@@ -15,6 +15,19 @@
     user: '{{ deploy_user }}'
     key: '{{ item.key }}'
   with_items: '{{ deploy_ssh_users }}'
+- name: Create app_configs directory
+  file:
+    path: '/home/{{deploy_user}}/app_configs'
+    state: 'directory'
+    owner: '{{deploy_user}}'
+    group: '{{deploy_user}}'
+- name: Load app configs
+  lineinfile: >
+              dest='/home/{{deploy_user}}/.bashrc'
+              state=present
+              regexp='^for f in ~/app_configs/\*; do source \$f; done$'
+              line="for f in ~/app_configs/*; do source $f; done"
+              insertbefore=BOF
 - name: Allow deploy user to SSH
   lineinfile: >
               dest=/etc/ssh/sshd_config
