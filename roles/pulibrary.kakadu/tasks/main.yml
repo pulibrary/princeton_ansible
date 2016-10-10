@@ -1,0 +1,29 @@
+---
+# tasks file for pulibrary.kakadu
+- name: Install Dependencies
+  package:
+    name: '{{ item }}'
+    state: present
+  with_items:
+    - unzip
+  become: true
+- name: Download Kakadu
+  unarchive:
+    src: http://kakadusoftware.com/wp-content/uploads/2014/06/KDU78_Demo_Apps_for_Linux-x86-64_160226.zip
+    copy: no
+    dest: '{{ kdu_install }}'
+    creates: '{{ kdu_install }}/KDU78_Demo_Apps_for_Linux-x86-64_160226/kdu_compress'
+  become: true
+
+- name: Set Default Symlink
+  file:
+    path: '{{ kdu_install }}/kakadu'
+    src: KDU78_Demo_Apps_for_Linux-x86-64_160226
+    state: link
+  become: true
+  ignore_errors: '{{ ansible_check_mode }}'
+
+- name: Setup ldconfig for kakadu
+  template: src=ldconfig.kakadu.conf dest=/etc/ld.so.conf.d/kakadu.conf
+  notify:
+    - run ldconfig

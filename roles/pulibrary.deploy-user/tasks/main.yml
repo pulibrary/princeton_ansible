@@ -1,0 +1,32 @@
+---
+# tasks file for pulibrary.deploy-user
+- name: Install easy-install
+  apt: name={{item}} state=installed
+  with_items:
+    - python-setuptools
+    - python-dev
+    - build-essential
+- name: Install pip
+  easy_install: name=pip state=latest
+- name: Install ssl dependencies
+  pip: name={{item}}
+  with_items:
+   - urllib3
+   - pyopenssl
+   - ndg-httpsclient
+   - pyasn1
+- name: Create deploy group
+  group:
+    name: '{{ deploy_user }}'
+    gid: '{{ deploy_user_uid }}'
+- name: Create deploy user
+  user: 
+    name: '{{ deploy_user }}'
+    uid: '{{ deploy_user_uid }}'
+    group: '{{ deploy_user }}'
+    home: '/home/{{ deploy_user }}'
+- name: Add SSH keys
+  authorized_key:
+    user: '{{ deploy_user }}'
+    key: '{{ item.key }}'
+  with_items: '{{ deploy_ssh_users}}'

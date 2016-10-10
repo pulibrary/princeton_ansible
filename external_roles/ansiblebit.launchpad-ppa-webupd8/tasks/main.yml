@@ -1,0 +1,20 @@
+---
+# file: launchpad-ppa-webupd8/tasks/main.yml
+#
+# tasks file
+#
+
+## include OS family specific task file
+
+- name: if debian, include family specific task file
+  include: "os_distribution/debian.yml"
+  when: ansible_distribution | lower == 'debian'
+
+- name: if ubuntu, include family specific task file
+  include: "os_distribution/ubuntu.yml"
+  when: ansible_distribution | lower == 'ubuntu'
+
+- name: check if operating system is suported
+  fail:
+    msg: "The operating system ({{ ansible_os_family }}) of the target machine ({{ inventory_hostname }}) is not currently supported."
+  when: launchpad_ppa_webupd8_os_supported is not defined
