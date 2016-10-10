@@ -1,20 +1,5 @@
 ---
 # tasks file for pulibrary.deploy-user
-- name: Install easy-install
-  apt: name={{item}} state=installed
-  with_items:
-    - python-setuptools
-    - python-dev
-    - build-essential
-- name: Install pip
-  easy_install: name=pip state=latest
-- name: Install ssl dependencies
-  pip: name={{item}}
-  with_items:
-   - urllib3
-   - pyopenssl
-   - ndg-httpsclient
-   - pyasn1
 - name: Create deploy group
   group:
     name: '{{ deploy_user }}'
@@ -29,4 +14,12 @@
   authorized_key:
     user: '{{ deploy_user }}'
     key: '{{ item.key }}'
-  with_items: '{{ deploy_ssh_users}}'
+  with_items: '{{ deploy_ssh_users }}'
+- name: Allow deploy user to SSH
+  lineinfile: >
+              dest=/etc/ssh/sshd_config
+              state=present
+              backrefs=yes
+              regexp='^AllowUsers(.*?)( ?)({{deploy_user}})?$'
+              line="AllowUsers\1 {{deploy_user}}"
+  notify: Restart ssh
