@@ -1,0 +1,63 @@
+---
+# tasks file for pulibrary.plum
+- name: Install dependencies
+  apt: name={{item}} state=installed
+  with_items:
+    - cifs-utils
+  become: true
+- name: Create mount directories
+  file:
+    path: '/mnt/{{item}}'
+    state: 'directory'
+  with_items:
+    - diglibdata
+    - libimages1
+- name: Copy smb credentials
+  copy: src=files/{{item}} dest=/etc/{{item}}
+  with_items:
+    - pudl.smb.credentials
+    - archives.smb.credentials
+    - libimages1.smb.credentials
+- name: Create diglibdata mounts
+  mount:
+    name: /mnt/diglibdata/{{item}}
+    src: //diglibdata1.princeton.edu/{{item}}
+    fstype: cifs
+    opts: credentials=/etc/{{item}}.smb.credentials
+    state: mounted
+  with_items:
+    - pudl
+    - archives
+- name: Create libimages mount
+  mount:
+    name: /mnt/libimages1/data
+    src: //libimages1.princeton.edu/data
+    fstype: cifs
+    opts: credentials=/etc/libimages1.smb.credentials
+    state: mounted
+- name: Create plum directory structure
+  file:
+    path: '/opt/{{item}}'
+    state: 'directory'
+    owner: '{{deploy_user}}'
+    group: '{{deploy_user}}'
+  with_items:
+    - '{{plum_directory}}'
+    - '{{plum_directory}}/shared'
+    - '{{plum_directory}}/shared/tmp'
+- name: Create symlinks
+  file:
+    src: '{{item.src}}'
+    dest: '{{item.link}}'
+    owner: '{{deploy_user}}'
+    group: '{{deploy_user}}'
+    state: 'link'
+  with_items:
+    - src: '/mnt/diglibdata/pudl'
+      link: '/opt/{{plum_directory}}/shared/staged_files'
+    - src: '{{plum_derivatives_dir}}'
+      link: '/opt/{{plum_directory}}/shared/tmp/derivatives'
+    - src: '{{plum_uploads_dir}}'
+      link: '/opt/{{plum_directory}}/shared/tmp/uploads'
+- name: Install site configuration
+  template: src=plum_config dest=/home/{{deploy_user}}/app_configs owner={{deploy_user}} group={{deploy_user}}
