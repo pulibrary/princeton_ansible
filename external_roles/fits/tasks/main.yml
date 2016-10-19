@@ -24,3 +24,12 @@
     state: link
   become: true
   ignore_errors: '{{ ansible_check_mode }}'
+
+- name: Disable Tika
+  lineinfile:
+    dest='{{ fits_install }}/fits-{{ fits_version }}/xml/fits.xml'
+    regexp='.*(<.*edu.harvard.hul.ois.fits.tools.tika.TikaTool.*>).*'
+    backrefs=yes
+    line='<!-- \1 -->'
+    state=present
+  when: disable_tika == true
