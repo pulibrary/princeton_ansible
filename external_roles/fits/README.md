@@ -13,6 +13,7 @@ Role Variables
 
 * `fits_version`: Version to install
 * `fits_install`: Location to install
+* `fits_disable_tika`: (boolean) Disable Apache Tika Toolkit
 
 Dependencies
 ------------
