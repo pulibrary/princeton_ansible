@@ -1,0 +1,15 @@
+---
+- name: Install startup script for workers
+  template: "src=plum-workers.conf dest=/etc/init/{{plum_worker_name}}s.conf"
+  notify: Restart plum workers
+- name: Install startup script for worker
+  template: "src=plum-worker.conf dest=/etc/init/{{plum_worker_name}}.conf"
+  notify: Restart plum workers
+- name: Keep workers running
+  service: "name={{plum_worker_name}}s enabled=yes state=started"
+- name: Allow deploy user to restart workers
+  lineinfile: "dest=/etc/sudoers state=present line='{{deploy_user}} ALL=(ALL) NOPASSWD: /sbin/initctl {{item}} {{plum_worker_name}}s' validate='visudo -cf %s'"
+  with_items:
+    - status
+    - restart
+    - start
