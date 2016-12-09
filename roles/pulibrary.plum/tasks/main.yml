@@ -18,6 +18,7 @@
     - pudl.smb.credentials
     - archives.smb.credentials
     - libimages1.smb.credentials
+    - plum_mount.smb.credentials
 - name: Create diglibdata mounts
   mount:
     name: /mnt/diglibdata/{{item}}
@@ -28,6 +29,13 @@
   with_items:
     - pudl
     - archives
+- name: Create mount to binaries
+  mount:
+    name: '/mnt/diglibdata/{{plum_fedora_mount}}_binaries'
+    src: '//diglibdata1.princeton.edu/{{plum_fedora_mount}}/binaries'
+    fstype: cifs
+    opts: 'credentials=/etc/plum_mount.smb.credentials,uid={{deploy_user_uid}},gid=33'
+    state: mounted
 - name: Create libimages mount
   mount:
     name: /mnt/libimages1/data
