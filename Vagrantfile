@@ -35,10 +35,6 @@ Vagrant.configure(2) do |config|
     # vb.name = "my_hydra"
   end
 
-  # Install the Ansible Galaxy roles as a prerequisite
-  config.vm.provision "ansible" do |ansible|
-    ansible.playbook = "install_external_roles.yml"
-  end
   # Enable provisioning with sufia-ansible project
   config.vm.provision "ansible" do |ansible|
     # ansible.verbose = 'vvv'
