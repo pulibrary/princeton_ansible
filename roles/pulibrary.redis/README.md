@@ -6,7 +6,7 @@ Installs and configures redis. It is heavily inspired by Geerlingguy's repo but 
 Requirements
 ------------
 
-Apt must be installed, along with our Common role.
+This depends on our pulibrary.common role.
 
 Role Variables
 --------------

@@ -4,7 +4,7 @@ Installs OpenJDK 8
 
 ### Requirements
 
-Apt must be installed, along with our Common role.
+This depends on our pulibrary.common role.
 
 ### Role Variables
 
