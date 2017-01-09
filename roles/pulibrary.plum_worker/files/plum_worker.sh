@@ -19,5 +19,5 @@ source /home/{{deploy_user}}/.bashrc
 source /etc/environment
 cd /opt/{{plum_directory}}/current
 export RAILS_ENV={{plum_environment}}
-exec bundle exec sidekiq -c 5 -e production -q high ingest default lowest | join(" -q ") -i ${index}
+exec bundle exec sidekiq -c 5 -e production -q high -q ingest -q default -q lowest -i ${index}
 EOT
