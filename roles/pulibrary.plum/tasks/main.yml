@@ -4,7 +4,15 @@
   apt: name={{item}} state=installed
   with_items:
     - cifs-utils
+    - gdal-bin
+    - libgdal-dev
+    - libcairo2-dev
+    - libpango1.0-dev
   become: true
+- name: Compile simple-tiles from source
+  shell: curl -L {{ simple_tiles_url }} | tar -xz && cd simple-tiles-{{simple_tiles_version}} && ./configure && make && make install
+  args:
+    creates: /usr/local/lib/libsimple-tiles.so
 - name: Create mount directories
   file:
     path: '/mnt/{{item}}'
