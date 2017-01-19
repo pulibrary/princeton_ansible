@@ -1,0 +1,12 @@
+- name: Install local nameserver
+  apt: name={{item}} state=present
+  with_items:
+    - bind9
+- name: Remove other nameservers
+  lineinfile: dest=/etc/resolv.conf state=absent regexp='.*nameserver.*'
+- name: Use local nameserver
+  lineinfile: dest=/etc/resolv.conf state=present line='nameserver 127.0.0.1'
+  notify: restart bind
+
+- name: enable bind to start on boot
+  systemd: name=bind9 enabled=yes
