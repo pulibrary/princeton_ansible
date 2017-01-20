@@ -9,7 +9,7 @@ Vagrant.configure(2) do |config|
   # Vagrant configuration options are fully documented at
   # https://docs.vagrantup.com.
 
-  config.vm.box = "ubuntu/trusty64"
+  config.vm.box = "princeton_box"
 
   # Forwarded port mappings allow access to a specific port on the guest vm
   # from a port on the host machine - to see your vm's port 80, use localhost:8484
@@ -35,10 +35,6 @@ Vagrant.configure(2) do |config|
     # vb.name = "my_hydra"
   end
 
-  # Install the Ansible Galaxy roles as a prerequisite
-  config.vm.provision "ansible" do |ansible|
-    ansible.playbook = "install_external_roles.yml"
-  end
   # Enable provisioning with sufia-ansible project
   config.vm.provision "ansible" do |ansible|
     # ansible.verbose = 'vvv'
@@ -57,6 +53,8 @@ Vagrant.configure(2) do |config|
     # update start_at_task and re-run `vagrant provison` if your configuration scripts fail on a particular task
     # and you want to restart the provisioning at the step where the failure occurred
     # ansible.start_at_task = "packages | update apt cache"
+    config.ssh.private_key_path = "pulsys_rsa_key"
+    config.ssh.username = "pulsys"
 
     # for further details on using ansible with vagrant, see
     # Ansible documentation: http://docs.ansible.com/ansible/guide_vagrant.html

@@ -1,24 +1,25 @@
 ---
+- name: create scripts directory
+  file:
+    path: /home/{{ deploy_user }}/scripts
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+    state: directory
+- name: copy shell script that restarts plum-worker
+  copy:
+    src: plum_worker.sh
+    dest: /home/{{ deploy_user }}/scripts/plum_worker.sh
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+    mode: "a+x"
 - name: Install startup script for workers
-  template: "src=plum-workers.conf dest=/etc/init/{{plum_worker_name}}s.conf"
-  notify: Restart plum workers
-- name: Install startup script for worker
-  template: "src=plum-worker.conf dest=/etc/init/{{plum_worker_name}}.conf"
+  template: "src=plum-worker.conf dest=/lib/systemd/system/{{plum_worker_name}}s.service"
   notify: Restart plum workers
 - name: Keep workers running
   service: "name={{plum_worker_name}}s enabled=yes state=started"
 - name: Allow deploy user to restart workers
-  lineinfile: "dest=/etc/sudoers state=present line='{{deploy_user}} ALL=(ALL) NOPASSWD: /sbin/initctl {{item}} {{plum_worker_name}}s' validate='visudo -cf %s'"
+  lineinfile: "dest=/etc/sudoers state=present line='{{deploy_user}} ALL=(ALL) NOPASSWD: /bin/systemdctl {{item}} {{plum_worker_name}}s' validate='visudo -cf %s'"
   with_items:
     - status
     - restart
     - start
-- name: Install local nameserver
-  apt: name={{item}} state=installed
-  with_items:
-    - bind9
-  become: true
-- name: Remove other nameservers
-  lineinfile: dest=/etc/resolv.conf state=absent regexp='.*nameserver.*'
-- name: Use local nameserver
-  lineinfile: dest=/etc/resolv.conf state=present line='nameserver 127.0.0.1'
