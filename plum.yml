@@ -1,22 +1,15 @@
 ---
 - hosts: plum
-  remote_user: systems
+  remote_user: pulsys
   become: true
-  tasks:
-    - name: Install list of packages
-      apt: name={{item}} state=installed
-      with_items:
-        - nodejs
-        - libpq-dev
-        - curl
-        - tesseract-ocr
-        - tesseract-ocr-*
+  vars_files:
+    - site_vars.yml
   roles:
-    - role: git
-    - role: ruby
-    - role: redis
-    - role: fits
-    - role: ansiblebit.oracle-java
+    - role: pulibrary.ruby
+    - role: pulibrary.nodejs
+    - role: pulibrary.redis
+    - role: pulibrary.fits
+    - role: ansiblebit.oracle.java8
     - role: pulibrary.kakadu
     - role: pulibrary.deploy-user
     - role: pulibrary.extra_path
@@ -27,7 +20,7 @@
   roles:
     - role: pulibrary.plum_worker
 - hosts: plum-derivative-workers
-  remote_user: systems
+  remote_user: pulsys
   become: true
   roles:
     - { role: pulibrary.plum_worker, plum_worker_name: "plum-derivative", plum_worker_threads: 5, plum_worker_queues: ['default']}
