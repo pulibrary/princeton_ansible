@@ -1,0 +1,40 @@
+---
+- name: add official nginx key
+  apt_key: url=http://nginx.org/keys/nginx_signing.key
+  environment: "{{ nginx_env }}"
+
+- name: add official nginx repository
+  apt_repository: repo="deb http://nginx.org/packages/{{ ansible_distribution|lower }}/ {{ ansible_distribution_release }} nginx"
+  environment: "{{ nginx_env }}"
+
+- name: add official nginx repository (mainline)
+  apt_repository: repo="deb http://nginx.org/packages/mainline/{{ ansible_distribution|lower }}/ {{ ansible_distribution_release }} nginx"
+  environment: "{{ nginx_env }}"
+
+- name: Install the nginx packages 
+  package: name={{ item }} state=present
+  with_items: 
+    - nginx
+  environment: "{{ nginx_env }}"
+
+- name: Create the directories for site specific configurations
+  file:
+    path: "{{nginx_conf_dir}}/{{ item }}"
+    state: directory
+    owner: root
+    group: "{{nginx_group}}"
+    mode: 0755
+  with_items:
+    - "sites-available"
+    - "sites-enabled"
+    - "auth_basic"
+    - "conf.d"
+    - "conf.d/stream"
+
+- name: make sure a log directory exist
+  file:
+    path: "{{ nginx_log_dir }}"
+    state: directory
+    owner: "{{nginx_user}}"
+    group: "{{nginx_group}}"
+    mode: 0755
