@@ -23,6 +23,7 @@
   with_items:
     - diglibdata
     - libimages1
+    - hydra_sources
 - name: Copy smb credentials
   copy: src=files/{{item}} dest=/etc/{{item}}
   with_items:
@@ -30,6 +31,7 @@
     - archives.smb.credentials
     - libimages1.smb.credentials
     - plum_mount.smb.credentials
+    - studio.smb.credentials
 - name: Create diglibdata mounts
   mount:
     name: /mnt/diglibdata/{{item}}
@@ -40,6 +42,23 @@
   with_items:
     - pudl
     - archives
+- name: Create diglibdata mounts (hydra sources)
+  mount:
+    name: /mnt/hydra_sources/{{item}}
+    src: //diglibdata1.princeton.edu/{{item}}
+    fstype: cifs
+    opts: 'credentials=/etc/{{item}}.smb.credentials,uid={{deploy_user_uid}}'
+    state: mounted
+  with_items:
+    - pudl
+    - archives
+- name: Create mount to studio (hydra sources)
+  mount:
+    name: /mnt/hydra_sources/studio
+    src: //libserv64.princeton.edu/studio
+    fstype: cifs
+    opts: 'credentials=/etc/studio.smb.credentials,uid={{deploy_user_uid}}'
+    state: mounted
 - name: Create mount to binaries
   mount:
     name: '/mnt/diglibdata/{{plum_fedora_mount}}_binaries'
@@ -72,7 +91,7 @@
     group: '{{deploy_user}}'
     state: 'link'
   with_items:
-    - src: '/mnt/diglibdata/pudl'
+    - src: '/mnt/hydra_sources'
       link: '/opt/{{plum_directory}}/shared/staged_files'
     - src: '{{plum_derivatives_dir}}'
       link: '/opt/{{plum_directory}}/shared/tmp/derivatives'
