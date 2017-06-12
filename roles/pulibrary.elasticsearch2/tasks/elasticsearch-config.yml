@@ -1,0 +1,39 @@
+---
+# Configure Elasticsearch Node
+
+#Create required directories
+- name: Create Directories
+  file: path={{ item }} state=directory owner={{ es_user }} group={{ es_group }}
+  with_items:
+    - "{{pid_dir}}"
+    - "{{work_dir}}"
+    - "{{log_dir}}"
+    - "{{conf_dir}}"
+
+- name: Create Data Directories
+  file: path={{ item }} state=directory owner={{ es_user }} group={{ es_group }}
+  with_items:
+    - "{{data_dirs}}"
+
+#Copy the config template
+- name: Copy Configuration File
+  template: src=elasticsearch.yml.j2 dest={{conf_dir}}/elasticsearch.yml owner={{ es_user }} group={{ es_group }} mode=0644 force=yes
+  register: config_updated
+  notify: restart elasticsearch
+
+#Copy the instance specific default file
+- name: Copy Default File for Instance
+  template: src=elasticsearch.j2 dest={{instance_default_file}} mode=0644 force=yes
+  notify: restart elasticsearch
+
+#Copy the systemd specific file 
+- name: Copy Systemd File for Instance
+  template: src=systemd/elasticsearch.j2 dest={{instance_sysd_script}} mode=0644 force=yes
+  notify:
+  - reload systemd configuration
+  - restart elasticsearch
+
+#Copy the logging.yml
+- name: Copy Logging.yml File for Instance
+  template: src=logging.yml.j2 dest={{conf_dir}}/logging.yml owner={{ es_user }} group={{ es_group }} mode=0644 force=yes
+  notify: restart elasticsearch

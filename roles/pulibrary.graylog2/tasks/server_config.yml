@@ -1,0 +1,25 @@
+---
+- name: create config directory with correct ownership and privileges
+  file:
+    path: '/etc/graylog/server'
+    owner: graylog
+    group: graylog
+    mode: '0750'
+
+- name: copy server config file
+  template:
+    src: 'graylog.server.conf.j2'
+    dest: '/etc/graylog/server/server.conf'
+    owner: graylog
+    group: graylog
+    mode: '0644'
+  notify: restart graylog-server
+
+- name: copy server defaults
+  template:
+    src: 'graylog.server.default.j2'
+    dest: '/etc/default/graylog-server'
+    owner: graylog
+    group: graylog
+    mode: '0644'
+  notify: restart graylog-server
