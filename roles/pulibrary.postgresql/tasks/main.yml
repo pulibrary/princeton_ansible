@@ -1,0 +1,53 @@
+---
+- name: add postgresql key
+  apt_key:
+    url: https://www.postgresql.org/media/keys/ACCC4CF8.asc
+    id: B97B0AFCAA1A47F044F244A07FCC7D46ACCC4CF8
+    state: present
+
+- name: add postgresql repository
+  apt_repository:
+    repo: 'deb http://apt.postgresql.org/pub/repos/apt/ {{ ansible_distribution_release }}-pgdg main'
+    update_cache: yes
+    state: present
+
+- name: install postgresql server packages
+  apt:
+    name: '{{ item }}'
+    state: present
+    cache_valid_time: '{{ apt_cache_timeout }}'
+    update_cache: yes
+  with_items:
+    - postgresql-{{ postgres_version }}
+  when: postgresql_is_local
+
+- name: install postgresql client packages
+  apt:
+    name: '{{ item }}'
+    state: present
+    cache_valid_time: '{{ apt_cache_timeout }}'
+    update_cache: yes
+  with_items:
+    - libpq-dev
+    - python-psycopg2
+
+- name: install access rules
+  copy:
+    src: pg_hba.conf
+    dest: /etc/postgresql/{{ postgres_version }}/main/pg_hba.conf
+    group: postgres
+    owner: postgres
+  register: configure_postgres
+  when: postgresql_is_local
+
+- name: ensure postgres starts on boot
+  systemd:
+    name: postgresql
+    enabled: yes
+  when: postgresql_is_local
+
+- name: restart postgres server
+  systemd:
+    name: postgresql
+    state: restarted
+  when: configure_postgres.changed
