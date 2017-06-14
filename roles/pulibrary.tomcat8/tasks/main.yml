@@ -1,0 +1,21 @@
+---
+- name: ensure tomcat8 packages are installed
+  apt:
+    name: '{{ item }}'
+    cache_valid_time: '{{ apt_cache_timeout }}'
+    update_cache: yes
+    state: present
+  with_items:
+    - tomcat8
+
+- name: copy tomcat 8 config file
+  template:
+    src: server.xml.j2
+    dest: /etc/tomcat8/server.xml
+    mode: 0640
+
+- name: ensure tomcat8 starts on boot
+  systemd:
+    name: tomcat8
+    state: started
+    enabled: True
