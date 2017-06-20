@@ -1,0 +1,21 @@
+---
+- name: Create plum directory structure
+  file:
+    path: '/opt/{{item}}'
+    state: 'directory'
+    owner: '{{deploy_user}}'
+    group: '{{deploy_user}}'
+  with_items:
+    - '{{plum_directory}}'
+    - '{{plum_directory}}/shared'
+    - '{{plum_directory}}/shared/tmp'
+- name: Create symlinks
+  file:
+    src: '{{item.src}}'
+    dest: '{{item.link}}'
+    owner: '{{deploy_user}}'
+    group: '{{deploy_user}}'
+    state: 'link'
+  with_items: '{{capistrano_shared_links}}'
+- name: Install site configuration
+  template: src=_config dest=/home/{{deploy_user}}/app_configs owner={{deploy_user}} group={{deploy_user}}
