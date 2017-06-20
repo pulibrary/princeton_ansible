@@ -1,0 +1,23 @@
+---
+- name: stop tomcat server
+  systemd:
+    name: tomcat8
+    state: stopped
+
+- name: copy war file
+  copy:
+    src: local_files/geoserver.war
+    dest: /var/lib/tomcat8/webapps/geoserver.war
+  notify:
+  - restart tomcat
+
+- name: install postgis software
+  apt:
+    name: "{{ item }}"
+    state: present
+  with_items:
+    - postgresql-9.6-postgis-2.3
+    - postgis
+    - postgresql-9.6-pgrouting
+  notify:
+  - restart postgresql
