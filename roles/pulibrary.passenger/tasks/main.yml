@@ -1,58 +1,26 @@
 ---
-# Variable setup.
-- name: Include OS-specific variables.
-  include_vars: "main.yml"
-
-- name: Define nginx_user.
-  set_fact:
-    nginx_user: "{{ __nginx_user }}"
-  when: nginx_user is not defined
-
-# Passenger repository setup.
-- name: Add Passenger apt key.
+# tasks file for roles/pulibrary.passenger
+- name: install passenger repository
   apt_key:
-    keyserver: keyserver.ubuntu.com
-    id: 561F9B9CAC40B2F7
+    url: http://keyserver.ubuntu.com/pks/lookup?op=get&fingerprint=on&search=0xAC40B2F7
     state: present
 
-- name: Add apt HTTPS capabilities.
-  apt: name=apt-transport-https state=present
+- name: apt via https
+  apt:
+    name: apt-transport-https
+    state: present
 
-- name: Add Phusion apt repo.
+- name: add passenger to list
   apt_repository:
     repo: 'deb https://oss-binaries.phusionpassenger.com/apt/passenger {{ansible_distribution_release}} main'
     state: present
     update_cache: yes
 
-# Nginx and passenger installation.
-- name: Install Nginx and Passenger.
-  apt: "pkg={{ item }} state=installed"
+- name: install nginx
+  apt:
+    pkg: "{{ item }}"
+    state: present
   with_items:
-   - nginx-extras
-   - passenger
+    - nginx-extras
+    - passenger
 
-# Nginx and passenger configuration.
-- name: Copy Nginx configuration into place.
-  template:
-    src: nginx.conf.j2
-    dest: /etc/nginx/nginx.conf
-  notify: restart nginx
-
-- name: Configure passenger virtual host.
-  template:
-    src: passenger.j2
-    dest: /etc/nginx/sites-available/passenger
-  notify: restart nginx
-
-- name: Ensure passenger virtual host is enabled.
-  file:
-    src: /etc/nginx/sites-available/passenger
-    dest: /etc/nginx/sites-enabled/passenger
-    state: link
-
-- name: Ensure default virtual host is removed.
-  file:
-    path: /etc/nginx/sites-enabled/default
-    state: absent
-  when: nginx_remove_default_vhost
-  notify: restart nginx
