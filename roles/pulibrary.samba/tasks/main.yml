@@ -1,0 +1,76 @@
+# File: roles/samba/tasks/main.yml
+---
+- name: Install Samba packages
+  package:
+    name: "{{ item }}"
+    state: present
+  with_items:
+    - samba-common
+    - samba
+    - samba-client
+  tags: samba
+
+- name: Create Samba shares root directory
+  file:
+    state: directory
+    path: "{{ samba_shares_root }}"
+    owner: root
+    group: root
+    mode: '0755'
+  when: samba_shares
+  tags: samba
+
+- name: Create share directories
+  with_items: "{{ samba_shares }}"
+  file:
+    state: directory
+    path: "{{ item.path|default([samba_shares_root,item.name]|join('/')) }}"
+    owner: "{{ item.owner|default('root') }}"
+    group: "{{ item.group|default('users') }}"
+    mode: "{{ item.directory_mode|default('0775') }}"
+    setype: "{{ item.setype|default('samba_share_t') }}"
+  tags: samba
+
+- name: Ensure webserver document root exists
+  file:
+    name: /var/www
+    state: directory
+  tags: samba
+
+- name: Create link to shares in webserver document root
+  file:
+    state: link
+    path: "/var/www/{{ item.name }}"
+    src: "{{ item.path|default([samba_shares_root,item.name]|join('/')) }}"
+  with_items: "{{ samba_shares }}"
+  when:  samba_create_varwww_symlinks
+  tags: samba
+
+- name: Samba configuration
+  template:
+    dest: /etc/samba/smb.conf
+    src: smb.conf.j2
+    validate: 'testparm -s %s'
+  notify:
+    - Restart Samba services
+  tags: samba
+
+- name: Start Samba service(s)
+  systemd:
+    name: "{{ item }}"
+    state: started
+    enabled: yes
+  with_items:
+    - smbd
+    - nmbd
+  tags: samba
+
+- name: Create Samba users if they don't exist yet
+  shell: >
+    (pdbedit --user={{ item.name }} 2>&1 > /dev/null) \
+    || (echo {{ item.password }}; echo {{ item.password }}) \
+    | smbpasswd -s -a {{ item.name }}
+  with_items: "{{ samba_users }}"
+  register: create_user_output
+  changed_when: "'Added user' in create_user_output.stdout"
+  tags: samba

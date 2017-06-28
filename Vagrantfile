@@ -10,7 +10,7 @@ Vagrant.configure(2) do |config|
   # https://docs.vagrantup.com.
 
   config.vm.box = "princeton_box"
-
+  config.vm.network "private_network", type: "dhcp"
   # Forwarded port mappings allow access to a specific port on the guest vm
   # from a port on the host machine - to see your vm's port 80, use localhost:8484
   config.vm.network "forwarded_port", guest: 80, host: 8484 # apache web server in production mode
