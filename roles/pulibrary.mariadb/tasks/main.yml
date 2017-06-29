@@ -1,0 +1,24 @@
+---
+- name: add mariadb repo keys
+  apt_key:
+    keyserver: keyserver.ubuntu.com
+    id: 0xcbcb082a1bb943db
+
+- name: add maria db repository
+  apt_repository:
+    repo: 'deb [arch=amd64,i386,ppc64el] https://mirrors.evowise.com/mariadb/repo/10.2/ubuntu xenial {{ ansible_distribution_release }} main'
+
+- name: install maria db version
+  apt:
+    name: '{{ items }}'
+    state: present
+    update_cache: yes
+  with_items:
+    - python-mysqldb
+    - mariadb-server
+
+- name: create replication account
+  mysql_user:
+    name: repl
+    host: "%" password=lper priv=*.*:"REPLICATION SLAVE"
+    state: present
