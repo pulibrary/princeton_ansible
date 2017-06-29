@@ -20,5 +20,21 @@
 - name: create replication account
   mysql_user:
     name: repl
-    host: "%" password=lper priv=*.*:"REPLICATION SLAVE"
+    host: '"%"'
+    password: '{{ replication_account_password }}'
+    priv: '*.*:"REPLICATION SLAVE"'
     state: present
+
+- name: create readwrite user
+  mysql_user:
+    name: rwuser
+    host: '"%"'
+    password: '{{ readwrite_user_password }}'
+    priv: '*.*:SELECT,INSERT,UPDATE,DELETE,CREATE,DROP'
+    state: present
+
+- name: modify config file to listen on all interfaces
+  lineinfile:
+    dest: /etc/mysql/my.cnf
+    regexp: '"^bind-address"'
+    line: '"server-id=1"'
