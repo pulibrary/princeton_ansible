@@ -1,8 +1,8 @@
 ---
 - name: add mariadb repo keys
   apt_key:
-    keyserver: keyserver.ubuntu.com
-    id: 0xcbcb082a1bb943db
+    keyserver: 'keyserver.ubuntu.com'
+    id: '0xcbcb082a1bb943db'
 
 - name: add maria db repository
   apt_repository:
@@ -33,8 +33,123 @@
     priv: '*.*:SELECT,INSERT,UPDATE,DELETE,CREATE,DROP'
     state: present
 
-- name: modify config file to listen on all interfaces
+- name: copy the my.cnf file
+  template:
+    src: my_cnf.j2
+    dest: '{{ mysql_conf_dir }}/my.cnf'
+  notify:
+    - restart mariadb
+
+- name: create config directory
+  file:
+    path: /etc/mysql/conf.d
+    state: directory
+  notify:
+    - restart mariadb
+
+- name: copy config file 
+  template:
+    src: mysql.cnf.j2
+    dest: /etc/mysql/conf.d/mysql.cnf
+  notify:
+    - restart mariadb
+
+- name: start mariadb services
+  systemd:
+    name: mariadb
+    state: started
+    enabled: yes
+
+- name: update mariadb root password 
+  mysql_user:
+    name: root
+    host: '{{ item }}'
+    password: '{{ mysql_root_db_pass }}'
+  with_items:
+    - 127.0.0.1
+    - ::1
+    - localhost
+  when: ansible_hostname != 'localhost'
+
+- name: update mariadb root password
+  mysql_user:
+    name: root
+    host: '{{ item }}'
+    password: '{{ mysql_root_db_pass }}'
+  with_items:
+    - 127.0.0.1
+    - ::1
+    - localhost
+  when: ansible_hostname == 'localhost'
+
+- name: copy .my.cnf file with root password credentials
+  template:
+    src: .my.cnf.j2
+    dest: '~/.my.cnf'
+    mode: 0600
+
+- name: ensure anonymous users are not in the database
+  mysql_user:
+    name: ''
+    host: '{{ item }}'
+    state: absent
+  with_items:
+    - localhost
+    - '{{ ansible_hostname }}'
+
+- name: remove the test database
+  mysql_db:
+    name: test
+    state: absent
+
+- name: check if slave is already configured for replication
+  mysql_replication:
+    mode: getslave
+    ignore_errors: true
+    register: slave
+  when: mysql_repl_role == 'slave'
+
+- name: add the hostname entry for master is available for the client.
   lineinfile:
-    dest: /etc/mysql/my.cnf
-    regexp: '"^bind-address"'
-    line: '"server-id=1"'
+    dest: '/etc/hosts'
+    regexp: '"{{ mysql_repl_master }}"'
+    line: '"{{ hostvars[mysql_repl_master].ansible_default_ipv4.address + "   " + mysql_repl_master }}"'
+    state: present
+  when: slave|failed and mysql_repl_role == 'slave' and mysql_repl_master is defined
+
+- name: get current master servers replication status
+  mysql_replication:
+    mode: getmaster
+    delegate_to: '{{ mysql_repl_master }}'
+    register: repl_stat
+  when: slave|failed and mysql_repl_role == 'slave' and mysql_repl_master is defined
+
+- name: change  master in slave to start the replication
+  mysql_replication:
+    mode: changemaster
+    master_host: '{{ mysql_repl_master }}'
+    master_log_file: '{{ repl_stat.File }}'
+    master_log_pos: '{{ repl_stat.Position }}'
+    master_user: repl
+    master_password: '{{ replication_account_password }}'
+  when: slave|failed and mysql_repl_role == 'slave' and mysql_repl_master is defined
+
+- name: create databases
+  mysql_db:
+    name: '{{ item }}'
+    state: present
+  with_items:
+    - '{{ mysql_db }}'
+  when: mysql_db|lower() != 'none'
+
+- name: create database users
+  mysql_user:
+    name: '{{ item }}'
+    password: '{{ item.pass|default("{{ mysql_user_password}}") }}'
+    priv: '{{ item.priv|default("*.*:ALL") }}'
+    state: present
+    host: '{{ item.host | default("localhost") }}'
+  with_items:
+    - '{{ mysql_users }}"'
+  when: mysql_users|lower() != 'none'
+
