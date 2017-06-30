@@ -26,6 +26,7 @@
     - libimages1
     - hydra_sources
     - lib-gissystem
+    - libimages
 - name: Copy smb credentials
   copy: src=files/{{item}} dest=/etc/{{item}}
   with_items:
@@ -68,10 +69,17 @@
     fstype: cifs
     opts: 'credentials=/etc/plum_mount.smb.credentials,uid={{deploy_user_uid}},gid=33'
     state: mounted
-- name: Create libimages mount
+- name: Create libimages1 mount
   mount:
     name: /mnt/libimages1/data
     src: //libimages1.princeton.edu/data
+    fstype: cifs
+    opts: credentials=/etc/libimages1.smb.credentials
+    state: mounted
+- name: Create libimages mount
+  mount:
+    name: /mnt/libimages/data
+    src: //libimages.princeton.edu/data
     fstype: cifs
     opts: credentials=/etc/libimages1.smb.credentials
     state: mounted
@@ -99,6 +107,7 @@
     owner: '{{deploy_user}}'
     group: '{{deploy_user}}'
     state: 'link'
+    force: true
   with_items:
     - src: '/mnt/hydra_sources'
       link: '/opt/{{plum_directory}}/shared/staged_files'
@@ -106,5 +115,9 @@
       link: '/opt/{{plum_directory}}/shared/tmp/derivatives'
     - src: '{{plum_uploads_dir}}'
       link: '/opt/{{plum_directory}}/shared/tmp/uploads'
+    - src: '/mnt/diglibdata/archives'
+      link: '/opt/{{plum_directory}}/shared/tmp/pulfa-master'
+    - src: '/mnt/libimages/data/jp2s'
+      link: '/opt/{{plum_directory}}/shared/tmp/pulfa-service'
 - name: Install site configuration
   template: src=plum_config dest=/home/{{deploy_user}}/app_configs owner={{deploy_user}} group={{deploy_user}}

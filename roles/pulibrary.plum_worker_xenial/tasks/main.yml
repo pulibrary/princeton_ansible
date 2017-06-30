@@ -1,11 +1,11 @@
 ---
 - name: Install startup script for workers
-  template: "src=plum-derivatives.service dest=/etc/systemd/system/plum-derivatives.service"
+  template: "src=plum-derivatives.service dest=/etc/systemd/system/{{plum_worker_name}}.service"
   notify: Restart plum workers
 - name: Keep workers running
-  service: "name=plum-derivatives enabled=yes state=started"
+  service: "name={{plum_worker_name}} enabled=yes state=started"
 - name: Allow deploy user to restart workers
-  lineinfile: "dest=/etc/sudoers state=present line='{{deploy_user}} ALL=(ALL) NOPASSWD: /usr/sbin/service plum-derivatives {{item}}' validate='visudo -cf %s'"
+  lineinfile: "dest=/etc/sudoers state=present line='{{deploy_user}} ALL=(ALL) NOPASSWD: /usr/sbin/service {{plum_worker_name}} {{item}}' validate='visudo -cf %s'"
   with_items:
     - status
     - restart
