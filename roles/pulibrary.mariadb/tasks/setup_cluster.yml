@@ -1,0 +1,52 @@
+---
+- name: setup_cluster | configuring db server and galera
+  template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+  with_items:
+    - src: 'debian.cnf.j2'
+      dest: '/etc/mysql/debian.cnf'
+    - src: 'my.cnf.j2'
+      dest: '/etc/mysql/my.cnf'
+    - src: 'galera.cnf.j2'
+      dest: '/etc/mysql/conf.d/galera.cnf'
+
+- name: setup_cluster check if galera cluster setup
+  stat:
+    path: "/etc/galera_cluster_configured"
+  register: "galera_cluster_configured"
+
+- name: setup_cluster | stopping mysql
+  systemd:
+    name: "mysql"
+    state: "stopped"
+  when: not galera_cluster_configured.stat.exists
+
+- name: setup_cluster | killing lingering mysql processes
+  command: "pkill mysqld"
+  ignore_errors: true
+  when: not galera_cluster_configured.stat.exists
+- name: setup cluster | fix debian bug
+  file:
+      path: files/galera_new_cluster
+      dest: '/usr/bin/galera_new_cluster'
+      owner: root
+      group: root
+      mode: 0755
+
+- name: setup_cluster | bootstrapping galera cluster
+  command: "/usr/bin/galera_new_cluster"
+
+- name: setup_cluster | joining galera cluster
+  systemd:
+    name: "mysql"
+    state: "restarted"
+  when: >
+        not galera_cluster_configured.stat.exists and
+        inventory_hostname != galera_mysql_master_node
+
+- name: setup_cluster | marking galera cluster as configured
+  file:
+    path: "/etc/galera_cluster_configured"
+    state: "touch"
+  when: not galera_cluster_configured.stat.exists
