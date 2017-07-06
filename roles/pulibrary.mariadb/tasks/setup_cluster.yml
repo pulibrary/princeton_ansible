@@ -26,9 +26,10 @@
   command: "pkill mysqld"
   ignore_errors: true
   when: not galera_cluster_configured.stat.exists
+
 - name: setup cluster | fix debian bug
-  file:
-      path: files/galera_new_cluster
+  copy:
+      src: files/galera_new_cluster
       dest: '/usr/bin/galera_new_cluster'
       owner: root
       group: root
@@ -36,10 +37,14 @@
 
 - name: setup_cluster | bootstrapping galera cluster
   command: "/usr/bin/galera_new_cluster"
+  become: true
+  when: >
+        not galera_cluster_configured.stat.exists and
+        inventory_hostname == galera_mysql_master_node
 
 - name: setup_cluster | joining galera cluster
   systemd:
-    name: "mysql"
+    name: "mariadb"
     state: "restarted"
   when: >
         not galera_cluster_configured.stat.exists and
