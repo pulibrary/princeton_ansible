@@ -43,6 +43,7 @@
 - name: setup_cluster | bootstrapping mariadb galera cluster on node1
   command: '/usr/bin/galera_new_cluster'
   become: true
+  register: '_mariadb_galera_cluster_master_restarted'
   when: >
         not galera_cluster_configured.stat.exists and
         inventory_hostname == galera_mysql_master_node
@@ -63,17 +64,6 @@
     state: 'touch'
   become: true
   when: not galera_cluster_configured.stat.exists
-
-- name: setup_cluster | Restarting MySQL (Master)
-  systemd:
-    name: "mysql"
-    state: "restarted"
-  become: true
-  register: "_mariadb_galera_cluster_master_restarted"
-  when: >
-        (galera_cluster_configured['stat']['exists'] and
-        inventory_hostname == galera_mysql_master_node) and
-        (_mariadb_galera_cluster_reconfigured['changed'])
 
 - name: setup_cluster | Waiting For MySQL (Master)
   wait_for:
