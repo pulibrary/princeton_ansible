@@ -5,6 +5,8 @@ to abide by its [code of conduct].
 
 ## Contributing
 
+- We always test with the newest version of [Ansible](https://ansible.com),
+  [Vagrant](https://vagrantup.com), and [Virtualbox](https://www.virtualbox.org)
 - Fork and clone the repo.
 - Make your changes.
 - Submit a pull request on GitHub.
