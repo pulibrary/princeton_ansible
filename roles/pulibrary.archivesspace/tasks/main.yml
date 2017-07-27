@@ -33,4 +33,17 @@
   shell: chdir=/opt/archivesspace/ ./scripts/setup-database.sh
 
 - name: delete indexed_state files which force re-index
-  shell: rm -f /opt/archivesspace/data/indexer_state/*
+  file:
+    path: '/opt/archivesspace/data/indexer_state'
+    state: absent
+  ignore_errors: true
+
+- name: create symbolic link
+  file:
+    src: '/opt/archivesspace/archivesspace.sh'
+    dest: '/etc/init.d/archivesspace'
+    state: link
+    mode: 0755
+
+- name: start archivesspace service
+  command: /etc/init.d/archivesspace start
