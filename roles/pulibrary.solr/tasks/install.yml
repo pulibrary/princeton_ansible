@@ -1,5 +1,5 @@
 ---
-# installation instructions taken from: https://cwiki.apache.org/confluence/display/solr/Taking+Solr+to+Production
+# installation instructions taken from: https://lucene.apache.org/solr/guide/6_6/taking-solr-to-production.html#taking-solr-to-production
 - name: create solr group
   group:
     name: '{{ solr_group }}'
@@ -9,7 +9,7 @@
     name: '{{ solr_user }}'
     group: '{{ solr_group }}'
     home: /bin/false
-    createhome: yes
+    createhome: 'yes'
 
 - name: create solr dirs
   file:
@@ -23,11 +23,11 @@
 
 - name: Check for solr service
   command: systemctl status solr.service
-  ignore_errors: yes
+  ignore_errors: true
   changed_when: false
   register: service_solrcloud_status
 
-- name: SolrCloud | Check installed version
+- name: Check for solr versionversion
   action: >
     uri \
       url="http://localhost:{{ solr_port }}/solr/admin/info/system" \
@@ -37,7 +37,7 @@
   ignore_errors: true
   when: service_solrcloud_status | success
 
-- name:  Download SolrCloud binaries
+- name: Download SolrCloud binaries
   get_url:
     url: "{{ solr_cloud_url }}"
     dest: /tmp/{{ solr_cloud_package }}
@@ -47,7 +47,7 @@
         (solrcloud_check | failed or
         "<str name=\"lucene-spec-version\">{{ solr_cloud_version }}</str>" not in solrcloud_check.content)
 
-- name:  Extract SolrCloud installation script 
+- name: Extract SolrCloud installation script
   shell: "tar xzf /tmp/{{ solr_cloud_package }} {{ solr_cloud_build_name }}/bin/install_solr_service.sh --strip-components=2"
   args:
     chdir: /tmp
