@@ -1,0 +1,20 @@
+---
+- name: install application packages
+  apt:
+    name: '{{item}}'
+    state: present
+  with_items:
+    - 'zookeeper'
+    - 'zookeeperd'
+
+- name: create systemd service
+  template:
+    src: zookeeper.service.j2
+    dest: /lib/systemd/system/zookeeper.service
+  notify:
+    - Restart zookeeper
+
+- name: Remove if available upstart service
+  file:
+    path: /etc/init.d/zookeeper
+    state: absent
