@@ -1,0 +1,33 @@
+---
+
+- name: Install Cantaloupe
+  unarchive:
+    remote_src: yes
+    src: https://github.com/medusa-project/cantaloupe/releases/download/v{{ cantaloupe_version }}/Cantaloupe-{{ cantaloupe_version }}.zip
+    dest: "{{ cantaloupe_install_root }}"
+    owner: "{{ cantaloupe_user }}"
+    group: "{{ cantaloupe_group }}"
+    creates: "{{ cantaloupe_install_root }}/Cantaloupe-{{ cantaloupe_version }}"
+
+- name: Create Cantaloupe symlink
+  file:
+    state: link
+    src: "{{ cantaloupe_install_root }}/Cantaloupe-{{ cantaloupe_version }}"
+    dest: "{{ cantaloupe_symlink }}"
+    owner: "{{ cantaloupe_user }}"
+    group: "{{ cantaloupe_group }}"
+
+- name: Create Cantaloupe log path
+  file:
+    state: directory
+    path: "{{ cantaloupe_log_path }}"
+    owner: "{{ cantaloupe_user }}"
+    group: "{{ cantaloupe_group }}"
+
+- name: Fix /dev/stdout
+  shell: "chmod o+w /dev/stdout"
+
+- name: Install startup script for workers
+  template: "src=cantaloupe.service.j2 dest=/etc/systemd/system/cantaloupe.service"
+- name: Keep cantaloupe running
+  service: "name=cantaloupe enabled=yes state=started"
