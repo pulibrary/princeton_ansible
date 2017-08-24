@@ -8,7 +8,7 @@
 - name: add postgresql repository
   apt_repository:
     repo: 'deb http://apt.postgresql.org/pub/repos/apt/ {{ ansible_distribution_release }}-pgdg main'
-    update_cache: yes
+    update_cache: 'yes'
     state: present
 
 - name: install postgresql server packages
@@ -16,7 +16,7 @@
     name: '{{ item }}'
     state: present
     cache_valid_time: '{{ apt_cache_timeout }}'
-    update_cache: yes
+    update_cache: 'yes'
   with_items:
     - postgresql-{{ postgres_version }}
   when: postgresql_is_local
@@ -26,7 +26,7 @@
     name: '{{ item }}'
     state: present
     cache_valid_time: '{{ apt_cache_timeout }}'
-    update_cache: yes
+    update_cache: 'yes'
   with_items:
     - libpq-dev
     - python-psycopg2
@@ -40,10 +40,19 @@
   register: configure_postgres
   when: postgresql_is_local
 
+- name: install configuration file
+  template:
+    src: 'postgresql.conf.j2'
+    dest: '/etc/postgresql/{{ postgres_version }}/main/postgresql.conf'
+    group: postgres
+    owner: postgres
+  register: configure_postgres
+  when: postgresql_is_local
+
 - name: ensure postgres starts on boot
   systemd:
     name: postgresql
-    enabled: yes
+    enabled: 'yes'
   when: postgresql_is_local
 
 - name: restart postgres server
@@ -51,3 +60,6 @@
     name: postgresql
     state: restarted
   when: configure_postgres.changed
+
+- include: create_users.yml
+- include: create_db.yml
