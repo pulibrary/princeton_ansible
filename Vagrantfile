@@ -14,7 +14,9 @@ Vagrant.configure(2) do |config|
   # Forwarded port mappings allow access to a specific port on the guest vm
   # from a port on the host machine - to see your vm's port 80, use localhost:8484
   config.vm.network "forwarded_port", guest: 80, host: 8484 # apache web server in production mode
+  config.vm.network "forwarded_port", guest: 8983, host: 9893  # solr
   config.vm.network "forwarded_port", guest: 8080, host: 2424 # tomcat (fedora & solr) in production mode
+  config.vm.network "forwarded_port", guest: 8182, host: 8182 # Cantaloupe
   # config.vm.network "forwarded_port", guest: 3000, host: 3000 # webrick web server in development mode
   # config.vm.network "forwarded_port", guest: 8983, host: 8983 # jetty (fedora & solr) in development mode
 
@@ -40,15 +42,23 @@ Vagrant.configure(2) do |config|
     # ansible.verbose = 'vvv'
 
     ansible.groups = {
-      "vagrant" => ["default"]
+      "figgy" => ["default"]
     }
 
     ansible.extra_vars = {
       server_name: "localhost",
-      rails_env: "production"
+      rails_env: "production",
+      application_host: 'localhost:8484',
+      passenger_server_name: 'localhost',
+      application_host_protocol: 'http',
+      postgres_host: nil,
+      project_db_host: 'http://127.0.0.1',
+      postgres_admin_user: 'postgres',
+      postgres_admin_password: nil,
+      postgresql_is_local: true
     }
 
-    ansible.playbook = "vagrant_staging.yml"
+    ansible.playbook = "figgy.yml"
 
     # update start_at_task and re-run `vagrant provison` if your configuration scripts fail on a particular task
     # and you want to restart the provisioning at the step where the failure occurred

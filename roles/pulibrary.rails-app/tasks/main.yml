@@ -1,0 +1,48 @@
+---
+- name: Install dependencies
+  apt:
+    name: '{{item}}'
+    state: present
+  with_items: '{{ rails_app_dependencies }}'
+
+- name: Update ruby gems
+  command: gem update --system
+  become: yes
+  become_method: sudo
+
+- name: Install site configuration
+  template:
+    src: 'rails_app_config'
+    dest: '/home/{{deploy_user}}/app_configs/{{rails_app_name}}'
+    owner: '{{deploy_user}}'
+    group: '{{deploy_user}}'
+- name: Create app directory structure
+  file:
+    path: '/opt/{{item}}'
+    state: 'directory'
+    owner: '{{deploy_user}}'
+    group: '{{deploy_user}}'
+  with_items:
+    - '{{rails_app_directory}}'
+    - '{{rails_app_directory}}/shared'
+    - '{{rails_app_directory}}/shared/tmp'
+- name: Create symlinks
+  file:
+    src: '{{item.src}}'
+    dest: '{{item.link}}'
+    owner: '{{deploy_user}}'
+    group: '{{deploy_user}}'
+    state: 'link'
+    force: true
+  with_items: '{{rails_app_symlinks}}'
+- name: Install local nameserver
+  apt: name={{item}} state=installed
+  with_items:
+    - bind9
+  become: true
+- name: Start nameserver
+  service: "name=bind9 enabled=yes state=started"
+- name: Remove other nameservers
+  lineinfile: dest=/etc/resolv.conf state=absent regexp='.*nameserver.*'
+- name: Use local nameserver
+  lineinfile: dest=/etc/resolv.conf state=present line='nameserver 127.0.0.1'
