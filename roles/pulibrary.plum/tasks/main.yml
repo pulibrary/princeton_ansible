@@ -37,6 +37,7 @@
     - libimages1.smb.credentials
     - plum_mount.smb.credentials
     - studio.smb.credentials
+    - geoserver.smb.credentials
 - name: Create diglibdata mounts
   mount:
     name: /mnt/diglibdata/{{item}}
@@ -92,6 +93,13 @@
     fstype: nfs
     opts: ro
     state: mounted
+- name: Create geoserver derivatives mount
+  mount:
+    name: /mnt/geoserver/plum_geo_data
+    src: //geoserv1.princeton.edu/plum_geo_data
+    fstype: cifs
+    opts: 'credentials=/etc/geoserver.smb.credentials,uid={{deploy_user_uid}}'
+    state: mounted
 - name: Create plum directory structure
   file:
     path: '/opt/{{item}}'
@@ -121,5 +129,7 @@
       link: '/opt/{{plum_directory}}/shared/tmp/pulfa-master'
     - src: '/mnt/libimages/data/jp2s'
       link: '/opt/{{plum_directory}}/shared/tmp/pulfa-service'
+    - src: '/mnt/geoserver/plum_geo_data'
+      link: '/opt/{{plum_directory}}/shared/tmp/geo-derivatives'
 - name: Install site configuration
   template: src=plum_config dest=/home/{{deploy_user}}/app_configs owner={{deploy_user}} group={{deploy_user}}
