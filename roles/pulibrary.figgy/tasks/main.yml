@@ -20,8 +20,6 @@
     group: '{{deploy_user}}'
   with_items:
     - 'repository'
-    - 'repository/files'
-    - 'repository/derivatives'
 ## Create Mounts
 - name: Create mount directories
   file:
@@ -29,6 +27,10 @@
     state: 'directory'
   with_items:
     - hydra_sources
+    - figgy_binaries
+    - figgy_images
+    - diglibdata
+    - libimages1
 - name: Copy smb credentials
   copy: src=files/{{item}} dest=/etc/{{item}}
   with_items:
@@ -36,6 +38,23 @@
     - archives.smb.credentials
     - studio.smb.credentials
     - studio.new.smb.credentials
+    - hydradev.smb.credentials
+    - plum_mount.smb.credentials
+    - libimages1.smb.credentials
+- name: Create mount to plum binaries
+  mount:
+    name: '/mnt/diglibdata/hydra_binaries'
+    src: '//diglibdata1.princeton.edu/hydra/binaries'
+    fstype: cifs
+    opts: 'credentials=/etc/plum_mount.smb.credentials,uid={{deploy_user_uid}},gid=33'
+    state: mounted
+- name: Create libimages1 mount
+  mount:
+    name: /mnt/libimages1/data
+    src: //libimages1.princeton.edu/data
+    fstype: cifs
+    opts: credentials=/etc/libimages1.smb.credentials
+    state: mounted
 - name: Create diglibdata mounts (hydra sources)
   mount:
     name: /mnt/hydra_sources/{{item}}
@@ -46,6 +65,20 @@
   with_items:
     - pudl
     - archives
+- name: Create figgy_binaries mount
+  mount:
+    name: /mnt/figgy_binaries
+    src: //diglibdata1.princeton.edu/hydradev/figgy
+    fstype: cifs
+    opts: 'credentials=/etc/hydradev.smb.credentials,uid={{deploy_user_uid}}'
+    state: mounted
+- name: Create figgy_images mount
+  mount:
+    name: /mnt/figgy_images
+    src: //diglibdata1.princeton.edu/hydradev/figgy_images
+    fstype: cifs
+    opts: 'credentials=/etc/hydradev.smb.credentials,uid={{deploy_user_uid}}'
+    state: mounted
 - name: Create mount to studio (hydra sources)
   mount:
     name: /mnt/hydra_sources/studio
@@ -72,3 +105,7 @@
   with_items:
     - src: '/mnt/hydra_sources'
       link: '/opt/{{rails_app_directory}}/shared/staged_files'
+    - src: '/mnt/diglibdata/hydra_binaries/figgy_staging'
+      link: '/opt/repository/files'
+    - src: '/mnt/diglibdata/hydra_binaries/figgy_staging_images'
+      link: '/opt/repository/derivatives'

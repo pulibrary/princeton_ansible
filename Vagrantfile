@@ -50,6 +50,7 @@ Vagrant.configure(2) do |config|
       rails_env: "production",
       application_host: 'localhost:8484',
       passenger_server_name: 'localhost',
+      figgy_host_name: 'localhost',
       application_host_protocol: 'http',
       postgres_host: nil,
       project_db_host: 'http://127.0.0.1',
