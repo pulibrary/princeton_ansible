@@ -1,0 +1,83 @@
+---
+- name: Create Postgresql User
+  postgresql_user:
+    name: '{{figgy_db_user}}'
+    password: '{{figgy_db_password}}'
+    role_attr_flags: SUPERUSER
+- name: Create Postgresql Database
+  postgresql_db:
+    name: '{{figgy_db_name}}'
+    owner: '{{figgy_db_user}}'
+- name: Configure Solr Core
+  template: 
+    src: '{{item.src}}'
+    dest: '{{item.dest}}'
+  with_items:
+    - src: solrconfig.xml
+      dest: '{{ solr_home }}/data/{{figgy_solr_name}}/conf/solrconfig.xml'
+    - src: schema.xml
+      dest: '{{ solr_home }}/data/{{figgy_solr_name}}/conf/schema.xml'
+    - src: stopwords_en.txt
+      dest: '{{ solr_home }}/data/{{figgy_solr_name}}/conf/stopwords_en.txt'
+  notify:
+    - restart solr
+- name: Create repository directory structure
+  file:
+    path: '/opt/{{item}}'
+    state: 'directory'
+    owner: '{{deploy_user}}'
+    group: '{{deploy_user}}'
+  with_items:
+    - 'repository'
+    - 'repository/files'
+    - 'repository/derivatives'
+## Create Mounts
+- name: Create mount directories
+  file:
+    path: '/mnt/{{item}}'
+    state: 'directory'
+  with_items:
+    - hydra_sources
+- name: Copy smb credentials
+  copy: src=files/{{item}} dest=/etc/{{item}}
+  with_items:
+    - pudl.smb.credentials
+    - archives.smb.credentials
+    - studio.smb.credentials
+    - studio.new.smb.credentials
+- name: Create diglibdata mounts (hydra sources)
+  mount:
+    name: /mnt/hydra_sources/{{item}}
+    src: //diglibdata1.princeton.edu/{{item}}
+    fstype: cifs
+    opts: 'credentials=/etc/{{item}}.smb.credentials,uid={{deploy_user_uid}}'
+    state: mounted
+  with_items:
+    - pudl
+    - archives
+- name: Create mount to studio (hydra sources)
+  mount:
+    name: /mnt/hydra_sources/studio
+    src: //libserv64.princeton.edu/studio
+    fstype: cifs
+    opts: 'credentials=/etc/studio.smb.credentials,uid={{deploy_user_uid}}'
+    state: mounted
+- name: Create mount to studio (hydra sources)
+  mount:
+    name: /mnt/hydra_sources/studio_new
+    src: //lib-dps-server.princeton.edu/studio
+    fstype: cifs
+    opts: 'credentials=/etc/studio.new.smb.credentials,uid={{deploy_user_uid}}'
+    state: mounted
+## Symlink to Mounts
+- name: Create symlinks
+  file:
+    src: '{{item.src}}'
+    dest: '{{item.link}}'
+    owner: '{{deploy_user}}'
+    group: '{{deploy_user}}'
+    state: 'link'
+    force: true
+  with_items:
+    - src: '/mnt/hydra_sources'
+      link: '/opt/{{rails_app_directory}}/shared/staged_files'
