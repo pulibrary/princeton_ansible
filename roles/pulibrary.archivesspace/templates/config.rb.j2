@@ -52,6 +52,7 @@ AppConfig[:db_url] = "{{ url_jdbc_archivesspace }}"
 #
 ## Log level for the backend, values: (everything) debug, info, warn, error, fatal (severe only)
 #AppConfig[:backend_log_level] = "debug"
+AppConfig[:backend_log_level] = "error"
 #
 ## By default, Solr backups will run at midnight.  See https://crontab.guru/ for
 ## information about the schedule syntax.
@@ -66,6 +67,7 @@ AppConfig[:db_url] = "{{ url_jdbc_archivesspace }}"
 #
 ## Plug-ins to load. They will load in the order specified
 #AppConfig[:plugins] = ['local',  'lcnaf']
+AppConfig[:plugins] = ['local', 'user_defined_in_basic']
 #
 ## The number of concurrent threads available to run background jobs
 ## Introduced for AR-1619 - long running jobs were blocking the queue
@@ -116,6 +118,7 @@ AppConfig[:db_url] = "{{ url_jdbc_archivesspace }}"
 #
 #AppConfig[:default_page_size] = 10
 #AppConfig[:max_page_size] = 250
+AppConfig[:max_page_size] = 3500
 #
 ## A prefix added to cookies used by the application.
 ##
@@ -210,17 +213,27 @@ AppConfig[:db_url] = "{{ url_jdbc_archivesspace }}"
 #
 ## Sessions marked as expirable will timeout after this number of seconds of inactivity
 #AppConfig[:session_expire_after_seconds] = 3600
+AppConfig[:session_expire_after_seconds] = 100000
 #
 ## Sessions marked as non-expirable will eventually expire too, but after a longer period.
 #AppConfig[:session_nonexpirable_force_expire_after_seconds] = 604800
 #
-AppConfig[:search_username] = "{{ search_user_secret.stdout }}"
+#AppConfig[:search_username] = "{{ search_user_secret.stdout }}"
 #
-AppConfig[:public_username] = "{{ public_user_secret.stdout }}"
+#AppConfig[:public_username] = "{{ public_user_secret.stdout }}"
 #
-AppConfig[:staff_username] = "{{ staff_user_secret.stdout }}"
+#AppConfig[:staff_username] = "{{ staff_user_secret.stdout }}"
 #
 #AppConfig[:authentication_sources] = []
+AppConfig[:authentication_sources] = [{
+            :model => 'LDAPAuth',
+            :hostname => '{{ ldap_server_hostname }}',
+            :port => 636,
+            :base_dn => 'o=Princeton University, c=US',
+            :username_attribute => 'uid',
+            :attribute_map => {:cn => :name},
+            :encryption => :simple_tls,
+}]
 #
 #AppConfig[:realtime_index_backlog_ms] = 60000
 #
@@ -532,3 +545,9 @@ AppConfig[:staff_username] = "{{ staff_user_secret.stdout }}"
 #
 ##The number of characters to truncate before showing the 'Read More' link on notes
 #AppConfig[:pui_readmore_max_characters] = 450
+##The number of characters to truncate before showing the 'Read More' link on notes
+#AppConfig[:pui_readmore_max_characters] = 450
+AppConfig[:user_defined_in_basic] = {
+    'accessions' => ['boolean_1', 'boolean_2', 'boolean_3', 'real_1', 'real_2', 'string_2', 'string_3', 'string_4', 'text_1', 'text_2', 'text_3', 'date_1', 'enum_2'],
+    'hide_user_defined_section' => true
+}
