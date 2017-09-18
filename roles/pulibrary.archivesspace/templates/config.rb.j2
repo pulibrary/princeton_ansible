@@ -14,6 +14,7 @@
 #
 ## Set your database name and credentials here.  Example:
 ##
+##  AppConfig[:db_url] = "jdbc:mysql://127.0.0.1:3306/aspace?useUnicode=true&characterEncoding=UTF-8&user=as&password=as123"
 AppConfig[:db_url] = "{{ url_jdbc_archivesspace }}"
 ##
 #AppConfig[:db_url] = proc { AppConfig.demo_db_url }
@@ -73,6 +74,7 @@ AppConfig[:plugins] = ['local', 'user_defined_in_basic']
 ## Introduced for AR-1619 - long running jobs were blocking the queue
 ## Resist the urge to set this to a big number!
 #AppConfig[:job_thread_count] = 2
+AppConfig[:job_thread_count] = 2
 #
 ## OAI configuration options
 #AppConfig[:oai_repository_name] = 'ArchivesSpace OAI Provider'
@@ -166,11 +168,11 @@ AppConfig[:max_page_size] = 3500
 ## recommended that you record those URLs in your configuration
 #AppConfig[:frontend_proxy_url] = proc { AppConfig[:frontend_url] }
 #AppConfig[:public_proxy_url] = proc { AppConfig[:public_url] }
+AppConfig[:frontend_proxy_url] = 'https://{{ ansible.fqdn }}/'
+AppConfig[:public_proxy_url] = 'https://{{ ansible.fqdn }}/'
 #
 ## Don't override _prefix or _proxy_prefix unless you know what you're doing
-#AppConfig[:frontend_prefix] = proc { "#{URI(AppConfig[:frontend_url]).path}/".gsub(%r{/+$}, "/") }
 #AppConfig[:frontend_proxy_prefix] = proc { "#{URI(AppConfig[:frontend_proxy_url]).path}/".gsub(%r{/+$}, "/") }
-#AppConfig[:public_prefix] = proc { "#{URI(AppConfig[:public_url]).path}/".gsub(%r{/+$}, "/") }
 #AppConfig[:public_proxy_prefix] = proc { "#{URI(AppConfig[:public_proxy_url]).path}/".gsub(%r{/+$}, "/") }
 #
 ## Setting any of the four keys below to false will prevent the associated
@@ -218,22 +220,13 @@ AppConfig[:session_expire_after_seconds] = 100000
 ## Sessions marked as non-expirable will eventually expire too, but after a longer period.
 #AppConfig[:session_nonexpirable_force_expire_after_seconds] = 604800
 #
-#AppConfig[:search_username] = "{{ search_user_secret.stdout }}"
+#AppConfig[:search_username] = "search_indexer"
 #
-#AppConfig[:public_username] = "{{ public_user_secret.stdout }}"
+#AppConfig[:public_username] = "public_anonymous"
 #
-#AppConfig[:staff_username] = "{{ staff_user_secret.stdout }}"
+#AppConfig[:staff_username] = "staff_system"
 #
 #AppConfig[:authentication_sources] = []
-AppConfig[:authentication_sources] = [{
-            :model => 'LDAPAuth',
-            :hostname => '{{ ldap_server_hostname }}',
-            :port => 636,
-            :base_dn => 'o=Princeton University, c=US',
-            :username_attribute => 'uid',
-            :attribute_map => {:cn => :name},
-            :encryption => :simple_tls,
-}]
 #
 #AppConfig[:realtime_index_backlog_ms] = 60000
 #
@@ -440,6 +433,7 @@ AppConfig[:authentication_sources] = [{
 #AppConfig[:pui_hide][:subjects] = false
 #AppConfig[:pui_hide][:agents] = false
 #AppConfig[:pui_hide][:classifications] = false
+#AppConfig[:pui_hide][:search_tab] = false
 ## The following determine globally whether the various "badges" appear on the Repository page
 ## can be overriden at repository level below (e.g.:  AppConfig[:repos][{repo_code}][:hide][:counts] = true
 #AppConfig[:pui_hide][:resource_badge] = false
@@ -543,11 +537,18 @@ AppConfig[:authentication_sources] = [{
 ##AppConfig[:pui_email_perform_deliveries] = true
 ##AppConfig[:pui_email_raise_delivery_errors] = true
 #
-##The number of characters to truncate before showing the 'Read More' link on notes
-#AppConfig[:pui_readmore_max_characters] = 450
+AppConfig[:authentication_sources] = [{
+			:model => 'LDAPAuth',
+			:hostname => '{{ ldap_server_hostname }}',
+			:port => 636,
+			:base_dn => 'o=Princeton University, c=US',
+			:username_attribute => 'uid',
+			:attribute_map => {:cn => :name},
+			:encryption => :simple_tls,
+}]
+
 ##The number of characters to truncate before showing the 'Read More' link on notes
 #AppConfig[:pui_readmore_max_characters] = 450
 AppConfig[:user_defined_in_basic] = {
-    'accessions' => ['boolean_1', 'boolean_2', 'boolean_3', 'real_1', 'real_2', 'string_2', 'string_3', 'string_4', 'text_1', 'text_2', 'text_3', 'date_1', 'enum_2'],
-    'hide_user_defined_section' => true
-}
+   'accessions' => ['boolean_1', 'boolean_2', 'boolean_3', 'real_1', 'real_2', 'string_2', 'string_3', 'string_4', 'text_1', 'text_2', 'text_3', 'date_1', 'enum_2'],
+   'hide_user_defined_section' => true
