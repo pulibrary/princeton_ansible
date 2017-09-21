@@ -48,10 +48,6 @@
 - name: add archivesspace service
   command: /usr/sbin/update-rc.d archivesspace defaults 90
 
-- name: start archivesspace service
-  command: /etc/init.d/archivesspace start
-  become: '{{ deploy_user }}'
-
 - name: change garbage collection limits
   lineinfile:
     dest: '/etc/environment'
@@ -63,9 +59,16 @@
 - name: restrict user
   include: restrict-aspace.yml
 
+- name: add locales
+  include: locales.yml
+
 - name: add logrotation
   template:
     src: 'archivesspace.j2'
     dest: '/etc/logrotate.d/archivesspace'
     owner: 'root'
     group: 'root'
+
+- name: start archivesspace service
+  command: /etc/init.d/archivesspace start
+  become: '{{ deploy_user }}'
