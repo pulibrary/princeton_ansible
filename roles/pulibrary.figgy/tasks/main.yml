@@ -1,4 +1,8 @@
 ---
+- name: Check for solr installed
+  stat:
+    path: '{{solr_home}}/data'
+  register: solr_installed
 - name: Configure Solr Core
   template: 
     src: '{{item.src}}'
@@ -11,7 +15,7 @@
     - src: stopwords_en.txt
       dest: '{{ solr_home }}/data/{{figgy_solr_name}}/conf/stopwords_en.txt'
   when:
-    - solr_home is defined
+    - solr_installed.stat.exists
   notify:
     - restart solr
 - name: Create repository directory structure
