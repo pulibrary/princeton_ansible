@@ -63,7 +63,7 @@ listen_addresses = '*'		# what IP address(es) to listen on;
 					# defaults to 'localhost'; use '*' for all
 					# (change requires restart)
 port = 5432				# (change requires restart)
-max_connections = 100			# (change requires restart)
+max_connections = 200			# (change requires restart)
 #superuser_reserved_connections = 3	# (change requires restart)
 unix_socket_directories = '/var/run/postgresql'	# comma-separated list of directories
 					# (change requires restart)
@@ -206,9 +206,9 @@ wal_buffers = 16MB			# min 32kB, -1 sets based on shared_buffers
 # - Checkpoints -
 
 checkpoint_timeout = 10min		# range 30s-1d
-#max_wal_size = 1GB
-#min_wal_size = 80MB
-checkpoint_completion_target = 0.9	# checkpoint target duration, 0.0 - 1.0
+max_wal_size = {{ max_wal }}
+min_wal_size = {{ min_wal }}
+checkpoint_completion_target = 0.7	# checkpoint target duration, 0.0 - 1.0
 #checkpoint_flush_after = 256kB		# measured in pages, 0 disables
 #checkpoint_warning = 30s		# 0 disables
 
@@ -302,7 +302,7 @@ random_page_cost = 1.1			# same scale as above
 #parallel_tuple_cost = 0.1		# same scale as above
 #parallel_setup_cost = 1000.0	# same scale as above
 #min_parallel_relation_size = 8MB
-#effective_cache_size = 4GB
+effective_cache_size = {{ cache_size }}
 
 # - Genetic Query Optimizer -
 
@@ -316,7 +316,7 @@ random_page_cost = 1.1			# same scale as above
 
 # - Other Planner Options -
 
-#default_statistics_target = 100	# range 1-10000
+default_statistics_target = 100	# range 1-10000
 #constraint_exclusion = partition	# on, off, or partition
 #cursor_tuple_fraction = 0.1		# range 0.0-1.0
 #from_collapse_limit = 8
