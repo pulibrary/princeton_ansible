@@ -42,7 +42,7 @@ Vagrant.configure(2) do |config|
     # ansible.verbose = 'vvv'
 
     ansible.groups = {
-      "figgy" => ["default"]
+      "figgy_production" => ["default"]
     }
 
     ansible.extra_vars = {
