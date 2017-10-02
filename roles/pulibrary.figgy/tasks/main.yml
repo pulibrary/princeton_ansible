@@ -10,6 +10,8 @@
       dest: '{{ solr_home }}/data/{{figgy_solr_name}}/conf/schema.xml'
     - src: stopwords_en.txt
       dest: '{{ solr_home }}/data/{{figgy_solr_name}}/conf/stopwords_en.txt'
+  when:
+    - solr_home is defined
   notify:
     - restart solr
 - name: Create repository directory structure
@@ -31,6 +33,8 @@
     - figgy_images
     - diglibdata
     - libimages1
+    - 'diglibdata/pudl'
+    - 'diglibdata/hydra_binaries'
 - name: Copy smb credentials
   copy: src=files/{{item}} dest=/etc/{{item}}
   with_items:
@@ -47,6 +51,13 @@
     src: '//diglibdata1.princeton.edu/hydra/binaries'
     fstype: cifs
     opts: 'credentials=/etc/plum_mount.smb.credentials,uid={{deploy_user_uid}},gid=33'
+    state: mounted
+- name: Create mount to pudl binaries (for migration)
+  mount:
+    name: '/mnt/diglibdata/pudl'
+    src: '//diglibdata1.princeton.edu/pudl'
+    fstype: cifs
+    opts: 'credentials=/etc/pudl.smb.credentials,uid={{deploy_user_uid}},gid=33'
     state: mounted
 - name: Create libimages1 mount
   mount:
@@ -65,20 +76,6 @@
   with_items:
     - pudl
     - archives
-- name: Create figgy_binaries mount
-  mount:
-    name: /mnt/figgy_binaries
-    src: //diglibdata1.princeton.edu/hydradev/figgy
-    fstype: cifs
-    opts: 'credentials=/etc/hydradev.smb.credentials,uid={{deploy_user_uid}}'
-    state: mounted
-- name: Create figgy_images mount
-  mount:
-    name: /mnt/figgy_images
-    src: //diglibdata1.princeton.edu/hydradev/figgy_images
-    fstype: cifs
-    opts: 'credentials=/etc/hydradev.smb.credentials,uid={{deploy_user_uid}}'
-    state: mounted
 - name: Create mount to studio (hydra sources)
   mount:
     name: /mnt/hydra_sources/studio
