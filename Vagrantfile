@@ -22,7 +22,7 @@ Vagrant.configure(2) do |config|
 
   # By default, the directory from which you launch vagrant will be shared inside your VM as /vagrant
   # To share an additional folder to the guest VM, state the path on the host
-  # to the actual folder, then the path on the guest to mount the folder. 
+  # to the actual folder, then the path on the guest to mount the folder.
   # config.vm.synced_folder "../data", "/vagrant_data"
 
   # Provider-specific configuration for VirtualBox:
@@ -59,12 +59,12 @@ Vagrant.configure(2) do |config|
       postgresql_is_local: true
     }
 
-    ansible.playbook = "figgy.yml"
+    ansible.playbook = "pas.yml"
 
     # update start_at_task and re-run `vagrant provison` if your configuration scripts fail on a particular task
     # and you want to restart the provisioning at the step where the failure occurred
     # ansible.start_at_task = "packages | update apt cache"
-    config.ssh.private_key_path = "pulsys_rsa_key"
+    config.ssh.private_key_path = "~/.ssh/pulsys_rsa_key"
     config.ssh.username = "pulsys"
 
     # for further details on using ansible with vagrant, see
