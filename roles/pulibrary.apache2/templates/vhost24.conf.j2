@@ -7,7 +7,15 @@
 
     <Directory {{ apache.docroot }}>
         AllowOverride All
-        Options -Indexes +FollowSymLinks
+        Options -Indexes +FollowSymLinks +Multiviews
         Require all granted
     </Directory>
+
+    <Proxy "fcgi://localhost:9000/" enablereuse=on max=10>
+    </Proxy>
+    <FilesMatch "\.php$">
+        <If "-f %{REQUEST_FILENAME}">
+          SetHandler "proxy:unix:/run/php/php7.0-fpm.sock|fcgi://localhost:9000/"
+        </If>
+    </FilesMatch>
 </VirtualHost>
