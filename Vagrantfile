@@ -64,7 +64,7 @@ Vagrant.configure(2) do |config|
     # update start_at_task and re-run `vagrant provison` if your configuration scripts fail on a particular task
     # and you want to restart the provisioning at the step where the failure occurred
     # ansible.start_at_task = "packages | update apt cache"
-    config.ssh.private_key_path = "~/.ssh/pulsys_rsa_key"
+    config.ssh.private_key_path = "pulsys_rsa_key"
     config.ssh.username = "pulsys"
 
     # for further details on using ansible with vagrant, see
