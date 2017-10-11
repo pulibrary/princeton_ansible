@@ -1,6 +1,6 @@
-passenger_server_name: "figgy-staging1.princeton.edu"
+passenger_server_name: "figgy1.princeton.edu"
 passenger_app_root: "/opt/figgy/current/public" 
-passenger_app_env: "staging"
+passenger_app_env: "production"
 rails_app_name: "figgy"
 rails_app_directory: "figgy"
 rails_app_symlinks: []
@@ -12,13 +12,22 @@ rails_app_dependencies:
   - libmagickwand-dev
   - imagemagick
   - pkg-config
-figgy_db_name: 'figgy_staging'
+figgy_db_name: 'figgy_production'
 figgy_db_user: '{{vault_figgy_db_user}}'
 figgy_db_password: '{{vault_figgy_db_password}}'
-rails_app_env: "staging"
+figgy_repository_mount: '/mnt/diglibdata/hydra_binaries/figgy_production'
+figgy_derivatives_mount: '/mnt/libimages1/data/jp2s/figgy_prod'
+figgy_rabbit_user: '{{vault_figgy_rabbit_user}}'
+figgy_rabbit_password: '{{vault_figgy_rabbit_password}}'
+figgy_rabbit_host: 'figgy1.princeton.edu'
+figgy_rabbit_server: 'amqp://{{figgy_rabbit_user}}:{{figgy_rabbit_password}}@{{figgy_rabbit_host}}:5672'
+rabbitmq_user: '{{figgy_rabbit_user}}'
+rabbitmq_password: '{{figgy_rabbit_password}}'
+rails_app_env: "production"
 solr_remove_cruft: true
 figgy_solr_name: figgy-staging
-figgy_host_name: 'figgy-staging.princeton.edu'
+figgy_host_name: 'figgy1.princeton.edu'
+figgy_honeybadger_key: '{{vault_figgy_honeybadger_key}}'
 solr_cores:
   - '{{figgy_solr_name}}'
 solr_version: "6.2.1"
@@ -47,15 +56,17 @@ rails_app_vars:
   - name: APPLICATION_HOST_PROTOCOL
     value: '{{application_host_protocol}}'
   - name: SOLR_URL
-    value: 'http://127.0.0.1:{{solr_port}}/solr/{{figgy_solr_name}}'
+    value: 'http://lib-solr1.princeton.edu:8983/solr/figgy'
   - name: CANTALOUPE_URL
-    value: 'https://{{figgy_host_name}}:8182/iiif/2/'
+    value: 'https://libimages1.princeton.edu/loris/figgy_prod/'
   - name: PLUM_SOLR_URL
     value: 'http://lib-solr1.princeton.edu:8983/solr/plum'
   - name: PLUM_BINARY_PATH
     value: '/mnt/diglibdata/hydra_binaries'
   - name: PLUM_DERIVATIVE_PATH
     value: '/mnt/libimages1/data/jp2s/plum_prod'
+  - name: HONEYBADGER_API_KEY
+    value: '{{figgy_honeybadger_key}}'
 sidekiq_worker_name: figgy-workers
 cantaloupe_user: '{{deploy_user}}'
 cantaloupe_group: '{{deploy_user}}'
