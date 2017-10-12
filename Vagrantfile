@@ -66,6 +66,7 @@ Vagrant.configure(2) do |config|
     # ansible.start_at_task = "packages | update apt cache"
     config.ssh.private_key_path = "pulsys_rsa_key"
     config.ssh.username = "pulsys"
+    config.ssh.forward_agent = true
 
     # for further details on using ansible with vagrant, see
     # Ansible documentation: http://docs.ansible.com/ansible/guide_vagrant.html
