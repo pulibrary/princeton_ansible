@@ -34,3 +34,37 @@
     recurse: 'yes'
     owner: '{{ deploy_user }}'
     group: 'www-data'
+
+- name: create db.php
+  template:
+    src: 'db.php.j2'
+    dest: '/opt/pas/craft/config/db.php'
+    owner: '{{ deploy_user }}'
+    group: 'www-data'
+  become: true
+
+- name: create mysql user
+  mysql_user:
+    name: '{{ pas_db_user }}'
+    password: '{{ pas_db_password }}'
+    state: present
+    priv: '{{ pas_db_name }}.*:ALL'
+
+- name: create mysql database
+  mysql_db:
+    name: '{{ pas_db_name }}'
+    encoding: 'utf8'
+    login_host: '{{ db_host }}'
+    login_password: '{{ pas_db_password }}'
+    login_user: '{{ pas_db_user }}'
+
+- name: copy SQL file to import
+  copy:
+    src: 'files/pas.sql.gz'
+    dest: '/tmp/pas.sql.gz'
+
+- name: Import database
+  mysql_db:
+    name: '{{ pas_db_name }}'
+    state: import
+    target: '/tmp/pas.sql.gz'
