@@ -43,7 +43,7 @@ Vagrant.configure(2) do |config|
     # ansible.verbose = 'vvv'
 
     ansible.groups = {
-      "figgy_production" => ["default"]
+      "lae_production" => ["default"]
     }
 
     ansible.extra_vars = {
@@ -59,10 +59,10 @@ Vagrant.configure(2) do |config|
       postgres_admin_password: nil,
       postgresql_is_local: true,
       figgy_rabbitmq_host: true,
-      figgy_rabbit_host: 'localhost'
+      lae_rabbit_host: 'localhost'
     }
 
-    ansible.playbook = "figgy.yml"
+    ansible.playbook = "lae.yml"
 
     # update start_at_task and re-run `vagrant provison` if your configuration scripts fail on a particular task
     # and you want to restart the provisioning at the step where the failure occurred
