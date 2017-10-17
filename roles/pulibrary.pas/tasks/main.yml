@@ -18,15 +18,6 @@
     mode: 0775
   become: true
 
-- name: Install pas
-  git:
-    repo: 'git@github.com:pulibrary/pas.git'
-    dest: '/opt/pas'
-    accept_hostkey: 'yes'
-    clone: 'yes'
-    update: 'yes'
-  become: 'pulsys'
-
 - name: change permissions
   file:
     path: '/opt/pas'
@@ -43,8 +34,20 @@
     group: 'www-data'
   become: true
 
+- name: Install pas
+  git:
+    repo: 'git@github.com:pulibrary/pas.git'
+    dest: '/opt/pas'
+    accept_hostkey: 'yes'
+    clone: 'yes'
+    update: 'yes'
+  become: 'pulsys'
+
 - name: create mysql user
   mysql_user:
+    login_host: '{{ db_host }}'
+    login_user: 'root'
+    login_password: '{{ mariadb_mysql_root_password }}'
     name: '{{ pas_db_user }}'
     password: '{{ pas_db_password }}'
     state: present
@@ -58,16 +61,20 @@
     login_password: '{{ pas_db_password }}'
     login_user: '{{ pas_db_user }}'
 
-- name: copy SQL file to import
-  copy:
+- name: Unarchive SQL file to import
+  unarchive:
     src: 'files/pas.sql.gz'
-    dest: '/tmp/pas.sql.gz'
+    dest: '/tmp'
+  ignore_errors: 'yes'
 
 - name: Import database
   mysql_db:
     name: '{{ pas_db_name }}'
+    login_host: '{{ db_host }}'
+    login_user: '{{ pas_db_user }}'
+    login_password: '{{ pas_db_password }}'
     state: import
-    target: '/tmp/pas.sql.gz'
+    target: '/tmp/pas.sql'
 
 - name: Set hostname for php application
   replace:
