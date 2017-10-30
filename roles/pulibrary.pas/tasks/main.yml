@@ -9,27 +9,25 @@
     state: latest
     user_install: 'no'
 
-# - name: Create mount directories
-#   file:
-#     path: '/mnt/{{item}}'
-#     state: 'directory'
-#   with_items:
-#     - diglibdata
-#
-# - name: Copy smb credentials
-#   copy: src=files/{{item}} dest=/etc/{{item}}
-#   with_items:
-#     - pas.smb.credentials
-#
-# - name: Create mount for pas shared files
-#   mount:
-#     name: /mnt/diglibdata/pas
-#     src: //diglibdata1.princeton.edu/pas
-#     fstype: cifs
-#     opts: 'credentials=/etc/pas.smb.credentials,uid={{deploy_user_uid}}'
-#     state: mounted
-#   with_items:
-#     - pas
+- name: Create mount directories
+  file:
+    path: '/mnt/{{item}}'
+    state: 'directory'
+  with_items:
+    - diglibdata1
+
+- name: Copy smb credentials
+  copy: src=files/{{item}} dest=/etc/{{item}}
+  with_items:
+    - pas.smb.credentials
+
+- name: Create mount for pas shared files
+  mount:
+    name: /mnt/diglibdata1/pas
+    src: //diglibdata1.princeton.edu/pas
+    fstype: cifs
+    opts: 'credentials=/etc/pas.smb.credentials,uid={{deploy_user_uid}}'
+    state: mounted
 
 - name: Creates app directory
   file:
@@ -106,38 +104,14 @@
     state: import
     target: '/tmp/pas.sql'
 
-# - name: Set hostname for php application
-#   replace:
-#     path: '/opt/pas/craft/config/general.php'
-#     regexp: 'pas_hostname'
-#     replace: '{{ pas_server_name }}'
-#
-# - name: Set siteURL for php application
-#   replace:
-#     path: '/opt/pas/craft/config/general.php'
-#     regexp: 'pas_site_url'
-#     replace: '{{ pas_site_url }}'
-#
-# - name: Set filepath for php application
-#   replace:
-#     path: '/opt/pas/craft/config/general.php'
-#     regexp: 'pas_base_path'
-#     replace: '{{ apache_app_path }}'
-#
-# - name: Set hostname for php application
-#   replace:
-#     path: '/opt/pas/craft/config/general.php'
-#     regexp: 'pas_base_url'
-#     replace: '{{ pas_base_url }}'
-
-# - name: Create symlinks
-#   file:
-#     src: '{{item.src}}'
-#     dest: '{{item.link}}'
-#     owner: '{{deploy_user}}'
-#     group: '{{deploy_user}}'
-#     state: 'link'
-#     force: true
-#   with_items:
-#     - src: '/mnt/diglibdata/pas'
-#       link: '/opt/pas/uploads'
+- name: Create symlinks
+  file:
+    src: '{{item.src}}'
+    dest: '{{item.link}}'
+    owner: '{{deploy_user}}'
+    group: '{{deploy_user}}'
+    state: 'link'
+    force: true
+  with_items:
+    - src: '/mnt/diglibdata1/pas'
+      link: '/opt/pas/uploads'
