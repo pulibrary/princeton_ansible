@@ -5,6 +5,13 @@
     DocumentRoot {{ apache_app_path | default(apache.docroot) }}
     ServerName {{ apache.servername }}
 
+    SetEnvIf X-Forwarded-For "^.*\..*\..*\..*" forwarded
+    LogFormat "%h %l %u %t \"%r\" %>s %b \"%{Referer}i\" \"%{User-Agent}i\"" combined
+    LogFormat "%{X-Forwarded-For}i %l %u %t \"%r\" %>s %b \"%{Referer}i\" \"%{User-Agent}i\"" forwarded
+    ErrorLog /var/log/apache2/error.log
+    CustomLog /var/log/apache2/access.log combined env=!forwarded
+    CustomLog /var/log/apache2/access.log forwarded env=forwarded
+
     <Directory {{ apache_app_path | default(apache.docroot) }}>
         AllowOverride All
         Options -Indexes +FollowSymLinks +Multiviews
