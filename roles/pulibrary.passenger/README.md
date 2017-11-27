@@ -1,8 +1,10 @@
-# Ansible Role: Passenger
+# Passenger
 
 [![Build Status](https://travis-ci.org/geerlingguy/ansible-role-passenger.svg?branch=master)](https://travis-ci.org/geerlingguy/ansible-role-passenger)
 
-Installs Passenger (with Nginx) on RedHat/CentOS (soon) or Debian/Ubuntu linux servers.
+Originally borrowed from Geerling Guy
+
+Installs Passenger (with Nginx) Ubuntu linux servers.
 
 ## Requirements
 
@@ -44,7 +46,7 @@ None.
 
     - hosts: server
       roles:
-        - { role: geerlingguy.passenger }
+        - { role: pulibrary.passenger }
 
 ## License
 
@@ -52,4 +54,4 @@ MIT / BSD
 
 ## Author Information
 
-This role was created in 2015 by [Jeff Geerling](https://www.jeffgeerling.com/), author of [Ansible for DevOps](https://www.ansiblefordevops.com/).
+This role was originally created in 2015 by [Jeff Geerling](https://www.jeffgeerling.com/), author of [Ansible for DevOps](https://www.ansiblefordevops.com/). Any changes are now managed locally
