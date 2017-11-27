@@ -13,6 +13,10 @@ Vagrant.configure(2) do |config|
   config.vm.network "forwarded_port", guest: 8182, host: 8182 # Cantaloupe
   config.vm.network "forwarded_port", guest: 15672, host: 15672 # Cantaloupe
 
+  # By default, the directory from which you launch vagrant will be shared inside your VM as /vagrant
+  # To share an additional folder to the guest VM, state the path on the host
+  # to the actual folder, then the path on the guest to mount the folder.
+  # config.vm.synced_folder "../data", "/vagrant_data"
 
   # Provider-specific configuration for VirtualBox:
   config.vm.provider "virtualbox" do |vb|
@@ -28,8 +32,6 @@ Vagrant.configure(2) do |config|
 
   # Enable provisioning ansible project
   config.vm.provision "ansible" do |ansible|
-    # ansible.verbose = 'vvv'
-
     ansible.groups = {
       "lae_production" => ["default"]
     }
@@ -51,6 +53,7 @@ Vagrant.configure(2) do |config|
     }
 
     ansible.playbook = "lae.yml"
+    ansible.ask_vault_pass = true
 
     # update start_at_task and re-run `vagrant provison` if your configuration scripts fail on a particular task
     # and you want to restart the provisioning at the step where the failure occurred
