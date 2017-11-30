@@ -14,6 +14,15 @@ $ vagrant box add --name princeton_box images/ubuntu-16.04.virtualbox.box
 
 # Developing
 
+Depending on what project you are working on there are example Vagrantfile's in
+the `Vagrant` directory. If you are working on the lae project as an example
+create a symbolic link to it with 
+
+```
+ln -s /path/to/thisclonedrepo/Vagrant/laeVagrantfile
+/path/to/thisclonedrepo/Vagrantfile
+```
+
 You can use a vagrant machine to develop and test these ansible playbooks. In
 order to do so, run `vagrant up` from this directory.
 
