@@ -1,0 +1,39 @@
+---
+- name: install libaio1
+  apt: 
+    name: libaio1 
+    state: present
+
+- name: create oracle directory
+  file: 
+    path: /opt/oracle 
+    state: directory
+
+- name: unarchive oracle client
+  unarchive: 
+    src: "{{ item }}"
+    dest: /opt/oracle
+  with_fileglob:
+    - local_files/instantclient-*.zip
+
+- name: register installation directory
+  shell: ls -d /opt/oracle/instantclient_1[012]_*
+  register: ls_oracle_home
+  changed_when: false
+
+- name: register libclntsh library path
+  shell: ls -d {{ ls_oracle_home.stdout }}/libclntsh.so.*
+  register: ls_libclntsh_path
+  changed_when: false
+
+- name: link libclntsh library
+  file:
+    src: "{{ ls_libclntsh_path.stdout }}"
+    dest: "{{ ls_oracle_home.stdout }}/libclntsh.so"
+    state: link
+
+- name: define library search path
+  lineinfile: 
+    line: LD_LIBRARY_PATH={{ ls_oracle_home.stdout }}
+    state: present
+    dest: /etc/environment
