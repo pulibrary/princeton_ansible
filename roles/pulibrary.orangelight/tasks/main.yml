@@ -1,18 +1,8 @@
 ---
-- name: remove default nginx
-  file:
-    path: /etc/nginx/sites-enabled/default
-    state: absent
-
-- name: copy template file
-  template:
-    src: default.j2
-    dest: /etc/nginx/sites-available/{{ ansible_hostname }}
-
-- name: symlink to enable
-  file:
-    src: /etc/nginx/sites-available/{{ ansible_hostname }}
-    dest: /etc/nginx/sites-enabled/{{ ansible_hostname }}
-    state: link
-
-  notify: restart nginx
+- name: Create the cron job
+  cron:
+    name: Regenerate the Sitemap nightly
+    hour: 2
+    job: "/bin/bash -l -c 'export PATH=\"/usr/local/bin/:$PATH\" && cd /opt/{{rails_app_directory}}/current && bundle exec rake sitemap:refresh >> /tmp/ol_sitemap.log 2>&1'"
+    minute: 0
+    user: '{{deploy_user}}'
