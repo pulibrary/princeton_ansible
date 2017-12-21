@@ -1,29 +1,34 @@
-Bibdata
-===========
+# Bibdata
 
-This role installs all of the necessary components to run a rails server for marc_liberation.
+This role, and it's complementary playbook, installs all of the necessary components to run a rails server for marc_liberation.
 
-Can we use postgres? It'd be nice to use the cluster. Or use maria_db_cluster.
+## Installation
 
-How are config files managed?
-config.email_regexp
+- Download the following 64-bit linux Instant Client packages (.zip) from [Oracle](http://www.oracle.com/technetwork/topics/linuxx86-64soft-092277.html):
+	- Basic
+	- SDK
+	- SQL*Plus
 
-create directory /opt/marc_liberation/shared/config/ip_whitelist.yml
-(rails_app role creates /opt/rails_app/shared)
-move secret.yml to env variable (update capistrano config file appropriately)
+- Copy them into the `local_files` directory.
 
-Oracle instant client and sdk
-(required login to oracle and download from website)
+## Development
+Create a symbolic link to the bibdata vagrant configuration, then provision a vagrant machine.
 
-/data shared across servers?
+```bash
+$ ln -s /path/to/thisclonedrepo/Vagrant/bibdataVagrantfile /path/to/thisclonedrepo/Vagrantfile
+$ vagrant up
+``` 
 
-improve resque...
+## Run Playbook
 
-Role Componenents
---------------
- - role: pulibrary.ruby
- - role: pulibrary.deploy-user
- - role: pulibrary.passenger
- - role: pulibrary.redis
- - role: pulibrary.nodejs
- - role: pulibrary.rails-app
+### Staging
+```bash
+$ ansible-playbook bibdata.yml --limit=bibdata_staging
+
+```
+
+### Production
+```bash
+$ ansible-playbook bibdata.yml --limit=bibdata_production
+
+```
