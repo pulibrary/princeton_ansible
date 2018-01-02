@@ -1,0 +1,67 @@
+---
+- name: Install libaio1
+  apt: 
+    name: libaio1 
+    state: present
+
+- name: Create oracle directory
+  file: 
+    path: /opt/oracle 
+    state: directory
+
+- name: Unarchive oracle client
+  unarchive: 
+    src: "{{ item }}"
+    dest: /opt/oracle
+  with_fileglob:
+    - local_files/instantclient-*.zip
+
+- name: Register installation directory
+  shell: ls -d /opt/oracle/instantclient_1[012]_*
+  register: ls_oracle_home
+  changed_when: false
+
+- name: Register libclntsh library path
+  shell: ls -d {{ ls_oracle_home.stdout }}/libclntsh.so.*
+  register: ls_libclntsh_path
+  changed_when: false
+
+- name: Link libclntsh library
+  file:
+    src: "{{ ls_libclntsh_path.stdout }}"
+    dest: "{{ ls_oracle_home.stdout }}/libclntsh.so"
+    state: link
+
+- name: Create network admin directory
+  file: 
+    path: "{{ ls_oracle_home.stdout }}/network/admin/"
+    state: directory
+
+- name: Copy tnsnames file
+  copy: 
+    src: files/tnsnames.ora 
+    dest: "{{ ls_oracle_home.stdout }}/network/admin/tnsnames.ora"
+
+- name: Define library search path
+  lineinfile: 
+    line: LD_LIBRARY_PATH={{ ls_oracle_home.stdout }}
+    state: present
+    dest: /etc/environment
+
+- name: Define oracle home path
+  lineinfile: 
+    line: ORACLE_HOME={{ ls_oracle_home.stdout }}
+    state: present
+    dest: /etc/environment
+
+- name: Define oracle lib path
+  lineinfile: 
+    line: ORACLE_LIB={{ ls_oracle_home.stdout }}
+    state: present
+    dest: /etc/environment
+
+- name: Define tns admin path
+  lineinfile: 
+    line: TNS_ADMIN={{ ls_oracle_home.stdout }}/network/admin
+    state: present
+    dest: /etc/environment
