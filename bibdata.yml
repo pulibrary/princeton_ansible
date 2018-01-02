@@ -1,0 +1,19 @@
+---
+- hosts: 
+    - bibdata_staging
+    - bibdata_production
+  remote_user: pulsys
+  become: true
+  vars_files:
+    - site_vars.yml
+    - group_vars/bibdata/vault.yml
+  roles:
+    - role: pulibrary.ruby
+    - role: pulibrary.deploy-user
+    - role: pulibrary.passenger
+    - role: pulibrary.redis
+    - {role: pulibrary.mariadb, when: bibdata_db_host == 'localhost'}
+    - role: pulibrary.nodejs
+    - role: pulibrary.rails-app
+    - role: pulibrary.oracle.client
+    - role: pulibrary.bibdata
