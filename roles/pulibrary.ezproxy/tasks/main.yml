@@ -1,0 +1,33 @@
+---
+- name: create ezproxy directory
+  file:
+    path: '/usr/local/ezproxy'
+    state: directory
+
+- name: download ezproxy binary
+  get_url:
+    url: 'https://www.oclc.org/content/dam/support/ezproxy/documentation/download/binaries/{{ ezproxy_version }}/ezproxy-linux.bin'
+    dest: '/usr/local/ezproxy/ezproxy'
+    mode: 0755
+
+- name: install dependencies for 64bit
+  apt:
+    name: '{{ item }}'
+    state: 'present'
+  with_items:
+    - lib32ncurses5
+    - lib32z1
+
+- name: install missing file replacements
+  command: /usr/local/ezproxy/ezproxy -m
+
+- name: create admin password
+  copy:
+    src: 'local_files/user.txt'
+    dest: '/usr/local/ezproxy/user.txt'
+
+- name: run command with WSKey
+  command: /usr/local/ezproxy/ezproxy -k '{{ oclc_wskey }}'
+
+- name: launch ezproxy
+  command: /usr/local/ezproxy/ezproxy
