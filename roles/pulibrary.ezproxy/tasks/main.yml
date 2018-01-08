@@ -1,13 +1,15 @@
 ---
 - name: create ezproxy directory
   file:
-    path: '/usr/local/ezproxy'
+    path: '/var/local/ezproxy'
     state: directory
+    group: '{{ deploy_user }}'
+    owner: '{{ deploy_user }}'
 
 - name: download ezproxy binary
   get_url:
     url: 'https://www.oclc.org/content/dam/support/ezproxy/documentation/download/binaries/{{ ezproxy_version }}/ezproxy-linux.bin'
-    dest: '/usr/local/ezproxy/ezproxy'
+    dest: '/var/local/ezproxy/ezproxy'
     mode: 0755
 
 - name: install dependencies for 64bit
@@ -19,17 +21,21 @@
     - lib32z1
 
 - name: install missing file replacements
-  command: /usr/local/ezproxy/ezproxy -m
-  become: 'yes'
+  command: /var/local/ezproxy/ezproxy -m
+  become_user: '{{ deploy_user }}'
   ignore_errors: true
 
 - name: create admin password
   copy:
     src: 'local_files/ezproxy/user.txt'
-    dest: '/usr/local/ezproxy/user.txt'
+    dest: '/var/local/ezproxy/user.txt'
+    owner: '{{ deploy_user }}'
+    group: '{{ deploy_user }}'
 
 - name: run command with WSKey
-  command: /usr/local/ezproxy/ezproxy -k '{{ oclc_wskey }}'
+  command: /var/local/ezproxy/ezproxy -k '{{ oclc_wskey }}'
+  become_user: '{{ deploy_user }}'
 
 - name: launch ezproxy
-  command: /usr/local/ezproxy/ezproxy start
+  command: /var/local/ezproxy/ezproxy start
+  become_user: '{{ deploy_user }}'
