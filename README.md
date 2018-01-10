@@ -30,3 +30,10 @@ After the box is built, you can re-run the scripts via `vagrant provision`.
 
 You can ignore the prompt for an SSH password, but will have to put in the
 Ansible Vault password.
+
+# Connections to other boxes
+
+Currently there's no automation on firewall changes when the box you're provisioning needs to talk to the postgres or solr machines. See instructions for manual edits at:
+
+* https://github.com/pulibrary/pul-the-hard-way/blob/master/services/postgresql.md#allow-access-from-a-new-box
+* https://github.com/pulibrary/pul-the-hard-way/blob/master/services/solr.md#allow-access-from-a-new-box
