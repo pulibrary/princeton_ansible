@@ -23,10 +23,15 @@ $ vagrant up
 
 ### Staging
 ```bash
-$ ansible-playbook bibdata.yml --limit=bibdata_staging --extra-vars "passenger_server_name=bibdata-staging.* bibdata_db_host=localhost"
+$ ansible-playbook bibdata.yml --limit=bibdata_staging
 ```
 
 ### Production
 ```bash
 $ ansible-playbook bibdata.yml --limit=bibdata_production
+```
+
+### Worker
+```bash
+$ ansible-playbook bibdata.yml --limit=bibdata_workers
 ```
