@@ -1,20 +1,59 @@
 ---
-- hosts: 
-    - bibdata_staging
-    - bibdata_production
+- hosts: bibdata
   remote_user: pulsys
   become: true
   vars_files:
     - site_vars.yml
     - group_vars/bibdata/vault.yml
+  vars:
+    bibdata_db_host: localhost
+    passenger_server_name: bibdata-staging.*
+    samba_status: server
   roles:
     - role: pulibrary.ruby
     - role: pulibrary.deploy-user
     - role: pulibrary.passenger
     - role: pulibrary.redis
-    - {role: pulibrary.mariadb, when: bibdata_db_host == 'localhost'}
+    - role: pulibrary.mariadb
     - role: pulibrary.nodejs
     - role: pulibrary.rails-app
     - role: pulibrary.oracle.client
     - role: pulibrary.sidekiq_worker
+    - role: pulibrary.samba
+    - role: pulibrary.bibdata
+- hosts: bibdata_production
+  remote_user: pulsys
+  become: true
+  vars_files:
+    - site_vars.yml
+    - group_vars/bibdata/vault.yml
+  vars:
+    samba_status: client
+  roles:
+    - role: pulibrary.ruby
+    - role: pulibrary.deploy-user
+    - role: pulibrary.passenger
+    - role: pulibrary.redis
+    - role: pulibrary.nodejs
+    - role: pulibrary.rails-app
+    - role: pulibrary.oracle.client
+    - role: pulibrary.bibdata
+- hosts: bibdata_production_workers
+  remote_user: pulsys
+  become: true
+  vars_files:
+    - site_vars.yml
+    - group_vars/bibdata/vault.yml
+  vars:
+    samba_status: server
+  roles:
+    - role: pulibrary.ruby
+    - role: pulibrary.deploy-user
+    - role: pulibrary.passenger
+    - role: pulibrary.redis
+    - role: pulibrary.nodejs
+    - role: pulibrary.rails-app
+    - role: pulibrary.oracle.client
+    - role: pulibrary.sidekiq_worker
+    - role: pulibrary.samba
     - role: pulibrary.bibdata
