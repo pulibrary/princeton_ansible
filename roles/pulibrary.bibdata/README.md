@@ -33,5 +33,5 @@ $ ansible-playbook bibdata.yml --limit=bibdata_production
 
 ### Worker
 ```bash
-$ ansible-playbook bibdata.yml --limit=bibdata_workers
+$ ansible-playbook bibdata.yml --limit=bibdata_production_workers
 ```
