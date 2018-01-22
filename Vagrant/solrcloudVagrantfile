@@ -1,0 +1,28 @@
+# Defines our Vagrant environment
+#
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+Vagrant.configure("2") do |config|
+
+# create some mariadb servers
+  # https://docs.vagrantup.com/v2/vagrantfile/tips.html
+  (1..2).each do |i|
+    config.vm.define "solr#{i}" do |node|
+        node.vm.box = "princeton_box"
+        node.vm.hostname = "maria#{i}"
+        node.vm.network :private_network, ip: "10.0.15.2#{i}"
+        node.vm.provider "virtualbox" do |vb|
+          vb.memory = "2048"
+        end
+    end
+    config.vm.provision "ansible" do |ansible|
+        ansible.playbook = "solr.yml"
+        ansible.limit = "all"
+
+    end
+    config.ssh.private_key_path = "pulsys_rsa_key"
+    config.ssh.username = "pulsys"
+  end
+
+end
