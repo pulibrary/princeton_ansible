@@ -35,6 +35,7 @@ If you need to diff an ansible-vault file, run
 ```
 git config --global diff.ansible-vault.textconv "ansible-vault view"
 ```
+after which any `git diff` command should decrypt your ansible-vault files.
 
 # Connections to other boxes
 
