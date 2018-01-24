@@ -31,6 +31,12 @@ After the box is built, you can re-run the scripts via `vagrant provision`.
 You can ignore the prompt for an SSH password, but will have to put in the
 Ansible Vault password.
 
+If you need to diff an ansible-vault file, run
+```
+git config --global diff.ansible-vault.textconv "ansible-vault view"
+```
+after which any `git diff` command should decrypt your ansible-vault files.
+
 # Connections to other boxes
 
 Currently there's no automation on firewall changes when the box you're provisioning needs to talk to the postgres or solr machines. See instructions for manual edits at:
