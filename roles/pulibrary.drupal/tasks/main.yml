@@ -1,4 +1,12 @@
 ---
+- name: install mysql php driver
+  apt:
+    name: '{{ item }}'
+    state: present
+  with_items:
+    - php7.0-gd
+    - php7.0-mysql
+
 - name: clone the drupal repo
   git:
     repo: '{{ drupal_git_repo }}'
@@ -6,19 +14,41 @@
     dest: '{{ drupal_docroot }}'
     depth: 1
 
+- name: grant permissions on deploy user
+  file:
+    path: '{{ drupal_docroot }}'
+    state: directory
+    owner: pulsys
+    group: pulsys
+    recurse: 'yes'
+
 - name: create composer directory
   file:
     path: '{{ drush_path }}/vendor'
     state: directory
     owner: pulsys
     group: pulsys
-  become: no
+  become: 'no'
+  become_user: pulsys
+
+- name: create vendor directory
+  file:
+    path: '{{ drupal_docroot }}/vendor'
+    state: directory
+    owner: pulsys
+    group: pulsys
+
+- name: Drupal | Run composer if we are running D8
+  composer:
+    command: require
+    working_dir: '{{ drush_path }}' # need to make a better decision for this
+  become: 'no'
   become_user: pulsys
 
 - name: Drupal | Run composer if we are running D8
   composer:
     command: install
-    working_dir: '{{ drush_path }}' # need to make a better decision for this
+    working_dir: '{{ drupal_docroot }}' # need to make a better decision for this
   become: 'no'
   become_user: pulsys
 
@@ -34,6 +64,8 @@
     mode: a+w
   when: not drush_status.stdout | search("Drupal bootstrap\s+:\s+Successful")
 
+- include: mysql_setup.yml
+
 - name: Drupal | Drush site install if not already installed
   command: >
     drush site-install standard -y
@@ -43,4 +75,5 @@
     --db-url=mysql://{{ drupal_db.user }}:{{ drupal_db.password }}@localhost/{{ drupal_db.name }}
     -r {{ drupal_docroot }}
   when: not drush_status.stdout | search("Drupal bootstrap\s+:\s+Successful")
+  become: 'yes'
   notify: 'restart apache'
