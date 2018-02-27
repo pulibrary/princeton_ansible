@@ -1,7 +1,7 @@
 ---
-# These first 3 tasks can be deleted
-# if at some point we're sure there isn't anymore brightbox stuff
-- name: uninstall Ruby 2.4.x
+# Ensure that any remaining Brightbox-installed Rubies are removed
+# Please see https://www.brightbox.com/docs/ruby/ubuntu/
+- name: uninstall Ruby 2.4.x releases
   apt:
     name: '{{ item }}'
     state: absent
@@ -12,27 +12,20 @@
     - ruby2.4-dev
     - ruby-switch
 
-- name: uninstall the dependencies
-  apt:
-    name: software-properties-common
-    state: absent
-    cache_valid_time: '{{ apt_cache_timeout }}'
-    update_cache: 'yes'
-
 - name: remove the Brightbox repository
   apt_repository:
     repo: 'ppa:brightbox/ruby-ng'
     state: absent
     update_cache: 'yes'
 
-# removes package ruby, installs ruby from source
-
+# Remove the existing system Ruby
 - name: remove package ruby
   become: yes
   package:
     name: ruby
     state: absent
 
+# Create the environment for building and installing Ruby from its source
 - name: create install directory
   become: yes
   file:
@@ -53,20 +46,21 @@
 - name: unzip ruby file
   become: yes
   unarchive:
-    src: /opt/install/ruby-{{ ruby_ver }}.tar.gz
+    src: "{{ install_path }}/ruby-{{ ruby_ver }}.tar.gz"
     dest: "{{ install_path }}/"
     creates: "{{ install_path }}/ruby-{{ ruby_ver }}/compile.c"
     copy: no
 
+- name: configure ruby
+  become: yes
+  shell: cd {{ install_path }}/ruby-{{ ruby_ver }} && ./configure --enable-shared creates={{ install_path }}/ruby-{{ ruby_ver }}/Makefile
+
+# Check if Ruby is installed, and store it within a Register
 - name: check if ruby is installed
   become: yes
   stat:
     path: /usr/local/bin/ruby
   register: ruby
-
-- name: configure ruby
-  become: yes
-  shell: cd {{ install_path }}/ruby-{{ ruby_ver }} && ./configure --enable-shared creates={{ install_path }}/ruby-{{ ruby_ver }}/Makefile
 
 - name: make ruby
   become: yes
@@ -77,12 +71,6 @@
   become: yes
   shell: cd {{ install_path }}/ruby-{{ ruby_ver }} && make install creates=/usr/local/bin/ruby
   when: ruby.stat.exists == False
-
-  # This installs bundler latest as a default gem; conflicts with below
-  #- name: Update ruby gems
-  #  command: gem update --system
-  #  become: 'yes'
-  #  become_method: sudo
 
 - name: install bundler
   become: yes
