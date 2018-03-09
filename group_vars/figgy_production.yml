@@ -46,6 +46,7 @@ application_host: '{{passenger_server_name}}'
 application_host_protocol: 'https'
 project_db_host: '{{postgres_host}}'
 redis_bind_interface: '0.0.0.0'
+figgy_solr_url: 'http://lib-solr2.princeton.edu:8983/solr/figgy'
 rails_app_vars:
   - name: SECRET_KEY_BASE
     value: '{{vault_figgy_secret_key}}'
@@ -64,7 +65,7 @@ rails_app_vars:
   - name: APPLICATION_HOST_PROTOCOL
     value: '{{application_host_protocol}}'
   - name: SOLR_URL
-    value: 'http://lib-solr2.princeton.edu:8983/solr/figgy'
+    value: '{{figgy_solr_url}}'
   - name: CANTALOUPE_URL
     value: 'https://libimages1.princeton.edu/loris/figgy_prod/'
   - name: PLUM_SOLR_URL
@@ -154,3 +155,9 @@ figgy_datadog_ruby_check:
       service: figgy
       source: ruby
       sourcecategory: sourcecode
+figgy_datadog_http_check:
+  init_config:
+  instances:
+    - name: Figgy Solr
+      url: '{{figgy_solr_url}}/admin/ping'
+      skip_event: true
