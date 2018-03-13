@@ -3,6 +3,7 @@
   apt: name={{item}} state=present
   with_items:
     - cifs-utils
+    - libmysqlclient-dev
 
 - include_tasks: samba_server.yml
   when: samba_status == 'server'
@@ -10,5 +11,13 @@
 - include_tasks: samba_client.yml
   when: samba_status == 'client'
 
-- include_tasks: local_mariadb.yml 
+- include_tasks: local_mariadb.yml
   when: bibdata_db_host == 'localhost'
+
+- name: Add the cron task for reseeding the ARK cache from the repositories
+  cron:
+    name: Reseed the ARK cached from Figgy and Plum
+    hour: 3
+    job: "/bin/bash -l -c 'export PATH=\"/usr/local/bin/:$PATH\" && cd /opt/{{rails_app_directory}}/current && bundle exec rake liberate:arks:seed_cache'"
+    minute: 0
+    user: '{{deploy_user}}'
