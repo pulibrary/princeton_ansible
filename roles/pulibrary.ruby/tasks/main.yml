@@ -1,21 +1,10 @@
 ---
-- name: install the dependencies
-  apt:
-    name: software-properties-common
-    state: present
-    cache_valid_time: '{{ apt_cache_timeout }}'
-    update_cache: 'yes'
-
-- name: add the Brightbox repository
-  apt_repository:
-    repo: 'ppa:brightbox/ruby-ng'
-    state: present
-    update_cache: 'yes'
-
-- name: install Ruby 2.4.3
+# Ensure that any remaining Brightbox-installed Rubies are removed
+# Please see https://www.brightbox.com/docs/ruby/ubuntu/
+- name: uninstall Ruby 2.4.x releases
   apt:
     name: '{{ item }}'
-    state: present
+    state: absent
     cache_valid_time: '{{ apt_cache_timeout }}'
     update_cache: 'yes'
   with_items:
@@ -23,5 +12,69 @@
     - ruby2.4-dev
     - ruby-switch
 
-- name: switch to Ruby 2.4.x release for the system default
-  shell: ruby-switch --set ruby2.4
+- name: remove the Brightbox repository
+  apt_repository:
+    repo: 'ppa:brightbox/ruby-ng'
+    state: absent
+    update_cache: 'yes'
+
+# Remove the existing system Ruby
+- name: remove package ruby
+  become: yes
+  package:
+    name: ruby
+    state: absent
+
+# Create the environment for building and installing Ruby from its source
+- name: create install directory
+  become: yes
+  file:
+    owner: "{{ ansible_ssh_user }}"
+    group: "{{ ansible_ssh_user }}"
+    state: directory
+    path: "{{ install_path }}"
+
+- name: download ruby
+  become: yes
+  get_url:
+    url: "{{ ruby_gzip_url }}"
+    sha256sum: "{{ ruby_sha_256 }}"
+    owner: "{{ ansible_ssh_user }}"
+    group: "{{ ansible_ssh_user }}"
+    dest: "{{ install_path }}/ruby-{{ ruby_ver }}.tar.gz"
+
+- name: unzip ruby file
+  become: yes
+  unarchive:
+    src: "{{ install_path }}/ruby-{{ ruby_ver }}.tar.gz"
+    dest: "{{ install_path }}/"
+    creates: "{{ install_path }}/ruby-{{ ruby_ver }}/compile.c"
+    copy: no
+
+- name: configure ruby
+  become: yes
+  shell: cd {{ install_path }}/ruby-{{ ruby_ver }} && ./configure --enable-shared creates={{ install_path }}/ruby-{{ ruby_ver }}/Makefile
+
+# Check if Ruby is installed, and store it within a Register
+- name: check if ruby is installed
+  become: yes
+  stat:
+    path: /usr/local/bin/ruby
+  register: ruby
+
+- name: make ruby
+  become: yes
+  shell: cd {{ install_path }}/ruby-{{ ruby_ver }} && make
+  when: ruby.stat.exists == False
+
+- name: install ruby
+  become: yes
+  shell: cd {{ install_path }}/ruby-{{ ruby_ver }} && make install creates=/usr/local/bin/ruby
+  when: ruby.stat.exists == False
+
+- name: install bundler
+  become: yes
+  gem:
+    name: bundler
+    version: "{{ bundler_version }}"
+    user_install: no
