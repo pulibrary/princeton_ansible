@@ -1,16 +1,19 @@
 ---
-- name: Install libaio1
-  apt: 
-    name: libaio1 
+- name: Install system package dependencies
+  apt:
+    name: "{{ item }}"
     state: present
+  with_items:
+    - libaio1
+    - unzip
 
 - name: Create oracle directory
-  file: 
-    path: /opt/oracle 
+  file:
+    path: /opt/oracle
     state: directory
 
 - name: Unarchive oracle client
-  unarchive: 
+  unarchive:
     src: "{{ item }}"
     dest: /opt/oracle
   with_fileglob:
@@ -33,35 +36,35 @@
     state: link
 
 - name: Create network admin directory
-  file: 
+  file:
     path: "{{ ls_oracle_home.stdout }}/network/admin/"
     state: directory
 
 - name: Copy tnsnames file
-  copy: 
-    src: files/tnsnames.ora 
+  copy:
+    src: files/tnsnames.ora
     dest: "{{ ls_oracle_home.stdout }}/network/admin/tnsnames.ora"
 
 - name: Define library search path
-  lineinfile: 
+  lineinfile:
     line: LD_LIBRARY_PATH={{ ls_oracle_home.stdout }}
     state: present
     dest: /etc/environment
 
 - name: Define oracle home path
-  lineinfile: 
+  lineinfile:
     line: ORACLE_HOME={{ ls_oracle_home.stdout }}
     state: present
     dest: /etc/environment
 
 - name: Define oracle lib path
-  lineinfile: 
+  lineinfile:
     line: ORACLE_LIB={{ ls_oracle_home.stdout }}
     state: present
     dest: /etc/environment
 
 - name: Define tns admin path
-  lineinfile: 
+  lineinfile:
     line: TNS_ADMIN={{ ls_oracle_home.stdout }}/network/admin
     state: present
     dest: /etc/environment
