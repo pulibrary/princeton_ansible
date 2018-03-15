@@ -50,6 +50,7 @@
     - plum_mount.smb.credentials
     - libimages1.smb.credentials
     - maplab.smb.credentials
+    - geoserver.smb.credentials
 - name: Create mount to plum binaries
   mount:
     name: '/mnt/diglibdata/hydra_binaries'
@@ -96,6 +97,13 @@
     fstype: cifs
     opts: 'credentials=/etc/studio.new.smb.credentials,uid={{deploy_user_uid}}'
     state: mounted
+- name: Create geoserver derivatives mount
+  mount:
+    name: /mnt/geoserver/figgy_geo_data
+    src: //geoserv1.princeton.edu/figgy_geo_data
+    fstype: cifs
+    opts: 'credentials=/etc/geoserver.smb.credentials,uid={{deploy_user_uid}}'
+    state: mounted
 ## Symlink to Mounts
 - name: Create symlinks
   file:
@@ -112,6 +120,8 @@
       link: '/opt/repository/files'
     - src: '{{figgy_derivatives_mount}}'
       link: '/opt/repository/derivatives'
+    - src: '{{figgy_geo_derivatives_mount}}'
+      link: '/opt/repository/geo_derivatives'
 ## Simple tiles dependency
 - name: Compile simple-tiles from source
   shell: curl -L {{ simple_tiles_url }} | tar -xz && cd simple-tiles-{{simple_tiles_version}} && ./configure && make && make install
