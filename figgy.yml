@@ -4,6 +4,7 @@
   become: true
   vars_files:
     - site_vars.yml
+  strategy: free
   roles:
     - role: pulibrary.ruby
     - role: pulibrary.deploy-user
@@ -24,6 +25,7 @@
 - hosts: figgy_production_webserver
   remote_user: pulsys
   become: true
+  strategy: free
   vars_files:
     - site_vars.yml
   roles:
@@ -42,9 +44,11 @@
     - { role: pulibrary.rabbitmq, when: figgy_rabbitmq_host == 'true' }
     - role: pulibrary.sidekiq_worker
     - role: pulibrary.figgy
+    - role: pulibrary.ansible-datadog
 - hosts: figgy_production_workers
   remote_user: pulsys
   become: true
+  strategy: free
   vars_files:
     - site_vars.yml
   roles:
@@ -59,3 +63,4 @@
     - { role: pulibrary.solr, when: postgresql_is_local == true }
     - role: pulibrary.sidekiq_worker
     - role: pulibrary.figgy
+    - role: pulibrary.ansible-datadog
