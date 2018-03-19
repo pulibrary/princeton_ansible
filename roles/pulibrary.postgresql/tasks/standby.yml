@@ -1,0 +1,40 @@
+---
+- name: install postgresql client packages
+  apt:
+    name: '{{ item }}'
+    state: present
+    cache_valid_time: '{{ apt_cache_timeout }}'
+    update_cache: 'yes'
+  with_items:
+    - postgresql-{{ postgres_version }}-repmgr
+  tags: replication
+
+- name: install replication configuration
+  template:
+    src: 'postgresql.replication.conf.j2'
+    dest: '/etc/postgresql/{{ postgres_version }}/main/conf.d/postgresql.replication.conf'
+  tags: replication
+
+- name: create replication manager
+  postgresql_user:
+    name: '{{ repmgr_dbuser_name }}'
+    login_host: '{{ postgres_host }}'
+    login_user: '{{ postgres_admin_user }}'
+    login_password: '{{ postgres_admin_password }}'
+    password: '{{ repmgr_dbuser_password }}'
+    role_attr_flags: '{{ application_dbuser_role_attr_flags }}'
+    state: 'present'
+  tags: replication
+
+- name: create replication metadata database
+  postgresql_db:
+    name: '{{ repmgr_db_name }}'
+    login_host: '{{ postgres_host }}'
+    login_user: '{{ postgres_admin_user }}'
+    login_password: '{{ postgres_admin_password }}'
+    encoding: 'UTF-8'
+    owner: '{{ repmgr_dbuser_name }}'
+    state: 'present'
+  tags: replication
+
+- include: configure_replica.yml

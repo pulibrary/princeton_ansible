@@ -1,0 +1,76 @@
+---
+- name: PostgreSQL | Make sure the CA certificates are available
+  apt:
+    pkg: ca-certificates
+    state: present
+  tags: install
+
+- name: PostgreSQL | Add PostgreSQL repository apt-key
+  apt_key:
+    url: '{{ postgresql_apt_key_url }}'
+    state: present
+  tags: install
+
+- name: add postgresql repository
+  apt_repository:
+    repo: 'deb http://apt.postgresql.org/pub/repos/apt/ {{ ansible_distribution_release }}-pgdg main'
+    update_cache: 'yes'
+    state: present
+  tags: install
+
+- name: install postgresql server packages
+  apt:
+    name: '{{ item }}'
+    state: present
+    cache_valid_time: '{{ apt_cache_timeout }}'
+    update_cache: 'yes'
+  with_items:
+    - postgresql-{{ postgres_version }}
+    - repmgr
+  when: postgresql_is_local
+  tags: install
+
+- name: install postgresql client packages
+  apt:
+    name: '{{ item }}'
+    state: present
+    cache_valid_time: '{{ apt_cache_timeout }}'
+    update_cache: 'yes'
+  with_items:
+    - libpq-dev
+    - python-psycopg2
+  tags: install
+
+- name: install access rules
+  template:
+    src: 'pg_hba.conf.j2'
+    dest: '/etc/postgresql/{{ postgres_version }}/main/pg_hba.conf'
+    group: postgres
+    owner: postgres
+  register: configure_postgres
+  when: postgresql_is_local
+  tags: install
+
+- name: install configuration file
+  template:
+    src: 'postgresql.conf.j2'
+    dest: '/etc/postgresql/{{ postgres_version }}/main/postgresql.conf'
+    group: postgres
+    owner: postgres
+  register: configure_postgres
+  when: postgresql_is_local
+  tags: install
+
+- name: ensure postgres starts on boot
+  systemd:
+    name: postgresql
+    enabled: 'yes'
+  when: postgresql_is_local
+  tags: install
+
+- name: restart postgres server
+  systemd:
+    name: postgresql
+    state: restarted
+  when: configure_postgres.changed
+  tags: install
