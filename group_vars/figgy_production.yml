@@ -28,6 +28,7 @@ figgy_rabbit_user: '{{vault_figgy_rabbit_user}}'
 figgy_rabbit_password: '{{vault_figgy_rabbit_password}}'
 figgy_rabbit_host: 'figgy1.princeton.edu'
 figgy_rabbit_server: 'amqp://{{figgy_rabbit_user}}:{{figgy_rabbit_password}}@{{figgy_rabbit_host}}:5672'
+figgy_pudl_root: '{{vault_figgy_pudl_root}}'
 rabbitmq_user: '{{figgy_rabbit_user}}'
 rabbitmq_password: '{{figgy_rabbit_password}}'
 rails_app_env: "production"
@@ -46,6 +47,7 @@ application_host: '{{passenger_server_name}}'
 application_host_protocol: 'https'
 project_db_host: '{{postgres_host}}'
 redis_bind_interface: '0.0.0.0'
+figgy_solr_url: 'http://lib-solr2.princeton.edu:8983/solr/figgy'
 rails_app_vars:
   - name: SECRET_KEY_BASE
     value: '{{vault_figgy_secret_key}}'
@@ -64,7 +66,7 @@ rails_app_vars:
   - name: APPLICATION_HOST_PROTOCOL
     value: '{{application_host_protocol}}'
   - name: SOLR_URL
-    value: 'http://lib-solr2.princeton.edu:8983/solr/figgy'
+    value: '{{figgy_solr_url}}'
   - name: CANTALOUPE_URL
     value: 'https://libimages1.princeton.edu/loris/figgy_prod/'
   - name: PLUM_SOLR_URL
@@ -138,3 +140,27 @@ deploy_ssh_users:
     key: "{{lookup('file', 'keys/lib-proc2.pub')}}"
   - name: lib-proc3
     key: "{{lookup('file', 'keys/lib-proc3.pub')}}"
+datadog_api_key: "{{vault_datadog_key}}"
+datadog_config:
+  tags: "{{figgy_tags}}"
+  apm_enabled: "true"
+  log_enabled: true
+  process_config:
+    enabled: "true"
+figgy_datadog_nginx_check:
+figgy_datadog_ruby_check:
+  init_config:
+  logs:
+    - type: file
+      path: /opt/figgy/current/log/production.log
+      service: figgy
+      source: ruby
+      sourcecategory: sourcecode
+figgy_datadog_http_check:
+  init_config:
+  instances:
+    - name: Figgy Solr
+      url: '{{figgy_solr_url}}/admin/ping'
+      skip_event: true
+      tags: 
+       - 'http_service:solr'
