@@ -1,0 +1,45 @@
+---
+- name: Overwrite myid file.
+  template:
+    src: 'myid.j2'
+    dest: '{{zookeeper_conf_dir}}/conf/myid'
+    force: '{{ zookeeper_force_myid }}'
+    owner: '{{ zookeeper_user }}'
+    group: '{{ zookeeper_group }}'
+  notify:
+    - Restart zookeeper
+
+- name: Overwrite application default config file
+  template:
+    src: 'zoo.cfg.j2'
+    dest: '{{zookeeper_conf_dir}}/conf/zoo.cfg'
+    owner: '{{ zookeeper_user }}'
+    group: '{{ zookeeper_group }}'
+  notify:
+    - Restart zookeeper
+
+- name: Configure zookeeper-env.sh
+  template:
+    src: 'zookeeper-env.sh.j2'
+    dest: '{{ zookeeper_conf_dir }}/conf/zookeeper-env.sh'
+    owner: '{{ zookeeper_user }}'
+    group: '{{ zookeeper_group }}'
+  notify:
+    - Restart zookeeper
+
+- name: ZOOKEEPER | Configure JAVA_OPTS
+  lineinfile:
+    name: "{{ zookeeper_dir }}/bin/zkEnv.sh"
+    regexp: "^ZOOMAIN="
+    line: "ZOOMAIN=\"{{ (zookeeper_jmx_enabled) | ternary(zookeeper_java_opts,'') }} {{ zookeeper_main_file }}\""
+  notify:
+    - Restart zookeeper
+
+- name: Update the log4j
+  template:
+    src: 'log4j.properties.j2'
+    dest: '{{ zookeeper_conf_dir }}/conf/log4j.properties'
+    owner: '{{ zookeeper_user }}'
+    group: '{{ zookeeper_group }}'
+  notify:
+    - Restart zookeeper
