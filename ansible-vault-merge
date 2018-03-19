@@ -1,27 +1,62 @@
-#!/bin/bash
+#!/bin/sh
+
+#
+# ansible-vault-merge: helper script for merging changes in ansible-vault file
+#
+
+PROGNAME=$(basename $0)
+
+usage() {
+    cat <<EOF
+usage: ${PROGNAME} [OPTION]... [--] BASE CURRENT OTHER [LOCATION]
+
+  -h, --help Display this help
+EOF
+}
+
+while test $# -gt 0; do
+    case $1 in
+        --help|-h)
+            usage
+            exit 0
+            ;;
+        --)
+            shift 1
+            break
+            ;;
+        -*)
+            echo "${PROGNAME}: unknown option $1" >&2
+            usage >&2
+            exit 1
+            ;;
+        *)
+            # probably the first positional argument
+            break
+    esac
+done
+
+if test $# -lt 3; then
+    echo "${PROGNAME}: not enough arguments" >&2
+    usage >&2
+    exit 1
+fi
+
+BASE=$1
+CURRENT=$2
+OTHER=$3
+LOCATION=$4
 
 set -e
 
-ancestor_version=$1
-current_version=$2
-other_version=$3
-conflict_marker_size=$4
-merged_result_pathname=$5
+echo "ansible-vault-merge ${LOCATION}"
 
-ancestor_tempfile=$(mktemp tmp.XXXXXXXXXX)
-current_tempfile=$(mktemp tmp.XXXXXXXXXX)
-other_tempfile=$(mktemp tmp.XXXXXXXXXX)
+ansible-vault decrypt $BASE > /dev/null
+ansible-vault decrypt $CURRENT > /dev/null
+ansible-vault decrypt $OTHER > /dev/null
 
-delete_tempfiles() {
-    rm -f "$ancestor_tempfile" "$current_tempfile" "$other_tempfile"
-}
-trap delete_tempfiles EXIT
+if ! git merge-file -L CURRENT -L BASE -L OTHER $CURRENT $BASE $OTHER; then
+    echo "Merge conflict; opening editor to resolve." >&2
+    ${EDITOR:-vi} $CURRENT
+fi
 
-ansible-vault decrypt --output "$ancestor_tempfile" "$ancestor_version"
-ansible-vault decrypt --output "$current_tempfile" "$current_version"
-ansible-vault decrypt --output "$other_tempfile" "$other_version"
-
-git merge-file "$current_tempfile" "$ancestor_tempfile" "$other_tempfile"
-
-ansible-vault encrypt --output "$current_version" "$current_tempfile"
-^D
+ansible-vault encrypt $CURRENT
