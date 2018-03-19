@@ -34,6 +34,8 @@ Ansible Vault password.
 If you need to diff an ansible-vault file, run
 ```
 git config --global diff.ansible-vault.textconv "ansible-vault view"
+git config --local merge.ansible-vault.driver "./ansible-vault-merge %O %A %B %L %P"
+git config --local merge.ansible-vault.name "Ansible Vault merge driver"
 ```
 after which any `git diff` command should decrypt your ansible-vault files.
 
