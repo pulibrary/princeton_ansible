@@ -67,16 +67,18 @@
   lineinfile:
     path: '/etc/postgresql/{{ postgres_version }}/main/pg_hba.conf'
     line: 'host    all             all             {{ansible_default_ipv4.address}}/32       md5'
-  delegate_to: '{{postgres_host}}'
+  delegate_to: '{{ postgres_host }}'
   register: remote_postgres_configured
-  when: postgresql_is_local != true
+  when:
+    - postgres_host is not none
+    - postgresql_is_local != true
 
 - name: reload remote postgres
   systemd:
     name: postgresql
     state: reloaded
   become: yes
-  delegate_to: '{{postgres_host}}'
+  delegate_to: '{{ postgres_host }}'
   when: remote_postgres_configured.changed
 
 - include: create_users.yml
