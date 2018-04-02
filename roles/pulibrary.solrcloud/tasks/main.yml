@@ -1,4 +1,13 @@
 ---
+- name: update host file
+  lineinfile:
+    dest: /etc/hosts
+    regexp: '{{ hostvars[item].ansible_default_ipv4.address }}.*{{ item }}$'
+    line: "{{ hostvars[item].ansible_default_ipv4.address }} {{item}}"
+    state: present
+  become: yes
+  loop: "{{ groups.solr }}"
+
 - name: solr cloud install node
   include: install.yml
   tags:
