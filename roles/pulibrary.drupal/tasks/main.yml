@@ -1,0 +1,84 @@
+---
+- name: install mysql php driver
+  apt:
+    name: '{{ item }}'
+    state: present
+  with_items:
+    - libapache2-mod-php7.0
+    - php7.0-gd
+    - php7.0-mysql
+
+- name: clone the drupal repo
+  git:
+    repo: '{{ drupal_git_repo }}'
+    version: '{{ drupal_version_branch }}'
+    dest: '{{ drupal_docroot }}'
+    depth: 1
+
+- name: grant permissions on deploy user
+  file:
+    path: '{{ drupal_docroot }}'
+    state: directory
+    owner: pulsys
+    group: pulsys
+    recurse: 'yes'
+
+- name: create composer directory
+  file:
+    path: '{{ drush_path }}/vendor'
+    state: directory
+    owner: pulsys
+    group: pulsys
+  become: 'no'
+  become_user: pulsys
+  when: drupal_major_version == 8
+
+- name: create vendor directory
+  file:
+    path: '{{ drupal_docroot }}/vendor'
+    state: directory
+    owner: pulsys
+    group: pulsys
+  when: drupal_major_version == 8
+
+- name: Drupal | Run composer if we are running D8
+  composer:
+    command: require
+    working_dir: '{{ drush_path }}' # need to make a better decision for this
+  become: 'no'
+  become_user: pulsys
+  when: drupal_major_version == 8
+
+- name: Drupal | Run composer if we are running D8
+  composer:
+    command: install
+    working_dir: '{{ drupal_docroot }}' # need to make a better decision for this
+  become: 'no'
+  become_user: pulsys
+  when: drupal_major_version == 8
+
+- name: Drupal | Check if site is already installed
+  command: >
+    drush status --root={{ drupal_docroot }}
+  register: drush_status
+
+- name: Drupal | Give appropriate permissions for files directory
+  file:
+    dest: '{{ drupal_docroot }}/sites/default/files'
+    recurse: 'yes'
+    mode: a+w
+  when: not drush_status.stdout | search("Drupal bootstrap\s+:\s+Successful")
+
+- include: mysql_setup.yml
+
+- name: Drupal | Drush site install if not already installed
+  command: >
+    drush site-install standard -y
+    --site-name="{{ drupal_site_name }}"
+    --account-name={{ drupal_account_name }}
+    --account-pass={{ drupal_account_pass }}
+    --db-url=mysql://{{ drupal_db.user }}:{{ drupal_db.password }}@localhost/{{ drupal_db.name }}
+    -r {{ drupal_docroot }}
+  when: not drush_status.stdout | search("Drupal bootstrap\s+:\s+Successful")
+  become: 'yes'
+  notify: 'restart apache'
