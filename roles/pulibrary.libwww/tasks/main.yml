@@ -30,3 +30,14 @@
     working_dir: '{{ discoveryutils_docroot }}' # need to make a better decision for this
   become: 'yes'
   become_user: deploy
+- name: Add apache rules
+  blockinfile:
+    path: '/etc/apache2/sites-available/000-default.conf'
+    marker: "## {mark} ANSIBLE MANAGED BLOCK ##"
+    insertafter: "</Directory>"
+    block: |
+      Alias /utils {{ discoveryutils_docroot }}
+      <Directory "{{ discoveryutils_docroot }}">
+        Options +Indexes
+        AllowOverride All
+      </Directory>
