@@ -1,4 +1,8 @@
 ---
+- name: Add drupal solr configs to drupal solr core
+  shell: "cp -r {{ drupal_docroot }}/sites/all/modules/search_api_solr/solr-conf/6.x/* {{ solr_home }}/data/drupal/conf/."
+  become: yes
+  become_user: "{{ solr_user }}"
 - name: clone the discoveryutils repo
   git:
     repo: '{{ discoverutils_git_repo }}'
@@ -30,6 +34,14 @@
     working_dir: '{{ discoveryutils_docroot }}' # need to make a better decision for this
   become: 'yes'
   become_user: deploy
+- name: Set up discoveryutils application log
+  copy:
+    content: ''
+    dest: '{{ discoveryutils_docroot }}/log/usage.log'
+    force: no
+    owner: deploy
+    group: www-data
+    mode: 775
 - name: Add apache rules
   blockinfile:
     path: '/etc/apache2/sites-available/000-default.conf'
