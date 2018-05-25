@@ -2,7 +2,13 @@
 - name: Add drupal solr configs to drupal solr core
   shell: "cp -r {{ drupal_docroot }}/sites/all/modules/search_api_solr/solr-conf/6.x/* {{ solr_home }}/data/drupal/conf/."
   become: yes
-  become_user: "{{ solr_user }}"
+- name: Set permissions on drupal solr conf files
+  file:
+    path: '{{ solr_home }}/data/drupal/conf'
+    state: directory
+    owner: "{{ solr_user }}"
+    group: "{{ solr_user }}"
+    recurse: 'yes'
 - name: clone the discoveryutils repo
   git:
     repo: '{{ discoverutils_git_repo }}'

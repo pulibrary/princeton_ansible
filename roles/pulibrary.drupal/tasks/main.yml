@@ -14,7 +14,7 @@
     state: 'directory'
     owner: 'pulsys'
     group: 'pulsys'
-    mode: 0775
+    mode: 0750
   become: true
 
 - name: clone the drupal repo
@@ -31,9 +31,18 @@
   file:
     path: '{{ drupal_docroot }}'
     state: directory
-    owner: pulsys
-    group: pulsys
+    owner: deploy
+    group: www-data
     recurse: 'yes'
+
+- name: grant permissions on drupal files root
+  file:
+    path: '{{ drupal_docroot }}/sites/default/files'
+    state: directory
+    owner: deploy
+    group: www-data
+    recurse: 'yes'
+    mode: 0770
 
 - name: create composer directory
   file:
