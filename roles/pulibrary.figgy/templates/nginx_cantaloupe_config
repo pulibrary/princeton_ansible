@@ -1,3 +1,16 @@
+  passenger_set_header X-Sendfile-Type X-Accel-Redirect;
+  # Uncomment below when Rack can support it.
+  #passenger_set_header X-Accel-Mapping /opt/figgy/shared/bundle/ruby/=/bundled_gems/,/opt/repository/=/restricted_repository/
+  passenger_set_header X-Accel-Mapping /opt/figgy/shared/bundle/ruby/=/bundled_gems/;
+  passenger_pass_header X-Accel-Redirect;
+  location ~ /restricted_repository/(.*) {
+    internal;
+    alias /opt/repository/$1;
+  }
+  location ~ /bundled_gems/(.*) {
+    internal;
+    alias /opt/figgy/shared/bundle/ruby/$1;
+  }
   location ~ ^.*/manifest {
     add_header 'Access-Control-Allow-Origin' '*';
     add_header 'Access-Control-Allow-Credentials' 'true';
