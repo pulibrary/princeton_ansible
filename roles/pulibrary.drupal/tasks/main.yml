@@ -91,6 +91,7 @@
   when: not drush_status.stdout | search("Drupal bootstrap\s+:\s+Successful")
 
 - include: mysql_setup.yml
+  when: db_host == 'localhost'
 
 - name: Drupal | Drush site install if not already installed
   command: >
@@ -98,7 +99,7 @@
     --site-name="{{ drupal_site_name }}"
     --account-name={{ drupal_account_name }}
     --account-pass={{ drupal_account_pass }}
-    --db-url=mysql://{{ drupal_db.user }}:{{ drupal_db.password }}@localhost/{{ drupal_db.name }}
+    --db-url=mysql://{{ drupal_db.user }}:{{ drupal_db.password }}@{{ db_host }}/{{ drupal_db.name }}
     -r {{ drupal_docroot }}
   when: not drush_status.stdout | search("Drupal bootstrap\s+:\s+Successful")
   become: 'yes'
