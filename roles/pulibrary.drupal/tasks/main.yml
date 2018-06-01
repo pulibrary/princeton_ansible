@@ -96,11 +96,18 @@
 - name: Drupal | Drush site install if not already installed
   command: >
     drush site-install standard -y
-    --site-name="{{ drupal_site_name }}"
+    --root={{ drupal_docroot }}
+    --site-name={{ drupal_site_name }}
     --account-name={{ drupal_account_name }}
     --account-pass={{ drupal_account_pass }}
     --db-url=mysql://{{ drupal_db.user }}:{{ drupal_db.password }}@{{ db_host }}/{{ drupal_db.name }}
-    -r {{ drupal_docroot }}
+  args:
+    chdir: "{{ drupal_docroot }}"
   when: not drush_status.stdout | search("Drupal bootstrap\s+:\s+Successful")
   become: 'yes'
   notify: 'restart apache'
+
+- name: install modules with drush
+  command: >
+    drush pm-enable -y search_api_solr
+    --root={{ drupal_docroot }}
