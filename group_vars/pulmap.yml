@@ -48,3 +48,26 @@ rails_app_vars:
     value: '/opt/pulmap/shared/maplab/pulmap/downloads'
 sneakers_workers: GeoblacklightEventHandler,Geoserver::Worker::EventHandler
 sneakers_worker_name: pulmap-sneakers
+datadog_api_key: "{{vault_datadog_key}}"
+datadog_config:
+  tags: "application:pulmap, environment:production, type:webserverj"
+  apm_enabled: "true"
+  log_enabled: true
+  process_config:
+    enabled: "true"
+datadog_checks:
+  ruby:
+    init_config:
+    logs:
+      - type: file
+        path: /opt/pulmap/current/log/production.log
+        service: pulmap
+        source: ruby
+  http_check:
+    init_config:
+    instances:
+      - name: Pulmap Solr
+        url: '{{pulmap_solr_url}}/admin/ping'
+        skip_event: true
+        tags:
+         - 'http_service:solr'
