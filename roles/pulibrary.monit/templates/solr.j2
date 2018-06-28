@@ -1,0 +1,21 @@
+ check process apache with pidfile /solr/solr-8983.pid
+   group deploy
+   group deploy
+   start program = "/etc/init.d/solr start"
+   stop program  = "/etc/init.d/solr stop"
+   restart program = "/usr/bin/sudo service solr restart"
+   if failed port 8983 then restart
+   if 3 restarts within 5 cycles then timeout
+   depends on solr_bin
+   depends on solr_init
+
+ check file solr_bin with path /opt/solr/bin/solr
+   group root
+   if failed uid root then unmonitor
+   if failed gid root then unmonitor
+   alert root@localhost
+
+ check file solr_init with path /etc/init.d/solr
+   if failed uid root then unmonitor
+   if failed gid root then unmonitor
+   alert root@localhost
