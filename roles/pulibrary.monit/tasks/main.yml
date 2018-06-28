@@ -1,0 +1,22 @@
+---
+- name: install monit
+  apt:
+    name: monit
+    state: present
+  notify:
+    - restart monit
+
+- name: configure monit
+  template:
+    src: monitrc.j2
+    dest: /etc/monit/monitrc
+  notify:
+    - reload monit
+
+- name: ensure monit starts on a reboot
+  service:
+    name: monit
+    state: started
+    enabled: yes
+
+- include: solr_setup.yml
