@@ -1,0 +1,83 @@
+---
+- name: "create dirs"
+  file:
+    path: "{{ item }}"
+    state: directory
+  with_items:
+    - "{{ imagemagick_install_path }}"
+  tags: imagemagick
+
+- name: "find latest patch version"
+  uri:
+    url: "{{ imagemagick_releases_url }}"
+    return_content: yes
+  register: imagemagick_releases_page
+  tags: imagemagick
+
+- set_fact:
+    imagemagick_patch_version: "{{ imagemagick_releases_page.content | regex_search('ImageMagick-'+imagemagick_version+'-[0-9]{1,3}.tar.xz') | regex_replace('^.*-(.*)\\.tar\\.xz','\\1') }}"
+  tags: imagemagick
+
+- set_fact:
+    imagemagick_file: "ImageMagick-{{ imagemagick_version + '-' + imagemagick_patch_version }}"
+  tags: imagemagick
+
+- name: "get source"
+  get_url:
+    url: "{{ imagemagick_releases_url }}/{{ imagemagick_file }}.tar.xz"
+    dest: "/usr/local/src/{{ imagemagick_file }}.tar.xz"
+  tags: imagemagick
+
+- name: "install dependencies"
+  apt:
+    name: "{{ item }}"
+    state: present
+    update_cache: yes
+    cache_valid_time: "{{ apt_cache_valid_time }}"
+  with_items:
+    - "{{ imagemagick_dependencies }}"
+    - "{{ imagemagick_optional_dependencies }}"
+  tags: imagemagick
+
+- name: "extract archive"
+  unarchive:
+    src: "/usr/local/src/{{ imagemagick_file }}.tar.xz"
+    dest: "/usr/local/src/"
+    copy: no
+    creates: "{{ imagemagick_source_path }}/{{ imagemagick_file }}"
+  tags: imagemagick
+
+- name: "configure"
+  command: "./configure --prefix={{ imagemagick_install_path }} {{ imagemagick_configure_options }}"
+  args:
+    chdir: "{{ imagemagick_source_path }}/{{ imagemagick_file }}"
+    creates: "{{ imagemagick_source_path }}/{{ imagemagick_file }}/config.status"
+  tags: imagemagick
+
+- name: "build"
+  command: "make -j{{ ansible_processor_cores|default(1) }}"
+  args:
+    chdir: "{{ imagemagick_source_path }}/{{ imagemagick_file }}"
+    creates: "{{ imagemagick_source_path }}/{{ imagemagick_file }}/utilites/.libs"
+  tags: imagemagick
+
+- name: "install"
+  command: "make install"
+  args:
+    chdir: "{{ imagemagick_source_path }}/{{ imagemagick_file }}"
+  tags: imagemagick
+
+- name: "get binaries"
+  find:
+    file_type: link
+    paths: "{{ imagemagick_install_path }}/bin/"
+  register: imagemagick_binaries
+  tags: imagemagick
+
+- name: "add binaries to /usr/bin"
+  alternatives:
+    name: "{{ item.path | basename }}"
+    path: "{{ item.path }}"
+    link: "/usr/bin/{{ item.path | basename }}"
+  with_items: "{{ imagemagick_binaries.files }}"
+  tags: imagemagick
