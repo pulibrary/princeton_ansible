@@ -1,7 +1,11 @@
 ---
 - name: Add drupal solr configs to drupal solr core
-  shell: "cp -r {{ drupal_docroot }}/sites/all/modules/search_api_solr/solr-conf/6.x/* {{ solr_home }}/data/drupal/conf/."
+  copy:
+    src: "{{ drupal_docroot }}/sites/all/modules/search_api_solr/solr-conf/7.x/"
+    dest: "{{ solr_home }}/data/drupal/conf/7.x/"
+    remote_src: yes
   become: yes
+
 - name: Set permissions on drupal solr conf files
   file:
     path: '{{ solr_home }}/data/drupal/conf'
@@ -9,18 +13,21 @@
     owner: "{{ solr_user }}"
     group: "{{ solr_user }}"
     recurse: 'yes'
+
 - name: clone the discoveryutils repo
   git:
     repo: '{{ discoverutils_git_repo }}'
     version: '{{ discovery_utils_version_branch }}'
     dest: '{{ discoveryutils_docroot }}'
     depth: 1
+
 - name: Install site configuration
   template:
     src: 'discoveryutils_app_config.j2'
     dest: '/home/{{ deploy_user }}/app_configs/discoveryutils'
     owner: '{{ deploy_user }}'
     group: '{{ deploy_user }}'
+
 - name: grant permissions on deploy user
   file:
     path: '{{ discoveryutils_docroot }}'
@@ -28,18 +35,21 @@
     owner: '{{ deploy_user }}'
     group: '{{ deploy_user }}'
     recurse: 'yes'
+
 - name: create vendor directory
   file:
     path: '{{ discoveryutils_docroot }}/vendor'
     state: directory
     owner: '{{ deploy_user }}'
     group: '{{ deploy_user }}'
+
 - name: Run composer to install silex and other dependencies
   composer:
     command: install
     working_dir: '{{ discoveryutils_docroot }}' # need to make a better decision for this
   become: 'yes'
   become_user: deploy
+
 - name: Set up discoveryutils application log
   copy:
     content: ''
@@ -48,6 +58,7 @@
     owner: deploy
     group: www-data
     mode: 0775
+
 - name: Add apache rules
   blockinfile:
     path: '/etc/apache2/sites-available/000-default.conf'
