@@ -28,8 +28,16 @@
       link: '/opt/{{rails_app_directory}}/shared/maplab'
 - name: Create a sitemap cron job
   cron:
-    name: Regenerate the Sitemap nightly
-    hour: 2
-    job: "/bin/bash -l -c 'export PATH=\"/usr/local/bin/:$PATH\" && cd /opt/{{rails_app_directory}}/current && bundle exec rake sitemap:refresh >> /tmp/pulmap_sitemap.log 2>&1'"
+    name: Regenerate the Sitemap weekly
+    hour: 23
+    weekday: 3
+    job: "/bin/bash -l -c 'export PATH=\"/usr/local/bin/:$PATH\" && cd /opt/{{rails_app_directory}}/current && RAILS_ENV=production bundle exec rake sitemap:refresh >> /tmp/pulmap_sitemap.log 2>&1'"
+    minute: 0
+    user: '{{deploy_user}}'
+- name: Precache thumbnails cron job
+  cron:
+    name: Precache thumbnails nightly
+    hour: 3
+    job: "/bin/bash -l -c 'export PATH=\"/usr/local/bin/:$PATH\" && cd /opt/{{rails_app_directory}}/current && RAILS_ENV=production bundle exec rake pulmap:thumbnails:precache_all'"
     minute: 0
     user: '{{deploy_user}}'
