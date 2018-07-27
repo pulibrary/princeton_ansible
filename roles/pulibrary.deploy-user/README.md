@@ -15,7 +15,7 @@ Example Playbook
 To install a remote user run the following
 
 ```
-ansible-playbook --limit 1.2.3.5 -e generic_app_user=aspace plum.yml -b
+ansible-playbook --limit 1.2.3.5 -e generic_app_user=aspace figgy.yml -b
 ```
 
 This will add the user aspace to the remote endpoint 1.2.3.5
