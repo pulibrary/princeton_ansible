@@ -1,37 +1,75 @@
 ---
-- name: Ensure dependencies are installed.
-  package: name={{ item }} state=present
+# installation instructions taken from: https://lucene.apache.org/solr/guide/7_2/taking-solr-to-production.html#taking-solr-to-production
+- name: create solr group
+  group:
+    name: '{{ solr_group }}'
+
+- name: create solr user
+  user:
+    name: '{{ solr_user }}'
+    group: '{{ solr_group }}'
+    home: /bin/false
+    createhome: 'yes'
+
+- name: create solr dirs
+  file:
+    path: '{{ item }}'
+    state: directory
+    owner: '{{ solr_user }}'
+    group: '{{ solr_group }}'
   with_items:
-    - lsof
-    - acl
-    - sudo
+    - '{{ solr_log_dir }}'
+    - '{{ solr_data_dir }}'
 
-- name: Run Solr installation script.
-  shell: >
-    {{ solr_workspace }}/{{ solr_filename }}/bin/install_solr_service.sh
-    {{ solr_workspace }}/{{ solr_filename }}.tgz
-    -i {{ solr_install_dir }}
-    -d {{ solr_home }}
-    -u {{ solr_user }}
-    -s {{ solr_service_name }}
-    -p {{ solr_port }}
-    creates={{ solr_install_path }}/bin/solr
-  register: solr_install_script_result
+- name: Check for solr service
+  command: systemctl status solr.service
+  ignore_errors: true
+  changed_when: false
+  register: service_solrcloud_status
 
-# Workaround for bug https://github.com/ansible/ansible-modules-core/issues/915.
-- name: Ensure solr is stopped (RHEL 7 workaround).
-  command: service {{ solr_service_name }} stop
-  when: >
-    (ansible_os_family == 'RedHat')
-    and (ansible_distribution_version.split(".")[0] == '7')
-    and (solr_install_script_result.changed)
-  failed_when: false
+- name: Check for solr version
+  action: >
+    uri \
+      url="http://localhost:{{ solr_port }}/solr/admin/info/system" \
+      return_content=yes
+  register: solrcloud_check
+  changed_when: false
+  ignore_errors: true
+  when: service_solrcloud_status is success
 
-- name: Run systemd daemon_reload (RHEL 7 workaround).
-  systemd:
-    name: solr
-    daemon_reload: yes
-  when: >
-    (ansible_os_family == 'RedHat')
-    and (ansible_distribution_version.split(".")[0] == '7')
-    and (solr_install_script_result.changed)
+- name: Download SolrCloud binaries
+  get_url:
+    url: "{{ solr_cloud_url }}"
+    dest: '/tmp/{{ solr_cloud_package }}'
+    timeout: 300
+  register: solr_downloaded
+  when: |
+      service_solrcloud_status.rc > 0 or
+      service_solrcloud_status is success and
+        (solrcloud_check is failed or
+        "<str name=\"lucene-spec-version\">{{ solr_cloud_version }}</str>" not in solrcloud_check.content)
+  ignore_errors: true
+
+- name: copy local copy if download fails
+  copy:
+    src: 'local_files/solr/{{ solr_cloud_package }}'
+    dest: '/tmp/{{ solr_cloud_package }}'
+  when: solr_downloaded is failed
+
+- name: Extract SolrCloud installation script
+  shell: "tar xzf /tmp/{{ solr_cloud_package }} {{ solr_cloud_build_name }}/bin/install_solr_service.sh --strip-components=2"
+  args:
+    chdir: /tmp
+  when: |
+      service_solrcloud_status.rc > 0 or
+      service_solrcloud_status is success and
+        (solrcloud_check is failed or
+        "<str name=\"lucene-spec-version\">{{ solr_cloud_version }}</str>" not in solrcloud_check.content)
+
+- name: run SolrCloud installation script
+  shell: /tmp/install_solr_service.sh /tmp/{{ solr_cloud_package }} -f -u {{ solr_user }} -n
+  when: |
+      service_solrcloud_status.rc > 0 or
+      service_solrcloud_status is success and
+        (solrcloud_check is failed or
+        "<str name=\"lucene-spec-version\">{{ solr_cloud_version }}</str>" not in solrcloud_check.content)
