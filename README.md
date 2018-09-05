@@ -5,7 +5,7 @@ Princeton Ansible Playbooks
 
 Download 'ubuntu-16.04.virtualbox.box` from the google drive and place it in the `images` directory. It is an image built from the [https://github.com/pulibrary/vmimages](https://github.com/pulibrary/vmimages) repository. It will need the relatively insecure `pulsys_rsa_key` to log into the VM. Ask for the untracked private key.
 
-Import the box with 
+Import the box with
 
 ```
 $ vagrant box add --name princeton_box images/ubuntu-16.04.virtualbox.box
@@ -16,7 +16,7 @@ $ vagrant box add --name princeton_box images/ubuntu-16.04.virtualbox.box
 
 Depending on what project you are working on there are example Vagrantfile's in
 the `Vagrant` directory. If you are working on the lae project as an example
-create a symbolic link to it with 
+create a symbolic link to it with
 
 ```
 ln -s /path/to/thisclonedrepo/Vagrant/laeVagrantfile
@@ -30,6 +30,11 @@ After the box is built, you can re-run the scripts via `vagrant provision`.
 
 You can ignore the prompt for an SSH password, but will have to put in the
 Ansible Vault password.
+
+## SolrCloud Vagrantfile
+*Please be aware that the [Vagrantfile for the SolrCloud Role](Vagrant/solrcloudVagrantfile)
+is extremely resource intensive and may not provision properly on host machines
+lacking adequate hardware resources.*
 
 If you need to diff an ansible-vault file, run
 ```
