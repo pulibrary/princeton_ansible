@@ -47,7 +47,7 @@
       service_solrcloud_status.rc > 0 or
       service_solrcloud_status is success and
         (solrcloud_check is failed or
-        "<str name=\"lucene-spec-version\">{{ solr_cloud_version }}</str>" not in solrcloud_check.content)
+        solr_config_xml not in solrcloud_check.content)
   ignore_errors: true
 
 - name: copy local copy if download fails
@@ -60,11 +60,12 @@
   shell: "tar xzf /tmp/{{ solr_cloud_package }} {{ solr_cloud_build_name }}/bin/install_solr_service.sh --strip-components=2"
   args:
     chdir: /tmp
+    warn: False
   when: |
       service_solrcloud_status.rc > 0 or
       service_solrcloud_status is success and
         (solrcloud_check is failed or
-        "<str name=\"lucene-spec-version\">{{ solr_cloud_version }}</str>" not in solrcloud_check.content)
+        solr_config_xml not in solrcloud_check.content)
 
 - name: run SolrCloud installation script
   shell: /tmp/install_solr_service.sh /tmp/{{ solr_cloud_package }} -f -u {{ solr_user }} -n
@@ -72,4 +73,4 @@
       service_solrcloud_status.rc > 0 or
       service_solrcloud_status is success and
         (solrcloud_check is failed or
-        "<str name=\"lucene-spec-version\">{{ solr_cloud_version }}</str>" not in solrcloud_check.content)
+        solr_config_xml not in solrcloud_check.content)
