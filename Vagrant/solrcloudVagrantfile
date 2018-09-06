@@ -8,27 +8,27 @@ Vagrant.configure("2") do |config|
   # https://docs.vagrantup.com/v2/vagrantfile/tips.html
   (1..1).each do |i|
     config.vm.define "lib-zk#{i}" do |node|
-        node.vm.box = "princeton_box"
-        node.vm.hostname = "lib-zk#{i}"
-        node.vm.network :private_network, ip: "10.0.15.1#{i}"
-        node.vm.network "forwarded_port", guest: 2181, host: "998#{i}"  # zookeeper
-        node.vm.provider "virtualbox" do |vb|
-          vb.memory = "2048"
-        end
+      node.vm.box = "princeton_box"
+      node.vm.hostname = "lib-zk#{i}"
+      node.vm.network :private_network, ip: "10.0.15.1#{i}"
+      node.vm.network "forwarded_port", guest: 2181, host: "998#{i}"  # zookeeper
+      node.vm.provider "virtualbox" do |vb|
+        vb.memory = "2048"
+      end
     end
     config.vm.provision "ansible" do |ansible|
-        ansible.verbose = 'vvv'
-        ansible.playbook = "zookeeper.yml"
-        ansible.limit = "all"
-        ansible.extra_vars = {
-          deploy_user_uid: "1002",
-          lib_zk1_host: "10.0.15.11",
-          lib_zk2_host: "10.0.15.12",
-          lib_zk3_host: "10.0.15.13"
-        }
-        ansible.groups = {
-          "zookeeper" => ["lib-zk#{i}"]
-        }
+      ansible.verbose = 'vvv'
+      ansible.playbook = "zookeeper.yml"
+      ansible.limit = "all"
+      ansible.extra_vars = {
+        deploy_user_uid: "1002",
+        lib_zk1_host: "10.0.15.11",
+        lib_zk2_host: "10.0.15.12",
+        lib_zk3_host: "10.0.15.13"
+      }
+      ansible.groups = {
+        "zookeeper" => ["lib-zk#{i}"]
+      }
     end
     config.ssh.private_key_path = "pulsys_rsa_key"
     config.ssh.username = "pulsys"
@@ -37,60 +37,31 @@ Vagrant.configure("2") do |config|
   # Create Solr server nodes
   # https://docs.vagrantup.com/v2/vagrantfile/tips.html
   (1..1).each do |i|
-    config.vm.define "lib-zk#{i}" do |node|
-        node.vm.box = "princeton_box"
-        node.vm.hostname = "lib-zk#{i}"
-        node.vm.network :private_network, ip: "10.0.15.1#{i}"
-        node.vm.network "forwarded_port", guest: 2181, host: "998#{i}"  # zookeeper
-        node.vm.provider "virtualbox" do |vb|
-          vb.memory = "2048"
-        end
-    end
-    config.vm.provision "ansible" do |ansible|
-        ansible.verbose = 'vvv'
-        ansible.playbook = "zookeeper.yml"
-        ansible.limit = "all"
-        ansible.extra_vars = {
-          deploy_user_uid: "1002",
-          lib_zk1_ip: "10.0.15.11",
-          lib_zk2_ip: "10.0.15.12",
-          lib_zk3_ip: "10.0.15.13",
-        }
-        ansible.groups = {
-          "zookeeper" => ["lib-zk#{i}"]
-        }
-    end
-    config.ssh.private_key_path = "pulsys_rsa_key"
-    config.ssh.username = "pulsys"
-  end
-
-# create solr servers
-  (1..1).each do |i|
     config.vm.define "lib-solr#{i}" do |node|
-        node.vm.box = "princeton_box"
-        node.vm.hostname = "lib-solr#{i}"
-        node.vm.network :private_network, ip: "10.0.15.2#{i}"
-        node.vm.network "forwarded_port", guest: 8983, host: "989#{i}"  # solr
-        node.vm.provider "virtualbox" do |vb|
-          vb.memory = "2048"
-        end
+      node.vm.box = "princeton_box"
+      node.vm.hostname = "lib-solr#{i}"
+      node.vm.network :private_network, ip: "10.0.15.2#{i}"
+      node.vm.network "forwarded_port", guest: 8983, host: "989#{i}"  # zookeeper
+      node.vm.provider "virtualbox" do |vb|
+        vb.memory = "2048"
+      end
     end
     config.vm.provision "ansible" do |ansible|
-        ansible.verbose = 'vvv'
-        ansible.playbook = "solrcloud.yml"
-        ansible.limit = "all"
-        ansible.extra_vars = {
-          deploy_user_uid: "1002",
-          lib_zk1_host: "10.0.15.11",
-          lib_zk2_host: "10.0.15.12",
-          lib_zk3_host: "10.0.15.13",
-          lib_solr1_host: "10.0.15.21",
-          lib_solr2_host: "10.0.15.22",
-          lib_solr3_host: "10.0.15.23"
-        }
-        ansible.groups = {
-          "solr" => ["lib-solr#{i}"]
-        }
+      ansible.verbose = 'vvv'
+      ansible.playbook = "solrcloud.yml"
+      ansible.limit = "all"
+      ansible.extra_vars = {
+        deploy_user_uid: "1002",
+        lib_zk1_host: "10.0.15.11",
+        lib_zk2_host: "10.0.15.12",
+        lib_zk3_host: "10.0.15.13",
+        lib_solr1_host: "10.0.15.21",
+        lib_solr2_host: "10.0.15.22",
+        lib_solr3_host: "10.0.15.23"
+      }
+      ansible.groups = {
+        "solr" => ["lib-solr#{i}"]
+      }
     end
     config.ssh.private_key_path = "pulsys_rsa_key"
     config.ssh.username = "pulsys"
