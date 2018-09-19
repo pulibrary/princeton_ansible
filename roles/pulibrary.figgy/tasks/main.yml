@@ -134,3 +134,15 @@
   shell: curl -L {{ simple_tiles_url }} | tar -xz && cd simple-tiles-{{simple_tiles_version}} && ./configure && make && make install
   args:
     creates: /usr/local/lib/libsimple-tiles.so
+## Necessary for gdal version >= 2.2.
+## Can remove once we're using Ubuntu Bionic or above. 
+- name: Add ubuntugis repository
+  become: yes
+  apt_repository: repo='ppa:ubuntugis/ubuntugis-unstable'
+- name: Check for latest GDAL
+  apt:
+    name: '{{ item }}'
+    state: latest
+  with_items:
+    - libgdal-dev
+    - gdal-bin
