@@ -4,9 +4,23 @@
     dest: '/etc/php/7.0/cli/php.ini'
     regexp: 'date.timezone ='
     line: 'date.timezone = {{ server.timezone }}'
+  when: ansible_distribution_release == "xenial"
 
 - name: enabling opcache cli
   lineinfile:
     dest: '/etc/php/7.0/cli/php.ini'
+    regexp: ';?opcache.enable_cli=\d'
+    line: 'opcache.enable_cli=1'
+  when: ansible_distribution_release == "xenial"
+
+- name: ensure timezone is set in cli php.ini
+  lineinfile:
+    dest: '/etc/php/7.2/cli/php.ini'
+    regexp: 'date.timezone ='
+    line: 'date.timezone = {{ server.timezone }}'
+
+- name: enabling opcache cli
+  lineinfile:
+    dest: '/etc/php/7.2/cli/php.ini'
     regexp: ';?opcache.enable_cli=\d'
     line: 'opcache.enable_cli=1'
