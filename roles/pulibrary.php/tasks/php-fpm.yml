@@ -5,10 +5,26 @@
     state: present
     regexp: '^;?listen.owner'
     line: 'listen.owner = www-data'
+  when: ansible_distribution_release == "xenial"
+
+- name: Set permissions on socket - owner
+  lineinfile:
+    dest: '/etc/php/7.2/fpm/pool.d/www.conf'
+    state: present
+    regexp: '^;?listen.owner'
+    line: 'listen.owner = www-data'
 
 - name: Set permissions on socket - group
   lineinfile:
     dest: '/etc/php/7.0/fpm/pool.d/www.conf'
+    state: present
+    regexp: '^;?listen.group'
+    line: 'listen.group = www-data'
+  when: ansible_distribution_release == "xenial"
+
+- name: Set permissions on socket - group
+  lineinfile:
+    dest: '/etc/php/7.2/fpm/pool.d/www.conf'
     state: present
     regexp: '^;?listen.group'
     line: 'listen.group = www-data'
@@ -19,10 +35,28 @@
     state: present
     regexp: '^;?listen.mode'
     line: 'listen.mode = 0660'
+  when: ansible_distribution_release == "xenial"
   notify: restart php7.0-fpm
+
+- name: Set permissions on socket - mode
+  lineinfile:
+    dest: '/etc/php/7.2/fpm/pool.d/www.conf'
+    state: present
+    regexp: '^;?listen.mode'
+    line: 'listen.mode = 0660'
+  notify: restart php7.2-fpm
 
 - name: ensure timezone is set in fpm php.ini
   lineinfile:
     dest: '/etc/php/7.0/fpm/php.ini'
-    regexp: 'date.timezone ='
-    line: 'date.timezone = {{ server.timezone }}'
+    state: present
+    regexp: ';date.timezone ='
+    line: "'date.timezone = {{ server.timezone }}'"
+  when: ansible_distribution_release == "xenial"
+
+- name: ensure timezone is set in fpm php.ini
+  lineinfile:
+    dest: '/etc/php/7.2/fpm/php.ini'
+    state: present
+    regexp: ';date.timezone ='
+    line: "'date.timezone = {{ server.timezone }}'"
