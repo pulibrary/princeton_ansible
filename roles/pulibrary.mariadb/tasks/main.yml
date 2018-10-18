@@ -1,12 +1,23 @@
 ---
+- name: install software properties
+  apt:
+    name: software-properties-common
+    state: latest
+- name: add apt-key manually
+  command: apt-key adv --recv-keys --keyserver hkp://keyserver.ubuntu.com:80 0xF1656F24C74CD1D8
+
 - name: add mariadb repo keys
   apt_key:
     keyserver: 'keyserver.ubuntu.com'
-    id: '0xF1656F24C74CD1D8'
+    id: '{{ item }}'
+  with_items: '{{ mariadb_apt_gpg_keys }}'
+  ignore_errors: yes
 
 - name: add maria db repository
   apt_repository:
-    repo: 'deb [arch=amd64,i386,ppc64el] https://mirrors.evowise.com/mariadb/repo/10.2/ubuntu {{ ansible_distribution_release }} main'
+    repo: 'deb {{ mariadb_apt_mirror_base }}/{{ mariadb_version }}/{{ ansible_distribution|lower }}/ {{ ansible_distribution_release }} main'
+    state: present
+    update_cache: yes
 
 - name: install maria db version
   apt:
@@ -17,8 +28,8 @@
     - python-mysqldb
     - mariadb-server
 
-- include: mysql_users.yml
+- import_tasks: mysql_users.yml
   tags: mysql-users
   when: mariadb_mysql_users is defined
 
-- include: root_access.yml
+- import_tasks: root_access.yml
