@@ -3,6 +3,7 @@ datadog_config:
   tags: "solrcloud, environment:production, role:solr"
   apm_enabled: false
   log_enabled: true
+  dogstatsd_port: 8135
   process_config:
     enabled: "true"
 datadog_checks:
@@ -54,61 +55,61 @@ datadog_checks:
       # location of tomcat
       - host: localhost
         port: 1099
+        conf:
+          - include:
+              category: SEARCHER
+              name:
+                - numDocs
+              scope:
+                - searcher
+              attribute:
+                Value:
+                  alias: solr.searcher.numdocs
+                  metric_type: gauge
+          - include:
+              category: QUERY
+              name: requestTimes
+              attribute:
+                MeanRate:
+                  alias: solr.search_handler.avg_requests_per_sec
+                  metric_type: gauge
+                avgTimePerRequest:
+                  alias: solr.search_handler.avg_time_per_req
+                  metric_type: gauge
+          - include:
+              category: CACHE
+              name: filterCache
+              scope:
+                - searcher
+              attribute:
+                cumulative_hitratio:
+                  alias: solr.filter_cache.cumulative_hitratio
+                  metric_type: gauge
+                cumulative_evictions:
+                  alias: solr.filter_cache.cumulative_evictions
+                  metric_type: gauge
+          - include:
+              category: CACHE
+              name: queryResultCache
+              scope:
+                - searcher
+              attribute:
+                cumulative_hitratio:
+                  alias: solr.query_result_cache.cumulative_hitratio
+                  metric_type: gauge
+                cumulative_evictions:
+                  alias: solr.query_result_cache.cumulative_evictions
+                  metric_type: gauge
+          - include:
+              category: CACHE
+              name: documentCache
+              scope:
+                - searcher
+              attribute:
+                cumulative_hitratio:
+                  alias: solr.document_cache.cumulative_hitratio
+                  metric_type: gauge
+                cumulative_evictions:
+                  alias: solr.document_cache.cumulative_evictions
+                  metric_type: gauge
     init_config:
-      conf:
-        - include:
-            category: SEARCHER
-            name:
-              - numDocs
-            scope:
-              - searcher
-            attribute:
-              Value:
-                alias: solr.searcher.numdocs
-                metric_type: gauge
-        - include:
-            category: QUERY
-            name: requestTimes
-            attribute:
-              MeanRate:
-                alias: solr.search_handler.avg_requests_per_sec
-                metric_type: gauge
-              avgTimePerRequest:
-                alias: solr.search_handler.avg_time_per_req
-                metric_type: gauge
-        - include:
-            category: CACHE
-            name: filterCache
-            scope:
-              - searcher
-            attribute:
-              cumulative_hitratio:
-                alias: solr.filter_cache.cumulative_hitratio
-                metric_type: gauge
-              cumulative_evictions:
-                alias: solr.filter_cache.cumulative_evictions
-                metric_type: gauge
-        - include:
-            category: CACHE
-            name: queryResultCache
-            scope:
-              - searcher
-            attribute:
-              cumulative_hitratio:
-                alias: solr.query_result_cache.cumulative_hitratio
-                metric_type: gauge
-              cumulative_evictions:
-                alias: solr.query_result_cache.cumulative_evictions
-                metric_type: gauge
-        - include:
-            category: CACHE
-            name: documentCache
-            scope:
-              - searcher
-            attribute:
-              cumulative_hitratio:
-                alias: solr.document_cache.cumulative_hitratio
-                metric_type: gauge
-              cumulative_evictions:
-                alias: solr.document_cache.cumulative_evictions
-                metric_type: gauge
