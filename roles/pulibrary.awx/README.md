@@ -32,4 +32,4 @@ None
       become: true
 
       roles:
-        - pulibrary.nodejs
+        - ../roles/pulibrary.nodejs
