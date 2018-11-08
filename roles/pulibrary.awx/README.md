@@ -21,3 +21,15 @@ Variables to control what version of AWX is checked out and installed.
     awx_run_install_playbook: true
 
 By default, this role will run the installation playbook included with AWX (which builds a set of containers and runs them). You can disable the playbook run by setting this variable to `no`.
+
+## Dependencies
+
+None
+
+## Example Playbook
+
+    - hosts: awx
+      become: true
+
+      roles:
+        - pulibrary.nodejs
