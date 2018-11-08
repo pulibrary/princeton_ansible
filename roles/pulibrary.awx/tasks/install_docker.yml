@@ -43,16 +43,16 @@
   apt:
     name: "{{ docker_package }}"
     state: present
+    vars:
+      docker_package:
+        - docker-ce
   notify: restart docker
 
 - name: Ensure Docker is started and enabled at boot.
   service:
     name: docker
-    state: "{{ docker_service_state }}"
-    enabled: "{{ docker_service_enabled }}"
-
-- name: Ensure handlers are notified now to avoid firewall conflicts.
-  meta: flush_handlers
+    state: started
+    enabled: true
 
 - include_tasks: docker-compose.yml
   when: docker_install_compose
