@@ -19,7 +19,7 @@
     id: 9DC858229FC7DD38854AE2D88D81803C0EBFCD88
     state: present
   register: add_repository_key
-  ignore_errors: "{{ docker_apt_ignore_key_error }}"
+  ignore_errors: true
 
 - name: install curl (on older systems without SNI).
   apt:
@@ -41,14 +41,32 @@
 
 - name: Install Docker.
   apt:
-    name: "{{ docker_package }}"
+    name:
+      - docker-ce
     state: present
-    vars:
-      docker_package:
-        - docker-ce
   notify: restart docker
 
-- name: Ensure Docker is started and enabled at boot.
+- name: Check current docker-compose version.
+  command: docker-compose --version
+  register: docker_compose_current_version
+  changed_when: false
+  failed_when: false
+
+- name: Delete existing docker-compose version if it's different.
+  file:
+    path: "{{ docker_compose_path }}"
+    state: absent
+  when: >
+    docker_compose_current_version.stdout is defined
+    and docker_compose_version not in docker_compose_current_version.stdout
+
+- name: Install Docker Compose (if configured).
+  get_url:
+    url: https://github.com/docker/compose/releases/download/{{ docker_compose_version }}/docker-compose-Linux-x86_64
+    dest: "{{ docker_compose_path }}"
+    mode: 0755
+
+- name: Make sure Docker is started and enabled at boot.
   service:
     name: docker
     state: started
@@ -56,6 +74,18 @@
 
 - name: add deploy user to docker group.
   user:
-    name: deploy
+    name: "{{ item }}"
     groups: docker
     append: true
+  with_items:
+      - deploy
+      - pulsys
+
+- name: install pip
+  apt:
+    name: python-pip
+    state: present
+
+- name: install docker py
+  pip:
+    name: docker-py
