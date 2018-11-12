@@ -2,6 +2,8 @@
 
 Installs and configures [AWX](https://github.com/ansible/awx), the open source version of [Ansible Tower](https://www.ansible.com/tower).
 
+The default user/password will be [admin/password](https://docs.ansible.com/ansible-tower/latest/html/quickstart/login_superuser.html) -You will want to change these.
+
 ## Requirements
 
 This role will also install (Git, Ansible, Docker) on the endpoint if they
@@ -33,3 +35,4 @@ None
 
       roles:
         - ../roles/pulibrary.nodejs
+        - ../roles/pulibrary.awx
