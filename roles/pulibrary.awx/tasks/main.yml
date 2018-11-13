@@ -1,0 +1,24 @@
+---
+- include: install_git.yml
+
+- include: install_ansible.yml
+
+- include: install_docker.yml
+
+- name: Install AWX dependencies.
+  apt:
+    name: "{{ item }}"
+    state: present
+  with_items: "{{ awx_package_dependencies }}"
+
+- name: Clone AWX into configured directory.
+  git:
+    repo: "{{ awx_repo }}"
+    dest: "{{ awx_repo_dir }}"
+    version: "{{ awx_version }}"
+    update: "{{ awx_keep_updated }}"
+    force: true
+    accept_hostkey: true
+
+- include: awx-install-playbook.yml
+  when: awx_run_install_playbook
