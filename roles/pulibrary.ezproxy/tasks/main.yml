@@ -1,4 +1,11 @@
 ---
+- name: Install git
+  apt:
+    name:
+      - git
+      - git-svn
+    state: present
+    update_cache: true
 - name: create ezproxy directory
   file:
     path: '/var/local/ezproxy'
@@ -35,6 +42,16 @@
 - name: run command with WSKey
   command: /var/local/ezproxy/ezproxy -k '{{ oclc_wskey }}'
   become_user: '{{ deploy_user }}'
+
+- name: Clone EZproxy Repo
+  git:
+    repo: '{{ ezproxy_git_repo }}'
+    version: '{{ ezproxy_default_branch }}'
+    dest: '{{ ezproxy_repo_root }}'
+    accept_hostkey: 'yes'
+    clone: 'yes'
+    update: 'yes'
+  become: 'pulsys'
 
 - name: launch ezproxy
   command: /var/local/ezproxy/ezproxy start
