@@ -1,0 +1,49 @@
+---
+## Install the system package dependencies
+- name: Install dependencies
+  apt: name={{item}} state=present
+  with_items:
+    - nfs-common
+
+## Create the mount for the Solr backup network share
+- name: Create mount directories
+  file:
+    path: '/mnt/{{item}}'
+    state: 'directory'
+  with_items:
+    - solrbackup
+
+## Mount the share
+- name: Create mount to the Solr backup
+  mount:
+    name: '/mnt/solrbackup'
+    src: 'diglibdata1.princeton.edu:/ifs/solrbackup'
+    fstype: nfs
+    state: mounted
+
+- name: update host file
+  lineinfile:
+    dest: /etc/hosts
+    regexp: '{{ item.address }}.*{{ item.hostname }}$'
+    line: '{{ item.address }} {{ item.hostname }}'
+    state: present
+  become: yes
+  loop:
+    - { hostname: 'lib-zk1.princeton.edu', address: "{{ lib_zk1_host }}" }
+    - { hostname: 'lib-zk2.princeton.edu', address: "{{ lib_zk2_host }}" }
+    - { hostname: 'lib-zk3.princeton.edu', address: "{{ lib_zk3_host }}" }
+
+- name: solr cloud install node
+  include: install.yml
+  tags:
+    - install
+
+- name: configure solr cloud
+  include: config.yml
+  tags:
+    - configure
+
+- name: run solr service
+  include: service.yml
+  tags:
+    - service

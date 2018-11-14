@@ -17,23 +17,26 @@ rails_app_dependencies:
   - openjdk-8-jre
   - libtool
   - autoconf
-  - gdal-bin
-  - libgdal-dev
   - libpango1.0-dev
   - zip
   - tesseract-ocr
   - tesseract-ocr-all
+  - mediainfo
 figgy_db_name: 'figgy_production'
 figgy_db_user: '{{vault_figgy_db_user}}'
 figgy_db_password: '{{vault_figgy_db_password}}'
 figgy_repository_mount: '/mnt/diglibdata/hydra_binaries/figgy_production'
 figgy_derivatives_mount: '/mnt/libimages1/data/jp2s/figgy_prod'
 figgy_geo_derivatives_mount: '/mnt/geoserver/figgy_geo_data/prod'
+figgy_stream_derivatives_mount: '/mnt/diglibdata/hydra_binaries/figgy_stream_derivatives'
 figgy_rabbit_user: '{{vault_figgy_rabbit_user}}'
 figgy_rabbit_password: '{{vault_figgy_rabbit_password}}'
 figgy_rabbit_host: 'figgy1.princeton.edu'
 figgy_rabbit_server: 'amqp://{{figgy_rabbit_user}}:{{figgy_rabbit_password}}@{{figgy_rabbit_host}}:5672'
 figgy_pudl_root: '{{vault_figgy_pudl_root}}'
+figgy_ezid_shoulder: '{{vault_figgy_ezid_shoulder}}'
+figgy_ezid_username: '{{vault_figgy_ezid_username}}'
+figgy_ezid_password: '{{vault_figgy_ezid_password}}'
 rabbitmq_user: '{{figgy_rabbit_user}}'
 rabbitmq_password: '{{figgy_rabbit_password}}'
 rails_app_env: "production"
@@ -52,7 +55,7 @@ application_host: '{{passenger_server_name}}'
 application_host_protocol: 'https'
 project_db_host: '{{postgres_host}}'
 redis_bind_interface: '0.0.0.0'
-figgy_solr_url: 'http://lib-solr2.princeton.edu:8983/solr/figgy'
+figgy_solr_url: 'http://lib-solr.princeton.edu:8983/solr/figgy'
 rails_app_vars:
   - name: SECRET_KEY_BASE
     value: '{{vault_figgy_secret_key}}'
@@ -87,11 +90,11 @@ rails_app_vars:
   - name: FIGGY_REDIS_DB
     value: '1'
   - name: EZID_DEFAULT_SHOULDER
-    value: '{{plum_ezid_shoulder}}'
+    value: '{{figgy_ezid_shoulder}}'
   - name: EZID_USER
-    value: '{{plum_ezid_username}}'
+    value: '{{figgy_ezid_username}}'
   - name: EZID_PASSWORD
-    value: '{{plum_ezid_password}}'
+    value: '{{figgy_ezid_password}}'
   - name: FIGGY_PUDL_ROOT
     value: '{{figgy_pudl_root}}'
   - name: INGEST_FOLDER_PATH
@@ -106,6 +109,8 @@ rails_app_vars:
     value: '{{ vault_figgy_geoserver_derivatives_path }}'
   - name: GEOSERVER_URL
     value: 'https://geoserver.princeton.edu/geoserver'
+  - name: MEDIAINFO_PATH
+    value: '/usr/bin/mediainfo'
 sidekiq_worker_name: figgy-workers
 cantaloupe_user: '{{deploy_user}}'
 cantaloupe_group: '{{deploy_user}}'
@@ -156,6 +161,9 @@ datadog_config:
   log_enabled: true
   process_config:
     enabled: "true"
+  apm_config:
+    analyzed_spans:
+      figgy|rack.request: 1
 figgy_datadog_nginx_check:
 figgy_datadog_ruby_check:
   init_config:
@@ -171,5 +179,10 @@ figgy_datadog_http_check:
     - name: Figgy Solr
       url: '{{figgy_solr_url}}/admin/ping'
       skip_event: true
-      tags: 
+      tags:
        - 'http_service:solr'
+    - name: Figgy Uptime
+      url: 'https://figgy.princeton.edu'
+      skip_event: true
+      tags:
+        - 'http_service:figgy'

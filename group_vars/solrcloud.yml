@@ -1,0 +1,115 @@
+datadog_api_key: "{{vault_datadog_key}}"
+datadog_config:
+  tags: "solrcloud, environment:production, role:solr"
+  apm_enabled: false
+  log_enabled: true
+  dogstatsd_port: 8135
+  process_config:
+    enabled: "true"
+datadog_checks:
+  solrcloud:
+    init_config:
+    logs:
+      - type: file
+        path: /solr/logs/solr.log
+        service: solr
+        source: solr
+        log_processing_rules:
+        - type: multi_line
+          name: new_log_start_with_date
+          pattern: \d{4}\-(0?[1-9]|1[012])\-(0?[1-9]|[12][0-9]|3[01])
+      - type: file
+        path: /solr/logs/solr_gc.log.0.current
+        service: solr
+        source: solr_gc
+        log_processing_rules:
+        - type: multi_line
+          name: new_log_start_with_date
+          pattern: \d{4}\-(0?[1-9]|1[012])\-(0?[1-9]|[12][0-9]|3[01])
+  http_check:
+    init_config:
+    instances:
+      - name: Catalog Production
+        url: 'http://localhost:8983/solr/catalog-production/admin/ping?wt=json&distrib=true&indent=true'
+        skip_event: true
+        tags:
+         - 'http_service:solr'
+         - 'application:orangelight'
+         - 'environment:production'
+      - name: Catalog Reindex
+        url: 'http://localhost:8983/solr/catalog-rebuild/admin/ping?wt=json&distrib=true&indent=true'
+        skip_event: true
+        tags:
+         - 'http_service:solr'
+         - 'application:orangelight'
+         - 'environment:reindex'
+      - name: Catalog Staging
+        url: 'http://localhost:8983/solr/catalog-staging/admin/ping?wt=json&distrib=true&indent=true'
+        skip_event: true
+        tags:
+         - 'http_service:solr'
+         - 'application:orangelight'
+         - 'environment:staging'
+  solr:
+    instances:
+      # location of tomcat
+      - host: localhost
+        port: 1099
+        conf:
+          - include:
+              category: SEARCHER
+              name:
+                - numDocs
+              scope:
+                - searcher
+              attribute:
+                Value:
+                  alias: solr.searcher.numdocs
+                  metric_type: gauge
+          - include:
+              category: QUERY
+              name: requestTimes
+              attribute:
+                MeanRate:
+                  alias: solr.search_handler.avg_requests_per_sec
+                  metric_type: gauge
+                avgTimePerRequest:
+                  alias: solr.search_handler.avg_time_per_req
+                  metric_type: gauge
+          - include:
+              category: CACHE
+              name: filterCache
+              scope:
+                - searcher
+              attribute:
+                cumulative_hitratio:
+                  alias: solr.filter_cache.cumulative_hitratio
+                  metric_type: gauge
+                cumulative_evictions:
+                  alias: solr.filter_cache.cumulative_evictions
+                  metric_type: gauge
+          - include:
+              category: CACHE
+              name: queryResultCache
+              scope:
+                - searcher
+              attribute:
+                cumulative_hitratio:
+                  alias: solr.query_result_cache.cumulative_hitratio
+                  metric_type: gauge
+                cumulative_evictions:
+                  alias: solr.query_result_cache.cumulative_evictions
+                  metric_type: gauge
+          - include:
+              category: CACHE
+              name: documentCache
+              scope:
+                - searcher
+              attribute:
+                cumulative_hitratio:
+                  alias: solr.document_cache.cumulative_hitratio
+                  metric_type: gauge
+                cumulative_evictions:
+                  alias: solr.document_cache.cumulative_evictions
+                  metric_type: gauge
+    init_config:

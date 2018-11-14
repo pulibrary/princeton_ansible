@@ -1,0 +1,82 @@
+---
+solr_cloud_version: 7.1.0
+
+## Service options
+
+# Owner
+solr_user: deploy
+solr_group: deploy
+
+# start on boot
+solr_service_enabled: 'yes'
+solr_service_state: started
+
+# Files & Paths
+solr_log_dir: /solr/logs
+solr_home: /solr
+solr_data_dir: '{{ solr_home }}/data'
+
+# Ports
+solr_port: 8983
+solr_jmx_enabled: 'true'
+solr_jmx_port: 1099
+solr_host: '{{ inventory_hostname }}'
+
+# JVM
+solr_gc_tune: "-XX:NewRatio=3 \
+-XX:SurvivorRatio=4 \
+-XX:TargetSurvivorRatio=90 \
+-XX:MaxTenuringThreshold=8 \
+-XX:+UseConcMarkSweepGC \
+-XX:+UseParNewGC \
+-XX:ConcGCThreads=4 -XX:ParallelGCThreads=4 \
+-XX:+CMSScavengeBeforeRemark \
+-XX:PretenureSizeThreshold=64m \
+-XX:+UseCMSInitiatingOccupancyOnly \
+-XX:CMSInitiatingOccupancyFraction=50 \
+-XX:CMSMaxAbortablePrecleanTime=6000 \
+-XX:+CMSParallelRemarkEnabled \
+-XX:+ParallelRefProcEnabled"
+
+solr_stack_size: 256k
+solr_heap: 72g
+solr_jetty_threads_min: 10
+solr_jetty_threads_max: 10000
+solr_jetty_threads_idle_timeout: 5000
+solr_jetty_threads_stop_timeout: 60000
+solr_jetty_secure_port: 8443
+solr_jetty_output_buffer_size: 32768
+solr_jetty_output_aggregation_size: 8192
+solr_jetty_request_header_size: 8192
+solr_jetty_response_header_size: 8192
+solr_jetty_send_server_version: 'false'
+solr_jetty_send_date_header: 'false'
+solr_jetty_header_cache_size: 512
+solr_jetty_delay_dispatch_until_content: 'false'
+solr_jetty_http_selectors: -1
+solr_jetty_http_acceptors: -1
+
+# ZOOKEEPER
+zookeeper_hosts: localhost:2181
+zookeeper_hosts_solr_path: solr
+zk_host: '{{ zookeeper_hosts }}/{{ zookeeper_hosts_solr_path }}'
+zookeeper_client_path: '/opt/solr/server/scripts/cloud-scripts'
+
+solr_zookeeper_hosts: '{{ zookeeper_hosts }}'
+solr_zookeeper_hosts_solr_path: '/{{ zookeeper_hosts_solr_path }}'
+solr_zk_host: '{{ solr_zookeeper_hosts }}{{ solr_zookeeper_hosts_solr_path }}'
+solr_zookeeper_client_path: '{{ zookeeper_client_path }}'
+
+# Orangelight Jars
+jardirectory: /opt/solr/contrib/analysis-extras/lib
+cjkfoldingfilter: https://github.com/pulibrary/pul_solr/raw/master/solr_configs/orangelight/conf/CJKFoldingFilter.jar
+umichsolrfilters: https://github.com/pulibrary/pul_solr/raw/master/solr_configs/orangelight/conf/lucene-umich-solr-filters-6.0.0-SNAPSHOT.jar
+
+# LOG
+log_root_level: WARN
+log_file_size: 500MB
+log_max_backup_index: 9
+
+solr_log_root_level: '{{ log_root_level }}'
+solr_log_file_size: '{{ log_file_size }}'
+solr_log_max_backup_index: '{{ log_max_backup_index }}'

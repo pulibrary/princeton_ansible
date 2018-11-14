@@ -1,0 +1,61 @@
+---
+- name: execution permission to zkcli script
+  file:
+    path: "{{ solr_zookeeper_client_path }}/zkcli.sh"
+    mode: 0744
+
+- name: Check Root Path (znode) in ZooKeeper
+  command: >
+    {{ solr_zookeeper_client_path }}/zkcli.sh
+    -zkhost {{ solr_zookeeper_hosts }}
+    -cmd list {{ solr_zookeeper_hosts_solr_path }}
+  register: solr_path_check
+  changed_when: false
+  ignore_errors: yes
+
+- name: Create Root Path (znode) in ZooKeeper using zkcli script
+  command: >
+    {{ solr_zookeeper_client_path }}/zkcli.sh
+    -zkhost {{ solr_zookeeper_hosts }}
+    -cmd makepath {{ solr_zookeeper_hosts_solr_path }}
+  when: solr_zookeeper_hosts_solr_path not in solr_path_check.stdout
+  ignore_errors: yes
+
+- name: Configuring jetty server
+  template:
+    src: 'jetty.xml.j2'
+    dest: '/opt/solr/server/etc/jetty.xml'
+    force: 'yes'
+  notify: restart SolrCloud
+
+- name: Configure jetty server http
+  template:
+    src: 'jetty-http.xml.j2'
+    dest: '/opt/solr/server/etc/jetty-http.xml'
+    force: 'yes'
+  notify: restart SolrCloud
+
+- name: Configure SolrCloud init script
+  template:
+    src: 'solr.in.sh.j2'
+    dest: '/etc/default/solr.in.sh'
+    force: 'yes'
+  notify: restart SolrCloud
+
+- name: Configure SolrCloud properties
+  template:
+    src: 'solr.xml.j2'
+    dest: '{{ solr_data_dir }}/solr.xml'
+    force: 'yes'
+  notify: restart SolrCloud
+
+- name: Configure logging
+  template:
+    src: 'log4j.properties.j2'
+    dest: '/solr/log4j.properties'
+    force: 'yes'
+  notify: restart SolrCloud
+
+- name: Add orangelight jar files
+  shell: "cd {{ jardirectory }} && wget {{ cjkfoldingfilter }} {{ umichsolrfilters }}"
+  notify: restart SolrCloud
