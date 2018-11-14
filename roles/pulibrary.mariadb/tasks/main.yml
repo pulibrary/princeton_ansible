@@ -3,19 +3,34 @@
   apt_key:
     keyserver: 'keyserver.ubuntu.com'
     id: '0xF1656F24C74CD1D8'
+  register: add_repository_key
+  ignore_errors: true
+
+- name: install curl if the apt key does not work
+  apt:
+    name: curl
+    state: present
+  when: add_repository_key is failed
+
+- name: add repo key using the shell
+  shell: "apt-key adv --recv-keys --keyserver hkp://keyserver.ubuntu.com:80 0xF1656F24C74CD1D8"
+  args:
+    warn: false
+  when: add_repository_key is failed
+
+- name: add repo using the shell
+  shell: "add-apt-repository 'deb [arch=amd64,arm64,i386,ppc64el] https://mirrors.evowise.com/mariadb/repo/10.2/ubuntu {{ ansible_lsb.codename }} main'"
+  when: add_repository_key is failed
 
 - name: add maria db repository
   apt_repository:
-    repo: 'deb [arch=amd64,i386,ppc64el] https://mirrors.evowise.com/mariadb/repo/10.2/ubuntu {{ ansible_distribution_release }} main'
+    repo: 'deb [arch=amd64,i386,ppc64el] https://mirrors.evowise.com/mariadb/repo/10.2/ubuntu {{ ansible_lsb.codename }} main'
 
 - name: install maria db version
   apt:
-    name: '{{ item }}'
+    name: [ 'python-mysqldb', 'mariadb-server' ]
     state: present
     update_cache: yes
-  with_items:
-    - python-mysqldb
-    - mariadb-server
 
 - include: mysql_users.yml
   tags: mysql-users
