@@ -18,3 +18,11 @@
     - role: roles/pulibrary.sneakers_worker
     - role: roles/pulibrary.ansible-datadog
       when: postgresql_is_local is not defined or not postgresql_is_local
+
+  post_tasks:
+    - name: tell everyone on slack you ran an ansible playbook
+      slack:
+        token: "{{ vault_pul_slack_token }}"
+        msg: "{{ inventory_hostname }} completed"
+        channel: #server-alerts
+      delegate_to: localhost
