@@ -1,4 +1,35 @@
 ---
+datadog_api_key: "{{vault_datadog_key}}"
+datadog_config:
+  tags: "application:bibdata, environment:production, type:webserver"
+  apm_enabled: "true"
+  log_enabled: true
+  process_config:
+    enabled: "true"
+  apm_config:
+    analyzed_spans:
+      bibdata|rack.request: 1
+datadog_checks:
+  ruby:
+    init_config:
+    logs:
+      - type: file
+        path: /opt/marc_liberation/current/log/production.log
+        service: bibdata
+        source: ruby
+  nginx:
+    init_config:
+    logs:
+      - type: file
+        path: /var/log/nginx/access.log
+        service: bibdata
+        source: nginx
+        sourcecategory: http_web_access
+      - type: file
+        path: /var/log/nginx/error.log
+        service: bibdata
+        source: nginx
+        sourcecategory: http_web_access
 passenger_server_name: "bibdata.*"
 passenger_app_root: "/opt/marc_liberation/current/public"
 passenger_app_env: "production"
