@@ -5,15 +5,16 @@
     state: directory
   with_items:
     - '{{ drupal_docroot }}'
+  tags: ['never', 'notlocal']
 
 - name: install mysql php driver
   apt:
     name: '{{ item }}'
     state: present
   with_items:
-    - libapache2-mod-php7.0
-    - php7.0-gd
-    - php7.0-mysql
+    - libapache2-mod-php7.2
+    - php7.2-gd
+    - php7.2-mysql
 
 - name: Creates app directory
   file:
@@ -24,6 +25,17 @@
     group: 'pulsys'
     mode: 0750
   become: true
+  tags: ['never', 'notlocal']
+
+- name: Creates app directory
+  file:
+    path: '{{ drupal_docroot }}'
+    state: directory
+    owner: 'pulsys'
+    group: 'pulsys'
+    mode: 0750
+  become: true
+  tags: ['never', 'vagrant']
 
 - name: clone the drupal repo
   git:
