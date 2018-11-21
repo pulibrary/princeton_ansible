@@ -1,4 +1,11 @@
 ---
+- name: Create shared mount directories
+  file:
+    path: '/mnt/{{ item }}'
+    state: directory
+  with_items:
+    - '{{ drupal_docroot }}'
+
 - name: install mysql php driver
   apt:
     name: '{{ item }}'
@@ -10,8 +17,9 @@
 
 - name: Creates app directory
   file:
-    path: '{{ drupal_docroot }}'
-    state: 'directory'
+    src: '/mnt/{{ drupal_docroot }}'
+    dest: '{{ drupal_docroot }}'
+    state: link
     owner: 'pulsys'
     group: 'pulsys'
     mode: 0750
