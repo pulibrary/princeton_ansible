@@ -1,0 +1,79 @@
+---
+# https://github.com/thedumbtechguy/ansible-role-freetds
+
+- name: ensure freetds build dependecies are installed
+  apt:
+    name: '{{ item }}'
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  become: true
+  with_items:
+    - autoconf
+    - automake
+    - gettext
+    - git
+    - libtool
+    - libtool-bin
+    - libltdl-dev
+    - m4
+    - pkg-config
+
+- name: create temporary build directory
+  file:
+    path: /tmp/freetds
+    state: directory
+    mode: 0700
+
+- name: clone git repo
+  git:
+    repo: 'https://github.com/FreeTDS/freetds.git'
+    dest: '/tmp/freetds'
+    version: branch-1_00
+    update: no
+
+- name: run autogen.sh
+  command: sh autogen.sh
+  args:
+    chdir: '/tmp/freetds'
+    creates: ansible.autogen
+
+- file:
+    path: '/tmp/freetds/ansible.autogen'
+    state: touch
+  changed_when: false
+
+- name: run make
+  command: make
+  args:
+    chdir: '/tmp/freetds'
+    creates: ansible.make
+
+- file:
+    path: '/tmp/freetds/ansible.make'
+    state: touch
+  changed_when: false
+
+- name: run make install
+  command: make install
+  args:
+    chdir: '/tmp/freetds'
+  become: true
+
+- name: check installation
+  command: tsql -C
+  register: _install_result
+  ignore_errors: true
+  changed_when: false
+
+- name: symlink libsybdb.so.5
+  file:
+    src: /usr/local/lib/libsybdb.so.5
+    dest: /usr/lib/libsybdb.so.5
+    state: link
+  when: "(_install_result|succeeded) and ('freetds v1.0' in _install_result.stdout)"
+  become: true
+
+- fail:
+    msg: "The installation was not successful."
+  when: "(_install_result|failed) or ('freetds v1.0' not in _install_result.stdout)"
