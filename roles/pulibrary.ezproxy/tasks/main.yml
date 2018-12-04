@@ -43,6 +43,15 @@
   command: /var/local/ezproxy/ezproxy -k '{{ oclc_wskey }}'
   become_user: '{{ deploy_user }}'
 
+- name: Creates app directory
+  file:
+    path: '{{ ezproxy_repo_root }}'
+    state: 'directory'
+    owner: 'pulsys'
+    group: 'pulsys'
+    mode: 0750
+  become: true
+
 - name: Clone EZproxy Repo
   git:
     repo: '{{ ezproxy_git_repo }}'
@@ -52,6 +61,29 @@
     clone: 'yes'
     update: 'yes'
   become: 'pulsys'
+
+- name: Clone EZproxy blacklist
+  git:
+    repo: 'https://github.com/prbutler/EZProxy_IP_Blacklist.git'
+    version: 'master'
+    dest: '/var/local/ezproxy/EZProxy_IP_Blacklist'
+    clone: 'yes'
+    update: 'yes'
+  become: 'true'
+
+- name: Download GeoLite2 DB
+  unarchive:
+    src: 'http://geolite.maxmind.com/download/geoip/database/GeoLite2-City.tar.gz'
+    dest: '/var/local/ezproxy/GeoLite2-City'
+    remote_src: 'yes'
+  become: 'true'
+
+- name: create base config file
+  copy:
+    src: 'local_files/ezproxy/config.txt.tmp'
+    dest: '/var/local/ezproxy/config.txt'
+    owner: '{{ deploy_user }}'
+    group: '{{ deploy_user }}'
 
 - name: launch ezproxy
   command: /var/local/ezproxy/ezproxy start
