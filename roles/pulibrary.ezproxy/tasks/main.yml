@@ -6,6 +6,7 @@
       - git-svn
     state: present
     update_cache: true
+
 - name: create ezproxy directory
   file:
     path: '/var/local/ezproxy'
@@ -43,6 +44,14 @@
   command: /var/local/ezproxy/ezproxy -k '{{ oclc_wskey }}'
   become_user: '{{ deploy_user }}'
 
+- name: Creates a log directory for ezproxy
+  file:
+    path: '/var/local/ezproxy/log'
+    state: 'directory'
+    owner: 'root'
+    group: 'root'
+  become: true
+
 - name: Creates app directory
   file:
     path: '{{ ezproxy_repo_root }}'
@@ -62,6 +71,15 @@
     update: 'yes'
   become: 'pulsys'
 
+- name: Assigns config repo to ezproxy user
+  file:
+    path: '{{ ezproxy_repo_root }}'
+    state: 'directory'
+    owner: 'ezproxy'
+    group: 'ezproxy'
+    recurse: true
+  become: true
+
 - name: Clone EZproxy blacklist
   git:
     repo: 'https://github.com/prbutler/EZProxy_IP_Blacklist.git'
@@ -71,12 +89,21 @@
     update: 'yes'
   become: 'true'
 
+- name: Assigns blacklist repo to ezproxy user
+  file:
+    path: '/var/local/ezproxy/EZProxy_IP_Blacklist'
+    state: 'directory'
+    owner: 'ezproxy'
+    group: 'ezproxy'
+    recurse: true
+  become: true
+
 - name: Create GeoLite DB directory
   file:
     path: '/var/local/ezproxy/GeoLite2-City'
     state: 'directory'
-    owner: 'pulsys'
-    group: 'pulsys'
+    owner: 'ezproxy'
+    group: 'ezproxy'
     mode: 0750
   become: true
 
@@ -93,6 +120,10 @@
     dest: '/var/local/ezproxy/config.txt'
     owner: '{{ deploy_user }}'
     group: '{{ deploy_user }}'
+
+- name: install ezproxy startup script (requires root)
+  command: /var/local/ezproxy/ezproxy -si
+  become_user: 'root'
 
 - name: launch ezproxy
   command: /var/local/ezproxy/ezproxy start
