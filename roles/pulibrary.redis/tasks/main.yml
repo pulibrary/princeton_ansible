@@ -1,4 +1,19 @@
 ---
+# Ensure that IPv6 is enabled for the redis server
+# This will remain necessary until the resolution for https://github.com/antirez/redis/issues/3894 is available upstream
+- sysctl:
+    name: net.ipv6.conf.all.disable_ipv6
+    value: 0
+    state: present
+- sysctl:
+    name: net.ipv6.conf.default.disable_ipv6
+    value: 0
+    state: present
+- sysctl:
+    name: net.ipv6.conf.lo.disable_ipv6
+    value: 0
+    state: present
+
 - name: install redis
   apt: name=redis-server state=present cache_valid_time='{{ apt_cache_timeout }}' update_cache=yes
 
