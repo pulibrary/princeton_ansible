@@ -18,12 +18,18 @@
     group: "{{ solr_user }}"
     recurse: 'yes'
 
+- name: Check to see if app root directory exists.
+  stat:
+    path: '{{  discoveryutils_docroot }}'
+  register: discovery_app_root_directory
+
 - name: clone the discoveryutils repo
   git:
     repo: '{{ discoverutils_git_repo }}'
     version: '{{ discovery_utils_version_branch }}'
     dest: '{{ discoveryutils_docroot }}'
     depth: 1
+  when: discovery_app_root_directory.stat.exists == false
 
 - name: Install site configuration
   template:

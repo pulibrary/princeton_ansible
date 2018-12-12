@@ -23,16 +23,10 @@
     with_items:
       - imagemagick
 
-- name: Creates app directory
-  file:
-    src: '/mnt/{{ drupal_docroot }}'
-    dest: '{{ drupal_docroot }}'
-    state: link
-    owner: 'pulsys'
-    group: 'pulsys'
-    mode: 0750
-  become: true
-  tags: ['never', 'notlocal']
+- name: Check to see if app root directory exists.
+  stat:
+    path: '{{ drupal_docroot }}'
+  register: app_root_directory
 
 - name: Creates app directory
   file:
@@ -42,7 +36,19 @@
     group: 'pulsys'
     mode: 0750
   become: true
+  when: app_root_directory.stat.exists == false
   tags: ['never', 'vagrant']
+
+- name: Creates fileshare directory
+  file:
+    src: '/mnt/{{ drupal_docroot }}'
+    dest: '{{ drupal_docroot }}/sites/default/files'
+    state: link
+    owner: 'pulsys'
+    group: 'pulsys'
+    mode: 0750
+  become: true
+  tags: ['never', 'notlocal']
 
 - name: clone the drupal repo
   git:
