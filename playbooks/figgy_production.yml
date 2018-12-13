@@ -51,6 +51,13 @@
     - role: roles/pulibrary.figgy
     - role: roles/pulibrary.ansible-datadog
       when: postgresql_is_local is not defined or not postgresql_is_local
+  post_tasks:
+    - name: tell everyone on slack you ran an ansible playbook
+      slack:
+        token: "{{ vault_pul_slack_token }}"
+        msg: "{{ inventory_hostname }} completed"
+        channel: #server-alerts
+
 - hosts: figgy_production_workers
   remote_user: pulsys
   become: true
@@ -74,7 +81,6 @@
     - role: roles/pulibrary.figgy
     - role: roles/pulibrary.ansible-datadog
       when: postgresql_is_local is not defined or not postgresql_is_local
-
   post_tasks:
     - name: tell everyone on slack you ran an ansible playbook
       slack:
