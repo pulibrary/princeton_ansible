@@ -17,31 +17,32 @@
     name: ['imagemagick']
     state: present
 
-- name: Check to see if app root directory exists.
-  stat:
-    path: '{{ drupal_docroot }}'
-  register: app_root_directory
-
 - name: Creates app directory
   file:
     path: '{{ drupal_docroot }}'
     state: directory
     owner: 'pulsys'
-    group: 'pulsys'
-    mode: 0750
+    group: 'www-data'
+    mode: 0770
+  register: app_root_directory
   become: true
-  when: app_root_directory.stat.exists == false
-  tags: ['never', 'vagrant']
+
+- name: add pulsys to www-data
+  user:
+    name: pulsys
+    groups: deploy,www-data
+    append: true
 
 - name: Creates fileshare directory
   file:
     src: '/mnt/{{ drupal_docroot }}'
     dest: "{{ drupal_docroot }}/sites/default/files"
     state: link
-    owner: 'pulsys'
-    group: 'pulsys'
+    owner: 'deploy'
+    group: 'www-data'
     mode: 0750
   become: true
+  register: app_root_directory
   tags: ['never', 'notlocal']
 
 - name: clone the drupal repo
@@ -52,13 +53,13 @@
     accept_hostkey: 'yes'
     clone: 'yes'
     update: 'yes'
-  become: 'true'
+  become: 'pulsys'
 
 - name: grant permissions on deploy user
   file:
     path: '{{ drupal_docroot }}'
     state: directory
-    owner: deploy
+    owner: pulsys
     group: www-data
     recurse: 'yes'
 
