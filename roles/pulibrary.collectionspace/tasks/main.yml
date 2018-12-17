@@ -1,0 +1,75 @@
+---
+- name: install prerequisites
+  apt:
+    name: ['ant', 'maven', 'imagemagick', 'python-psycopg2']
+    state: present
+    update_cache: true
+
+- name: copy pg_casts to server
+  copy:
+    src: files/pg_casts.sql
+    dest: "/home/{{ deploy_user }}/pg_casts.sql"
+    owner: postgres
+    group: postgres
+  register: pg_cast_copied
+  tags:
+    - postgres
+
+- name: create csadmin db account
+  postgresql_user:
+    name: "csadmin"
+    password: "{{ csadmin_db_admin_password }}"
+    role_attr_flags: SUPERUSER,INHERIT,NOCREATEDB,NOCREATEROLE,NOREPLICATION
+  tags:
+    - postgres
+
+- name: run pg_casts sql
+  become_user: postgres
+  shell: psql -U postgres -d template1 -f /home/{{ deploy_user }}/pg_casts.sql
+  when: pg_cast_copied.changed
+  notify:
+    - restart postgres
+  tags:
+    - postgres
+
+- name: download the cspace tomcat
+  get_url:
+    url: ftp://nightly.collectionspace.org/pub/collectionspace/releases/{{ cspace_version }}/cspace-server-{{ cspace_version }}.tar.gz
+    dest: /tmp/cspace-server-{{ cspace_version }}.tar.gz
+
+- name: unpack tomcat
+  unarchive:
+    src: /tmp/cspace-server-{{ cspace_version }}.tar.gz
+    dest: /usr/local/share
+    mode: 0755
+    owner: cspace
+    remote_src: true
+
+- name: set up environment variables
+  lineinfile:
+    line: "{{ item }}"
+    dest: /etc/environment
+    state: present
+  with_items:
+    - CSPACE+JEESERVER_HOME="/usr/local/share/apache-tomcat-7.0.64"
+    - CATALINA_HOME=$CSPACE_JEESERVER_HOME
+    - CATALINA_PID="$CSPACE_JEESERVER_HOME/bin/tomcat.pid"
+    - CATALINA_OPTS="-Xmx1024m -XX:MaxPermSize=384m"
+    - JAVA_HOME="/usr/lib/jvm/java-8-openjdk-amd64/"
+    - ANT_OPTS="-Xmx768m -XX:MaxPermSize=512m"
+    - MAVEN_OPTS="-Xmx768m -XX:MaxPermSize=512m"
+    - CSPACE_CORE_CREATE_DISABLED_OPT="false"
+    - CSPACE_BONSAI_CREATE_DISABLED_OPT="true"
+    - CSPACE_FCART_CREATE_DISABLED_OPT="true"
+    - CSPACE_HERBARIUM_CREATE_DISABLED_OPT="true"
+    - CSPACE_LHMC_CREATE_DISABLED_OPT="true"
+    - CSPACE_MATERIALS_CREATE_DISABLED_OPT="false"
+    - CSPACE_PUBLICART_CREATE_DISABLED_OPT="true"
+    - CSPACE_ANTHRO_CREATE_DISABLED_OPT="true"
+    - CSPACE_BOTGARDEN_CREATE_DISABLED_OPT="true"
+    - CSPACE_TESTSCI_CREATE_DISABLED_OPT="false"
+    - DB_HOST="{{db_host}}"
+    - DB_CSADMIN_PASSWORD="{{cspace_admin_password}}"
+    - DB_NUXEO_PASSWORD="{{db_nuxeo_password}}"
+    - DB_CSPACE_PASSWORD="{{db_cspace_password}}"
+    - DB_READER_PASSWORD="{{db_reader_password}}"
