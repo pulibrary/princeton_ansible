@@ -4,8 +4,17 @@
     pkg: ca-certificates
     state: present
 
+- name: install apt key for postgresql
+  apt_key:
+    url: "{{ postgresql_apt_key_url }}"
+    state: present
+  register: repo_key_add
+  ignore_errors: true
+
 - name: PostgreSQL | Add PostgreSQL repository apt-key
   shell: "wget --quiet -O - {{ postgresql_apt_key_url }} | sudo apt-key add -"
+  when: repo_key_add is failed
+
 
 - name: add postgresql repository
   apt_repository:
@@ -25,17 +34,14 @@
 
 - name: install postgresql client packages
   apt:
-    name: '{{ item }}'
+    name: ['libpq-dev', 'python-psycopg2']
     state: present
-    cache_valid_time: '{{ apt_cache_timeout }}'
-    update_cache: 'yes'
-  with_items:
-    - libpq-dev
-    - python-psycopg2
+    cache_valid_time: "{{ apt_cache_timeout }}"
+    update_cache: true
 
 - name: install access rules
   copy:
-    src: pg_hba.conf
+    src: files/pg_hba.conf
     dest: /etc/postgresql/{{ postgres_version }}/main/pg_hba.conf
     group: postgres
     owner: postgres
@@ -69,6 +75,7 @@
     line: 'host    all             all             {{ansible_default_ipv4.address}}/32       md5'
   delegate_to: '{{ postgres_host }}'
   register: remote_postgres_configured
+  ignore_errors: true
   when:
     - postgres_host is not none
     - postgresql_is_local != true
@@ -82,4 +89,5 @@
   when: remote_postgres_configured.changed
 
 - include: create_users.yml
+
 - include: create_db.yml
