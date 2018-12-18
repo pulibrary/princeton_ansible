@@ -4,6 +4,31 @@
     name: "{{ item }}"
     state: present
   with_items:
-    - rewrite
     - proxy
     - proxy_http
+  notify:
+    - restart apache
+
+- name: configure apache proxy
+  copy:
+    src: files/proxy.conf
+    dest: /etc/apache2/mods-available/proxy.conf
+
+- name: create cspace virtual host
+  template:
+    src: cspace.conf.j2
+    dest: /etc/apache2/sites-available/cspace.conf
+
+- name: add virtual host
+  file:
+    src: /etc/apache2/sites-available/cspace.conf
+    dest: /etc/apache2/sites-enabled/cspace.conf
+    state: link
+
+- name: deactivate default site
+  command: a2dissite 000-default
+
+- name: activate cspace
+  command: a2ensite cspace
+  notify:
+    - restart apache
