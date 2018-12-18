@@ -1,0 +1,18 @@
+---
+- name: build services with maven
+  become_user: "{{ deploy_user }}"
+  command: mvn clean install -DskipTests
+  args:
+    chdir: /home/{{ deploy_user }}/collectionspace-source/services/
+
+- name: build applications with maven
+  become_user: "{{ deploy_user }}"
+  command: mvn clean install -DskipTests
+  args:
+    chdir: /home/{{ deploy_user }}/collectionspace-source/application/
+
+- name: deploy using ant
+  become_user: "{{ deploy_user }}"
+  command: ant undeploy deploy create_db -Drecreate_db=true import
+  args:
+    chdir: /home/{{ deploy_user }}/collectionspace-source/services/
