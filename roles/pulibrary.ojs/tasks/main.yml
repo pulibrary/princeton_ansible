@@ -1,0 +1,20 @@
+---
+- name: extract OJS archive
+  unarchive:
+    src: https://github.com/pkp/ojs/archive/ojs-{{ ojs_version }}.zip
+    dest: /var/www/
+    creates: /var/www/ojs-{{ ojs_version }}
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+    remote_src: true
+
+- name: remove apache document root
+  file:
+    path: "{{ apache.docroot }}"
+    state: absent
+
+- name: create symlink for versions
+  file:
+    src: /home/pulsys/ojs-ojs-{{ ojs_version }}
+    dest: "{{ apache.docroot }}"
+    state: link
