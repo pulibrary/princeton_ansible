@@ -1,12 +1,23 @@
 ---
-- name: extract OJS archive
-  unarchive:
-    src: https://github.com/pkp/ojs/archive/ojs-{{ ojs_version }}.zip
-    dest: /var/www/
-    creates: /var/www/ojs-{{ ojs_version }}
+- name: install php postgres drivers
+  apt:
+    name: ['php-pgsql', 'libapache2-mod-php']
+    state: present
+
+- name: create ojs directory
+  file:
+    path: "{{ ojs_home }}"
+    state: directory
     owner: "{{ deploy_user }}"
     group: "{{ deploy_user }}"
-    remote_src: true
+
+- name: clone the repo
+  git:
+    dest: "{{ ojs_home }}"
+    repo: https://github.com/pkp/ojs
+    version: "ojs-{{ ojs_version }}"
+    update: no
+  become_user: "{{ deploy_user }}"
 
 - name: remove apache document root
   file:
@@ -15,9 +26,16 @@
 
 - name: create symlink for versions
   file:
-    src: /home/pulsys/ojs-ojs-{{ ojs_version }}
+    src: /var/www/ojs-{{ ojs_version }}
     dest: "{{ apache.docroot }}"
     state: link
+
+- name: update db driver
+  lineinfile:
+    path: "{{ apache.docroot }}/config.TEMPLATE.inc.php"
+    regexp: "driver = mysql"
+    line: "driver = postgres"
+  become_user: "{{ deploy_user }}"
 
 - name: update password
   lineinfile:
@@ -42,4 +60,42 @@
     path: "{{ ojs_file_uploads }}"
     state: directory
     owner: "{{ deploy_user }}"
-    group: "{{ deploy_user }}"
+    group: "www-data"
+    mode: "ug+w"
+
+- name: upstream README on other directories to modify
+  file:
+    path: "{{ apache.docroot }}/{{ item }}"
+    group: "www-data"
+    mode: "ug+w"
+    recurse: true
+  with_items:
+    - "cache"
+    - "plugins"
+    - "public"
+
+- name: ensure config file has correct permissions
+  file:
+    path: "{{ apache.docroot }}/config.inc.php"
+    group: "www-data"
+    mode: "ug+w"
+  notify:
+    - restart apache
+
+- name: run compose
+  composer:
+    command: update
+    working_dir: "{{ item }}"
+  with_items:
+    - "{{ apache.docroot }}/lib/pkp"
+    - "{{ apache.docroot }}/plugins/generic/citationStyleLanguage"
+    - "{{ apache.docroot }}/plugins/paymethod/paypal"
+
+- name: install node dependencies
+  npm:
+    path: "{{ ojs_home }}"
+
+- name: build javascript dependencies
+  shell:
+    cmd: npm run build
+    chdir: "{{ ojs_home }}"
