@@ -18,3 +18,28 @@
     src: /home/pulsys/ojs-ojs-{{ ojs_version }}
     dest: "{{ apache.docroot }}"
     state: link
+
+- name: update password
+  lineinfile:
+    path: "{{ apache.docroot }}/config.TEMPLATE.inc.php"
+    regexp: '^password ='
+    line: "password = {{ ojs_db_password }}"
+  become_user: "{{ deploy_user }}"
+  notify:
+    - restart apache
+
+- name: copy template file for live config
+  copy:
+    src: "{{ apache.docroot }}/config.TEMPLATE.inc.php"
+    dest: "{{ apache.docroot }}/config.inc.php"
+    remote_src: true
+  become_user: "{{ deploy_user }}"
+  notify:
+    - restart apache
+
+- name: create uploads directory
+  file:
+    path: "{{ ojs_file_uploads }}"
+    state: directory
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
