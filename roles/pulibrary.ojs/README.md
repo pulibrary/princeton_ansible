@@ -12,6 +12,7 @@ Role Variables
 --------------
 
 ```
+ojs_version: "3_1_1-4"
 apache:
   docroot: "/var/www/ojs"
   servername: "{{ ansible_hostname }}"
