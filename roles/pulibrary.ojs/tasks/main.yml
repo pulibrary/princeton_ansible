@@ -1,7 +1,7 @@
 ---
 - name: install php postgres drivers
   apt:
-    name: ['php-pgsql', 'libapache2-mod-php']
+    name: ['php-pgsql', 'libapache2-mod-php', 'python-pexpect']
     state: present
 
 - name: create ojs directory
@@ -99,3 +99,44 @@
   shell:
     cmd: npm run build
     chdir: "{{ ojs_home }}"
+
+- name: Check the site install state
+  shell: >
+    grep -i '^installed = \(On\|Off\)' "{{ apache.docroot }}"/config.inc.php | cut -d '=' -f 2 | xargs
+  register: ojs_installed
+
+- name: Run the OJS install script
+  expect:
+    command: php {{ apache.docroot }}/tools/install.php
+    responses:
+      'Select \(en_US\):': '' # Default
+      'Select \(None\):': '' # Default
+      'Select \(utf-8\):': '' # Default
+      'Select \(None\):': '' # Default
+      'Select \(None\):': '' # Default
+      'Directory for uploads:': '{{ ojs_file_uploads }}'
+      'Select \(md5\):': '' # Default
+      'Username:': '{{ ojs_site_adminname }}'
+      'Password:': '{{ ojs_site_adminpassword }}'
+      'Repeat password:': '{{ ojs_site_adminpassword }}'
+      'Email:': '{{ ojs_site_email }}'
+      'Select:': 'postgres'
+      'Host \(None\):': '{{ ojs_db_host }}'
+      'Username \(None\):': '{{ application_dbuser_name }}'
+      'Password \(None\):': '{{ application_dbuser_password }}'
+      'Database name:': '{{ application_db_name }}'
+      'Create new database \[Y/n\]': 'n'
+      'Repository Identifier:': '{{ ojs_site_repoid }}'
+      'Provide a unique site ID and OAI base URL to PKP for statistics and security alert purposes only\. \[Y/n\]': 'n' # Default
+      '\*\*\* Install Open Journal Systems \[y/N\]': 'y'
+    timeout: 300
+  ignore_errors: True
+  when: (ojs_installed.stdout == "Off")
+
+- name: Mark the site as installed in config.inc.php
+  replace:
+    dest: "{{ apache.docroot }}/config.inc.php"
+    regexp: >
+      ^installed = Off$
+    replace: "installed = On"
+  when: (ojs_installed.stdout == "Off")
