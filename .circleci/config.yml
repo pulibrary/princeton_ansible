@@ -1,19 +1,61 @@
+---
 version: 2
 jobs:
   build:
-    docker:
-      - image: phusion/baseimage
     working_directory: ~/princeton_ansible
+    machine:
+      enabled: true
+      docker_layer_caching: true
     steps:
+      - checkout
       - run:
-          name: Install software properties
-          command: apt-get update && apt-get -y install software-properties-common
+          name: Update apt repositories
+          command: sudo apt-get -qq update
+      - persist_to_workspace:
+          root: '~/princeton_ansible'
+          paths: '*'
+  ubuntu1604:
+    working_directory: ~/princeton_ansible
+    machine:
+      enabled: true
+      docker_layer_caching: true
+    environment:
+      ROLE_NAME: pulibrary.apache2
+      MOLECULE_DISTRO: ubuntu1604
+    steps:
+      - attach_workspace:
+          at: '~/princeton_ansible'
       - run:
-          name: Install ansible repo
-          command: apt-add-repository ppa:ansible/ansible -y
+          name: Install module requirements
+          command: pip install -r requirements.txt
       - run:
-          name: install ansible
-          command: apt-get update && apt-get -y install ansible
+          name: Run the default Molecule scenario
+          command: molecule test
+  ubuntu1804:
+    working_directory: ~/princeton_ansible
+    machine:
+      enabled: true
+      docker_layer_caching: true
+    environment:
+      ROLE_NAME: pulibrary.apache2
+      MOLECULE_DISTRO: ubuntu1804
+    steps:
+      - attach_workspace:
+          at: '~/princeton_ansible'
       - run:
-          name: run tests
-          command: date
+          name: Install module requirements
+          command: pip install -r requirements.txt
+      - run:
+          name: Run the default Molecule scenario
+          command: molecule test
+workflows:
+  version: 2
+  build_and_test:
+    jobs:
+      - build
+      - ubuntu1604:
+          requires:
+            - build
+      - ubuntu1804:
+          requires:
+            - build
