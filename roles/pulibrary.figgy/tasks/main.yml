@@ -3,6 +3,7 @@
   stat:
     path: '{{solr_home}}/data'
   register: solr_installed
+
 - name: Configure Solr Core
   template:
     src: '{{item.src}}'
@@ -18,6 +19,7 @@
     - solr_installed.stat.exists
   notify:
     - restart solr
+
 - name: Create repository directory structure
   file:
     path: '/opt/{{item}}'
@@ -26,6 +28,7 @@
     group: '{{deploy_user}}'
   with_items:
     - 'repository'
+
 ## Create Mounts
 - name: Create mount directories
   file:
@@ -39,6 +42,7 @@
     - libimages1
     - 'diglibdata/pudl'
     - 'diglibdata/hydra_binaries'
+
 - name: Copy smb credentials
   copy: src=files/{{item}} dest=/etc/{{item}}
   with_items:
@@ -51,6 +55,7 @@
     - libimages1.smb.credentials
     - maplab.smb.credentials
     - geoserver.smb.credentials
+
 - name: Create mount to plum binaries
   mount:
     name: '/mnt/diglibdata/hydra_binaries'
@@ -58,6 +63,7 @@
     fstype: cifs
     opts: 'credentials=/etc/plum_mount.smb.credentials,uid={{deploy_user_uid}},gid=33'
     state: mounted
+
 - name: Create mount to pudl binaries (for migration)
   mount:
     name: '/mnt/diglibdata/pudl'
@@ -65,6 +71,7 @@
     fstype: cifs
     opts: 'credentials=/etc/pudl.smb.credentials,uid={{deploy_user_uid}},gid=33'
     state: mounted
+
 - name: Create mount to scratch space (for bulk ingests)
   mount:
     name: '/mnt/hydra_sources/ingest_scratch'
@@ -72,6 +79,7 @@
     fstype: cifs
     opts: 'credentials=/etc/plum_mount.smb.credentials,uid={{deploy_user_uid}},gid=33'
     state: mounted
+
 - name: Create libimages1 mount
   mount:
     name: /mnt/libimages1/data
@@ -79,6 +87,7 @@
     fstype: cifs
     opts: credentials=/etc/libimages1.smb.credentials
     state: mounted
+
 - name: Create diglibdata mounts (hydra sources)
   mount:
     name: /mnt/hydra_sources/{{item}}
@@ -90,6 +99,7 @@
     - pudl
     - archives
     - maplab
+
 - name: Create mount to studio (hydra sources)
   mount:
     name: /mnt/hydra_sources/studio
@@ -97,6 +107,7 @@
     fstype: cifs
     opts: 'credentials=/etc/studio.smb.credentials,uid={{deploy_user_uid}}'
     state: mounted
+
 - name: Create mount to studio (hydra sources)
   mount:
     name: /mnt/hydra_sources/studio_new
@@ -104,6 +115,7 @@
     fstype: cifs
     opts: 'credentials=/etc/studio.new.smb.credentials,uid={{deploy_user_uid}}'
     state: mounted
+
 - name: Create mount to music reserves (hydra sources)
   mount:
     name: /mnt/hydra_sources/music
@@ -111,6 +123,7 @@
     fstype: cifs
     opts: 'credentials=/etc/plum_mount.smb.credentials,uid={{deploy_user_uid}},gid=33'
     state: mounted
+
 - name: Create geoserver derivatives mount
   mount:
     name: /mnt/geoserver/figgy_geo_data
@@ -118,6 +131,7 @@
     fstype: cifs
     opts: 'credentials=/etc/geoserver.smb.credentials,uid={{deploy_user_uid}}'
     state: mounted
+
 ## Symlink to Mounts
 - name: Create symlinks
   file:
@@ -139,9 +153,9 @@
     - src: '{{figgy_stream_derivatives_mount}}'
       link: '/opt/repository/stream_derivatives'
 ## Necessary for gdal version >= 2.2.
-## Can remove once we're using Ubuntu Bionic or above. 
+## Can remove once we're using Ubuntu Bionic or above.
 - name: Add ubuntugis repository
-  become: yes
+  become: true
   apt_repository: repo='ppa:ubuntugis/ubuntugis-unstable'
 - name: Install GDAL
   apt:
