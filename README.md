@@ -34,7 +34,9 @@ exec "$SHELL"
 ```
  * `git clone https://github.com/pyenv/pyenv-virtualenv.git $(pyenv
    root)/plugins/pyenv-virtualenv`
- * `echo 'eval "$(pyenv virtualenv-init -)"' >> ~/.bash_profile`
+```bash
+ `echo 'eval "$(pyenv virtualenv-init -)"' >> ~/.bash_profile`
+```
 
 
 ## Setup your environment
@@ -59,8 +61,11 @@ Then install all the required packages for this repo by running:
 
 `pip install -r requirements.txt`
 
-Molecule will only run under the `roles/pulibrary.apache2` directory, so do the
-following to test:
+Run the following to test
+
+```bash
+molecule test
+```
 
 
 # Developing
