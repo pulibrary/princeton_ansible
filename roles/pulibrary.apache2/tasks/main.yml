@@ -1,14 +1,14 @@
 ---
-- name: install apache2
+- name: ensure required packages are present
   apt:
-    name: apache2
+    name: ['apache2']
     state: present
-    update_cache: 'yes'
+    update_cache: true
 
 - name: install apache modules
   apache2_module:
+    name: "{{ item }}"
     state: present
-    name: '{{ item }}'
   notify: restart apache
   with_items:
     - rewrite
@@ -17,8 +17,8 @@
     - filter
     - vhost_alias
 
-- name: change default apache2.4 site
+- name: modify the default apache site
   template:
-    src: 'vhost24.conf.j2'
-    dest: '/etc/apache2/sites-available/000-default.conf'
+    src: "vhosts24.conf.j2"
+    dest: "/etc/apache2/sites-available/000-default.conf"
   notify: restart apache
