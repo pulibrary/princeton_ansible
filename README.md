@@ -3,7 +3,7 @@ Princeton Ansible Playbooks
 
 # Import PUL Box
 
-Download 'ubuntu-16.04.virtualbox.box` from the google drive and place it in the `images` directory. It is an image built from the [https://github.com/pulibrary/vmimages](https://github.com/pulibrary/vmimages) repository. It will need the relatively insecure `pulsys_rsa_key` to log into the VM. Ask for the untracked private key.
+Download `ubuntu-16.04.virtualbox.box` from the google drive and place it in the `images` directory. It is an image built from the [https://github.com/pulibrary/vmimages](https://github.com/pulibrary/vmimages) repository. It will need the relatively insecure `pulsys_rsa_key` to log into the VM. Ask for the untracked private key.
 
 Import the box with
 
@@ -70,6 +70,23 @@ molecule test
 
 # Developing
 
+## Create a new role
+
+Run the following command from the root of this repo:
+
+```bash
+molecule init role -r roles/pulibrary.example 
+```
+
+When you are done add 
+
+```bash
+- role: pulibrary.example
+```
+
+to [`molecule/default/playbooks.yml`](molecule/default/playbooks.yml)
+
+
 Depending on what project you are working on there are example Vagrantfile's in
 the `Vagrant` directory. If you are working on the lae project as an example
 create a symbolic link to it with
@@ -84,10 +101,18 @@ order to do so, run `vagrant up` from this directory.
 
 After the box is built, you can re-run the scripts via `vagrant provision`.
 
-You can ignore the prompt for an SSH password, but will have to put in the
-Ansible Vault password.
+You will need to enter the Ansible Vault password.
+
+# Usage
+
+If you need to run a playbook
+
+```bash
+ansible-playbook playbooks/example.yml
+```
 
 ## SolrCloud Vagrantfile
+
 *Please be aware that the [Vagrantfile for the SolrCloud Role](Vagrant/solrcloudVagrantfile)
 is extremely resource intensive and may not provision properly on host machines
 lacking adequate hardware resources.*
