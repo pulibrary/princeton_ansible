@@ -11,6 +11,62 @@ Import the box with
 $ vagrant box add --name princeton_box images/ubuntu-16.04.virtualbox.box
 ```
 
+# Setting up your Python Environment
+
+## Prerequisites of MacOS
+
+ * `brew install virtualbox`
+ * `brew install vagrant`
+ * `brew install pyenv`
+ * `brew install pyenv-virtualenv`
+
+## Prerequisites of Ubuntu Bionic
+
+ * `sudo add-apt-repository multiverse && sudo apt -y update`
+ * `sudo apt -y install virtualbox`
+ * `sudo apt-get install vagrant`
+ * `git clone https://github.com/pyenv/pyenv.git ~/.pyenv`
+```bash
+echo 'export PYENV_ROOT="$HOME/.pyenv"' >> ~/.bashrc
+echo 'export PATH="$PYENV_ROOT/bin:$PATH"' >> ~/.bashrc
+echo -e 'if command -v pyenv 1>/dev/null 2>&1; then\n  eval "$(pyenv init -)"\nfi' >> ~/.bashrc
+exec "$SHELL"
+```
+ * `git clone https://github.com/pyenv/pyenv-virtualenv.git $(pyenv
+   root)/plugins/pyenv-virtualenv`
+```bash
+ `echo 'eval "$(pyenv virtualenv-init -)"' >> ~/.bash_profile`
+```
+
+
+## Setup your environment
+
+To setup your virtual environment install the current version of Python using
+the following command:
+
+`pyenv install 3.7.1`
+
+Create a virtual environment of the Python version you just installed using:
+
+`pyenv virtualenv 3.7.1 princeton_ansible-3.7.1`
+
+This will create a virtualenv based on Python 3.7.1 under $(pyenv root)/versions
+in a directory called `princeton_ansible-3.7.1`
+
+Activate your environment using the following command
+
+`pyenv activate princeton_ansible-3.7.1`
+
+Then install all the required packages for this repo by running:
+
+`pip install -r requirements.txt`
+
+Run the following to test
+
+```bash
+molecule test
+```
+
 
 # Developing
 
