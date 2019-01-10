@@ -1,0 +1,144 @@
+---
+- name: install php postgres drivers
+  apt:
+    name: ['php-pgsql', 'libapache2-mod-php', 'python-pexpect']
+    state: present
+
+- name: create ojs directory
+  file:
+    path: "{{ ojs_home }}"
+    state: directory
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+
+- name: clone the repo
+  git:
+    dest: "{{ ojs_home }}"
+    repo: https://github.com/pkp/ojs
+    version: "ojs-{{ ojs_version }}"
+    update: false
+  become_user: "{{ deploy_user }}"
+
+- name: remove apache document root
+  file:
+    path: "{{ apache.docroot }}"
+    state: absent
+
+- name: create symlink for versions
+  file:
+    src: /var/www/ojs-{{ ojs_version }}
+    dest: "{{ apache.docroot }}"
+    state: link
+
+- name: update db driver
+  lineinfile:
+    path: "{{ apache.docroot }}/config.TEMPLATE.inc.php"
+    regexp: "driver = mysql"
+    line: "driver = postgres"
+  become_user: "{{ deploy_user }}"
+
+- name: update password
+  lineinfile:
+    path: "{{ apache.docroot }}/config.TEMPLATE.inc.php"
+    regexp: '^password ='
+    line: "password = {{ ojs_db_password }}"
+  become_user: "{{ deploy_user }}"
+  notify:
+    - restart apache
+
+- name: copy template file for live config
+  copy:
+    src: "{{ apache.docroot }}/config.TEMPLATE.inc.php"
+    dest: "{{ apache.docroot }}/config.inc.php"
+    remote_src: true
+  become_user: "{{ deploy_user }}"
+  notify:
+    - restart apache
+
+- name: create uploads directory
+  file:
+    path: "{{ ojs_file_uploads }}"
+    state: directory
+    owner: "{{ deploy_user }}"
+    group: "www-data"
+    mode: "ug+w"
+
+- name: upstream README on other directories to modify
+  file:
+    path: "{{ apache.docroot }}/{{ item }}"
+    group: "www-data"
+    mode: "ug+w"
+    recurse: true
+  with_items:
+    - "cache"
+    - "plugins"
+    - "public"
+
+- name: ensure config file has correct permissions
+  file:
+    path: "{{ apache.docroot }}/config.inc.php"
+    group: "www-data"
+    mode: "ug+w"
+  notify:
+    - restart apache
+
+- name: run compose
+  composer:
+    command: update
+    working_dir: "{{ item }}"
+  with_items:
+    - "{{ apache.docroot }}/lib/pkp"
+    - "{{ apache.docroot }}/plugins/generic/citationStyleLanguage"
+    - "{{ apache.docroot }}/plugins/paymethod/paypal"
+
+- name: install node dependencies
+  npm:
+    path: "{{ ojs_home }}"
+
+- name: build javascript dependencies
+  shell:
+    cmd: npm run build
+    chdir: "{{ ojs_home }}"
+
+- name: Check the site install state
+  shell: >
+    grep -i '^installed = \(On\|Off\)' "{{ apache.docroot }}"/config.inc.php | cut -d '=' -f 2 | xargs
+  register: ojs_installed
+
+- name: Run the OJS install script
+  expect:
+    command: php {{ apache.docroot }}/tools/install.php
+    responses:
+      'Select \(en_US\):': ''  # Default
+      'Select \(None\):': ''  # Default
+      'Select \(utf-8\):': ''  # Default
+      # yamllint disable-line rule:key-duplicates
+      'Select \(None\):': ''  # Default
+      # yamllint disable-line rule:key-duplicates
+      'Select \(None\):': ''  # Default
+      'Directory for uploads:': '{{ ojs_file_uploads }}'
+      'Select \(md5\):': ''  # Default
+      'Username:': '{{ ojs_site_adminname }}'
+      'Password:': '{{ ojs_site_adminpassword }}'
+      'Repeat password:': '{{ ojs_site_adminpassword }}'
+      'Email:': '{{ ojs_site_email }}'
+      'Select:': 'postgres'
+      'Host \(None\):': '{{ ojs_db_host }}'
+      'Username \(None\):': '{{ application_dbuser_name }}'
+      'Password \(None\):': '{{ application_dbuser_password }}'
+      'Database name:': '{{ application_db_name }}'
+      'Create new database \[Y/n\]': 'n'
+      'Repository Identifier:': '{{ ojs_site_repoid }}'
+      'Provide a unique site ID and OAI base URL to PKP for statistics and security alert purposes only\. \[Y/n\]': 'n'  # Default
+      '\*\*\* Install Open Journal Systems \[y/N\]': 'y'
+    timeout: 300
+  ignore_errors: true
+  when: (ojs_installed.stdout == "Off")
+
+- name: Mark the site as installed in config.inc.php
+  replace:
+    dest: "{{ apache.docroot }}/config.inc.php"
+    regexp: >
+      ^installed = Off$
+    replace: "installed = On"
+  when: (ojs_installed.stdout == "Off")
