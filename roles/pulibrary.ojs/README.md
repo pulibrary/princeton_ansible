@@ -6,12 +6,12 @@ This role installs Open Journal Systems on Ubuntu
 Requirements
 ------------
 
-Find them in the playbook example
+None
 
 Role Variables
 --------------
 
-```
+```bash
 ojs_version: "3_1_1-4"
 apache:
   docroot: "/var/www/ojs"
@@ -29,6 +29,10 @@ application_dbuser_password: "ojs_db_password"
 application_dbuser_role_attr_flags: "SUPERUSER,INHERIT,NOCREATEDB,NOCREATEROLE,NOREPLICATION"
 postgres_version: "10"
 ```
+
+Dependencies
+------------
+
 
 Example Playbook
 ----------------
@@ -56,3 +60,9 @@ License
 -------
 
 MIT
+
+Author Information
+------------------
+
+An optional section for the role authors to include contact information, or a
+website (HTML is not allowed).
