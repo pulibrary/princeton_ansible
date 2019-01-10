@@ -6,9 +6,7 @@ testinfra_hosts = testinfra.utils.ansible_runner.AnsibleRunner(
     os.environ['MOLECULE_INVENTORY_FILE']).get_hosts('all')
 
 
-def test_hosts_file(host):
-    f = host.file('/etc/hosts')
+def test_elastic_package_installation(host):
+    package = host.package("elasticsearch")
 
-    assert f.exists
-    assert f.user == 'root'
-    assert f.group == 'root'
+    assert package.is_installed
