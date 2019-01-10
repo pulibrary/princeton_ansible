@@ -1,12 +1,24 @@
+---
 - name: Install local nameserver
-  apt: name={{item}} state=present
-  with_items:
-    - bind9
+  apt:
+    name: ["bind9"]
+    state: present
+
 - name: Remove other nameservers
-  lineinfile: dest=/etc/resolv.conf state=absent regexp='.*nameserver.*'
+  lineinfile:
+    dest: "/etc/resolv.conf"
+    state: absent
+    regexp: '.*nameserver.*'
+
 - name: Use dns forwarder nameserver
-  lineinfile: dest=/etc/resolv.conf state=present line='nameserver 128.112.200.253'
-  notify: restart bind
+  lineinfile:
+    dest: "/etc/resolv.conf"
+    state: present
+    line: 'nameserver 128.112.200.253'
+  notify:
+    - restart bind
 
 - name: enable bind to start on boot
-  systemd: name=bind9 enabled=yes
+  systemd:
+    name: bind9
+    enabled: true

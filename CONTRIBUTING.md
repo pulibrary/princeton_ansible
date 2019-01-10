@@ -3,9 +3,11 @@ to abide by its [code of conduct].
 
 [code of conduct]: https://github.com/pulibrary/princeton_ansible/blob/master/CODE_OF_CONDUCT.md
 
+
 ## Contributing
 
-- We always test with the newest version of [Ansible](https://ansible.com),
+- We always test with the newest version of
+  [Molecule](https://molecule.readthedocs.io/en/latest/), [Ansible](https://ansible.com),
   [Vagrant](https://vagrantup.com), and [Virtualbox](https://www.virtualbox.org)
 - Fork and clone the repo.
 - Make your changes.
