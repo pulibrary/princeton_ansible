@@ -1,0 +1,39 @@
+---
+dependency:
+  name: galaxy
+  enabled: false
+driver:
+  name: docker
+lint:
+  name: yamllint
+platforms:
+  - name: instance
+    image: "kayiwa/puldocker-${MOLECULE_DISTRO:-ubuntu1804}-ansible:latest"
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    pre_build_image: true
+provisioner:
+  name: ansible
+  lint:
+    name: ansible-lint
+scenario:
+  name: default
+  test_sequence:
+    - lint
+    - destroy
+    - syntax
+    - create
+    - converge
+    - idempotence
+    - verify
+    - destroy
+verifier:
+  name: testinfra
+  env:
+    PYTHONWARNINGS: "ignore:.*U.*mode is deprecated:DeprecationWarning"
+  lint:
+    name: flake8
+  options:
+    # show which tests where executed in test output
+    v: 1
