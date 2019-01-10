@@ -11,6 +11,15 @@ It needs the `pulibrary.oracle.java8` or `pulibrary.openjdk8` roles to run
 Role Variables
 --------------
 
+```bash
+elasticsearch_version: "6.x"
+
+elasticsearch_service_state: started
+elasticsearch_service_enabled: true
+
+elasticsearch_network_host: localhost
+elasticsearch_http_port: 9200
+```
 
 Dependencies
 ------------
