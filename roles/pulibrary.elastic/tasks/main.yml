@@ -1,0 +1,46 @@
+---
+- name: install APT transport for Elasticsearch repository.
+  apt:
+    name: apt-transport-https
+    state: present
+
+- name: Add Elasticsearch apt key.
+  apt_key:
+    url: https://artifacts.elastic.co/GPG-KEY-elasticsearch
+    state: present
+
+- name: Add Elasticsearch repository.
+  apt_repository:
+    repo: 'deb https://artifacts.elastic.co/packages/{{ elasticsearch_version }}/apt stable main'
+    state: present
+    update_cache: true
+
+- name: Install Elasticsearch.
+  apt:
+    name: elasticsearch
+    state: present
+
+- name: Configure Elasticsearch.
+  template:
+    src: elasticsearch.yml.j2
+    dest: /etc/elasticsearch/elasticsearch.yml
+    owner: root
+    group: elasticsearch
+    mode: 0660
+  notify: restart elasticsearch
+
+- name: Force a restart if configuration has changed.
+  meta: flush_handlers
+
+- name: Start Elasticsearch.
+  service:
+    name: elasticsearch
+    state: "{{ elasticsearch_service_state }}"
+    enabled: "{{ elasticsearch_service_enabled }}"
+
+- name: Make sure Elasticsearch is running before proceeding.
+  wait_for:
+    host: "{{ elasticsearch_network_host }}"
+    port: "{{ elasticsearch_http_port }}"
+    delay: 3
+    timeout: 300
