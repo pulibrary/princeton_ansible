@@ -111,6 +111,40 @@ If you need to run a playbook
 ansible-playbook playbooks/example.yml
 ```
 
+## Provisioning to a service with multiple hosts (no downtime)
+
+Check to make sure you're going to run on the correct host
+`$ ansible-playbook playbooks/figgy_production.yml --limit figgy2.princeton.edu --list-hosts`
+
+coordinate with operations to take the machine off load balancer
+run playbook:
+`$ ansible-playbook playbooks/figgy_production.yml --limit figgy2.princeton.edu`
+
+capistrano deploy to the box that's off the load balancer.
+Make sure you're depoying the already-deployed commit! Note the way to do this
+may vary by project in figgy it's the BRANCH env var
+`$ bundle exec HOSTS=figgy2 BRANCH=commit_hash cap production deploy`
+
+SSH to the box that's off the load balancer and check that the index page still looks okay
+`$ curl localhost:80`
+  A bunch of the page only shows up if you're logged in, but you can see the menus and stuff
+
+Tell ops that one's done; switch the load balancer to the other box. Repeat the process.
+
+After both boxes are provisioned, ops puts them back up on the load
+balancer
+
+provision the workers:
+`$ ansible-playbook playbooks/figgy_production.yml --limit figgy_production_workers`
+
+Some roles don't have the right `become` / sudo settings. (Figgy doesn't have
+this problem). the `-b` flag to ansible-playbook will correct these.
+
+how to do a dry run? it's unclear. documentation suggests it's `--check`
+
+Finally, deploy from robots channel to get the new functionality on all the boxes at once
+
+
 ## SolrCloud Vagrantfile
 
 *Please be aware that the [Vagrantfile for the SolrCloud Role](Vagrant/solrcloudVagrantfile)
