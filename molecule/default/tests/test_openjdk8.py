@@ -1,0 +1,1 @@
+../roles/pulibrary.openjdk8/molecule/default/tests/test_openjdk8.py
