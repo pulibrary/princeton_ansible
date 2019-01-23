@@ -1,1 +1,0 @@
-../roles/pulibrary.oracle.java8/molecule/default/tests/test_oracle_java8.py
