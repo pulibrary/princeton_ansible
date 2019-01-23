@@ -8,11 +8,9 @@ testinfra_hosts = testinfra.utils.ansible_runner.AnsibleRunner(
 
 
 @pytest.mark.parametrize("name", [
-    "php7.2"
-    "php7.2-fpm"
-    "php7.2-dev"
-    "php7.2-mbstring"
-    "php7.2-curl"
+    "php7.2",
+    "php7.2-dev",
+    "php7.2-curl",
     ])
 def test_for_php7_software(host, name):
     pkg = host.package(name)
