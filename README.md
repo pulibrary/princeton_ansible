@@ -32,7 +32,10 @@ pip install --user pipenv
 
 ## Setup your environment
 
-`pipenv shell`
+```bash
+pipenv sync
+pipenv shell
+```
 
 Run the following to test
 
