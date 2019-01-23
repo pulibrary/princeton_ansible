@@ -1,11 +1,37 @@
-## Oracle Java8
+Role Name
+=========
 
-Installs Oracle's Java 8
+This Role installs Oracle Java 8
 
-### Requirements
-
-`apt` and our `common` roles need to be installed
-
-### Role variables
+Requirements
+------------
 
 None
+
+Role Variables
+--------------
+
+None
+
+Dependencies
+------------
+
+None
+
+Example Playbook
+----------------
+
+    - hosts: servers
+      roles:
+         - { role: roles/pulibrary.oracle.java8 }
+
+License
+-------
+
+MIT
+
+Author Information
+------------------
+
+An optional section for the role authors to include contact information, or a
+website (HTML is not allowed).
