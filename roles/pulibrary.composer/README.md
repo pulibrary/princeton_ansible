@@ -1,24 +1,28 @@
 Role Name
 =========
 
-Installs Drush
+Installs composer
 
 Requirements
 ------------
+
+None
 
 
 Role Variables
 --------------
 
 ```bash
-drush_version: 8.*
-drush_path: "/usr/local/bin"
+composer_path: "/usr/local/bin"
+composer_paths: []
+md5_value: "242f22ee3380bb7960e9f4ba6ce4eb37"
 ```
 
 Dependencies
 ------------
 
-- pulibrary.composer
+- pulibrary.common
+- pulibrary.php
 
 Example Playbook
 ----------------
@@ -28,7 +32,7 @@ passed in as parameters) is always nice for users too:
 
     - hosts: servers
       roles:
-         - { role: roles/pulibrary.drush }
+         - { role: roles/pulibrary.composer }
 
 License
 -------
