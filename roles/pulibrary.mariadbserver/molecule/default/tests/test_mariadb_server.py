@@ -11,13 +11,13 @@ testinfra_hosts = testinfra.utils.ansible_runner.AnsibleRunner(
     "python-mysqldb",
     "mariadb-server",
     ])
-def test_for_mariadb_software(host, name):
+def test_for_mariadb_server_software(host, name):
     pkg = host.package(name)
 
     assert pkg.is_installed
 
 
-def test_mariadb_listening_port(host):
+def test_mariadb_server_listening_port(host):
     socket = host.socket("tcp://127.0.0.1:3306")
 
     assert socket.is_listening
