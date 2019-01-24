@@ -1,30 +1,56 @@
 Role Name
 =========
 
-A brief description of the role goes here.
+This installs Drupal 7 and/or 8 (depending on which variables one selects)
 
 Requirements
 ------------
 
-Any pre-requisites that may not be covered by Ansible itself or the role should
-be mentioned here. For instance, if the role uses the EC2 module, it may be a
-good idea to mention in this section that the boto package is required.
+None
 
 Role Variables
 --------------
 
-A description of the settable variables for this role should go here, including
-any variables that are in defaults/main.yml, vars/main.yml, and any variables
-that can/should be set via parameters to the role. Any variables that are read
-from other roles and/or the global scope (ie. hostvars, group vars, etc.) should
-be mentioned here as well.
+```bash
+drupal_docroot: "/var/www/drupal"
+drupal_major_version: "8"
+drupal_7_branch: "7.x"
+drupal_8_branch: "8.6.x"
+drupal_version_branch: "{{ drupal_8_branch if drupal_major_version == 8 else drupal_7_branch }}"
+drupal_git_repo: "{{ drupal_local_repo | default('https://github.com/drupal/drupal.git') }}"
+drupal_site_name: "Test site"
+drupal_account_name: "{{ vault_drupal_admin | default('drupal_account') }}"
+drupal_account_pass: "{{ vault_drupal_admin_pass | default('change_this') }}"
+drush_path: "~/.composer"
+mysql_root_home: /root
+mysql_root_username: "root"
+mysql_root_password: "{{ vault_maria_mysql_root_password | default('change_this') }}"
+systems_user: "{{ deploy_user }}"
+
+drupal_db:
+  user: drupal
+  password: "{{ drupal_db_password | default('change_this') }}"
+  name: drupal
+
+mysql_users:
+  - name: "{{ drupal_db.user | default('drupal_user') }}"
+    host: "%"
+    password: "{{ drupal_db.password }}"
+    priv: "{{ drupal_db.name }}.*:ALL"
+
+mysql_databases:
+  - name: "{{ drupal_db.name }}"
+    encoding: utf8mb4
+    collation: utf8mb4_general_ci
+```
+
 
 Dependencies
 ------------
 
-A list of other roles hosted on Galaxy should go here, plus any details in
-regards to parameters that may need to be set for other roles, or variables that
-are used from other roles.
+- pulibrary.deploy-user
+- pulibrary.php
+- pulibrary.drush
 
 Example Playbook
 ----------------
@@ -34,12 +60,12 @@ passed in as parameters) is always nice for users too:
 
     - hosts: servers
       roles:
-         - { role: roles/pulibrary.drupal, x: 42 }
+         - { role: roles/pulibrary.drupal}
 
 License
 -------
 
-BSD
+MIT
 
 Author Information
 ------------------
