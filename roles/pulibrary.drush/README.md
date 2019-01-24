@@ -1,13 +1,44 @@
-# Drush
+Role Name
+=========
 
-## Requirements
+Installs Drush
 
-- PHP must be installed
+Requirements
+------------
 
-## Dependencies
 
-- `pulibrary.composer` (will install PHP)
+Role Variables
+--------------
 
-## Variables
+```bash
+drush_version: 8.*
+drush_path: "/usr/local/bin"
+```
 
-One can bump up the version and location of the drush install
+Dependencies
+------------
+
+- pulibrary.composer
+- pulibrary.common
+- pulibrary.php
+
+Example Playbook
+----------------
+
+Including an example of how to use your role (for instance, with variables
+passed in as parameters) is always nice for users too:
+
+    - hosts: servers
+      roles:
+         - { role: roles/pulibrary.drush }
+
+License
+-------
+
+MIT
+
+Author Information
+------------------
+
+An optional section for the role authors to include contact information, or a
+website (HTML is not allowed).
