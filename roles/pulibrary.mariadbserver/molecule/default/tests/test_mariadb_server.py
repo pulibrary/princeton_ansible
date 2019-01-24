@@ -18,7 +18,7 @@ def test_for_mariadb_server_software(host, name):
 
 
 def test_mariadb_server_listening_port(host):
-    socket = host.socket("tcp://127.0.0.1:3306")
+    socket = host.socket("tcp://0.0.0.0:3306")
 
     assert socket.is_listening
 
