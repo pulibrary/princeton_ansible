@@ -1,11 +1,37 @@
-## NodeJS
+Role Name
+=========
 
-Installs NodeJS directly from node.
+Installs Nodejs (that's nodejs and yarn packages)
 
-### Requirements
+Requirements
+------------
 
-This depends on the pulibrary.common role.
 
-### Role Variables
+Role Variables
+--------------
 
-When using this role, the `nodejs_version` must be set.
+
+Dependencies
+------------
+
+
+Example Playbook
+----------------
+
+Including an example of how to use your role (for instance, with variables
+passed in as parameters) is always nice for users too:
+
+    - hosts: servers
+      roles:
+         - { role: roles/pulibrary.nodejs }
+
+License
+-------
+
+MIT
+
+Author Information
+------------------
+
+An optional section for the role authors to include contact information, or a
+website (HTML is not allowed).
