@@ -19,6 +19,7 @@
     owner: "{{ systems_user }}"
     group: "{{ systems_user }}"
     recurse: true
+  changed_when: false
 
 - name: create composer directory
   file:
@@ -54,17 +55,12 @@
   become_user: "{{ systems_user }}"
   when: drupal_major_version == 8
 
-- name: Drupal | Check if site is already installed
-  command: >
-    drush status --root={{ drupal_docroot }}
-  register: drush_status
-
 - name: Drupal | Give appropriate permissions for files directory
   file:
     dest: "{{ drupal_docroot }}/sites/default/files"
     recurse: true
     mode: a+w
-  when: not drush_status.stdout | search("Drupal bootstrap\s+:\s+Successful")
+  changed_when: false
 
 - include: mysql_setup.yml
 
@@ -76,6 +72,7 @@
     --account-pass={{ drupal_account_pass }}
     --db-url=mysql://{{ drupal_db.user }}:{{ drupal_db.password }}@localhost/{{ drupal_db.name }}
     -r {{ drupal_docroot }}
-  when: not drush_status.stdout | search("Drupal bootstrap\s+:\s+Successful")
   become: true
   notify: 'restart apache'
+  register: drush_status
+  changed_when: false
