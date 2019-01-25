@@ -1,0 +1,76 @@
+---
+mariadb__server: ""
+mariadb__port: "3306"
+mariadb__client: "{{ maria_db_cluster_host | default('localhost') }}"
+mariadb__delegate_to: '{{ mariadb__server
+                          if (mariadb__server|d() and
+                              mariadb__server != "localhost")
+                          else inventory_hostname }}'
+mariadb__client_charset_options:
+  "default_character_set": "utf8mb4"
+mariadb__client_remote_host_options:
+  - name: "remote-host-options"
+    state: "{{ 'present'
+               if (not mariadb__register_version.stdout|d(false))
+               else 'absent' }}"
+    options:
+
+      - name: "remote-host-not-tunnel"
+        state: "{{ 'present'
+                   if (mariadb__register_tunnel.rc|d() != 0)
+                   else 'absent' }}"
+        options:
+          "host": "{{ mariadb__server }}"
+          "port": "{{ mariadb__port }}"
+
+      - name: "remote-host-tunnel"
+        state: "{{ 'present'
+                   if (mariadb__register_tunnel.rc|d() == 0)
+                   else 'absent' }}"
+        options:
+          "host": "127.0.0.1"
+          "port": "{{ mariadb__port }}"
+
+      - name: "pki-options"
+        comment: "Support for SSL connections"
+        state: "{{ 'present' if mariadb__pki|bool else 'absent' }}"
+        options:
+          "ssl":
+          "ssl_ca": "{{ mariadb__pki_path + '/' + mariadb__pki_realm + '/' + mariadb__pki_ca }}"
+          "ssl_cert": "{{ mariadb__pki_path + '/' + mariadb__pki_realm + '/' + mariadb__pki_crt }}"
+          "ssl_key": "{{ mariadb__pki_path + '/' + mariadb__pki_realm + '/' + mariadb__pki_key }}"
+          "ssl_cipher": "{{ mariadb__pki_cipher }}"
+mariadb__client_options:
+  - section: "client"
+    options:
+      - "{{ mariadb__client_charset_options }}"
+      - "{{ mariadb__client_remote_host_options }}"
+      - "{{ mariadb__options }}"
+mariadb__options: {}
+mariadb__client_cnf_file: "{{ '/etc/mysql/mariadb.conf.d/90-client.cnf'
+                              if (mariadb__register_confd.stat.exists|bool)
+                              else '/etc/mysql/conf.d/zz-client.cnf' }}"
+mariadb__pki: "{{ (true
+                   if (ansible_local|d() and ansible_local.pki|d() and
+                       ansible_local.pki.enabled|d() and
+                       mariadb__pki_realm in ansible_local.pki.known_realms)
+                   else false) | bool }}"
+mariadb__pki_path: "{{ (ansible_local.pki.base_path
+                        if (ansible_local|d() and ansible_local.pki|d() and
+                            ansible_local.pki.base_path|d())
+                        else '/etc/pki') }}"
+mariadb__pki_realm: "{{ ansible_local.pki.realm
+                        if (ansible_local|d() and ansible_local.pki|d() and
+                            ansible_local.pki.realm|d())
+                        else 'domain' }}"
+mariadb__pki_ca: "CA.crt"
+mariadb__pki_crt: "default.crt"
+mariadb__pki_key: "default.key"
+mariadb__pki_cipher: "DHE-RSA-AES256-SHA"
+mariadb__default_privileges: true
+mariadb__default_privileges_aux: true
+mariadb__default_privileges_grant: "ALL"
+mariadb__databases: []
+mariadb__dependent_databases: []
+mariadb__users: []
+mariadb__dependent_users: []
