@@ -22,11 +22,3 @@ def test_mariadb_server_listening_port(host):
     socket = host.socket("tcp://127.0.0.1:3306")
 
     assert socket.is_listening
-
-
-def test_hosts_file(host):
-    f = host.file('/etc/hosts')
-
-    assert f.exists
-    assert f.user == 'root'
-    assert f.group == 'root'
