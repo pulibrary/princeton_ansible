@@ -10,11 +10,3 @@ def test_composer_file(host):
     file = host.file("/usr/local/bin/composer")
 
     assert file.exists
-
-
-def test_hosts_file(host):
-    f = host.file('/etc/hosts')
-
-    assert f.exists
-    assert f.user == 'root'
-    assert f.group == 'root'
