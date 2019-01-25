@@ -19,6 +19,7 @@ $ vagrant box add --name princeton_box images/ubuntu-16.04.virtualbox.box
  * `brew cask install vagrant`
  * `brew install python`
  * `brew install pipenv`
+ * `brew install docker`
 
 ## Prerequisites of Ubuntu Bionic
 
@@ -26,6 +27,12 @@ $ vagrant box add --name princeton_box images/ubuntu-16.04.virtualbox.box
  * `sudo apt -y install virtualbox`
  * `sudo apt -y install vagrant`
  * `sudo apt -y install python-pip`
+ * `sudo apt install apt-transport-https ca-certificates curl software-properties-common`
+ * `curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add
+   -`
+ * `sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu bionic stable"`
+ * `sudo apt update`
+ * `sudo apt install docker-ce`
 ```bash
 pip install --user pipenv
 ```

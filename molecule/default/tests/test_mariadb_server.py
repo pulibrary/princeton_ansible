@@ -1,0 +1,1 @@
+../roles/pulibrary.mariadbserver/molecule/default/tests/test_mariadb_server.py
