@@ -16,3 +16,9 @@ def test_commonly_needed_build_files(host, name):
     pkg = host.package(name)
 
     assert pkg.is_installed
+
+
+def test_redis_server_listening_port(host):
+    socket = host.socket("tcp://0.0.0.0:6379")
+
+    assert socket.is_listening
