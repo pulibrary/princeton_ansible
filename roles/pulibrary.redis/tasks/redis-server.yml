@@ -1,0 +1,33 @@
+---
+- name: Generate redis-server configuration
+  template:
+    src: "etc/redis/redis-conf.j2"
+    dest: "/etc/redis/ansible-redis-static.conf"
+    owner: "root"
+    group: "{{ redis__group }}"
+    mode: 0640
+  register: redis__register_config_ansible_redis_static
+
+- name: Remove Ansible include line from redis.conf
+  lineinfile:
+    dest: "/etc/redis/redis.conf"
+    regexp: '^include\s+/etc/redis/ansible-redis-static.conf'
+    state: absent
+  when: redis__register_config_ansible_redis_static is changed
+
+- name: Include Ansible configuration in redis.conf
+  lineinfile:
+    dest: "/etc/redis/redis.conf"
+    regexp: '^include\s+/etc/redis/ansible-redis-static.conf'
+    line: 'include /etc/redis/ansible-redis-static.conf'
+    insertafter: 'EOF'
+    state: present
+  register: redis__register_config_redis
+
+- name: Restart redis-server if modified
+  service:
+    name: "redis-server"
+    state: restarted
+  register: redis__register_server_restart
+  when: (redis__register_config_ansible_redis_static is changed or
+         redis__register_config_redis is changed)

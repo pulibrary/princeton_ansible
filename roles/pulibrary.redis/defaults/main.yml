@@ -1,31 +1,95 @@
 ---
-redis_conf_path: '/etc/redis/redis.conf'
-redis_port: 6379
-redis_bind_interface: 127.0.0.1
-redis_unixsocket: ''
-redis_timeout: 300
+redis__user: "redis"
+redis__group: "redis"
+redis__domain: "{{ ansible_domain if ansible_domain else ansible_hostname }}"
+redis__server_bind: "0.0.0.0"
+redis__auth_password: "{{ vault_redis__auth_password | default('change_me')}}"
+redis__server_port: "6379"
+redis__server_slave: false
+redis__server_enabled: true
+# Enable or disable database snapshots.
+redis__server_save_enabled: true
+# List of ``SAVE`` snapshots to configure. See http://redis.io/commands/save
+# for more details.
+redis__server_save:
+  - '900 1'
+  - '300 10'
+  - '60 10000'
+# Specify Redis Server log level. Available levels: ``debug``, ``verbose``,
+# ``notice``, ``warning``.
+redis__server_loglevel: "notice"
+# Enable or disable syslog support in Redis Server.
+redis__server_syslog: true
+# Specify the string that identifies Redis Server syslog messages.
+redis__server_syslog_ident: "redis"
+# Specify the syslog facility used by Redis Server to send log messages.
+redis__server_syslog_facility: "local0"
+# by default ~80% of system memory.
+redis__server_maxmemory_limit: "0.8"
+#
+# Maximum amount of system memory available for Redis Server in bytes.
+redis__server_maxmemory: "{{ ((ansible_memtotal_mb|int * 1024 * 1024) *
+                              redis__server_maxmemory_limit|float) | round | int }}"
+# Specify the policy used by Redis Server for key expiration.
+redis__server_maxmemory_policy: "volatile-lru"
+# Enable or disable vm.overcommit_memory. If disabled and background save is
+# enabled your database cannot exceed half of your memory.
+redis__overcommit_memory_enable: true
+# Number of samples taken by Redis Server to perform memory management
+# operations.
+redis__server_maxmemory_samples: 3
+# to ensure data replication. If Redis Server is configured as standalone, this
+# feature is disabled.
+# The Redis server configuration parameters set by default by the role.
+redis__server_default_configuration:
+  requirepass: "{{ redis__auth_password }}"
+  masterauth: "{{ redis__auth_password }}"
+  syslog-enabled: "{{ redis__server_syslog | bool }}"
+  syslog-ident: "{{ redis__server_syslog_ident }}"
+  syslog-facility: "{{ redis__server_syslog_facility }}"
+  loglevel: "{{ redis__server_loglevel }}"
+  bind: "{{ redis__server_bind }}"
+  port: "{{ redis__server_port }}"
+  save: "{{ redis__server_save }}"
+  maxmemory: "{{ redis__server_maxmemory }}"
+  maxmemory-policy: "{{ redis__server_maxmemory_policy }}"
+  maxmemory-samples: "{{ redis__server_maxmemory_samples }}"
+# from the above variables. This variable is used in the configuration file
+# templates.
+redis__server_host_configuration: {}
+redis__server_configuration: {}
+redis__server_group_configuration: {}
 
-redis_loglevel: "notice"
-redis_logfile: /var/log/redis/redis-server.log
+redis__server_combined_configuration: "{{ redis__server_default_configuration
+                                          | combine(redis__server_configuration)
+                                          | combine(redis__server_group_configuration)
+                                          | combine(redis__server_host_configuration) }}"
 
-redis_databases: 16
-
-# Set to an empty set to disable persistence (saving the DB to disk).
-redis_save:
-  - 900 1
-  - 300 10
-  - 60 10000
-
-redis_rdbcompression: "yes"
-redis_dbfilename: dump.rdb
-redis_dbdir: /var/lib/redis
-
-redis_maxmemory: 0
-redis_maxmemory_policy: "noeviction"
-redis_maxmemory_samples: 5
-
-redis_appendonly: "no"
-redis_appendfsync: "everysec"
-
-# Add extra include files for local configuration/overrides.
-redis_includes: []
+# versions and above. This YAML dictionary defines what parameters can be used
+# when certain Redis version is installed.
+redis__server_version_config_map:
+  tcp-backlog: '2.8.5'
+  hll-sparse-max-bytes: '2.8.9'
+  latency-monitor-threshold: '2.8.13'
+# service needs to be restarted (role will do that automatically).
+redis__server_static_options:
+  - "activerehashing"
+  - "appendfilename"
+  - "bind"
+  - "daemonize"
+  - "databases"
+  - "dir"
+  - "logfile"
+  - "masterauth"
+  - "no-appendfsync-on-rewite"
+  - "pidfile"
+  - "port"
+  - "rdbchecksum"
+  - "requirepass"
+  - "slaveof"
+  - "syslog-enabled"
+  - "syslog-facility"
+  - "syslog-ident"
+  - "tcp-backlog"
+  - "unixsocket"
+  - "unixsocketperm"
