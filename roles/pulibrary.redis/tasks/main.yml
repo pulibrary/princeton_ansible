@@ -1,10 +1,48 @@
 ---
-- name: install redis
-  apt: name=redis-server state=present cache_valid_time='{{ apt_cache_timeout }}' update_cache=yes
+- name: Install redis packages
+  apt:
+    name: ["redis-tools", "python-redis", "redis-server"]
+    state: present
 
-- name: configure redis
-  template: src=redis.conf.j2 dest='{{ redis_conf_path }}' mode=0644
-  notify: restart redis
+- name: Ensure that /etc/redis directory exists
+  file:
+    path: "/etc/redis"
+    state: directory
+    owner: "root"
+    group: "root"
+    mode: 0755
 
-- name: make sure redis starts on boot
-  service: name=redis-server enabled=yes
+- name: Create stub Redis config file
+  template:
+    src: "etc/redis/redis.conf.j2"
+    dest: "/etc/redis/redis.conf"
+    owner: "root"
+    group: "root"
+    mode: 0640
+    force: false
+
+- name: Install Redis custom scripts
+  copy:
+    src: "usr/local/lib/"
+    dest: "/usr/local/lib/"
+    owner: "root"
+    group: "root"
+    mode: 0755
+
+- name: Set vm.overcommit
+  sysctl:
+    name: "vm.overcommit_memory"
+    value: 1
+    sysctl_file: "/etc/sysctl.d/30-redis.conf"
+  when: redis__overcommit_memory_enable|bool
+
+- name: Configure redis-server service
+  include: redis-server.yml
+  when: redis__server_enabled|bool
+
+- name: Disable Redis Server service if not enabled
+  service:
+    name: "redis-server"
+    state: stopped
+    enabled: false
+  when: not redis__server_enabled|bool
