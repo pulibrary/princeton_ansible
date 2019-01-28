@@ -33,13 +33,6 @@
   become_user: '{{ deploy_user }}'
   ignore_errors: true
 
-- name: setting up user.txt file
-  copy:
-    src: '../../../local_files/ezproxy/user.txt'
-    dest: '/var/local/ezproxy/user.txt'
-    owner: '{{ deploy_user }}'
-    group: '{{ deploy_user }}'
-
 - name: run command with WSKey
   command: /var/local/ezproxy/ezproxy -k '{{ oclc_wskey }}'
   become_user: '{{ deploy_user }}'
@@ -98,26 +91,33 @@
     recurse: true
   become: true
 
-- name: Create GeoLite DB directory
-  file:
-    path: '/var/local/ezproxy/GeoLite2-City'
-    state: 'directory'
-    owner: 'ezproxy'
-    group: 'ezproxy'
-    mode: 0750
-  become: true
+# - name: Create GeoLite DB directory
+#   file:
+#     path: '/var/local/ezproxy/GeoLite2-City'
+#     state: 'directory'
+#     owner: 'ezproxy'
+#     group: 'ezproxy'
+#     mode: 0750
+#   become: true
 
 - name: Download GeoLite2 DB
   unarchive:
     src: 'http://geolite.maxmind.com/download/geoip/database/GeoLite2-City.tar.gz'
-    dest: '/var/local/ezproxy/GeoLite2-City'
+    dest: '/var/local/ezproxy'
     remote_src: 'yes'
   become: 'true'
 
 - name: create base config file
   copy:
-    src: '../../../local_files/ezproxy/config.txt.tmp'
+    src: '{{ ezproxy_repo_root }}/config.txt.tmp'
     dest: '/var/local/ezproxy/config.txt'
+    owner: '{{ deploy_user }}'
+    group: '{{ deploy_user }}'
+
+- name: setting up user.txt file
+  copy:
+    src: '{{ ezproxy_repo_root }}/user.txt.tmp'
+    dest: '/var/local/ezproxy/user.txt'
     owner: '{{ deploy_user }}'
     group: '{{ deploy_user }}'
 
