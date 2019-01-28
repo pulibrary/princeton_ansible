@@ -12,7 +12,7 @@ testinfra_hosts = testinfra.utils.ansible_runner.AnsibleRunner(
     "ruby2.4",
     "ruby2.4-dev",
     ])
-def test_commonly_needed_build_files(host, name):
+def test_for_ruby_package_installs(host, name):
     pkg = host.package(name)
 
     assert pkg.is_installed
