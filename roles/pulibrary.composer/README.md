@@ -12,10 +12,10 @@ None
 Role Variables
 --------------
 
-```bash
+```yaml
 composer_path: "/usr/local/bin"
 composer_paths: []
-md5_value: "242f22ee3380bb7960e9f4ba6ce4eb37"
+md5_value: "692d451a81e7437017a3e944a95e2871"
 ```
 
 Dependencies
