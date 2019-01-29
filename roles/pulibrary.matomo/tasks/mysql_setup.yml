@@ -2,12 +2,13 @@
 - name: MySQL | Ensure MySQL users are present.
   mysql_user:
     name: "{{ item.name }}"
-    host: "{{ item.host | default('localhost') }}"
+    host: "{{ ansible_local.mariadb.host }}"
     password: "{{ item.password }}"
     priv: "{{ item.priv | default('*.*:USAGE') }}"
     state: "{{ item.state | default('present') }}"
     append_privs: "{{ item.append_privs | default('no') }}"
   with_items: "{{ mysql_users }}"
+  delegate_to: "{{ ansible_local.mariadb.delegate_to }}"
 
 - name: MySQL | Ensure MySQL databases are present.
   mysql_db:
@@ -16,3 +17,5 @@
     encoding: "{{ item.encoding | default('utf8') }}"
     state: present
   with_items: "{{ mysql_databases }}"
+  delegate_to: "{{ ansible_local.mariadb.delegate_to }}"
+  register: matomo__register_database
