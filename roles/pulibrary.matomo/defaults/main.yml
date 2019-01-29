@@ -1,0 +1,26 @@
+---
+mysql_root_home: /root
+mysql_root_username: "root"
+mysql_root_password: "{{ vault_maria_mysql_root_password | default('changeme') }}"
+
+matomo_db:
+  user: matomo
+  password: "{{ matomo_db_password }}"
+  name: matomo
+
+mysql_users:
+  - name: "{{ matomo_db.user }}"
+    host: "%"
+    password: "{{ matomo_db_password }}"
+    priv: "{{ matomo_db.name }}.*:ALL"
+
+mysql_databases:
+  - name: "{{ matomo_db.name }}"
+    encoding: utf8mb4
+    collation: utf8mb4_general_ci
+apache:
+  docroot: "/var/www/piwik"
+  servername: "{{ ansible_hostname }}"
+server:
+  timezone: "America/New_York"
+matomo_db_password: "{{ vault_matomo_db_password | default('change_me' }}"
