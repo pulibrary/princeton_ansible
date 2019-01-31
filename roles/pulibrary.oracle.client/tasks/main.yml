@@ -1,21 +1,18 @@
 ---
 - name: Install system package dependencies
   apt:
-    name: "{{ item }}"
+    name: ["libaio1"]
     state: present
-  with_items:
-    - libaio1
-    - unzip
 
 - name: Create oracle directory
   file:
-    path: /opt/oracle
+    path: "/opt/oracle"
     state: directory
 
 - name: Unarchive oracle client
   unarchive:
     src: "{{ item }}"
-    dest: /opt/oracle
+    dest: "/opt/oracle"
   with_fileglob:
     - local_files/instantclient-*.zip
 
@@ -49,22 +46,22 @@
   lineinfile:
     line: LD_LIBRARY_PATH={{ ls_oracle_home.stdout }}
     state: present
-    dest: /etc/environment
+    dest: "/etc/environment"
 
 - name: Define oracle home path
   lineinfile:
     line: ORACLE_HOME={{ ls_oracle_home.stdout }}
     state: present
-    dest: /etc/environment
+    dest: "/etc/environment"
 
 - name: Define oracle lib path
   lineinfile:
     line: ORACLE_LIB={{ ls_oracle_home.stdout }}
     state: present
-    dest: /etc/environment
+    dest: "/etc/environment"
 
 - name: Define tns admin path
   lineinfile:
     line: TNS_ADMIN={{ ls_oracle_home.stdout }}/network/admin
     state: present
-    dest: /etc/environment
+    dest: "/etc/environment"
