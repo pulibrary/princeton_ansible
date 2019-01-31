@@ -34,8 +34,30 @@ $ vagrant box add --name princeton_box images/ubuntu-16.04.virtualbox.box
  * `sudo apt update`
  * `sudo apt install docker-ce`
 ```bash
+curl https://pyenv.run | bash
+```
+
+Edit your `~/.bashrc` accordingly
+
+```bash
+pyenv install --list
+```
+From the resulting list select the version of python version that matches the
+version in the `Pipfile` in this repo
+
+```bash
 pip install --user pipenv
 ```
+
+Add the docker group to your computer and add your user to this group with:
+
+```bash
+sudo groupadd docker
+sudo usermod -aG docker $USER
+```
+
+You will need to relaunch your shell.
+
 
 ## Setup your environment
 
@@ -44,7 +66,8 @@ pipenv sync
 pipenv shell
 ```
 
-Run the following to test
+
+Make sure docker is running before you run the following to test
 
 ```bash
 molecule test
