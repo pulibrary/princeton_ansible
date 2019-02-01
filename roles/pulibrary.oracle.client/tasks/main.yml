@@ -1,26 +1,23 @@
 ---
 - name: Install system package dependencies
   apt:
-    name: "{{ item }}"
+    name: ["libaio1"]
     state: present
-  with_items:
-    - libaio1
-    - unzip
 
 - name: Create oracle directory
   file:
-    path: /opt/oracle
+    path: "/opt/oracle"
     state: directory
 
 - name: Unarchive oracle client
   unarchive:
     src: "{{ item }}"
-    dest: /opt/oracle
+    dest: "/opt/oracle"
   with_fileglob:
     - local_files/instantclient-*.zip
 
 - name: Register installation directory
-  shell: ls -d /opt/oracle/instantclient_1[012]_*
+  command: ls -d /opt/oracle/instantclient_18_3
   register: ls_oracle_home
   changed_when: false
 
@@ -42,29 +39,29 @@
 
 - name: Copy tnsnames file
   copy:
-    src: files/tnsnames.ora
+    src: "files/tnsnames.ora"
     dest: "{{ ls_oracle_home.stdout }}/network/admin/tnsnames.ora"
 
 - name: Define library search path
   lineinfile:
     line: LD_LIBRARY_PATH={{ ls_oracle_home.stdout }}
     state: present
-    dest: /etc/environment
+    dest: "/etc/environment"
 
 - name: Define oracle home path
   lineinfile:
     line: ORACLE_HOME={{ ls_oracle_home.stdout }}
     state: present
-    dest: /etc/environment
+    dest: "/etc/environment"
 
 - name: Define oracle lib path
   lineinfile:
     line: ORACLE_LIB={{ ls_oracle_home.stdout }}
     state: present
-    dest: /etc/environment
+    dest: "/etc/environment"
 
 - name: Define tns admin path
   lineinfile:
     line: TNS_ADMIN={{ ls_oracle_home.stdout }}/network/admin
     state: present
-    dest: /etc/environment
+    dest: "/etc/environment"
