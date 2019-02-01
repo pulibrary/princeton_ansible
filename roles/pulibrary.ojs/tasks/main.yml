@@ -17,6 +17,7 @@
     repo: https://github.com/pkp/ojs
     version: "ojs-{{ ojs_version }}"
     update: false
+  become: true
   become_user: "{{ deploy_user }}"
 
 - name: remove apache document root
@@ -35,6 +36,7 @@
     path: "{{ apache.docroot }}/config.TEMPLATE.inc.php"
     regexp: "driver = mysql"
     line: "driver = postgres"
+  become: true
   become_user: "{{ deploy_user }}"
 
 - name: update password
@@ -42,6 +44,7 @@
     path: "{{ apache.docroot }}/config.TEMPLATE.inc.php"
     regexp: '^password ='
     line: "password = {{ ojs_db_password }}"
+  become: true
   become_user: "{{ deploy_user }}"
   notify:
     - restart apache
@@ -51,6 +54,7 @@
     src: "{{ apache.docroot }}/config.TEMPLATE.inc.php"
     dest: "{{ apache.docroot }}/config.inc.php"
     remote_src: true
+  become: true
   become_user: "{{ deploy_user }}"
   notify:
     - restart apache
@@ -110,6 +114,7 @@
     command: php {{ apache.docroot }}/tools/install.php
     responses:
       'Select \(en_US\):': ''  # Default
+      # yamllint disable-line rule:key-duplicates
       'Select \(None\):': ''  # Default
       'Select \(utf-8\):': ''  # Default
       # yamllint disable-line rule:key-duplicates
