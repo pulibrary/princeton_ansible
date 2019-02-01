@@ -1,0 +1,130 @@
+---
+- name: Install git
+  apt:
+    name:
+      - git
+      - git-svn
+    state: present
+    update_cache: true
+
+- name: create ezproxy directory
+  file:
+    path: '/var/local/ezproxy'
+    state: directory
+    group: '{{ deploy_user }}'
+    owner: '{{ deploy_user }}'
+
+- name: download ezproxy binary
+  get_url:
+    url: 'https://www.oclc.org/content/dam/support/ezproxy/documentation/download/binaries/{{ ezproxy_version }}/ezproxy-linux.bin'
+    dest: '/var/local/ezproxy/ezproxy'
+    mode: 0755
+
+- name: install dependencies for 64bit
+  apt:
+    name: '{{ item }}'
+    state: 'present'
+  with_items:
+    - lib32ncurses5
+    - lib32z1
+
+- name: install missing file replacements
+  command: /var/local/ezproxy/ezproxy -m
+  become_user: '{{ deploy_user }}'
+  ignore_errors: true
+
+- name: create admin password
+  copy:
+    src: '../../../local_files/ezproxy/user.txt'
+    dest: '/var/local/ezproxy/user.txt'
+    owner: '{{ deploy_user }}'
+    group: '{{ deploy_user }}'
+
+- name: run command with WSKey
+  command: /var/local/ezproxy/ezproxy -k '{{ oclc_wskey }}'
+  become_user: '{{ deploy_user }}'
+
+- name: Creates a log directory for ezproxy
+  file:
+    path: '/var/local/ezproxy/log'
+    state: 'directory'
+    owner: 'ezproxy'
+    group: 'ezproxy'
+  become: true
+
+- name: Creates app directory
+  file:
+    path: '{{ ezproxy_repo_root }}'
+    state: 'directory'
+    owner: 'pulsys'
+    group: 'pulsys'
+    mode: 0750
+  become: true
+
+- name: Clone EZproxy Repo
+  git:
+    repo: '{{ ezproxy_git_repo }}'
+    version: '{{ ezproxy_default_branch }}'
+    dest: '{{ ezproxy_repo_root }}'
+    accept_hostkey: 'yes'
+    clone: 'yes'
+    update: 'yes'
+  become: 'pulsys'
+
+- name: Assigns config repo to ezproxy user
+  file:
+    path: '{{ ezproxy_repo_root }}'
+    state: 'directory'
+    owner: 'ezproxy'
+    group: 'ezproxy'
+    recurse: true
+  become: true
+
+- name: Clone EZproxy blacklist
+  git:
+    repo: 'https://github.com/prbutler/EZProxy_IP_Blacklist.git'
+    version: 'master'
+    dest: '/var/local/ezproxy/EZProxy_IP_Blacklist'
+    clone: 'yes'
+    update: 'yes'
+  become: 'true'
+
+- name: Assigns blacklist repo to ezproxy user
+  file:
+    path: '/var/local/ezproxy/EZProxy_IP_Blacklist'
+    state: 'directory'
+    owner: 'ezproxy'
+    group: 'ezproxy'
+    recurse: true
+  become: true
+
+- name: Create GeoLite DB directory
+  file:
+    path: '/var/local/ezproxy/GeoLite2-City'
+    state: 'directory'
+    owner: 'ezproxy'
+    group: 'ezproxy'
+    mode: 0750
+  become: true
+
+- name: Download GeoLite2 DB
+  unarchive:
+    src: 'http://geolite.maxmind.com/download/geoip/database/GeoLite2-City.tar.gz'
+    dest: '/var/local/ezproxy/GeoLite2-City'
+    remote_src: 'yes'
+  become: 'true'
+
+- name: create base config file
+  copy:
+    src: '../../../local_files/ezproxy/config.txt.tmp'
+    dest: '/var/local/ezproxy/config.txt'
+    owner: '{{ deploy_user }}'
+    group: '{{ deploy_user }}'
+
+- name: install ezproxy startup script (requires root)
+  command: /var/local/ezproxy/ezproxy -si
+  become_user: 'root'
+
+- name: launch ezproxy
+  command: /var/local/ezproxy/ezproxy start
+  become_user: '{{ deploy_user }}'
