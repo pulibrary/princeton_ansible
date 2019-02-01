@@ -9,8 +9,9 @@ testinfra_hosts = testinfra.utils.ansible_runner.AnsibleRunner(
 
 
 @pytest.mark.parametrize("name", [
-    ("oracle-java8-installer")
-    ("ca-certificates")
+    ("oracle-java8-installer"),
+    ("ca-certificates"),
+    ("oracle-java8-set-default"),
     ])
 def test_for_oracle_java8_installer(host, name):
     package = host.package("name")
