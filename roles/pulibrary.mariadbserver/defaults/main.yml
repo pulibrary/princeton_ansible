@@ -1,0 +1,84 @@
+---
+mariadb_server__root_password: "{{ vault_mariadb_mysql_root_password | default('change_me')}}"
+mariadb_server__port: 3306
+mariadb_server__bind_address: "localhost"
+mariadb_server__allow: []
+mariadb_server__max_connections: "100"
+mariadb_server__default_datadir: "/var/lib/mysql"
+mariadb_server__datadir: "{{ mariadb_server__default_datadir }}"
+mariadb_server__delegate_to: "{{ inventory_hostname }}"
+mariadb_server__mysqld_performance_options:
+  'innodb_buffer_pool_instances': '{{ ansible_processor_vcpus | d(1) }}'
+  'innodb_buffer_pool_size': '{{ (ansible_memtotal_mb / 2) | int }}M'
+  'query_cache_type': '0'
+mariadb_server__local_infile: false
+mariadb_server__mysqld_security_options:
+  'local_infile': '{{ "1" if mariadb_server__local_infile|bool else "0" }}'
+mariadb_server__mysqld_charset_options:
+  'character_set_server': 'utf8mb4'
+  'collation_server': 'utf8mb4_general_ci'
+  'init_connect': 'SET NAMES utf8mb4'
+mariadb_server__mysqld_network_options:
+  'bind_address': '{{ mariadb_server__bind_address }}'
+  'port': '{{ mariadb_server__port }}'
+  'max_connections': '{{ mariadb_server__max_connections }}'
+mariadb_server__mysqld_pki_options:
+  name: 'pki-options'
+  comment: 'Support for SSL connections'
+  state: '{{ "present" if mariadb_server__pki|bool else "absent" }}'
+  options:
+    'ssl':
+    'ssl_ca': '{{ mariadb_server__pki_path + "/" + mariadb_server__pki_realm + "/" + mariadb_server__pki_ca }}'
+    'ssl_cert': '{{ mariadb_server__pki_path + "/" + mariadb_server__pki_realm + "/" + mariadb_server__pki_crt }}'
+    'ssl_key': '{{ mariadb_server__pki_path + "/" + mariadb_server__pki_realm + "/" + mariadb_server__pki_key }}'
+    'ssl_cipher': '{{ mariadb_server__pki_cipher }}'
+mariadb_server__mysqld_cluster_options:
+  name: 'cluster-options'
+  comment: 'Required for cluster operation'
+  state: absent
+  options:
+    'binlog_format': 'ROW'
+    'default_storage_engine': 'InnoDB'
+    'innodb_autoinc_lock_mode': '2'
+mariadb_server__mysqld_directory_options:
+  'datadir': '{{ mariadb_server__datadir }}'
+mariadb_server__mysqld_options:
+  - section: 'mysqld'
+    options:
+      - '{{ mariadb_server__mysqld_performance_options }}'
+      - '{{ mariadb_server__mysqld_charset_options }}'
+      - '{{ mariadb_server__mysqld_security_options }}'
+      - '{{ mariadb_server__mysqld_network_options }}'
+      - '{{ mariadb_server__mysqld_pki_options }}'
+      - '{{ mariadb_server__mysqld_cluster_options }}'
+      - '{{ mariadb_server__mysqld_directory_options }}'
+      - '{{ mariadb_server__options }}'
+mariadb_server__client_options:
+  - section: 'client'
+    options:
+      'default_character_set': 'utf8mb4'
+mariadb_server__options: {}
+mariadb_server__client_cnf_file: '{{ "/etc/mysql/mariadb.conf.d/90-client.cnf"
+                                     if (mariadb_server__register_confd.stat.exists|bool)
+                                     else "/etc/mysql/conf.d/zz-client.cnf" }}'
+mariadb_server__mysqld_cnf_file: '{{ "/etc/mysql/mariadb.conf.d/90-mysqld.cnf"
+                                     if (mariadb_server__register_confd.stat.exists|bool)
+                                     else "/etc/mysql/conf.d/zz-mysqld.cnf" }}'
+mariadb_server__append_groups: ['ssl-cert']
+mariadb_server__pki: '{{ (True
+                      if (ansible_local|d() and ansible_local.pki|d() and
+                          ansible_local.pki.enabled|d() and
+                          mariadb_server__pki_realm in ansible_local.pki.known_realms)
+                      else False) | bool }}'
+mariadb_server__pki_path: '{{ (ansible_local.pki.base_path
+                           if (ansible_local|d() and ansible_local.pki|d() and
+                               ansible_local.pki.base_path|d())
+                           else "/etc/pki") }}'
+mariadb_server__pki_realm: '{{ ansible_local.pki.realm
+                               if (ansible_local|d() and ansible_local.pki|d() and
+                                   ansible_local.pki.realm|d())
+                               else "domain" }}'
+mariadb_server__pki_ca: 'CA.crt'
+mariadb_server__pki_crt: 'default.crt'
+mariadb_server__pki_key: 'default.key'
+mariadb_server__pki_cipher: 'DHE-RSA-AES256-SHA'
