@@ -13,10 +13,12 @@ Role Variables
 
 None
 
+
 Dependencies
 ------------
 
 None
+
 
 Example Playbook
 ----------------
@@ -29,6 +31,7 @@ License
 -------
 
 MIT
+
 
 Author Information
 ------------------
