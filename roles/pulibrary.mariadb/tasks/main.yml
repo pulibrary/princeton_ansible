@@ -1,24 +1,84 @@
 ---
+- name: Check if database server is installed
+  environment:
+    LC_MESSAGES: 'C'
+  shell: dpkg-query -W -f='${Version}\n' 'mariadb-server' | grep -v '^$'
+  register: mariadb__register_version
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
 - name: add mariadb repo keys
   apt_key:
-    keyserver: 'keyserver.ubuntu.com'
-    id: '0xF1656F24C74CD1D8'
+    keyserver: "keyserver.ubuntu.com"
+    id: "0xF1656F24C74CD1D8"
 
 - name: add maria db repository
   apt_repository:
-    repo: 'deb [arch=amd64,i386,ppc64el] https://mirrors.evowise.com/mariadb/repo/10.2/ubuntu {{ ansible_distribution_release }} main'
+    repo: "deb [arch=amd64,i386,ppc64el] https://mirrors.evowise.com/mariadb/repo/10.2/ubuntu {{ ansible_distribution_release }} main"
 
-- name: install maria db version
+- name: Check if local database port is open
+  command: nc -z localhost {{ mariadb__port }}
+  register: mariadb__register_tunnel
+  when: not mariadb__register_version.stdout
+  failed_when: false
+  changed_when: false
+
+- name: Override delegation if tunnel is detected
+  set_fact:
+    mariadb__delegate_to: '{{ mariadb__server|d("undefined") }}'
+  when: (not mariadb__register_version.stdout|d(False) and
+         (mariadb__register_tunnel|d() and mariadb__register_tunnel.rc == 0))
+
+- name: Override configuration if local server is detected
+  set_fact:
+    mariadb__server: 'localhost'
+    mariadb__client: 'localhost'
+  when: (mariadb__register_version.stdout|d(False) or
+         (mariadb__register_tunnel|d() and mariadb__register_tunnel.rc == 0))
+
+- name: Install database client packages
   apt:
-    name: '{{ item }}'
+    name: ["python-mysqldb", "mysql-client"]
     state: present
-    update_cache: yes
-  with_items:
-    - python-mysqldb
-    - mariadb-server
+    install_recommends: false
 
-- include: mysql_users.yml
-  tags: mysql-users
-  when: mariadb_mysql_users is defined
+- name: Check if MariaDB config directory exists
+  stat:
+    path: "/etc/mysql/mariadb.conf.d"
+  register: mariadb__register_confd
 
-- include: root_access.yml
+- name: Configure database client defaults
+  template:
+    src: "etc/mysql/conf.d/client.cnf.j2"
+    dest: "{{ mariadb__client_cnf_file }}"
+    owner: "root"
+    group: "root"
+    mode: 0644
+  when: mariadb__server|d(false)
+
+- name: Make sure that local fact directory exists
+  file:
+    dest: "/etc/ansible/facts.d"
+    state: directory
+    owner: "root"
+    group: "root"
+    mode: 0755
+
+- name: Save MariaDB local facts
+  template:
+    src: "etc/ansible/facts.d/mariadb.fact.j2"
+    dest: "/etc/ansible/facts.d/mariadb.fact"
+    owner: "root"
+    group: "root"
+    mode: 0644
+  register: mariadb__register_local_facts
+
+- name: Re-read local facts if they have been modified
+  action: setup
+  when: mariadb__register_local_facts is changed
+
+- name: Manage database contents
+  include: "manage_contents.yml"
+  when: (mariadb__server|d(false) and mariadb__delegate_to)
+  tags: ["role::mariadb:contents"]
