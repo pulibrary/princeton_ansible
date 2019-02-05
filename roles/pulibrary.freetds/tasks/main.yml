@@ -1,4 +1,11 @@
 ---
+- name: install freetds from ubuntu package
+  apt:
+    name: "freetds-bin"
+    state: present
+    update_cache: true
+  when: ansible_distribution_release != "xenial"
+
 # https://github.com/thedumbtechguy/ansible-role-freetds
 
 - name: ensure freetds build dependecies are installed
@@ -18,12 +25,14 @@
     - libltdl-dev
     - m4
     - pkg-config
+  when: ansible_distribution_release == "xenial"
 
 - name: create temporary build directory
   file:
     path: /tmp/freetds
     state: directory
     mode: 0700
+  when: ansible_distribution_release == "xenial"
 
 - name: clone git repo
   git:
@@ -31,40 +40,47 @@
     dest: '/tmp/freetds'
     version: branch-1_00
     update: false
+  when: ansible_distribution_release == "xenial"
 
 - name: run autogen.sh
   command: sh autogen.sh
   args:
     chdir: '/tmp/freetds'
     creates: ansible.autogen
+  when: ansible_distribution_release == "xenial"
 
 - file:
     path: '/tmp/freetds/ansible.autogen'
     state: touch
   changed_when: false
+  when: ansible_distribution_release == "xenial"
 
 - name: run make
   command: make
   args:
     chdir: '/tmp/freetds'
     creates: ansible.make
+  when: ansible_distribution_release == "xenial"
 
 - file:
     path: '/tmp/freetds/ansible.make'
     state: touch
   changed_when: false
+  when: ansible_distribution_release == "xenial"
 
 - name: run make install
   command: make install
   args:
     chdir: '/tmp/freetds'
   become: true
+  when: ansible_distribution_release == "xenial"
 
 - name: check installation
   command: tsql -C
   register: _install_result
   ignore_errors: true
   changed_when: false
+  when: ansible_distribution_release == "xenial"
 
 - name: symlink libsybdb.so.5
   file:
@@ -73,7 +89,9 @@
     state: link
   when: "(_install_result|succeeded) and ('freetds v1.0' in _install_result.stdout)"
   become: true
+  when: ansible_distribution_release == "xenial"
 
 - fail:
     msg: "The installation was not successful."
   when: "(_install_result|failed) or ('freetds v1.0' not in _install_result.stdout)"
+  when: ansible_distribution_release == "xenial"
