@@ -90,11 +90,9 @@
     src: /usr/local/lib/libsybdb.so.5
     dest: /usr/lib/libsybdb.so.5
     state: link
-  when: "(_install_result|succeeded) and ('freetds v1.0' in _install_result.stdout)"
+  when: "(ansible_distribution_release == 'xenial') and (_install_result|succeeded) and ('freetds v1.0' in _install_result.stdout)"
   become: true
-  when: ansible_distribution_release == "xenial"
 
 - fail:
     msg: "The installation was not successful."
-  when: "(_install_result|failed) or ('freetds v1.0' not in _install_result.stdout)"
-  when: ansible_distribution_release == "xenial"
+  when: "(ansible_distribution_release == 'xenial') and ((_install_result|failed) or ('freetds v1.0' not in _install_result.stdout))"
