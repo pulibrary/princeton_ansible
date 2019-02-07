@@ -8,8 +8,8 @@
 
 - name: download ezproxy binary
   get_url:
-    url: 'https://www.oclc.org/content/dam/support/ezproxy/documentation/download/binaries/{{ ezproxy_version }}/ezproxy-linux.bin'
-    dest: '/var/local/ezproxy/ezproxy'
+    url: "https://www.oclc.org/content/dam/support/ezproxy/documentation/download/binaries/{{ ezproxy_version }}/ezproxy-linux.bin"
+    dest: "/var/local/ezproxy/ezproxy"
     mode: 0755
 
 - name: install dependencies for 64bit
@@ -38,8 +38,8 @@
   file:
     path: "{{ ezproxy_repo_root }}"
     state: directory
-    owner: "pulsys"
-    group: "pulsys"
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
     recurse: true
   become: true
 
@@ -58,7 +58,8 @@
     accept_hostkey: true
     clone: true
     update: true
-  become_user: "{{ deploy_user }}"
+  become: true
+  become_user: "pulsys"
 
 - name: chmod back permissions
   file:
@@ -68,16 +69,6 @@
     mode: 0750
     owner: "{{ deploy_user }}"
     group: "{{ deploy_user }}"
-  become: true
-
-
-- name: Assigns config repo to ezproxy user
-  file:
-    path: "{{ ezproxy_repo_root }}"
-    state: directory
-    owner: "{{ deploy_user }}"
-    group: "{{ deploy_user }}"
-    recurse: true
   become: true
 
 - name: Clone EZproxy blacklist
@@ -119,6 +110,7 @@
     dest: "/var/local/ezproxy/config.txt"
     owner: "{{ deploy_user }}"
     group: "{{ deploy_user }}"
+    remote_src: true
 
 - name: setting up user.txt file
   copy:
