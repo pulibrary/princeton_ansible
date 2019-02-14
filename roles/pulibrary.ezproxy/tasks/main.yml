@@ -43,12 +43,21 @@
     recurse: true
   become: true
 
-- name: allow temporary full permissions
+- name: Ensure .ssh directory exists.
   file:
-    path: "{{ ezproxy_repo_root }}"
-    mode: 0777
+    path: "/home/{{ deploy_user }}/.ssh"
     state: directory
-  become: true
+    mode: 0700
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+
+- name: Ensure GitHub deploy key is present on the server.
+  copy:
+    content: "{{ deploy_private_key }}"
+    dest: "/home/{{ deploy_user }}/.ssh/deploy_key"
+    mode: 0600
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
 
 - name: Clone EZproxy Repo
   git:
@@ -56,11 +65,12 @@
     version: "{{ ezproxy_default_branch }}"
     dest: "{{ ezproxy_repo_root }}"
     accept_hostkey: true
+    key_file: "/home/{{ deploy_user }}/.ssh/deploy_key"
     clone: true
     update: false
   ignore_errors: true
-  become: no
-  # become_user: "{{ systems_user }}"
+  # become: no
+  become_user: "{{ deploy_user }}"
 
 - name: chmod back permissions
   file:
