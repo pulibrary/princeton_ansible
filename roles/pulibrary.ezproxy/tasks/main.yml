@@ -19,12 +19,16 @@
 
 - name: install missing file replacements
   command: /var/local/ezproxy/ezproxy -m
+  become: true
   become_user: "{{ deploy_user }}"
   ignore_errors: true
+  changed_when: false
 
 - name: run command with WSKey
   command: /var/local/ezproxy/ezproxy -k "{{ oclc_wskey }}"
+  become: true
   become_user: "{{ deploy_user }}"
+  changed_when: false
 
 - name: Creates a log directory for ezproxy
   file:
@@ -69,6 +73,7 @@
     clone: true
     update: false
   ignore_errors: true
+  become: true
   become_user: "{{ deploy_user }}"
 
 - name: remove private key
@@ -148,8 +153,12 @@
 
 - name: install ezproxy startup script (requires root)
   command: /var/local/ezproxy/ezproxy -si
+  become: true
   become_user: 'root'
+  changed_when: false
 
 - name: launch ezproxy
   command: /var/local/ezproxy/ezproxy start
+  become: true
   become_user: "{{ deploy_user }}"
+  changed_when: false
