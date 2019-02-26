@@ -28,7 +28,7 @@
 - name: Define nginx_passenger_packages
   set_fact:
     nginx_passenger_packages: "{{ __nginx_passenger_packages_16_04 }}"
-  when: ansible_facts['distribution_major_version'] < 18
+  when: ansible_distribution == 'Ubuntu' and ansible_distribution_major_version|int < 18
 
 - name: Install Nginx and Passenger.
   apt: "pkg={{ item }} state=installed"
@@ -46,6 +46,7 @@
     src: passenger.conf.j2
     dest: /etc/nginx/passenger.conf
   notify: restart nginx
+  when: ansible_distribution == 'Ubuntu' and ansible_distribution_major_version|int < 18
 
 - name: Configure passenger virtual host.
   template:
