@@ -25,11 +25,14 @@
     update_cache: true
 
 # Nginx and passenger installation.
+- name: Define nginx_passenger_packages
+  set_fact:
+    nginx_passenger_packages: "{{ __nginx_passenger_packages_16_04 }}"
+  when: ansible_facts['distribution_major_version'] < 18
+
 - name: Install Nginx and Passenger.
   apt: "pkg={{ item }} state=installed"
-  with_items:
-    - nginx-extras
-    - passenger
+  with_items: "{{ nginx_passenger_packages }}"
 
 # Nginx and passenger configuration.
 - name: Copy Nginx configuration into place.
