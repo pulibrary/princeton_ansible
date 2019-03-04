@@ -1,0 +1,28 @@
+---
+- name: download graylog deb file
+  get_url:
+    url: "{{ graylog_apt_deb_url }}"
+    dest: "/tmp/graylog_repository.deb"
+
+- name: Package apt-transport-https should be installed
+  apt:
+    name: "apt-transport-https"
+    state: present
+
+- name: Graylog repository package should be installed
+  apt:
+    deb: "/tmp/graylog_repository.deb"
+    state: present
+    dpkg_options: "force-all"
+  register: "install_repo"
+
+- name: "APT cache should be updated"
+  apt:
+    update_cache: true
+  when: install_repo.changed
+
+- name: install graylog server
+  apt:
+    name: "graylog-server{% if graylog_server_version is defined %}={{ graylog_server_version }}{% endif %}"
+    state: "{{ graylog_package_state }}"
+  notify: "restart graylog-server"

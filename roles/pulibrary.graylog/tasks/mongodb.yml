@@ -1,0 +1,44 @@
+---
+- name: apt key for mongo db
+  apt_key:
+    keyserver: "{{ graylog_mongodb_ubuntu_keyserver }}"
+    id: "{{ graylog_mongodb_ubuntu_key }}"
+
+- name: update repositories
+  apt_repository:
+    repo: "{{ graylog_mongodb_ubuntu_repo }}"
+    state: present
+    update_cache: true
+
+- name: install mongodb
+  apt:
+    name: mongodb-org
+    state: present
+
+- name: install mongodb service
+  template:
+    src: "mongodb.service.j2"
+    dest: "/lib/systemd/system/mongod.service"
+    owner: "root"
+    group: "root"
+    mode: 0644
+  notify:
+    - reload systemd configuration
+    - restat mongod
+
+- name: configure mondodb
+  template:
+    src: "mongodb.conf.j2"
+    dest: "/etc/mongod.conf"
+    owner: "root"
+    group: "root"
+    mode: 0644
+  notify: "restart mongod"
+
+- meta: "flush_handlers"
+- name: "Wait for MongoDB to startup"
+  wait_for:
+    host: "127.0.0.1"
+    port: 27017
+    delay: 5
+    connect_timeout: 1
