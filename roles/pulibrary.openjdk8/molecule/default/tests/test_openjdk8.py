@@ -8,7 +8,7 @@ testinfra_hosts = testinfra.utils.ansible_runner.AnsibleRunner(
 
 
 @pytest.mark.parametrize("name", [
-    "openjdk-8-jdk"
+    "openjdk-8-jdk-headless"
     ])
 def test_for_openjdk8(host, name):
     pkg = host.package(name)
