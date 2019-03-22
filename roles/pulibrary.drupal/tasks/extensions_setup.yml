@@ -1,8 +1,18 @@
 ---
-- name: enable mysql pdo extension
+- name: install required extensions
   apt:
     name: ["php7.2-gd", "php7.2-mysql", "php7.2-mbstring", "php7.2-curl"]
     state: present
     update_cache: true
   when: ansible_distribution_release == "xenial"
+
+- name: enable modules
+  command: phpenmod "{{ item }}"
+  when: ansible_distribution_release == "xenial"
+  with_items:
+    - gd
+    - mysqli
+    - mbstring
+    - curl
+  changed_when: false
   notify: restart apache
