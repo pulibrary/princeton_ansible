@@ -10,9 +10,3 @@ def test_elastic_package_installation(host):
     package = host.package("elasticsearch")
 
     assert package.is_installed
-
-
-def test_apache_listening_http(host):
-    socket = host.socket('tcp://0.0.0.0:80')
-
-    assert socket.is_listenin
