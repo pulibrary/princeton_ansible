@@ -1,0 +1,19 @@
+---
+- name: "Install: Install NGINX Open Source XSLT Module"
+  apt:
+    name: nginx-module-xslt
+    state: present
+  when: nginx_type == "opensource"
+
+- name: "Install: Install NGINX Plus XSLT Module"
+  apt:
+    name: nginx-plus-module-xslt
+    state: present
+  when: nginx_type == "plus"
+
+- name: "Setup: Load NGINX XSLT Module"
+  lineinfile:
+    path: /etc/nginx/nginx.conf
+    insertbefore: BOF
+    line: load_module modules/ngx_http_xslt_filter_module.so;
+  notify: Reload NGINX
