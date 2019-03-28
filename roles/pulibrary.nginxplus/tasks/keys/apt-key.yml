@@ -1,0 +1,14 @@
+---
+- name: "Install: NGINX Signing Key URL"
+  set_fact:
+    default_keysite: >-
+      {{ (ansible_distribution_release == "trusty")
+      | ternary("http://nginx.org/keys/nginx_signing.key", "https://nginx.org/keys/nginx_signing.key") }}
+
+- name: "Install: Set NGINX Signing Key URL"
+  set_fact:
+    keysite: "{{ nginx_signing_key | default(default_keysite) }}"
+
+- name: "Install: Add APT NGINX Signing Key"
+  apt_key:
+    url: "{{ keysite }}"
