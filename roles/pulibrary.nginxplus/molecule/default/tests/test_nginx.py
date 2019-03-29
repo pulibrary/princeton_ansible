@@ -7,7 +7,7 @@ testinfra_hosts = testinfra.utils.ansible_runner.AnsibleRunner(
 
 
 def test_is_nginx_installed(host):
-    package_nginx = host.package('nginx-common')
+    package_nginx = host.package('nginx')
 
     assert package_nginx.is_installed
 
