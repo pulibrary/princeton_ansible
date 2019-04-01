@@ -10,14 +10,20 @@ nginx_modules:
   image_filter: true
   rtmp: true
   xslt: true
-nginx_status_enable: true
+nginx_status_enable: false
 nginx_status_port: 8080
 nginx_rest_api_src: api.conf.j2
 nginx_rest_api_location: /etc/nginx/conf.d/api.conf
 nginx_rest_api_port: 8080
 nginx_rest_api_dashboard: true
-nginx_cleanup_config: true
 nginx_delete_license: false
+nginx_http_upload_enable: true
+nginx_http_upload_src: conf/http/*.conf
+nginx_http_upload_dest: /etc/nginx/conf.d/
+nginx_stream_upload_enable: true
+nginx_stream_upload_src: conf/stream/*.conf
+nginx_stream_upload_dest: /etc/nginx/conf.d/
+nginx_cleanup_config: true
 nginx_cleanup_config_path:
   - /etc/nginx/conf.d
 datadog_api_key: "{{vault_datadog_key}}"
@@ -28,3 +34,56 @@ datadog_config:
   process_config:
     enabled: "true"
 nginxplus_tags: "application:nginxplus, environment:production, type:adc"
+nginxplus_datadog_check:
+  init_config:
+    logs:
+      - type: file
+        path: /var/log/nginx/access.log
+        service: adc
+        source: adc
+        sourcecategory: http_web_access
+      - type: file
+        path: /var/log/nginx/error.log
+        service: adc
+        source: adc
+        sourcecategory: http_web_access
+nginx_stream_template_enable: true
+nginx_stream_template:
+  default:
+    template_file: stream/default.conf.j2
+    conf_file_name: default.conf
+    conf_file_location: /etc/nginx/conf.d/stream/
+    network_streams:
+      default:
+        listen_address: localhost
+        listen_port: 80
+        udp_enable: false
+        proxy_pass: backend
+        proxy_timeout: 3s
+        proxy_connect_timeout: 1s
+        proxy_protocol: false
+        proxy_ssl:
+          cert: /etc/ssl/certs/proxy_default.crt
+          key: /etc/ssl/private/proxy_default.key
+          trusted_cert: /etc/ssl/certs/proxy_ca.crt
+          server_name: false
+          name: server_name
+          protocols: TLSv1 TLSv1.1 TLSv1.2
+          ciphers: HIGH:!aNULL:!MD5
+          verify: false
+          verify_depth: 1
+          session_reuse: true
+        health_check_plus: false
+    upstreams:
+      upstream1:
+        name: backend
+        lb_method: least_conn
+        zone_name: backend
+        zone_size: 64k
+        sticky_cookie: false
+        servers:
+          server1:
+            address: localhost
+            port: 8080
+            weight: 1
+            health_check: max_fails=1 fail_timeout=10s
