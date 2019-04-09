@@ -171,3 +171,10 @@ Currently there's no automation on firewall changes when the box you're provisio
 
 * https://github.com/pulibrary/pul-the-hard-way/blob/master/services/postgresql.md#allow-access-from-a-new-box
 * https://github.com/pulibrary/pul-the-hard-way/blob/master/services/solr.md#allow-access-from-a-new-box
+*
+
+# Automatically pull vault password from lastpass
+1. `brew install lastpass-cli`
+2. `lpass login <email@email.com>`
+3. `gem install lastpass-ansible`
+4. `export ANSIBLE_VAULT_PASSWORD_FILE=`command -v lastpass-ansible``
