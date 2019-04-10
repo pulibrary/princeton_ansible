@@ -81,10 +81,10 @@ molecule test
 Run the following command from the root of this repo:
 
 ```bash
-molecule init role -r roles/pulibrary.example 
+molecule init role -r roles/pulibrary.example
 ```
 
-When you are done add 
+When you are done add
 
 ```bash
 - role: pulibrary.example
@@ -171,7 +171,6 @@ Currently there's no automation on firewall changes when the box you're provisio
 
 * https://github.com/pulibrary/pul-the-hard-way/blob/master/services/postgresql.md#allow-access-from-a-new-box
 * https://github.com/pulibrary/pul-the-hard-way/blob/master/services/solr.md#allow-access-from-a-new-box
-*
 
 # Automatically pull vault password from lastpass
 1. `brew install lastpass-cli`
