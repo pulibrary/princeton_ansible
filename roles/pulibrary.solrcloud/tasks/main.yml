@@ -4,6 +4,8 @@
   apt: name={{item}} state=present
   with_items:
     - nfs-common
+  tags:
+    - mnt
 
 ## Create the mount for the Solr backup network share
 - name: Create mount directories
@@ -12,6 +14,18 @@
     state: 'directory'
   with_items:
     - solrbackup
+  tags:
+    - mnt
+
+## Mount the share
+- name: Create mount to the Solr backup
+  mount:
+    name: '/mnt/solrbackup'
+    src: 'diglibdata1.princeton.edu:/ifs/solrbackup'
+    fstype: nfs
+    state: mounted
+  tags:
+    - mnt
 
 - name: update host file
   lineinfile:
@@ -24,6 +38,8 @@
     - {hostname: '{{ lib_zk1_host_name }}.princeton.edu', address: "{{ lib_zk1_host }}"}
     - {hostname: '{{ lib_zk2_host_name }}.princeton.edu', address: "{{ lib_zk2_host }}"}
     - {hostname: '{{ lib_zk3_host_name }}.princeton.edu', address: "{{ lib_zk3_host }}"}
+  tags:
+    - hosts
 
 - name: solr cloud install node
   include: install.yml
