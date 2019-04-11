@@ -56,29 +56,3 @@
     group: "root"
     mode: 0644
   when: mariadb__server|d(false)
-
-- name: Make sure that local fact directory exists
-  file:
-    dest: "/etc/ansible/facts.d"
-    state: directory
-    owner: "root"
-    group: "root"
-    mode: 0755
-
-- name: Save MariaDB local facts
-  template:
-    src: "etc/ansible/facts.d/mariadb.fact.j2"
-    dest: "/etc/ansible/facts.d/mariadb.fact"
-    owner: "root"
-    group: "root"
-    mode: 0644
-  register: mariadb__register_local_facts
-
-- name: Re-read local facts if they have been modified
-  action: setup
-  when: mariadb__register_local_facts is changed
-
-- name: Manage database contents
-  include: "manage_contents.yml"
-  when: (mariadb__server|d(false) and mariadb__delegate_to)
-  tags: ["role::mariadb:contents"]
