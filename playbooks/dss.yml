@@ -1,15 +1,18 @@
 ---
-- hosts: dss
+- hosts: dss_production
   remote_user: pulsys
   become: true
   vars_files:
     - ../site_vars.yml
+    - ../group_vars/dss_production.yml
+    - ../group_vars/mariadb.yml
   roles:
     - role: roles/pulibrary.ruby
     - role: roles/pulibrary.deploy-user
     - role: roles/pulibrary.passenger
     - role: roles/pulibrary.redis
-    - {role: roles/pulibrary.mariadbserver, when: db_host == 'localhost'}
+    - {role: roles/pulibrary.mariadbserver, when: maria_db_cluster_host == 'localhost'}
+    - role: roles/pulibrary.mariadb
     - role: roles/pulibrary.nodejs
     - role: roles/pulibrary.extra_path
     - role: roles/pulibrary.rails-app
