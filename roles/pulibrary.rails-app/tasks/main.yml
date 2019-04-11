@@ -1,9 +1,8 @@
 ---
 - name: Install dependencies
   apt:
-    name: '{{ item }}'
+    name: ["libpq-dev", "libopenjp2-7-dev", "libmagickwand-dev", "imagemagick", "pkg-config"]
     state: present
-  with_items: '{{ rails_app_dependencies }}'
 
 - name: Install site configuration
   template:
@@ -35,16 +34,14 @@
 
 - name: Install local nameserver
   apt:
-    name: '{{ item }}'
+    name: ["bind9"]
     state: present
-  with_items:
-    - bind9
   become: true
 
 - name: Start nameserver
   service:
     name: bind9
-    enabled: 'yes'
+    enabled: true
     state: started
 
 - name: Remove other nameservers
