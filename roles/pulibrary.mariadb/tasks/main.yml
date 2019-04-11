@@ -15,44 +15,10 @@
 
 - name: add maria db repository
   apt_repository:
-    repo: "deb [arch=amd64,i386,ppc64el] https://mirrors.evowise.com/mariadb/repo/10.2/ubuntu {{ ansible_distribution_release }} main"
-
-- name: Check if local database port is open
-  command: nc -z localhost {{ mariadb__port }}
-  register: mariadb__register_tunnel
-  when: not mariadb__register_version.stdout
-  failed_when: false
-  changed_when: false
-
-- name: Override delegation if tunnel is detected
-  set_fact:
-    mariadb__delegate_to: '{{ mariadb__server|d("undefined") }}'
-  when: (not mariadb__register_version.stdout|d(False) and
-         (mariadb__register_tunnel|d() and mariadb__register_tunnel.rc == 0))
-
-- name: Override configuration if local server is detected
-  set_fact:
-    mariadb__server: 'localhost'
-    mariadb__client: 'localhost'
-  when: (mariadb__register_version.stdout|d(False) or
-         (mariadb__register_tunnel|d() and mariadb__register_tunnel.rc == 0))
+    repo: "deb [arch=amd64,ppc64el] https://mirrors.evowise.com/mariadb/repo/10.3/ubuntu {{ ansible_distribution_release }} main"
 
 - name: Install database client packages
   apt:
     name: ["python-mysqldb", "mysql-client"]
     state: present
     install_recommends: false
-
-- name: Check if MariaDB config directory exists
-  stat:
-    path: "/etc/mysql/mariadb.conf.d"
-  register: mariadb__register_confd
-
-- name: Configure database client defaults
-  template:
-    src: "etc/mysql/conf.d/client.cnf.j2"
-    dest: "{{ mariadb__client_cnf_file }}"
-    owner: "root"
-    group: "root"
-    mode: 0644
-  when: mariadb__server|d(false)
