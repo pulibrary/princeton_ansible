@@ -19,20 +19,26 @@
     state: present
     update_cache: true
 
-- name: create mysql user
+- name: MySQL | Ensure MySQL users are present.
   mysql_user:
-    login_host: '{{ db_host }}'
-    login_user: 'root'
-    login_password: '{{ mariadb_server__root_password }}'
-    name: '{{ dss_db_user }}'
-    password: '{{ dss_db_password }}'
-    state: present
-    priv: '{{ dss_db_name }}.*:ALL'
+    name: "{{ item.name }}"
+    login_host: "{{ maria_db_cluster_host }}"
+    login_password: "{{ mysql_root_password }}"
+    login_user: "{{ mysql_root_username }}"
+    password: "{{ item.password }}"
+    priv: "{{ item.priv | default('*.*:USAGE') }}"
+    state: "{{ item.state | default('present') }}"
+    append_privs: "{{ item.append_privs | default('no') }}"
+  with_items: "{{ mysql_users }}"
 
-- name: create mysql database
+- name: MySQL | Ensure MySQL databases are present.
   mysql_db:
-    name: '{{ dss_db_name }}'
-    encoding: 'utf8'
-    login_host: '{{ db_host }}'
-    login_password: '{{ dss_db_password }}'
-    login_user: '{{ dss_db_user }}'
+    login_host: "{{ maria_db_cluster_host }}"
+    login_user: "{{ mysql_root_username }}"
+    login_password: "{{ mysql_root_password }}"
+    name: "{{ item.name }}"
+    collation: "{{ item.collation | default('utf8_general_ci') }}"
+    encoding: "{{ item.encoding | default('utf8') }}"
+    state: present
+  with_items: "{{ mysql_databases }}"
+  register: dss__register_database
