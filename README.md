@@ -176,4 +176,4 @@ Currently there's no automation on firewall changes when the box you're provisio
 1. `brew install lastpass-cli`
 2. `lpass login <email@email.com>`
 3. `gem install lastpass-ansible`
-4. `export ANSIBLE_VAULT_PASSWORD_FILE=`command -v lastpass-ansible``
+4. ``export ANSIBLE_VAULT_PASSWORD_FILE=`command -v lastpass-ansible```
