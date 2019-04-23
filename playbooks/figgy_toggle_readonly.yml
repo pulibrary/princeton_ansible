@@ -1,0 +1,32 @@
+# NOTE
+# You must use command-line "extra variables" to use this playbook. They are
+# used to specify the host group you want to toggle, and the value of
+# read_only_mode, e.g.:
+# $ ansible-playbook -e "figgy_hosts=figgy_staging" -e "figgy_read_only_mode=true" figgy_toggle_readonly.yml
+---
+- hosts: "{{ figgy_hosts }}"
+  remote_user: pulsys
+  become: true
+  vars:
+    - deploy_user: "deploy"
+  vars_files:
+    - ../site_vars.yml
+  tasks:
+    - name: Install site configuration
+      template:
+        src: 'roles/pulibrary.rails-app/templates/rails_app_config'
+        dest: '/home/{{ deploy_user }}/app_configs/{{ rails_app_name }}'
+        owner: '{{ deploy_user }}'
+        group: '{{ deploy_user }}'
+    - name: restart the app
+      file:
+        state: touch
+        path: "/opt/figgy/current/tmp/restart.txt"
+      become: true
+      become_user: "{{ deploy_user }}"
+  post_tasks:
+    - name: tell everyone on slack you ran an ansible playbook
+      slack:
+        token: "{{ vault_pul_slack_token }}"
+        msg: "{{ inventory_hostname }} toggled read-only mode to {{figgy_read_only_mode}}"
+        channel: #server-alerts
