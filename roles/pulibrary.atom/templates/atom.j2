@@ -1,0 +1,64 @@
+
+upstream atom {
+  server unix:/run/php7.0-fpm.atom.sock;
+}
+
+server {
+  listen 80;
+  root /usr/share/nginx/atom;
+  server_name _;
+
+  client_max_body_size 72M;
+
+  # http://wiki.nginx.org/HttpCoreModule#try_files
+  location / {
+    try_files $uri /index.php?$args;
+  }
+
+  location ~ /\. {
+    deny all;
+    return 404;
+  }
+
+  location ~* (\.yml|\.ini|\.tmpl)$ {
+    deny all;
+    return 404;
+  }
+
+  location ~* /(?:uploads|files)/.*\.php$ {
+    deny all;
+    return 404;
+  }
+
+  location ~* /uploads/r/(.*)/conf/ {
+  }
+
+  location ~* ^/uploads/r/(.*)$ {
+    include /etc/nginx/fastcgi_params;
+    set $index /index.php;
+    fastcgi_param SCRIPT_FILENAME $document_root$index;
+    fastcgi_param SCRIPT_NAME $index;
+    fastcgi_pass atom;
+  }
+
+  location ~ ^/private/(.*)$ {
+    internal;
+    alias /usr/share/nginx/atom/$1;
+  }
+
+  location ~ ^/(index|qubit_dev)\.php(/|$) {
+    include /etc/nginx/fastcgi_params;
+    fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+    fastcgi_split_path_info ^(.+\.php)(/.*)$;
+    fastcgi_pass atom;
+  }
+
+  location ~* \.php$ {
+    deny all;
+    return 404;
+  }
+
+  set_real_ip_from 128.112.201.158; #lib-loadbal1
+  set_real_ip_from 128.112.200.219; #lib-loadbal2
+  real_ip_header X-Forwarded-For;
+}
