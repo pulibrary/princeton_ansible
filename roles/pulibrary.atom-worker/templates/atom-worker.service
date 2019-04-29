@@ -1,0 +1,19 @@
+[Unit]
+Description=atom-worker
+After=network.target
+
+[Install]
+WantedBy=multi-user.target
+
+[Service]
+Type=simple
+User={{ __nginx_user }}
+Group={{ __nginx_user }}
+WorkingDirectory=/usr/share/nginx/atom
+ExecStart=/usr/bin/php -d memory_limit=-1 -d error_reporting="E_ALL" symfony jobs:worker
+ExecStop=/bin/kill -s TERM $MAINPID
+RestartSec=1
+Restart=on-failure
+
+StandardOutput=syslog
+StandardError=syslog
