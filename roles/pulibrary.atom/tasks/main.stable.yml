@@ -1,0 +1,187 @@
+---
+
+# Install the Java 8 runtime environment
+- name: Install OpenJDK 8
+  apt:
+    name:
+      - openjdk-8-jre-headless
+      - software-properties-common
+    state: present
+    update_cache: true
+
+# Install NGINX
+- name: Define nginx_user.
+  set_fact:
+    nginx_user: "{{ __nginx_user }}"
+  when: nginx_user is not defined
+
+- name: Add apt HTTPS capabilities.
+  apt:
+    name: apt-transport-https
+    state: present
+
+- name: Install NGINX
+  apt:
+    name: nginx-extras
+    state: present
+
+- name: Start the NGINX system service
+  service:
+    name: nginx
+    enabled: true
+    state: restarted
+
+- name: Copy NGINX configuration into place.
+  template:
+    src: nginx.conf.j2
+    dest: /etc/nginx/nginx.conf
+  notify: restart nginx
+
+- name: Configure the AtoM virtual host.
+  template:
+    src: atom.j2
+    dest: /etc/nginx/sites-available/atom
+  notify: restart nginx
+
+- name: Ensure passenger virtual host is enabled.
+  file:
+    src: /etc/nginx/sites-available/atom
+    dest: /etc/nginx/sites-enabled/atom
+    state: link
+
+- name: Ensure default virtual host is removed.
+  file:
+    path: /etc/nginx/sites-enabled/default
+    state: absent
+  when: nginx_remove_default_vhost
+  notify:
+    - restart nginx
+
+# Installing ElasticSearch
+- name: Add the apt repository key
+  shell: "wget --quiet -O - {{ elastic_search_apt_key_url }} | sudo apt-key add -"
+
+- name: Add the ElasticSearch repository
+  apt_repository:
+    repo: "deb http://packages.elasticsearch.org/elasticsearch/1.7/debian stable main"
+    state: present
+    update_cache: true
+
+- name: Install ElasticSearch
+  apt:
+    name: elasticsearch
+    state: present
+
+- name: Start the ElasticSearch system service
+  service:
+    name: elasticsearch
+    enabled: true
+    state: restarted
+
+# PHP releases at 7.1.0 or beyond introduce changes which break the latest
+# supported AtoM releases
+# Please see
+# https://www.accesstomemory.org/en/docs/2.4/admin-manual/installation/linux/ubuntu-xenial/#php
+
+- name: Install the apt repository for legacy PHP releases
+  apt_repository:
+    repo: 'ppa:ondrej/php'
+    state: present
+    update_cache: true
+
+- name: Install PHP 7.0
+  apt:
+    name:
+      - php7.0-cli
+      - php7.0-curl
+      - php7.0-json
+      - php7.0-ldap
+      - php7.0-mysql
+      - php7.0-opcache
+      - php7.0-readline
+      - php7.0-xml
+      - php7.0-fpm
+      - php7.0-mbstring
+      - php7.0-mcrypt
+      - php7.0-xsl
+      - php7.0-zip
+      - php-apcu
+      - php-memcache
+    state: present
+  notify:
+    - restart nginx
+
+- name: Start the PHP system service
+  service:
+    name: php7.0-fpm
+    enabled: true
+    state: restarted
+  notify:
+    - restart nginx
+
+# Install the APC adapter
+- name: install the PHP adapter for APC caching
+  apt:
+    name: php-dev
+    state: present
+  notify:
+    - restart php7.0-fpm
+
+- name: install AtoM PHP config. settings
+  template:
+    src: atom.php.conf
+    dest: /etc/php/7.0/fpm/pool.d/atom.conf
+  notify:
+    - restart php7.0-fpm
+
+- name: install gearman job server
+  apt:
+    name: gearman-job-server
+    state: present
+  notify:
+    - restart php7.0-fpm
+
+# These are packages required for the generation of PDF Documents and the
+# processing of digital objects
+- name: Installing packages for PDF generation
+  apt:
+    name: "{{ item }}"
+    state: present
+    install_recommends: false
+  with_items:
+    - fop
+    - libsaxon-java
+
+- name: Installing packages for digital object processing
+  apt:
+    name: "{{ item }}"
+    state: present
+  with_items:
+    - imagemagick
+    - ghostscript
+    - poppler-utils
+    - ffmpeg
+
+- name: Download AtoM
+  shell: wget "https://storage.accesstomemory.org/releases/atom-2.4.1.tar.gz"
+
+- name: Create the directory for AtoM
+  file:
+    path: /usr/share/nginx/atom
+    owner: "{{ __nginx_user }}"
+    group: "{{ __nginx_user }}"
+    state: directory
+
+- name: Install AtoM
+  shell: tar xzf atom-2.4.1.tar.gz -C /usr/share/nginx/atom --strip 1
+
+- name: Set the directory permissions for AtoM
+  file:
+    path: /usr/share/nginx/atom
+    owner: "{{ __nginx_user }}"
+    group: "{{ __nginx_user }}"
+    state: directory
+    recurse: true
+  notify:
+    - restart php7.0-fpm
+    - restart nginx
