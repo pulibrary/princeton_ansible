@@ -2,7 +2,9 @@
 - name: Check for solr installed
   stat:
     path: '{{solr_home}}/data'
-  when: solr_home is defined
+  when: 
+    - solr_home is defined
+    - solr_home != ""
   register: solr_installed
 
 - name: Configure Solr Core
@@ -17,6 +19,8 @@
     - src: stopwords_en.txt
       dest: '{{ solr_home }}/data/{{figgy_solr_name}}/conf/stopwords_en.txt'
   when:
+    - solr_home is defined
+    - solr_home != ""
     - solr_installed.stat.exists
   notify:
     - restart solr
