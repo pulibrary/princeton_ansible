@@ -13,7 +13,9 @@ $ vagrant box add --name princeton_box images/ubuntu-16.04.virtualbox.box
 
 # Setting up your Python Environment
 
-## Prerequisites of MacOS
+## Install Prerequisites
+
+### MacOS
 
  * `brew cask install virtualbox`
  * `brew cask install vagrant`
@@ -21,7 +23,7 @@ $ vagrant box add --name princeton_box images/ubuntu-16.04.virtualbox.box
  * `brew install pipenv`
  * `brew install docker`
 
-## Prerequisites of Ubuntu Bionic
+### Ubuntu Bionic
 
  * `sudo add-apt-repository multiverse && sudo apt -y update`
  * `sudo apt -y install virtualbox`
@@ -61,13 +63,15 @@ You will need to relaunch your shell.
 
 ## Setup your environment
 
+**Note: These commands should be run for each shell you run**
 ```bash
 pipenv sync
 pipenv shell
 ```
 
+## Determine if everything is installed correctly
 
-Make sure docker is running before you run the following to test
+Make sure docker is running before you run the following to test the installation
 
 ```bash
 molecule test
@@ -78,20 +82,46 @@ molecule test
 
 ## Create a new role
 
-Run the following command from the root of this repo:
+1. Initialize the role with molecule.
+   Run the following command from the root of this repo:
+
+   ```bash
+   molecule init role -r roles/pulibrary.example
+   ```
+1. Setup ther directory to run molecule locally
+
+   1. copy over the root molecule.yml
+      ```bash
+      cp molecule/default/molecule/molecule.yml roles/pulibrary.example/molecule/default
+      ```
+   
+   1. edit `roles/pulibrary.example/molecule/default/molecule.yml` and change `converge: playbooks.yml` to `converge: playbook.yml`  
+
+1. Add your role to the main molecule playbook [`molecule/default/playbooks.yml`](molecule/default/playbooks.yml)
+
+   ```bash
+   - role: pulibrary.example
+   ```
+1. Add any vars found in [`molecule/default/playbooks.yml`](molecule/default/playbooks.yml) to roles/pulibrary.example/molecule/default/playbook.yml
+
+## Molecule tests
+
+You can run `molecule test` from either the root directory or the role directory (for example roles/pulibrary.example)
+If you are writing tests we have found it is easier to test just your examples by running from the role directory.
+
+We also reccomend instead of running just `molecule test` which takes a very long time your run `molecule converge` to build a docker container with your ansible playbook loaded.  You can run converge and/or verify as many times as needed to get your playbook working.
 
 ```bash
-molecule init role -r roles/pulibrary.example 
+molecule converge
+molecule verify
 ```
 
-When you are done add 
-
-```bash
-- role: pulibrary.example
+If your are having issues with your tests passing and have run `molecule converge` you can connect to the running container by running
+```
+docker exec -it instance bash
 ```
 
-to [`molecule/default/playbooks.yml`](molecule/default/playbooks.yml)
-
+## Vagrant for testing 
 
 Depending on what project you are working on there are example Vagrantfile's in
 the `Vagrant` directory. If you are working on the lae project as an example
@@ -171,3 +201,9 @@ Currently there's no automation on firewall changes when the box you're provisio
 
 * https://github.com/pulibrary/pul-the-hard-way/blob/master/services/postgresql.md#allow-access-from-a-new-box
 * https://github.com/pulibrary/pul-the-hard-way/blob/master/services/solr.md#allow-access-from-a-new-box
+
+# Automatically pull vault password from lastpass
+1. `brew install lastpass-cli`
+2. `lpass login <email@email.com>`
+3. `gem install lastpass-ansible`
+4. ``export ANSIBLE_VAULT_PASSWORD_FILE=`command -v lastpass-ansible```

@@ -20,33 +20,31 @@
 
 - name: Create app_configs directory
   file:
-    path: "/home/{{ deploy_user }}/app_configs"
-    state: directory
-    owner: "{{ deploy_user }}"
-    group: "{{ deploy_user }}"
-
+    path: '/home/{{ deploy_user }}/app_configs'
+    state: 'directory'
+    owner: '{{ deploy_user }}'
+    group: '{{ deploy_user }}'
 - name: Load app configs
-  lineinfile:
-    dest: "/home/{{ deploy_user }}/.bashrc"
-    state: present
-    regexp: '^for f in ~/app_configs/\*; do source \$f; done$'
-    line: "for f in ~/app_configs/*; do source $f; done"
-    insertbefore: BOF
-
-- name: Allow authorized_key files
-  lineinfile:
-    dest: "/etc/ssh/sshd_config"
-    state: present
-    backrefs: true
-    regexp: '^#AuthorizedKeysFile(.*?)$'
-    line: 'AuthorizedKeysFile\1'
-
+  lineinfile: >
+              dest='/home/{{ deploy_user }}/.bashrc'
+              state=present
+              regexp='^for f in ~/app_configs/\*; do source \$f; done$'
+              line="for f in ~/app_configs/*; do source $f; done"
+              insertbefore=BOF
+- name: Allow "authorized_key" files
+  lineinfile: >
+              dest=/etc/ssh/sshd_config
+              state=present
+              backrefs=yes
+              regexp='^#AuthorizedKeysFile(.*?)$'
+              line="AuthorizedKeysFile\1"
 - name: Allow deploy user to SSH
-  lineinfile:
-    dest: "/etc/ssh/sshd_config"
-    state: present
-    backrefs: true
-    regexp: '^AllowUsers(.*?)( ?)({{ deploy_user }})?$'
-    line: 'AllowUsers\1 {{ deploy_user }}'
+  lineinfile: >
+              dest=/etc/ssh/sshd_config
+              state=present
+              backrefs=yes
+              regexp='^AllowUsers(.*?)( ?)({{ deploy_user }})?$'
+              line="AllowUsers\1 {{ deploy_user }}"
+
   notify:
     - restart ssh
