@@ -25,16 +25,20 @@ rails_app_dependencies:
 figgy_db_name: 'figgy_staging'
 figgy_db_user: '{{vault_figgy_db_user}}'
 figgy_db_password: '{{vault_figgy_db_password}}'
+figgy_db_ro_user: '{{vault_figgy_db_ro_user}}'
+figgy_db_ro_password: '{{vault_figgy_db_ro_password}}'
 figgy_rabbit_user: '{{vault_figgy_staging_rabbit_user}}'
 figgy_rabbit_password: '{{vault_figgy_staging_rabbit_password}}'
 figgy_rabbit_host: 'figgy-staging1.princeton.edu'
 figgy_rabbit_server: 'amqp://{{figgy_rabbit_user}}:{{figgy_rabbit_password}}@{{figgy_rabbit_host}}:5672'
+figgy_read_only_mode: 'false'
 figgy_svn_user: '{{vault_figgy_svn_user}}'
 figgy_svn_pass: '{{vault_figgy_svn_pass}}'
 figgy_svn_url: '{{vault_figgy_svn_url}}'
 rails_app_env: "staging"
 solr_remove_cruft: true
 figgy_solr_name: figgy-staging
+solr_port: "8983"
 figgy_host_name: 'figgy-staging.princeton.edu'
 solr_cores:
   - '{{figgy_solr_name}}'
@@ -42,6 +46,8 @@ solr_version: "6.2.1"
 application_db_name: '{{figgy_db_name}}'
 application_dbuser_name: '{{figgy_db_user}}'
 application_dbuser_password: '{{figgy_db_password}}'
+application_dbuser_ro_name: '{{figgy_db_ro_user}}'
+application_dbuser_ro_password: '{{figgy_db_ro_password}}'
 application_dbuser_role_attr_flags: 'SUPERUSER'
 application_host: '{{passenger_server_name}}'
 application_host_protocol: 'https'
@@ -57,6 +63,10 @@ rails_app_vars:
     value: '{{figgy_db_user}}'
   - name: FIGGY_DB_PASSWORD
     value: '{{figgy_db_password}}'
+  - name: FIGGY_DB_RO_USERNAME
+    value: '{{figgy_db_ro_user}}'
+  - name: FIGGY_DB_RO_PASSWORD
+    value: '{{figgy_db_ro_password}}'
   - name: FIGGY_DB_HOST
     value: '{{postgres_host}}'
   - name: FIGGY_RABBIT_SERVER
@@ -103,6 +113,16 @@ rails_app_vars:
     value: '{{figgy_svn_pass}}'
   - name: SVN_URL
     value: '{{figgy_svn_url}}'
+  - name: STORAGE_CREDENTIALS
+    value: '/home/{{deploy_user}}/cloud_config/google_cloud_credentials.json'
+  - name: STORAGE_PROJECT
+    value: 'pulibrary-figgy-storage-1'
+  - name: FIGGY_READ_ONLY_MODE
+    value: '{{figgy_read_only_mode}}'
+  - name: GOOGLE_CLOUD_CREDENTIALS
+    value: '/home/{{deploy_user}}/cloud_config/google_cloud_credentials.json'
+  - name: GOOGLE_CLOUD_PROJECT
+    value: 'pulibrary-figgy-storage-1'
 sidekiq_worker_name: figgy-workers
 cantaloupe_user: '{{deploy_user}}'
 cantaloupe_group: '{{deploy_user}}'
@@ -117,3 +137,14 @@ passenger_ruby: "/usr/bin/ruby2.4"
 passenger_extra_config: "{{ lookup('file', 'roles/pulibrary.figgy/templates/nginx_cantaloupe_config')  }}"
 simple_tiles_version: 0.6.0
 simple_tiles_url: https://github.com/propublica/simple-tiles/archive/v{{simple_tiles_version}}.tar.gz
+redis__server_default_configuration:
+  syslog-enabled: "{{ redis__server_syslog | bool }}"
+  syslog-ident: "{{ redis__server_syslog_ident }}"
+  syslog-facility: "{{ redis__server_syslog_facility }}"
+  loglevel: "{{ redis__server_loglevel }}"
+  bind: "{{ redis__server_bind }}"
+  port: "{{ redis__server_port }}"
+  save: "{{ redis__server_save }}"
+  maxmemory: "{{ redis__server_maxmemory }}"
+  maxmemory-policy: "{{ redis__server_maxmemory_policy }}"
+  maxmemory-samples: "{{ redis__server_maxmemory_samples }}"
