@@ -1,21 +1,23 @@
 ---
-# tasks file for pulibrary.deploy-user
 - name: Create system user group
   group:
-    name: '{{ deploy_user }}'
-    gid: '{{ deploy_user_uid }}'
+    name: "{{ deploy_user }}"
+    gid: "{{ deploy_user_uid }}"
+
 - name: Create system user
   user:
-    name: '{{ deploy_user }}'
-    uid: '{{ deploy_user_uid }}'
-    group: '{{ deploy_user }}'
-    home: '/home/{{ deploy_user }}'
-    shell: '{{ deploy_user_shell }}'
+    name: "{{ deploy_user }}"
+    uid: "{{ deploy_user_uid }}"
+    group: "{{ deploy_user }}"
+    home: "/home/{{ deploy_user }}"
+    shell: "{{ deploy_user_shell }}"
+
 - name: Add SSH keys
   authorized_key:
-    user: '{{ deploy_user }}'
-    key: '{{ item.key }}'
-  with_items: '{{ deploy_ssh_users }}'
+    user: "{{ deploy_user }}"
+    key: "{{ item.key }}"
+  with_items: "{{ deploy_ssh_users }}"
+
 - name: Create app_configs directory
   file:
     path: '/home/{{ deploy_user }}/app_configs'
@@ -43,5 +45,6 @@
               backrefs=yes
               regexp='^AllowUsers(.*?)( ?)({{ deploy_user }})?$'
               line="AllowUsers\1 {{ deploy_user }}"
+
   notify:
-  - restart ssh
+    - restart ssh

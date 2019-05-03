@@ -13,6 +13,6 @@ def test_elastic_package_installation(host):
 
 
 def test_apache_listening_http(host):
-    socket = host.socket('tcp://0.0.0.0:80')
+    socket = host.socket('tcp://0.0.0.0:9200')
 
     assert socket.is_listenin
