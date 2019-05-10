@@ -1,4 +1,5 @@
 import os
+import time
 
 import testinfra.utils.ansible_runner
 
@@ -28,6 +29,7 @@ def test_nginx_user(host):
 
 
 def test_http_port(host):
-    port = host.socket('tcp://0.0.0.0:80')
+    port = host.socket("tcp://0.0.0.0:80")
+    time.sleep(30)
 
     assert port.is_listening
