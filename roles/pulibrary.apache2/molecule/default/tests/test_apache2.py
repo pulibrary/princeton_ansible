@@ -13,6 +13,6 @@ def test_is_apache_installed(host):
 
 
 def test_apache_listening_http(host):
-    socket = host.socket('tcp://0.0.0.0:80')
+    socket = host.socket('tcp://0.0.0.0:8081')
 
     assert socket.is_listening
