@@ -23,6 +23,7 @@
     - '{{ rails_app_directory }}/shared'
     - '{{ rails_app_directory }}/shared/tmp'
 
+# todo should we remove this since it is not being used
 - name: Create symlinks
   file:
     src: '{{ item.src }}'
@@ -35,31 +36,37 @@
 
 - name: Install local nameserver
   apt:
-    name: '{{ item }}'
+    name: ['bind9']
     state: present
-  with_items:
-    - bind9
   become: true
 
 - name: Start nameserver
   service:
     name: bind9
-    enabled: 'yes'
+    enabled: true
     state: started
 
+#####
+# Note these are not tested becuase docker will not allow
+#
 - name: Remove other nameservers
   lineinfile:
     dest: '/etc/resolv.conf'
     state: absent
     regexp: "'.*nameserver.*'"
+  when: run_not_in_container
 
 - name: Use local nameserver
   lineinfile:
     dest: '/etc/resolv.conf'
     state: present
     line: "'nameserver 127.0.0.1'"
+  when: run_not_in_container
+  #
+  # End - untested
+  ####
 
 - name: rotate the logs for the rails applications
   template:
     src: 'logrotate.d.rails.j2'
-    dest: '/etc/logrotate.d/{{rails_app_name}}'
+    dest: '/etc/logrotate.d/{{ rails_app_name }}'
