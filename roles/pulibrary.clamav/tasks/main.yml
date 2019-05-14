@@ -1,0 +1,16 @@
+---
+- name: install clamav
+  apt:
+    name: ["clamav", "libclamav-dev", "clamav-daemon"]
+    state: present
+    update_cache: true
+
+- name: copy template config file
+  template:
+    src: clamd.conf.j2
+    dest: "/etc/clamav/clamd.conf"
+
+- name: create and/or update the clamav database
+  command: /usr/bin/freshclam --quiet
+  args:
+    creates: /var/lib/clamav/main.cvd
