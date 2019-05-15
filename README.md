@@ -88,11 +88,20 @@ molecule test
    ```bash
    molecule init role -r roles/pulibrary.example
    ```
+1. Set up to run from the main directory and on circle ci
+   ```
+   cd molecule/default/tests/
+   ln -s ../roles/pulibrary.example/molecule/default/tests/test_example.py test_example.py
+   ```
+1. Add the role to the main molecule playbook by adding `- role: pulibrary.example` to the end of the list
+   ```
+   vi molecule/default/playbooks.yml # add - role: pulibrary.example 
+   ```
 1. Setup ther directory to run molecule locally
 
    1. copy over the root molecule.yml
       ```bash
-      cp molecule/default/molecule/molecule.yml roles/pulibrary.example/molecule/default
+      cp molecule/default/molecule.yml roles/pulibrary.example/molecule/default
       ```
    
    1. edit `roles/pulibrary.example/molecule/default/molecule.yml` and change `converge: playbooks.yml` to `converge: playbook.yml`  
@@ -109,7 +118,7 @@ molecule test
 You can run `molecule test` from either the root directory or the role directory (for example roles/pulibrary.example)
 If you are writing tests we have found it is easier to test just your examples by running from the role directory.
 
-We also reccomend instead of running just `molecule test` which takes a very long time your run `molecule converge` to build a docker container with your ansible playbook loaded.  You can run converge and/or verify as many times as needed to get your playbook working.
+We also recommend instead of running just `molecule test` which takes a very long time your run `molecule converge` to build a docker container with your ansible playbook loaded.  You can run converge and/or verify as many times as needed to get your playbook working.
 
 ```bash
 molecule converge
