@@ -1,18 +1,30 @@
 ---
-dependency:
-  name: galaxy
+scenario:
+  name: default
 driver:
   name: docker
-lint:
-  name: yamllint
 platforms:
   - name: instance
-    image: centos:7
+    image: "pulibrary/puldocker-${MOLECULE_DISTRO:-ubuntu1804}-ansible:latest"
+    privileged: true
+    pre_build_image: true
 provisioner:
   name: ansible
-  lint:
-    name: ansible-lint
+  playbooks:
+    converge: playbook.yml
+  log: true
+dependency:
+  name: galaxy
+  enabled: false
+lint:
+  name: yamllint
 verifier:
   name: testinfra
+  env:
+    PYTHONWARNINGS: "ignore:.*U.*mode is deprecated:DeprecationWarning"
   lint:
     name: flake8
+  options:
+    # show which tests where executed in test output
+    v: 1
+  directory: ./tests/
