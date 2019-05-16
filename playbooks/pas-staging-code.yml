@@ -1,0 +1,18 @@
+---
+- hosts: pas-staging
+  remote_user: pulsys
+  become: true
+  vars_files:
+    - ../site_vars.yml
+  vars:
+    pas_upload_path: 'pas/pas-staging'
+    force_pas_deploy: true
+    run_not_in_container: true
+  roles:
+    - role: roles/pulibrary.pas_code
+  post_tasks:
+    - name: tell everyone on slack you ran an ansible playbook
+      slack:
+        token: "{{ vault_pul_slack_token }}"
+        msg: "{{ inventory_hostname }} completed"
+        channel: #server-alerts
