@@ -14,6 +14,17 @@ Role Variables
 
 ```bash
 mariadb__server: "some.remotedb.edu"
+
+mariadb__databases:
+  - name: "some_database"
+    encoding: utf8mb4
+    collation: utf8mb4_general_ci
+
+mariadb__users:
+  - name: "some_user"
+    host: "%"
+    password: "change_me"
+    priv: "some_database.*:ALL"
 ```
 
 Dependencies
