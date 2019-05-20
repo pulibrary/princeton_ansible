@@ -76,10 +76,12 @@
     name: '{{ item.user | d(item.name) }}'
     host: '{{ item.host | default(mariadb__client) }}'
     state: 'present'
-    password: '{{ item.password | default(lookup("password",
-                  secret + "/mariadb/" + mariadb__delegate_to +
-                  "/credentials/" + item.user | d(item.name) + "/password " +
-                  "length=" + mariadb__password_length)) }}'
+    password: "{{ item.password }}"
+    # todo A future enhancement to utilize secret delegation
+    # password: '{{ item.password | default(lookup("password",
+    #               secret + "/mariadb/" + mariadb__delegate_to +
+    #               "/credentials/" + item.user | d(item.name) + "/password " +
+    #               "length=" + mariadb__password_length)) }}'
   with_flattened: '{{ mariadb__users + mariadb__dependent_users + mariadb_users|d([]) }}'
   delegate_to: '{{ mariadb__delegate_to }}'
   register: mariadb__register_create_users
@@ -89,18 +91,18 @@
 
 - name: Grant default privileges to users
   mysql_user:
-    name: '{{ item.0.user | d(item.0.name) }}'
-    host: '{{ item.0.host | default(mariadb__client) }}'
-    priv: '{{ (item.0.database | d(item.0.name)) + ".*:" + mariadb__default_privileges_grant }}'
+    name: '{{ item.user | d(item.name) }}'
+    host: '{{ item.host | default(mariadb__client) }}'
+    priv: '{{ (item.database | d(item.name)) + ".*:" + mariadb__default_privileges_grant }}'
     append_privs: true
   with_together:
     - '{{ mariadb__users + lookup("flattened", mariadb__dependent_users, wantlist=True) + mariadb_users|d([]) }}'
     - '{{ mariadb__register_create_users.results }}'
   delegate_to: '{{ mariadb__delegate_to }}'
-  when: ((item.0.user|d(False) or item.0.name|d(False)) and
-         (item.0.state is undefined or item.0.state != "absent") and
+  when: ((item.user|d(False) or item.name|d(False)) and
+         (item.state is undefined or item.state != "absent") and
          mariadb__default_privileges|d(False) and
-         (item.0.priv_default is undefined or item.0.priv_default))
+         (item.priv_default is undefined or item.priv_default))
   no_log: true
 
 - name: Grant auxiliary privileges to users
