@@ -1,4 +1,5 @@
 ---
+
 - name: ensure required packages are present
   apt:
     name: ['apache2']
@@ -17,8 +18,23 @@
     - filter
     - vhost_alias
 
+- name: update listen port if needed
+  replace:
+    path: /etc/apache2/ports.conf
+    regexp: 'Listen 80$'
+    replace: "Listen {{ apache_listen_port }}"
+
+- name: check for update of config needed
+  lineinfile:
+    dest: "/etc/apache2/sites-available/000-default.conf"
+    line: "    DocumentRoot {{ apache.docroot }}"
+    state: present
+  check_mode: yes
+  register: update_config
+
 - name: modify the default apache site
   template:
     src: "vhosts24.conf.j2"
     dest: "/etc/apache2/sites-available/000-default.conf"
+  when: update_config.msg == "line added"
   notify: restart apache
