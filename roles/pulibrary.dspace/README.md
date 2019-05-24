@@ -1,8 +1,9 @@
 pulibrary.dspace
 =========
 
-This role sets up an endpoint to make sure it has all the prerequisites to
-configure a dspace instance
+This role installs all the prerequisite software to install dspace. It is
+unlikely to be used as a standalone role. The configuration will often be in a
+separate role that configures it.
 
 Requirements
 ------------
@@ -12,15 +13,14 @@ Look in the `meta/main.yml` file
 Role Variables
 --------------
 
-A description of the settable variables for this role should go here, including
-any variables that are in defaults/main.yml, vars/main.yml, and any variables
-that can/should be set via parameters to the role. Any variables that are read
-from other roles and/or the global scope (ie. hostvars, group vars, etc.) should
-be mentioned here as well.
+```
+dspace_version: 6.3
+```
 
 Dependencies
 ------------
 
+The dependencies for this role are under `meta/main.yml`
 
 Example Playbook
 ----------------
@@ -30,7 +30,7 @@ passed in as parameters) is always nice for users too:
 
     - hosts: servers
       roles:
-         - { role: roles/pulibrary.dspace, x: 42 }
+         - { role: roles/pulibrary.dspace }
 
 License
 -------
