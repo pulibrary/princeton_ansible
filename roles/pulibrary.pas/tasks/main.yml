@@ -1,0 +1,69 @@
+---
+# tasks file for roles/pulibrary.pas
+- name: Install php7.2 requirements for craft
+  apt:
+    name: ["php7.2-gd", "php7.2-json", "php7.2-mbstring", "php7.2-mysql", "php7.2-zip", "php7.2-intl"]
+    state: present
+    update_cache: true
+
+- name: Install other packages
+  apt:
+    name: ["cifs-utils", "zip"]
+    state: present
+    update_cache: true
+
+- name: Install git
+  apt:
+    name:
+      - git
+    state: present
+    update_cache: true
+
+- name: Install apache2 requirements for craft
+  apache2_module:
+    name: "{{ item }}"
+    state: present
+  notify: restart apache
+  with_items:
+    - remoteip
+    - proxy
+    - proxy_fcgi
+
+- name: Install "sass" node.js package globally.
+  npm:
+    name: sass
+    global: true
+
+- name: Install "grunt-cli" node.js package globally.
+  npm:
+    name: grunt-cli
+    global: true
+
+- name: Create mount directories
+  file:
+    path: '/mnt/diglibdata1'
+    state: 'directory'
+
+- name: Copy smb credentials
+  copy:
+    src: files/pas.smb.credentials
+    dest: /etc/pas.smb.credentials
+  when: run_not_in_container
+
+- name: Create mount for pas shared files
+  mount:
+    path: /mnt/diglibdata1/pas
+    src: //diglibdata1.princeton.edu/pas
+    fstype: cifs
+    opts: 'defaults,uid=33,gid={{ deploy_user_uid }},credentials=/etc/pas.smb.credentials'
+    state: mounted
+  when: run_not_in_container
+
+- name: Creates app directory
+  file:
+    path: '/opt/pas'
+    state: 'directory'
+    owner: '{{ deploy_user }}'
+    group: 'www-data'
+    mode: 0775
+  become: true
