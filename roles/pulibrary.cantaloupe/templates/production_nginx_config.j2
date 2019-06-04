@@ -2,6 +2,21 @@ location ~ ^/loris/(iiif/2/)?figgy_prod/.* {
     if ($request_uri ~* "/loris/(iiif/2/)?figgy_prod(/)?(%2F)?(.*)") {
         proxy_pass http://127.0.0.1:8182/iiif/2/figgy_prod%2F$4;
     }
+    if ($request_method = 'OPTIONS') {
+      add_header 'Access-Control-Allow-Origin' '*';
+      add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS';
+      add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range';
+      add_header 'Access-Control-Max-Age' 1728000;
+      add_header 'Content-Type' 'text/plain; charset=utf-8';
+      add_header 'Content-Length' 0;
+      return 204;
+    }
+    if ($request_method = 'GET') {
+      add_header 'Access-Control-Allow-Origin' '*';
+      add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS';
+      add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range';
+      add_header 'Access-Control-Expose-Headers' 'Content-Length,Content-Range';
+    }
     proxy_set_header X-Forwarded-Proto {{ application_host_protocol }};
     proxy_set_header X-Forwarded-Host $host;
     proxy_set_header X-Forwarded-Path /loris;
@@ -14,6 +29,21 @@ location ~ ^/loris/(iiif/2/)?figgy_prod/.* {
 location ~ ^/loris/.* {
     if ($request_uri ~* "/loris/(iiif/2/)?(.*)") {
         proxy_pass http://127.0.0.1:8182/iiif/2/$2;
+    }
+    if ($request_method = 'OPTIONS') {
+      add_header 'Access-Control-Allow-Origin' '*';
+      add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS';
+      add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range';
+      add_header 'Access-Control-Max-Age' 1728000;
+      add_header 'Content-Type' 'text/plain; charset=utf-8';
+      add_header 'Content-Length' 0;
+      return 204;
+    }
+    if ($request_method = 'GET') {
+      add_header 'Access-Control-Allow-Origin' '*';
+      add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS';
+      add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range';
+      add_header 'Access-Control-Expose-Headers' 'Content-Length,Content-Range';
     }
     proxy_set_header X-Forwarded-Proto {{ application_host_protocol }};
     proxy_set_header X-Forwarded-Host $host;
