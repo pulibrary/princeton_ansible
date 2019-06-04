@@ -1,21 +1,10 @@
 location ~ ^/loris/(iiif/2/)?figgy_prod/.* {
+    add_header 'Access-Control-Allow-Origin' '*';
+    add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS';
+    add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range';
+    add_header 'Access-Control-Expose-Headers' 'Content-Length,Content-Range';
     if ($request_uri ~* "/loris/(iiif/2/)?figgy_prod(/)?(%2F)?(.*)") {
         proxy_pass http://127.0.0.1:8182/iiif/2/figgy_prod%2F$4;
-    }
-    if ($request_method = 'OPTIONS') {
-      add_header 'Access-Control-Allow-Origin' '*';
-      add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS';
-      add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range';
-      add_header 'Access-Control-Max-Age' 1728000;
-      add_header 'Content-Type' 'text/plain; charset=utf-8';
-      add_header 'Content-Length' 0;
-      return 204;
-    }
-    if ($request_method = 'GET') {
-      add_header 'Access-Control-Allow-Origin' '*';
-      add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS';
-      add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range';
-      add_header 'Access-Control-Expose-Headers' 'Content-Length,Content-Range';
     }
     proxy_set_header X-Forwarded-Proto {{ application_host_protocol }};
     proxy_set_header X-Forwarded-Host $host;
@@ -27,23 +16,12 @@ location ~ ^/loris/(iiif/2/)?figgy_prod/.* {
     proxy_redirect http://127.0.0.1:8182/ /loris;
 }
 location ~ ^/loris/.* {
+    add_header 'Access-Control-Allow-Origin' '*';
+    add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS';
+    add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range';
+    add_header 'Access-Control-Expose-Headers' 'Content-Length,Content-Range';
     if ($request_uri ~* "/loris/(iiif/2/)?(.*)") {
         proxy_pass http://127.0.0.1:8182/iiif/2/$2;
-    }
-    if ($request_method = 'OPTIONS') {
-      add_header 'Access-Control-Allow-Origin' '*';
-      add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS';
-      add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range';
-      add_header 'Access-Control-Max-Age' 1728000;
-      add_header 'Content-Type' 'text/plain; charset=utf-8';
-      add_header 'Content-Length' 0;
-      return 204;
-    }
-    if ($request_method = 'GET') {
-      add_header 'Access-Control-Allow-Origin' '*';
-      add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS';
-      add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range';
-      add_header 'Access-Control-Expose-Headers' 'Content-Length,Content-Range';
     }
     proxy_set_header X-Forwarded-Proto {{ application_host_protocol }};
     proxy_set_header X-Forwarded-Host $host;
@@ -74,5 +52,9 @@ location / {
 }
 
 location @errors {
+  add_header 'Access-Control-Allow-Origin' '*';
+  add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS';
+  add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range';
+  add_header 'Access-Control-Expose-Headers' 'Content-Length,Content-Range';
   rewrite ^ https://libimages1.princeton.edu$request_uri;
 }
