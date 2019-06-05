@@ -1,0 +1,52 @@
+location ~ ^/loris/(iiif/2/)?figgy_prod/.* {
+    if ($request_uri ~* "/loris/(iiif/2/)?figgy_prod(/)?(%2F)?(.*)") {
+        proxy_pass http://127.0.0.1:8182/iiif/2/figgy_prod%2F$4;
+    }
+    proxy_set_header X-Forwarded-Proto {{ application_host_protocol }};
+    proxy_set_header X-Forwarded-Host $host;
+    proxy_set_header X-Forwarded-Path /loris;
+    proxy_set_header X-Forwarded-Port 443;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_intercept_errors on;
+    error_page 404 = @errors;
+    proxy_redirect http://127.0.0.1:8182/ /loris;
+}
+location ~ ^/loris/.* {
+    if ($request_uri ~* "/loris/(iiif/2/)?(.*)") {
+        proxy_pass http://127.0.0.1:8182/iiif/2/$2;
+    }
+    proxy_set_header X-Forwarded-Proto {{ application_host_protocol }};
+    proxy_set_header X-Forwarded-Host $host;
+    proxy_set_header X-Forwarded-Path /loris;
+    proxy_set_header X-Forwarded-Port 443;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_intercept_errors on;
+    error_page 404 = @errors;
+    proxy_redirect http://127.0.0.1:8182/ /loris;
+}
+
+location /loris {
+  proxy_pass http://127.0.0.1:8182/;
+  proxy_set_header X-Forwarded-Proto https;
+  proxy_set_header X-Forwarded-Host $host;
+  proxy_set_header X-Forwarded-Path /loris;
+  proxy_set_header X-Forwarded-Port 443;
+  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+}
+
+location / {
+  proxy_pass http://127.0.0.1:8182/;
+  proxy_set_header X-Forwarded-Proto https;
+  proxy_set_header X-Forwarded-Host $host;
+  proxy_set_header X-Forwarded-Path /;
+  proxy_set_header X-Forwarded-Port 443;
+  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+}
+
+location @errors {
+  add_header 'Access-Control-Allow-Origin' '*';
+  add_header 'Access-Control-Allow-Credentials' 'true';
+  add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS';
+  add_header 'Access-Control-Allow-Headers' 'DNT,X-CustomHeader,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Origin';
+  rewrite ^ https://libimages1.princeton.edu$request_uri;
+}
