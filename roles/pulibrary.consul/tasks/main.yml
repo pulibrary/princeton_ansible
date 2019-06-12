@@ -1,0 +1,35 @@
+---
+# tasks file for roles/pulibrary.consul
+- name: Install python dependencies
+  when:
+    - consul_install_dependencies | bool
+  block:
+    - name: Install netaddr dependency on controlling host (with --user)
+      pip:
+        name: netaddr
+        extra_args: --user
+      delegate_to: 127.0.0.1
+      become: false
+      vars:
+        ansible_become: false
+      run_once: true
+      when: not is_virtualenv or is_virtualenv == None
+
+    - name: Install netaddr dependency on controlling host (virtualenv)
+      pip:
+        name: netaddr
+      delegate_to: 127.0.0.1
+      become: false
+      vars:
+        ansible_become: false
+      run_once: true
+      when: is_virtualenv is defined
+
+- name: Include install tasks
+  include_tasks: posix.yml
+
+- name: Include services management
+  import_tasks: services.yml
+  when: consul_services is defined and consul_services|length>0
+  tags:
+    - consul_services
