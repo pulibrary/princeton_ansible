@@ -43,14 +43,12 @@
   when:
     - consul_install_binary | bool
     - not consul_install_remotely | bool
-    - run_not_in_container
 
 - name: Install OS packages and consul - remotely
   include_tasks: install_remote.yml
   when:
     - consul_install_binary | bool
     - consul_install_remotely | bool
-    - run_not_in_container
 
 - block:
     - block:
@@ -156,11 +154,9 @@
 - name: Reload systemd
   systemd:
     daemon_reload: true
-  when: systemd_unit is changed
-
-- name: Enable Consul Snapshots on servers
-  include_tasks: snapshot.yml
-    - consul_snapshot | bool
+  when:
+    - systemd_unit is changed
+    - run_not_in_container
 
 - block:
 
@@ -188,4 +184,6 @@
         dest: "{{ consul_bootstrap_state }}"
         state: touch
 
-  when: not bootstrap_state.stat.exists
+  when:
+    - not bootstrap_state.stat.exists
+    - run_not_in_container
