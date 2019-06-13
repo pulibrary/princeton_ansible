@@ -14,6 +14,7 @@
     consul_bind_address: "{{ consul_bind_address }}"
     consul_datacenter: "{{ consul_datacenter }}"
     consul_node_role: "{{ consul_node_role }}"
+  when: run_not_in_container
 
 - name: Read bootstrapped state
   stat:
@@ -42,12 +43,14 @@
   when:
     - consul_install_binary | bool
     - not consul_install_remotely | bool
+    - run_not_in_container
 
 - name: Install OS packages and consul - remotely
   include_tasks: install_remote.yml
   when:
     - consul_install_binary | bool
     - consul_install_remotely | bool
+    - run_not_in_container
 
 - block:
     - block:
@@ -102,7 +105,7 @@
             ansible_become: false
           delegate_to: localhost
 
-      no_log: true
+      no_log: false
       run_once: true
       when:
         - not consul_local_key.changed
@@ -111,9 +114,10 @@
     - name: Read gossip encryption key for servers that require it
       set_fact:
         consul_raw_key: "{{ lookup('file', '/tmp/consul_raw.key') }}"
-      no_log: true
+      no_log: false
       when:
         - consul_raw_key is not defined
+      changed_when: false
 
     - name: Delete gossip encryption key file
       file:
@@ -184,10 +188,4 @@
         dest: "{{ consul_bootstrap_state }}"
         state: touch
 
-    - import_tasks: ../tasks/iptables.yml
-      when: consul_iptables_enable | bool
-
   when: not bootstrap_state.stat.exists
-
-- import_tasks: ../tasks/dnsmasq.yml
-  when: consul_dnsmasq_enable | bool
