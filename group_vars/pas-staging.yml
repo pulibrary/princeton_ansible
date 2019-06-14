@@ -4,22 +4,25 @@ server:
     locale: 'en_US.UTF-8'
 
 apache:
-    docroot: '/var/www/html'
+    docroot: '/opt/pas/web'
     servername: '{{ ansible_hostname }}'
+    directory_options: '+Multiviews'
 
-pas_password: '{{vault_pas_db_password}}'
+pas_password: '{{ vault_pas_db_password }}'
+pas_security_key: '{{ vault_pas_security_key }}'
 db_host: '{{ maria_db_cluster_host | default("localhost") }}'
+db_password: '{{ mariadb_mysql_root_password | default("") }}'
+pas_default_site_url: 'https://slavery-staging.princeton.edu'
 
-samba_users:
-  - name: pulsys
-    password: '{{vault_samba_pulsys_password}}'
+mariadb__server: "{{ db_host }}"
 
-samba_shares:
-  - name: pas_data
-    group: sambashare
-    write_list: +sambashare
-    writable: yes
-    create_mode: 0777
-    force_create_mode: 0777
-    directory_mode: 0777
-    force_directory_mode: 0777
+mariadb__users:
+  - name: "{{ pas_db_user }}"
+    host: "{{ ansible_hostname }}.princeton.edu"
+    password: "{{ pas_db_password }}"
+    priv: "{{ pas_db_name }}.*:ALL"
+
+mariadb__databases:
+  - name: "{{ pas_db_name }}"
+    encoding: utf8mb4
+    collation: utf8mb4_general_ci
