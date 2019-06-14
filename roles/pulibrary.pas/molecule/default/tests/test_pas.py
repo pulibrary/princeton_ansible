@@ -54,8 +54,3 @@ def test_for_pas_node_modules(host, module):
 def test_for_pas_apache2_sites(host, line):
     site_file = host.file("/etc/apache2/sites-available/000-default.conf")
     assert site_file.contains(line)
-
-
-def test_for_pas_app_dir(host):
-    f = host.file('/opt/pas')
-    assert f.exists
