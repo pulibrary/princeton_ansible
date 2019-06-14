@@ -1,0 +1,155 @@
+---
+# tasks file for roles/pulibrary.pas_code
+- name: Install deploy key
+  copy:
+    src: files/id_rsa
+    dest: '/home/{{ deploy_user }}/.ssh/'
+    owner: deploy
+    group: deploy
+    mode: 0600
+  when: run_not_in_container
+
+- name: Create the ssh directory for docker
+  file:
+    path: /home/{{ deploy_user }}/.ssh/
+    state: directory
+    owner: deploy
+    group: deploy
+    mode: 0600
+  when: not run_not_in_container
+
+- name: Install deploy ssh config
+  copy:
+    src: files/ssh_config
+    dest: '/home/{{ deploy_user }}/.ssh/config'
+    owner: deploy
+    group: deploy
+    mode: 0644
+  register: deploy_ssh_config
+
+- name: Install pas craft3
+  git:
+    repo: 'git@github.com:pulibrary/pas-craft3.git'
+    dest: '/opt/pas'
+    accept_hostkey: true
+    key_file: '/home/deploy/.ssh/id_rsa'
+    clone: true
+    update: true
+    force: true
+    version: 'running_version'
+  become: true
+  when: run_not_in_container
+
+- name: Create the pas directory for docker
+  file:
+    path: '{{ item }}'
+    state: directory
+    owner: deploy
+    group: deploy
+    mode: 0600
+  with_items:
+    - '/opt/pas'
+    - '/opt/pas/config'
+    - '/opt/pas/storage'
+    - '/opt/pas/vendor'
+    - '/opt/pas/web'
+    - '/opt/pas/web/cpresources'
+  when: not run_not_in_container and deploy_ssh_config.diff == []
+
+- name: Install the license key
+  copy:
+    src: files/license.key
+    dest: /opt/pas/config/license.key
+  when: run_not_in_container
+
+- name: change permissions files at the top level
+  file:
+    path: '/opt/pas'
+    state: 'directory'
+    owner: 'www-data'
+    group: 'www-data'
+    mode: '0744'
+  when: deploy_ssh_config.diff == [] or force_pas_deploy
+
+- name: change permissions sub directories
+  file:
+    path: '/opt/pas/{{ item }}'
+    state: 'directory'
+    recurse: 'yes'
+    follow: false
+    owner: 'www-data'
+    group: 'www-data'
+    mode: '0744'
+  with_items:
+    - 'config'
+    - 'storage'
+    - 'vendor'
+    - 'web/cpresources'
+  when: deploy_ssh_config.diff == [] or force_pas_deploy
+
+- name: update .env
+  template:
+    src: 'files/env.j2'
+    dest: '/opt/pas/.env'
+    owner: 'www-data'
+    group: 'www-data'
+  when: deploy_ssh_config.diff == [] or force_pas_deploy
+
+- name: Unarchive SQL file to import
+  unarchive:
+    src: 'files/pas.zip'
+    dest: '/tmp'
+  ignore_errors: 'yes'
+  when: deploy_ssh_config.diff == [] or force_pas_deploy
+
+- name: Drop the database
+  mysql_db:
+    name: '{{ pas_db_name }}'
+    login_host: '{{ db_host | default("localhost") }}'
+    login_user: '{{ pas_db_user }}'
+    login_password: '{{ pas_db_password }}'
+    state: absent
+  when: deploy_ssh_config.diff == [] or force_pas_deploy
+
+- name: Drop the database
+  mysql_db:
+    name: '{{ pas_db_name }}'
+    login_host: '{{ db_host | default(omit) }}'
+    login_user: '{{ pas_db_user }}'
+    login_password: '{{ pas_db_password }}'
+    state: present
+  when: deploy_ssh_config.diff == [] or force_pas_deploy
+
+- name: Import database
+  mysql_db:
+    name: '{{ pas_db_name }}'
+    login_host: '{{ db_host | default(omit) }}'
+    login_user: '{{ pas_db_user }}'
+    login_password: '{{ pas_db_password }}'
+    state: import
+    target: '/tmp/pas-craft3.sql'
+  when: deploy_ssh_config.diff == [] or force_pas_deploy
+
+- name: Create symlinks
+  file:
+    src: '{{ item.src }}'
+    dest: '{{ item.link }}'
+    owner: 'www-data'
+    group: '{{ deploy_user }}'
+    state: 'link'
+    force: true
+  with_items:
+    - src: '/mnt/diglibdata1/{{ pas_upload_path }}'
+      link: '/opt/pas/web/uploads'
+  when: run_not_in_container
+
+- name: Migrate craft
+  become: true
+  command: './craft migrate/all'
+  args:
+    chdir: '/opt/pas'
+  changed_when: false
+  with_items:
+    - 'migrate/all'
+    - 'project-config/sync'
+  when: run_not_in_container
