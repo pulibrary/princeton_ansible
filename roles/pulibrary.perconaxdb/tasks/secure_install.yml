@@ -1,0 +1,62 @@
+---
+- name: Get temporary root password
+  shell: |
+      set -o pipefail
+      grep 'temporary password' /var/log/mysqld.log | awk '{print $NF}' | tail -n 1
+  args:
+    executable: /bin/bash
+  register: "_xtradb_root_temp_password"
+  when:
+    - not _xtradb_password_changed.stat.exists
+
+- name: Set the MySQL root password
+  shell: |
+    set -o pipefail
+    'mysqladmin -u root --password="{{ _xtradb_root_temp_password.stdout }}" password "{{ xtradb_root_password }}"'
+  args:
+    executable: /bin/bash
+  when:
+    - not _xtradb_password_changed.stat.exists
+
+- name: Marking as password is changed
+  file:
+    path: "{{ xtradb_password_changed }}"
+    state: "touch"
+    owner: root
+    group: root
+    mode: '0400'
+
+- name: Delete anonymous connections
+  mysql_user:
+    login_user: "{{ xtradb_root_user }}"
+    login_password: "{{ xtradb_root_password }}"
+    name: ""
+    host_all: true
+    state: absent
+
+- name: "Secure the MySQL root user for localhost"
+  mysql_user:
+    login_user: "{{ xtradb_root_user }}"
+    login_password: "{{ xtradb_root_password }}"
+    name: "{{ xtradb_root_user }}"
+    host: "{{ item }}"
+  with_items:
+    - "::1"
+    - "127.0.0.1"
+    - "localhost"
+    - "{{ xtradb_bind_address }}"
+
+- name: Remove the MySQL test database
+  mysql_db:
+    db: test
+    login_user: "{{ xtradb_root_user }}"
+    login_password: "{{ xtradb_root_password }}"
+    state: absent
+
+- name: Marking as secured
+  file:
+    path: "{{ xtradb_secured }}"
+    state: "touch"
+    owner: root
+    group: root
+    mode: '0400'
