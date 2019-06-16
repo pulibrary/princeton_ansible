@@ -20,10 +20,10 @@ xtradb_password_changed: "{{ xtradb_confdir }}/_password_changed"
 xtradb_root_user: root
 
 # Defines the root password
-xtradb_root_password: root
+xtradb_root_password: "{{ vault_xtradb_root_password | default('change_me')}}"
 
 # Define Ansible group in which the nodes exist to be part of the cluster
-xtradb_nodes_group: xtradb-cluster-nodes
+xtradb_nodes_group: perconaxtra_db_cluster
 
 # Define the node pool
 xtradb_wsrep_cluster_address: "gcomm://{{ groups[xtradb_nodes_group] | map('extract', hostvars, ['ansible_' ~ xtradb_bind_interface, 'ipv4', 'address']) | join(',') }}"
@@ -48,7 +48,7 @@ xtradb_bind_address: "{{ hostvars[inventory_hostname]['ansible_' + xtradb_bind_i
 xtradb_sst_user: sstuser
 
 # Defines the sst password
-xtradb_sst_password: sstpassword
+xtradb_sst_password: "{{ vault_xtradb_sstuser_password | default('change_me')}}"
 
 # Defines the cluster name
 xtradb_cluster_name: foo
