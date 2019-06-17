@@ -1,0 +1,1 @@
+../roles/pulibrary.perconaxdb/molecule/default/tests/test_percona_db_server.py
