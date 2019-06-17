@@ -29,10 +29,8 @@ Example Playbook
   roles:
     - role: pulibrary.perconaxdb
       xtradb_cluster_name: "pulibrary-cluster"
-      xtradb_sst_password: A_Vaulted_Password
-      xtradb_root_password: A_Vaulted_Password
       xtradb_nodes_group: "percona_cluster_db"
-      xtradb_bind_interface: eth0
+      xtradb_bind_interface: ens33
 
       xtradb_databases:
         - name: archivesspace

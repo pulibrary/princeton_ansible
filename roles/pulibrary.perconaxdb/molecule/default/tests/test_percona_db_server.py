@@ -14,15 +14,7 @@ testinfra_hosts = testinfra.utils.ansible_runner.AnsibleRunner(
     "percona-xtradb-cluster-server-5.7",
     "percona-xtrabackup-24"
     ])
-def test_for_pas_php_software(host, name):
+def test_for_percona_db_server_software(host, name):
     pkg = host.package(name)
 
     assert pkg.is_installed
-
-
-def test_hosts_file(host):
-    f = host.file('/etc/hosts')
-
-    assert f.exists
-    assert f.user == 'root'
-    assert f.group == 'root'
