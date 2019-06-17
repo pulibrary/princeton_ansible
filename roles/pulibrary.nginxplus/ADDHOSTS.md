@@ -6,15 +6,13 @@ Adding new hosts to Nginx Plus
 ping the #Operations Slack channel. The turn around is instant + time for DNS to
 propagate worldwide.
 
-* Generate SSL keys for the Virtual Server above. This is also another bug that
+* What we will need is the name of the new service. If the service is to be
+  example.princeton.edu, we will then register example-staging1.princeton.edu
+  and example-prod1.princeton.edu, example-prod2.princeton.edu
+
+* Where necessary generate SSL keys for the Virtual Server above. This is also another bug that
   will be fixed with a ping to the #Operations Slack channel. The turn around
   here averages about 12 hours.
-
-* You will need at least one upstream server (for staging) and we encourage at
-  least 2 for production that will host your application. This is the last bug
-  that will still involve the #Operation channel. Registration for a fixed lease
-  IP address is done through the network registration link in step one. The turn
-  around here is also instant.
 
 * Create your nginx configuration files for your service. Examples can be found
   at `roles/pulibrary.nginxplus/files/conf/http` for HTTP based services and
@@ -31,9 +29,3 @@ propagate worldwide.
 
 * Tunnel into the production ADC on port 8080 to see if your new virtual server
   is available
-
-
-[TODO]
-
-* check datadog for upstream services. We have a ticket with both datadog and
-  nginx plus on why the upstream services aren't showing up in our metrics
