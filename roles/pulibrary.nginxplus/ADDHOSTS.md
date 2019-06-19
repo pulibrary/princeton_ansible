@@ -24,7 +24,7 @@ propagate worldwide.
 
 * Once you have your application ready you can then re-run the
   `playbooks/nginxplus.yml` playbook which will upload the new configuration
-  files and ssl certificates to the production ADC and the hot-standy one and
+  files and ssl certificates to the production ADC and the hot-standby one and
   reload nginx.
 
 * Tunnel into the production ADC on port 8080 to see if your new virtual server
