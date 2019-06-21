@@ -4,39 +4,42 @@
   become: true
   changed_when: false
 
-- name: create solr core dir
-  file:
-    path: "{{ solr_home }}/data/drupal/conf/"
-    state: directory
-  changed_when: false
+# TODO: we need this lib-solr-staging/ libwww-staging
+# - name: create solr core dir
+#   file:
+#     path: "{{ solr_home }}/data/drupal/conf/"
+#     state: directory
+#   changed_when: false
 
-- name: Add drupal solr configs to drupal solr core
-  synchronize:
-    src: "{{ drupal_docroot }}/sites/all/modules/search_api_solr/solr-conf/7.x/"
-    dest: "{{ solr_home }}/data/drupal/conf/"
-  delegate_to: "{{ inventory_hostname }}"
-  become: true
+# - name: Add drupal solr configs to drupal solr core
+#   synchronize:
+#     src: "{{ drupal_docroot }}/sites/all/modules/search_api_solr/solr-conf/7.x/"
+#     dest: "{{ solr_home }}/data/drupal/conf/"
+#   delegate_to: "{{ inventory_hostname }}"
+#   become: true
 
-- name: Set permissions on drupal solr conf files
-  file:
-    path: "{{ solr_home }}/data/drupal/conf"
-    state: directory
-    owner: "{{ solr_user }}"
-    group: "{{ solr_user }}"
-    recurse: true
+# - name: Set permissions on drupal solr conf files
+#   file:
+#     path: "{{ solr_home }}/data/drupal/conf"
+#     state: directory
+#     owner: "{{ solr_user }}"
+#     group: "{{ solr_user }}"
+#     recurse: true
 
 - name: Check to see if app root directory exists.
   stat:
     path: "{{  discoveryutils_docroot }}"
   register: discovery_app_root_directory
 
-- name: clone the discoveryutils repo
+- name: Install discoveryutils repo
   git:
-    repo: "{{ discoverutils_git_repo }}"
-    version: "{{ discovery_utils_version_branch }}"
-    dest: "{{ discoveryutils_docroot }}"
-    depth: 1
-  when: discovery_app_root_directory.stat.exists == false
+    repo: 'https://github.com/pulibrary/discoveryutils.git'
+    dest: "{{  discoveryutils_docroot }}"
+    version: 'master'
+    clone: true
+    update: true
+  become: true
+  when: not discovery_app_root_directory.stat.exists
 
 - name: Install site configuration
   template:
@@ -45,6 +48,19 @@
     owner: "{{ deploy_user }}"
     group: "{{ deploy_user }}"
 
+- name: Check to see if .env.local file exists.
+  stat:
+    path: "{{  discoveryutils_docroot }}/.env.local"
+  register: env_local_exists
+
+- name: Install .env.local
+  template:
+    src: "env.local.j2"
+    dest: "{{ discoveryutils_docroot }}/.env.local"
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+  when: not env_local_exists.stat.exists
+
 - name: grant permissions on deploy user
   file:
     path: "{{ discoveryutils_docroot }}"
@@ -52,41 +68,44 @@
     owner: "{{ deploy_user }}"
     group: "{{ deploy_user }}"
     recurse: true
+  when: not env_local_exists.stat.exists
 
-- name: create vendor directory
-  file:
-    path: "{{ discoveryutils_docroot }}/vendor"
-    state: directory
-    owner: "{{ deploy_user }}"
-    group: "{{ deploy_user }}"
+- name: Check to see if vendor exists.
+  stat:
+    path: "{{  discoveryutils_docroot }}/vendor/symfony"
+  register: vendor_exists
 
-- name: Run composer to install silex and other dependencies
+- name: Run composer to install symfony and other dependencies
   composer:
     command: install
-    working_dir: "{{ discoveryutils_docroot }}"  #  need to make a better decision for this
+    working_dir: "{{ discoveryutils_docroot }}"
   become: true
   become_user: "{{ deploy_user }}"
+  when: not vendor_exists.stat.exists
 
-- name: Set up discoveryutils application log
-  copy:
-    content: ''
-    dest: "{{ discoveryutils_docroot }}/log/usage.log"
-    force: false
-    owner: "{{ deploy_user }}"
-    group: www-data
-    mode: 0775
+# - name: Set up discoveryutils application log
+#   copy:
+#     content: ''
+#     dest: "{{ discoveryutils_docroot }}/log/usage.log"
+#     force: false
+#     owner: "{{ deploy_user }}"
+#     group: www-data
+#     mode: 0775
 
-- name: Add apache rules
+- name: Add apache rules for discovery utils
   blockinfile:
     path: "/etc/apache2/sites-available/000-default.conf"
     marker: "## {mark} ANSIBLE MANAGED BLOCK ##"
     insertafter: "</Directory>"
     block: |
-      Alias /utils {{ discoveryutils_docroot }}
-      <Directory "{{ discoveryutils_docroot }}">
-        Options +Indexes
+      Alias /utils {{ discoveryutils_docroot }}/public
+      <Directory "{{ discoveryutils_docroot }}/public">
+        Options Indexes FollowSymLinks MultiViews
         AllowOverride All
       </Directory>
+  notify: restart apache
+
+# Drupal after this
 
 - name: Create directory for drush site alias
   file:
@@ -102,16 +121,71 @@
     owner: "{{ systems_user }}"
     group: "{{ systems_user }}"
 
+- name: Check to see if settings.php file exists.
+  stat:
+    path: "{{  drupal_docroot }}/sites/default/settings.php"
+  register: settings_php_exists
+
+- name: Install settings.php
+  template:
+    src: "settings.php.j2"
+    dest: "{{ drupal_docroot }}/sites/default/settings.php"
+    owner: "www-data"
+    group: "{{ deploy_user }}"
+  when: not settings_php_exists.stat.exists
+
+- name: Create a symbolic link to files
+  file:
+    src: '{{drupal_fileshare_mount}}/{{files_mount_dir}}'
+    dest: '{{ drupal_docroot }}/sites/default/files'
+    owner: '{{ deploy_user }}'
+    group: '{{ deploy_user }}'
+    state: link
+    force: true
+  when: not settings_php_exists.stat.exists
+
 - name: Copy database dump
   copy:
-    src: '../../../local_files/{{ drupal_dbimport_file }}'
+    src: 'files/{{ drupal_dbimport_file }}'
     dest: '{{ drupal_docroot }}/{{ drupal_dbimport_file }}'
     owner: '{{ deploy_user }}'
     group: '{{ deploy_user }}'
   when: drupal_dbimport_file is defined
 
 - name: Import database from local dump file
-  shell: drush sql-cli < {{ drupal_dbimport_file }}
+  command: drush sql-cli < {{ drupal_dbimport_file }}
+  args:
+    chdir: "{{ drupal_docroot }}"
+  when: drupal_dbimport_file is defined
+
+- name: Install drupal variable update file
+  template:
+    src: "update.sql.j2"
+    dest: "{{ drupal_docroot }}/update.sql"
+    owner: "{{ systems_user }}"
+    group: "{{ systems_user }}"
+  when: drupal_dbimport_file is defined
+
+- name: Setup the solr connection
+  command: drush sql-cli < update.sql
+  args:
+    chdir: "{{ drupal_docroot }}"
+  when: drupal_dbimport_file is defined
+
+- name: Clear the solr index
+  command: drush search-api-clear
+  args:
+    chdir: "{{ drupal_docroot }}"
+  when: drupal_dbimport_file is defined
+
+- name: Update the solr index
+  command: drush search-api-index
+  args:
+    chdir: "{{ drupal_docroot }}"
+  when: drupal_dbimport_file is defined
+
+- name: Install smtp module
+  command: drush -y en --resolve-dependencies smtp
   args:
     chdir: "{{ drupal_docroot }}"
   when: drupal_dbimport_file is defined
@@ -138,4 +212,84 @@
       /* Makes sure jquery is loaded on every page */
       /* set to false in production */
       $conf['javascript_always_use_jquery'] = TRUE;
-  when: db_host == 'localhost'
+  when: (db_host | default('localhost')) == 'localhost'
+
+- name: grant permissions on deploy user
+  file:
+    path: "{{ discoveryutils_docroot }}"
+    state: directory
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+    recurse: true
+  when: not settings_php_exists.stat.exists
+
+- name: install node modules
+  command: "npm install"
+  args:
+    chdir: "{{ apache_app_path }}/sites/all/themes/pul_base"
+    creates: "{{ apache_app_path }}/sites/all/themes/pul_base/node_modules/"
+  become: true
+  become_user: "{{ deploy_user }}"
+
+- name: install assets using gulp
+  command: 'gulp deploy'
+  args:
+    chdir: "{{ apache_app_path }}/sites/all/themes/pul_base"
+    creates: "{{ apache_app_path }}/sites/all/themes/pul_base/assets/public"
+  become: true
+  become_user: "{{ deploy_user }}"
+
+- name: disable apache php7.0 module
+  apache2_module:
+    state: absent
+    name: php7.0
+  notify: restart apache
+  ignore_errors: yes
+
+- name: enable apache php7.2 module
+  apache2_module:
+    state: present
+    name: php7.2
+  notify: restart apache
+
+- name: Change owner to www-data so apache has access
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: "www-data"
+    group: "{{ deploy_user }}"
+    recurse: true
+    follow: false
+  with_items:
+    - '{{ discoveryutils_docroot }}'
+    - '{{ apache_app_path }}'
+  notify: restart apache
+  when: not settings_php_exists.stat.exists
+
+- name: clear the drush cache
+  command: drush cc all
+  args:
+    chdir: "{{ drupal_docroot }}"
+  when: drupal_dbimport_file is defined
+
+- name: Check to staff script exists.
+  stat:
+    path: "/usr/bin/get_staff_updates.sh"
+  register: staff_scripts_exists
+
+- name: Copy the staff script
+  copy:
+    src: 'files/get_staff_updates.sh'
+    dest: '/usr/bin/get_staff_updates.sh'
+    owner: '{{ deploy_user }}'
+    group: '{{ deploy_user }}'
+    mode: 0777
+  when: not staff_scripts_exists.stat.exists
+
+- name: install the cron job for staff
+  cron:
+    name: "staff profile"
+    hour: 5
+    job: "/usr/bin/get_staff_updates.sh"
+    user: "{{ deploy_user }}"
+  when: not staff_scripts_exists.stat.exists
