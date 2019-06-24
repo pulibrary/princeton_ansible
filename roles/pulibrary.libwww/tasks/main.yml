@@ -1,0 +1,141 @@
+---
+- name: Install gulp globally
+  command: npm install --global gulp-cli
+  become: true
+  changed_when: false
+
+- name: create solr core dir
+  file:
+    path: "{{ solr_home }}/data/drupal/conf/"
+    state: directory
+  changed_when: false
+
+- name: Add drupal solr configs to drupal solr core
+  synchronize:
+    src: "{{ drupal_docroot }}/sites/all/modules/search_api_solr/solr-conf/7.x/"
+    dest: "{{ solr_home }}/data/drupal/conf/"
+  delegate_to: "{{ inventory_hostname }}"
+  become: true
+
+- name: Set permissions on drupal solr conf files
+  file:
+    path: "{{ solr_home }}/data/drupal/conf"
+    state: directory
+    owner: "{{ solr_user }}"
+    group: "{{ solr_user }}"
+    recurse: true
+
+- name: Check to see if app root directory exists.
+  stat:
+    path: "{{  discoveryutils_docroot }}"
+  register: discovery_app_root_directory
+
+- name: clone the discoveryutils repo
+  git:
+    repo: "{{ discoverutils_git_repo }}"
+    version: "{{ discovery_utils_version_branch }}"
+    dest: "{{ discoveryutils_docroot }}"
+    depth: 1
+  when: discovery_app_root_directory.stat.exists == false
+
+- name: Install site configuration
+  template:
+    src: "discoveryutils_app_config.j2"
+    dest: "/home/{{ deploy_user }}/app_configs/discoveryutils"
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+
+- name: grant permissions on deploy user
+  file:
+    path: "{{ discoveryutils_docroot }}"
+    state: directory
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+    recurse: true
+
+- name: create vendor directory
+  file:
+    path: "{{ discoveryutils_docroot }}/vendor"
+    state: directory
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+
+- name: Run composer to install silex and other dependencies
+  composer:
+    command: install
+    working_dir: "{{ discoveryutils_docroot }}"  #  need to make a better decision for this
+  become: true
+  become_user: "{{ deploy_user }}"
+
+- name: Set up discoveryutils application log
+  copy:
+    content: ''
+    dest: "{{ discoveryutils_docroot }}/log/usage.log"
+    force: false
+    owner: "{{ deploy_user }}"
+    group: www-data
+    mode: 0775
+
+- name: Add apache rules
+  blockinfile:
+    path: "/etc/apache2/sites-available/000-default.conf"
+    marker: "## {mark} ANSIBLE MANAGED BLOCK ##"
+    insertafter: "</Directory>"
+    block: |
+      Alias /utils {{ discoveryutils_docroot }}
+      <Directory "{{ discoveryutils_docroot }}">
+        Options +Indexes
+        AllowOverride All
+      </Directory>
+
+- name: Create directory for drush site alias
+  file:
+    path: "/etc/drush"
+    state: directory
+    owner: "{{ systems_user }}"
+    group: "{{ systems_user }}"
+
+- name: Install drush site alias
+  template:
+    src: "aliases_drushrc_php.j2"
+    dest: "/etc/drush/aliases.drushrc.php"
+    owner: "{{ systems_user }}"
+    group: "{{ systems_user }}"
+
+- name: Copy database dump
+  copy:
+    src: '../../../local_files/{{ drupal_dbimport_file }}'
+    dest: '{{ drupal_docroot }}/{{ drupal_dbimport_file }}'
+    owner: '{{ deploy_user }}'
+    group: '{{ deploy_user }}'
+  when: drupal_dbimport_file is defined
+
+- name: Import database from local dump file
+  shell: drush sql-cli < {{ drupal_dbimport_file }}
+  args:
+    chdir: "{{ drupal_docroot }}"
+  when: drupal_dbimport_file is defined
+
+- name: Copy settings for local development
+  blockinfile:
+    path: "{{ drupal_docroot }}/sites/default/settings.php"
+    block: |
+      /* Overrides for the local environment */
+      $conf['securepages_enable'] = 0;
+      /* This should be set in your php.ini file */
+      ini_set('memory_limit', '1G');
+      /* Turn off Caching */
+      $conf['css_gzip_compression'] = FALSE;
+      $conf['js_gzip_compression'] = FALSE;
+      $conf['cache'] = 0;
+      $conf['block_cache'] = 0;
+      $conf['preprocess_css'] = 0;
+      $conf['preprocess_js'] = 0;
+      /* end cache settings */
+      /* Turn on theme debugging. Injects the path to every Template utilized in the HTML source. */
+      $conf['theme_debug'] = TRUE;
+
+      /* Makes sure jquery is loaded on every page */
+      /* set to false in production */
+      $conf['javascript_always_use_jquery'] = TRUE;
+  when: db_host == 'localhost'

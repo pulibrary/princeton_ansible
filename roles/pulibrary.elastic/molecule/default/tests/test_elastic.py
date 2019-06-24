@@ -6,13 +6,13 @@ testinfra_hosts = testinfra.utils.ansible_runner.AnsibleRunner(
     os.environ['MOLECULE_INVENTORY_FILE']).get_hosts('all')
 
 
-def test_elastic_package_installation(host):
-    package = host.package("elasticsearch")
+def test_if_elasticsearch_installed(host):
+    pkg = host.package('elasticsearch')
 
-    assert package.is_installed
+    assert pkg.is_installed
 
 
-def test_apache_listening_http(host):
-    socket = host.socket('tcp://0.0.0.0:9200')
+def test_if_elasticsearch_listening_http(host):
+    socket = host.socket('tcp://127.0.0.1:9200')
 
-    assert socket.is_listenin
+    assert socket.is_listening
