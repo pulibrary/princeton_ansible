@@ -1,9 +1,31 @@
 ---
+- name: Install dependencies
+  apt: name={{item}} state=present
+  with_items:
+    - cifs-utils
+
 - name: install mysql php driver
   apt:
     name: ["libapache2-mod-php7.2", "php7.2-gd", "php7.2-mysql", "php7.2-xml"]
     state: present
     update_cache: true
+
+- name: create drupal docroot
+  file:
+    path: "{{ drupal_docroot }}"
+    state: directory
+    owner: "{{ systems_user }}"
+    group: "{{ systems_user }}"
+    recurse: true
+  become: true
+  changed_when: false
+
+- name: allow temporary full permissions
+  file:
+    path: "{{ drupal_docroot }}"
+    mode: 0777
+    state: directory
+  become: true
 
 - name: clone the drupal repo
   git:
@@ -11,13 +33,19 @@
     version: "{{ drupal_version_branch }}"
     dest: "{{ drupal_docroot }}"
     depth: 1
+    accept_hostkey: true
+    clone: true
+    update: false
+  ignore_errors: true
+  become: true
+  become_user: "{{ systems_user }}"
 
 - name: grant permissions on deploy user
   file:
     path: "{{ drupal_docroot }}"
     state: directory
-    owner: "{{ systems_user }}"
-    group: "{{ systems_user }}"
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
     recurse: true
   changed_when: false
 
@@ -25,18 +53,18 @@
   file:
     path: "{{ drush_path }}/vendor"
     state: directory
-    owner: "{{ systems_user }}"
-    group: "{{ systems_user }}"
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
   become: false
-  become_user: "{{ systems_user }}"
+  become_user: "{{ deploy_user }}"
   when: drupal_major_version == 8
 
 - name: create vendor directory
   file:
     path: "{{ drupal_docroot }}/vendor"
     state: directory
-    owner: "{{ systems_user }}"
-    group: "{{ systems_user }}"
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
   when: drupal_major_version == 8
 
 - name: Drupal | Run composer if we are running D8
@@ -44,7 +72,7 @@
     command: require
     working_dir: "{{ drush_path }}"  # need to make a better decision for this
   become: false
-  become_user: "{{ systems_user }}"
+  become_user: "{{ deploy_user }}"
   when: drupal_major_version == 8
 
 - name: Drupal | Run composer if we are running D8
@@ -52,7 +80,7 @@
     command: install
     working_dir: "{{ drupal_docroot }}"  # need to make a better decision for this
   become: false
-  become_user: "{{ systems_user }}"
+  become_user: "{{ deploy_user }}"
   when: drupal_major_version == 8
 
 - name: Drupal | Give appropriate permissions for files directory
@@ -76,3 +104,24 @@
   notify: 'restart apache'
   register: drush_status
   changed_when: false
+
+# Create Mounts
+- name: Create mount directories
+  file:
+    path: '/mnt/{{item}}'
+    state: 'directory'
+  with_items:
+    - drupal_fileshare_mount
+
+- name: Copy smb credentials
+  copy: src=files/{{item}} dest=/etc/{{item}}
+  with_items:
+    - drupalweb.smb.credentials
+
+- name: Mount Drupal fileshare
+  mount:
+    name: '/mnt/diglibdata/drupalweb'
+    src: '//diglibdata1.princeton.edu/drupalweb'
+    fstype: cifs
+    opts: 'credentials=/etc/drupalweb.smb.credentials,uid={{deploy_user_uid}},gid=33'
+    state: mounted
