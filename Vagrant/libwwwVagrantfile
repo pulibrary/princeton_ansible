@@ -1,0 +1,38 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+# you're doing.
+Vagrant.configure(2) do |config|
+  # https://docs.vagrantup.com.
+  config.vm.box = "princeton_box"
+  config.vm.network "private_network", type: "dhcp"
+  config.vm.network "forwarded_port", guest: 80, host: 8484 # apache web server in production mode
+  config.vm.define "libwwwstage" # needed by ansible hosts
+
+  # Provider-specific configuration for VirtualBox:
+  config.vm.provider "virtualbox" do |vb|
+    vb.memory = 4096 # if your system can afford it, definitely increase the memory allocation here
+    vb.cpus = 2
+    vb.customize ["modifyvm", :id, "--natdnshostresolver1", "on"]
+  end
+
+  # Enable provisioning ansible project
+  config.vm.provision "ansible" do |ansible|
+    ansible.verbose = 'vvv'
+    ansible.playbook = "playbooks/libwww.yml"
+    config.ssh.private_key_path = "pulsys_rsa_key"
+    config.ssh.username = "pulsys"
+    config.ssh.forward_agent = true
+
+    # extra variables
+    ansible.extra_vars = {
+      db_host: "localhost",
+      admin_user: 'pulsys',
+      drupal_local_repo: 'git@github.com:pulibrary/pul_library_drupal.git',
+      drupal_7_branch: 'master',
+      ansible_connection: 'ssh',
+      ansible_ssh_args: '-o ForwardAgent=yes -o UserKnownHostsFile=/dev/null',
+      drupal_dbimport_file: 'dbimport.sql'
+    }
+  end
+end
