@@ -11,6 +11,10 @@ None
 Role Variables
 --------------
 
+# set to true to force the code to be redeployed even if it already exists
+force_pas_sql_import 'false'
+# set to true to force a database import even if it has already been created
+force_pas_deploy: 'false'
 pas_db_user: 'pas'
 pas_db_name: 'pas'
 pas_file_directory: 'uploads'

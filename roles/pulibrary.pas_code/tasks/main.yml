@@ -62,29 +62,15 @@
     dest: /opt/pas/config/license.key
   when: run_not_in_container
 
-- name: change permissions files at the top level
+- name: change permissions of all files recursively
   file:
     path: '/opt/pas'
     state: 'directory'
     owner: 'www-data'
     group: 'www-data'
-    mode: '0744'
-  when: deploy_ssh_config.diff == [] or force_pas_deploy
-
-- name: change permissions sub directories
-  file:
-    path: '/opt/pas/{{ item }}'
-    state: 'directory'
     recurse: 'yes'
     follow: false
-    owner: 'www-data'
-    group: 'www-data'
     mode: '0744'
-  with_items:
-    - 'config'
-    - 'storage'
-    - 'vendor'
-    - 'web/cpresources'
   when: deploy_ssh_config.diff == [] or force_pas_deploy
 
 - name: update .env
@@ -100,7 +86,7 @@
     src: 'files/pas.zip'
     dest: '/tmp'
   ignore_errors: 'yes'
-  when: deploy_ssh_config.diff == [] or force_pas_deploy
+  when: deploy_ssh_config.diff == [] or force_pas_sql_import
 
 - name: Drop the database
   mysql_db:
@@ -109,16 +95,16 @@
     login_user: '{{ pas_db_user }}'
     login_password: '{{ pas_db_password }}'
     state: absent
-  when: deploy_ssh_config.diff == [] or force_pas_deploy
+  when: deploy_ssh_config.diff == [] or force_pas_sql_import
 
-- name: Drop the database
+- name: create the database
   mysql_db:
     name: '{{ pas_db_name }}'
     login_host: '{{ db_host | default(omit) }}'
     login_user: '{{ pas_db_user }}'
     login_password: '{{ pas_db_password }}'
     state: present
-  when: deploy_ssh_config.diff == [] or force_pas_deploy
+  when: deploy_ssh_config.diff == [] or force_pas_sql_import
 
 - name: Import database
   mysql_db:
@@ -128,7 +114,7 @@
     login_password: '{{ pas_db_password }}'
     state: import
     target: '/tmp/pas-craft3.sql'
-  when: deploy_ssh_config.diff == [] or force_pas_deploy
+  when: deploy_ssh_config.diff == [] or force_pas_sql_import
 
 - name: Create symlinks
   file:
