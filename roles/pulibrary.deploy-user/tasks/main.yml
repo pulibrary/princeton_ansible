@@ -48,3 +48,29 @@
 
   notify:
     - restart ssh
+
+- name: Create the .ssh directory
+  file:
+    path: /home/{{ deploy_user }}/.ssh/
+    state: directory
+    owner: deploy
+    group: deploy
+    mode: 0600
+
+- name: Install deploy github key
+  copy:
+    content: '{{ deploy_id_rsa_private_key }}'
+    dest: '/home/{{ deploy_user }}/.ssh/id_rsa'
+    owner: deploy
+    group: deploy
+    mode: 0600
+  when: run_not_in_container
+
+- name: Install deploy github ssh config
+  copy:
+    src: files/ssh_config
+    dest: '/home/{{ deploy_user }}/.ssh/config'
+    owner: deploy
+    group: deploy
+    mode: 0644
+  register: deploy_ssh_config
