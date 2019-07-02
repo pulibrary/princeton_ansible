@@ -21,6 +21,7 @@ $ vagrant box add --name princeton_box images/ubuntu-16.04.virtualbox.box
  * `brew cask install vagrant`
  * `brew install python`
  * `brew install pipenv`
+ * `brew install rbenv`
  * `brew install docker`
 
 ### Ubuntu Bionic
@@ -37,6 +38,7 @@ $ vagrant box add --name princeton_box images/ubuntu-16.04.virtualbox.box
  * `sudo apt install docker-ce`
 ```bash
 curl https://pyenv.run | bash
+git clone https://github.com/rbenv/rbenv.git ~/.rbenv
 ```
 
 Edit your `~/.bashrc` accordingly
