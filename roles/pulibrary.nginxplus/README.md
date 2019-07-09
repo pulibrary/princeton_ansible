@@ -1,13 +1,16 @@
 Role Name
 =========
 
-This role installs NGINX Open Source and NGINX Plus on a target host.
+* This role installs NGINX Open Source and NGINX Plus on a target host.
+
+* If you just need to add a [New Host](ADDHOSTS.md)
 
 **Note** This role is a stripped down version (to allow us to understand what it
 does for us) of
 [https://github.com/nginxinc/ansible-role-nginx](https://github.com/nginxinc/ansible-role-nginx)
 of upstream's role. We've removed everything that we don't use. All credit goes
-to NGINX and by default it expect Ubuntu 
+to NGINX and by default it expects Ubuntu 
+
 
 Requirements
 ------------
