@@ -1,20 +1,15 @@
 ---
-- hosts: pas-staging
+- hosts: pas-production
   remote_user: pulsys
   become: true
   vars_files:
     - ../site_vars.yml
   vars:
-    pas_upload_path: 'pas/pas-staging'
-    force_pas_deploy: true
-    # Change this to true to force an mysql import
-    force_pas_sql_import: false
-    run_not_in_container: true
+    - pas_upload_path: 'pas/pas-production'
+    - run_not_in_container: true
   roles:
+    - role: roles/pulibrary.pas
     - role: roles/pulibrary.pas_code
-  pre_tasks:
-    - set_fact:
-        deploy_id_rsa_private_key: "{{  lookup('file', '../roles/pulibrary.pas_code/files/id_rsa')  }}\n"
   post_tasks:
     - name: tell everyone on slack you ran an ansible playbook
       slack:
