@@ -75,8 +75,12 @@
   mysql_user:
     name: '{{ item.user | d(item.name) }}'
     host: '{{ item.host | default(mariadb__client) }}'
+    # TODO For some strange reason this works if no host is provided when connecting to percona
+    #      It does not work if the host (maria-staging1) is provided (Error about access)
+    #      Id does not work if the host (maria-staging) is provided (an ssh error)
     login_host: '{{ db_host | default(omit) }}'
     login_password: '{{ db_password | default(omit) }}'
+    login_user: 'root'
     state: 'present'
     password: "{{ item.password }}"
     # todo A future enhancement to utilize secret delegation
