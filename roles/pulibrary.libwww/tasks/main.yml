@@ -4,28 +4,6 @@
   become: true
   changed_when: false
 
-# TODO: we need this lib-solr-staging/ libwww-staging
-# - name: create solr core dir
-#   file:
-#     path: "{{ solr_home }}/data/drupal/conf/"
-#     state: directory
-#   changed_when: false
-
-# - name: Add drupal solr configs to drupal solr core
-#   synchronize:
-#     src: "{{ drupal_docroot }}/sites/all/modules/search_api_solr/solr-conf/7.x/"
-#     dest: "{{ solr_home }}/data/drupal/conf/"
-#   delegate_to: "{{ inventory_hostname }}"
-#   become: true
-
-# - name: Set permissions on drupal solr conf files
-#   file:
-#     path: "{{ solr_home }}/data/drupal/conf"
-#     state: directory
-#     owner: "{{ solr_user }}"
-#     group: "{{ solr_user }}"
-#     recurse: true
-
 - name: Check to see if app root directory exists.
   stat:
     path: "{{  discoveryutils_docroot }}"
@@ -83,15 +61,6 @@
   become_user: "{{ deploy_user }}"
   when: not vendor_exists.stat.exists
 
-# - name: Set up discoveryutils application log
-#   copy:
-#     content: ''
-#     dest: "{{ discoveryutils_docroot }}/log/usage.log"
-#     force: false
-#     owner: "{{ deploy_user }}"
-#     group: www-data
-#     mode: 0775
-
 - name: Add apache rules for discovery utils
   blockinfile:
     path: "/etc/apache2/sites-available/000-default.conf"
@@ -132,7 +101,7 @@
     dest: "{{ drupal_docroot }}/sites/default/settings.php"
     owner: "www-data"
     group: "{{ deploy_user }}"
-  when: not settings_php_exists.stat.exists
+  when: not settings_php_exists.stat.exists or force_settings
 
 - name: Create a symbolic link to files
   file:
@@ -150,13 +119,13 @@
     dest: '{{ drupal_docroot }}/{{ drupal_dbimport_file }}'
     owner: '{{ deploy_user }}'
     group: '{{ deploy_user }}'
-  when: drupal_dbimport_file is defined
+  when: (drupal_dbimport_file is defined) and (inventory_hostname ==  groups[group_names[0]][0])
 
 - name: Import database from local dump file
   command: drush sql-cli < {{ drupal_dbimport_file }}
   args:
     chdir: "{{ drupal_docroot }}"
-  when: drupal_dbimport_file is defined
+  when: (drupal_dbimport_file is defined) and (inventory_hostname ==  groups[group_names[0]][0])
 
 - name: Install drupal variable update file
   template:
@@ -164,55 +133,31 @@
     dest: "{{ drupal_docroot }}/update.sql"
     owner: "{{ systems_user }}"
     group: "{{ systems_user }}"
-  when: drupal_dbimport_file is defined
+  when: (drupal_dbimport_file is defined) and (inventory_hostname ==  groups[group_names[0]][0])
 
 - name: Setup the solr connection
   command: drush sql-cli < update.sql
   args:
     chdir: "{{ drupal_docroot }}"
-  when: drupal_dbimport_file is defined
+  when: (drupal_dbimport_file is defined) and (inventory_hostname ==  groups[group_names[0]][0])
 
 - name: Clear the solr index
   command: drush search-api-clear
   args:
     chdir: "{{ drupal_docroot }}"
-  when: drupal_dbimport_file is defined
+  when: (drupal_dbimport_file is defined) and (inventory_hostname ==  groups[group_names[0]][0])
 
 - name: Update the solr index
   command: drush search-api-index
   args:
     chdir: "{{ drupal_docroot }}"
-  when: drupal_dbimport_file is defined
+  when: (drupal_dbimport_file is defined) and (inventory_hostname ==  groups[group_names[0]][0])
 
 - name: Install smtp module
   command: drush -y en --resolve-dependencies smtp
   args:
     chdir: "{{ drupal_docroot }}"
   when: drupal_dbimport_file is defined
-
-- name: Copy settings for local development
-  blockinfile:
-    path: "{{ drupal_docroot }}/sites/default/settings.php"
-    block: |
-      /* Overrides for the local environment */
-      $conf['securepages_enable'] = 0;
-      /* This should be set in your php.ini file */
-      ini_set('memory_limit', '1G');
-      /* Turn off Caching */
-      $conf['css_gzip_compression'] = FALSE;
-      $conf['js_gzip_compression'] = FALSE;
-      $conf['cache'] = 0;
-      $conf['block_cache'] = 0;
-      $conf['preprocess_css'] = 0;
-      $conf['preprocess_js'] = 0;
-      /* end cache settings */
-      /* Turn on theme debugging. Injects the path to every Template utilized in the HTML source. */
-      $conf['theme_debug'] = TRUE;
-
-      /* Makes sure jquery is loaded on every page */
-      /* set to false in production */
-      $conf['javascript_always_use_jquery'] = TRUE;
-  when: (db_host | default('localhost')) == 'localhost'
 
 - name: grant permissions on deploy user
   file:
@@ -292,4 +237,12 @@
     hour: 5
     job: "/usr/bin/get_staff_updates.sh"
     user: "{{ deploy_user }}"
-  when: not staff_scripts_exists.stat.exists
+  when: not staff_scripts_exists.stat.exists and (inventory_hostname ==  groups[group_names[0]][0])
+
+- name: install the cron job for staff
+  cron:
+    name: "run drush cron"
+    minute: 0
+    job: "drush @prod cron"
+    user: "{{ deploy_user }}"
+  when: not staff_scripts_exists.stat.exists and (inventory_hostname ==  groups[group_names[0]][0])
