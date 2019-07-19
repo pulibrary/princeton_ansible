@@ -1,0 +1,21 @@
+---
+- name: Converge
+  hosts: all
+  vars:
+    - run_not_in_container: true
+    - mariadb_server__root_password: "{{ vault_maridb_password | default('change_me') }}"
+    ### Uncomment this to force a dump file to be imported
+    # - drupal_dbimport_file: 'dump.sql'
+    # go back to this once percona db staging is up and running.
+    # - mariadb__server: 'maria-staging.princeton.edu'
+  vars_files:
+    - ../../../../site_vars.yml
+    - ../../../../group_vars/libwww/vault.yml
+    - ../../defaults/main.yml
+  roles:
+    - role: pulibrary.mariadbserver
+    - role: pulibrary.libwww
+  pre_tasks:
+    - name: Set the github private deploy key
+      set_fact:
+        deploy_id_rsa_private_key: "{{  lookup('file', '../../files/id_rsa')  }}\n"
