@@ -8,11 +8,9 @@ testinfra_hosts = testinfra.utils.ansible_runner.AnsibleRunner(
 
 
 @pytest.mark.parametrize("file", [
-    "/var/www/discoveryutils/public/index.php",
-    "/var/www/library/sites/default/settings.php",
+    "/home/deploy/settings.php",
     "/etc/drush/aliases.drushrc.php",
-    "/var/www/discoveryutils/vendor/symfony",
-    "/var/www/discoveryutils/.env.local"
+    "/home/deploy/.env.local"
     ])
 def test_for_libwww_file_exist(host, file):
     file = host.file(file)
@@ -21,8 +19,8 @@ def test_for_libwww_file_exist(host, file):
 
 
 @pytest.mark.parametrize("line", [
-    "Alias /utils /var/www/discoveryutils/public",
-    "DocumentRoot /var/www/library"
+    "Alias /utils /var/www/discoveryutils_cap/current/public",
+    "DocumentRoot /var/www/library_cap/current"
     ])
 def test_for_libwww_apache_config(host, line):
     file = host.file("/etc/apache2/sites-available/000-default.conf")
