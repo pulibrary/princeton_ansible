@@ -6,7 +6,7 @@ A role to install Elasticsearch
 Requirements
 ------------
 
-It needs the `pulibrary.oracle.java8` or `pulibrary.openjdk8` roles to run
+It needs the `pulibrary.openjdk8` roles to run
 
 Role Variables
 --------------
