@@ -1,0 +1,38 @@
+ version: 2
+ jobs:
+   build:
+     working_directory: ~/princeton_ansible
+     docker:
+       - image: quay.io/ansible/molecule:2.22rc3
+     steps:
+       - setup_remote_docker
+       - run: molecule --version
+       - run: ansible --version
+       - run: python --version
+       - checkout
+   test:
+     working_directory: ~/princeton_ansible
+     docker:
+       - image: quay.io/ansible/molecule:2.22rc3
+     parallelism: 2
+     steps:
+      #  - attach_workspace:
+      #     at: '/root/princeton_ansible'
+       - run: 
+          name: Run molecule test for deploy user role
+          command: |
+            cd roles/pulibrary.deploy-user/
+            molecule test
+       - run: 
+          name: Run molecule test for rails app role
+          command: |
+            cd roles/pulibrary.rails-app/
+            molecule test
+ workflows:
+   version: 2
+   build_and_test:
+     jobs:
+       - build
+       - test:
+          requires:
+            - build
