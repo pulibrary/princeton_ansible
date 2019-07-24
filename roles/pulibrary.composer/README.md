@@ -15,7 +15,7 @@ Role Variables
 ```yaml
 composer_path: "/usr/local/bin"
 composer_paths: []
-md5_value: "692d451a81e7437017a3e944a95e2871"
+composer_checksum: 'sha384:a5c698ffe4b8e849a443b120cd5ba38043260d5c4023dbf93e1558871f1f07f58274fc6f4c93bcfd858c6bd0775cd8d1'
 ```
 
 Dependencies
