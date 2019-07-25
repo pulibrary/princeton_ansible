@@ -1,5 +1,6 @@
 Princeton Ansible Playbooks
 ===========================
+[![CircleCI](https://circleci.com/gh/pulibrary/princeton_ansible.svg?style=svg)](https://circleci.com/gh/pulibrary/princeton_ansible)
 
 # Import PUL Box
 
