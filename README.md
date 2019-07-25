@@ -116,6 +116,18 @@ molecule test
    ```
 1. Add any vars found in [`molecule/default/playbooks.yml`](molecule/default/playbooks.yml) to roles/pulibrary.example/molecule/default/playbook.yml
 
+## Generating Molecule Tests
+
+One can use the `invoke molecularize` task in order to generate new molecule
+suites for existing roles:
+
+```bash
+invoke molecularize pulibrary.bind9
+```
+
+Please note that this should only be used for cases where the role already
+exists.
+
 ## Molecule tests
 
 You can run `molecule test` from either the root directory or the role directory (for example roles/pulibrary.example)
