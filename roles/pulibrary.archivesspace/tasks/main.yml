@@ -2,7 +2,8 @@
 - include: setup_mysql.yml
 - include: generate_secrets.yml
 
-- set_fact:
+- name: register name
+  set_fact:
     url_jdbc_archivesspace: '{{ url_jdbc_base }}{{ archivesspace_db_name }}?user={{ archivesspace_db_user }}&password={{ archivesspace_db_password }}{{ url_jdbc_suffix }}'
 
 - name: we need unzip for the next step
@@ -30,7 +31,10 @@
   template: src=config.rb.j2 dest=/opt/archivesspace/config/config.rb
 
 - name: setup database
-  shell: chdir=/opt/archivesspace/ ./scripts/setup-database.sh
+  shell: |
+      set -o pipefail
+      chdir=/opt/archivesspace/ ./scripts/setup-database.sh
+  changed_when: false
 
 - name: delete indexed_state files which force re-index
   file:
@@ -47,6 +51,7 @@
 
 - name: add archivesspace service
   command: /usr/sbin/update-rc.d archivesspace defaults 90
+  changed_when: false
 
 - name: change garbage collection limits
   lineinfile:
@@ -72,3 +77,4 @@
 - name: start archivesspace service
   command: /etc/init.d/archivesspace start
   become: '{{ deploy_user }}'
+  changed_when: false
