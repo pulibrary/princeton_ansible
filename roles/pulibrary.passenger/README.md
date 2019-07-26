@@ -1,7 +1,5 @@
 # Passenger
 
-[![Build Status](https://travis-ci.org/geerlingguy/ansible-role-passenger.svg?branch=master)](https://travis-ci.org/geerlingguy/ansible-role-passenger)
-
 Originally borrowed from Geerling Guy
 
 Installs Passenger (with Nginx) Ubuntu linux servers.
