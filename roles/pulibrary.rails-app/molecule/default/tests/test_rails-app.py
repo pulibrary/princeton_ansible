@@ -23,13 +23,6 @@ def test_for_rails_app_is_directory(host):
     assert f.group == 'deploy'
 
 
-def test_for_rails_app_bind9_is_available(host):
-    p = host.package('bind9')
-
-    assert p.is_installed
-    assert host.process.get(user="bind", comm="named")
-
-
 def test_for_rails_app_logrotate(host):
     f = host.file('/etc/logrotate.d/rails_app')
 
