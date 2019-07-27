@@ -1,28 +1,30 @@
 ---
 - name: Copy smb credentials
-  copy: src=files/{{item}} dest=/etc/{{item}}
+  copy:
+    src: "files/{{ item }}"
+    dest: "/etc/{{ item }}"
   with_items:
     - bibdata-worker.smb.credentials
 
 - name: Create mount directory
   file:
-    path: '{{bibdata_data_dir}}'
+    path: '{{ bibdata_data_dir }}'
     state: directory
     owner: deploy
     group: deploy
 
 - name: Create marc_liberation data mount
   mount:
-    name: '{{bibdata_data_dir}}'
+    name: '{{ bibdata_data_dir }}'
     src: //bibdata-worker2.princeton.edu/marc_liberation_files
     fstype: cifs
-    opts: 'credentials=/etc/bibdata-worker.smb.credentials,uid={{deploy_user_uid}},gid={{ deploy_user_uid }}'
+    opts: 'credentials=/etc/bibdata-worker.smb.credentials,uid={{ deploy_user_uid }},gid={{ deploy_user_uid }}'
     state: mounted
 
 - name: Create marc_liberation data mount
   mount:
-    name: '{{scsb_file_dir}}'
+    name: '{{ scsb_file_dir }}'
     src: //bibdata-worker2.princeton.edu/marc_liberation_files/scsb_update_files
     fstype: cifs
-    opts: 'credentials=/etc/bibdata-worker.smb.credentials,uid={{deploy_user_uid}},gid={{ deploy_user_uid }}'
+    opts: 'credentials=/etc/bibdata-worker.smb.credentials,uid={{ deploy_user_uid }},gid={{ deploy_user_uid }}'
     state: mounted
