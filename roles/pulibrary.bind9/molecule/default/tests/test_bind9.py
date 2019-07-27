@@ -10,3 +10,4 @@ def test_is_bind9_installed(host):
     pkg = host.package('bind9')
 
     assert pkg.is_installed
+    assert host.process.get(user="bind", comm="named")
