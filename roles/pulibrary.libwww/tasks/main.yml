@@ -1,24 +1,63 @@
 ---
-- name: install npm
+- name: install npm for circle ci
   apt:
     name: ["nodejs-dev", "node-gyp", "npm"]
     state: present
     update_cache: true
   changed_when: false
+  when: not run_not_in_container
 
-- name: Install gulp globally
-  npm:
-    name: gulp-cli
-    global: true
-  become: true
+- name: Change owner to lib/www so deploy has access
+  file:
+    path: "/var/www"
+    state: directory
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
 
-  # needed for capistrano to have access to this file
+- name: Define WWW user sudoer group www-data
+  lineinfile:
+    dest: "/etc/sudoers"
+    state: "present"
+    line: "Runas_Alias WWW = www-data"
+    validate: "visudo -cf %s"
+
+- name: Allow deploy user to run any command as www-data
+  lineinfile:
+    dest: "/etc/sudoers"
+    state: "present"
+    line: "{{ deploy_user }} ALL = (WWW) NOPASSWD: ALL"
+    validate: "visudo -cf %s"
+
+- name: Allow deploy to restart apache2
+  lineinfile:
+    dest: "/etc/sudoers"
+    state: "present"
+    line: "{{ deploy_user }} ALL=(ALL) NOPASSWD: /usr/sbin/service apache2 restart"
+    validate: "visudo -cf %s"
+
+
+- name: Allow deploy user to change ownership of the library directory to www-data
+  lineinfile:
+    dest: "/etc/sudoers"
+    state: "present"
+    line: "{{ deploy_user }} ALL=(ALL) NOPASSWD: /bin/chown -R www-data /var/www/library_cap*"
+    validate: "visudo -cf %s"
+
+- name: Allow deploy user to change ownership of the library directory to deploy
+  lineinfile:
+    dest: "/etc/sudoers"
+    state: "present"
+    line: "{{ deploy_user }} ALL=(ALL) NOPASSWD: /bin/chown -R deploy /var/www/library_cap*"
+    validate: "visudo -cf %s"
+
+
+# needed for capistrano to have access to this file
 - name: Check to see if .env.local file exists.
   stat:
     path: "/home/{{ deploy_user }}/.env.local"
   register: env_home_exists
 
-  # needed for capistrano to have access to this file
+# needed for capistrano to have access to this file
 - name: Install .env.local in deploy user home directory for cap
   template:
     src: "env.local.j2"
@@ -26,6 +65,9 @@
     owner: "{{ deploy_user }}"
     group: "{{ deploy_user }}"
   when: not env_home_exists.stat.exists
+
+######### Discovery utils start ######
+# Things needed for discover utils after this
 
 - name: Add apache rules for discovery utils
   blockinfile:
@@ -39,6 +81,19 @@
         AllowOverride All
       </Directory>
   notify: restart apache
+
+- name: Install php7.2 requirements for libwww
+  apt:
+    name: ["php7.2-pdo"]
+    state: present
+    update_cache: true
+
+- name: Install gulp globally
+  npm:
+    name: gulp-cli
+    global: true
+  become: true
+
 
 ########### Drupal Start ######
 # Drupal after this
@@ -70,65 +125,23 @@
     group: "{{ deploy_user }}"
   when: not settings_php_home_exists.stat.exists or force_settings
 
-- name: Change owner to lib/www so deploy has access
-  file:
-    path: "/var/www"
-    state: directory
-    owner: "{{ deploy_user }}"
-    group: "{{ deploy_user }}"
-
 - name: Copy database dump
   copy:
     src: 'files/{{ drupal_dbimport_file }}'
-    dest: '{{ drupal_docroot }}/{{ drupal_dbimport_file }}'
+    dest: '/home/deploy/{{ drupal_dbimport_file }}'
     owner: '{{ deploy_user }}'
     group: '{{ deploy_user }}'
   when: (drupal_dbimport_file is defined) and (inventory_hostname ==  groups[group_names[0]][0])
 
 - name: Import database from local dump file
-  command: drush sql-cli < {{ drupal_dbimport_file }}
-  args:
-    chdir: "{{ drupal_docroot }}"
+  mysql_db:
+    state: 'import'
+    name: '{{ drupal_db_name }}'
+    login_host: '{{ db_host | default(omit) }}'
+    login_password: '{{ drupal_db_password | default(omit) }}'
+    login_user: '{{ drupal_db_user }}'
+    target: '/home/deploy/{{ drupal_dbimport_file }}'
   when: (drupal_dbimport_file is defined) and (inventory_hostname ==  groups[group_names[0]][0])
-
-- name: Install drupal variable update file
-  template:
-    src: "update.sql.j2"
-    dest: "{{ drupal_docroot }}/update.sql"
-    owner: "{{ systems_user }}"
-    group: "{{ systems_user }}"
-  when: (drupal_dbimport_file is defined) and (inventory_hostname ==  groups[group_names[0]][0])
-
-- name: Setup the solr connection
-  command: drush sql-cli < update.sql
-  args:
-    chdir: "{{ drupal_docroot }}"
-  when: (drupal_dbimport_file is defined) and (inventory_hostname ==  groups[group_names[0]][0])
-
-- name: Clear the solr index
-  command: drush search-api-clear
-  args:
-    chdir: "{{ drupal_docroot }}"
-  when: (drupal_dbimport_file is defined) and (inventory_hostname ==  groups[group_names[0]][0])
-
-- name: Update the solr index
-  command: drush search-api-index
-  args:
-    chdir: "{{ drupal_docroot }}"
-  when: (drupal_dbimport_file is defined) and (inventory_hostname ==  groups[group_names[0]][0])
-
-- name: Install smtp module
-  command: drush -y en --resolve-dependencies smtp
-  args:
-    chdir: "{{ drupal_docroot }}"
-  when: drupal_dbimport_file is defined
-
-- name: Allow deploy user to chownership of the library directory
-  lineinfile:
-    dest: "/etc/sudoers"
-    state: "present"
-    line: "{{ deploy_user }} ALL=(ALL) NOPASSWD: /bin/chown -R www-data /var/www/library_cap"
-    validate: "visudo -cf %s"
 
 - name: disable apache php7.0 module
   apache2_module:
