@@ -9,6 +9,7 @@
     dest: "/etc/resolv.conf"
     state: absent
     regexp: '.*nameserver.*'
+  when: run_not_in_container
 
 - name: Use dns forwarder nameserver
   lineinfile:
@@ -17,8 +18,10 @@
     line: 'nameserver 128.112.200.253'
   notify:
     - restart bind
+  when: run_not_in_container
 
 - name: enable bind to start on boot
   systemd:
     name: bind9
     enabled: true
+  when: run_not_in_container
