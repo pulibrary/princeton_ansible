@@ -1,10 +1,6 @@
 # Capistrano
 
-<<<<<<< HEAD
 Prepares a directory for deploy via capistrano
-=======
-Installs a capistrano
->>>>>>> add tests
 
 ## Requirements
 
