@@ -7,7 +7,7 @@ testinfra_hosts = testinfra.utils.ansible_runner.AnsibleRunner(
 
 
 def test_hosts_file(host):
-    f = host.file('/etc/hosts')
+    f = host.file('/etc/systemd/system/sidekiq-workers.service')
 
     assert f.exists
     assert f.user == 'root'
