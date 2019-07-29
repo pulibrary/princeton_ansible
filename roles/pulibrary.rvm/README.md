@@ -1,29 +1,18 @@
 Role Name
 =========
 
-<<<<<<< HEAD
 Install and manage ruby versions using rvm. Bootstrapped from
 [https://github.com/rvm/rvm1-ansible](https://github.com/rvm/rvm1-ansible)
 
-=======
-A brief description of the role goes here.
->>>>>>> initialize moleculization
 
 Requirements
 ------------
 
-<<<<<<< HEAD
 Ubuntu Bionic
-=======
-Any pre-requisites that may not be covered by Ansible itself or the role should
-be mentioned here. For instance, if the role uses the EC2 module, it may be a
-good idea to mention in this section that the boto package is required.
->>>>>>> initialize moleculization
 
 Role Variables
 --------------
 
-<<<<<<< HEAD
 Below is a list of default values that you can configure:
 
 ```yaml
@@ -79,28 +68,14 @@ rvm1_gpg_key_server: 'hkp://pool.sks-keyservers.net'
 # autolib mode, see https://rvm.io/rvm/autolibs
 rvm1_autolib_mode: 3
 ```
-=======
-A description of the settable variables for this role should go here, including
-any variables that are in defaults/main.yml, vars/main.yml, and any variables
-that can/should be set via parameters to the role. Any variables that are read
-from other roles and/or the global scope (ie. hostvars, group vars, etc.) should
-be mentioned here as well.
->>>>>>> initialize moleculization
 
 Dependencies
 ------------
 
-<<<<<<< HEAD
-=======
-A list of other roles hosted on Galaxy should go here, plus any details in
-regards to parameters that may need to be set for other roles, or variables that
-are used from other roles.
->>>>>>> initialize moleculization
 
 Example Playbook
 ----------------
 
-<<<<<<< HEAD
 ```yaml
 ---
 
@@ -178,14 +153,6 @@ A common work flow for upgrading your ruby version would be:
 ### Leverage ansible's `--extra-vars`
 
 Just add `--extra-vars 'rvm1_delete_ruby=ruby-2.1.0'` to the end of your play book command and that version will be removed.
-=======
-Including an example of how to use your role (for instance, with variables
-passed in as parameters) is always nice for users too:
-
-    - hosts: servers
-      roles:
-         - { role: roles/pulibrary.rvm, x: 42 }
->>>>>>> initialize moleculization
 
 License
 -------
