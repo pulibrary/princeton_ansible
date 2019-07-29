@@ -1,6 +1,6 @@
 # Capistrano
 
-Installs a capistrano
+Prepares a directory for deploy via capistrano
 
 ## Requirements
 
