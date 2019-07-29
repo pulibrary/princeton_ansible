@@ -9,6 +9,7 @@
   apt_repository:
     repo: "ppa:brightbox/ruby-ng"
     state: present
+  ignore_errors: true
 
 - name: install Ruby 2.4.3
   apt:
@@ -29,12 +30,14 @@
     url: "{{ brightbox_repo_url }}/{{ ruby_version_path }}/ruby2.4_2.4.6-1bbox1~bionic1_amd64.deb"
     dest: /tmp/ruby.deb
   when: packages_installed is failed
+  ignore_errors: true
 
 - name: manually download ruby dev on fail
   get_url:
     url: "{{ brightbox_repo_url }}/{{ ruby_version_path }}/ruby2.4-dev_2.4.6-1bbox1~bionic1_amd64.deb"
     dest: /tmp/ruby-dev.deb
   when: packages_installed is failed
+  ignore_errors: true
 
 - name: install manual packages
   apt:
@@ -44,6 +47,7 @@
     - /tmp/ruby.deb
     - /tmp/ruby-dev.deb
   when: packages_installed is failed
+  ignore_errors: true
 
 - name: switch to Ruby 2.4.x release for the system default
   command: ruby-switch --set ruby2.4
