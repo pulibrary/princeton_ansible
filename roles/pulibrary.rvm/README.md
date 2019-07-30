@@ -45,7 +45,7 @@ rvm1_ruby_install_flags:
 # Set the owner for the rvm directory
 # NOTE: If you are doing a ROOT BASED INSTALL then
 #       make sure you set rvm1_user to 'root'
-rvm1_user: 'deploy-user'
+rvm1_user: 'deploy_user'
 
 # URL for the latest installer script
 rvm1_rvm_latest_installer: 'https://raw.githubusercontent.com/rvm/rvm/master/binscripts/rvm-installer'
