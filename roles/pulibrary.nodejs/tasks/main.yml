@@ -4,32 +4,56 @@
     id: "{{ nodejs__upstream_key_id }}"
     keyserver: "hkp://pool.sks-keyservers.net"
     state: present
+  register: pool_servers
   ignore_errors: true
 
-- name: Add upstream Yarn APT repository GPG key from MIT
+- name: Get upstream APT GPG key from MIT
+  apt_key:
+    id: "{{ nodejs__upstream_key_id }}"
+    state: present
+    keyserver: "pgp.mit.edu"
+  register: mit_servers
+  when: pool_servers is failed
+  ignore_errors: true
+
+- name: Get upstream APT GPG key from PGP
+  apt_key:
+    id: "{{ nodejs__upstream_key_id }}"
+    state: present
+    keyserver: "keyserver.pgp.com"
+  when: mit_servers is failed
+  ignore_errors: true
+
+- name: Add upstream Yarn APT key from PGP
+  apt_key:
+    id: "{{ nodejs__yarn_upstream_key_id }}"
+    keyserver: "hkp://pool.sks-keyservers.net"
+    state: present
+  register: yarnpool_servers
+  ignore_errors: true
+
+- name: Add upstream Yarn APT key from MIT
   apt_key:
     id: "{{ nodejs__yarn_upstream_key_id }}"
     state: present
-    keyserver: "hkp://pgp.mit.edu"
+    keyserver: "pgp.mit.edu"
+  when: yarnpool_servers is failed
+  register: yarnmit_servers
+  ignore_errors: true
+
+- name: Add upstream Yarn APT key from PGP
+  apt_key:
+    id: "{{ nodejs__yarn_upstream_key_id }}"
+    state: present
+    keyserver: "keyserver.pgp.com"
+  when: yarnmit_servers is failed
+  ignore_errors: true
 
 - name: Configure upstream APT repository
   apt_repository:
     repo: "{{ nodejs__upstream_repository }}"
     state: present
     update_cache: true
-
-- name: Add upstream Yarn APT repository GPG key
-  apt_key:
-    id: "{{ nodejs__yarn_upstream_key_id }}"
-    state: present
-    keyserver: "hkp://pool.sks-keyservers.net"
-  ignore_errors: true
-
-- name: Add upstream Yarn APT repository GPG key from MIT
-  apt_key:
-    id: "{{ nodejs__yarn_upstream_key_id }}"
-    state: present
-    keyserver: "hkp://pgp.mit.edu"
 
 - name: Add upstream Yarn APT repository
   apt_repository:
