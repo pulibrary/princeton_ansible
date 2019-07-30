@@ -38,16 +38,6 @@ def test_for_pas_apache2_modules(host, module):
     assert module_name+" " in cmd.stdout
 
 
-@pytest.mark.parametrize("module", [
-    "sass",
-    "grunt-cli"
-    ])
-def test_for_pas_node_modules(host, module):
-    command = "npm ls -g '"+module+"'"
-    cmd = host.run(command)
-    assert module in cmd.stdout
-
-
 @pytest.mark.parametrize("line", [
     "DocumentRoot /opt/pas/web"
     ])
