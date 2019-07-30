@@ -1,0 +1,22 @@
+---
+# tasks file for roles/pulibrary.rvm
+- name: Install RVM
+  import_tasks: 'rvm.yml'
+  become: true
+
+- name: Install Ruby and Gems
+  import_tasks: 'rubies.yml'
+  become: true
+
+- name: add deploy user to rvm
+  user:
+    name: '{{ deploy_user }}'
+    groups: rvm
+    append: true
+
+- name: source the environment
+  lineinfile:
+    dest: '/etc/environment'
+    regexp: '^'
+    insertafter: EOF
+    line: 'source /usr/local/rvm/scripts/rvm'
