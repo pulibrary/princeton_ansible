@@ -1,0 +1,29 @@
+---
+- name: Install rvm installer
+  get_url:
+    url: '{{ rvm1_rvm_latest_installer }}'
+    dest: '{{ rvm1_temp_download_path }}/rvm-installer.sh'
+    mode: 0755
+
+- name: Import GPG keys from rvm.io, if keyservers failed
+  shell: 'curl -sSL https://rvm.io/{{ item }} | gpg --batch --import -'
+  with_items:
+    - pkuczynski.asc
+  changed_when: false
+
+- name: Install rvm
+  shell: |
+    set -o pipefail
+    /tmp/rvm-installer.sh
+  args:
+    executable: /bin/bash
+  ignore_errors: true
+  changed_when: false
+
+- name: Update rvm
+  shell: '{{ rvm1_rvm }} get {{ rvm1_rvm_version }} && {{ rvm1_rvm }} reload'
+  changed_when: false
+
+- name: Configure rvm
+  command: '{{ rvm1_rvm }} autolibs {{ rvm1_autolib_mode }}'
+  changed_when: false
