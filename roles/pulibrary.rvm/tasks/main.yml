@@ -3,9 +3,20 @@
 - name: Install RVM
   import_tasks: 'rvm.yml'
   become: true
-  become_user: '{{ rvm1_user }}'
 
 - name: Install Ruby and Gems
   import_tasks: 'rubies.yml'
   become: true
-  become_user: '{{ rvm1_user }}'
+
+- name: add deploy user to rvm
+  user:
+    name: '{{ deploy_user }}'
+    groups: rvm
+    append: true
+
+- name: source the environment
+  lineinfile:
+    dest: '/etc/environment'
+    regexp: '^'
+    insertafter: EOF
+    line: 'source /usr/local/rvm/scripts/rvm'
