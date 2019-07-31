@@ -25,7 +25,7 @@ The `passenger_root` for your application (e.g. the `public` folder in a rails a
 The app environment passenger will load.
 
     passenger_root: /usr/lib/ruby/vendor_ruby/phusion_passenger/locations.ini
-    passenger_ruby: /usr/bin/ruby
+    passenger_ruby: /usr/local/bin/ruby
 
 Values for passenger configuration directives inside `nginx.conf`. These defaults should generally work correctly, but if you build `ruby` on its own (as an example), the path to ruby may be different.
 
