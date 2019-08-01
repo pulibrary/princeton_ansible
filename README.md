@@ -95,9 +95,13 @@ In all the steps below substitue your role name for `example`
    ```
 1. Set up to run from circle ci `vi .circleci/config.yml` add for your role at the end of the jobs
    ```
+<<<<<<< HEAD
       - test_role:
         name: "test_example"
         role: "pulibrary.example"
+=======
+   vi molecule/default/playbooks.yml # add - role: pulibrary.example
+>>>>>>> Remove rvm role as a dependency
    ```
 1. Setup the directory to run molecule
 
@@ -107,6 +111,11 @@ In all the steps below substitue your role name for `example`
       cp roles/example/yaml-lint.yml roles/pulibrary.example/molecule/default
       cp roles/example/main.yml roles/pulibrary.example/meta
       ```
+<<<<<<< HEAD
+=======
+
+   1. edit `roles/pulibrary.example/molecule/default/molecule.yml` and change `converge: playbooks.yml` to `converge: playbook.yml`
+>>>>>>> Remove rvm role as a dependency
 
    1. edit `roles/pulibrary.example/meta/main.yml` and change `to include your role name`
 
