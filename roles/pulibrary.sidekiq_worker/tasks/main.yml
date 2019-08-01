@@ -1,19 +1,33 @@
 ---
 - name: Install startup script for workers
-  template: "src=derivatives.service dest=/etc/systemd/system/{{sidekiq_worker_name}}.service"
+  template:
+    src: derivatives.service
+    dest: "/etc/systemd/system/{{ sidekiq_worker_name }}.service"
   notify: 'restart sidekiq worker'
+
 - name: Keep workers running
-  service: "name={{sidekiq_worker_name}} enabled=yes state=started"
+  service:
+    name: "{{ sidekiq_worker_name }}"
+    enabled: true
+    state: started
+  when: run_not_in_container
+
 - name: Allow deploy user to restart workers
-  lineinfile: "dest=/etc/sudoers state=present line='{{deploy_user}} ALL=(ALL) NOPASSWD: /usr/sbin/service {{sidekiq_worker_name}} {{item}}' validate='visudo -cf %s'"
+  lineinfile:
+    dest: /etc/sudoers
+    state: present
+    line: '{{ deploy_user }} ALL=(ALL) NOPASSWD: /usr/sbin/service {{ sidekiq_worker_name }} {{ item }}'
+    validate: 'visudo -cf %s'
   with_items:
     - status
     - restart
     - start
+
 - name: Update PATH because /etc/environment does not work with systemd
   lineinfile: >
-              dest='/home/{{deploy_user}}/.bashrc'
+              dest='/home/{{ deploy_user }}/.bashrc'
               state=present
               regexp='^PATH=$PATH:/opt/fits:/opt/kakadu$'
               line="PATH=$PATH:/opt/fits:/opt/kakadu"
               insertbefore=BOF
+  changed_when: false
