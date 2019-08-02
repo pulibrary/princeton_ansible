@@ -98,7 +98,7 @@ molecule test
    ```
 1. Add the role to the main molecule playbook by adding `- role: pulibrary.example` to the end of the list
    ```
-   vi molecule/default/playbooks.yml # add - role: pulibrary.example 
+   vi molecule/default/playbooks.yml # add - role: pulibrary.example
    ```
 1. Setup ther directory to run molecule locally
 
@@ -106,8 +106,8 @@ molecule test
       ```bash
       cp molecule/default/molecule.yml roles/pulibrary.example/molecule/default
       ```
-   
-   1. edit `roles/pulibrary.example/molecule/default/molecule.yml` and change `converge: playbooks.yml` to `converge: playbook.yml`  
+
+   1. edit `roles/pulibrary.example/molecule/default/molecule.yml` and change `converge: playbooks.yml` to `converge: playbook.yml`
 
 1. Add your role to the main molecule playbook [`molecule/default/playbooks.yml`](molecule/default/playbooks.yml)
 
@@ -145,7 +145,7 @@ If your are having issues with your tests passing and have run `molecule converg
 docker exec -it instance bash
 ```
 
-## Vagrant for testing 
+## Vagrant for testing
 
 Depending on what project you are working on there are example Vagrantfile's in
 the `Vagrant` directory. If you are working on the lae project as an example
