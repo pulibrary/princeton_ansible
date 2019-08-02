@@ -21,7 +21,22 @@
   command: ruby-switch --set ruby2.4
   changed_when: false
 
-- name: install global bundler
+- name: uninstall bundler to get specific version
+  gem:
+    name: bundler
+    state: absent
+    user_install: false
+  when: bundler_version is defined
+
+- name: install global bundler, specific version
+  gem:
+    name: bundler
+    version: "{{ bundler_version }}"
+    user_install: false
+  when: bundler_version is defined
+
+- name: install global bundler, any version
   gem:
     name: bundler
     user_install: false
+  when: bundler_version is undefined
