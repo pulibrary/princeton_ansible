@@ -1,0 +1,127 @@
+#
+# The MySQL database server configuration file.
+#
+# For explanations see
+# http://dev.mysql.com/doc/mysql/en/server-system-variables.html
+
+[client]
+port        = {{ mysql_port }}
+socket      = /var/run/mysqld/mysqld.sock
+
+[mysqld_safe]
+socket      = /var/run/mysqld/mysqld.sock
+nice        = 0
+open-files-limit = 16384
+
+[mysqld]
+# * Basic Settings
+user        = mysql
+pid-file    = /var/run/mysqld/mysqld.pid
+socket      = /var/run/mysqld/mysqld.sock
+port        = {{ mysql_port }}
+basedir     = /usr
+datadir     = /var/lib/mysql
+tmpdir      = /tmp
+# language is for pre-5.5. In 5.5 it is an alias for lc_messages_dir.
+language = {{ mysql_language }}
+bind-address = {{ mysql_bind_address }}
+skip-external-locking
+
+{% if wsrep_cluster_name is defined %}
+# Cluster settings
+binlog_format                  = ROW
+wsrep_provider                 = /usr/lib/libgalera_smm.so
+wsrep_cluster_address          = gcomm://{{ wsrep_cluster_hosts|join(',') }}
+wsrep_slave_threads            = {{ wsrep_slave_threads }}
+wsrep_cluster_name             = {{ wsrep_cluster_name }}
+wsrep_sst_method               = {{wsrep_sst_method}}
+{% if wsrep_node_name is defined %}
+wsrep_node_name = {{ wsrep_node_name }}
+{% endif %}
+{% if wsrep_notify_cmd is defined %}
+wsrep_notify_cmd = {{ wsrep_notify_cmd }}
+{% endif %}
+{% if wsrep_sst_receive_address is defined %}
+wsrep_sst_receive_address = {{ wsrep_sst_receive_address }}
+{% endif %}
+{% if wsrep_sst_auth is defined %}
+wsrep_sst_auth = {{ wsrep_sst_auth }}
+{% endif %}
+innodb_locks_unsafe_for_binlog = 1
+innodb_autoinc_lock_mode       = 2
+{% endif %}
+
+# * Fine Tuning
+key_buffer_size         = {{ mysql_key_buffer }}
+max_allowed_packet      = {{ mysql_max_allowed_packet }}
+thread_stack            = {{ mysql_thread_stack }}
+thread_cache_size       = {{ mysql_cache_size }}
+myisam-recover          = {{ mysql_myisam_recover }}
+max_connections         = {{ mysql_max_connections }}
+table_open_cache        = {{ mysql_table_cache }}
+thread_concurrency      = {{ mysql_thread_concurrency }}
+
+# ** Query Cache Configuration
+query_cache_limit       = {{ mysql_query_cache_limit }}
+query_cache_size        = {{ mysql_query_cache_size }}
+
+# ** Logging and Replication
+log_error = /var/log/mysql/error.log
+log_warnings = 2
+#general_log_file        = /var/log/mysql/mysql.log
+#general_log             = 1
+#
+#log_slow_queries   = /var/log/mysql/mysql-slow.log
+#long_query_time = 2
+#log-queries-not-using-indexes
+#
+# The following can be used as easy to replay backup logs or for replication.
+#server-id      = 1
+#log_bin            = /var/log/mysql/mysql-bin.log
+expire_logs_days    = 10
+max_binlog_size     = 100M
+#binlog_do_db       = include_database_name
+#binlog_ignore_db   = include_database_name
+
+# ** InnoDB
+# InnoDB is enabled by default with a 10MB datafile in /var/lib/mysql/.
+# Read the manual for more InnoDB related options. There are many!
+innodb_flush_log_at_trx_commit = {{ mysql_innodb_flush_log_at_trx_commit }}
+innodb_buffer_pool_size = {{ mysql_innodb_buffer_pool_size }}
+{% if mysql_innodb_flush_method != 'fdatasync': %}
+innodb_flush_method = {{ mysql_innodb_flush_method }}
+{% endif %}
+innodb_lock_wait_timeout = {{ mysql_innodb_lock_wait_timeout }}
+innodb_log_buffer_size = {{ mysql_innodb_log_buffer_size }}
+innodb_log_file_size = {{ mysql_innodb_log_file_size }}
+{{ mysql_innodb_file_per_table }}
+
+# ** Security Features
+# Read the manual, too, if you want chroot!
+# chroot = /var/lib/mysql/
+
+{% if mysql_ssl_key is defined %}
+ssl-ca = {{mysql_ssl_ca}}
+ssl-cert = {{mysql_ssl_cert}}
+ssl-key = {{mysql_ssl_key}}
+{% endif %}
+
+character_set_server = {{ mysql_character_set_server }}
+collation_server = {{ mysql_collation_server }}
+
+[mysqldump]
+quick
+quote-names
+max_allowed_packet  = {{ mysql_mysqldump_max_allowed_packet }}
+
+[mysql]
+#no-auto-rehash # faster start of mysql but no tab completition
+
+[isamchk]
+key_buffer      = {{ mysql_isamchk_key_buffer }}
+
+#
+# * IMPORTANT: Additional settings that can override those from this file!
+#   The files must end with '.cnf', otherwise they'll be ignored.
+#
+!includedir /etc/mysql/conf.d/
