@@ -1,20 +1,9 @@
 ---
-- name: Get temporary root password
-  shell: grep 'temporary password' /var/log/mysqld.log | awk '{print $NF}' | tail -n 1
-  # set -o pipefail
-  #  args:
-  #  executable: /bin/bash
-  register: "_xtradb_root_temp_password"
-  when:
-    - not _xtradb_password_changed.stat.exists
-
 - name: Set the MySQL root password
-  shell: 'mysqladmin -u root --password="{{ _xtradb_root_temp_password.stdout }}" password "{{ xtradb_root_password }}"'
+  shell: 'mysqladmin -u root password "{{ xtradb_root_password }}"'
   # set -o pipefail
   # args:
   # executable: /bin/bash
-  when:
-    - not _xtradb_password_changed.stat.exists
   ignore_errors: true
 
 - name: Marking as password is changed
