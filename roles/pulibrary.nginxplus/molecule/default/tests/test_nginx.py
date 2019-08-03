@@ -1,5 +1,4 @@
 import os
-import time
 
 import testinfra.utils.ansible_runner
 
