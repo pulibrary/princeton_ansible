@@ -26,17 +26,30 @@
   apt:
     name: "{{ xtradb_packages }}"
     state: present
+  register: install_result
   tags: install
 
-- name: Ensure service is started
+- name: Ensure service is stopped
   service:
     name: "{{ xtradb_service }}"
-    state: started
-    enabled: true
+    state: stopped
   tags: install
   when:
     - not _xtradb_secured.stat.exists
+    - install_result.changed
 
+- name: Write server configuration
+  template:
+    src: etc_mysql_my.cnf.j2
+    dest: /etc/mysql/my.cnf
+    owner: root
+    mode: 0600
+  notify:
+    - restart xtradb
+
+- name: include secure tasks
+  import_tasks: setup_install.yml
+  tags: install
 
 - name: include secure tasks
   import_tasks: secure_install.yml
