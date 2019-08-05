@@ -10,6 +10,11 @@
     state: present
     update_cache: true
 
+- name: Check to see if settings.php home file exists.
+  stat:
+    path: "{{ drupal_docroot }}"
+  register: drupal_docroot_exists
+
 - name: create drupal docroot
   file:
     path: "{{ drupal_docroot }}"
@@ -19,7 +24,7 @@
     recurse: true
     follow: false
   become: true
-  changed_when: false
+  when: not drupal_docroot_exists.stat.exists
 
 - name: allow temporary full permissions
   file:
@@ -39,7 +44,7 @@
     clone: true
     update: true
   become: true
-  when: run_not_in_container
+  when: run_not_in_container and (drupal_git_repo is defined)
 
 - name: grant permissions on deploy user
   file:
@@ -113,6 +118,7 @@
   copy: src=files/{{ item }} dest=/etc/{{ item }}
   with_items:
     - drupalweb.smb.credentials
+  when: run_not_in_container
 
 - name: Mount Drupal fileshare
   mount:
