@@ -6,6 +6,9 @@ Installs Geoserver
 Requirements
 ------------
 
+Download the latest [Geoserver war file](http://geoserver.org/download/) and
+place it in the `local_files/geoserver` directory
+
 
 Role Variables
 --------------
