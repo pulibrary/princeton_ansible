@@ -26,3 +26,16 @@ def test_for_libwww_apache_config(host, line):
     file = host.file("/etc/apache2/sites-available/000-default.conf")
 
     assert file.contains(line)
+
+
+@pytest.mark.parametrize("line", [
+    "deploy ALL=(ALL) NOPASSWD: /usr/sbin/service apache2 restart",
+    "Runas_Alias WWW = www-data",
+    "deploy ALL = (WWW) NOPASSWD: ALL",
+    "deploy ALL=(ALL) NOPASSWD: /bin/chown -R www-data /var/www/library_cap*",
+    "deploy ALL=(ALL) NOPASSWD: /bin/chown -R deploy /var/www/library_cap*"
+    ])
+def test_for_libwww_sudoer(host, line):
+    file = host.file("/etc/sudoers")
+
+    assert file.contains(line)
