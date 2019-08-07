@@ -39,3 +39,13 @@ def test_for_libwww_sudoer(host, line):
     file = host.file("/etc/sudoers")
 
     assert file.contains(line)
+
+
+@pytest.mark.parametrize("line", [
+    "0 * * * * sudo -u www-data drush @prod cron",
+    "* 5 * * * /usr/bin/get_staff_updates.sh"
+    ])
+def test_for_libwww_crontab(host, line):
+    cmd = host.run("crontab -l -u deploy")
+
+    assert line in cmd.stdout
