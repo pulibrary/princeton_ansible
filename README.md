@@ -77,6 +77,7 @@ pipenv shell
 Make sure docker is running before you run the following to test the installation
 
 ```bash
+cd roles/pulibrary.common
 molecule test
 ```
 
@@ -84,37 +85,45 @@ molecule test
 # Developing
 
 ## Create a new role
-
+In all the steps below substitue your role name for `example`
 1. Initialize the role with molecule.
    Run the following command from the root of this repo:
 
    ```bash
    molecule init role -r roles/pulibrary.example
    ```
-1. Set up to run from the main directory and on circle ci
+1. Set up to run from circle ci `vi .circleci/config.yml` add for your role at the end of the jobs 
    ```
-   cd molecule/default/tests/
-   ln -s ../roles/pulibrary.example/molecule/default/tests/test_example.py test_example.py
+      - test_role:
+        name: "test_example"
+        role: "pulibrary.example"
    ```
-1. Add the role to the main molecule playbook by adding `- role: pulibrary.example` to the end of the list
-   ```
-   vi molecule/default/playbooks.yml # add - role: pulibrary.example
-   ```
-1. Setup ther directory to run molecule locally
+1. Setup the directory to run molecule
 
    1. copy over the root molecule.yml
       ```bash
-      cp molecule/default/molecule.yml roles/pulibrary.example/molecule/default
+      cp roles/example/molecule.yml roles/pulibrary.example/molecule/default
+      cp roles/example/yaml-lint.yml roles/pulibrary.example/molecule/default
+      cp roles/example/main.yml roles/pulibrary.example/meta
       ```
 
-   1. edit `roles/pulibrary.example/molecule/default/molecule.yml` and change `converge: playbooks.yml` to `converge: playbook.yml`
+   1. edit `roles/pulibrary.example/meta/main.yml` and change `to include your role name`
 
-1. Add your role to the main molecule playbook [`molecule/default/playbooks.yml`](molecule/default/playbooks.yml)
+   1. edit `roles/pulibrary.example/molecule/default/playbook.yml`
+      1. Add:
+         ```
+         vars:
+           - run_not_in_container: false
+         ```
+      1. remove `role\` from `- role: role\pulibrary.example`
 
-   ```bash
-   - role: pulibrary.example
+1. Test that your role is now working
+   All tests should pass
    ```
-1. Add any vars found in [`molecule/default/playbooks.yml`](molecule/default/playbooks.yml) to roles/pulibrary.example/molecule/default/playbook.yml
+   cd roles/pulibrary.example
+   molecule test
+   ```
+1. Push your branch and verify that circle ci runs and passes.
 
 ## Generating Molecule Tests
 
@@ -136,6 +145,7 @@ If you are writing tests we have found it is easier to test just your examples b
 We also recommend instead of running just `molecule test` which takes a very long time your run `molecule converge` to build a docker container with your ansible playbook loaded.  You can run converge and/or verify as many times as needed to get your playbook working.
 
 ```bash
+molecule lint
 molecule converge
 molecule verify
 ```
