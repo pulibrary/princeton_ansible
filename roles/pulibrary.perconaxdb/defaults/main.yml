@@ -1,7 +1,7 @@
 ---
 # defaults file for roles/pulibrary.perconaxdb
 #
-run_not_in_container: true
+run_not_in_container: false
 mysql_port: 3306
 mysql_language: '/usr/share/mysql/'
 mysql_bind_address: "0.0.0.0"
@@ -30,8 +30,6 @@ mysql_innodb_log_file_size: '5M'
 
 wsrep_slave_threads: 2
 wsrep_sst_method: rsync
-percona_master_node: false
-bootstrapping: false  # The task will set this to true if the package is installed on the master node
 
 # Data directory
 xtradb_datadir: /var/lib/mysql
@@ -55,7 +53,7 @@ xtradb_root_user: root
 xtradb_root_password: "{{ vault_xtradb_root_password | default('change_me')}}"
 
 # Define Ansible group in which the nodes exist to be part of the cluster
-xtradb_nodes_group: perconaxtra_db_cluster
+xtradb_nodes_group: "{{ perconaxtra_db_cluster | default('pulcluster') }}"
 
 # Define the node pool
 xtradb_wsrep_cluster_address: "gcomm://{{ groups[xtradb_nodes_group] | map('extract', hostvars, ['ansible_' ~ xtradb_bind_interface, 'ipv4', 'address']) | join(',') }}"
