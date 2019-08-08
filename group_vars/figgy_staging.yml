@@ -22,6 +22,8 @@ rails_app_dependencies:
   - tesseract-ocr
   - tesseract-ocr-all
   - mediainfo
+figgy_cantaloupe_images_mount: iiif-staging1
+figgy_derivatives_mount: '/mnt/{{figgy_cantaloupe_images_mount}}/data/jp2s/figgy_staging'
 figgy_db_name: 'figgy_staging'
 figgy_db_user: '{{vault_figgy_db_user}}'
 figgy_db_password: '{{vault_figgy_db_password}}'
@@ -77,8 +79,10 @@ rails_app_vars:
     value: '{{application_host_protocol}}'
   - name: SOLR_URL
     value: 'http://127.0.0.1:{{solr_port}}/solr/{{figgy_solr_name}}'
+    # cantaloupe will use terminal value as directory name, but slashes aren't
+    # allowed by the iiif spec so we encode the slash
   - name: CANTALOUPE_URL
-    value: 'https://{{figgy_host_name}}/cantaloupe/iiif/2/'
+    value: 'https://iiif-staging.princeton.edu/figgy_staging/'
   - name: PLUM_SOLR_URL
     value: 'http://lib-solr1.princeton.edu:8983/solr/plum'
   - name: PLUM_BINARY_PATH
@@ -126,19 +130,9 @@ rails_app_vars:
   - name: READING_ROOM_IPS
     value: '"{{ vault_reading_room_ips }}"'
 sidekiq_worker_name: figgy-workers
-cantaloupe_user: '{{deploy_user}}'
-cantaloupe_group: '{{deploy_user}}'
-cantaloupe_FilesystemResolver_BasicLookupStrategy_path_prefix: /opt/repository/derivatives/
-cantaloupe_cache_source: FilesystemCache
-cantaloupe_cache_derivative: FilesystemCache
-cantaloupe_create_FilesystemCache_dir: yes
-cantaloupe_src_prefix: Cantaloupe
-cantaloupe_version: 3.3.2
-cantaloupe_KakaduProcessor_path_to_binaries: /opt/kakadu
-cantaloupe_log_application_level: all
 passenger_ruby: "/usr/bin/ruby2.4"
 bundler_version: "1.16.6"
-passenger_extra_config: "{{ lookup('file', 'roles/pulibrary.figgy/templates/nginx_cantaloupe_config')  }}"
+passenger_extra_config: "{{ lookup('file', 'roles/pulibrary.figgy/templates/nginx_extra_config')  }}"
 simple_tiles_version: 0.6.0
 simple_tiles_url: https://github.com/propublica/simple-tiles/archive/v{{simple_tiles_version}}.tar.gz
 redis__server_default_configuration:
