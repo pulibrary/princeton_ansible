@@ -49,3 +49,15 @@ def test_for_libwww_crontab(host, line):
     cmd = host.run("crontab -l -u deploy")
 
     assert line in cmd.stdout
+
+
+@pytest.mark.parametrize("name", [
+    "php7.2",
+    "php7.2-common",
+    "php7.2-mbstring",
+    "sendmail"
+    ])
+def test_for_pas_php_software(host, name):
+    pkg = host.package(name)
+
+    assert pkg.is_installed
