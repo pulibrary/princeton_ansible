@@ -51,6 +51,12 @@ def test_for_libwww_crontab(host, line):
     assert line in cmd.stdout
 
 
+def test_for_php_ini(host):
+    file = host.file("/etc/php/7.2/apache2/php.ini")
+
+    assert file.contains('upload_max_filesize = 8M')
+
+
 @pytest.mark.parametrize("name", [
     "php7.2",
     "php7.2-common",
