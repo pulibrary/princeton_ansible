@@ -12,3 +12,8 @@ def test_hosts_file(host):
     assert f.exists
     assert f.user == 'root'
     assert f.group == 'root'
+
+def test_for_lib_jobs_yml_file_exist(host):
+    file = host.file('/home/deploy/sfx_env.yml')
+
+    assert file.exists
