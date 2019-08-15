@@ -34,3 +34,23 @@ mariadb__server: "{{ db_host }}"
 special_collections_drupal_base_path: 'https://library.princeton.edu/special-collections'
 special_collections_drupal_ssl_base_path: 'https://library.princeton.edu/special-collections'
 special_collections_drupal_db_name: 'special_collections_prod'
+
+datadog_api_key: "{{vault_datadog_key}}"
+
+datadog_config:
+    log_enabled: "true"
+datadog_checks:
+    libwww_datadog_apache_check:
+        init_config:
+        logs:
+            - type: file
+              path: /var/log/apache2/other_vhosts_access.log
+              service: library
+              source: library
+              sourcecategory: library
+            - type: file
+              path: /var/log/apache2/error.log
+              service: library
+              source: library
+              sourcecategory: library
+        tags: "library, environment:production, role:libwww"
