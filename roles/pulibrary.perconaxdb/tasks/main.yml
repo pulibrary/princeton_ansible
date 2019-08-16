@@ -6,13 +6,13 @@
   register: "_xtradb_configured"
   tags: install
 
-- name: Cheking if XtraDB cluster is already secured
+- name: Checking if XtraDB cluster is already secured
   stat:
     path: "{{ xtradb_secured }}"
   register: "_xtradb_secured"
   tags: install
 
-- name: Cheking if XtraDB cluster is already configured with the password
+- name: Checking if XtraDB cluster is already configured with the password
   stat:
     path: "{{ xtradb_password_changed }}"
   register: "_xtradb_password_changed"
@@ -26,17 +26,21 @@
   apt:
     name: "{{ xtradb_packages }}"
     state: present
+  register: install_result
   tags: install
 
-- name: Ensure service is started
+- name: Ensure service is stopped
   service:
     name: "{{ xtradb_service }}"
-    state: started
-    enabled: true
+    state: stopped
   tags: install
   when:
     - not _xtradb_secured.stat.exists
+    - install_result.changed
 
+- name: include secure tasks
+  import_tasks: setup_install.yml
+  tags: install
 
 - name: include secure tasks
   import_tasks: secure_install.yml

@@ -1,16 +1,14 @@
 ---
 - name: Install dependencies
-  apt: name={{item}} state=present
-  with_items:
-    - cifs-utils
-    - libmysqlclient-dev
-    - python-mysqldb
+  apt:
+    name: ["cifs-utils", "libmysqlclient-dev", "python-mysqldb"]
+    state: present
 
 - include: samba_server.yml
-  when: samba_status == 'server'
+  when: samba_status == 'server' and run_not_in_container
 
 - include: samba_client.yml
-  when: samba_status == 'client'
+  when: samba_status == 'client' and run_not_in_container
 
 - include: local_mariadb.yml
   when: bibdata_db_host == 'localhost'
