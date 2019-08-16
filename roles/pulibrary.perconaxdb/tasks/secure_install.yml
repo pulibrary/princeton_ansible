@@ -1,20 +1,15 @@
 ---
-- name: Get temporary root password
-  shell: grep 'temporary password' /var/log/mysqld.log | awk '{print $NF}' | tail -n 1
-  # set -o pipefail
-  #  args:
-  #  executable: /bin/bash
-  register: "_xtradb_root_temp_password"
-  when:
-    - not _xtradb_password_changed.stat.exists
+- name: Install the reset file
+  copy:
+    src: files/reset.sql
+    dest: /tmp/reset.sql
 
 - name: Set the MySQL root password
-  shell: 'mysqladmin -u root --password="{{ _xtradb_root_temp_password.stdout }}" password "{{ xtradb_root_password }}"'
-  # set -o pipefail
-  # args:
-  # executable: /bin/bash
-  when:
-    - not _xtradb_password_changed.stat.exists
+  mysql_db:
+    state: import
+    name: all
+    target: "/tmp/reset.sql"
+  changed_when: false
 
 - name: Marking as password is changed
   file:
@@ -32,7 +27,7 @@
     host_all: true
     state: absent
 
-- name: "Secure the MySQL root user for localhost"
+- name: Secure the MySQL root user for localhost
   mysql_user:
     login_user: "{{ xtradb_root_user }}"
     login_password: "{{ xtradb_root_password }}"
@@ -43,7 +38,6 @@
     - "127.0.0.1"
     - "localhost"
     - "{{ xtradb_bind_address }}"
-  when: run_not_in_container
 
 - name: Remove the MySQL test database
   mysql_db:

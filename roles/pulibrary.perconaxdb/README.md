@@ -30,7 +30,7 @@ Example Playbook
     - role: pulibrary.perconaxdb
       xtradb_cluster_name: "pulibrary-cluster"
       xtradb_nodes_group: "percona_cluster_db"
-      xtradb_bind_interface: ens33
+      bind_interface: ens33
 
       xtradb_databases:
         - name: archivesspace
