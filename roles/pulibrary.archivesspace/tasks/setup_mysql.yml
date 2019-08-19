@@ -4,6 +4,10 @@
     src: files/bin_log.sql
     dest: '/tmp/bin_log.sql'
 
+- name: restart percona
+  command: /etc/init.d/mysql bootstrap-pxc
+  changed_when: false
+
 - name: privilege and binary logging is enabled fix
   mysql_db:
     state: import
@@ -12,23 +16,23 @@
 
 - name: create mysql user
   mysql_user:
-    name: '{{ archivesspace_db_user }}'
+    name: '{{ db_user }}'
     password: '{{ db_password }}'
     state: present
-    priv: '{{ archivesspace_db_name }}.*:ALL'
+    priv: '{{ db_name }}.*:ALL'
 
 - name: create .my.cnf
   template:
     src: my.cnf.j2
-    dest: '/home/{{ archivesspace_db_user }}/.my.cnf'
-    owner: '{{ archivesspace_db_user }}'
-    group: '{{ archivesspace_db_user }}'
+    dest: '/home/{{ db_user }}/.my.cnf'
+    owner: '{{ db_user }}'
+    group: '{{ db_user }}'
   become: true
 
 - name: create mysql database
   mysql_db:
-    name: '{{ archivesspace_db_name }}'
+    name: '{{ db_name }}'
     encoding: 'utf8'
     login_host: '{{ db_server }}'
     login_password: '{{ db_password }}'
-    login_user: '{{ archivesspace_db_user }}'
+    login_user: '{{ db_user }}'
