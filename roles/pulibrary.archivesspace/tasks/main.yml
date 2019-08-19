@@ -24,16 +24,20 @@
   get_url:
     url: https://repo1.maven.org/maven2/mysql/mysql-connector-java/5.1.44/mysql-connector-java-5.1.44.jar
     dest: '/opt/archivesspace/lib/'
-    checksum: md5:803783e5c40c911c92d4b6b5ea324912
+    checksum: md5:5278a3a02fbf9266450612860ba2f41d
     force: 'no'
 
 - name: config db access
-  template: src=config.rb.j2 dest=/opt/archivesspace/config/config.rb
+  template:
+    src: config.rb.j2
+    dest: /opt/archivesspace/config/config.rb
 
 - name: setup database
   shell: |
       set -o pipefail
       chdir=/opt/archivesspace/ ./scripts/setup-database.sh
+  args:
+    executable: /bin/bash
   changed_when: false
 
 - name: delete indexed_state files which force re-index
