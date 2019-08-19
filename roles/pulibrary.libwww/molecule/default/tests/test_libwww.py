@@ -29,7 +29,7 @@ def test_for_libwww_apache_config(host, line):
 
 
 @pytest.mark.parametrize("line", [
-    "deploy ALL=(ALL) NOPASSWD: /usr/sbin/service apache2 restart",
+    "deploy ALL=(ALL) NOPASSWD: /usr/sbin/service apache2 *",
     "Runas_Alias WWW = www-data",
     "deploy ALL = (WWW) NOPASSWD: ALL",
     "deploy ALL=(ALL) NOPASSWD: /bin/chown -R www-data /var/www/library_cap*",
