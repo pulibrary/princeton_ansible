@@ -6,8 +6,8 @@ testinfra_hosts = testinfra.utils.ansible_runner.AnsibleRunner(
     os.environ['MOLECULE_INVENTORY_FILE']).get_hosts('all')
 
 
-def test_for_capistrano_is_directory(host):
-    f = host.file('/opt/rails_app/shared/tmp')
+def test_for_archivesspace_is_directory(host):
+    f = host.file('/opt/archivesspace')
 
     assert f.exists
     assert f.is_directory
