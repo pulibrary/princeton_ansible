@@ -4,11 +4,23 @@
     src: files/reset.sql
     dest: /tmp/reset.sql
 
+- name: Install the permissive file
+  copy:
+    src: files/permissive.sql
+    dest: /tmp/permissive.sql
+
 - name: Set the MySQL root password
   mysql_db:
     state: import
     name: all
     target: "/tmp/reset.sql"
+  changed_when: false
+
+- name: Set permissive percona
+  mysql_db:
+    state: import
+    name: all
+    target: "/tmp/permissive.sql"
   changed_when: false
 
 - name: Marking as password is changed
