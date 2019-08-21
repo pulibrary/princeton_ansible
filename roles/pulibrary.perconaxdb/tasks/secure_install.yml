@@ -1,26 +1,30 @@
 ---
-- name: Install the reset file
+- name: copy simple password
   copy:
-    src: files/reset.sql
-    dest: /tmp/reset.sql
+    src: files/reset0.sql
+    dest: /tmp/reset0.sql
 
-- name: Install the permissive file
-  copy:
-    src: files/permissive.sql
-    dest: /tmp/permissive.sql
-
-- name: Set the MySQL root password
+- name: Change password
   mysql_db:
     state: import
+    name: all
+    target: "/tmp/reset0.sql"
+  changed_when: false
+  notify:
+    - restart percona
+
+- name: set the root password
+  template:
+    src: reset.sql.j2
+    dest: "/tmp/reset.sql"
+
+- name: Install new password
+  mysql_db:
+    state: import
+    login_user: root
+    login_password: "n1md4"
     name: all
     target: "/tmp/reset.sql"
-  changed_when: false
-
-- name: Set permissive percona
-  mysql_db:
-    state: import
-    name: all
-    target: "/tmp/permissive.sql"
   changed_when: false
 
 - name: Marking as password is changed
