@@ -6,11 +6,6 @@
   set_fact:
     url_jdbc_archivesspace: '{{ url_jdbc_base }}{{ db_name }}?user={{ db_user }}&password={{ db_password }}{{ url_jdbc_suffix }}'
 
-- name: we need unzip for the next step
-  apt:
-    name: unzip
-    state: present
-
 - name: unzip archivesspace into opt dir
   unarchive:
     src: 'https://github.com/archivesspace/archivesspace/releases/download/{{ archivesspace_version }}/archivesspace-{{ archivesspace_version }}.zip'
@@ -25,14 +20,19 @@
     url: https://repo1.maven.org/maven2/mysql/mysql-connector-java/5.1.44/mysql-connector-java-5.1.44.jar
     dest: '/opt/archivesspace/lib/'
     checksum: md5:5278a3a02fbf9266450612860ba2f41d
-    force: 'no'
+    force: false
 
 - name: config db access
   template:
     src: config.rb.j2
     dest: /opt/archivesspace/config/config.rb
 
-- name: Set permissive percona
+- name: transfer permissive percona
+  copy:
+    src: files/permissive.sql
+    dest: /tmp/permissive.sql
+
+- name: Change permissive percona at runtime
   mysql_db:
     state: import
     name: all
