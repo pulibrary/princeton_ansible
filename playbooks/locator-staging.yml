@@ -1,0 +1,20 @@
+---
+- hosts: locator-staging
+  remote_user: pulsys
+  become: true
+  vars:
+    - run_not_in_container: true
+  vars_files:
+    - ../group_vars/locator/locator-staging.yml
+    - ../group_vars/locator/vault.yml
+    - ../group_vars/all/vault.yml
+    - ../roles/pulibrary.locator/defaults/mariadb.yml
+    # need information to connect to solr staging cluster
+  roles:
+    - role: pulibrary.locator
+  post_tasks:
+  - name: tell everyone on slack you ran an ansible playbook
+    slack:
+      token: "{{ vault_pul_slack_token }}"
+      msg: "{{ inventory_hostname }} completed"
+      channel: #server-alerts
