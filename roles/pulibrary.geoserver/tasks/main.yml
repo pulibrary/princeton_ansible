@@ -1,33 +1,50 @@
 ---
 - name: stop tomcat server
-  systemd:
+  service:
     name: tomcat8
     state: stopped
+  changed_when: false
 
-- name: copy war file
-  copy:
-    src: local_files/geoserver.war
-    dest: /var/lib/tomcat8/webapps/geoserver.war
+- name: unarchive war file
+  unarchive:
+    src: "{{ geoserver_url }}/{{ geoserver_version }}/{{ geoserver_file }}"
+    dest: /var/lib/tomcat8/webapps
+    remote_src: true
   notify:
     - restart tomcat
+  changed_when: false
+
+- name: PostgreSQL | Make sure the CA certificates are available
+  apt:
+    pkg: ca-certificates
+    state: present
+
+- name: PostgreSQL | Add PostgreSQL repository apt-key
+  shell: >
+      set -o pipefail |
+      wget --quiet -O - {{ postgresql_apt_key_url }} | sudo apt-key add -
+  changed_when: false
+
+- name: add postgresql repository
+  apt_repository:
+    repo: 'deb http://apt.postgresql.org/pub/repos/apt/ {{ ansible_distribution_release }}-pgdg main'
+    update_cache: true
+    state: present
 
 - name: install postgis software
   apt:
-    name: "{{ item }}"
+    name: ["postgresql-9.6-postgis-2.5", "postgis", "postgresql-9.6-pgrouting"]
     state: present
-  with_items:
-    - postgresql-9.6-postgis-2.3
-    - postgis
-    - postgresql-9.6-pgrouting
+    update_cache: true
   notify:
     - restart postgresql
 
 - name: Create symlinks
   file:
-    src: '{{item.src}}'
-    dest: '{{item.link}}'
-    owner: '{{deploy_user}}'
-    group: '{{deploy_user}}'
+    src: '{{ item.src }}'
+    dest: '{{ item.link }}'
+    owner: '{{ deploy_user }}'
+    group: '{{ deploy_user }}'
     state: 'link'
     force: true
   with_items:
@@ -37,3 +54,5 @@
       link: '/var/lib/tomcat8/webapps/geoserver/data/figgy_geo_data'
     - src: '/mnt/libimages2/data/jp2s/plum_prod'
       link: '/var/lib/tomcat8/webapps/geoserver/data/plum_prod'
+  when: run_not_in_container
+  changed_when: false
