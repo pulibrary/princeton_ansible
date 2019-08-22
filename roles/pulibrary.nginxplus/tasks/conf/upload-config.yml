@@ -13,6 +13,12 @@
     state: directory
   when: nginx_http_upload_enable
 
+- name: "Setup: Ensure NGINX template Directory Exists"
+  file:
+    path: "{{ nginx_template_upload_dest }}"
+    state: directory
+  when: nginx_template_upload_enable
+
 - name: "Setup: Upload NGINX HTTP Configuration Files"
   copy:
     src: "{{ item }}"
@@ -21,6 +27,15 @@
   with_fileglob: "{{ nginx_http_upload_src }}"
   notify: Reload NGINX
   when: nginx_http_upload_enable
+
+- name: "Setup: Upload NGINX template Configuration Files"
+  copy:
+    src: "{{ item }}"
+    dest: "{{ nginx_template_upload_dest }}"
+    backup: true
+  with_fileglob: "{{ nginx_template_upload_src }}"
+  notify: Reload NGINX
+  when: nginx_template_upload_enable
 
 - name: "Setup: Ensure NGINX Stream Directory Exists"
   file:
