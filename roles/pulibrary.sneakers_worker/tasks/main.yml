@@ -1,11 +1,23 @@
 ---
 - name: Install startup script for sneakers workers
-  template: "src=sneakers.service dest=/etc/systemd/system/{{sneakers_worker_name}}.service"
+  template:
+    src: sneakers.service
+    dest: "/etc/systemd/system/{{ sneakers_worker_name }}.service"
   notify: 'restart sneakers worker'
+
 - name: Keep workers running
-  service: "name={{sneakers_worker_name}} enabled=yes state=started"
+  service:
+    name: "{{ sneakers_worker_name }}"
+    enabled: true
+    state: started
+  when: run_not_in_container
+
 - name: Allow deploy user to restart workers
-  lineinfile: "dest=/etc/sudoers state=present line='{{deploy_user}} ALL=(ALL) NOPASSWD: /usr/sbin/service {{sneakers_worker_name}} {{item}}' validate='visudo -cf %s'"
+  lineinfile:
+    dest: /etc/sudoers
+    state: present
+    line: '{{ deploy_user }} ALL=(ALL) NOPASSWD: /usr/sbin/service {{ sneakers_worker_name }} {{ item }}'
+    validate: 'visudo -cf %s'
   with_items:
     - status
     - restart
