@@ -1,0 +1,25 @@
+---
+- hosts: libwwwprod
+  remote_user: pulsys
+  become: true
+  vars:
+    - run_not_in_container: true
+    - drupal_version_branch: develop
+    - force_settings: true
+  vars_files:
+    - ../group_vars/libwww/libwww-prod.yml
+    - ../group_vars/libwww/vault.yml
+    - ../roles/pulibrary.libwww/defaults/mariadb.yml
+    # need information to connect to solr staging cluster
+  roles:
+    - role: pulibrary.libwww
+  pre_tasks:
+    - set_fact:
+        deploy_id_rsa_private_key: "{{  lookup('file', '../roles/pulibrary.libwww/files/id_rsa')  }}\n"
+
+  post_tasks:
+  - name: tell everyone on slack you ran an ansible playbook
+    slack:
+      token: "{{ vault_pul_slack_token }}"
+      msg: "{{ inventory_hostname }} completed"
+      channel: #server-alerts
