@@ -1,13 +1,12 @@
 ---
-- name: add apt key
-  apt_key:
-    keyserver: keyserver.ubuntu.com
-    id: "{{ xtradb_repo_gpgkey }}"
+- name: manually import key
+  get_url:
+    url: "https://repo.percona.com/apt/percona-release_latest.{{ ansible_distribution_release }}_all.deb"
+    dest: "/tmp/{{ ansible_distribution_release }}_all.deb"
 
-- name: repository installation
-  apt_repository:
-    filename: "{{ xtradb_repo_filename }}"
-    repo: "{{ xtradb_repo_baseurl }}"
+- name: configure apt repo
+  apt:
+    deb: "/tmp/{{ ansible_distribution_release }}_all.deb"
 
 - name: update cache
   apt:
