@@ -73,10 +73,12 @@
 
 - name: Create Samba users if they don't exist yet
   shell: >
-    set -o pipefail \
+    set -o pipefail; \
     (pdbedit --user={{ item.name }} 2>&1 > /dev/null) \
     || (echo {{ item.password }}; echo {{ item.password }}) \
     | smbpasswd -s -a {{ item.name }}
+  args:
+    executable: /bin/bash
   with_items: "{{ samba_users }}"
   no_log: true
   register: create_user_output
