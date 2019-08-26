@@ -1,0 +1,29 @@
+---
+- name: Detect bootstrapping
+  set_fact:
+    bootstrapping: true
+  when: install_result.changed
+
+- name: Run bootstrap-pxc on this node
+  command: /etc/init.d/mysql bootstrap-pxc
+  changed_when: false
+
+- name: Copy .my.cnf file into the root home folder
+  template:
+    src: root-my-cnf.j2
+    dest: /root/.my.cnf
+    owner: root
+    mode: 0600
+
+- meta: flush_handlers
+
+- name: Enable perconaxtradb
+  service:
+    name: "{{ xtradb_service }}"
+    state: started
+    enabled: true
+  when: run_not_in_container
+
+- name: reload systemd
+  command: systemctl daemon-reload
+  when: run_not_in_container

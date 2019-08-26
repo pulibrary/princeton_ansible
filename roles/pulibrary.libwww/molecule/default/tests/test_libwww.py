@@ -26,3 +26,44 @@ def test_for_libwww_apache_config(host, line):
     file = host.file("/etc/apache2/sites-available/000-default.conf")
 
     assert file.contains(line)
+
+
+@pytest.mark.parametrize("line", [
+    "deploy ALL=(ALL) NOPASSWD: /usr/sbin/service apache2 *",
+    "Runas_Alias WWW = www-data",
+    "deploy ALL = (WWW) NOPASSWD: ALL",
+    "deploy ALL=(ALL) NOPASSWD: /bin/chown -R www-data /var/www/library_cap*",
+    "deploy ALL=(ALL) NOPASSWD: /bin/chown -R deploy /var/www/library_cap*"
+    ])
+def test_for_libwww_sudoer(host, line):
+    file = host.file("/etc/sudoers")
+
+    assert file.contains(line)
+
+
+@pytest.mark.parametrize("line", [
+    "0 * * * * sudo -u www-data drush @prod cron",
+    "* 5 * * * /usr/bin/get_staff_updates.sh"
+    ])
+def test_for_libwww_crontab(host, line):
+    cmd = host.run("crontab -l -u deploy")
+
+    assert line in cmd.stdout
+
+
+def test_for_php_ini(host):
+    file = host.file("/etc/php/7.2/apache2/php.ini")
+
+    assert file.contains('upload_max_filesize = 8M')
+
+
+@pytest.mark.parametrize("name", [
+    "php7.2",
+    "php7.2-common",
+    "php7.2-mbstring",
+    "sendmail"
+    ])
+def test_for_pas_php_software(host, name):
+    pkg = host.package(name)
+
+    assert pkg.is_installed
