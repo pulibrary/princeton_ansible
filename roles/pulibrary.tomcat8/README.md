@@ -14,7 +14,7 @@ Variables can be found in `defaults/main.yml`
 Dependencies
 ------------
 
-This role depends on `pulibrary.openjdk8`
+This role depends on `pulibrary.openjdk`
 
 Example Playbook
 ----------------
