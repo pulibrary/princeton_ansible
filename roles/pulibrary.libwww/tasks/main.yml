@@ -1,55 +1,6 @@
 ---
-- name: install npm for circle ci
-  apt:
-    name: ["nodejs-dev", "node-gyp", "npm"]
-    state: present
-    update_cache: true
-  changed_when: false
-  when: not run_not_in_container
-
-- name: Change owner to lib/www so deploy has access
-  file:
-    path: "/var/www"
-    state: directory
-    owner: "{{ deploy_user }}"
-    group: "{{ deploy_user }}"
-
-- name: Define WWW user sudoer group www-data
-  lineinfile:
-    dest: "/etc/sudoers"
-    state: "present"
-    line: "Runas_Alias WWW = www-data"
-    validate: "visudo -cf %s"
-
-- name: Allow deploy user to run any command as www-data
-  lineinfile:
-    dest: "/etc/sudoers"
-    state: "present"
-    line: "{{ deploy_user }} ALL = (WWW) NOPASSWD: ALL"
-    validate: "visudo -cf %s"
-
-- name: Allow deploy to restart apache2
-  lineinfile:
-    dest: "/etc/sudoers"
-    state: "present"
-    line: "{{ deploy_user }} ALL=(ALL) NOPASSWD: /usr/sbin/service apache2 *"
-    validate: "visudo -cf %s"
-
-
-- name: Allow deploy user to change ownership of the library directory to www-data
-  lineinfile:
-    dest: "/etc/sudoers"
-    state: "present"
-    line: "{{ deploy_user }} ALL=(ALL) NOPASSWD: /bin/chown -R www-data /var/www/library_cap*"
-    validate: "visudo -cf %s"
-
-- name: Allow deploy user to change ownership of the library directory to deploy
-  lineinfile:
-    dest: "/etc/sudoers"
-    state: "present"
-    line: "{{ deploy_user }} ALL=(ALL) NOPASSWD: /bin/chown -R deploy /var/www/library_cap*"
-    validate: "visudo -cf %s"
-
+######### Discovery utils start ######
+# Things needed for discover utils after this
 
 # needed for capistrano to have access to this file
 - name: Check to see if .env.local file exists.
@@ -66,9 +17,6 @@
     group: "{{ deploy_user }}"
   when: not env_home_exists.stat.exists
 
-######### Discovery utils start ######
-# Things needed for discover utils after this
-
 - name: Add apache rules for discovery utils
   blockinfile:
     path: "/etc/apache2/sites-available/000-default.conf"
@@ -82,48 +30,9 @@
       </Directory>
   notify: restart apache
 
-- name: Install php7.2 requirements for libwww
-  apt:
-    name: ["php7.2-common", "php7.2-mbstring", "sendmail"]
-    state: present
-    update_cache: true
-
-- name: Install gulp globally
-  npm:
-    name: gulp-cli
-    global: true
-  become: true
-
 
 ########### Drupal Start ######
 # Drupal after this
-
-- name: Create directory for drush site alias
-  file:
-    path: "/etc/drush"
-    state: directory
-    owner: "{{ systems_user }}"
-    group: "{{ systems_user }}"
-
-- name: Install drush site alias
-  template:
-    src: "aliases_drushrc_php.j2"
-    dest: "/etc/drush/aliases.drushrc.php"
-    owner: "{{ systems_user }}"
-    group: "{{ systems_user }}"
-
-- name: Check to see if settings.php home file exists.
-  stat:
-    path: "/home/{{ deploy_user }}/settings.php"
-  register: settings_php_home_exists
-
-- name: Install settings.php
-  template:
-    src: "settings.php.j2"
-    dest: "/home/{{ deploy_user }}/settings.php"
-    owner: "{{ deploy_user }}"
-    group: "{{ deploy_user }}"
-  when: not settings_php_home_exists.stat.exists or force_settings
 
 - name: Copy database dump
   copy:
@@ -142,19 +51,6 @@
     login_user: '{{ drupal_db_user }}'
     target: '/home/deploy/{{ drupal_dbimport_file }}'
   when: (drupal_dbimport_file is defined) and (inventory_hostname ==  groups[group_names[0]][0])
-
-- name: disable apache php7.0 module
-  apache2_module:
-    state: absent
-    name: php7.0
-  notify: restart apache
-  ignore_errors: yes
-
-- name: enable apache php7.2 module
-  apache2_module:
-    state: present
-    name: php7.2
-  notify: restart apache
 
 - name: Check to staff script exists.
   stat:
