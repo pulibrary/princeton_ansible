@@ -1,7 +1,7 @@
 Role Name
 =========
 
-A brief description of the role goes here.
+The role to initailize the machines for the RECAP website
 
 Requirements
 ------------
