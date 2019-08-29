@@ -1,2 +1,23 @@
 ---
 # tasks file for roles/pulibrary.approvals
+# Create Mounts
+- name: Create mount directories
+  file:
+    path: '/mnt/dms-smbserve'
+    state: 'directory'
+
+- name: Copy smb credentials
+  copy:
+    src: files/approvals.smb.credentials
+    dest: /etc/approvals.smb.credentials
+  when: run_not_in_container
+
+- name: Create mount for pas shared files
+  mount:
+    path: '/mnt/dms-smbserve/bi-library-hr'
+    src: '//dms-smbserve/bi-library-hr'
+    fstype: cifs
+    opts: 'defaults,uid=33,gid={{ deploy_user_uid }},credentials=/etc/approvals.smb.credentials'
+    state: mounted
+  when: run_not_in_container
+  become: true
