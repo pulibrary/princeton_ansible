@@ -21,3 +21,19 @@
     state: mounted
   when: run_not_in_container
   become: true
+
+- name: Download node apt update script
+  get_url:
+    url: https://deb.nodesource.com/setup_10.x
+    dest: /tmp/setup_10.x
+    mode: '0755'
+
+- name: update the node source repository
+  command: '/tmp/setup_10.x'
+  become: true
+  changed_when: false
+
+- name: Install latest node
+  apt:
+    name: 'nodejs'
+    state: latest
