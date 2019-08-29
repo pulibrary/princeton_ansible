@@ -17,43 +17,27 @@
     state: present
     update_cache: true
   register: packages_installed
-  ignore_errors: true
-
-- name: manually download ruby switch on fail
-  get_url:
-    url: "{{ brightbox_repo_url }}/{{ ruby_switch_path }}/ruby-switch_0.1.0-bbox1~bionic2_all.deb"
-    dest: /tmp/ruby-switch.deb
-  when: packages_installed is failed
-
-- name: manually download ruby on fail
-  get_url:
-    url: "{{ brightbox_repo_url }}/{{ ruby_version_path }}/ruby2.4_2.4.6-1bbox1~bionic1_amd64.deb"
-    dest: /tmp/ruby.deb
-  when: packages_installed is failed
-  ignore_errors: true
-
-- name: manually download ruby dev on fail
-  get_url:
-    url: "{{ brightbox_repo_url }}/{{ ruby_version_path }}/ruby2.4-dev_2.4.6-1bbox1~bionic1_amd64.deb"
-    dest: /tmp/ruby-dev.deb
-  when: packages_installed is failed
-  ignore_errors: true
-
-- name: install manual packages
-  apt:
-    deb: "{{ item }}"
-  with_items:
-    - /tmp/ruby-switch.deb
-    - /tmp/ruby.deb
-    - /tmp/ruby-dev.deb
-  when: packages_installed is failed
-  ignore_errors: true
 
 - name: switch to Ruby 2.4.x release for the system default
   command: ruby-switch --set ruby2.4
   changed_when: false
 
-- name: install global bundler
+- name: uninstall bundler to get specific version
+  gem:
+    name: bundler
+    state: absent
+    user_install: false
+  when: bundler_version is defined
+
+- name: install global bundler, specific version
+  gem:
+    name: bundler
+    version: "{{ bundler_version }}"
+    user_install: false
+  when: bundler_version is defined
+
+- name: install global bundler, any version
   gem:
     name: bundler
     user_install: false
+  when: bundler_version is undefined

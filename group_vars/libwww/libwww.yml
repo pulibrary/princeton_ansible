@@ -5,13 +5,13 @@ discoveryutils_base_url: 'https://library-staging.princeton.edu'
 
 drupal_ssl_base_path: 'https://library-staging.princeton.edu'
 
-# this should really be master here.  Once all the things are merged
-drupal_version_branch: 'develop'
-drupal_docroot: '/var/www/library'
 drupal_db_user: 'libwww-staging'
 drupal_db_password: "{{ libwww_db_password | default('change_this') }}"
 drupal_db_name: 'libwww-staging'
-apache_app_path: "{{ drupal_docroot }}"
+apache_app_path: '/var/www/library_cap/current'
+
+### Uncomment to force the update of the settings file
+# force_settings: true
 
 ### Uncomment this to force a dump file to be imported
 # drupal_dbimport_file: 'dump.sql'
@@ -26,17 +26,9 @@ search_api_solr_path: '20:"/solr/libwww-staging"'
 # db_host: '{{ percona_xtra_cluster_host }}'
 # db_password: '{{ percona_xtra_root_password }}'
 
+### Uncomment this to force a dump file to be imported
+# drupal_dbimport_file: 'dump.sql'
+
 db_host: '{{ maria_db_cluster_host }}'
 db_password: '{{ vault_maria_mysql_root_password }}'
 mariadb__server: "{{ db_host }}"
-
-mariadb__users:
-  - name: "{{ drupal_db_user }}"
-    host: "%"
-    password: "{{ drupal_db_password }}"
-    priv: "{{ drupal_db_name }}.*:ALL"
-
-mariadb__databases:
-  - name: "{{ drupal_db_name }}"
-    encoding: utf8mb4
-    collation: utf8mb4_general_ci

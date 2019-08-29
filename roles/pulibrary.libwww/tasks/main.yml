@@ -1,77 +1,14 @@
 ---
-- name: Install gulp globally
-  command: npm install --global gulp-cli
-  become: true
-  changed_when: false
+######### Discovery utils start ######
+# Things needed for discover utils after this
 
-  ##################### Start - NO CAP ###############################
-  # not needed if we go with capistrano (see capistano branch on discovery utils)
-- name: Check to see if app root directory exists.
-  stat:
-    path: "{{  discoveryutils_docroot }}"
-  register: discovery_app_root_directory
-
-- name: Install discoveryutils repo
-  git:
-    repo: 'https://github.com/pulibrary/discoveryutils.git'
-    dest: "{{  discoveryutils_docroot }}"
-    version: 'master'
-    clone: true
-    update: true
-  become: true
-  when: not discovery_app_root_directory.stat.exists
-
-- name: Install site configuration
-  template:
-    src: "discoveryutils_app_config.j2"
-    dest: "/home/{{ deploy_user }}/app_configs/discoveryutils"
-    owner: "{{ deploy_user }}"
-    group: "{{ deploy_user }}"
-
-- name: Check to see if .env.local file exists.
-  stat:
-    path: "{{  discoveryutils_docroot }}/.env.local"
-  register: env_local_exists
-
-- name: Install .env.local
-  template:
-    src: "env.local.j2"
-    dest: "{{ discoveryutils_docroot }}/.env.local"
-    owner: "{{ deploy_user }}"
-    group: "{{ deploy_user }}"
-  when: not env_local_exists.stat.exists
-
-- name: grant permissions on deploy user
-  file:
-    path: "{{ discoveryutils_docroot }}"
-    state: directory
-    owner: "{{ deploy_user }}"
-    group: "{{ deploy_user }}"
-    recurse: true
-  when: not env_local_exists.stat.exists
-
-- name: Check to see if vendor exists.
-  stat:
-    path: "{{  discoveryutils_docroot }}/vendor/symfony"
-  register: vendor_exists
-
-- name: Run composer to install symfony and other dependencies
-  composer:
-    command: install
-    working_dir: "{{ discoveryutils_docroot }}"
-  become: true
-  become_user: "{{ deploy_user }}"
-  when: not vendor_exists.stat.exists
-
-  ##################### End - NO CAP ###############################
-
-  # needed for capistrano to have access to this file
+# needed for capistrano to have access to this file
 - name: Check to see if .env.local file exists.
   stat:
     path: "/home/{{ deploy_user }}/.env.local"
   register: env_home_exists
 
-  # needed for capistrano to have access to this file
+# needed for capistrano to have access to this file
 - name: Install .env.local in deploy user home directory for cap
   template:
     src: "env.local.j2"
@@ -79,7 +16,6 @@
     owner: "{{ deploy_user }}"
     group: "{{ deploy_user }}"
   when: not env_home_exists.stat.exists
-
 
 - name: Add apache rules for discovery utils
   blockinfile:
@@ -92,157 +28,29 @@
         Options Indexes FollowSymLinks MultiViews
         AllowOverride All
       </Directory>
-    # block without capistrano
-    # block: |
-    #   Alias /utils {{ discoveryutils_docroot }}/public
-    #   <Directory "{{ discoveryutils_docroot }}/public">
-    #     Options Indexes FollowSymLinks MultiViews
-    #     AllowOverride All
-    #   </Directory>
   notify: restart apache
 
+
+########### Drupal Start ######
 # Drupal after this
-
-- name: Create directory for drush site alias
-  file:
-    path: "/etc/drush"
-    state: directory
-    owner: "{{ systems_user }}"
-    group: "{{ systems_user }}"
-
-- name: Install drush site alias
-  template:
-    src: "aliases_drushrc_php.j2"
-    dest: "/etc/drush/aliases.drushrc.php"
-    owner: "{{ systems_user }}"
-    group: "{{ systems_user }}"
-
-- name: Check to see if settings.php file exists.
-  stat:
-    path: "{{  drupal_docroot }}/sites/default/settings.php"
-  register: settings_php_exists
-
-- name: Install settings.php
-  template:
-    src: "settings.php.j2"
-    dest: "{{ drupal_docroot }}/sites/default/settings.php"
-    owner: "www-data"
-    group: "{{ deploy_user }}"
-  when: not settings_php_exists.stat.exists or force_settings
-
-- name: Create a symbolic link to files
-  file:
-    src: '{{ drupal_fileshare_mount }}/{{ files_mount_dir }}'
-    dest: '{{ drupal_docroot }}/sites/default/files'
-    owner: '{{ deploy_user }}'
-    group: '{{ deploy_user }}'
-    state: link
-    force: true
-  when: not settings_php_exists.stat.exists
 
 - name: Copy database dump
   copy:
     src: 'files/{{ drupal_dbimport_file }}'
-    dest: '{{ drupal_docroot }}/{{ drupal_dbimport_file }}'
+    dest: '/home/deploy/{{ drupal_dbimport_file }}'
     owner: '{{ deploy_user }}'
     group: '{{ deploy_user }}'
   when: (drupal_dbimport_file is defined) and (inventory_hostname ==  groups[group_names[0]][0])
 
 - name: Import database from local dump file
-  command: drush sql-cli < {{ drupal_dbimport_file }}
-  args:
-    chdir: "{{ drupal_docroot }}"
+  mysql_db:
+    state: 'import'
+    name: '{{ drupal_db_name }}'
+    login_host: '{{ db_host | default(omit) }}'
+    login_password: '{{ drupal_db_password | default(omit) }}'
+    login_user: '{{ drupal_db_user }}'
+    target: '/home/deploy/{{ drupal_dbimport_file }}'
   when: (drupal_dbimport_file is defined) and (inventory_hostname ==  groups[group_names[0]][0])
-
-- name: Install drupal variable update file
-  template:
-    src: "update.sql.j2"
-    dest: "{{ drupal_docroot }}/update.sql"
-    owner: "{{ systems_user }}"
-    group: "{{ systems_user }}"
-  when: (drupal_dbimport_file is defined) and (inventory_hostname ==  groups[group_names[0]][0])
-
-- name: Setup the solr connection
-  command: drush sql-cli < update.sql
-  args:
-    chdir: "{{ drupal_docroot }}"
-  when: (drupal_dbimport_file is defined) and (inventory_hostname ==  groups[group_names[0]][0])
-
-- name: Clear the solr index
-  command: drush search-api-clear
-  args:
-    chdir: "{{ drupal_docroot }}"
-  when: (drupal_dbimport_file is defined) and (inventory_hostname ==  groups[group_names[0]][0])
-
-- name: Update the solr index
-  command: drush search-api-index
-  args:
-    chdir: "{{ drupal_docroot }}"
-  when: (drupal_dbimport_file is defined) and (inventory_hostname ==  groups[group_names[0]][0])
-
-- name: Install smtp module
-  command: drush -y en --resolve-dependencies smtp
-  args:
-    chdir: "{{ drupal_docroot }}"
-  when: drupal_dbimport_file is defined
-
-- name: grant permissions on deploy user
-  file:
-    path: "{{ discoveryutils_docroot }}"
-    state: directory
-    owner: "{{ deploy_user }}"
-    group: "{{ deploy_user }}"
-    recurse: true
-  when: not settings_php_exists.stat.exists
-
-- name: install node modules
-  command: "npm install"
-  args:
-    chdir: "{{ apache_app_path }}/sites/all/themes/pul_base"
-    creates: "{{ apache_app_path }}/sites/all/themes/pul_base/node_modules/"
-  become: true
-  become_user: "{{ deploy_user }}"
-
-- name: install assets using gulp
-  command: 'gulp deploy'
-  args:
-    chdir: "{{ apache_app_path }}/sites/all/themes/pul_base"
-    creates: "{{ apache_app_path }}/sites/all/themes/pul_base/assets/public"
-  become: true
-  become_user: "{{ deploy_user }}"
-
-- name: disable apache php7.0 module
-  apache2_module:
-    state: absent
-    name: php7.0
-  notify: restart apache
-  ignore_errors: yes
-
-- name: enable apache php7.2 module
-  apache2_module:
-    state: present
-    name: php7.2
-  notify: restart apache
-
-- name: Change owner to www-data so apache has access
-  file:
-    path: "{{ item }}"
-    state: directory
-    owner: "www-data"
-    group: "{{ deploy_user }}"
-    recurse: true
-    follow: false
-  with_items:
-    - '{{ discoveryutils_docroot }}'
-    - '{{ apache_app_path }}'
-  notify: restart apache
-  when: not settings_php_exists.stat.exists
-
-- name: clear the drush cache
-  command: drush cc all
-  args:
-    chdir: "{{ drupal_docroot }}"
-  when: drupal_dbimport_file is defined
 
 - name: Check to staff script exists.
   stat:
@@ -266,10 +74,16 @@
     user: "{{ deploy_user }}"
   when: not staff_scripts_exists.stat.exists and (inventory_hostname ==  groups[group_names[0]][0])
 
-- name: install the cron job for staff
+- name: install the cron for running drush cron
   cron:
     name: "run drush cron"
     minute: 0
-    job: "drush @prod cron"
+    job: "sudo -u www-data drush @prod cron"
     user: "{{ deploy_user }}"
   when: not staff_scripts_exists.stat.exists and (inventory_hostname ==  groups[group_names[0]][0])
+
+- name: ensure max file size is set in apache2 php.ini
+  lineinfile:
+    dest: "/etc/php/7.2/apache2/php.ini"
+    regexp: "upload_max_filesize ="
+    line: "upload_max_filesize = 8M"

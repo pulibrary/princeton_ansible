@@ -1,0 +1,46 @@
+---
+# Needed for capistrano to bea able to restart the appropriate services
+# change ownership to www-data and run things as www-data
+
+- name: Change owner to lib/www so deploy has access
+  file:
+    path: "/var/www"
+    state: directory
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+
+- name: Define WWW user sudoer group www-data
+  lineinfile:
+    dest: "/etc/sudoers"
+    state: "present"
+    line: "Runas_Alias WWW = www-data"
+    validate: "visudo -cf %s"
+
+- name: Allow deploy user to run any command as www-data
+  lineinfile:
+    dest: "/etc/sudoers"
+    state: "present"
+    line: "{{ deploy_user }} ALL = (WWW) NOPASSWD: ALL"
+    validate: "visudo -cf %s"
+
+- name: Allow deploy to restart, stop, start apache2
+  lineinfile:
+    dest: "/etc/sudoers"
+    state: "present"
+    line: "{{ deploy_user }} ALL=(ALL) NOPASSWD: /usr/sbin/service apache2 *"
+    validate: "visudo -cf %s"
+
+
+- name: Allow deploy user to change ownership of the library directory to www-data
+  lineinfile:
+    dest: "/etc/sudoers"
+    state: "present"
+    line: "{{ deploy_user }} ALL=(ALL) NOPASSWD: /bin/chown -R www-data {{ drupal_docroot }}*"
+    validate: "visudo -cf %s"
+
+- name: Allow deploy user to change ownership of the library directory to deploy
+  lineinfile:
+    dest: "/etc/sudoers"
+    state: "present"
+    line: "{{ deploy_user }} ALL=(ALL) NOPASSWD: /bin/chown -R deploy {{ drupal_docroot }}*"
+    validate: "visudo -cf %s"
