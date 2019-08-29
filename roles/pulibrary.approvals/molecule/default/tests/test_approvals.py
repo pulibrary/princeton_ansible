@@ -23,9 +23,16 @@ def test_for_approvals_is_directory(host):
     assert f.group == 'deploy'
 
 
-def test_for_approvales_logrotate(host):
+def test_for_approvales_files(host):
     f = host.file('/etc/logrotate.d/approvals')
 
     assert f.exists
     assert f.user == 'root'
     assert f.group == 'root'
+
+
+def test_for_approvals_mnt_directory(host):
+    f = host.file('/mnt/dms-smbserve')
+
+    assert f.exists
+    assert f.is_directory
