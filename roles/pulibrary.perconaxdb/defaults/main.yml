@@ -1,5 +1,35 @@
 ---
 # defaults file for roles/pulibrary.perconaxdb
+#
+run_not_in_container: false
+mysql_port: 3306
+mysql_language: '/usr/share/mysql/'
+mysql_bind_address: "0.0.0.0"
+mysql_key_buffer: '16M'
+mysql_max_allowed_packet: '128M'
+mysql_thread_stack: '192K'
+mysql_cache_size: 8
+mysql_myisam_recover: 'BACKUP'
+mysql_max_connections: 100
+mysql_table_cache: 64
+mysql_thread_concurrency: 10
+mysql_query_cache_limit: '1M'
+mysql_query_cache_size: '16M'
+mysql_character_set_server: 'utf8'
+mysql_collation_server: 'utf8_general_ci'
+mysql_mysqldump_max_allowed_packet: '128M'
+mysql_isamchk_key_buffer: '16M'
+
+mysql_innodb_file_per_table: 'innodb_file_per_table'
+mysql_innodb_flush_method: 'fdatasync'
+mysql_innodb_buffer_pool_size: '128M'
+mysql_innodb_flush_log_at_trx_commit: 1
+mysql_innodb_lock_wait_timeout: 50
+mysql_innodb_log_buffer_size: '1M'
+mysql_innodb_log_file_size: '5M'
+
+wsrep_slave_threads: 2
+wsrep_sst_method: rsync
 
 # Data directory
 xtradb_datadir: /var/lib/mysql
@@ -23,7 +53,7 @@ xtradb_root_user: root
 xtradb_root_password: "{{ vault_xtradb_root_password | default('change_me')}}"
 
 # Define Ansible group in which the nodes exist to be part of the cluster
-xtradb_nodes_group: perconaxtra_db_cluster
+xtradb_nodes_group: "{{ perconaxtra_db_cluster | default('pulcluster') }}"
 
 # Define the node pool
 xtradb_wsrep_cluster_address: "gcomm://{{ groups[xtradb_nodes_group] | map('extract', hostvars, ['ansible_' ~ xtradb_bind_interface, 'ipv4', 'address']) | join(',') }}"
@@ -39,7 +69,7 @@ xtradb_version: "57"
 xtradb_service: mysql
 
 # Defines the network interfaces used
-xtradb_bind_interface: ens33
+xtradb_bind_interface: "{{ bind_interface | default('eth0') }}"
 
 # Defines the network address used
 xtradb_bind_address: "{{ hostvars[inventory_hostname]['ansible_' + xtradb_bind_interface]['ipv4']['address'] }}"
@@ -51,7 +81,7 @@ xtradb_sst_user: sstuser
 xtradb_sst_password: "{{ vault_xtradb_sstuser_password | default('change_me')}}"
 
 # Defines the cluster name
-xtradb_cluster_name: foo
+xtradb_cluster_name: "{{ clustername | default('pulibrary_cluster') }}"
 
 # Defines the swappiness by node
 xtradb_swappiness: 0

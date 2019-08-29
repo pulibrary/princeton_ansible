@@ -1,5 +1,4 @@
 ---
-
 - name: Install Cantaloupe
   unarchive:
     remote_src: true
@@ -7,12 +6,12 @@
     dest: "{{ cantaloupe_install_root }}"
     owner: "{{ cantaloupe_user }}"
     group: "{{ cantaloupe_group }}"
-    creates: "{{ cantaloupe_install_root }}/cantaloupe-{{ cantaloupe_version }}"
+    creates: "{{ cantaloupe_install_root }}/{{ cantaloupe_src_prefix }}-{{ cantaloupe_version }}"
 
 - name: Create Cantaloupe symlink
   file:
     state: link
-    src: "{{ cantaloupe_install_root }}/cantaloupe-{{ cantaloupe_version }}"
+    src: "{{ cantaloupe_install_root }}/{{ cantaloupe_src_prefix }}-{{ cantaloupe_version }}"
     dest: "{{ cantaloupe_symlink }}"
     owner: "{{ cantaloupe_user }}"
     group: "{{ cantaloupe_group }}"
@@ -24,18 +23,26 @@
     owner: "{{ cantaloupe_user }}"
     group: "{{ cantaloupe_group }}"
 
+- name: Create Cantaloupe image directory
+  file:
+    state: directory
+    path: "{{ cantaloupe_FilesystemSource_BasicLookupStrategy_path_prefix }}"
+    owner: "{{ cantaloupe_user }}"
+    group: "{{ cantaloupe_group }}"
+
 - name: Fix /dev/stdout
   shell: "chmod o+w /dev/stdout"
 
 - name: Symlink Kakadu Libraries
   file:
     state: link
-    src: "{{ cantaloupe_install_root }}/cantaloupe-{{ cantaloupe_version }}/deps/Linux-x86-64/lib/{{ item }}"
+    src: "{{ cantaloupe_install_root }}/{{ cantaloupe_src_prefix }}-{{ cantaloupe_version }}/deps/Linux-x86-64/lib/{{ item }}"
     dest: "/usr/lib/{{ item }}"
   with_items:
     - libkdu_a7AR.so
     - libkdu_jni.so
     - libkdu_v7AR.so
+  when: cantaloupe_version != "3.3.2"
 
 - name: Install startup script for workers
   template: "src=cantaloupe.service.j2 dest=/etc/systemd/system/cantaloupe.service"
