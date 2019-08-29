@@ -1,19 +1,16 @@
 ---
-- name: install fits dependencies
-  apt:
-    name: "{{ item }}"
-    state: present
-    cache_valid_time: "{{ apt_cache_timeout }}"
-    update_cache: yes
-  with_items:
-    - unzip
+- name: check for existence of fits
+  stat:
+    path: "/tmp/fits-{{ fits_version }}.zip"
+  register: fits_downloaded
 
 - name: copy cached fits
   copy:
-    src: "{{ local_files_dir }}/fits-{{ fits_version }}.zip"
+    src: local_files/fits/fits-{{ fits_version }}.zip"
     dest: /tmp/fits-{{ fits_version }}.zip
   register: cached_fits
-  ignore_errors: True
+  when: fits_downloaded.stat.islnk is not defined
+  ignore_errors: true
 
 - name: download fits
   get_url:
@@ -23,13 +20,13 @@
     owner: root
     group: root
     mode: 0444
-  when: cached_fits|failed
+  when: cached_fits is failed
 
 - name: cache fits for future use
   fetch:
-    src: /tmp/fits-"{{ fits_version }}".zip
-    dest: "{{ local_files_dir }}/"
-    flat: True
+    src: "/tmp/fits-{{ fits_version }}.zip"
+    dest: local_files/fits
+    flat: true
   when: ansible_virtualization_type == 'virtualbox'
 
 - name: unarchive fits
