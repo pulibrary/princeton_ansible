@@ -39,7 +39,7 @@
     - figgy_binaries
     - figgy_images
     - diglibdata
-    - libimages2
+    - '{{ figgy_cantaloupe_images_mount }}'
     - 'diglibdata/pudl'
     - 'diglibdata/hydra_binaries'
 
@@ -80,13 +80,18 @@
     opts: 'credentials=/etc/plum_mount.smb.credentials,uid={{deploy_user_uid}},gid=33'
     state: mounted
 
-- name: Create libimages2 mount
+- name: Create cantaloupe images mount
   mount:
-    name: /mnt/libimages2/data
-    src: //libimages2.princeton.edu/data
+    name: '/mnt/{{figgy_cantaloupe_images_mount}}/data'
+    src: '//{{figgy_cantaloupe_images_mount}}.princeton.edu/data'
     fstype: cifs
     opts: 'credentials=/etc/libimages2.smb.credentials,uid={{deploy_user_uid}},gid={{deploy_user_uid}}'
     state: mounted
+
+- name: Ensure figgy derivatives mount directory exists
+  file:
+    path: '{{figgy_derivatives_mount}}'
+    state: directory
 
 - name: Create diglibdata mounts (hydra sources)
   mount:
@@ -160,6 +165,7 @@
       link: '/opt/repository/geo_derivatives'
     - src: '{{figgy_stream_derivatives_mount}}'
       link: '/opt/repository/stream_derivatives'
+
 ## Necessary for gdal version >= 2.2.
 ## Can remove once we're using Ubuntu Bionic or above.
 - name: Add ubuntugis repository

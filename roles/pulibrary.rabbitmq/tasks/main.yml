@@ -1,22 +1,36 @@
 ---
-- name: ensure python-software-properties is installed
-  apt: pkg=python-software-properties state=installed
-
-- name: add rabbitmq official apt repository
-  apt_repository: repo='deb http://www.rabbitmq.com/debian/ testing main' state=present
+# Needed in order to add the rabbitmq repository
+- name: ensure software-properties-common is installed
+  apt:
+    name: ['software-properties-common', 'apt-transport-https']
+    update_cache: yes
+    state: present
 
 - name: import key
   apt_key:
-    url: https://www.rabbitmq.com/rabbitmq-release-signing-key.asc
+    url: https://github.com/rabbitmq/signing-keys/releases/download/2.0/rabbitmq-release-signing-key.asc
+    state: present
+
+- name: add erlang apt repository, dependency for rabbitmq repo
+  apt_repository:
+    repo: 'deb https://dl.bintray.com/rabbitmq-erlang/debian {{ ansible_distribution_release }} erlang-21.x'
+    state: present
+
+- name: add rabbitmq official apt repository
+  apt_repository:
+    repo: 'deb https://dl.bintray.com/rabbitmq/debian {{ ansible_distribution_release }} main'
     state: present
 
 - name: install package
-  apt: name={{ item }} update_cache=yes state=installed
-  with_items:
-    - rabbitmq-server
+  apt:
+    name: rabbitmq-server
+    update_cache: yes
+    state: present
 
 - name: enable rabbitmq plugins
-  rabbitmq_plugin: names=rabbitmq_management state=enabled
+  rabbitmq_plugin:
+    names: rabbitmq_management
+    state: enabled
   notify:
     - restart rabbitmq
 
@@ -32,4 +46,6 @@
     state: present
 
 - name: remove default guest user
-  rabbitmq_user: user=guest state=absent
+  rabbitmq_user:
+    user: guest
+    state: absent
