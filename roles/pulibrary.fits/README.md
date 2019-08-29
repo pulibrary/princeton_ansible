@@ -4,7 +4,7 @@ Installs FITS under /opt and symlinks the version installed to /opt/fits
 
 ### Requirements
 
-This requires our pulibrary.common role.
+This requires our `pulibrary.common` role.
 
 ### Role Variables
 
