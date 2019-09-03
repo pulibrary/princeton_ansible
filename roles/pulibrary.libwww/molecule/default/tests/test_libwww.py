@@ -43,7 +43,7 @@ def test_for_libwww_sudoer(host, line):
 
 @pytest.mark.parametrize("line", [
     "0 * * * * sudo -u www-data drush @prod cron",
-    "* 5 * * * /usr/bin/get_staff_updates.sh"
+    "0 5 * * * /usr/bin/get_staff_updates.sh >/tmp/staff_updates.out 2>&1"
     ])
 def test_for_libwww_crontab(host, line):
     cmd = host.run("crontab -l -u deploy")
