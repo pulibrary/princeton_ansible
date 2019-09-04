@@ -1,0 +1,27 @@
+---
+recap_base_url: 'recap-prod.princeton.edu'
+drupal_ssl_base_path: 'https://{{ recap_base_url }}'
+
+drupal_db_user: 'recap-prod'
+drupal_db_password: "{{ recap_db_password }}"
+drupal_db_name: 'recap-prod'
+drupal_docroot: '/var/www/recap_cap'
+apache_app_path: '{{ drupal_docroot }}/current'
+
+### Uncomment this to force a dump file to be imported
+# drupal_dbimport_file: 'dump.sql'
+
+db_host: '{{ maria_db_cluster_host }}'
+db_password: '{{ vault_maria_mysql_root_password }}'
+mariadb__server: "{{ db_host }}"
+
+mariadb__users:
+  - name: "{{ drupal_db_user }}"
+    host: "%"
+    password: "{{ drupal_db_password }}"
+    priv: "{{ drupal_db_name }}.*:ALL"
+
+mariadb__databases:
+  - name: "{{ drupal_db_name }}"
+    encoding: utf8mb4
+    collation: utf8mb4_general_ci
