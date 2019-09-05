@@ -1,0 +1,65 @@
+---
+server:
+    timezone: 'America/New_York'
+    locale: 'en_US.UTF-8'
+
+apache:
+    docroot: '/opt/pas/web'
+    servername: '{{ ansible_hostname }}'
+    directory_options: '+Multiviews'
+
+pas_password: '{{ vault_pas_db_password }}'
+pas_security_key: '{{ vault_pas_security_key }}'
+db_host: '{{ maria_db_cluster_host | default("localhost") }}'
+db_password: '{{ mariadb_mysql_root_password | default("") }}'
+pas_default_site_url: 'https://slavery.princeton.edu'
+pas_db_name: 'pas_prod'
+pas_env: 'production'
+
+mariadb__server: "{{ db_host }}"
+
+mariadb__users:
+    - name: "{{ pas_db_user }}"
+      host: "{{ ansible_hostname }}.princeton.edu"
+      password: "{{ pas_db_password }}"
+      priv: "{{ pas_db_name }}.*:ALL"
+
+mariadb__databases:
+    - name: "{{ pas_db_name }}"
+      encoding: utf8mb4
+      collation: utf8mb4_general_ci
+
+datadog_api_key: "{{vault_datadog_key}}"
+
+datadog_config:
+    log_enabled: "true"
+datadog_checks:
+    recap_datadog_apache_check:
+        init_config:
+        logs:
+            - type: file
+              path: /var/log/apache2/other_vhosts_access.log
+              service: pas
+              source: pas
+              sourcecategory: pas
+            - type: file
+              path: /var/log/apache2/error.log
+              service: pas
+              source: pas
+              sourcecategory: pas
+            - type: file
+              path: /opt/pas/storage/logs/web.log
+              service: pas
+              source: pas
+              sourcecategory: pas
+            - type: file
+              path: /opt/pas/storage/logs/phperrors.log
+              service: pas
+              source: pas
+              sourcecategory: pas
+            - type: file
+              path: /opt/pas/storage/logs/web-404s.log
+              service: pas
+              source: pas
+              sourcecategory: pas
+        tags: "slavery, environment:production, role:pas"
