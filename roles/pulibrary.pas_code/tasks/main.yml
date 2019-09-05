@@ -13,7 +13,9 @@
     force: true
     version: 'running_version'
   become: true
-  when: run_not_in_container
+  when: 
+    - deploy_ssh_config.diff == [] or force_pas_deploy
+    - run_not_in_container
 
 - name: Create the pas directory for docker
   file:
@@ -29,7 +31,9 @@
     - '/opt/pas/vendor'
     - '/opt/pas/web'
     - '/opt/pas/web/cpresources'
-  when: not run_not_in_container and deploy_ssh_config.diff == []
+  when: 
+    - deploy_ssh_config.diff == []
+    - not run_not_in_container
 
 - name: Install the license key
   copy:
@@ -46,6 +50,8 @@
     recurse: 'yes'
     follow: false
     mode: '0744'
+  become: true
+  ignore_errors: true
   when: deploy_ssh_config.diff == [] or force_pas_deploy
 
 - name: update .env
