@@ -11,6 +11,9 @@
 - name: Create databases
   mysql_db:
     name: "{{ item.database | d(item.name) }}"
+    login_host: '{{ db_host | default(omit) }}'
+    login_password: '{{ db_password | default(omit) }}'
+    login_user: 'root'
     state: present
     encoding: "{{ item.encoding | d(omit) }}"
     collation: "{{ item.collation | d(omit) }}"
@@ -117,6 +120,8 @@
   mysql_user:
     name: '{{ item.0.user | d(item.0.name) }}'
     host: '{{ item.0.host | default(mariadb__client) }}'
+    login_host: '{{ db_host | default(omit) }}'
+    login_password: '{{ db_password | default(omit) }}'
     priv: '{{ (item.0.database | d(item.0.name)) + "\_%.*:" + mariadb__default_privileges_grant }}'
     append_privs: true
   with_together:
@@ -133,6 +138,8 @@
   mysql_user:
     name: '{{ item.0.user | d(item.0.name) }}'
     host: '{{ item.0.host | default(mariadb__client) }}'
+    login_host: '{{ db_host | default(omit) }}'
+    login_password: '{{ db_password | default(omit) }}'
     priv: '{{ item.0.priv if (item.0.priv is string) else (item.0.priv | join("/")) }}'
     append_privs: '{{ item.0.append_privs | default(True) }}'
   with_together:
