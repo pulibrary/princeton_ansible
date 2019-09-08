@@ -7,8 +7,8 @@ testinfra_hosts = testinfra.utils.ansible_runner.AnsibleRunner(
 
 
 def test_hosts_file(host):
-    f = host.file('/etc/hosts')
+    f = host.file('/opt/datadog-agent/version-manifest.txt')
 
     assert f.exists
-    assert f.user == 'root'
-    assert f.group == 'root'
+    assert f.user == 'dd-agent'
+    assert f.group == 'dd-agent'
