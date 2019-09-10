@@ -1,0 +1,54 @@
+---
+name: Molecule Tests
+on: [push]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        role:
+          # - pulibrary.ansible-datadog
+          - pulibrary.apache2
+          - pulibrary.approvals
+          - pulibrary.bind9
+          - pulibrary.blacklight-app
+          - pulibrary.capistrano
+          - pulibrary.common
+          - pulibrary.deploy-user
+          - pulibrary.drupal
+          - pulibrary.extra_path
+          - pulibrary.ffmpeg
+          - pulibrary.fits
+          - pulibrary.geoserver
+          # - pulibrary.libwww
+          # - pulibrary.locator
+          # - pulibrary.mariadb
+          # - pulibrary.matomo
+          - pulibrary.nodejs
+          - pulibrary.nginxplus
+          - pulibrary.openjdk
+          # - pulibrary.pas
+          - pulibrary.passenger
+          - pulibrary.php
+          - pulibrary.rails-app
+          # - pulibrary.recap-www
+          - pulibrary.redis
+          - pulibrary.ruby
+          - pulibrary.rvm
+
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v1
+      - name: Set up Python
+        uses: actions/setup-python@v1
+        with:
+          python-version: 3.7
+      - name: Install dependencies
+        run: |
+          sudo apt install docker
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Run tests
+        run: |
+          cd roles/${{ matrix.role }}
+          molecule test
