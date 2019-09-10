@@ -1,0 +1,22 @@
+---
+image: "quay.io/ansible/molecule:2.22"
+
+services:
+  - docker:dind
+
+before_script:
+  - apk update
+  - apk add --no-cache linux-headers musl-dev gcc libffi-dev libressl-dev make
+  - docker -v
+  - python -V
+  - pip install pipenv
+  - pipenv install
+  - ansible --version
+  - molecule --version
+
+pulibrary-roles:
+  stage: test
+  variables:
+    DOCKER_HOST: "tcp://docker:2375"
+  script: pipenv run invoke test
+  parallel: 4

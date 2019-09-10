@@ -1,6 +1,53 @@
+from functools import reduce
+import glob
 from invoke import task
 import os
 from pathlib import Path
+import subprocess
+import sys
+
+
+@task
+def test(command):
+    # Retrieve all possible roles with molecule tests
+    current_path = os.path.dirname(os.path.realpath(__file__))
+    role_paths = []
+    for glob_path in glob.glob(f"{current_path}/roles/**/molecule/.."):
+        role_path = os.path.realpath(glob_path)
+        role_paths.append(role_path)
+
+    # Divide and find out which subset should have their tests run
+
+    # The parallelism setting
+    if 'CI_NODE_TOTAL' in os.environ:
+        batch_size = int(os.environ['CI_NODE_TOTAL'])
+    else:
+        batch_size = len(role_paths)
+
+    # The job index passed by the current CI build environment
+    if 'CI_NODE_INDEX' in os.environ:
+        job_index = int(os.environ['CI_NODE_INDEX'])
+    else:
+        job_index = 0
+
+    roles_indices = range((len(role_paths) + batch_size - 1) // batch_size)
+    roles_subsets = [role_paths[i*batch_size:(i+1)*batch_size] for i in roles_indices]
+    roles_subset = roles_subsets[job_index]
+
+    # Execute each Molecule test
+    statuses = []
+    # Unfortunately, these still need to block for the process status code to be
+    #   returned (please see https://docs.python.org/3/library/os.html#os.spawnvp)
+    for role_path in roles_subset:
+        role_molecule_command_args = ["molecule", "test"]
+        completed = subprocess.run(role_molecule_command_args, cwd=role_path)
+        status = completed.returncode
+        statuses.append(status)
+
+    # Reduce the status of each
+    exit_status = reduce((lambda u, v: u | v), statuses)
+    sys.exit(exit_status)
+
 
 @task
 def molecularize(command, role):
