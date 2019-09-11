@@ -1,12 +1,9 @@
 ---
 - name: install freetds from ubuntu package
   apt:
-    name: "{{item}}"
+    name: ["freetds-bin", "freetds-dev"]
     state: present
     update_cache: true
-  with_items:
-    - freetds-bin
-    - freetds-dev
   when: ansible_distribution_release != "xenial"
 
 # https://github.com/thedumbtechguy/ansible-role-freetds
@@ -52,7 +49,8 @@
     creates: ansible.autogen
   when: ansible_distribution_release == "xenial"
 
-- file:
+- name: create ansible autogen
+  file:
     path: '/tmp/freetds/ansible.autogen'
     state: touch
   changed_when: false
@@ -65,7 +63,8 @@
     creates: ansible.make
   when: ansible_distribution_release == "xenial"
 
-- file:
+- name: create ansible make file
+  file:
     path: '/tmp/freetds/ansible.make'
     state: touch
   changed_when: false
@@ -93,6 +92,7 @@
   when: "(ansible_distribution_release == 'xenial') and (_install_result|succeeded) and ('freetds v1.0' in _install_result.stdout)"
   become: true
 
-- fail:
+- name: announce failure
+  fail:
     msg: "The installation was not successful."
   when: "(ansible_distribution_release == 'xenial') and ((_install_result|failed) or ('freetds v1.0' not in _install_result.stdout))"
