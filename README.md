@@ -1,7 +1,8 @@
 Princeton Ansible Playbooks
 ===========================
-[![CircleCI](https://circleci.com/gh/pulibrary/princeton_ansible.svg?style=svg)](https://circleci.com/gh/pulibrary/princeton_ansible)
-
+<p align="left">
+  <a href="https://github.com/pulibrary/princeton_ansible"><img alt="Princeton Ansible Workflow" src="https://github.com/pulibrary/princeton_ansible/workflows/Molecule%20Tests/badge.svg"></a>
+</p>
 # Import PUL Box
 
 Download `ubuntu-16.04.virtualbox.box` from the google drive and place it in the `images` directory. It is an image built from the [https://github.com/pulibrary/vmimages](https://github.com/pulibrary/vmimages) repository. It will need the relatively insecure `pulsys_rsa_key` to log into the VM. Ask for the untracked private key.
@@ -92,7 +93,7 @@ In all the steps below substitue your role name for `example`
    ```bash
    molecule init role -r roles/pulibrary.example
    ```
-1. Set up to run from circle ci `vi .circleci/config.yml` add for your role at the end of the jobs 
+1. Set up to run from circle ci `vi .circleci/config.yml` add for your role at the end of the jobs
    ```
       - test_role:
         name: "test_example"
