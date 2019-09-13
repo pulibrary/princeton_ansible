@@ -1,12 +1,23 @@
 ---
 ## Google Cloud Worker
 - name: Install startup script for PubSub
-  template: "src=pubsub.service dest=/etc/systemd/system/figgy-pubsub-worker.service"
+  template:
+    src: pubsub.service
+    dest: /etc/systemd/system/figgy-pubsub-worker.service
   notify: 'restart pubsub worker'
+
 - name: Keep pubsub worker running
-  service: "name=figgy-pubsub-worker enabled=yes state=started"
+  service:
+    name: figgy-pubsub-worker
+    enabled: true
+    state: started
+
 - name: Allow deploy user to restart worker
-  lineinfile: "dest=/etc/sudoers state=present line='{{deploy_user}} ALL=(ALL) NOPASSWD: /usr/sbin/service figgy-pubsub-worker {{item}}' validate='visudo -cf %s'"
+  lineinfile:
+    dest: /etc/sudoers
+    state: present
+    line: '{{ deploy_user }} ALL=(ALL) NOPASSWD: /usr/sbin/service figgy-pubsub-worker {{ item }}'
+    validate: 'visudo -cf %s'
   with_items:
     - status
     - restart
