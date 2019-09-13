@@ -222,6 +222,15 @@ Finally, deploy from robots channel to get the new functionality on all the boxe
 is extremely resource intensive and may not provision properly on host machines
 lacking adequate hardware resources.*
 
+# Connections to other boxes
+
+Currently there's no automation on firewall changes when the box you're provisioning needs to talk to the postgres or solr machines. See instructions for manual edits at:
+
+* https://github.com/pulibrary/pul-the-hard-way/blob/master/services/postgresql.md#allow-access-from-a-new-box
+* https://github.com/pulibrary/pul-the-hard-way/blob/master/services/solr.md#allow-access-from-a-new-box
+
+# Vault
+
 If you need to diff an ansible-vault file, run
 ```
 git config --global diff.ansible-vault.textconv "ansible-vault view"
@@ -230,14 +239,9 @@ git config --local merge.ansible-vault.name "Ansible Vault merge driver"
 ```
 after which any `git diff` command should decrypt your ansible-vault files.
 
-# Connections to other boxes
+If a file is not decrypting with `git diff` you may need to add the file you're trying to diff to `.gitattributes`.
 
-Currently there's no automation on firewall changes when the box you're provisioning needs to talk to the postgres or solr machines. See instructions for manual edits at:
-
-* https://github.com/pulibrary/pul-the-hard-way/blob/master/services/postgresql.md#allow-access-from-a-new-box
-* https://github.com/pulibrary/pul-the-hard-way/blob/master/services/solr.md#allow-access-from-a-new-box
-
-# Automatically pull vault password from lastpass
+## Automatically pull vault password from lastpass
 1. `brew install lastpass-cli`
 2. `lpass login <email@email.com>`
 3. `gem install lastpass-ansible`
