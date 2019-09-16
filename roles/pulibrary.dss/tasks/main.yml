@@ -1,35 +1,16 @@
 ---
-- name: add mariadb repo keys
-  apt_key:
-    keyserver: 'keyserver.ubuntu.com'
-    id: '0xF1656F24C74CD1D8'
+- name: Download node apt update script
+  get_url:
+    url: https://deb.nodesource.com/setup_10.x
+    dest: /tmp/setup_10.x
+    mode: '0755'
 
-- name: add maria db repository
-  apt_repository:
-    repo: 'deb [arch=amd64,i386,ppc64el] https://mirrors.evowise.com/mariadb/repo/10.2/ubuntu {{ ansible_distribution_release }} main'
+- name: update the node source repository
+  command: '/tmp/setup_10.x'
+  become: true
+  changed_when: false
 
-- name: install maridb client dev headers
+- name: Install latest node
   apt:
-    name: '{{ item }}'
-    state: present
-    update_cache: 'yes'
-  with_items:
-    - libmariadbclient-dev
-
-- name: create mysql user
-  mysql_user:
-    login_host: '{{ db_host }}'
-    login_user: 'root'
-    login_password: '{{ mariadb_mysql_root_password }}'
-    name: '{{ dss_db_user }}'
-    password: '{{ dss_db_password }}'
-    state: present
-    priv: '{{ dss_db_name }}.*:ALL'
-
-- name: create mysql database
-  mysql_db:
-    name: '{{ dss_db_name }}'
-    encoding: 'utf8'
-    login_host: '{{ db_host }}'
-    login_password: '{{ dss_db_password }}'
-    login_user: '{{ dss_db_user }}'
+    name: 'nodejs'
+    state: latest
