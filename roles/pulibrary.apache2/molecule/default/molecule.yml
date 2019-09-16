@@ -1,33 +1,25 @@
 ---
-dependency:
-  name: galaxy
-  enabled: false
+scenario:
+  name: default
 driver:
   name: docker
-lint:
-  name: yamllint
 platforms:
   - name: instance
-    image: "kayiwa/puldocker-${MOLECULE_DISTRO:-ubuntu1804}-ansible:latest"
-    volumes:
-      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    image: "pulibrary/puldocker-${MOLECULE_DISTRO:-ubuntu1804}-ansible:latest"
     privileged: true
     pre_build_image: true
 provisioner:
   name: ansible
-  lint:
-    name: ansible-lint
-scenario:
-  name: default
-  test_sequence:
-    - lint
-    - destroy
-    - syntax
-    - create
-    - converge
-    - idempotence
-    - verify
-    - destroy
+  playbooks:
+    converge: playbook.yml
+  log: true
+dependency:
+  name: galaxy
+  enabled: false
+lint:
+  name: yamllint
+  options:
+    config-file: molecule/default/yaml-lint.yml
 verifier:
   name: testinfra
   env:
@@ -37,3 +29,4 @@ verifier:
   options:
     # show which tests where executed in test output
     v: 1
+  directory: ./tests/
