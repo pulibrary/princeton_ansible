@@ -1,0 +1,15 @@
+---
+- hosts: lib-jobs-staging
+  remote_user: pulsys
+  become: true
+  vars_files:
+    - ../group_vars/lib-jobs/vault.yml
+  roles:
+    - role: roles/pulibrary.lib-jobs
+
+  post_tasks:
+    - name: tell everyone on slack you ran an ansible playbook
+      slack:
+        token: "{{ vault_pul_slack_token }}"
+        msg: "{{ inventory_hostname }} completed"
+        channel: #server-alerts
