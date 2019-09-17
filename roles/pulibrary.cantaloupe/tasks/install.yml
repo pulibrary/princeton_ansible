@@ -15,6 +15,8 @@
     dest: "{{ cantaloupe_symlink }}"
     owner: "{{ cantaloupe_user }}"
     group: "{{ cantaloupe_group }}"
+    force: true
+  changed_when: false
 
 - name: Create Cantaloupe log path
   file:
@@ -31,13 +33,17 @@
     group: "{{ cantaloupe_group }}"
 
 - name: Fix /dev/stdout
-  shell: "chmod o+w /dev/stdout"
+  file:
+    path: "/dev/stdout"
+    mode: o+w
+    force: true
 
 - name: Symlink Kakadu Libraries
   file:
     state: link
     src: "{{ cantaloupe_install_root }}/{{ cantaloupe_src_prefix }}-{{ cantaloupe_version }}/deps/Linux-x86-64/lib/{{ item }}"
     dest: "/usr/lib/{{ item }}"
+    force: true
   with_items:
     - libkdu_a7AR.so
     - libkdu_jni.so
@@ -45,7 +51,15 @@
   when: cantaloupe_version != "3.3.2"
 
 - name: Install startup script for workers
-  template: "src=cantaloupe.service.j2 dest=/etc/systemd/system/cantaloupe.service"
+  template:
+    src: cantaloupe.service.j2
+    dest: /etc/systemd/system/cantaloupe.service
+  when: run_not_in_container
   notify: restart cantaloupe
+
 - name: Keep cantaloupe running
-  service: "name=cantaloupe enabled=yes state=started"
+  service:
+    name: cantaloupe
+    enabled: true
+    state: started
+  when: run_not_in_container
