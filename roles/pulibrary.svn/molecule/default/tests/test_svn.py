@@ -8,7 +8,7 @@ testinfra_hosts = testinfra.utils.ansible_runner.AnsibleRunner(
 
 
 @pytest.mark.parametrize("name", [
-    "libapache2-mod-svn",
+    "subversion",
     ])
 def test_for_svn_software(host, name):
     pkg = host.package(name)
