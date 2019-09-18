@@ -7,6 +7,8 @@ testinfra_hosts = testinfra.utils.ansible_runner.AnsibleRunner(
 
 
 def test_lib_svn_home_dir(host):
-    f = host.file('/var/svn/libsvn')
+    f = host.file('/srv/svn/repos/libsvn')
 
     assert f.exists
+    assert f.user == 'svn'
+    assert f.group == 'svn'
