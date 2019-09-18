@@ -22,3 +22,18 @@
   command: svnadmin create "{{ lib_svn_repo_dir }}"
   when: not repo_dir.stat.exists
   changed_when: false
+
+- name: copy svn default file
+  copy:
+    src: files/svnserve
+    dest: /etc/default/svnserve
+    owner: root
+    group: root
+
+- name: add svn systemd file
+  copy:
+    src: files/svnserve.service
+    dest: /etc/systemd/system/svnserve.service
+    owner: root
+    group: root
+  when: run_not_in_container
