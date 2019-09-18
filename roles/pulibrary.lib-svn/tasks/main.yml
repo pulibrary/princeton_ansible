@@ -23,6 +23,13 @@
   when: not repo_dir.stat.exists
   changed_when: false
 
+- name: modify file permissions
+  file:
+    path: "{{ lib_svn_repo_dir }}"
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+    recurse: true
+
 - name: copy svn default file
   copy:
     src: files/svnserve
@@ -37,3 +44,20 @@
     owner: root
     group: root
   when: run_not_in_container
+
+- name: make systemd re-read itself
+  systemd:
+    daemon_reload: true
+  when: run_not_in_container
+
+- name: copy svnserve config file
+  copy:
+    src: files/svnserve.conf
+    dest: "{{ lib_svn_repo_dir }}/conf"
+
+- name: copy svnserve credentials file
+  copy:
+    src: files/passwd
+    dest: "{{ lib_svn_repo_dir }}/conf"
+  notify:
+    - restart subversion
