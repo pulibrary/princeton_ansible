@@ -1,2 +1,15 @@
 ---
-# tasks file for roles/pulibrary.lib-svn
+- name: create svn home
+  file:
+    path: "{{ svn_home }}"
+    state: directory
+
+- name: Check if repo exists in svn home
+  stat:
+    path: "{{ lib_svn_repo_dir }}"
+  register: repo_dir
+
+- name: create repo
+  command: svnadmin create "{{ lib_svn_repo_dir }}"
+  when: not repo_dir.stat.exists
+  changed_when: false
