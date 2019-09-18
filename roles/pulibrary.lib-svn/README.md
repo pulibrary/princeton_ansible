@@ -1,45 +1,38 @@
 Role Name
 =========
 
-A brief description of the role goes here.
+Manages a Subversion Server
 
 Requirements
 ------------
 
-Any pre-requisites that may not be covered by Ansible itself or the role should
-be mentioned here. For instance, if the role uses the EC2 module, it may be a
-good idea to mention in this section that the boto package is required.
+An already configured subversion server
 
 Role Variables
 --------------
 
-A description of the settable variables for this role should go here, including
-any variables that are in defaults/main.yml, vars/main.yml, and any variables
-that can/should be set via parameters to the role. Any variables that are read
-from other roles and/or the global scope (ie. hostvars, group vars, etc.) should
-be mentioned here as well.
+* in `vars/main.yml` # the name of the subversion user
+* in `defaults/main.yml` # the user harry and sally are examples
+
+Create a new vaulted user and saved the username and password under `group_vars/lib-svn/vault.yml`
+
 
 Dependencies
 ------------
 
-A list of other roles hosted on Galaxy should go here, plus any details in
-regards to parameters that may need to be set for other roles, or variables that
-are used from other roles.
+This role depends on `pulibrary.svn` and `pulibrary.deploy-user`
 
 Example Playbook
 ----------------
 
-Including an example of how to use your role (for instance, with variables
-passed in as parameters) is always nice for users too:
-
     - hosts: servers
       roles:
-         - { role: roles/pulibrary.lib-svn, x: 42 }
+         - { role: roles/pulibrary.lib-svn }
 
 License
 -------
 
-BSD
+MIT
 
 Author Information
 ------------------
