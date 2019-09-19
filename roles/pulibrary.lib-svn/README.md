@@ -14,7 +14,8 @@ Role Variables
 Create a new vaulted user and saved the username and password under `group_vars/lib-svn/vault.yml`
 
 * in `vars/main.yml` # the name of the subversion user
-* in `defaults/main.yml` # the user harry and sally are examples
+* in `defaults/main.yml` # the `svn_users` dictionary 
+* in `vars/testuser.yml` # sally is an example to populate `svn_users`
 
 
 
