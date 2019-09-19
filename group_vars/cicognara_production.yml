@@ -57,3 +57,30 @@ redis__server_default_configuration:
   maxmemory: "{{ redis__server_maxmemory }}"
   maxmemory-policy: "{{ redis__server_maxmemory_policy }}"
   maxmemory-samples: "{{ redis__server_maxmemory_samples }}"
+datadog_api_key: "{{vault_datadog_key}}"
+datadog_config:
+  tags: "application:cicognara, environment:production, type:webserver"
+  apm_enabled: "true"
+  log_enabled: true
+  process_config:
+    enabled: "true"
+  apm_config:
+    analyzed_spans:
+      cicognara|rack.request: 1
+datadog_checks:
+  ruby:
+    init_config:
+    logs:
+      - type: file
+        path: /opt/cicognara/current/log/production.log
+        service: cicognara
+        source: ruby
+  redisdb:
+    init_config:
+    instances:
+      - host: 127.0.0.1
+        port: 6379
+        keys:
+          - 'cicognara:queue:default'
+          - 'cicognara:retry'
+          - 'cicognara:dead'
