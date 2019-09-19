@@ -1,0 +1,30 @@
+---
+locator_db_user: 'locator'
+locator_db_password: '{{ vault_locator_db_password }}'
+locator_stage_db_name: 'locator_prod_stage'
+locator_production_db_name: 'locator_prod_production'
+locator_base_url: 'https://locator-prod.princeton.edu/'
+
+db_host: '{{ maria_db_cluster_host }}'
+db_password: '{{ vault_maria_mysql_root_password }}'
+mariadb__server: "{{ db_host }}"
+
+datadog_api_key: "{{vault_datadog_key}}"
+
+datadog_config:
+    log_enabled: "true"
+datadog_checks:
+  locator_datadog_apache_check:
+    init_config:
+    logs:
+      - type: file
+        path: /var/log/apache2/other_vhosts_access.log
+        service: locator
+        source: locator
+        sourcecategory: locator
+      - type: file
+        path: /var/log/apache2/error.log
+        service: locator
+        source: locator
+        sourcecategory: locator
+    tags: "locator, environment:production, role:locator"
