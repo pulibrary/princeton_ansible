@@ -1,0 +1,29 @@
+---
+- name: register services
+  consul:
+    service_name: "{{ item.name }}"
+    service_port: "{{ item.port | default (omit) }}"
+    service_address: "{{ item.service_address | default (omit) }}"
+    http: "{{ item.http | default (omit) }}"
+    script: "{{ item.script | default (omit) }}"
+    interval: "{{ item.interval | default (omit) }}"
+    tags: "{{ item.tags | default (omit) }}"
+    token: "{{ consul_acl_agent_token }}"
+  notify: restart consul
+  changed_when: false
+  no_log: true
+  with_items:
+    - "{{ consul_services_register }}"
+
+# Temporary, until consul state=absent is fixed
+- name: De-register services
+  uri:
+    url: "http://localhost:{{ consul_http_port }}/v1/agent/service/deregister/{{ item.name }}"
+    method: PUT
+    headers:
+      X-Consul-Token: "{{ consul_acl_agent_token }}"
+    validate_certs: no
+  when: item.state is defined and item.state == "absent"
+  no_log: true
+  with_items:
+    - "{{ consul_services_register }}"
