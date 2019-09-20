@@ -1,2 +1,36 @@
 ---
 # tasks file for roles/pulibrary.consul
+- name: check version
+  import_tasks: check.yml
+  tags:
+    - check
+
+- name: Install consul
+  import_tasks: install.yml
+  tags:
+    - install
+  when: consul_installed_version.rc != 0 or consul_force_install or consul_version not in consul_installed_version.stdout
+
+- name: configure consul
+  import_tasks: config.yml
+  tags:
+    - configure
+
+- name: set consul service
+  import_tasks: service.yml
+  tags:
+    - service
+
+- name: consul ACL
+  import_tasks: consul_acl.yml
+  when: consul_acl
+  tags:
+    - configure
+    - acl
+
+- name: consul services registration
+  import_tasks: consul_services_registration.yml
+  when: consul_agent_services and consul_agent
+  tags:
+    - configure
+    - services
