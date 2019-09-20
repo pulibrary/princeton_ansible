@@ -7,7 +7,7 @@ testinfra_hosts = testinfra.utils.ansible_runner.AnsibleRunner(
 
 
 def test_consul_bin_file(host):
-    f = host.file('/usr/local/bin/consul')
+    f = host.file('/usr/bin/consul')
 
     assert f.exists
     assert f.user == 'root'
