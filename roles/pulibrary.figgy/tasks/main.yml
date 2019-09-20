@@ -1,25 +1,4 @@
 ---
-- name: Check for solr installed
-  stat:
-    path: '{{solr_home}}/data'
-  register: solr_installed
-
-- name: Configure Solr Core
-  template:
-    src: '{{item.src}}'
-    dest: '{{item.dest}}'
-  with_items:
-    - src: solrconfig.xml
-      dest: '{{ solr_home }}/data/{{figgy_solr_name}}/conf/solrconfig.xml'
-    - src: schema.xml
-      dest: '{{ solr_home }}/data/{{figgy_solr_name}}/conf/schema.xml'
-    - src: stopwords_en.txt
-      dest: '{{ solr_home }}/data/{{figgy_solr_name}}/conf/stopwords_en.txt'
-  when:
-    - solr_installed.stat.exists
-  notify:
-    - restart solr
-
 - name: Create repository directory structure
   file:
     path: '/opt/{{item}}'
