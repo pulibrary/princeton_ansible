@@ -44,7 +44,7 @@
 
 - name: Configure high ulimit value for Solr
   template:
-    src: 'solr.conf'
+    src: 'solr.conf.j2'
     dest: '/etc/security/limits.d/solr.conf'
     force: 'yes'
   notify: restart SolrCloud
@@ -56,10 +56,17 @@
     force: 'yes'
   notify: restart SolrCloud
 
-- name: Configure logging
+- name: Configure pre 7.4 logging
   template:
     src: 'log4j.properties.j2'
     dest: '/solr/log4j.properties'
+    force: 'yes'
+  notify: restart SolrCloud
+
+- name: Configure logging
+  template:
+    src: 'log4j2.xml.j2'
+    dest: '/solr/log4j2.xml'
     force: 'yes'
   notify: restart SolrCloud
 
