@@ -1,0 +1,28 @@
+{
+  "node_name": "{{ consul_nodename }}",
+{% if consul_ui %}
+  "ui": true,
+  "addresses":{
+    "http": "0.0.0.0"
+  },
+{% endif %}
+  "data_dir": "{{ consul_datadir }}",
+  "log_level": "{{ consul_loglevel }}",
+  "log_file": "{{ consul_logfile }}",
+  "domain": "{{ consul_domain }}",
+  "datacenter": "{{ consul_datacenter }}",
+  "bind_addr": "{{ consul_ip }}",
+  "advertise_addr": "{{ consul_ip }}",
+  "ports": {
+    "http": {{ consul_http_port }},
+    "dns": {{ consul_dns_port }}
+  },
+  "server": {{ "true" if consul_server else "false" }},
+  "enable_syslog": {{ "true" if consul_syslog else "false" }},
+  "retry_join": [{% for host in consul_server_nodes %}"{{ host }}"{% if not loop.last %}, {% endif %}{% endfor %}],
+  "rejoin_after_leave": true,
+{% if consul_server %}
+  "bootstrap_expect": {{ consul_server_nodes|length }},
+{% endif %}
+  "start_join": [{% for host in consul_server_nodes %}"{{ host }}"{% if not loop.last %}, {% endif %}{% endfor %}]
+}
