@@ -1,0 +1,27 @@
+---
+- name: Configure postgresql repository key
+  apt_key:
+    url: "{{ postgresql_apt_key_url }}"
+
+- name: Configure postgresql repository
+  apt_repository:
+    repo: "{{ postgresql_apt_repo }}"
+
+- name: Ensure postgresql database-cluster manager package
+  apt:
+    name: postgresql-common
+    update_cache: true
+
+- name: Disable initializing of a default postgresql cluster
+  replace:
+    path: /etc/postgresql-common/createcluster.conf
+    replace: create_main_cluster = false
+    regexp: ^#?create_main_cluster.*$
+
+- name: Install postgresql packages
+  apt:
+    name: "{{ item.name }}"
+    state: "{{ item.state }}"
+    update_cache: true
+  with_items:
+    - "{{ patroni_postgresql_packages }}"
