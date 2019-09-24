@@ -1,0 +1,25 @@
+---
+- name: Template out config
+  template:
+    src: "{{ consul_configuration_template_path }}"
+    dest: "{{ consul_configdir }}/consul.json"
+    owner: "{{ consul_user }}"
+    group: "{{ consul_group }}"
+  notify: restart consul
+
+- name: copy logrotate conf
+  template:
+    src: "{{ consul_logrotate_template_path }}"
+    dest: /etc/logrotate.d/consul
+    mode: 0644
+  when: run_not_in_container
+
+- name: copy consul.service file
+  template:
+    src: "{{ consul_service_template_path }}"
+    dest: /etc/systemd/system/consul.service
+    trim_blocks: false
+    mode: 0644
+    owner: root
+    group: root
+  notify: restart consul
