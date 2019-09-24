@@ -1,0 +1,38 @@
+---
+- name: Create patroni config directory
+  file:
+    path: "{{ patroni_config_dir }}"
+    state: directory
+    owner: "{{ patroni_system_user }}"
+    group: "{{ patroni_system_group }}"
+    mode: 0750
+
+- name: Prepare callback scripts
+  copy:
+    src: "callbacks/{{ item.event }}"
+    dest: "{{ item.script }}"
+    owner: "{{ patroni_system_user }}"
+    group: "{{ patroni_system_group }}"
+    mode: 0750
+    backup: yes
+  with_items:
+    - "{{ patroni_postgresql_callbacks }}"
+  when: not( (item.script is none) or (item.script | trim | length == 0) )
+
+- name: Create patroni unit file
+  template:
+    src: patroni.service.j2
+    dest: /etc/systemd/system/patroni.service
+    owner: root
+    group: root
+    mode: 0644
+
+- name: Create patroni configuration file
+  template:
+    src: patroni.yml.j2
+    dest: "{{ patroni_config_dir }}/{{ patroni_name|default(inventory_hostname) }}.yml"
+    owner: "{{ patroni_system_user }}"
+    group: "{{ patroni_system_group }}"
+    mode: 0600
+  notify:
+    - restart patroni
