@@ -1,0 +1,51 @@
+---
+- name: add acl configuration master
+  template:
+    src: consul.master.j2
+    dest: "{{ consul_configdir }}/master.json"
+    owner: "{{ consul_user }}"
+    group: "{{ consul_group }}"
+    mode: 0640
+  notify: restart consul
+  no_log: true
+  when: consul_server
+
+- name: add acl configuration client
+  template:
+    src: consul.client.j2
+    dest: "{{ consul_configdir }}/client.json"
+    owner: "{{ consul_user }}"
+    group: "{{ consul_group }}"
+    mode: 0640
+  notify: restart consul
+  no_log: true
+  when: consul_agent
+
+- name: ACLs system needs to be enabled prior to apply them
+  meta: flush_handlers
+  when: consul_acl
+
+- name: install consul_acl prerequisites
+  apt:
+    name: "{{ consul_acl_required_libs }}"
+
+- name: install consul_acl Python prerequisites
+  pip:
+    name: "{{ consul_acl_python_required_packages }}"
+
+- name: wait for Consul to start up
+  wait_for:
+    port: "{{ consul_http_port }}"
+    timeout: 60
+
+- name: create ACL
+  consul_acl:
+    name: "{{ item.key }}"
+    token_type: "{{ item.value.token_type }}"
+    token: "{{ item.value.token }}"
+    rules: "{{ item.value.rules }}"
+    mgmt_token: "{{ consul_acl_master_token }}"
+    host: "{{ consul_server_nodes | first }}"
+  notify: restart consul
+  with_dict: "{{ consul_acl_configuration_list }}"
+  no_log: true
