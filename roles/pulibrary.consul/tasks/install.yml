@@ -1,0 +1,43 @@
+---
+- name: install dependencies
+  apt:
+    pkg: "{{ consul_required_libs }}"
+    update_cache: true
+    cache_valid_time: 600
+
+- name: ensure Consul group
+  group:
+    name: "{{ consul_group }}"
+
+- name: ensure Consul user
+  user:
+    name: "{{ consul_user }}"
+    group: "{{ consul_group }}"
+    createhome: no
+
+- name: ensure Consul skeleton path
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ consul_user }}"
+    group: "{{ consul_group }}"
+  with_items:
+    - "{{ consul_bindir }}"
+    - "{{ consul_configdir }}"
+    - "{{ consul_datadir }}"
+    - "{{ consul_logdir }}"
+
+- name: download and extract Consul
+  unarchive:
+    src: "{{ consul_url }}"
+    dest: "{{ consul_bindir }}"
+    owner: "{{ consul_user }}"
+    group: "{{ consul_group }}"
+    remote_src: yes
+  notify: restart consul
+
+- name: link binary
+  file:
+    src: "{{ consul_bindir }}/consul"
+    dest: /usr/bin/consul
+    state: link
