@@ -1,2 +1,56 @@
 ---
 # defaults file for roles/pulibrary.consul
+consul_version: 1.6.1
+
+consul_user: consul
+consul_group: consul
+consul_nodename: "{{ ansible_nodename }}"
+
+consul_force_install: false
+
+## List with the hosts acting as servers
+consul_server_nodes: []
+
+consul_basedir: /opt/consul
+
+consul_bindir: "{{ consul_basedir }}/bin"
+consul_configdir: "{{ consul_basedir }}/consul.d"
+consul_datadir: "{{ consul_basedir }}/data"
+consul_syslog: false
+
+consul_logdir: /var/log/consul
+consul_logfile: "{{ consul_logdir }}/consul.log"
+consul_loglevel: INFO
+
+consul_domain: consul
+consul_datacenter: main
+consul_interface: "{{ ansible_default_ipv4.alias }}"
+consul_ip: "{{ hostvars[ansible_nodename]['ansible_' + consul_interface]['ipv4']['address'] }}"
+consul_http_port: 8500
+consul_dns_port: 8600
+
+consul_configuration_template_path: consul.json.j2
+consul_logrotate_template_path: logrotate.j2
+consul_service_template_path: consul.service.j2
+
+# Consul nodes behaviour #
+consul_agent: false
+consul_server: false
+consul_ui: false
+# Check this blog post before enable this variable
+# https://www.hashicorp.com/blog/protecting-consul-from-rce-risk-in-specific-configurations
+consul_enable_script_check: false
+
+# ACLs #
+consul_acl: false
+consul_acl_datacenter: "{{ consul_datacenter }}"
+consul_acl_default_policy: allow
+consul_acl_down_policy: extend-cache
+
+## Recommended to generate these values with uuidgen
+consul_acl_master_token: master
+consul_acl_agent_token: agent
+
+# Services #
+consul_agent_services: false
+consul_services_register:  # Example:
