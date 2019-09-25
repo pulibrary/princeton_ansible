@@ -1,0 +1,22 @@
+---
+- name: Install watchdog
+  apt:
+    name: watchdog
+    state: present
+
+- name: Make kernel watchdog device available for patroni
+  template:
+    src: patroni-watchdog.service.j2
+    dest: /etc/systemd/system/patroni-watchdog.service
+    owner: root
+    group: root
+    mode: 0644
+  notify:
+    - restart patroni-watchdog
+  when: run_not_in_container
+
+- name: Enable watchdog daemon to start on boot
+  file:
+    src: /lib/systemd/system/watchdog.service
+    dest: /etc/systemd/system/multi-user.target.wants/watchdog.service
+    state: link
