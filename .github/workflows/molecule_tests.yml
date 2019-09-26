@@ -50,7 +50,9 @@ jobs:
 
     steps:
       - name: Checkout branch
-        uses: actions/checkout@v1
+        run: |
+          git clone https://github.com/pulibrary/princeton_ansible.git .
+          git checkout ${{ github.sha }}
       - name: Set up Python
         uses: actions/setup-python@v1
         with:
@@ -67,5 +69,4 @@ jobs:
           sudo /usr/sbin/update-rc.d -f apparmor remove
       - name: Run tests
         run: |
-          cd roles/${{ matrix.role }}
-          molecule test
+          ROLE=${{ matrix.role }} python run_molecule.py
