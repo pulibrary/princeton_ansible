@@ -7,4 +7,38 @@ run_not_in_container: true
 patroni_consul_host: "lib-consul-staging1.princeton.edu:{{ patroni_consul_port | default(8500) }}"
 patroni_consul_dc: "diglib-staging"
 patroni_dcs_exists: true
+patroni_consul_register_service: true
 patroni_consul_url: "lib-consul-staging1.princeton.edu:8500"
+patroni_bootstrap_pg_hba:
+  - {type: "host", database: "all", user: "all", address: "0.0.0.0/0", method: "md5"}
+  - {type: "host", database: "replication", user: "{{ patroni_replication_username }}", address: "0.0.0.0/0", method: "md5"}
+patroni_postgresql_pg_hba:
+  - {type: "host", database: "all", user: "all", address: "0.0.0.0/0", method: "md5"}
+  - {type: "host", database: "replication", user: "{{ patroni_replication_username }}", address: "0.0.0.0/0", method: "md5"}
+patroni_bootstrap_dcs_postgresql_recovery_conf:
+  - {option: "standby_mode", value: "on"}
+  - {option: "restore_command", value: "cp ../wal_archive/%f %p"}
+consul_force_install: true
+consul_agent: true
+consul_agent_services: true
+datacenter_name: diglib-staging
+consul_acl: true
+consul_acl_datacenter: "{{ consul_datacenter }}"
+consul_server_nodes:
+  - lib-consul-staging1.princeton.edu
+  - lib-consul-staging2.princeton.edu
+  - lib-consul-staging3.princeton.edu
+consul_acl_configuration_list:
+  Agent:
+    token_type: client
+    token: "{{ consul_acl_agent_token }}"
+    rules:
+      - node: ""
+        policy: write
+      - service: ""
+        policy: read
+consul_services_register:
+  - name: patroni
+    port: 8500
+    http: "http://lib-consul-staging1.princeton.edu"
+    interval: "60s"
