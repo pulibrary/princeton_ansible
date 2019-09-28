@@ -11,9 +11,9 @@
     token: "{{ consul_acl_agent_token }}"
   notify: restart consul
   changed_when: false
-  no_log: true
   with_items:
     - "{{ consul_services_register }}"
+  ignore_errors: true
 
 # Temporary, until consul state=absent is fixed
 - name: De-register services
@@ -24,6 +24,6 @@
       X-Consul-Token: "{{ consul_acl_agent_token }}"
     validate_certs: no
   when: item.state is defined and item.state == "absent"
-  no_log: true
   with_items:
     - "{{ consul_services_register }}"
+  ignore_errors: true
