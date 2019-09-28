@@ -11,13 +11,24 @@ patroni_consul_register_service: true
 patroni_consul_url: "lib-consul-staging1.princeton.edu:8500"
 patroni_bootstrap_pg_hba:
   - {type: "host", database: "all", user: "all", address: "0.0.0.0/0", method: "md5"}
-  - {type: "host", database: "replication", user: "{{ patroni_replication_username }}", address: "0.0.0.0/0", method: "md5"}
+  - {type: "host", database: "replication", user: "{{ patroni_replication_username }}", address: "{{ patroni_server1 }}/32", method: "md5"}
+  - {type: "host", database: "replication", user: "{{ patroni_replication_username }}", address: "{{ patroni_server2 }}/32", method: "md5"}
+  - {type: "host", database: "replication", user: "{{ patroni_replication_username }}", address: "{{ patroni_server3 }}/32", method: "md5"}
 patroni_postgresql_pg_hba:
   - {type: "host", database: "all", user: "all", address: "0.0.0.0/0", method: "md5"}
-  - {type: "host", database: "replication", user: "{{ patroni_replication_username }}", address: "0.0.0.0/0", method: "md5"}
+  - {type: "host", database: "replication", user: "{{ patroni_replication_username }}", address: "{{ patroni_server1 }}/32", method: "md5"}
+  - {type: "host", database: "replication", user: "{{ patroni_replication_username }}", address: "{{ patroni_server2 }}/32", method: "md5"}
+  - {type: "host", database: "replication", user: "{{ patroni_replication_username }}", address: "{{ patroni_server3 }}/32", method: "md5"}
 patroni_bootstrap_dcs_postgresql_recovery_conf:
   - {option: "standby_mode", value: "on"}
   - {option: "restore_command", value: "cp ../wal_archive/%f %p"}
+patroni_bootstrap_dcs_postgresql_use_pg_rewind: true
+patroni_postgresql_recovery_conf:
+  - {option: "standby_mode", value: "on"}
+  - {option: "restore_command", value: "cp ../wal_archive/%f %p"}
+patroni_server1: "{{ vault_patroni_server1 }}"
+patroni_server2: "{{ vault_patroni_server2 }}"
+patroni_server3: "{{ vault_patroni_server3 }}"
 consul_force_install: true
 consul_agent: true
 consul_agent_services: true
