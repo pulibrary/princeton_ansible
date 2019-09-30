@@ -10,7 +10,8 @@ testinfra_hosts = testinfra.utils.ansible_runner.AnsibleRunner(
 @pytest.mark.parametrize("file", [
     "/home/deploy/settings.php",
     "/etc/drush/aliases.drushrc.php",
-    "/home/deploy/.env.local"
+    "/home/deploy/.env.local",
+    "/home/deploy/special_collections_settings.php",
     ])
 def test_for_libwww_file_exist(host, file):
     file = host.file(file)
@@ -20,7 +21,8 @@ def test_for_libwww_file_exist(host, file):
 
 @pytest.mark.parametrize("line", [
     "Alias /utils /var/www/discoveryutils_cap/current/public",
-    "DocumentRoot /var/www/library_cap/current"
+    "DocumentRoot /var/www/library_cap/current",
+    "Alias /special_collections /var/www/special_collections_cap/current"
     ])
 def test_for_libwww_apache_config(host, line):
     file = host.file("/etc/apache2/sites-available/000-default.conf")
@@ -33,7 +35,9 @@ def test_for_libwww_apache_config(host, line):
     "Runas_Alias WWW = www-data",
     "deploy ALL = (WWW) NOPASSWD: ALL",
     "deploy ALL=(ALL) NOPASSWD: /bin/chown -R www-data /var/www/library_cap*",
-    "deploy ALL=(ALL) NOPASSWD: /bin/chown -R deploy /var/www/library_cap*"
+    "deploy ALL=(ALL) NOPASSWD: /bin/chown -R deploy /var/www/library_cap*",
+    "deploy ALL=(ALL) NOPASSWD: /bin/chown -R www-data /var/www/special_collections_cap*",
+    "deploy ALL=(ALL) NOPASSWD: /bin/chown -R deploy /var/www/special_collections_cap*"
     ])
 def test_for_libwww_sudoer(host, line):
     file = host.file("/etc/sudoers")
