@@ -88,3 +88,62 @@
     dest: "/etc/php/7.2/apache2/php.ini"
     regexp: "upload_max_filesize ="
     line: "upload_max_filesize = 8M"
+
+###### Special Collections ######
+# after this is the tasks to setup special collections
+
+- name: Check to see if special collections drupal docroot home file exists.
+  stat:
+    path: "{{ special_collections_drupal_docroot }}"
+  register: special_collections_drupal_docroot_exists
+
+- name: create special collections drupal docroot
+  file:
+    path: "{{ special_collections_drupal_docroot }}"
+    state: directory
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+    recurse: true
+    follow: false
+  become: true
+  when: not special_collections_drupal_docroot_exists.stat.exists
+
+- name: Check to see if special_collections_settings.php home file exists.
+  stat:
+    path: "/home/{{ deploy_user }}/special_collections_settings.php"
+  register: special_collections_settings_php_home_exists
+
+- name: Install settings.php
+  template:
+    src: "special_collections_settings.php.j2"
+    dest: "/home/{{ deploy_user }}/special_collections_settings.php"
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+  when: not special_collections_settings_php_home_exists.stat.exists or force_settings
+
+- name: Add apache rules for special collections
+  blockinfile:
+    path: "/etc/apache2/sites-available/000-default.conf"
+    marker: "## {mark} ANSIBLE SPECIAL COLLECTIONS MANAGED BLOCK ##"
+    insertafter: "</Directory>"
+    block: |
+      Alias /special_collections {{ special_collections_drupal_docroot }}/current
+      <Directory "{{ special_collections_drupal_docroot }}/current/>
+        Options Indexes FollowSymLinks MultiViews
+        AllowOverride All
+      </Directory>
+  notify: restart apache
+
+- name: Allow deploy user to change ownership of the special collections directory to www-data
+  lineinfile:
+    dest: "/etc/sudoers"
+    state: "present"
+    line: "{{ deploy_user }} ALL=(ALL) NOPASSWD: /bin/chown -R www-data {{ special_collections_drupal_docroot }}*"
+    validate: "visudo -cf %s"
+
+- name: Allow deploy user to change ownership of the special collections directory to deploy
+  lineinfile:
+    dest: "/etc/sudoers"
+    state: "present"
+    line: "{{ deploy_user }} ALL=(ALL) NOPASSWD: /bin/chown -R deploy {{ special_collections_drupal_docroot }}*"
+    validate: "visudo -cf %s"
