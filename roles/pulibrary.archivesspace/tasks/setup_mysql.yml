@@ -7,33 +7,38 @@
 - name: restart percona
   command: /etc/init.d/mysql bootstrap-pxc
   changed_when: false
+  ignore_errors: true
 
 - name: privilege and binary logging is enabled fix
   mysql_db:
     state: import
-    name: all
+    name: '{{ aspace_db_name }}'
     target: '/tmp/bin_log.sql'
   changed_when: false
 
 - name: create mysql user
   mysql_user:
-    name: '{{ db_user }}'
-    password: '{{ db_password }}'
+    name: '{{ aspace_db_user }}'
+    password: '{{ aspace_db_password }}'
+    login_host: '{{ db_server }}'
+    login_password: '{{ db_host_password }}'
+    login_user: '{{ db_host_user }}'
     state: present
     priv: '{{ db_name }}.*:ALL'
 
 - name: create .my.cnf
   template:
     src: my.cnf.j2
-    dest: '/home/{{ db_user }}/.my.cnf'
-    owner: '{{ db_user }}'
-    group: '{{ db_user }}'
+    dest: '/home/{{ aspace_db_user }}/.my.cnf'
+    owner: '{{ aspace_db_user }}'
+    group: '{{ aspace_db_user }}'
   become: true
 
 - name: create mysql database
   mysql_db:
-    name: '{{ db_name }}'
+    name: '{{ aspace_db_name }}'
     encoding: 'utf8'
     login_host: '{{ db_server }}'
-    login_password: '{{ db_password }}'
-    login_user: '{{ db_user }}'
+    login_password: '{{ db_host_password }}'
+    login_user: '{{ db_host_user }}'
+    state: present
