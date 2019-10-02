@@ -4,21 +4,19 @@
     name: "{{ item.database | d(item.name) }}"
     state: absent
   with_flattened: "{{ mariadb__databases + mariadb__dependent_databases + mariadb_databases|d([]) }}"
-  delegate_to: "{{ mariadb__delegate_to }}"
   when: ((item.database|d(false) or item.name|d(false)) and
          (item.state is defined and item.state == 'absent'))
 
 - name: Create databases
   mysql_db:
     name: "{{ item.database | d(item.name) }}"
-    login_host: '{{ db_host | default(omit) }}'
-    login_password: '{{ db_password | default(omit) }}'
+    login_host: '{{ db_host }}'
+    login_password: '{{ db_password }}'
     login_user: 'root'
     state: present
     encoding: "{{ item.encoding | d(omit) }}"
     collation: "{{ item.collation | d(omit) }}"
-  with_flattened: "{{ mariadb__databases + mariadb__dependent_databases + mariadb_databases|d([]) }}"
-  delegate_to: "{{ mariadb__delegate_to }}"
+  loop: "{{ mariadb__databases + mariadb__dependent_databases + mariadb_databases|d([]) }}"
   when: ((item.database|d(false) or item.name|d(false)) and
          (item.state is undefined or item.state != 'absent'))
   register: mariadb__register_database_status
@@ -33,7 +31,6 @@
   with_together:
     - "{{ mariadb__databases + lookup('flattened', mariadb__dependent_databases, wantlist=True) + mariadb_databases|d([]) }}"
     - "{{ mariadb__register_database_status.results }}"
-  delegate_to: "{{ mariadb__delegate_to }}"
   when: ((item.0.database|d(false) or item.0.name|d(false)) and
          (item.0.state is undefined or item.0.state != 'absent') and
          (item.0.source|d(false) and item.0.target|d(false)) and
@@ -47,7 +44,6 @@
   with_together:
     - "{{ mariadb__databases + lookup('flattened', mariadb__dependent_databases, wantlist=True) + mariadb_databases|d([]) }}"
     - "{{ mariadb__register_database_status.results }}"
-  delegate_to: '{{ mariadb__delegate_to }}'
   when: ((item.0.database|d(false) or item.0.name|d(false)) and
          (item.0.state is undefined or item.0.state != 'absent') and
          item.0.target|d(false) and (item.0.name == item.1.db and item.1 is changed))
@@ -57,7 +53,6 @@
     dest: "{{ item.target }}"
     state: absent
   with_flattened: "{{ mariadb__databases + mariadb__dependent_databases + mariadb_databases|d([]) }}"
-  delegate_to: "{{ mariadb__delegate_to }}"
   when: ((item.database|d(false) or item.name|d(false)) and
          (item.state is undefined or item.state != 'absent') and
          (item.source|d(false) and item.target|d(false)) and
@@ -66,10 +61,9 @@
 - name: Drop user accounts if requested
   mysql_user:
     name: '{{ item.user | d(item.name) }}'
-    host: '{{ item.host | default(mariadb__client) }}'
+    host: '{{ db_host }}'
     state: 'absent'
   with_flattened: '{{ mariadb__users + mariadb__dependent_users + mariadb_users|d([]) }}'
-  delegate_to: '{{ mariadb__delegate_to }}'
   when: ((item.user|d(False) or item.name|d(False)) and
          (item.state is defined and item.state == "absent"))
   no_log: true
@@ -77,22 +71,13 @@
 - name: Create user accounts
   mysql_user:
     name: '{{ item.user | d(item.name) }}'
-    host: '{{ item.host | default(mariadb__client) }}'
-    # TODO For some strange reason this works if no host is provided when connecting to percona
-    #      It does not work if the host (maria-staging1) is provided (Error about access)
-    #      Id does not work if the host (maria-staging) is provided (an ssh error)
-    login_host: '{{ db_host | default(omit) }}'
-    login_password: '{{ db_password | default(omit) }}'
+    host: '{{ db_host }}'
+    login_host: '{{ db_host }}'
+    login_password: '{{ db_password }}'
     login_user: 'root'
     state: 'present'
     password: "{{ item.password }}"
-    # todo A future enhancement to utilize secret delegation
-    # password: '{{ item.password | default(lookup("password",
-    #               secret + "/mariadb/" + mariadb__delegate_to +
-    #               "/credentials/" + item.user | d(item.name) + "/password " +
-    #               "length=" + mariadb__password_length)) }}'
-  with_flattened: '{{ mariadb__users + mariadb__dependent_users + mariadb_users|d([]) }}'
-  delegate_to: '{{ mariadb__delegate_to }}'
+  with_flattened: '{{ mariadb__users + mariadb_users|d([]) }}'
   register: mariadb__register_create_users
   when: ((item.user|d(False) or item.name|d(False)) and
          (item.state is undefined or item.state != "absent"))
@@ -101,79 +86,30 @@
 - name: Grant default privileges to users
   mysql_user:
     name: '{{ item.user | d(item.name) }}'
-    host: '{{ item.host | default(mariadb__client) }}'
-    login_host: '{{ db_host | default(omit) }}'
-    login_password: '{{ db_password | default(omit) }}'
-    priv: '{{ (item.database | d(item.name)) + ".*:" + mariadb__default_privileges_grant }}'
+    host: '{{ db_host }}'
+    login_host: '{{ db_host }}'
+    login_password: '{{ db_password }}'
+    login_user: 'root'
+    priv: '{{ (item.database | d(item.name)) + "*.*:" + mariadb__default_privileges_grant }}'
     append_privs: true
-  with_together:
-    - '{{ mariadb__users + lookup("flattened", mariadb__dependent_users, wantlist=True) + mariadb_users|d([]) }}'
-    - '{{ mariadb__register_create_users.results }}'
-  delegate_to: '{{ mariadb__delegate_to }}'
-  when: ((item.user|d(False) or item.name|d(False)) and
-         (item.state is undefined or item.state != "absent") and
-         mariadb__default_privileges|d(False) and
-         (item.priv_default is undefined or item.priv_default))
-  no_log: true
-
-- name: Grant auxiliary privileges to users
-  mysql_user:
-    name: '{{ item.0.user | d(item.0.name) }}'
-    host: '{{ item.0.host | default(mariadb__client) }}'
-    login_host: '{{ db_host | default(omit) }}'
-    login_password: '{{ db_password | default(omit) }}'
-    priv: '{{ (item.0.database | d(item.0.name)) + "\_%.*:" + mariadb__default_privileges_grant }}'
-    append_privs: true
-  with_together:
-    - '{{ mariadb__users + lookup("flattened", mariadb__dependent_users, wantlist=True) + mariadb_users|d([]) }}'
-    - '{{ mariadb__register_create_users.results }}'
-  delegate_to: '{{ mariadb__delegate_to }}'
-  when: ((item.0.user|d(False) or item.0.name|d(False)) and
-         (item.0.state is undefined or item.0.state != "absent") and
-         mariadb__default_privileges_aux|d(False) and
-         (item.0.priv_aux is undefined or item.0.priv_aux))
-  no_log: true
+  loop: "{{ mariadb__users }}"
 
 - name: Grant custom privileges to users
   mysql_user:
     name: '{{ item.0.user | d(item.0.name) }}'
-    host: '{{ item.0.host | default(mariadb__client) }}'
-    login_host: '{{ db_host | default(omit) }}'
-    login_password: '{{ db_password | default(omit) }}'
+    host: '{{ db_host }}'
+    login_host: '{{ db_host }}'
+    login_password: '{{ db_password }}'
     priv: '{{ item.0.priv if (item.0.priv is string) else (item.0.priv | join("/")) }}'
     append_privs: '{{ item.0.append_privs | default(True) }}'
-  with_together:
-    - '{{ mariadb__users + lookup("flattened", mariadb__dependent_users, wantlist=True) + mariadb_users|d([]) }}'
+  loop:
+    - '{{ mariadb__users + mariadb_users|d([]) }}'
     - '{{ mariadb__register_create_users.results }}'
-  delegate_to: '{{ mariadb__delegate_to }}'
   when: ((item.0.user|d(False) or item.0.name|d(False)) and
          (item.0.state is undefined or item.0.state != "absent") and
          item.0.priv|d(False))
   no_log: true
-
-- name: Make sure required system groups exist
-  group:
-    name: '{{ item.group | d(item.owner) }}'
-    state: 'present'
-    system: '{{ item.system | d(True) }}'
-  with_flattened: '{{ mariadb__users + mariadb__dependent_users + mariadb_users|d([]) }}'
-  when: ((item.user|d(False) or item.name|d(False)) and
-         (item.state is undefined or item.state != "absent") and
-         item.owner|d(False) and item.home|d(False))
-  no_log: true
-
-- name: Make sure required system accounts exist
-  user:
-    name: '{{ item.owner }}'
-    group: '{{ item.group | d(item.owner) }}'
-    home: '{{ item.home }}'
-    state: 'present'
-    system: '{{ item.system | d(True) }}'
-  with_flattened: '{{ mariadb__users + mariadb__dependent_users + mariadb_users|d([]) }}'
-  when: ((item.user|d(False) or item.name|d(False)) and
-         (item.state is undefined or item.state != "absent") and
-         item.owner|d(False) and item.home|d(False))
-  no_log: true
+  ignore_errors: true
 
 - name: Remove ~/.my.cnf from owner home if requested
   file:
@@ -184,6 +120,7 @@
          (item.state is defined and item.state == "absent") and
          item.owner|d(False))
   no_log: true
+  ignore_errors: true
 
 - name: Ensure that directory for custom file path .my.cnf exists
   file:
@@ -197,6 +134,7 @@
          item.0.creds_path|d(False) and
          item.0.owner|d(False))
   no_log: true
+  ignore_errors: true
 
 - name: Write ~/.my.cnf in owner home directory
   template:
@@ -212,3 +150,4 @@
          (item.0.state is undefined or item.0.state != "absent") and
          item.0.owner|d(False))
   no_log: true
+  ignore_errors: true
