@@ -1,14 +1,9 @@
 ---
-- include: setup_mysql.yml
 - include: generate_secrets.yml
 
-- set_fact:
-    url_jdbc_archivesspace: '{{ url_jdbc_base }}{{ archivesspace_db_name }}?user={{ archivesspace_db_user }}&password={{ archivesspace_db_password }}{{ url_jdbc_suffix }}'
-
-- name: we need unzip for the next step
-  apt:
-    name: unzip
-    state: present
+- name: register name
+  set_fact:
+    url_jdbc_archivesspace: '{{ url_jdbc_base }}{{ db_name }}?user={{ db_user }}&password={{ aspace_db_password }}{{ url_jdbc_suffix }}'
 
 - name: unzip archivesspace into opt dir
   unarchive:
@@ -16,27 +11,50 @@
     dest: /opt
     creates: '/opt/archivesspace/archivesspace.sh'
     remote_src: 'True'
-    owner: '{{ archivesspace_db_user }}'
-    group: '{{ archivesspace_db_user }}'
+    owner: '{{ db_user }}'
+    group: '{{ db_user }}'
 
 - name: download  mysql connector in place
   get_url:
     url: https://repo1.maven.org/maven2/mysql/mysql-connector-java/5.1.44/mysql-connector-java-5.1.44.jar
     dest: '/opt/archivesspace/lib/'
-    checksum: md5:803783e5c40c911c92d4b6b5ea324912
-    force: 'no'
+    checksum: md5:5278a3a02fbf9266450612860ba2f41d
+    force: false
 
 - name: config db access
-  template: src=config.rb.j2 dest=/opt/archivesspace/config/config.rb
+  template:
+    src: config.rb.j2
+    dest: /opt/archivesspace/config/config.rb
+
+- name: transfer permissive percona
+  copy:
+    src: files/permissive.sql
+    dest: /tmp/permissive.sql
+
+- name: Change permissive percona at runtime
+  mysql_db:
+    login_host: '{{ db_host }}'
+    login_password: '{{ db_password }}'
+    login_user: 'root'
+    state: import
+    name: all
+    target: "/tmp/permissive.sql"
+  changed_when: false
 
 - name: setup database
-  shell: chdir=/opt/archivesspace/ ./scripts/setup-database.sh
+  shell: |
+      set -o pipefail
+      chdir=/opt/archivesspace/ ./scripts/setup-database.sh
+  args:
+    executable: /bin/bash
+  changed_when: false
 
 - name: delete indexed_state files which force re-index
   file:
     path: '/opt/archivesspace/data/indexer_state'
     state: absent
   ignore_errors: true
+  changed_when: false
 
 - name: create symbolic link
   file:
@@ -47,6 +65,7 @@
 
 - name: add archivesspace service
   command: /usr/sbin/update-rc.d archivesspace defaults 90
+  changed_when: false
 
 - name: change garbage collection limits
   lineinfile:
@@ -55,9 +74,6 @@
     insertafter: 'EOF'
     line: 'JAVA_OPTS="-Djava.awt.headless=true -Dfile.encoding=UTF-8 -server -Xms1024m -Xmx4096m -XX:+UseG1GC -XX:+DisableExplicitGC"'
     state: present
-
-- name: restrict user
-  include: restrict-aspace.yml
 
 - name: add locales
   include: locales.yml
@@ -72,3 +88,4 @@
 - name: start archivesspace service
   command: /etc/init.d/archivesspace start
   become: '{{ deploy_user }}'
+  changed_when: false
