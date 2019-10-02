@@ -1,4 +1,8 @@
 ---
+- name: restart percona
+  command: /etc/init.d/mysql bootstrap-pxc
+  changed_when: false
+
 - name: Drop databases if requested
   mysql_db:
     name: "{{ item.database | d(item.name) }}"
@@ -93,61 +97,3 @@
     priv: '{{ (item.database | d(item.name)) + "*.*:" + mariadb__default_privileges_grant }}'
     append_privs: true
   loop: "{{ mariadb__users }}"
-
-- name: Grant custom privileges to users
-  mysql_user:
-    name: '{{ item.0.user | d(item.0.name) }}'
-    host: '{{ db_host }}'
-    login_host: '{{ db_host }}'
-    login_password: '{{ db_password }}'
-    priv: '{{ item.0.priv if (item.0.priv is string) else (item.0.priv | join("/")) }}'
-    append_privs: '{{ item.0.append_privs | default(True) }}'
-  loop:
-    - '{{ mariadb__users + mariadb_users|d([]) }}'
-    - '{{ mariadb__register_create_users.results }}'
-  when: ((item.0.user|d(False) or item.0.name|d(False)) and
-         (item.0.state is undefined or item.0.state != "absent") and
-         item.0.priv|d(False))
-  no_log: true
-  ignore_errors: true
-
-- name: Remove ~/.my.cnf from owner home if requested
-  file:
-    dest: '{{ "~" + item.owner + "/.my.cnf" }}'
-    state: 'absent'
-  with_flattened: '{{ mariadb__users + mariadb__dependent_users + mariadb_users|d([]) }}'
-  when: ((item.user|d(False) or item.name|d(False)) and
-         (item.state is defined and item.state == "absent") and
-         item.owner|d(False))
-  no_log: true
-  ignore_errors: true
-
-- name: Ensure that directory for custom file path .my.cnf exists
-  file:
-    path: '{{ item.0.creds_path | regex_replace("^(.*/).*$", "\\1") }}'
-    state: 'directory'
-  with_together:
-    - '{{ mariadb__users + lookup("flattened", mariadb__dependent_users, wantlist=True) + mariadb_users|d([]) }}'
-    - '{{ mariadb__register_create_users.results }}'
-  when: ((item.0.user|d(False) or item.0.name|d(False)) and
-         (item.0.state|d("present") != "absent") and
-         item.0.creds_path|d(False) and
-         item.0.owner|d(False))
-  no_log: true
-  ignore_errors: true
-
-- name: Write ~/.my.cnf in owner home directory
-  template:
-    src: 'home/my.cnf.j2'
-    dest: '{{ item.0.creds_path|d("~" + item.0.owner + "/.my.cnf") }}'
-    owner: '{{ item.0.owner }}'
-    group: '{{ item.0.group | default(item.0.owner) }}'
-    mode: '{{ item.0.mode | default("0640") }}'
-  with_together:
-    - '{{ mariadb__users + lookup("flattened", mariadb__dependent_users, wantlist=True) + mariadb_users|d([]) }}'
-    - '{{ mariadb__register_create_users.results }}'
-  when: ((item.0.user|d(False) or item.0.name|d(False)) and
-         (item.0.state is undefined or item.0.state != "absent") and
-         item.0.owner|d(False))
-  no_log: true
-  ignore_errors: true
