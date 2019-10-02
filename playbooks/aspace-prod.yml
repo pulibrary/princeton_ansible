@@ -1,0 +1,16 @@
+---
+- hosts: archivesspace
+  remote_user: pulsys
+  become: true
+  vars_files:
+    - ../site_vars.yml
+    - ../group_vars/archivesspace/production.yml
+  roles:
+    - role: roles/pulibrary.archivesspace
+
+  post_tasks:
+    - name: tell everyone on slack you ran an ansible playbook
+      slack:
+        token: "{{ vault_pul_slack_token }}"
+        msg: "{{ inventory_hostname }} completed"
+        channel: #server-alerts
