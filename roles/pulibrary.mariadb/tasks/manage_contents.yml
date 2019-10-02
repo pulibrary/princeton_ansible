@@ -2,6 +2,7 @@
 - name: restart percona
   command: /etc/init.d/mysql bootstrap-pxc
   changed_when: false
+  when: xtradb_root_user is defined
 
 - name: Drop databases if requested
   mysql_db:
@@ -14,8 +15,8 @@
 - name: Create databases
   mysql_db:
     name: "{{ item.database | d(item.name) }}"
-    login_host: '{{ db_host }}'
-    login_password: '{{ db_password }}'
+    login_host: '{{ db_host | default(omit) }}'
+    login_password: '{{ db_password | default(omit) }}'
     login_user: 'root'
     state: present
     encoding: "{{ item.encoding | d(omit) }}"
@@ -87,13 +88,13 @@
          (item.state is undefined or item.state != "absent"))
   no_log: true
 
-- name: Grant default privileges to users
+- name: Grant privileges to users
   mysql_user:
     name: '{{ item.user | d(item.name) }}'
     host: '{{ db_host }}'
     login_host: '{{ db_host }}'
     login_password: '{{ db_password }}'
     login_user: 'root'
-    priv: '{{ (item.database | d(item.name)) + ".*:" + mariadb__default_privileges_grant }}'
+    priv: '{{ item.priv | d((item.database | d(item.name)) + ".*:" + mariadb__default_privileges_grant) }}'
     append_privs: true
   loop: "{{ mariadb__users }}"
