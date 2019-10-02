@@ -66,7 +66,7 @@
 - name: Drop user accounts if requested
   mysql_user:
     name: '{{ item.user | d(item.name) }}'
-    host: '{{ db_host }}'
+    host: '{{ db_host | default(omit) }}'
     state: 'absent'
   with_flattened: '{{ mariadb__users + mariadb__dependent_users + mariadb_users|d([]) }}'
   when: ((item.user|d(False) or item.name|d(False)) and
@@ -77,8 +77,8 @@
   mysql_user:
     name: '{{ item.user | d(item.name) }}'
     host: '{{ item.host }}'
-    login_host: '{{ db_host }}'
-    login_password: '{{ db_password }}'
+    login_host: '{{ db_host | default(omit) }}'
+    login_password: '{{ db_password | default(omit) }}'
     login_user: 'root'
     state: 'present'
     password: "{{ item.password }}"
@@ -92,8 +92,8 @@
   mysql_user:
     name: '{{ item.user | d(item.name) }}'
     host: '{{ item.host }}'
-    login_host: '{{ db_host }}'
-    login_password: '{{ db_password }}'
+    login_host: '{{ db_host | default(omit) }}'
+    login_password: '{{ db_password | default(omit) }}'
     login_user: 'root'
     priv: '{{ item.priv | d((item.database | d(item.name)) + ".*:" + mariadb__default_privileges_grant) }}'
     append_privs: true
