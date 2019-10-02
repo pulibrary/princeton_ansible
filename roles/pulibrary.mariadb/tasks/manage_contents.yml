@@ -76,7 +76,7 @@
 - name: Create user accounts
   mysql_user:
     name: '{{ item.user | d(item.name) }}'
-    host: '{{ db_host }}'
+    host: '{{ item.host }}'
     login_host: '{{ db_host }}'
     login_password: '{{ db_password }}'
     login_user: 'root'
@@ -88,10 +88,14 @@
          (item.state is undefined or item.state != "absent"))
   no_log: true
 
+- name: debug db_host
+  debug:
+    msg: "dbhost is {{ db_host }}"
+
 - name: Grant privileges to users
   mysql_user:
     name: '{{ item.user | d(item.name) }}'
-    host: '{{ db_host }}'
+    host: '{{ item.host }}'
     login_host: '{{ db_host }}'
     login_password: '{{ db_password }}'
     login_user: 'root'
