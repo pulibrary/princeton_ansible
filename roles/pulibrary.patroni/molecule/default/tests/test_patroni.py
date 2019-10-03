@@ -8,11 +8,11 @@ testinfra_hosts = testinfra.utils.ansible_runner.AnsibleRunner(
 
 
 @pytest.mark.parametrize("name", [
-    "postgresql-11",
-    "postgresql-client-11",
+    "postgresql-12",
+    "postgresql-client-12",
     "postgresql-client-common",
     "postgresql-common",
-    "postgresql-server-dev-11"
+    "postgresql-server-dev-12"
     ])
 def test_for_postgresql_software(host, name):
     pkg = host.package(name)
