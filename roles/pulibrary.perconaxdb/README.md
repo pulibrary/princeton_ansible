@@ -27,35 +27,74 @@ Example Playbook
   gather_facts: true
   become: true
   roles:
-    - role: pulibrary.perconaxdb
-      xtradb_cluster_name: "pulibrary-cluster"
-      xtradb_nodes_group: "percona_cluster_db"
-      bind_interface: ens33
-
-      xtradb_databases:
-        - name: archivesspace
-      xtradb_users:
-        - name: archivesspace
-          password: A_Vaulted_Password
-          priv: 'archivesspace.*:GRANT,ALL'
+    - role: pulibrary.perconaxdb      
 
 ```
 
-
-Adding Users
+Adding Databases and Users
 ------------
 
-```
-xtradb_users:
-  - name: drupal
-    password: A_Vaulted_password
-    privs: "drupal.*:SUPER"
+This should be done via the `pulibrary.mariadb` role
 
-  - name: drupal_user
-    password: A_Vaulted_password
-    priv: 'drupaldb.*:ALL'
-    host: '192.168.1.%'
-```
+Migrating your role's database from the MariaDB cluster to Percona
+------------
+
+1. Change molecule in your role to run a percona server
+
+   1. Modify the molecule playbook to include a pre_task in `<your role>/molecule/default/playbook.yml`
+
+      ```
+        pre_tasks:
+          - name: install iproute
+            apt:
+              name: iproute2
+              state: present
+          - name: rerun setup
+            setup:
+              gather_subset:
+                - network
+      ```
+    
+    1. Modify the molecule playbook to include a new vars for percona in `<your role>/molecule/default/playbook.yml`
+       ```
+         - xtradb_nodes_group: "all"
+         - xtradb_leader_node: "instance"
+       ```
+
+    1. Modify the molecule playbook to use the perconaxdb role in `<your role>/molecule/default/playbook.yml`
+       ```
+         - role: pulibrary.perconaxdb        
+       ```
+
+    Full example playbook below
+    ```
+    ---
+    - name: Converge
+      hosts: all
+      pre_tasks:
+      - name: install iproute
+        apt:
+          name: iproute2
+          state: present
+      - name: rerun setup
+        setup:
+          gather_subset:
+            - network
+      vars:
+        - run_not_in_container: false
+        - xtradb_nodes_group: "all"
+        - xtradb_leader_node: "instance"
+      roles:
+        - role: pulibrary.perconaxdb
+        - role: pulibrary.<your role>
+    ```
+
+  1. Modify your group_vars for your playbook database_host & database_password
+
+      ```
+      db_host: 'maria-< staging | prod >.princeton.edu'
+      db_password: "{{ vault_xtradb_root_password }}"
+      ```
 
 License
 -------
