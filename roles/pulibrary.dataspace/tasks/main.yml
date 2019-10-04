@@ -1,2 +1,28 @@
 ---
 # tasks file for roles/pulibrary.dataspace
+- name: create dataspace directory
+  file:
+    path: "{{ dataspace_home }}"
+    state: directory
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+
+- name: perform initial dataspace install
+  command: /opt/apache-ant/bin/ant fresh_install
+  args:
+    creates: "{{ dataspace_home }}/webapps/xmlui"
+    chdir: "{{ ant_source_dir }}"
+  become: true
+  become_user: "{{ deploy_user }}"
+
+- name: set up tomcat ROOT context
+  shell: echo '<Context docBase="{{ dataspace_home }}/webapps/xmlui"/>' > /var/lib/tomcat8/conf/Catalina/localhost/ROOT.xml
+  changed_when: false
+
+- name: set up other tomcat contexts
+  shell: echo '<Context docBase="{{ dataspace_home }}/webapps/{{ item }}"/>' > /var/lib/tomcat8/conf/Catalina/localhost/{{ item }}.xml
+  loop:
+    - solr
+    - oai
+    - swordv2
+    - sword
