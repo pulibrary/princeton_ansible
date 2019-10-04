@@ -1,0 +1,16 @@
+---
+- hosts: postgresql-staging
+  remote_user: pulsys
+  become: true
+  vars_files:
+    - ../group_vars/patroni/postgres-staging.yml
+    - ../group_vars/patroni/vault.yml
+  roles:
+    - role: roles/pulibrary.patroni
+
+  post_tasks:
+    - name: tell everyone on slack you ran an ansible playbook
+      slack:
+        token: "{{ vault_pul_slack_token }}"
+        msg: "{{ inventory_hostname }} completed"
+        channel: #server-alerts
