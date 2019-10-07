@@ -1,8 +1,19 @@
 ---
 - name: Converge
   hosts: all
+  pre_tasks:
+  - name: install iproute
+    apt:
+      name: iproute2
+      state: present
+  - name: rerun setup
+    setup:
+      gather_subset:
+        - network
   vars:
     - run_not_in_container: false
+    - xtradb_nodes_group: "all"
+    - xtradb_leader_node: "instance"
     - mariadb_server__root_password: "{{ vault_maridb_password | default('change_me') }}"
     ### Uncomment this to force a dump file to be imported
     # - drupal_dbimport_file: 'dump.sql'
@@ -10,7 +21,6 @@
     # - mariadb__server: 'maria-staging.princeton.edu'
   vars_files:
     - ../../../../site_vars.yml
-    - ../../defaults/mariadb.yml
   roles:
-    - role: pulibrary.mariadbserver
+    - role: pulibrary.perconaxdb
     - role: pulibrary.libwww
