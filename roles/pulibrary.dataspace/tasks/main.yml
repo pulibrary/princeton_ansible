@@ -14,10 +14,12 @@
     chdir: "{{ ant_source_dir }}"
   become: true
   become_user: "{{ deploy_user }}"
+  when: run_not_in_container
 
 - name: set up tomcat ROOT context
   shell: echo '<Context docBase="{{ dataspace_home }}/webapps/xmlui"/>' > /var/lib/tomcat8/conf/Catalina/localhost/ROOT.xml
   changed_when: false
+  when: run_not_in_container
 
 - name: set up other tomcat contexts
   shell: echo '<Context docBase="{{ dataspace_home }}/webapps/{{ item }}"/>' > /var/lib/tomcat8/conf/Catalina/localhost/{{ item }}.xml
@@ -26,3 +28,4 @@
     - oai
     - swordv2
     - sword
+  when: run_not_in_container
