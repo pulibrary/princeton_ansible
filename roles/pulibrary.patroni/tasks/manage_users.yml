@@ -1,0 +1,48 @@
+---
+- name: configure postgres
+  lineinfile:
+    path: "{{ postgres_conf }}"
+    regex: "^{{ item.name }} ="
+    line: "{{ item.name }} = {{ item.value }}"
+    create: true
+  with_items:
+    - "{{ postgres_settings }}"
+  when:
+    - postgres_settings is defined
+  notify:
+    - restart postgres
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: create pg_hba.conf
+  template:
+    src: pg_hba.conf.j2
+    dest: "{{ postgres_dir }}/pg_hba.conf"
+    backup: true
+  notify: reload patroni
+
+- name: create postgres database
+  postgresql_db:
+    name: "{{ item.name }}"
+    state: present
+  with_items:
+    - "{{ postgres_databases }}"
+  become_user: postgres
+  become: true
+  loop_control:
+    label: "{{ item.name }}"
+  when:
+    - postgres_databases is defined
+
+- name: create postgres users
+  postgresql_user:
+    name: "{{ item.name }}"
+    db: "{{ item.db | default(omit) }}"
+    password: "{{ item.password }}"
+    expires: "{{ item.expires | default(omit) }}"
+  with_items:
+    - "{{ postgres_users }}"
+  when:
+    - postgres_users is defined
+  become_user: postgres
+  become: true
