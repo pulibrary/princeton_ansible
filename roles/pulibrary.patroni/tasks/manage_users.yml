@@ -1,23 +1,8 @@
 ---
-- name: configure postgres
-  lineinfile:
-    path: "{{ postgres_conf }}"
-    regex: "^{{ item.name }} ="
-    line: "{{ item.name }} = {{ item.value }}"
-    create: true
-  with_items:
-    - "{{ postgres_settings }}"
-  when:
-    - postgres_settings is defined
-  notify:
-    - restart postgres
-  loop_control:
-    label: "{{ item.name }}"
-
-- name: create pg_hba.conf
+- name: create /update pg_hba.conf
   template:
-    src: pg_hba.conf.j2
-    dest: "{{ postgres_dir }}/pg_hba.conf"
+    src: patroni.yml.j2
+    dest: "{{ patroni_config_dir }}/{{ patroni_name|default(inventory_hostname) }}.yml"
     backup: true
   notify: reload patroni
 
