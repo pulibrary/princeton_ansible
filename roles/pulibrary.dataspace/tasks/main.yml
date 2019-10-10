@@ -2,27 +2,73 @@
 # tasks file for roles/pulibrary.dataspace
 - name: create dataspace directory
   file:
-    path: "{{ dataspace_home }}"
+    path: "{{ dspace_source_dir }}"
     state: directory
     owner: "{{ deploy_user }}"
     group: "{{ deploy_user }}"
 
+- name: clone dataspace repo
+  git:
+    accept_hostkey: true
+    key_file: "/home/{{ deploy_user }}/.ssh/id_rsa"
+    repo: "{{ dataspace_repo_url }}"
+    dest: "{{ dataspace_source_dir }}"
+    version: "{{ version }}"
+    update: true
+    force: true
+  become: true
+  when:
+    - run_not_in_container
+
+- name: verify ownership of cloned repo
+  file:
+    path: "{{ dataspace_source_dir }}"
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+    state: directory
+    recurse: true
+  changed_when: true
+
+- name: copy build properties to dspace repo
+  template:
+    src: build.properties.j2
+    dest: "{{ dataspace_source_dir }}/dspace_local.properties"
+  become: true
+  become_user: "{{ deploy_user }}"
+
+- name: symbolic link to the properties file
+  file:
+    src: "{{ dataspace_source_dir }}/dspace_local.properties"
+    dest: "{{ dataspace_source_dir }}/dspace_local.properties.properties"
+    state: link
+  become: true
+  become_user: "{{ deploy_user }}"
+
+- name: build it with maven
+  command: /opt/apache-maven/bin/mvn -U clean package -Denv=dspace_local.properties -Dmirage2.on=true
+  args:
+    chdir: "{{ dataspace_source_dir }}/dspace"
+  become: true
+  become_user: "{{ project_user }}"
+  changed_when: true
+
+
 - name: perform initial dataspace install
   command: /opt/apache-ant/bin/ant fresh_install
   args:
-    creates: "{{ dataspace_home }}/webapps/xmlui"
+    creates: "{{ dspace_source_dir }}/webapps/xmlui"
     chdir: "{{ ant_source_dir }}"
   become: true
   become_user: "{{ deploy_user }}"
   when: run_not_in_container
 
 - name: set up tomcat ROOT context
-  shell: echo '<Context docBase="{{ dataspace_home }}/webapps/xmlui"/>' > /var/lib/tomcat8/conf/Catalina/localhost/ROOT.xml
+  shell: echo '<Context docBase="{{ dspace_source_dir }}/webapps/xmlui"/>' > /var/lib/tomcat8/conf/Catalina/localhost/ROOT.xml
   changed_when: false
   when: run_not_in_container
 
 - name: set up other tomcat contexts
-  shell: echo '<Context docBase="{{ dataspace_home }}/webapps/{{ item }}"/>' > /var/lib/tomcat8/conf/Catalina/localhost/{{ item }}.xml
+  shell: echo '<Context docBase="{{ dspace_source_dir }}/webapps/{{ item }}"/>' > /var/lib/tomcat8/conf/Catalina/localhost/{{ item }}.xml
   loop:
     - solr
     - oai
