@@ -1,0 +1,35 @@
+---
+- name: create /update pg_hba.conf
+  template:
+    src: patroni.yml.j2
+    dest: "{{ patroni_config_dir }}/{{ patroni_name|default(inventory_hostname) }}.yml"
+    backup: true
+  notify: reload patroni
+
+- name: create postgres database
+  postgresql_db:
+    name: "{{ item.name }}"
+    state: present
+  with_items:
+    - "{{ postgres_databases }}"
+  become_user: postgres
+  become: true
+  loop_control:
+    label: "{{ item.name }}"
+  when:
+    - postgres_databases is defined
+    - run_not_in_container
+
+- name: create postgres users
+  postgresql_user:
+    name: "{{ item.name }}"
+    db: "{{ item.db | default(omit) }}"
+    password: "{{ item.password }}"
+    expires: "{{ item.expires | default(omit) }}"
+  with_items:
+    - "{{ postgres_users }}"
+  when:
+    - postgres_users is defined
+    - run_not_in_container
+  become_user: postgres
+  become: true
