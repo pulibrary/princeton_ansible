@@ -1,8 +1,8 @@
 ---
 # tasks file for roles/pulibrary.locator
-- name: install mysql php driver
+- name: install mysql php driver & cif utils
   apt:
-    name: ["php7.2-mysql"]
+    name: ["php7.2-mysql", "cifs-utils"]
     state: present
     update_cache: true
 
@@ -28,3 +28,22 @@
     state: directory
     owner: "{{ deploy_user }}"
     group: "{{ deploy_user }}"
+
+- name: Create mount directories
+  file:
+    path: '/mnt/diglibdata/{{ locator_fileshare_mount }}'
+    state: 'directory'
+
+- name: Copy smb credentials
+  copy: src=files/locator.smb.credentials dest=/etc/locator.smb.credentials
+  when: run_not_in_container
+
+- name: Mount Drupal fileshare
+  mount:
+    name: '/mnt/diglibdata/{{ locator_fileshare_mount }}'
+    src: '//diglibdata1.princeton.edu/{{ locator_fileshare_mount }}'
+    fstype: cifs
+    opts: 'credentials=/etc/locator.smb.credentials,gid={{ deploy_user_uid }},uid=33,file_mode=0777'
+    state: mounted
+  become: true
+  when: run_not_in_container
