@@ -1,0 +1,24 @@
+---
+- name: Converge
+  hosts: all
+  pre_tasks:
+  - name: install iproute
+    apt:
+      name: iproute2
+      state: present
+  - name: rerun setup
+    setup:
+      gather_subset:
+        - network
+  vars:
+    - run_not_in_container: false
+    - passenger_listen_port: '8080'
+    - rails_app_directory: 'mudd'
+    - rails_app_name: 'mudd'
+    - xtradb_nodes_group: "all"
+    - xtradb_leader_node: "instance"
+    - mariadb_server__root_password: "{{ vault_maridb_password | default('change_me') }}"
+  roles:
+    # Specify each pulibrary role here
+    - role: pulibrary.perconaxdb
+    - role: pulibrary.mudd
