@@ -1,0 +1,15 @@
+---
+- hosts: libruby-dev
+  remote_user: pulsys
+  become: true
+  vars:
+    - ignore_error: true
+  vars_files:
+  roles:
+    - role: pulibrary.deploy-user
+  post_tasks:
+  - name: tell everyone on slack you ran an ansible playbook
+    slack:
+      token: "{{ vault_pul_slack_token }}"
+      msg: "{{ inventory_hostname }} completed"
+      channel: #server-alerts
