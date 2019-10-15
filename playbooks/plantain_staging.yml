@@ -1,0 +1,24 @@
+---
+- hosts: plantain_staging
+  remote_user: pulsys
+  become: true
+  vars_files:
+    - ../site_vars.yml
+    - ../group_vars/plantain/plantain_staging.yml
+    - ../group_vars/plantain/vault.yml
+  roles:
+    - role: roles/pulibrary.ruby
+    - role: roles/pulibrary.deploy-user
+    - role: roles/pulibrary.passenger
+    - role: roles/pulibrary.postgresql
+    - role: roles/pulibrary.nodejs
+    - role: roles/pulibrary.openjdk
+    - role: roles/pulibrary.blacklight-app
+    - { role: roles/pulibrary.solr, when: postgresql_is_local == true }
+
+  post_tasks:
+    - name: tell everyone on slack you ran an ansible playbook
+      slack:
+        token: "{{ vault_pul_slack_token }}"
+        msg: "{{ inventory_hostname }} completed"
+        channel: #server-alerts
