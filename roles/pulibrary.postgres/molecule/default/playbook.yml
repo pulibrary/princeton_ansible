@@ -1,0 +1,20 @@
+---
+- name: Converge
+  hosts: all
+  pre_tasks:
+    - name: install iproute
+      apt:
+        name: iproute2
+        state: present
+    - name: rerun setup
+      setup:
+        gather_subset:
+          - network
+  vars_files:
+    - molecule_vars.yml
+  vars:
+    - run_not_in_container: false
+    - consul_nodename: inventory
+  roles:
+    - role: pulibrary.patroni
+    - role: pulibrary.postgres
