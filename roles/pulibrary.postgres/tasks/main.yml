@@ -1,3 +1,70 @@
 ---
 # tasks file for roles/pulibrary.postgres
-- include: readonly_user.yml
+- name: install postgres packages
+  apt:
+    name: ['postgresql-client', 'python3-psycopg2']
+    state: present
+    update_cache: true
+
+- name: create postgres database
+  postgresql_db:
+    login_host: '{{ db_host | default(omit) }}'
+    login_password: '{{ db_password | default(omit) }}'
+    login_user: 'postgres'
+    name: "{{ item.name }}"
+    state: present
+  with_items:
+    - "{{ postgres_databases }}"
+  become_user: postgres
+  become: true
+  loop_control:
+    label: "{{ item.name }}"
+  when:
+    - postgres_databases is defined
+
+- name: create postgres users
+  postgresql_user:
+    login_host: '{{ db_host | default(omit) }}'
+    login_password: '{{ db_password | default(omit) }}'
+    login_user: 'postgres'
+    name: "{{ item.name }}"
+    db: "{{ item.db | default(omit) }}"
+    password: "{{ item.password }}"
+    expires: "{{ item.expires | default(omit) }}"
+  with_items:
+    - "{{ postgres_users }}"
+  when:
+    - postgres_users is defined
+  become_user: postgres
+  become: true
+
+- name: create read-only postgresql db users
+  postgresql_user:
+    login_host: '{{ db_host | default(omit) }}'
+    login_user: 'postgres'
+    login_password: '{{ db_password | default(omit) }}'
+    name: "{{ item.name }}"
+    password: "{{ item.password }}"
+    encrypted: true
+    state: present
+  with_items:
+    - "{{ postgres_users }}"
+  become_user: postgres
+  become: true
+  when: application_dbuser_ro_name is defined
+
+- name: grant read privileges for user
+  postgresql_privs:
+    login_host: '{{ db_host | default(omit) }}'
+    login_user: 'postgres'
+    login_password: '{{ db_password | default(omit) }}'
+    database: '{{ item.databases }}'
+    state: present
+    privs: SELECT
+    type: table
+    objs: ALL_IN_SCHEMA
+    roles: '{{ application_dbuser_ro_name }}'
+    grant_option: yes
+  with_items:
+    - "{{ databases }}"
+  when: application_dbuser_ro_name is defined
