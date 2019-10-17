@@ -2,7 +2,7 @@
 # tasks file for roles/pulibrary.postgres
 - name: install postgres packages
   apt:
-    name: ['postgresql-client', 'python3-psycopg2']
+    name: ['postgresql-client-{{ postgresql_version }}', 'python3-psycopg2']
     state: present
     update_cache: true
 
@@ -21,6 +21,7 @@
     label: "{{ item.name }}"
   when:
     - postgres_databases is defined
+    - run_not_in_container
 
 - name: create postgres users
   postgresql_user:
@@ -35,6 +36,7 @@
     - "{{ postgres_users }}"
   when:
     - postgres_users is defined
+    - run_not_in_container
   become_user: postgres
   become: true
 
@@ -51,7 +53,9 @@
     - "{{ postgres_users }}"
   become_user: postgres
   become: true
-  when: application_dbuser_ro_name is defined
+  when:
+    - application_dbuser_ro_name is defined
+    - run_not_in_container
 
 - name: grant read privileges for user
   postgresql_privs:
@@ -67,4 +71,6 @@
     grant_option: yes
   with_items:
     - "{{ databases }}"
-  when: application_dbuser_ro_name is defined
+  when:
+    - application_dbuser_ro_name is defined
+    - run_not_in_container
