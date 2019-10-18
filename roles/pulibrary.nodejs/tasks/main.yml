@@ -61,6 +61,28 @@
     state: present
     update_cache: true
 
+- name: Gather the apt package facts
+  package_facts:
+    manager: auto
+
+- name: Get the versions of nodejs installed
+  set_fact:
+    nodejs_versions: "{{ packages['nodejs'] | map(attribute='version') | list }}"
+
+- name: Check for the LTS v10 release
+  set_fact:
+    nodejs_lts_installed: "{{ nodejs_versions | select('match', '^10.') | list | length > 0 }}"
+
+- name: Uninstall any existing nodejs releases
+  apt:
+    name: nodejs
+    state: absent
+  when: nodejs_lts_installed is false
+
+- name: Add the repository for LTS v10 releases
+  script: setup_10.x
+  when: nodejs_lts_installed is false
+
 - name: Install node packages
   apt:
     name: ["nodejs", "yarn"]
