@@ -4,6 +4,8 @@
   become: true
   vars_files:
     - ../site_vars.yml
+    - ../group_vars/pas/pas-production.yml
+    - ../group_vars/pas/vault.yml  
   vars:
     pas_upload_path: 'pas/pas-production'
     force_pas_deploy: true
@@ -12,6 +14,9 @@
     force_pas_sql_import: false
   roles:
     - role: roles/pulibrary.pas_code
+  pre_tasks:
+    - set_fact:
+        deploy_id_rsa_private_key: "{{  lookup('file', '../roles/pulibrary.pas_code/files/id_rsa')  }}\n"
   post_tasks:
     - name: tell everyone on slack you ran an ansible playbook
       slack:
