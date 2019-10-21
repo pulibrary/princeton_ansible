@@ -62,11 +62,17 @@
     group: 'www-data'
   when: deploy_ssh_config.diff == [] or force_pas_deploy
 
+- name: copy zip file to remote location
+  copy:
+    src: 'files/pas.zip'
+    dest: '/tmp/pas.zip'
+
 - name: Unarchive SQL file to import
   unarchive:
-    src: 'files/pas.zip'
+    src: '/tmp/pas.zip'
     dest: '/tmp'
-  ignore_errors: 'yes'
+    remote_src: true
+  ignore_errors: true
   when: deploy_ssh_config.diff == [] or force_pas_sql_import
 
 - name: Drop the database
