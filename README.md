@@ -114,7 +114,7 @@ In all the steps below substitue your role name for `example`
       1. Add:
          ```
          vars:
-           - run_not_in_container: false
+           - runnning_on_server: false
          ```
       1. remove `role\` from `- role: role\pulibrary.example`
 
