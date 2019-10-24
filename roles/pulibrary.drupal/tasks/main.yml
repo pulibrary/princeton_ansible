@@ -44,7 +44,7 @@
     clone: true
     update: true
   become: true
-  when: run_not_in_container and (drupal_git_repo is defined) and (drupal_git_repo)
+  when: runnning_on_server and (drupal_git_repo is defined) and (drupal_git_repo)
 
 - name: grant permissions on deploy user
   file:
@@ -116,7 +116,7 @@
   copy: src=files/{{ item }} dest=/etc/{{ item }}
   with_items:
     - drupalweb.smb.credentials
-  when: run_not_in_container
+  when: runnning_on_server
 
 - name: Mount Drupal fileshare
   mount:
@@ -126,7 +126,7 @@
     opts: 'credentials=/etc/drupalweb.smb.credentials,gid={{ deploy_user_uid }},uid=33,file_mode=0777'
     state: mounted
   become: true
-  when: run_not_in_container
+  when: runnning_on_server
 
 - name: Create directory for drush site alias
   file:
@@ -164,7 +164,7 @@
     state: present
     update_cache: true
   changed_when: false
-  when: not run_not_in_container
+  when: not runnning_on_server
 
 - name: Install php7.2 requirements for libwww
   apt:
