@@ -110,6 +110,7 @@
     group: "{{ deploy_user }}"
   become: true
 
+
 # - name: Create GeoLite DB directory
 #   file:
 #     path: '/var/local/ezproxy/GeoLite2-City'
@@ -159,8 +160,21 @@
   become_user: 'root'
   changed_when: false
 
-- name: launch ezproxy
-  command: /var/local/ezproxy/ezproxy start
-  become: true
-  become_user: "{{ deploy_user }}"
+- name: copy ezproxy init.d
+  copy:
+    src: "files/ezproxy"
+    dest: /etc/init.d/ezproxy
+    owner: root
+    group: root
+    mode: a+x
   changed_when: false
+
+- name: start ezproxy
+  service:
+    name: ezproxy
+    state: started
+
+- name: enable ezproxy
+  service:
+    name: ezproxy
+    enabled: true
