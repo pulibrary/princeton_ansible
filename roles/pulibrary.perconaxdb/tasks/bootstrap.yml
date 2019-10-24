@@ -11,7 +11,7 @@
     owner: root
     group: root
     mode: 0644
-  when: run_not_in_container
+  when: runnning_on_server
 
 - name: Configure swappiness
   sysctl:
@@ -38,7 +38,7 @@
     password: "{{ xtradb_sst_password }}"
     priv: "*.*:grant,reload,lock tables,process,replication client"
   when:
-    - run_not_in_container
+    - runnning_on_server
     - xtradb_bind_address == xtradb_leader_node
 
 - name: Start the follower nodes
@@ -46,7 +46,7 @@
     name: "{{ xtradb_service }}"
     state: started
   when:
-    - run_not_in_container
+    - runnning_on_server
     - xtradb_bind_address != xtradb_leader_node
 
 - name: Marking as configured
