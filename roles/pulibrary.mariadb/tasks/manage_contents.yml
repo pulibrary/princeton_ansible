@@ -8,9 +8,10 @@
   mysql_db:
     name: "{{ item.database | d(item.name) }}"
     state: absent
-  with_flattened: "{{ mariadb__databases + mariadb__dependent_databases + mariadb_databases|d([]) }}"
+  with_flattened: "{{ mariadb__databases }}"
   when: ((item.database|d(false) or item.name|d(false)) and
          (item.state is defined and item.state == 'absent'))
+  no_log: true
 
 - name: Create databases
   mysql_db:
@@ -21,9 +22,10 @@
     state: present
     encoding: "{{ item.encoding | d(omit) }}"
     collation: "{{ item.collation | d(omit) }}"
-  loop: "{{ mariadb__databases + mariadb__dependent_databases + mariadb_databases|d([]) }}"
+  loop: "{{ mariadb__databases }}"
   when: ((item.database|d(false) or item.name|d(false)) and
          (item.state is undefined or item.state != 'absent'))
+  no_log: true
   register: mariadb__register_database_status
 
 - name: Copy database source file to remote host
@@ -65,10 +67,12 @@
 
 - name: Drop user accounts if requested
   mysql_user:
+    login_host: '{{ db_host | default(omit) }}'
+    login_password: '{{ db_password | default(omit) }}'
+    login_user: 'root'
     name: '{{ item.user | d(item.name) }}'
-    host: '{{ db_host | default(omit) }}'
     state: 'absent'
-  with_flattened: '{{ mariadb__users + mariadb__dependent_users + mariadb_users|d([]) }}'
+  with_flattened: "{{ mariadb__users + mariadb__dependent_users + mariadb_userss|d([]) }}"
   when: ((item.user|d(False) or item.name|d(False)) and
          (item.state is defined and item.state == "absent"))
   no_log: true
@@ -76,13 +80,12 @@
 - name: Create user accounts
   mysql_user:
     name: '{{ item.user | d(item.name) }}'
-    host: '{{ item.host }}'
     login_host: '{{ db_host | default(omit) }}'
     login_password: '{{ db_password | default(omit) }}'
     login_user: 'root'
     state: 'present'
     password: "{{ item.password }}"
-  with_flattened: '{{ mariadb__users + mariadb_users|d([]) }}'
+  with_flattened: "{{ mariadb__users + mariadb__dependent_users + mariadb_userss|d([]) }}"
   register: mariadb__register_create_users
   when: ((item.user|d(False) or item.name|d(False)) and
          (item.state is undefined or item.state != "absent"))
@@ -91,10 +94,9 @@
 - name: Grant privileges to users
   mysql_user:
     name: '{{ item.user | d(item.name) }}'
-    host: '{{ item.host }}'
     login_host: '{{ db_host | default(omit) }}'
     login_password: '{{ db_password | default(omit) }}'
     login_user: 'root'
     priv: '{{ item.priv | d((item.database | d(item.name)) + ".*:" + mariadb__default_privileges_grant) }}'
     append_privs: true
-  loop: "{{ mariadb__users }}"
+  with_flattened: "{{ mariadb__users + mariadb__dependent_users + mariadb_userss|d([]) }}"
