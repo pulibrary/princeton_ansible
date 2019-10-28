@@ -13,3 +13,10 @@ def test_hosts_file(host):
     assert f.exists
     assert f.user == 'root'
     assert f.group == 'root'
+
+
+def test_solr_core_running(host):
+    command = """curl http://localhost:8983/solr/admin/cores?action=STATUS"""
+    cmd = host.run(command)
+
+    assert 'plantain-staging' in cmd.stdout
