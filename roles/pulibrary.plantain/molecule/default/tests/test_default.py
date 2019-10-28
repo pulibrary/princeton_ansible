@@ -20,3 +20,10 @@ def test_solr_core_running(host):
     cmd = host.run(command)
 
     assert 'plantain-staging' in cmd.stdout
+
+
+def test_solr_config_installed(host):
+    command = """curl http://localhost:8983/solr/plantain-staging/config"""
+    cmd = host.run(command)
+
+    assert 'collection_title_tesim^150' in cmd.stdout
