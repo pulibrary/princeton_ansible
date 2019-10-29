@@ -3,20 +3,20 @@
 # Discussion, issues and change requests at:
 #   https://github.com/nodesource/distributions
 #
-# Script to install the NodeSource Node.js 12.x repo onto a
+# Script to install the NodeSource Node.js 10.x repo onto a
 # Debian or Ubuntu system.
 #
 # Run as root or insert `sudo -E` before `bash`:
 #
-# curl -sL https://deb.nodesource.com/setup_12.x | bash -
+# curl -sL https://deb.nodesource.com/setup_10.x | bash -
 #   or
-# wget -qO- https://deb.nodesource.com/setup_12.x | bash -
+# wget -qO- https://deb.nodesource.com/setup_10.x | bash -
 #
 
 export DEBIAN_FRONTEND=noninteractive
-SCRSUFFIX="_12.x"
-NODENAME="Node.js 12.x"
-NODEREPO="node_12.x"
+SCRSUFFIX="_10.x"
+NODENAME="Node.js 10.x"
+NODEREPO="node_10.x"
 NODEPKG="nodejs"
 
 print_status() {
@@ -171,7 +171,6 @@ if [ ! -x /usr/bin/curl ] && [ ! -x /usr/bin/wget ]; then
 fi
 
 # Used by apt-key to add new keys
-
 if [ ! -x /usr/bin/gpg ]; then
     PRE_INSTALL_PKGS="${PRE_INSTALL_PKGS} gnupg"
 fi
@@ -308,4 +307,3 @@ print_status """Run \`${bold}sudo apt-get install -y ${NODEPKG}${normal}\` to in
 
 ## Defer setup until we have the complete script
 setup
-
