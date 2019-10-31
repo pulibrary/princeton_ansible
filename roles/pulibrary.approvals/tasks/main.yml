@@ -12,7 +12,7 @@
     dest: /etc/approvals.smb.credentials
   when: runnning_on_server
 
-- name: Create mount for pas shared files
+- name: Create mount for approvals shared files
   mount:
     path: '/mnt/dms-smbserve/bi-library-hr'
     src: '//dms-smbserve/bi-library-hr'
@@ -37,3 +37,10 @@
   apt:
     name: 'nodejs'
     state: latest
+
+- name: Allow deploy to restart, stop, start nginx
+  lineinfile:
+    dest: "/etc/sudoers"
+    state: "present"
+    line: "{{ deploy_user }} ALL=(ALL) NOPASSWD: /usr/sbin/service nginx *"
+    validate: "visudo -cf %s"
