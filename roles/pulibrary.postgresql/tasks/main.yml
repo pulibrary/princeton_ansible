@@ -22,9 +22,9 @@
     state: present
     cache_valid_time: '{{ apt_cache_timeout }}'
     update_cache: 'yes'
-  with_items:
+  loop:
     - postgresql-{{ postgres_version }}
-  when: postgresql_is_local == true
+  when: postgresql_is_local
 
 - name: install postgresql client packages
   apt:
@@ -32,7 +32,7 @@
     state: present
     cache_valid_time: '{{ apt_cache_timeout }}'
     update_cache: 'yes'
-  with_items:
+  loop:
     - libpq-dev
     - python-psycopg2
 
@@ -43,7 +43,7 @@
     group: postgres
     owner: postgres
   register: configure_postgres
-  when: postgresql_is_local == true
+  when: postgresql_is_local
 
 - name: install configuration file
   template:
@@ -52,13 +52,13 @@
     group: postgres
     owner: postgres
   register: configure_postgres
-  when: postgresql_is_local == true
+  when: postgresql_is_local
 
 - name: ensure postgres starts on boot
   service:
     name: postgresql
     enabled: 'yes'
-  when: postgresql_is_local == true
+  when: postgresql_is_local
 
 - name: restart postgres server
   service:
