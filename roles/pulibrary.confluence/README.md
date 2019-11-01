@@ -1,14 +1,12 @@
 Role Name
 =========
 
-A brief description of the role goes here.
+Installs Confluence 
 
 Requirements
 ------------
 
-Any pre-requisites that may not be covered by Ansible itself or the role should
-be mentioned here. For instance, if the role uses the EC2 module, it may be a
-good idea to mention in this section that the boto package is required.
+Download the [Install file from Atlassian](https://www.atlassian.com/software/confluence/download) and place it in the `local_files/confluence` directory. Make sure that the version matches the `defaults/main.yml`
 
 Role Variables
 --------------
