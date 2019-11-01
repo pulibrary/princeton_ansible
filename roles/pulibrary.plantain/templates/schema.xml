@@ -1,0 +1,390 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!--
+ Licensed to the Apache Software Foundation (ASF) under one or more
+ contributor license agreements.  See the NOTICE file distributed with
+ this work for additional information regarding copyright ownership.
+ The ASF licenses this file to You under the Apache License, Version 2.0
+ (the "License"); you may not use this file except in compliance with
+ the License.  You may obtain a copy of the License at
+
+     http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+-->
+
+<!--
+ This is the Solr schema file. This file should be named "schema.xml" and
+ should be in the conf directory under the solr home
+ (i.e. ./solr/conf/schema.xml by default)
+ or located where the classloader for the Solr webapp can find it.
+
+ This example schema is the recommended starting point for users.
+ It should be kept correct and concise, usable out-of-the-box.
+
+ For more information, on how to customize this file, please see
+ http://wiki.apache.org/solr/SchemaXml
+
+ PERFORMANCE NOTE: this schema includes many optional features and should not
+ be used for benchmarking.  To improve performance one could
+  - set stored="false" for all fields possible (esp large fields) when you
+    only need to search on the field but don't need to return the original
+    value.
+  - set indexed="false" if you don't need to search on the field, but only
+    return the field as a result of searching on other indexed fields.
+  - remove all unneeded copyField statements
+  - for best index size and searching performance, set "index" to false
+    for all general text fields, use copyField to copy them to the
+    catchall "text" field, and use that for searching.
+  - For maximum indexing performance, use the StreamingUpdateSolrServer
+    java client.
+  - Remember to run the JVM in server mode, and use a higher logging level
+    that avoids logging every request
+-->
+
+<schema name="Arclight Demo Index" version="1.5">
+  <!-- attribute "name" is the name of this schema and is only used for display purposes.
+       Applications should change this to reflect the nature of the search collection.
+       version="1.4" is Solr's version number for the schema syntax and semantics.  It should
+       not normally be changed by applications.
+       1.0: multiValued attribute did not exist, all fields are multiValued by nature
+       1.1: multiValued attribute introduced, false by default
+       1.2: omitTermFreqAndPositions attribute introduced, true by default except for text fields.
+       1.3: removed optional field compress feature
+       1.4: default auto-phrase (QueryParser feature) to off
+     -->
+
+  <types>
+    <!-- field type definitions. The "name" attribute is
+       just a label to be used by field definitions.  The "class"
+       attribute and any other attributes determine the real
+       behavior of the fieldType.
+         Class names starting with "solr" refer to java classes in the
+       org.apache.solr.analysis package.
+    -->
+
+    <!-- The StrField type is not analyzed, but indexed/stored verbatim. -->
+    <fieldType name="string" class="solr.StrField" sortMissingLast="true" omitNorms="true" docValues="true"/>
+
+    <!-- boolean type: "true" or "false" -->
+    <fieldType name="boolean" class="solr.BoolField" sortMissingLast="true" omitNorms="true"/>
+    <!--Binary data type. The data should be sent/retrieved in as Base64 encoded Strings -->
+    <fieldtype name="binary" class="solr.BinaryField"/>
+
+    <!-- The optional sortMissingLast and sortMissingFirst attributes are
+         currently supported on types that are sorted internally as strings
+         and on numeric types.
+	       This includes "string","boolean", and, as of 3.5 (and 4.x),
+	       int, float, long, date, double, including the "Trie" variants.
+       - If sortMissingLast="true", then a sort on this field will cause documents
+         without the field to come after documents with the field,
+         regardless of the requested sort order (asc or desc).
+       - If sortMissingFirst="true", then a sort on this field will cause documents
+         without the field to come before documents with the field,
+         regardless of the requested sort order.
+       - If sortMissingLast="false" and sortMissingFirst="false" (the default),
+         then default lucene sorting will be used which places docs without the
+         field first in an ascending sort and last in a descending sort.
+    -->
+    <!--
+      Numeric field types that index values using KD-trees.
+      Point fields don't support FieldCache, so they must have docValues="true" if needed for sorting, faceting, functions, etc.
+    -->
+    <fieldType name="pint" class="solr.IntPointField" docValues="true"/>
+    <fieldType name="pfloat" class="solr.FloatPointField" docValues="true"/>
+    <fieldType name="plong" class="solr.LongPointField" docValues="true"/>
+    <fieldType name="pdouble" class="solr.DoublePointField" docValues="true"/>
+
+    <!-- The format for this date field is of the form 1995-12-31T23:59:59Z, and
+         is a more restricted form of the canonical representation of dateTime
+         http://www.w3.org/TR/xmlschema-2/#dateTime
+         The trailing "Z" designates UTC time and is mandatory.
+         Optional fractional seconds are allowed: 1995-12-31T23:59:59.999Z
+         All other components are mandatory.
+
+         Expressions can also be used to denote calculations that should be
+         performed relative to "NOW" to determine the value, ie...
+
+               NOW/HOUR
+                  ... Round to the start of the current hour
+               NOW-1DAY
+                  ... Exactly 1 day prior to now
+               NOW/DAY+6MONTHS+3DAYS
+                  ... 6 months and 3 days in the future from the start of
+                      the current day
+
+         Consult the DateField javadocs for more information.
+
+         Note: For faster range queries, consider the tdate type
+      -->
+    <!-- KD-tree versions of date fields -->
+    <fieldType name="pdate" class="solr.DatePointField" docValues="true"/>
+
+    <!-- The "RandomSortField" is not used to store or search any
+         data.  You can declare fields of this type it in your schema
+         to generate pseudo-random orderings of your docs for sorting
+         purposes.  The ordering is generated based on the field name
+         and the version of the index, As long as the index version
+         remains unchanged, and the same field name is reused,
+         the ordering of the docs will be consistent.
+         If you want different psuedo-random orderings of documents,
+         for the same version of the index, use a dynamicField and
+         change the name
+     -->
+    <fieldType name="random" class="solr.RandomSortField" indexed="true" />
+
+    <fieldType name="text" class="solr.TextField" positionIncrementGap="100">
+      <analyzer>
+        <tokenizer class="solr.ICUTokenizerFactory" />
+        <filter class="solr.KeywordRepeatFilterFactory" />
+        <filter class="solr.ICUFoldingFilterFactory" />
+        <filter class="solr.PorterStemFilterFactory"/>
+        <filter class="solr.RemoveDuplicatesTokenFilterFactory" />
+      </analyzer>
+    </fieldType>
+
+    <fieldType name="text_en" class="solr.TextField" positionIncrementGap="100">
+      <analyzer type="index">
+        <tokenizer class="solr.WhitespaceTokenizerFactory" />
+        <filter class="solr.KeywordRepeatFilterFactory" />
+        <filter class="solr.WordDelimiterGraphFilterFactory"/>
+        <filter class="solr.EnglishPossessiveFilterFactory"/>
+        <filter class="solr.ICUFoldingFilterFactory" />
+        <filter class="solr.KeywordMarkerFilterFactory" protected="protwords.txt"/>
+        <filter class="solr.PorterStemFilterFactory"/>
+        <filter class="solr.FlattenGraphFilterFactory"/> <!-- required on index analyzers after graph filters -->
+        <filter class="solr.RemoveDuplicatesTokenFilterFactory" />
+      </analyzer>
+      <analyzer type="query">
+        <tokenizer class="solr.WhitespaceTokenizerFactory" />
+        <filter class="solr.KeywordRepeatFilterFactory" />
+        <filter class="solr.WordDelimiterGraphFilterFactory"/>
+        <filter class="solr.SynonymFilterFactory" synonyms="synonyms.txt" ignoreCase="true" expand="true"/>
+        <filter class="solr.ICUFoldingFilterFactory" />
+        <filter class="solr.EnglishPossessiveFilterFactory"/>
+        <filter class="solr.KeywordMarkerFilterFactory" protected="protwords.txt"/>
+        <filter class="solr.PorterStemFilterFactory"/>
+        <filter class="solr.RemoveDuplicatesTokenFilterFactory" />
+      </analyzer>
+    </fieldType>
+
+    <fieldType name="identifier_match" class="solr.TextField" positionIncrementGap="100">
+      <analyzer type="index">
+        <tokenizer class="solr.WhitespaceTokenizerFactory"/>
+        <filter class="solr.WordDelimiterGraphFilterFactory"
+          catenateWords="1"
+          catenateNumbers="1"
+          catenateAll="1"
+          />
+        <filter class="solr.ICUFoldingFilterFactory" />
+        <filter class="solr.FlattenGraphFilterFactory"/> <!-- required on index analyzers after graph filters -->
+      </analyzer>
+      <analyzer type="query">
+        <tokenizer class="solr.WhitespaceTokenizerFactory"/>
+        <filter class="solr.WordDelimiterGraphFilterFactory"
+          catenateWords="1"
+          catenateNumbers="1"
+          catenateAll="1"
+          />
+        <filter class="solr.ICUFoldingFilterFactory" />
+        <filter class="solr.WordDelimiterGraphFilterFactory"/>
+      </analyzer>
+    </fieldType>
+
+    <fieldType name="textSpell" class="solr.TextField" positionIncrementGap="100" >
+      <analyzer>
+        <tokenizer class="solr.StandardTokenizerFactory"/>
+        <filter class="solr.StopFilterFactory" ignoreCase="true" words="stopwords.txt"/>
+        <filter class="solr.LowerCaseFilterFactory"/>
+        <filter class="solr.RemoveDuplicatesTokenFilterFactory"/>
+      </analyzer>
+    </fieldType>
+
+    <fieldType name="textSuggest" class="solr.TextField" positionIncrementGap="100">
+       <analyzer>
+          <tokenizer class="solr.KeywordTokenizerFactory"/>
+          <filter class="solr.LowerCaseFilterFactory"/>
+          <filter class="solr.RemoveDuplicatesTokenFilterFactory"/>
+       </analyzer>
+    </fieldType>
+
+    <!-- This is an example of using the KeywordTokenizer along
+         With various TokenFilterFactories to produce a sortable field
+         that does not include some properties of the source text
+      -->
+    <fieldType name="alphaNumericSort" class="solr.TextField" sortMissingLast="true" omitNorms="true">
+      <analyzer>
+        <!-- KeywordTokenizer does no actual tokenizing, so the entire
+             input string is preserved as a single token
+          -->
+        <tokenizer class="solr.KeywordTokenizerFactory"/>
+        <!-- The LowerCase TokenFilter does what you expect, which can be
+             when you want your sorting to be case insensitive
+          -->
+        <filter class="solr.LowerCaseFilterFactory" />
+        <!-- The TrimFilter removes any leading or trailing whitespace -->
+        <filter class="solr.TrimFilterFactory" />
+        <!-- The PatternReplaceFilter gives you the flexibility to use
+             Java Regular expression to replace any sequence of characters
+             matching a pattern with an arbitrary replacement string,
+             which may include back references to portions of the original
+             string matched by the pattern.
+
+             See the Java Regular Expression documentation for more
+             information on pattern and replacement string syntax.
+
+             http://java.sun.com/j2se/1.5.0/docs/api/java/util/regex/package-summary.html
+          -->
+        <filter class="solr.PatternReplaceFilterFactory"
+                pattern="([^a-z0-9])" replacement="" replace="all"
+        />
+      </analyzer>
+    </fieldType>
+
+    <!-- A specialized field for geospatial search. If indexed, this fieldType must not be multivalued. -->
+    <fieldType name="location" class="solr.LatLonType" subFieldSuffix="_coordinate"/>
+
+    <fieldType name="_nest_path_" class="solr.NestPathField" />
+
+ </types>
+
+
+ <fields>
+   <!-- Valid attributes for fields:
+     name: mandatory - the name for the field
+     type: mandatory - the name of a previously defined type from the
+       <types> section
+     indexed: true if this field should be indexed (searchable or sortable)
+     stored: true if this field should be retrievable
+     multiValued: true if this field may contain multiple values per document
+     omitNorms: (expert) set to true to omit the norms associated with
+       this field (this disables length normalization and index-time
+       boosting for the field, and saves some memory).  Only full-text
+       fields or fields that need an index-time boost need norms.
+     termVectors: [false] set to true to store the term vector for a
+       given field.
+       When using MoreLikeThis, fields used for similarity should be
+       stored for best performance.
+     termPositions: Store position information with the term vector.
+       This will increase storage costs.
+     termOffsets: Store offset information with the term vector. This
+       will increase storage costs.
+     default: a value that should be used if no value is specified
+       when adding a document.
+   -->
+
+   <!-- NOTE: this is not a full list of fields in the index; dynamic fields are also used -->
+   <field name="id" type="string" indexed="true" stored="true" required="true" />
+   <field name="_version_" type="plong" indexed="true" stored="true" multiValued="false" />
+   <field name="timestamp" type="pdate" indexed="true" stored="true" default="NOW" multiValued="false"/>
+   <!-- default, catch all search field -->
+   <field name="text" type="text" indexed="true" stored="true" multiValued="true"/>
+   <field name="unitid_identifier_match" type="identifier_match" indexed="true" multiValued="true" />
+
+   <field name="_root_" type="string" indexed="true" stored="true" docValues="false" />
+   <field name="_nest_parent_" type="string" indexed="true" stored="true"/>
+   <field name="_nest_path_" type="_nest_path_" indexed="true" stored="true"/>
+
+   <!-- Dynamic field definitions.  If a field name is not found, dynamicFields
+        will be used if the name matches any of the patterns.
+        RESTRICTION: the glob-like pattern in the name attribute must have
+        a "*" only at the start or the end.
+        EXAMPLE:  name="*_i" will match any field ending in _i (like myid_i, z_i)
+        Longer patterns will be matched first.  if equal size patterns
+        both match, the first appearing in the schema will be used.  -->
+   <dynamicField name="random_*" type="random" />
+
+   <dynamicField name="*_sort" type="alphaNumericSort" indexed="true" stored="false" multiValued="false" />
+   <dynamicField name="*spell" type="textSpell" indexed="true" stored="false" multiValued="true" />
+   <dynamicField name="*suggest" type="textSuggest" indexed="true" stored="false" multiValued="true" />
+
+   <!-- uncomment the following to ignore any fields that don't already match an existing
+        field name or dynamic field, rather than reporting them as an error.
+        alternately, change the type="ignored" to some other type e.g. "text" if you want
+        unknown fields indexed and/or stored by default -->
+   <!--dynamicField name="*" type="ignored" multiValued="true" /-->
+
+   <dynamicField name="*_tesim" type="text_en"   stored="true"  indexed="true"  multiValued="true"  />
+   <dynamicField name="*_teim"  type="text_en"   stored="false" indexed="true"  multiValued="true"  />
+   <dynamicField name="*_si"    type="string"    stored="false" indexed="true"  multiValued="false" />
+   <dynamicField name="*_sim"   type="string"    stored="false" indexed="true"  multiValued="true"  />
+   <dynamicField name="*_ssm"   type="string"    stored="true"  indexed="false" multiValued="true"  />
+   <dynamicField name="*_ssi"   type="string"    stored="true"  indexed="true"  multiValued="false" />
+   <dynamicField name="*_ssim"  type="string"    stored="true"  indexed="true"  multiValued="true"  />
+   <dynamicField name="*_isim"  type="pint"      stored="true"  indexed="true"  multiValued="true"  />
+   <dynamicField name="*_ii"    type="pint"      stored="false" indexed="true"  multiValued="false" />
+ </fields>
+
+ <!-- Field to use to determine and enforce document uniqueness.
+      Unless this field is marked with required="false", it will be a required field
+   -->
+ <uniqueKey>id</uniqueKey>
+
+
+  <!-- copyField commands copy one field to another at the time a document
+        is added to the index.  It's used either to index the same field differently,
+        or to add multiple fields to the same field for easier/faster searching.  -->
+   <!-- Copy Fields -->
+
+   <!-- field-based searches -->
+   <copyField source="normalized_title_ssm" dest="title_tesim"/>
+   <copyField source="places_ssm" dest="place_tesim"/>
+   <copyField source="names_ssim" dest="name_tesim"/>
+   <copyField source="access_subjects_ssim" dest="subject_tesim"/>
+
+   <!-- The catch all `text` field -->
+   <!-- grab the fielded searches -->
+   <copyField source="normalized_title_ssm" dest="text" />
+   <copyField source="places_ssm" dest="text" />
+   <copyField source="names_ssim" dest="text" />
+   <copyField source="access_subjects_ssim" dest="text" />
+   <!-- grab the searchable notes -->
+   <copyField source="abstract_teim" dest="text" />
+   <copyField source="accessrestricct_teim" dest="text" />
+   <copyField source="accruals_teim" dest="text" />
+   <copyField source="acqinfo_teim" dest="text" />
+   <copyField source="altformavail_teim" dest="text" />
+   <copyField source="appraisal_teim" dest="text" />
+   <copyField source="arrangement_teim" dest="text" />
+   <copyField source="bibliography_teim" dest="text" />
+   <copyField source="bioghist_teim" dest="text" />
+   <copyField source="custodhist_teim" dest="text" />
+   <copyField source="did_note_teim" dest="text" />
+   <copyField source="fileplan_teim" dest="text" />
+   <copyField source="materialspec_teim" dest="text" />
+   <copyField source="note_teim" dest="text" />
+   <copyField source="odd_teim" dest="text" />
+   <copyField source="originalsloc_teim" dest="text" />
+   <copyField source="physdesc_teim" dest="text" />
+   <copyField source="physloc_teim" dest="text" />
+   <copyField source="phystech_teim" dest="text" />
+   <copyField source="processinfo_teim" dest="text" />
+   <copyField source="relatedmaterial_teim" dest="text" />
+   <copyField source="scopecontent_teim" dest="text" />
+   <copyField source="separatedmaterial_teim" dest="text" />
+   <copyField source="userestrict_teim" dest="text" />
+   <!-- grab structured data that's important -->
+   <copyField source="unitid_ssm" dest="text" />
+   <copyField source="unitid_ssm" dest="unitid_identifier_match" />
+
+   <!-- sort fields -->
+   <copyField source="normalized_title_ssm" dest="title_sort"/> <!-- TODO: assumes single values -->
+   <copyField source="normalized_date_ssm" dest="date_sort"/> <!-- TODO: assumes single values -->
+
+   <!-- spellcheck fields -->
+   <!-- default spell check;  should match fields for default request handler -->
+   <!-- it won't work with a copy of a copy field -->
+   <copyField source="*_t" dest="spell"/>
+
+   <!-- for suggestions -->
+   <copyField source="normalized_title_ssm" dest="suggest"/>
+   <copyField source="collection_sim" dest="suggest"/>
+   <copyField source="names_ssim" dest="suggest"/>
+   <copyField source="repository_sim" dest="suggest"/>
+   <copyField source="places_ssim" dest="suggest"/>
+   <copyField source="access_subjects_ssim" dest="suggest"/>
+
+</schema>
