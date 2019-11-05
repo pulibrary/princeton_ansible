@@ -14,16 +14,13 @@
     - restart tomcat
   changed_when: false
 
-- name: PostgreSQL | Make sure the CA certificates are available
-  apt:
-    pkg: ca-certificates
-    state: present
+- name: Configure postgresql repository key
+  apt_key:
+    url: "{{ postgresql_apt_key_url }}"
 
-- name: PostgreSQL | Add PostgreSQL repository apt-key
-  shell: >
-      set -o pipefail |
-      wget --quiet -O - {{ postgresql_apt_key_url }} | sudo apt-key add -
-  changed_when: false
+- name: Configure postgresql repository
+  apt_repository:
+    repo: "{{ postgresql_apt_repo }}"
 
 - name: add postgresql repository
   apt_repository:
@@ -33,7 +30,7 @@
 
 - name: install postgis software
   apt:
-    name: ["postgresql-9.6-postgis-2.5", "postgis", "postgresql-9.6-pgrouting"]
+    name: ["postgresql-10-postgis-2.4", "postgis", "postgresql-10-pgrouting"]
     state: present
     update_cache: true
   notify:
