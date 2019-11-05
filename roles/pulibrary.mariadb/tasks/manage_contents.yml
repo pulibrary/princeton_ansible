@@ -85,6 +85,7 @@
     login_user: 'root'
     state: 'present'
     password: "{{ item.password }}"
+    host: '{{ item.host | default(omit) }}'
   with_flattened: "{{ mariadb__users + mariadb__dependent_users + mariadb_userss|d([]) }}"
   register: mariadb__register_create_users
   when: ((item.user|d(False) or item.name|d(False)) and
@@ -97,6 +98,8 @@
     login_host: '{{ db_host | default(omit) }}'
     login_password: '{{ db_password | default(omit) }}'
     login_user: 'root'
+    host: '{{ item.host | default(omit) }}'
+    password: '{{ item.password  | default(omit)}}'
     priv: '{{ item.priv | d((item.database | d(item.name)) + ".*:" + mariadb__default_privileges_grant) }}'
     append_privs: true
   with_flattened: "{{ mariadb__users + mariadb__dependent_users + mariadb_userss|d([]) }}"
