@@ -6,6 +6,10 @@
     - runnning_on_server: true
     - force_settings: true
     - drupal_git_repo: ''
+    - post_install: |
+      Possible Things left to do:
+        - run a cap for rbsc_drupal, pul_library_drupal, discoveryutils
+        - where needed make sure server is greenlisted on lib-ponyexpress
   vars_files:
     - ../group_vars/libwww/libwww-staging.yml
     - ../group_vars/libwww/vault.yml
@@ -17,8 +21,12 @@
         deploy_id_rsa_private_key: "{{  lookup('file', '../roles/pulibrary.libwww/files/id_rsa')  }}\n"
 
   post_tasks:
-  - name: tell everyone on slack you ran an ansible playbook
-    slack:
-      token: "{{ vault_pul_slack_token }}"
-      msg: "{{ inventory_hostname }} completed"
-      channel: #server-alerts
+    - name: tell everyone on slack you ran an ansible playbook
+      slack:
+        token: "{{ vault_pul_slack_token }}"
+        msg: "{{ inventory_hostname }} completed"
+        channel: #server-alerts
+
+    - name: post role reminders
+      debug:
+        msg: "{{ post_install.split('\n') }}"
