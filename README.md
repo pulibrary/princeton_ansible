@@ -93,11 +93,9 @@ In all the steps below substitue your role name for `example`
    ```bash
    molecule init role -r roles/pulibrary.example
    ```
-1. Set up to run from circle ci `vi .circleci/config.yml` add for your role at the end of the jobs
+1. Set up to run from github actions `vi .github/workflows/molecule_tests.yml` add for your role at the end matrix of the roles
    ```
-      - test_role:
-        name: "test_example"
-        role: "pulibrary.example"
+       - pulibrary.example
    ```
 1. Setup the directory to run molecule
 
