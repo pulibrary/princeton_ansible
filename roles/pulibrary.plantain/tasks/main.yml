@@ -10,3 +10,19 @@
     src: schema.xml
     dest: "{{ solr_home }}/data/{{ plantain_solr_core }}/conf/schema.xml"
   notify: 'reload solr schema'
+
+- name: use subversion to checkout the PUL finding aid files
+  subversion:
+    repo: "{{ subversion_pulfa_repo }}"
+    dest: "{{ subversion_pulfa_dir_path }}"
+    username: "{{ subversion_pulfa_username }}"
+    password: "{{ subversion_pulfa_password }}"
+  when: running_on_server
+
+- name: set the file system attributes for the directory for the PUL finding aid files
+  file:
+    state: directory
+    path: "{{ subversion_pulfa_dir_path }}"
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+  when: running_on_server
