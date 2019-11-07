@@ -17,21 +17,29 @@
     path: "{{ solr_install_path }}"
   register: solr_install_path_status
 
+- name: upload solr file
+  copy:
+    src: "local_files/solr/{{ solr_filename }}.tgz"
+    dest: "{{ solr_workspace }}/{{ solr_filename }}.tgz"
+  when:
+    - solr_install_path_status.stat.isdir is not defined
+    - running_on_server
+  register: solr_upload_status
+
 - name: Download Solr.
   get_url:
     url: "{{ solr_mirror }}/lucene/solr/{{ solr_version }}/{{ solr_filename }}.tgz"
     dest: "{{ solr_workspace }}/{{ solr_filename }}.tgz"
     force: no
     timeout: 600
-  when: solr_install_path_status.stat.isdir is not defined
+  when: solr_upload_status is not defined
   register: solr_download_status
 
 - name: Expand Solr.
   unarchive:
     src: "{{ solr_workspace }}/{{ solr_filename }}.tgz"
     dest: "{{ solr_workspace }}"
-    copy: no
-  when: solr_download_status.changed
+    remote_src: true
 
 # Install Solr < 5.
 - include: install-pre5.yml
