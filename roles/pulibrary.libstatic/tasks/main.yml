@@ -1,0 +1,33 @@
+---
+# tasks file for roles/pulibrary.libstatic
+- name: Install Firestone renovations
+  git:
+    repo: '{{ item.git_repo }}'
+    dest: '{{ item.doc_root }}'
+    clone: true
+    update: true
+    force: true
+    version: 'static-site'
+  become: true
+  with_items: '{{ sites }}'
+
+- name: Add alias for each site
+  template:
+    src: "apache2-site.conf.j2"
+    dest: "/etc/apache2/sites-available/000-{{ item.server_name }}.conf"
+  notify: restart apache
+  become: true
+  with_items: '{{ sites }}'
+
+- name: enable apache2 sites
+  command: 'a2ensite 000-{{ item.server_name }}'
+  become: true
+  with_items: '{{ sites }}'
+  register: apache2_enabled
+  changed_when: '"Enabling site" in apache2_enabled.stdout'
+
+- name: disable the default apache2 site
+  command: 'a2dissite 000-default'
+  become: true
+  register: apache2_disable
+  changed_when: '"disabled." in apache2_disable.stdout'
