@@ -32,7 +32,9 @@
     dest: "{{ solr_workspace }}/{{ solr_filename }}.tgz"
     force: no
     timeout: 600
-  when: solr_upload_status is not defined
+  when:
+    - solr_install_path_status.stat.isdir is not defined
+    - solr_upload_status is failed
   register: solr_download_status
 
 - name: Expand Solr.
@@ -63,8 +65,6 @@
 # Create cores, if any are configured.
 - include: cores.yml
   when: "solr_cores and solr_version.split('.')[0] >= '5'"
-
-- include_tasks: trim-fat.yml
 
 - name: modify ulimits
   template:
