@@ -1,0 +1,21 @@
+---
+- hosts: muddprod
+  remote_user: pulsys
+  become: true
+  vars:
+    - run_not_in_container: true
+    - force_settings: true
+    - drupal_git_repo: ''
+  vars_files:
+    - ../group_vars/mudd/mudd-prod.yml
+    - ../group_vars/mudd/vault.yml
+    # need information to connect to solr staging cluster
+  roles:
+    - role: pulibrary.mudd
+
+  post_tasks:
+  - name: tell everyone on slack you ran an ansible playbook
+    slack:
+      token: "{{ vault_pul_slack_token }}"
+      msg: "{{ inventory_hostname }} completed"
+      channel: #server-alerts
