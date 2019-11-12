@@ -1,0 +1,52 @@
+---
+# vars file for roles/pulibrary.approvals
+
+rails_app_name: "mudd-dbs"
+rails_app_directory: "mudd-dbs"
+rails_app_env: "production"
+
+
+passenger_app_root: "/opt/mudd-dbs/current/public"
+passenger_app_env: "production"
+passenger_ruby: "/usr/bin/ruby2.4"
+nginx_remove_default_vhost: true
+rails_app_dependencies:
+  - zlib1g-dev
+  - libsqlite3-dev
+  - libmysqlclient-dev
+  - nodejs
+  - cifs-utils
+app_db_host: '{{ db_host }}'
+app_db_name: '{{ mudd_db_name }}'
+app_db_user: '{{ mudd_db_user }}'
+app_db_password: '{{ mudd_db_password }}'
+app_secret_key: '{{ vault_mudd_staging_secret_key }}'
+
+mariadb__users:
+  - name: "{{ mudd_db_user }}"
+    host: "%"
+    password: "{{ mudd_db_password }}"
+    priv: "{{ mudd_db_name }}.*:ALL"
+
+mariadb__databases:
+  - name: "{{ mudd_db_name }}"
+    encoding: utf8mb4
+    collation: utf8mb4_general_ci
+
+rails_app_vars:
+  - name: APP_SECRET_KEY_BASE
+    value: '{{ app_secret_key }}'
+  - name: APP_DB
+    value: '{{ app_db_name }}'
+  - name: APP_DB_USERNAME
+    value: '{{ app_db_user }}'
+  - name: APP_DB_PASSWORD
+    value: '{{ app_db_password }}'
+  - name: APP_DB_HOST
+    value: '{{ app_db_host }}'
+  - name: APPLICATION_HOST
+    value: '{{ app_host_name }}'
+  - name: APPLICATION_HOST_PROTOCOL
+    value: '{{ application_host_protocol }}'
+  - name: LD_LIBRARY_PATH
+    value: '/usr/local/opt/openssl/lib/'
