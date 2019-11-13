@@ -1,0 +1,15 @@
+---
+- hosts: confluencestaging
+  remote_user: pulsys
+  become: true
+  vars_files:
+    - ../site_vars.yml
+  roles:
+    - role: roles/pulibrary.confluence
+
+  post_tasks:
+    - name: tell everyone on slack you ran an ansible playbook
+      slack:
+        token: "{{ vault_pul_slack_token }}"
+        msg: "{{ inventory_hostname }} completed"
+        channel: #server-alerts
