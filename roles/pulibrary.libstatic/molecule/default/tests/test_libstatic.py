@@ -11,8 +11,7 @@ testinfra_hosts = testinfra.utils.ansible_runner.AnsibleRunner(
 @pytest.mark.parametrize("path", ["/var/local/firestone-renovations",
                                   "/var/local/republic",
                                   "/var/local/milberg",
-                                  "/etc/apache2/sites-enabled/000-firestone-renovations-staging.conf",
-                                  "/etc/apache2/sites-enabled/000-republic-staging.conf",
+                                  "/etc/apache2/sites-enabled/000-lib-static-staging1.conf",
                                   "/etc/apache2/sites-enabled/000-milberg-staging.conf"
                                   ])
 def test_for_libstatic_code_git_repos(host, path):
