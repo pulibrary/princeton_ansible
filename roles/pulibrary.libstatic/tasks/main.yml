@@ -11,18 +11,25 @@
   become: true
   with_items: '{{ sites }}'
 
-- name: Add alias for each site
+- name: Add alias for the milberg site
   template:
     src: "apache2-site.conf.j2"
     dest: "/etc/apache2/sites-available/000-{{ item.server_name }}.conf"
   notify: restart apache
   become: true
-  with_items: '{{ sites }}'
+  with_items: '{{ [sites[ milberg_index ]] }}'
+
+- name: Add alias for the libstatic site
+  template:
+    src: "lib-static-site.conf.j2"
+    dest: "/etc/apache2/sites-available/000-{{ lib_static_site.server_name }}.conf"
+  notify: restart apache
+  become: true
 
 - name: enable apache2 sites
   command: 'a2ensite 000-{{ item.server_name }}'
   become: true
-  with_items: '{{ sites }}'
+  with_items: '{{ [sites[ milberg_index ], lib_static_site] }}'
   register: apache2_enabled
   changed_when: '"Enabling site" in apache2_enabled.stdout'
 
