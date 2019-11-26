@@ -19,6 +19,7 @@
     login_host: '{{ db_host | default(omit) }}'
     login_password: '{{ db_password | default(omit) }}'
     login_user: 'root'
+    login_port: '{{ db_port | default(omit) }}'
     state: present
     encoding: "{{ item.encoding | d(omit) }}"
     collation: "{{ item.collation | d(omit) }}"
@@ -70,6 +71,7 @@
     login_host: '{{ db_host | default(omit) }}'
     login_password: '{{ db_password | default(omit) }}'
     login_user: 'root'
+    login_port: '{{ db_port | default(omit) }}'
     name: '{{ item.user | d(item.name) }}'
     state: 'absent'
   with_flattened: "{{ mariadb__users + mariadb__dependent_users + mariadb_userss|d([]) }}"
@@ -77,12 +79,13 @@
          (item.state is defined and item.state == "absent"))
   no_log: true
 
-- name: Create user accounts
+- name: Create user accounts 
   mysql_user:
     name: '{{ item.user | d(item.name) }}'
     login_host: '{{ db_host | default(omit) }}'
     login_password: '{{ db_password | default(omit) }}'
     login_user: 'root'
+    login_port: '{{ db_port | default(omit) }}'
     state: 'present'
     password: "{{ item.password }}"
     host: '{{ item.host | default(omit) }}'
@@ -98,6 +101,7 @@
     login_host: '{{ db_host | default(omit) }}'
     login_password: '{{ db_password | default(omit) }}'
     login_user: 'root'
+    login_port: '{{ db_port | default(omit) }}'
     host: '{{ item.host | default(omit) }}'
     password: '{{ item.password  | default(omit)}}'
     priv: '{{ item.priv | d((item.database | d(item.name)) + ".*:" + mariadb__default_privileges_grant) }}'
