@@ -1,0 +1,19 @@
+---
+- hosts: percona_stage_cluster
+  remote_user: pulsys
+  gather_facts: true
+  become: true
+  vars:
+    - runnning_on_server: true
+  roles:
+    - role: pulibrary.perconaxdb
+      xtradb_cluster_name: "pulibrary-cluster"
+      xtradb_nodes_group: "perconaxtra_db_cluster"
+      xtradb_bind_interface: ens33
+
+  post_tasks:
+    - name: tell everyone on slack you ran an ansible playbook
+      slack:
+        token: "{{ vault_pul_slack_token }}"
+        msg: "{{ inventory_hostname }} completed"
+        channel: #server-alerts
