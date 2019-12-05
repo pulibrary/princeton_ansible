@@ -15,6 +15,6 @@ def test_hosts_file(host):
 
 
 def test_for_lib_jobs_yml_file_exist(host):
-    file = host.file('/home/deploy/sfx_env.yml')
+    file = host.file('/home/deploy/app_configs/sfx_worldcat')
 
     assert file.exists
