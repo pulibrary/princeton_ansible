@@ -12,6 +12,17 @@
     dest: /etc/approvals.smb.credentials
   when: runnning_on_server
 
+- name: Check mount for approvals shared files
+  mount:
+    path: '/mnt/dms-smbserve/bi-library-hr'
+    src: '//dms-smbserve/bi-library-hr'
+    fstype: cifs
+    opts: 'defaults,uid=33,gid={{ deploy_user_uid }},credentials=/etc/approvals.smb.credentials'
+    state: present
+  register: mount_info
+  when: runnning_on_server
+  become: true
+
 - name: Create mount for approvals shared files
   mount:
     path: '/mnt/dms-smbserve/bi-library-hr'
@@ -19,7 +30,7 @@
     fstype: cifs
     opts: 'defaults,uid=33,gid={{ deploy_user_uid }},credentials=/etc/approvals.smb.credentials'
     state: mounted
-  when: runnning_on_server
+  when: runnning_on_server and mount_info.changed
   become: true
 
 - name: Download node apt update script
@@ -44,3 +55,23 @@
     state: "present"
     line: "{{ deploy_user }} ALL=(ALL) NOPASSWD: /usr/sbin/service nginx *"
     validate: "visudo -cf %s"
+
+- name: install global mail catcher
+  gem:
+    name: mailcatcher
+    user_install: false
+  when: install_mailcatcher
+
+- name: Iqnstall startup script for mailcatcher
+  template:
+    src: mailcatcher.service.j2
+    dest: /lib/systemd/system/mailcatcher.service
+  when: runnning_on_server and install_mailcatcher
+  notify: restart mailcatcher
+
+- name: Keep mailcatcher running
+  service:
+    name: mailcatcher
+    enabled: true
+    state: started
+  when: runnning_on_server and install_mailcatcher
