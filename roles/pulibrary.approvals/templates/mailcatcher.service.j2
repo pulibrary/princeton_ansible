@@ -1,0 +1,25 @@
+[Unit]
+Description=Mailcatcher
+After=syslog.target network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/{{mailcatcher_user}}
+ExecStart=/bin/bash --login -c "/usr/local/bin/mailcatcher"
+User={{mailcatcher_user}}
+Group={{mailcatcher_group}}
+UMask=0002
+
+# if we crash, restart
+RestartSec=1
+Restart=on-failure
+
+# output goes to /var/log/syslog
+StandardOutput=syslog
+StandardError=syslog
+
+# This will default to "bundler" if we don't specify it
+SyslogIdentifier=mailcatcher
+
+[Install]
+WantedBy=multi-user.target
