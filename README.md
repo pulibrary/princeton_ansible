@@ -245,7 +245,4 @@ If a file is not decrypting with `git diff` you may need to add the file you're 
 1. `brew install lastpass-cli`
 2. `lpass login <email@email.com>`
 3. `gem install lastpass-ansible`
-4. ```
-   export ANSIBLE_VAULT_PASSWORD_FILE=`command -v lastpass-ansible`
-   ```
-5. To set the agent timeout to 12 hours instead of the default 1 hour  `export LPASS_AGENT_TIMEOUT=43200`
+4. `source princeton_ansible_env.sh`
