@@ -27,16 +27,16 @@
 - include: install.yml
   when: "solr_version.split('.')[0] >= '5'"
 
+# Configure solr.
+- include: configure.yml
+  when: "solr_version.split('.')[0] >= '5'"
+
 - name: Ensure solr is started and enabled on boot if configured.
   service:
     name: "{{ solr_service_name }}"
     state: "{{ solr_service_state }}"
     enabled: yes
   when: solr_service_manage
-
-# Configure solr.
-- include: configure.yml
-  when: "solr_version.split('.')[0] >= '5'"
 
 # Create cores, if any are configured.
 - include: cores.yml
@@ -48,3 +48,7 @@
     dest: "/etc/security/limits.d/solr.conf"
     owner: root
     group: root
+
+# Create cores, if any are configured.
+- include: links.yml
+  when: "solr_cores and solr_version.split('.')[0] >= '5'"

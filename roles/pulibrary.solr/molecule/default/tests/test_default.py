@@ -20,3 +20,11 @@ def test_solr_running(host):
     cmd = host.run(command)
 
     assert 'HTTP/1.1 200 OK' in cmd.stdout
+
+
+def test_core_configured(host):
+    f = host.file('/solr/data/catalog/core.properties')
+
+    assert f.exists
+    assert f.user == 'deploy'
+    assert f.group == 'deploy'
