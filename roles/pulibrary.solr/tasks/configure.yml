@@ -1,22 +1,25 @@
 ---
-- name: Remove existing SOLR_HEAP configuration.
-  lineinfile:
-    dest: "{{ solr_config_file }}"
-    regexp: "^SOLR_HEAP"
-    state: absent
+- name: Configure Solr init script
+  template:
+    src: 'solr.in.sh.j2'
+    dest: '{{ solr_config_file }}'
+    force: true
+  notify: restart solr
+
+- name: Configure Solr properties
+  template:
+    src: 'solr.xml.j2'
+    dest: '{{ solr_data_dir }}/solr.xml'
+    force: 'yes'
   notify: restart solr
 
 - name: Apply Solr configuration changes.
   lineinfile:
-    dest: "{{ solr_config_file }}"
+    dest: "{{ solr_service_file }}"
     regexp: "{{ item.regexp }}"
     line: "{{ item.line }}"
     state: present
   with_items:
-    - regexp: "^.?SOLR_JAVA_MEM="
-      line: 'SOLR_JAVA_MEM="-Xms{{ solr_xms }} -Xmx{{ solr_xmx }}"'
-    - regexp: "^SOLR_PORT="
-      line: 'SOLR_PORT="{{ solr_port }}"'
-    - regexp: "^.?SOLR_TIMEZONE="
-      line: 'SOLR_TIMEZONE="{{ solr_timezone }}"'
+    - regexp: "RUNAS="
+      line: 'RUNAS="deploy"'
   notify: restart solr
