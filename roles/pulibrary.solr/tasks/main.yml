@@ -52,3 +52,10 @@
 # Create cores, if any are configured.
 - include: links.yml
   when: "solr_cores and solr_version.split('.')[0] >= '5'"
+
+- name: Allow deploy to restart, stop, start solr
+  lineinfile:
+    dest: "/etc/sudoers"
+    state: "present"
+    line: "{{ deploy_user }} ALL=(ALL) NOPASSWD: /usr/sbin/service solr *"
+    validate: "visudo -cf %s"
