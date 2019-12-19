@@ -10,5 +10,5 @@ def test_cantaloupe_symlink_file(host):
     f = host.file('/opt/cantaloupe')
 
     assert f.exists
-    assert f.user == 'deploy'
-    assert f.group == 'deploy'
+    assert f.user == 'root'
+    assert f.group == 'root'
