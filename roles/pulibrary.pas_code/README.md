@@ -6,7 +6,21 @@ A role to deploy the pas code and database to a machine
 Requirements
 ------------
 
-None
+### Getting a new sql.zip for pas-code
+
+On slavery-prod1 (get the password from the vault)
+```
+mysqldump -h maria-prod.princeton.edu -p -u pas pas_prod > /tmp/pas.sql
+```
+
+On your machine
+```
+cd <princeton-ansible projectdir>/roles/pulibrary.pas_code/files
+scp pulsys@slavery-prod1:/tmp/pas.sql .
+zip pas.zip pas.sql
+rm pas.sql
+```
+
 
 Role Variables
 --------------
