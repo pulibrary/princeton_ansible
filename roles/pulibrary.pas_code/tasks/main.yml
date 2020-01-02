@@ -65,6 +65,7 @@
   copy:
     src: 'files/pas.zip'
     dest: '/tmp/pas.zip'
+  when: deploy_ssh_config.diff == [] or force_pas_sql_import
 
 - name: Unarchive SQL file to import
   unarchive:
@@ -94,9 +95,18 @@
     state: present
   when: deploy_ssh_config.diff == [] or force_pas_sql_import
 
+- name: run permissive script
+  command: "/home/{{ deploy_user }}/sql/set_permission.sh"
+  ignore_errors: true
+  changed_when: false
+
 - name: Import database
   mysql_db:
     name: '{{ pas_db_name }}'
+    login_host: '{{ db_host | default(omit) }}'
+    login_port: '{{ db_port | default(omit) }}'
+    login_user: '{{ pas_db_user }}'
+    login_password: '{{ pas_db_password }}'
     state: import
     target: '/tmp/pas.sql'
   when: deploy_ssh_config.diff == [] or force_pas_sql_import
