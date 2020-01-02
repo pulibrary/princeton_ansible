@@ -6,9 +6,21 @@ A role to generate the machine for running Princeton and Slavery (PAS) site
 Requirements
 ------------
 
-Any pre-requisites that may not be covered by Ansible itself or the role should
-be mentioned here. For instance, if the role uses the EC2 module, it may be a
-good idea to mention in this section that the boto package is required.
+### Getting a new sql.zip for pas
+
+On slavery-prod1 (get the password from the vault)
+```
+mysqldump -h maria-prod.princeton.edu -p -u pas pas_prod > /tmp/pas.sql
+```
+
+On your machine
+```
+cd <princeton-ansible projectdir>/roles/pulibrary.pas/files
+scp pulsys@slavery-prod1:/tmp/pas.sql .
+zip pas.zip pas.sql
+rm pas.sql
+```
+
 
 Role Variables
 --------------
