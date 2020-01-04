@@ -81,7 +81,7 @@ Migrating your role's database from the MariaDB cluster to Percona
           gather_subset:
             - network
       vars:
-        - runnning_on_server: false
+        - running_on_server: false
         - xtradb_nodes_group: "all"
         - xtradb_leader_node: "instance"
       roles:
