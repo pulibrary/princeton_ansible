@@ -10,7 +10,7 @@
   copy:
     src: files/approvals.smb.credentials
     dest: /etc/approvals.smb.credentials
-  when: runnning_on_server
+  when: running_on_server
 
 - name: Check mount for approvals shared files
   mount:
@@ -20,7 +20,7 @@
     opts: 'defaults,uid=33,gid={{ deploy_user_uid }},credentials=/etc/approvals.smb.credentials'
     state: present
   register: mount_info
-  when: runnning_on_server
+  when: running_on_server
   become: true
 
 - name: Create mount for approvals shared files
@@ -30,7 +30,7 @@
     fstype: cifs
     opts: 'defaults,uid=33,gid={{ deploy_user_uid }},credentials=/etc/approvals.smb.credentials'
     state: mounted
-  when: runnning_on_server and mount_info.changed
+  when: running_on_server and mount_info.changed
   become: true
 
 - name: Download node apt update script
@@ -66,7 +66,7 @@
   template:
     src: mailcatcher.service.j2
     dest: /lib/systemd/system/mailcatcher.service
-  when: runnning_on_server and install_mailcatcher
+  when: running_on_server and install_mailcatcher
   notify: restart mailcatcher
 
 - name: Keep mailcatcher running
@@ -74,4 +74,4 @@
     name: mailcatcher
     enabled: true
     state: started
-  when: runnning_on_server and install_mailcatcher
+  when: running_on_server and install_mailcatcher

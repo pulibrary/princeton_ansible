@@ -42,7 +42,7 @@ passed in as parameters) is always nice for users too:
 
     - hosts: servers
       vars:
-        - runnning_on_server: true # needed to force the docker samba items to run
+        - running_on_server: true # needed to force the docker samba items to run
       roles:
         - role: roles/pulibrary.pas
         - role: roles/pulibrary.pas_code
