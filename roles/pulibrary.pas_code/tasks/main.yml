@@ -14,7 +14,7 @@
   become: true
   when:
     - deploy_ssh_config.diff == [] or force_pas_deploy
-    - runnning_on_server
+    - running_on_server
 
 - name: Create the pas directory for docker
   file:
@@ -32,13 +32,13 @@
     - '/opt/pas/web/cpresources'
   when:
     - deploy_ssh_config.diff == []
-    - not runnning_on_server
+    - not running_on_server
 
 - name: Install the license key
   copy:
     src: files/license.key
     dest: /opt/pas/config/license.key
-  when: runnning_on_server
+  when: running_on_server
 
 - name: change permissions of all files recursively
   file:
@@ -112,7 +112,7 @@
   with_items:
     - src: '/mnt/diglibdata1/{{ pas_upload_path }}'
       link: '/opt/pas/web/uploads'
-  when: runnning_on_server
+  when: running_on_server
 
 - name: Migrate craft
   become: true
@@ -123,4 +123,4 @@
   with_items:
     - 'migrate/all'
     - 'project-config/sync'
-  when: runnning_on_server
+  when: running_on_server
