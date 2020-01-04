@@ -16,7 +16,7 @@ Example Playbook
 - name: Converge
   hosts: all
   vars:
-    - runnning_on_server: true
+    - running_on_server: true
     - generic_app_user: 'aspace'
   roles:
     - role: pulibrary.deploy-user
