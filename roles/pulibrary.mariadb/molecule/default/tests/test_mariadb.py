@@ -26,6 +26,7 @@ def test_for_mysql_user_and_access(host):
 @pytest.mark.parametrize("file",
                          ["/home/deploy/sql/permissive.sql",
                           "/home/deploy/sql/set_permission.sh",
+                          "/home/deploy/.my.cnf",
                           ])
 def test_for_libwww_file_exist(host, file):
     file = host.file(file)
