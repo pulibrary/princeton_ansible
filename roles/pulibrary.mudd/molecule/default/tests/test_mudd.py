@@ -22,6 +22,7 @@ def test_for_mudd_is_directory(host):
     assert f.user == 'deploy'
     assert f.group == 'deploy'
 
+
 def test_for_mudd_database_yml(host):
     f = host.file('/opt/mudd-dbs/shared/config/database.yml')
 
@@ -36,4 +37,3 @@ def test_for_mudd_files(host):
     assert f.exists
     assert f.user == 'root'
     assert f.group == 'root'
-
