@@ -1,6 +1,15 @@
 ---
 - name: Converge
   hosts: all
+  pre_tasks:
+    - name: install iproute
+      apt:
+        name: iproute2
+        state: present
+    - name: rerun setup
+      setup:
+        gather_subset:
+          - network
   vars:
     - running_on_server: false
     - samba_status: client
@@ -8,5 +17,5 @@
     - xtradb_nodes_group: "all"
     - xtradb_leader_node: "instance"
   roles:
-    - role: pulibrary.mariadbserver
+    - role: pulibrary.perconaxdb
     - role: pulibrary.bibdata
