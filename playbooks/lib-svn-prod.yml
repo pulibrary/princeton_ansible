@@ -1,0 +1,17 @@
+---
+- hosts: libsvn
+  remote_user: pulsys
+  become: true
+  vars_files:
+    - ../group_vars/lib-svn/vault.yml
+    - ../group_vars/lib-svn/production.yml
+  roles:
+    - role: roles/pulibrary.lib-svn
+    - role: roles/pulibrary.saxon
+
+  post_tasks:
+    - name: tell everyone on slack you ran an ansible playbook
+      slack:
+        token: "{{ vault_pul_slack_token }}"
+        msg: "{{ inventory_hostname }} completed"
+        channel: #server-alerts
