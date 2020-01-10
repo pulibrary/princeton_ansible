@@ -15,6 +15,6 @@ def test_imagemagick_installed(host):
     assert 'Width: 214.7MP' in cmd.stdout
     assert 'Height: 214.7MP' in cmd.stdout
     assert 'Area: 1.0737GP' in cmd.stdout
-    assert 'Memory: 1.952GiB' in cmd.stdout
-    assert 'Map: 3.904GiB' in cmd.stdout
+    assert 'Memory: 2GiB' in cmd.stdout
+    assert 'Map: 4GiB' in cmd.stdout
     assert 'Disk: 8GiB' in cmd.stdout
