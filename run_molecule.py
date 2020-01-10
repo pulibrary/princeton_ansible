@@ -29,10 +29,10 @@ def role_dependencies(role):
     path = './roles/' + role + '/meta/main.yml'
     if not os.path.exists(path):
         return []
-    f = open(path, 'r')
-    meta = yaml.safe_load(f)
-    if 'dependencies' in meta:
-        return list(map(lambda x: x['role'], meta['dependencies']))
+    with open(path, 'r') as yamlfile:
+        meta = yaml.safe_load(f)
+        if 'dependencies' in meta and meta['dependencies']:
+            return list(map(lambda x: x['role'], meta['dependencies']))
 
 
 def roles_dependant_on_role(role_under_evaluation):
