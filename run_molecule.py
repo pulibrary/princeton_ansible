@@ -30,7 +30,7 @@ def role_dependencies(role):
     if not os.path.exists(path):
         return []
     f = open(path, 'r')
-    meta = yaml.load(f)
+    meta = yaml.safe_load(f)
     if 'dependencies' in meta:
         return list(map(lambda x: x['role'], meta['dependencies']))
 
