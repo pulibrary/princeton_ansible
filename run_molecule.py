@@ -31,7 +31,7 @@ def role_dependencies(role):
         return []
     f = open(path, 'r')
     meta = yaml.load(f)
-    if 'dependencies' in meta:
+    if 'dependencies' in meta and meta['dependencies']:
         return list(map(lambda x: x['role'], meta['dependencies']))
 
 
