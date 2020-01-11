@@ -11,6 +11,7 @@ testinfra_hosts = testinfra.utils.ansible_runner.AnsibleRunner(
     "php7.2",
     "php7.2-dev",
     "php7.2-curl",
+    "php7.2-zip",
     ])
 def test_for_php7_software(host, name):
     pkg = host.package(name)
