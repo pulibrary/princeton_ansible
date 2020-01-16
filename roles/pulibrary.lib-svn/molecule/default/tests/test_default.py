@@ -11,4 +11,4 @@ def test_lib_svn_home_dir(host):
 
     assert f.exists
     assert f.user == 'svn'
-    assert f.group == 'svn'
+    assert f.group == 'www-data'
