@@ -4,7 +4,7 @@
     path: "{{ svn_home }}"
     state: directory
     owner: "{{ deploy_user }}"
-    group: "{{ deploy_user }}"
+    group: "www-data"
 
 - name: create svn logs home
   file:
@@ -27,7 +27,7 @@
   file:
     path: "{{ lib_svn_repo_dir }}"
     owner: "{{ deploy_user }}"
-    group: "{{ deploy_user }}"
+    group: "www-data"
     recurse: true
 
 - name: copy svn default file
@@ -66,11 +66,40 @@
   template:
     src: pre-revprop-change.j2
     dest: "{{ lib_svn_repo_dir }}/hooks/pre-revprop-change"
-    mode: "u=rwx,g=rx,o=rx"
+    mode: "u=rwx,g=rwx,o=rx"
     owner: "{{ deploy_user }}"
-    group: "{{ deploy_user }}"
+    group: "www-data"
 
 - name: rotate the logs
   template:
     src: svnserve.j2
     dest: '/etc/logrotate.d/svnserve'
+
+- name: install apache modules
+  apt:
+    name: ["libapache2-mod-svn", "libsvn-dev", "apache2-utils"]
+    state: present
+
+- name: enable svn module
+  apache2_module:
+    state: present
+    name: dav
+
+- name: enable dav_svn module
+  apache2_module:
+    state: present
+    name: dav_svn
+
+- name: setup virtual host
+  template:
+    src: "svn_host.conf.j2"
+    dest: "/etc/apache2/sites-available/svn_host.conf"
+
+- name: enable svn site
+  command: /usr/sbin/a2ensite svn_host.conf
+  changed_when: false
+
+- name: disable default site
+  command: /usr/sbin/a2dissite 000-default.conf
+  changed_when: false
+  notify: reload apache
