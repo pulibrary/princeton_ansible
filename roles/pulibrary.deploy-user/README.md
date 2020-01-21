@@ -7,7 +7,20 @@ Role Variables
 --------------
 
 - `generic_app_user` by default the role will install the user `deploy` unless you
-use the `-e` flag to pass a different user
+use the `-e` flag to pass a different user see the example below
+- `user_id` there are instances (usually non-virtual machines) where there are other users on a system which makes the `groupid` non-deterministic. When this fails determine what the groupid is an rerun by passing that result  :frowning_face:
+
+Find GroupID
+------------
+
+```bash
+user@lib-solr2:~$ cat /etc/passwd | grep deploy
+```
+pass the result of the command above to the role
+
+```bash
+ansible-playbook -e user_id=1234 playbooks/solrcloud.yml
+```
 
 Example Playbook
 ----------------
