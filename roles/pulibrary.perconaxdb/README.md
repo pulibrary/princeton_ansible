@@ -96,6 +96,11 @@ Migrating your role's database from the MariaDB cluster to Percona
       db_password: "{{ vault_xtradb_root_password }}"
       ```
 
+Backup and Restore
+------------------
+
+There is a cron job at `/etc/cron.daily/automysqlbackup`  on `mariadb-prod1` whose configuration information is at `/etc/default/automysqlbackup` The databases can be restored from `/mnt/diglibdata/mariadb/percona/{prod|stage}`
+
 License
 -------
 
