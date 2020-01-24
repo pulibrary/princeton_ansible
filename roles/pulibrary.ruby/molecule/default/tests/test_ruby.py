@@ -9,8 +9,8 @@ testinfra_hosts = testinfra.utils.ansible_runner.AnsibleRunner(
 
 @pytest.mark.parametrize("name", [
     "ruby-switch",
-    "ruby2.6",
-    "ruby2.6-dev",
+    "ruby2.4",
+    "ruby2.4-dev",
     ])
 def test_for_ruby_package_installs(host, name):
     pkg = host.package(name)
