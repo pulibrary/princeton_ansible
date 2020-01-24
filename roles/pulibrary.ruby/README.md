@@ -12,7 +12,7 @@ if you need a different version of ruby use the example on
 
 `defaults/main.yml`
 
-e.g `ruby2_6: "ruby2.6"`
+e.g `ruby_version_override: "ruby2.6"`
 
 this is most reliably set in your `group_vars/<your_role>/vars.yml`
 
