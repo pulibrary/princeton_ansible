@@ -77,7 +77,7 @@
 
 - name: install apache modules
   apt:
-    name: ["libapache2-mod-svn", "libsvn-dev", "apache2-utils"]
+    name: ["libapache2-mod-svn", "libsvn-dev", "apache2-utils", "python-passlib"]
     state: present
 
 - name: enable svn module
@@ -89,6 +89,16 @@
   apache2_module:
     state: present
     name: dav_svn
+
+- name: create svn authentication
+  htpasswd:
+    path: "{{ item.path }}"
+    name: "{{ item.name }}"
+    password: "{{ item.secret }}"
+    owner: "{{ item.owner }}"
+    group: "{{ item.group }}"
+    mode: "{{ item.mode | default('u+rw,g+r') }}"
+  with_items: "{{ svn_credentials }}"
 
 - name: setup virtual host
   template:
