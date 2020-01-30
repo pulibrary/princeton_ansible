@@ -1,0 +1,23 @@
+#!/bin/bash
+
+REPOS="$1"
+TXN="$2"
+AWK=/usr/bin/awk
+XMLLINT=/usr/bin/xmllint
+EADSCHEMA='{{ lib_svn_repo_dir }}/ead.xsd'
+
+# Make sure that the log message contains some text.
+SVNLOOK=/usr/bin/svnlook
+$SVNLOOK log -t "$TXN" "$REPOS" | \
+   grep "[a-zA-Z0-9]" > /dev/null || exit 1
+
+# Exit on all errors.
+set -e
+
+for FILE in $($SVNLOOK changed $REPOS -t $TXN | $AWK -F '   ' '{IGNORECASE = 1; if (($1 ~ /^A|U/) && ($2 ~ /\.(EAD.xml)$/)) print $2};')
+do
+    $XMLLINT -schema $EADSCHEMA <($SVNLOOK cat -t $TXN $REPOS $FILE)
+done
+
+# All checks passed, so allow the commit.
+exit 0
