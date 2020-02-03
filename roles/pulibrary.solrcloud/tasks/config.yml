@@ -1,25 +1,33 @@
 ---
-- name: execution permission to zkcli script
-  file:
-    path: "{{ solr_zookeeper_client_path }}/zkcli.sh"
-    mode: 0744
-
-- name: Check Root Path (znode) in ZooKeeper
+- name: Check for solr znode
   command: >
-    {{ solr_zookeeper_client_path }}/zkcli.sh
-    -zkhost {{ solr_zookeeper_hosts }}
-    -cmd list {{ solr_zookeeper_hosts_solr_path }}
-  register: solr_path_check
+    {{ solr_installation }}/bin/solr zk ls /
+    -z {{ zk_host_setting }}
+  register: znode_check
   changed_when: false
-  ignore_errors: true
 
-- name: Create Root Path (znode) in ZooKeeper using zkcli script
+  #- debug:
+  #    var: znode_check.stdout_lines
+  #
+  #- debug:
+  #    msg: Will create znode
+  #  when: zookeeper_hosts_solr_path not in znode_check.stdout_lines
+
+- name: Create zk chroot / solr znode using bin/solr
   command: >
-    {{ solr_zookeeper_client_path }}/zkcli.sh
-    -zkhost {{ solr_zookeeper_hosts }}
-    -cmd makepath {{ solr_zookeeper_hosts_solr_path }}
-  when: solr_zookeeper_hosts_solr_path not in solr_path_check.stdout
-  ignore_errors: true
+    {{ solr_installation }}/bin/solr zk mkroot {{ solr_zookeeper_hosts_solr_path }}
+    -z {{ zk_host_setting }}
+  when: zookeeper_hosts_solr_path not in znode_check.stdout_lines
+
+  #- name: Check for solr znode
+  #  command: >
+  #    {{ solr_installation }}/bin/solr zk ls /
+  #    -z {{ zk_host_setting }}
+  #  register: znode_check
+  #  changed_when: false
+  #
+  #- debug:
+  #    var: znode_check.stdout_lines
 
 - name: Configuring jetty server
   template:
