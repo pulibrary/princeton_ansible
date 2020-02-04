@@ -9,6 +9,8 @@ testinfra_hosts = testinfra.utils.ansible_runner.AnsibleRunner(
 
 @pytest.mark.parametrize("name", [
     "acl",
+    "htop",
+    "python-apt",
     "build-essential",
     "curl",
     "git",
