@@ -4,9 +4,16 @@
     name: ["zookeeper", "zookeeperd"]
     state: present
 
+- name: start zookeeper service
+  service:
+    name: zookeeper
+    state: started
+  when: not running_on_server
+
 - name: create systemd service
   template:
     src: 'zookeeper.service.j2'
     dest: '/lib/systemd/system/zookeeper.service'
   notify:
     - Restart zookeeper
+  when: running_on_server
