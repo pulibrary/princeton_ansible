@@ -1,4 +1,5 @@
 import os
+import pytest
 
 import testinfra.utils.ansible_runner
 
@@ -13,3 +14,9 @@ def test_hosts_file(host):
     assert f.exists
     assert f.user == 'root'
     assert f.group == 'root'
+
+@pytest.mark.parametrize("line", ["new_znode"])
+def test_for_libwww_apache_config(host, line):
+    cmd = host.run("/opt/solr/bin/solr zk ls / -z localhost:2181")
+
+    assert line in cmd.stdout
