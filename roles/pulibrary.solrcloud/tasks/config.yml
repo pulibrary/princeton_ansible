@@ -2,32 +2,15 @@
 - name: Check for solr znode
   command: >
     {{ solr_installation }}/bin/solr zk ls /
-    -z {{ zk_host_setting }}
+    -z {{ zookeeper_hosts }}
   register: znode_check
   changed_when: false
-
-  #- debug:
-  #    var: znode_check.stdout_lines
-  #
-  #- debug:
-  #    msg: Will create znode
-  #  when: zookeeper_hosts_solr_path not in znode_check.stdout_lines
 
 - name: Create zk chroot / solr znode using bin/solr
   command: >
     {{ solr_installation }}/bin/solr zk mkroot {{ solr_zookeeper_hosts_solr_path }}
-    -z {{ zk_host_setting }}
+    -z {{ zookeeper_hosts }}
   when: zookeeper_hosts_solr_path not in znode_check.stdout_lines
-
-  #- name: Check for solr znode
-  #  command: >
-  #    {{ solr_installation }}/bin/solr zk ls /
-  #    -z {{ zk_host_setting }}
-  #  register: znode_check
-  #  changed_when: false
-  #
-  #- debug:
-  #    var: znode_check.stdout_lines
 
 - name: Configuring jetty server
   template:
