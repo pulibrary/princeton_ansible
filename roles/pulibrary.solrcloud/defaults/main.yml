@@ -59,15 +59,16 @@ solr_jetty_http_selectors: -1
 solr_jetty_http_acceptors: -1
 
 # ZOOKEEPER
-zookeeper_hosts: localhost:2181
-zookeeper_hosts_solr_path: solr
-zk_host: '{{ zookeeper_hosts }}/{{ zookeeper_hosts_solr_path }}'
-zookeeper_client_path: '/opt/solr/server/scripts/cloud-scripts'
+solr_zookeeper_client_port: 2181
+lib_zk1_host_name: localhost
+solr_zookeeper_hosts_string_multi: '{{ lib_zk1_host_name }}:{{ solr_zookeeper_client_port }},{{ lib_zk2_host_name }}:{{ solr_zookeeper_client_port }},{{ lib_zk3_host_name }}:{{ solr_zookeeper_client_port }}'
+solr_zookeeper_hosts_string_default: localhost:{{ solr_zookeeper_client_port }}
+solr_zookeeper_hosts_string: '{{ solr_zookeeper_hosts_string_default if lib_zk1_host_name == "localhost" else solr_zookeeper_hosts_string_multi }}'
 
-solr_zookeeper_hosts: '{{ zookeeper_hosts }}'
-solr_zookeeper_hosts_solr_path: '/{{ zookeeper_hosts_solr_path }}'
-solr_zk_host: '{{ solr_zookeeper_hosts }}{{ solr_zookeeper_hosts_solr_path }}'
-zk_host_setting: '{{ lib_zk1_host_name }}:2181,{{ lib_zk2_host_name }}:2181,{{ lib_zk3_host_name }}:2181'
+solr_znode: ''
+solr_znode_path: '/{{ solr_znode }}'
+
+solr_zk_host: '{{ solr_zookeeper_hosts_string }}{{ solr_znode_path if solr_znode else "" }}'
 
 # Orangelight Jars
 jardirectory: /opt/solr/contrib/analysis-extras/lib
