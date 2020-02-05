@@ -14,8 +14,3 @@ def test_for_zookeeper_packages(host, name):
     pkg = host.package(name)
 
     assert pkg.is_installed
-
-def test_myid_configuration(host):
-    file = host.file("/etc/zookeeper/conf/myid")
-
-    assert file.contains('1')
