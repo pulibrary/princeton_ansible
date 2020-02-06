@@ -1,75 +1,70 @@
 ---
-- name: execution permission to zkcli script
-  file:
-    path: "{{ solr_zookeeper_client_path }}/zkcli.sh"
-    mode: 0744
-
-- name: Check Root Path (znode) in ZooKeeper
+- name: Check for solr znode
   command: >
-    {{ solr_zookeeper_client_path }}/zkcli.sh
-    -zkhost {{ solr_zookeeper_hosts }}
-    -cmd list {{ solr_zookeeper_hosts_solr_path }}
-  register: solr_path_check
+    {{ solr_installation }}/bin/solr zk ls /
+    -z {{ solr_zookeeper_hosts_string }}
+  register: znode_check
+  ignore_errors: true
   changed_when: false
-  ignore_errors: true
 
-- name: Create Root Path (znode) in ZooKeeper using zkcli script
+- name: Create zk chroot / solr znode using bin/solr
   command: >
-    {{ solr_zookeeper_client_path }}/zkcli.sh
-    -zkhost {{ solr_zookeeper_hosts }}
-    -cmd makepath {{ solr_zookeeper_hosts_solr_path }}
-  when: solr_zookeeper_hosts_solr_path not in solr_path_check.stdout
+    {{ solr_installation }}/bin/solr zk mkroot {{ solr_znode }}
+    -z {{ solr_zookeeper_hosts_string }}
+  when: solr_znode not in znode_check.stdout_lines and solr_znode != ''
   ignore_errors: true
+  changed_when: false
 
 - name: Configuring jetty server
   template:
     src: 'jetty.xml.j2'
     dest: '/opt/solr/server/etc/jetty.xml'
-    force: 'yes'
+    force: true
   notify: restart SolrCloud
 
 - name: Configure jetty server http
   template:
     src: 'jetty-http.xml.j2'
     dest: '/opt/solr/server/etc/jetty-http.xml'
-    force: 'yes'
+    force: true
   notify: restart SolrCloud
 
 - name: Configure SolrCloud init script
   template:
     src: 'solr.in.sh.j2'
     dest: '/etc/default/solr.in.sh'
-    force: 'yes'
+    force: true
   notify: restart SolrCloud
 
 - name: Configure high ulimit value for Solr
   template:
     src: 'solr.conf.j2'
     dest: '/etc/security/limits.d/solr.conf'
-    force: 'yes'
+    force: true
   notify: restart SolrCloud
 
 - name: Configure SolrCloud properties
   template:
     src: 'solr.xml.j2'
     dest: '{{ solr_data_dir }}/solr.xml'
-    force: 'yes'
+    force: true
   notify: restart SolrCloud
 
 - name: Configure pre 7.4 logging
   template:
     src: 'log4j.properties.j2'
     dest: '/solr/log4j.properties'
-    force: 'yes'
+    force: true
   notify: restart SolrCloud
 
 - name: Configure logging
   template:
     src: 'log4j2.xml.j2'
     dest: '/solr/log4j2.xml'
-    force: 'yes'
+    force: true
   notify: restart SolrCloud
 
 - name: Add orangelight jar files
   shell: "cd {{ jardirectory }} && wget {{ cjkfoldingfilter }} {{ umichsolrfilters }}"
+  changed_when: false
   notify: restart SolrCloud
