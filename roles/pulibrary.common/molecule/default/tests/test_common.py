@@ -16,7 +16,9 @@ testinfra_hosts = testinfra.utils.ansible_runner.AnsibleRunner(
     "git",
     "unzip",
     "zip",
-    "python-pip",
+    "tmux",
+    "vim",
+    "silversearcher-ag"
     ])
 def test_commonly_needed_build_files(host, name):
     pkg = host.package(name)
