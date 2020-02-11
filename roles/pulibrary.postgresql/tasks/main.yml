@@ -1,2 +1,94 @@
 ---
 # tasks file for roles/pulibrary.postgresql
+- name: PostgreSQL | Add PostgreSQL repository apt-key
+  apt_key:
+    url: "{{ postgresql_apt_key_url }}"
+    state: present
+
+- name: PostgreSQL | add postgresql repository
+  apt_repository:
+    repo: 'deb http://apt.postgresql.org/pub/repos/apt/ {{ ansible_distribution_release }}-pgdg main'
+    update_cache: true
+    state: present
+
+- name: PostgreSQL | install postgres
+  apt:
+    name: "{{ postgres_packages }}"
+    state: present
+  register: postgres_install_postgres
+
+- name: create postgres data directory
+  file:
+    path: "{{ postgres_dir }}"
+    state: directory
+    owner: postgres
+    group: postgres
+    mode: "0700"
+
+- name: configure postgres
+  lineinfile:
+    path: "{{ postgres_conf_dir }}/postgresql.conf"
+    regex: "^{{ item.name }} ="
+    line: "{{ item.name }} = '{{ item.value }}'"
+    create: yes
+  loop: "{{ postgres_settings }}"
+  when:
+    - postgres_settings is defined
+  notify:
+    - restart postgres
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: create pg_hba.conf
+  template:
+    src: pg_hba.conf.j2
+    dest: "{{ postgres_conf_dir }}/pg_hba.conf"
+    backup: yes
+  notify:
+    - reload postgres
+
+- name: start and enable postgres
+  service:
+    name: postgresql
+    state: started
+    enabled: yes
+
+- name: install psycopg2-binary
+  pip:
+    name: psycopg2-binary
+    state: present
+  register: postgres_install_psycopg2_binary
+  until: postgres_install_psycopg2_binary is succeeded
+  retries: 3
+  when:
+    - postgres_databases is defined or
+      postgres_users is defined
+
+- name: flush handlers
+  meta: flush_handlers
+
+- name: create postgres database
+  postgresql_db:
+    name: "{{ item.name }}"
+    state: present
+  loop: "{{ postgres_databases }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when:
+    - postgres_databases is defined
+  become_user: postgres
+  become: true
+
+- name: create postgres users
+  postgresql_user:
+    name: "{{ item.name }}"
+    db: "{{ item.db | default(omit) }}"
+    password: "{{ item.password }}"
+    expires: "{{ item.expires | default(omit) }}"
+  loop: "{{ postgres_users }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when:
+    - postgres_users is defined
+  become_user: postgres
+  become: true
