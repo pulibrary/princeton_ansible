@@ -10,7 +10,7 @@ testinfra_hosts = testinfra.utils.ansible_runner.AnsibleRunner(
 
 @pytest.mark.parametrize("name",
                          ["csvkit",
-                          "csvkit-docs"
+                          "csvkit-doc"
                           ])
 def test_for_csvkit_software(host, name):
     pkg = host.package(name)
