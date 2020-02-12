@@ -16,7 +16,7 @@ The Lets Encrypt expects the SSL certs to be under `/etc/letsencrypt/` which dif
 ## Decision
 
 make sure certificates are under `/etc/letsencrypt/`
-create a directory under `/var/www/letsencrypt/<servicename>`
+create a directory under `/var/www/letsencrypt/<servicename>` This directory which is configured as the `http://tld.domain/.well_known` will be empty but is needed during the Let's Encrypt verification step.
 
 
 ## Consequences
