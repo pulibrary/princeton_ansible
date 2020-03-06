@@ -21,3 +21,31 @@ application_host_protocol: 'https'
 running_on_server: true
 ruby_version_override: "ruby2.6"
 bundler_version: '2.1.4'
+
+datadog_api_key: "{{ vault_datadog_key }}"
+
+datadog_config:
+  log_enabled: true
+  apm_enabled: true
+  process_config:
+    enabled: true
+  apm_config:
+    analyzed_spans:
+      approvals|rack.request: 1
+datadog_checks:
+  tls:
+    init_config:
+    instances:
+      - server: approvals.princeton.edu
+        port: 443
+        tags:
+          - 'tls_service:approvals'
+  approval_datadog_ruby_check:
+    init_config:
+    logs:
+      - type: file
+        path: /opt/approvals/current/log/production.log
+        service: approvals
+        source: ruby
+        sourcecategory: sourcecode
+        tags: "approvals, environment:production, role:approvals"
