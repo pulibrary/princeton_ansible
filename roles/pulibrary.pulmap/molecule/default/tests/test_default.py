@@ -13,3 +13,11 @@ def test_hosts_file(host):
     assert f.exists
     assert f.user == 'root'
     assert f.group == 'root'
+
+
+def test_for_pulmap_directory(host):
+    f = host.file('/opt/pulmap/shared/tmp')
+
+    assert f.exists
+    assert f.is_directory
+    assert f.user == 'deploy'
