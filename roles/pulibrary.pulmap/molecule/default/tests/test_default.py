@@ -13,6 +13,7 @@ def test_hosts_file(host):
     assert f.exists
     assert f.user == 'root'
     assert f.group == 'root'
+<<<<<<< HEAD
 
 
 def test_for_pulmap_directory(host):
@@ -21,3 +22,5 @@ def test_for_pulmap_directory(host):
     assert f.exists
     assert f.is_directory
     assert f.user == 'deploy'
+=======
+>>>>>>> ba76d8a1... initial molecularization
