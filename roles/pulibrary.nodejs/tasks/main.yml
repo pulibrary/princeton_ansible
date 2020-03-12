@@ -61,6 +61,26 @@
     state: present
     update_cache: true
 
+- name: Gather the apt package facts
+  package_facts:
+    manager: auto
+
+- name: Get the versions of nodejs installed
+  set_fact:
+    nodejs_versions: "{{ packages['nodejs'] | map(attribute='version') | list }}"
+  when: "'nodejs' in packages"
+
+- name: Check for the LTS release
+  set_fact:
+    nodejs_lts_installed: "{{ nodejs_versions | select('match', '^12.') | list | length > 0 }}"
+  when: nodejs_versions is defined and nodejs__upstream_release == 'node_12.x'
+
+- name: Uninstall any existing nodejs releases
+  apt:
+    name: nodejs
+    state: absent
+  when: nodejs_lts_installed is defined and not nodejs_lts_installed
+
 - name: Install node packages
   apt:
     name: ["nodejs", "yarn"]
