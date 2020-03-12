@@ -15,3 +15,5 @@ def test_for_nodejs_install(host, name):
     pkg = host.package(name)
 
     assert pkg.is_installed
+    if name == "nodejs":
+        assert pkg.version.startswith("12.")
