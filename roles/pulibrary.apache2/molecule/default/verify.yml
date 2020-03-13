@@ -1,0 +1,26 @@
+---
+- name: Verify
+  hosts: all
+  become: true
+  gather_facts: true
+
+  tasks:
+    - name: install apache2
+      apt:
+        name: ["apache2"]
+        state: present
+
+    - name: wait for apache2 port
+      wait_for:
+        host: "{{ inventory_hostname }}"
+        port: 80
+
+    - name: record apache config path
+      stat:
+        path: /etc/apache2
+      register: apache2_path
+
+    - name: check apache2 config path
+      assert:
+        that:
+          - apache2_path.stat.exists
