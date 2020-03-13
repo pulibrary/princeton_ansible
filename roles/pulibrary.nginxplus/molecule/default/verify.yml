@@ -1,0 +1,21 @@
+---
+- name: Verify
+  hosts: all
+  become: true
+  gather_facts: true
+
+  tasks:
+    - name: install nginx
+      apt:
+        name: ["nginx"]
+        state: present
+
+    - name: record nginx config path
+      stat:
+        path: /etc/nginx
+      register: nginx_path
+
+    - name: check nginx config path
+      assert:
+        that:
+          - nginx_path.stat.exists
