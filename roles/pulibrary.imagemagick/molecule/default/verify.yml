@@ -1,0 +1,23 @@
+---
+- name: Verify
+  hosts: all
+  become: true
+  gather_facts: true
+
+  tasks:
+
+  - name: list imagemagick resources
+    shell: /usr/bin/identify -list resource
+    register: cmd_result
+
+  - debug:
+      msg: "Memory: 2G"
+    when: cmd_result | search("Memory") and cmd_result | search("2G")
+
+  - debug:
+      var: search_output
+
+  - name: assert that result works
+    assert:
+      that:
+        - "'Memory' in search_output.stdout"
