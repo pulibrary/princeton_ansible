@@ -3,3 +3,19 @@
   hosts: all
   become: true
   gather_facts: true
+
+
+  tasks:
+    - name: install node and yarn
+      apt:
+        name: ["nodejs", "yarn"]
+        state: present
+
+    - name: check node version
+      command: node -v
+      register: node_version
+
+    - name: verify node and yarn versions
+      assert:
+        that:
+          - "'v12.16.1' in node_version.stdout"
