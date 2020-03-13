@@ -1,0 +1,25 @@
+---
+- name: Verify
+  hosts: all
+  become: true
+  gather_facts: true
+
+  tasks:
+    - name: record status of saxon9he xquery
+      stat:
+        path: /usr/local/bin/saxon9he-xquery
+      ignore_errors: true
+      register: saxon9xquery_result
+
+    - name: record status of saxon9he xslt
+      stat:
+        path: /usr/local/bin/saxon9he-xslt
+      ignore_errors: true
+      register: saxon9xslt_result
+
+    - name: check status of app_configs
+      assert:
+        that:
+          - saxon9xquery_result.stat.exists
+          - saxon9xslt__result.stat.exists
+      ignore_errors: true
