@@ -1,0 +1,22 @@
+---
+- name: Verify
+  hosts: all
+  become: true
+  gather_facts: true
+
+  tasks:
+    - name: record status of app_configs
+      stat:
+        path: /home/deploy/app_configs
+      register: result
+
+    - name: record status of ssh_configs
+      stat:
+        path: /home/deploy/.ssh/config
+      register: ssh_result
+
+    - name: check status of app_configs
+      assert:
+        that:
+          - result.stat.exists
+          - ssh_result.stat.exists
