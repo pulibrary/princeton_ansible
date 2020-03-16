@@ -1,0 +1,21 @@
+---
+- name: Verify
+  hosts: all
+  become: true
+  gather_facts: true
+
+  tasks:
+    - name: install php7.2 add ons
+      apt:
+        name: ["php7.2-xml", "php7.2-gd", "php7.2-mbstring"]
+        state: present
+
+    - name: test for matomo js file path
+      stat:
+        path: /var/www/piwik/matomo.js
+      register: matomo_jsfile_path
+
+    - name: assert the existence of matomo js file
+      assert:
+        that:
+          - matomo_jsfile_path.stat.exists
