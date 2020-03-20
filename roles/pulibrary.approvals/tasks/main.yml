@@ -55,23 +55,3 @@
     state: "present"
     line: "{{ deploy_user }} ALL=(ALL) NOPASSWD: /usr/sbin/service nginx *"
     validate: "visudo -cf %s"
-
-- name: install global mail catcher
-  gem:
-    name: mailcatcher
-    user_install: false
-  when: install_mailcatcher
-
-- name: Iqnstall startup script for mailcatcher
-  template:
-    src: mailcatcher.service.j2
-    dest: /lib/systemd/system/mailcatcher.service
-  when: running_on_server and install_mailcatcher
-  notify: restart mailcatcher
-
-- name: Keep mailcatcher running
-  service:
-    name: mailcatcher
-    enabled: true
-    state: started
-  when: running_on_server and install_mailcatcher
