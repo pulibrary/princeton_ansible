@@ -11,7 +11,8 @@ NA
 Role Variables
 --------------
 
-install_mailcatcher: defaults to false - you must specifically opt into mailcatcher
+* install_mailcatcher: defaults to false - you must specifically opt into mailcatcher
+* mailcatcher_install_location: location mailcatcher will be installed. defaults to /usr/local/bin/mailcatcher If you are utilizing RVM the installation location will change based on your current ruby (e.g. /usr/local/rvm/gems/ruby-2.4.6/bin/mailcatcher)
 
 Dependencies
 ------------
