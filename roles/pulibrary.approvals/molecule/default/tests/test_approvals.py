@@ -36,3 +36,9 @@ def test_for_approvals_mnt_directory(host):
 
     assert f.exists
     assert f.is_directory
+
+
+def test_mailcatcher(host):
+    cmd = host.run("gem list")
+
+    assert 'mailcatcher' in cmd.stdout
