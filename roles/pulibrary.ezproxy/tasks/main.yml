@@ -55,33 +55,18 @@
     owner: "{{ deploy_user }}"
     group: "{{ deploy_user }}"
 
-- name: Ezproxy | Ensure GitHub deploy key is present on the server.
-  copy:
-    content: "{{ deploy_private_key }}"
-    dest: "/home/{{ deploy_user }}/.ssh/deploy_key"
-    mode: 0600
-    owner: "{{ deploy_user }}"
-    group: "{{ deploy_user }}"
-  changed_when: false
-
 - name: Ezproxy | Clone EZproxy Repo
   git:
     repo: "{{ ezproxy_git_repo }}"
     version: "{{ ezproxy_default_branch }}"
     dest: "{{ ezproxy_repo_root }}"
     accept_hostkey: true
-    key_file: "/home/{{ deploy_user }}/.ssh/deploy_key"
     clone: true
     update: false
   ignore_errors: true
   become: true
   become_user: "{{ deploy_user }}"
-
-- name: Ezproxy | remove private key
-  file:
-    path: "/home/{{ deploy_user }}/.ssh/deploy_key"
-    state: absent
-  changed_when: false
+  when: running_on_server
 
 - name: Ezproxy | chmod back permissions
   file:
