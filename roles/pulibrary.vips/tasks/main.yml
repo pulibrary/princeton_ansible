@@ -1,0 +1,35 @@
+---
+- name: Install VIPS dependencies
+  apt:
+    name:
+      - build-essential
+      - pkg-config
+      - libglib2.0-dev
+      - libexpat1-dev
+      - libtiff5-dev
+      - libjpeg-turbo8-dev
+      - libgsf-1-dev
+      - libexif-dev
+      - fftw3
+      - liblcms2-dev
+      - liblcms2-2
+      - libpng-dev
+    state: present
+- name: Create VIPS package directory
+  file:
+    path: "/opt/vips"
+    state: "directory"
+- name: Download and untar VIPS
+  unarchive:
+    remote_src: true
+    src: "{{ vips_download_url }}"
+    dest: "/opt/vips"
+    creates: "/opt/vips/vips-{{ vips_version }}"
+- name: Compile VIPS
+  shell: cd /opt/vips/vips-{{ vips_version }} && ./configure && make && make install
+  args:
+    creates: /usr/local/bin/vips
+- name: Setup ldconfig for vips
+  template: src=ldconfig.vips.conf dest=/etc/ld.so.conf.d/vips.conf
+  notify:
+    - run ldconfig
