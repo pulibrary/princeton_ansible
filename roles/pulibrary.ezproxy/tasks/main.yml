@@ -6,16 +6,24 @@
     group: "{{ deploy_user }}"
     owner: "{{ deploy_user }}"
 
+- name: check for ezproxy version
+  command: /var/local/ezproxy/ezproxy -v
+  register: ezproxy_version
+  ignore_errors: true
+  changed_when: false
+
 - name: Ezproxy | copy ezproxy binary
   copy:
     src: "files/ezproxy.bin"
     dest: "/var/local/ezproxy/ezproxy"
     mode: 0755
+  when: ezproxy_version is search('6')
 
 - name: Ezproxy | install dependencies for 64bit
   apt:
     name: ["lib32ncurses5", "lib32z1"]
     state: present
+    update_cache: true
 
 - name: Ezproxy | install missing file replacements
   command: /var/local/ezproxy/ezproxy -m
@@ -29,6 +37,7 @@
   become: true
   become_user: "{{ deploy_user }}"
   changed_when: false
+  when: running_on_server
 
 - name: Ezproxy | Creates a log directory for ezproxy
   file:
