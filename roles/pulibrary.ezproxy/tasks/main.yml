@@ -103,23 +103,17 @@
     owner: "{{ deploy_user }}"
     group: "{{ deploy_user }}"
   become: true
-# - name: Create GeoLite DB directory
-#   file:
-#     path: '/var/local/ezproxy/GeoLite2-City'
-#     state: 'directory'
-#     owner: 'ezproxy'
-#     group: 'ezproxy'
-#     mode: 0750
-#   become: true
-- name: Download GeoLite2 DB
-  unarchive:
-    src: "http://geolite.maxmind.com/download/geoip/database/GeoLite2-City.tar.gz"
-    dest: "/var/local/ezproxy"
-    owner: "{{ deploy_user }}"
-    group: "{{ deploy_user }}"
-    remote_src: true
-  become: true
-  when: running_on_server
+
+- name: Ezproxy | add geoip ppa
+  apt_repository:
+    repo: "ppa:maxmind/ppa"
+    state: present
+
+- name: Ezproxy | install geoupdate
+  apt:
+    name: geoipupdate
+    state: present
+    update_cache: true
 
 - name: create base config file
   copy:
