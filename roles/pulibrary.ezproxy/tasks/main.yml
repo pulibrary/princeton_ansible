@@ -35,7 +35,6 @@
 - name: Ezproxy | run command with WSKey
   command: /var/local/ezproxy/ezproxy -k "{{ oclc_wskey }}"
   become: true
-  become_user: "{{ deploy_user }}"
   changed_when: false
   when: running_on_server
 
@@ -114,6 +113,20 @@
     name: geoipupdate
     state: present
     update_cache: true
+
+- name: Ezproxy | add geoip configuration file
+  template:
+    src: geoip_conf.j2
+    dest: "/usr/local/etc/GeoIP.conf"
+  when: running_on_server
+
+- name: Ezproxy | run a cronjob to update
+  cron:
+    name: "run the update"
+    minute: 49
+    hour: 8
+    job: "/usr/bin/geoipupdate"
+  when: running_on_server
 
 - name: create base config file
   copy:
