@@ -246,3 +246,24 @@ If a file is not decrypting with `git diff` you may need to add the file you're 
 2. `lpass login <email@email.com>`
 3. `gem install lastpass-ansible`
 4. `source princeton_ansible_env.sh`
+
+## Changing/Modifying Passwords
+
+In the event that there is a need to modify the vault password grep recursively to find the occurrence of `AES256` from the root of the repo. I am using the `grep` commands below, YMMV
+
+```bash
+grep -RI AES256 .
+```
+
+Rekey the password with the following
+
+```bash
+ansible-vault rekey /path/to/file/vault.yml
+ansible-vault rekey /path/to/file/smb.credentials
+ansible-vault rekey /path/to/file/id_rsa
+ansible-vault rekey /path/to/file/license.key
+ansible-vault rekey /path/to/file/webhost.conf
+ansible-vault rekey /path/to/file/webhost_priv.key
+```
+
+update the file on lastpass so others can use
