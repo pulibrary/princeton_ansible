@@ -1,0 +1,41 @@
+---
+- name: PostgreSQL | Ensure PostgreSQL is running
+  service:
+    name: postgresql
+    state: started
+
+- name: PostgreSQL | Make sure the PostgreSQL databases are present
+  postgresql_db:
+    name: "{{ item.name }}"
+    owner: "{{ item.owner | default(postgresql_database_owner) }}"
+    encoding: "{{ item.encoding | default(postgresql_encoding) }}"
+    lc_collate: "{{ item.lc_collate | default(postgresql_locale) }}"
+    lc_ctype: "{{ item.lc_ctype | default(postgresql_ctype) }}"
+    port: "{{ postgresql_port }}"
+    template: "template0"
+    state: present
+    login_user: "{{ postgresql_admin_user }}"
+  become: true
+  become_user: "{{ postgresql_admin_user }}"
+  with_items: "{{ postgresql_databases }}"
+  when: postgresql_databases|length > 0
+
+- name: PostgreSQL | Add extensions to the databases
+  become: true
+  become_user: "{{ postgresql_admin_user }}"
+  postgresql_ext:
+    db: "{{ item.0.db }}"
+    login_user: "{{ postgresql_admin_user }}"
+    port: "{{ postgresql_port }}"
+    name: "{{ item.1 }}"
+  with_subelements:
+    - "{{ postgresql_database_extensions }}"
+    - extensions
+  register: result
+
+- name: PostgreSQL | Add postgis to the databases with the requirement
+  become: true
+  become_user: "{{ postgresql_admin_user }}"
+  shell: "{{ postgresql_bin_directory}}/psql {{ item.name }} --port={{ postgresql_port | int }} --username {{ postgresql_admin_user }} -c 'CREATE EXTENSION IF NOT EXISTS postgis;'&&psql {{ item.name }} -c 'CREATE EXTENSION IF NOT EXISTS postgis_topology;'"
+  with_items: "{{ postgresql_databases }}"
+  when: item.gis is defined and item.gis
