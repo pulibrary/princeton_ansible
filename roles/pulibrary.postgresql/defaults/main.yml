@@ -2,12 +2,26 @@
 # defaults file for roles/pulibrary.postgresql
 postgresql_version: "12"
 postgresql_service_name: "postgresql-{{ postgresql_version }}"
-postgresql_admin_user: "{{ pg_admin | default(postgres) }}"
+postgresql_port: 5432
+postgresql_encoding: "UTF-8"
+postgresql_admin_user: "postgres"
 postgresql_users: []
 postgresql_databases: []
 postgresql_database_owner: "{{ postgresql_admin_user }}"
 postgresql_cluster_name: "main"
 postgresql_conf_directory: "/etc/postgresql/{{ postgresql_version }}/{{ postgresql_cluster_name }}"
+postgresql_locale_parts:
+  - "en_US"  # Locale
+  - "UTF-8"  # Encoding
+postgresql_locale: "{{ postgresql_locale_parts | join('.') }}"
+postgresql_ctype_parts:
+  - "en_US"  # Locale
+  - "UTF-8"  # Encoding
+postgresql_ctype: "{{ postgresql_ctype_parts | join('.') }}"
+
+postgresql_env:
+  LC_ALL: "{{ postgresql_locale }}"
+  LC_LCTYPE: "{{ postgresql_locale }}"
 
 # Extensions
 postgresql_ext_install_contrib: no
