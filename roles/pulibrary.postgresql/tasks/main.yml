@@ -1,81 +1,81 @@
 ---
-- name: PostgreSQL | Make sure the CA certificates are available
-  apt:
-    pkg: ca-certificates
+# tasks file for roles/pulibrary.postgresql
+- name: PostgreSQL | Add PostgreSQL repository apt-key | apt
+  apt_key:
+    id: "{{ postgresql_apt_key_id }}"
+    url: "{{ postgresql_apt_key_url }}"
     state: present
 
-- name: PostgreSQL | Add PostgreSQL repository apt-key
-  shell: >
-      set -o pipefail |
-      wget --quiet -O - {{ postgresql_apt_key_url }} | sudo apt-key add -
-  changed_when: false
-
-- name: add postgresql repository
+- name: PostgreSQL | Add PostgreSQL repository | apt
   apt_repository:
-    repo: 'deb http://apt.postgresql.org/pub/repos/apt/ {{ ansible_distribution_release }}-pgdg main'
-    update_cache: 'yes'
+    repo: "{{ postgresql_apt_repository }}"
     state: present
 
-- name: install postgresql server packages
+- name: PostgreSQL | Make sure the dependencies are installed | apt
   apt:
-    name: '{{ item }}'
+    pkg: "{{ postgresql_apt_dependencies }}"
     state: present
-    cache_valid_time: '{{ apt_cache_timeout }}'
-    update_cache: 'yes'
-  loop:
-    - postgresql-{{ postgres_version }}
-  when: postgresql_is_local
+    update_cache: yes
+    cache_valid_time: "{{apt_cache_valid_time | default (3600)}}"
 
-- name: install postgresql client packages
-  apt:
-    name: '{{ item }}'
+- name: Postgresql | ensure postgresql is installed
+  package:
+    name: "{{ postgresql_packages }}"
     state: present
-    cache_valid_time: '{{ apt_cache_timeout }}'
-    update_cache: 'yes'
-  loop:
-    - libpq-dev
-    - python-psycopg2
+    update_cache: true
+  register: postgresql_install_postgresql
+  until: postgresql_install_postgresql is succeeded
 
-- name: install access rules
-  copy:
-    src: pg_hba.conf
-    dest: /etc/postgresql/{{ postgres_version }}/main/pg_hba.conf
-    group: postgres
+- name: Postgresql | ensure postgresql data directory exists
+  file:
+    path: "{{ postgresql_dir }}"
+    state: directory
     owner: postgres
-  register: configure_postgres
-  when: postgresql_is_local
+    group: postgres
+    mode: "0700"
 
-- name: install configuration file
+- import_tasks: extensions.yml
+
+- name: Postgresql | ensure postgresql has configuration file
+  lineinfile:
+    path: "{{ postgresql_conf_dir }}/postgresql.conf"
+    regex: "^{{ item.name }} ="
+    line: "{{ item.name }} = '{{ item.value }}'"
+    create: true
+  loop: "{{ postgresql_settings }}"
+  when:
+    - postgresql_settings is defined
+  notify:
+    - restart postgresql
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Postgresql | ensure postgresql has pg_hba.conf
   template:
-    src: 'postgresql.conf.j2'
-    dest: '/etc/postgresql/{{ postgres_version }}/main/postgresql.conf'
-    group: postgres
-    owner: postgres
-  register: configure_postgres
-  when: postgresql_is_local
+    src: pg_hba.conf.j2
+    dest: "{{ postgresql_conf_dir }}/pg_hba.conf"
+    backup: yes
+  notify:
+    - reload postgresql
 
-- name: ensure postgres starts on boot
-  service:
-    name: postgresql
-    enabled: 'yes'
-  when: postgresql_is_local
-
-- name: restart postgres server
+- name: Postgresql | start and enable postgresql
   service:
     name: postgresql
     state: started
-  when: postgresql_is_local
+    enabled: true
 
-- name: ensure access to postgres server
-  lineinfile:
-    path: '/etc/postgresql/{{ postgres_version }}/main/pg_hba.conf'
-    line: 'host    all             all             {{ ansible_default_ipv4.address }}/32       md5'
-  delegate_to: '{{ postgres_host }}'
-  register: remote_postgres_configured
+- name: Postgresql | install psycopg2-binary
+  pip:
+    name: psycopg2-binary
+    state: present
+  register: postgresql_install_psycopg2_binary
+  until: postgresql_install_psycopg2_binary is succeeded
   when:
-    - postgres_host is not none
-    - not postgresql_is_local
-  notify: 'reload remote postgres'
+    - postgresql_databases is defined or
+      postgresql_users is defined
 
-- include: create_users.yml
-- include: create_db.yml
+- name: flush handlers
+  meta: flush_handlers
+
+- import_tasks: users.yml
+- import_tasks: databases.yml
