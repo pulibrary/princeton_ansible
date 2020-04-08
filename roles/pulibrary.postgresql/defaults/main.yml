@@ -1,20 +1,88 @@
 ---
-# PostgreSQL-related settings
-postgresql_is_local: true
-# postgresql_is_local: "{{ 'true' if project_db_host | search( 'localhost|127\\.0\\.0\\.1|^/') else 'false' }}"
-application_dbuser_role_attr_flags: ''
-buffer_memory: '{{ quarter_system_memory | default("128MB") }}'
-cache_size: '{{ two_third_system_memory | default("4GB") }}'
-min_wal: '{{ one_gig | default("80MB") }}'
-max_wal: '{{ two_gig | default("1GB") }}'
-# APT settings
-postgresql_apt_key_id: ACCC4CF8
-postgresql_apt_key_url: "https://www.postgresql.org/media/keys/ACCC4CF8.asc"
-postgresql_apt_repository: 'deb http://apt.postgresql.org/pub/repos/apt/ {{ansible_distribution_release}}-pgdg main {{postgresql_version}}'
-# Pin-Priority of PGDG repository
-postgresql_apt_pin_priority: 500
-postgres_version: 10
-apt_cache_timeout: 1800
-application_dbuser_name: pguser
-application_dbuser_password: changethis
-application_db_name: dbname
+# defaults file for roles/pulibrary.postgresql
+postgresql_version: "12"
+postgresql_service_name: "postgresql-{{ postgresql_version }}"
+postgresql_admin_user: "{{ pg_admin | default(postgres) }}"
+postgresql_users: []
+postgresql_databases: []
+postgresql_database_owner: "{{ postgresql_admin_user }}"
+postgresql_cluster_name: "main"
+postgresql_conf_directory: "/etc/postgresql/{{ postgresql_version }}/{{ postgresql_cluster_name }}"
+
+# Extensions
+postgresql_ext_install_contrib: no
+postgresql_ext_install_dev_headers: no
+postgresql_ext_install_postgis: no
+postgresql_database_extensions: []
+
+postgresql_ext_postgis_version: "3"
+postgresql_ext_postgis_deps:
+  - libgeos-c1
+  - postgresql-{{ postgresql_version }}-postgis-{{ postgresql_ext_postgis_version }}
+  - postgresql-{{ postgresql_version }}-postgis-scripts
+
+postgresql_varlib_directory_name: "postgresql"
+postgresql_data_directory: "/var/lib/{{ postgresql_varlib_directory_name }}/{{ postgresql_version }}/{{ postgresql_cluster_name }}"
+
+postgresql_settings:
+  - name: port
+    value: 5432
+  - name: listen_addresses
+    value: 127.0.0.1
+  - name: unix_socket_directories
+    value: /var/run/postgresql
+  - name: max_wal_size
+    value: 1GB
+  - name: min_wal_size
+    value: 80MB
+  - name: log_timezone
+    value: UCT
+  - name: datestyle
+    value: iso, ymd
+  - name: timezone
+    value: UCT
+  - name: default_text_search_config
+    value: pg_catalog.english
+
+postgresql_hba_entries:
+  - type: local
+    database: all
+    user: all
+    method: peer
+  - type: host
+    database: all
+    user: all
+    address: 127.0.0.1/32
+    method: ident
+  - type: host
+    database: all
+    user: all
+    address: ::1/128
+    method: ident
+  - type: local
+    database: replication
+    user: all
+    method: peer
+  - type: host
+    database: replication
+    user: all
+    address: 127.0.0.1/32
+    method: ident
+  - type: host
+    database: replication
+    user: all
+    address: ::1/128
+    method: ident
+
+postgresql_packages:
+  - postgresql-{{ postgresql_version }}
+  - postgresql-client-{{ postgresql_version }}
+  - postgresql-contrib-{{ postgresql_version }}
+
+postgresql_install_repository: true
+
+postgresql_dir: "/var/lib/postgresql/{{ postgresql_version }}"
+postgresql_conf_dir: "/etc/postgresql/{{ postgresql_version }}"
+postgresql_apt_py3_dependencies: ["python3-psycopg2", "locales"]
+postgresql_apt_py2_dependencies: ["python-psycopg2", "python-pycurl", "locales"]
+postgresql_apt_dependencies: "{{ postgresql_apt_py3_dependencies if 'python3' in ansible_python_interpreter|default('') else postgresql_apt_py2_dependencies }}"
