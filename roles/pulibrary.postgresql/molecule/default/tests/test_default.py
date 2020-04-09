@@ -18,7 +18,13 @@ def test_for_postgresql_server_software(host, name):
     assert pkg.is_installed
 
 
-def test_mariadb_server_listening_port(host):
+def test_postgresql_server_listening_port(host):
     socket = host.socket("tcp://127.0.0.1:5432")
 
     assert socket.is_listening
+
+
+def test_for_repmgr_config_file(host):
+    f = host.file('/etc/repmgr.conf')
+
+    assert f.exists
