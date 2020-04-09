@@ -10,6 +10,9 @@ postgresql_databases: []
 postgresql_database_owner: "{{ postgresql_admin_user }}"
 postgresql_cluster_name: "main"
 postgresql_conf_directory: "/etc/postgresql/{{ postgresql_version }}/{{ postgresql_cluster_name }}"
+spostgresql_conf_dir: "/etc/postgresql/{{ postgresql_version }}/"
+replication_user: []
+replication_database: []
 postgresql_locale_parts:
   - "en_US"  # Locale
   - "UTF-8"  # Encoding
@@ -58,35 +61,9 @@ postgresql_settings:
   - name: default_text_search_config
     value: pg_catalog.english
 
-postgresql_hba_entries:
-  - type: local
-    database: all
-    user: all
-    method: peer
-  - type: host
-    database: all
-    user: all
-    address: 127.0.0.1/32
-    method: ident
-  - type: host
-    database: all
-    user: all
-    address: ::1/128
-    method: ident
-  - type: local
-    database: replication
-    user: all
-    method: peer
-  - type: host
-    database: replication
-    user: all
-    address: 127.0.0.1/32
-    method: ident
-  - type: host
-    database: replication
-    user: all
-    address: ::1/128
-    method: ident
+postgresql_hba_entries: []
+repmgr_config: "/etc/repmgr.conf"
+repmgr_init_log: "/etc/repmgr_init.log"
 
 postgresql_packages:
   - postgresql-{{ postgresql_version }}
@@ -97,7 +74,6 @@ postgresql_packages:
 postgresql_install_repository: true
 
 postgresql_dir: "/var/lib/postgresql/{{ postgresql_version }}"
-postgresql_conf_dir: "/etc/postgresql/{{ postgresql_version }}"
 postgresql_apt_py3_dependencies: ["python3-psycopg2", "locales"]
 postgresql_apt_py2_dependencies: ["python-psycopg2", "python-pycurl", "locales"]
 postgresql_apt_dependencies: "{{ postgresql_apt_py3_dependencies if 'python3' in ansible_python_interpreter|default('') else postgresql_apt_py2_dependencies }}"
