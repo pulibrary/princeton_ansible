@@ -9,6 +9,7 @@ testinfra_hosts = testinfra.utils.ansible_runner.AnsibleRunner(
 
 @pytest.mark.parametrize("name", [
     "postgresql-12",
+    "postgresql-12-repmgr",
     "postgresql-client-12",
     ])
 def test_for_postgresql_server_software(host, name):
