@@ -1,0 +1,78 @@
+---
+- name: PostgreSQL | register if we have recorded the repmgr
+  stat:
+    path: "{{ repmgr_init_log }}"
+  register: repmgr_log_stat
+
+- name: PostgreSQL | add repmgr configuration file
+  template:
+    src: repmgr.conf.j2
+    dest: "{{ repmgr_config }}"
+
+- name: PostgreSQL | add replication postgresql configuration
+  template:
+    src: replication.conf.j2
+    dest: "{{ postgresql_conf_directory }}/conf.d/replication.conf"
+  when:
+    - not repmgr_log_stat.stat.exists
+    - node_identifier == 1
+  notify: restart postgresql
+
+- name: PostgreSQL | alter replicant db user
+  command: psql -c 'alter user {{ replication_user }} set search_path TO {{ replication_user }}, "$user", public;'
+  become: true
+  become_user: postgres
+  changed_when: false
+  ignore_errors: true
+
+- name: PostgreSQL | register master
+  command: repmgr -f {{ repmgr_config }} primary register --force
+  register: repmgr_log
+  become: true
+  become_user: postgres
+  notify:
+    - save repmgr log
+  when: running_on_server
+
+- name: PostsgreSQL | stop postgres on standby
+  service:
+    name: postgresql
+    state: stopped
+  when:
+    - node_identifier is undefined
+    - running_on_server
+
+- name: PostgreSQL | remove pg data
+  file:
+    path: "{{ postgresql_data_directory }}/*"
+    state: absent
+  when:
+    - node_identifier is undefined
+    - running_on_server
+
+- name: PostgreSQL | cloning standby
+  command: repmgr -h {{ node_identifier.2 }} -U replicant -d replicant -f {{ repmgr_config }} standby clone -F
+  become: true
+  become_user: postgres
+  when:
+    - node_identifier is undefined
+    - running_on_server
+
+- name: PostgreSQL | start postgres
+  service:
+    name: postgresql
+    state: started
+  when:
+    - node_identifier is undefined
+    - running_on_server
+
+- name: PostgreSQL | register standby
+  command: repmgr -f {{ repmgr_config }} standby register --force
+  register: repmgr_log
+  become: true
+  become_user: postgres
+  when:
+    - node_identifier is undefined
+    - running_on_server
+  notify:
+    - save repmgr log

@@ -1,48 +1,48 @@
 ---
 - name: Converge
   hosts: all
+  vars:
+    - node_identifier: 1
+    - replication_database: "replicant"
+    - replication_user: "replicant"
+    - repmgr_config: "/etc/repmgr.conf"
+    - running_on_server: false
   roles:
     - role: pulibrary.postgresql
       postgresql_ext_install_postgis: true
       postgresql_databases:
         - name: awesome_db
           gis: true
+        - name: replicant
       postgresql_database_extensions:
         - db: awesome_db
           extensions:
-          - gis
+            - gis
       postgresql_users:
         - name: awesome_user_with_pass
           password: "ToughToGusspAsSwOrD"
         - name: awesome_user_with_db
           password: "ToughToGusspAsSwOrD"
           db: test_db
+        - name: replicant
+          password: "VoightKampff"
+          db: replicant
       postgresql_hba_entries:
         - type: local
           database: all
-          user: all
-          method: peer
-        - type: host
-          database: all
-          user: all
-          address: 127.0.0.1/32
-          method: ident
-        - type: host
-          database: all
-          user: all
-          address: ::1/128
+          user: postgres
           method: ident
         - type: local
-          database: replication
-          user: all
-          method: peer
+          database: replicant
+          user: replicant
+          method: md5
         - type: host
-          database: replication
-          user: all
+          database: all
+          user: postgres
           address: 127.0.0.1/32
           method: ident
         - type: host
-          database: replication
-          user: all
-          address: ::1/128
-          method: ident
+          database: replicant
+          user: replicant
+          address: 127.0.0.1/32
+          method: md5
