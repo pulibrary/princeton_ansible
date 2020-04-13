@@ -1,40 +1,39 @@
 Role Name
 =========
 
-A brief description of the role goes here.
+A role that installs [pgbouncer](https://www.pgbouncer.org/) the connection pooler for postgresql
 
 Requirements
 ------------
 
-Any pre-requisites that may not be covered by Ansible itself or the role should
-be mentioned here. For instance, if the role uses the EC2 module, it may be a
-good idea to mention in this section that the boto package is required.
+An instance of `pulibrary.postgresql` that this will pool connections to
 
 Role Variables
 --------------
 
-A description of the settable variables for this role should go here, including
-any variables that are in defaults/main.yml, vars/main.yml, and any variables
-that can/should be set via parameters to the role. Any variables that are read
-from other roles and/or the global scope (ie. hostvars, group vars, etc.) should
-be mentioned here as well.
+find any variables in `defaults/main.yml`, `vars/main.yml` pay special attention to `pgbouncer_auth_users`
+
+### pgbouncer_auth_users
+This is a list of dict objects which each have a **name** and a *pass* property. You may use a plaintext or encrypted password. 
+```yml
+pgbouncer_auth_users:
+  - name: postgres
+    password: pa55word
+```
+The above will result in a userlist.txt file that looks like this:
+```
+"postgres" "pa55word"
+```
 
 Dependencies
 ------------
 
-A list of other roles hosted on Galaxy should go here, plus any details in
-regards to parameters that may need to be set for other roles, or variables that
-are used from other roles.
 
 Example Playbook
 ----------------
 
-Including an example of how to use your role (for instance, with variables
-passed in as parameters) is always nice for users too:
+There is an example playbook at `molecule/defaults/playbook.yml`
 
-    - hosts: servers
-      roles:
-         - { role: pulibrary.pgbouncer, x: 42 }
 
 License
 -------
