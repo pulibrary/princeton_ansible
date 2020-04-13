@@ -19,22 +19,41 @@ dependencies:
   - role: 'pulibrary.passenger'
   - role: 'pulibrary.postgresql'
     vars:
+      postgresql_ext_install_postgis: true
       postgresql_databases:
-        - name: demo_db
+        - name: awesome_db
+          gis: true
+        - name: replicant
+      postgresql_database_extensions:
+        - db: awesome_db
+          extensions:
+            - gis
       postgresql_users:
-        - name: demo_db
+        - name: awesome_user_with_pass
           password: "ToughToGusspAsSwOrD"
-        - name: demo_db
+        - name: awesome_user_with_db
           password: "ToughToGusspAsSwOrD"
-          db: demo_db
+          db: test_db
+        - name: replicant
+          password: "VoightKampff"
+          db: replicant
       postgresql_hba_entries:
         - type: local
           database: all
           user: postgres
           method: ident
+        - type: local
+          database: replicant
+          user: replicant
+          method: md5
         - type: host
-          database: demo_db
-          user: demo_db
+          database: all
+          user: postgres
+          address: 127.0.0.1/32
+          method: ident
+        - type: host
+          database: replicant
+          user: replicant
           address: 127.0.0.1/32
           method: md5
   - role: 'pulibrary.nodejs'
