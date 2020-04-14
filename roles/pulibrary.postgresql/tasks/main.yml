@@ -15,7 +15,7 @@
   apt:
     pkg: "{{ postgresql_apt_dependencies }}"
     state: present
-    update_cache: yes
+    update_cache: true
     cache_valid_time: "{{ apt_cache_valid_time | default (3600) }}"
 
 - name: Postgresql | ensure postgresql is installed
@@ -54,7 +54,7 @@
   template:
     src: pg_hba.conf.j2
     dest: "{{ postgresql_conf_directory }}/pg_hba.conf"
-    backup: yes
+  changed_when: false
   notify:
     - reload postgresql
 
@@ -69,7 +69,7 @@
     name: psycopg2-binary
     state: present
   register: postgresql_install_psycopg2_binary
-  until: postgresql_install_psycopg2_binary is succeeded
+  changed_when: false
   when:
     - postgresql_databases is defined or
       postgresql_users is defined
