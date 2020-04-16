@@ -10,83 +10,71 @@
       wget --quiet -O - {{ postgresql_apt_key_url }} | sudo apt-key add -
   changed_when: false
 
-- name: add postgresql repository
+- name: PostgreSQL | add postgresql repository
   apt_repository:
     repo: 'deb http://apt.postgresql.org/pub/repos/apt/ {{ ansible_distribution_release }}-pgdg main'
-    update_cache: 'yes'
+    update_cache: true
     state: present
 
-- name: install postgresql server packages
+- name: Postgresql | install postgresql server packages
   apt:
     name: '{{ item }}'
     state: present
-    cache_valid_time: '{{ apt_cache_timeout }}'
-    update_cache: 'yes'
+    update_cache: true
   loop:
-    - postgresql-{{ postgres_version }}
-  when: postgresql_is_local
+    - postgresql-{{ postgresql_version }}
 
-- name: install postgresql client packages
+- name: Postgresql | install postgresql client packages
   apt:
     name: '{{ item }}'
     state: present
-    cache_valid_time: '{{ apt_cache_timeout }}'
-    update_cache: 'yes'
+    update_cache: true
   loop:
     - libpq-dev
     - python-psycopg2
 
-- name: install access rules
-  copy:
-    src: pg_hba.conf
-    dest: /etc/postgresql/{{ postgres_version }}/main/pg_hba.conf
-    group: postgres
-    owner: postgres
-  register: configure_postgres
-  when: postgresql_is_local
+- import_tasks: extensions.yml
 
-- name: install configuration file
+- name: Postgresql | configure postgres
+  lineinfile:
+    path: "{{ postgresql_conf_directory }}/postgresql.conf"
+    regex: "^{{ item.name }} ="
+    line: "{{ item.name }} = '{{ item.value }}'"
+    create: true
+  loop: "{{ postgresql_settings }}"
+  when:
+    - postgresql_settings is defined
+  notify:
+    - restart postgresql
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Postgresql | create pg_hba.conf
   template:
-    src: 'postgresql.conf.j2'
-    dest: '/etc/postgresql/{{ postgres_version }}/main/postgresql.conf'
-    group: postgres
-    owner: postgres
-  register: configure_postgres
-  when: postgresql_is_local
+    src: pg_hba.conf.j2
+    dest: "{{ postgresql_conf_directory }}/pg_hba.conf"
+    backup: true
+  notify:
+    - reload postgresql
 
-- name: ensure postgres starts on boot
-  service:
-    name: postgresql
-    enabled: 'yes'
-  when: postgresql_is_local
-
-- name: restart postgres server
+- name: start and enable postgres
   service:
     name: postgresql
     state: started
-  when: postgresql_is_local
+    enabled: true
 
-- name: ensure access to postgres server
-  lineinfile:
-    path: '/etc/postgresql/{{ postgres_version }}/main/pg_hba.conf'
-    line: 'host    all             all             {{ ansible_default_ipv4.address }}/32       md5'
-  delegate_to: '{{ postgres_host }}'
-  register: remote_postgres_configured
+- name: install psycopg2-binary
+  pip:
+    name: psycopg2-binary
+    state: present
+  register: postgres_install_psycopg2_binary
+  until: postgres_install_psycopg2_binary is succeeded
   when:
-    - postgres_host is not none
-    - not postgresql_is_local
-    - running_on_server
+    - postgresql_databases is defined or
+      postgresql_users is defined
 
-- name: reload remote postgres now for the access to take place
-  service:
-    name: postgresql
-    state: reloaded
-  become: yes
-  delegate_to: '{{ postgres_host }}'
-  when:
-    - running_on_server
-    - remote_postgres_configured
+- name: flush handlers
+  meta: flush_handlers
 
-
-- include: create_users.yml
-- include: create_db.yml
+- include: users.yml
+- include: databases.yml
