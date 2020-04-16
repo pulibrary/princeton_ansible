@@ -14,14 +14,16 @@
         - name: awesome_db
           gis: true
         - name: replicant
+        - name: test_db
       postgresql_database_extensions:
         - db: awesome_db
           extensions:
             - gis
       postgresql_users:
-        - name: awesome_user_with_pass
+        - name: app_user
           password: "ToughToGusspAsSwOrD"
-        - name: awesome_user_with_db
+          db: awesome_db
+        - name: pgbouncer_user
           password: "ToughToGusspAsSwOrD"
           db: test_db
         - name: replicant
@@ -46,14 +48,25 @@
           user: replicant
           address: 127.0.0.1/32
           method: md5
+        - type: host
+          database: test_db
+          user: pgbouncer_user
+          address: 127.0.0.1/32
+          method: md5
+        - type: host
+          database: awesome_db
+          user: app_user
+          address: 127.0.0.1/32
+          method: md5
     - role: pulibrary.pgbouncer
       pgbouncer_database_aliases:
-        - name: awesome_db
+        - name: test_db
           host: 127.0.0.1
+          dbname: test_db
           pool_size: 50
-          user: awesome_user_with_pass
+          user: pgbouncer_user
       pgbouncer_auth_users:
-        - name: test_app
-          password: md55febd31cd57bced0b87cc9fce61c00b4
+        - name: pgbouncer_user
+          password: md51b13eb858d29f391e8cf949fc884da5b
       pgbouncer_install_pg_client: true
       pgbouncer_auth_type: md5
