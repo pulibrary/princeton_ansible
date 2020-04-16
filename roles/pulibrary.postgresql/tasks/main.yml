@@ -75,7 +75,18 @@
   when:
     - postgres_host is not none
     - not postgresql_is_local
-  notify: 'reload remote postgres'
+    - running_on_server
+
+- name: reload remote postgres now for the access to take place
+  service:
+    name: postgresql
+    state: reloaded
+  become: yes
+  delegate_to: '{{ postgres_host }}'
+  when:
+    - running_on_server
+    - remote_postgres_configured
+
 
 - include: create_users.yml
 - include: create_db.yml
