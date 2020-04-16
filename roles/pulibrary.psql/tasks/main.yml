@@ -4,16 +4,15 @@
     pkg: ca-certificates
     state: present
 
-- name: PostgreSQL | Add PostgreSQL repository apt-key
-  shell: >
-      set -o pipefail |
-      wget --quiet -O - {{ postgresql_apt_key_url }} | sudo apt-key add -
-  changed_when: false
+- name: pgbouncer | Add PostgreSQL repository apt-key | apt
+  apt_key:
+    id: "{{ postgresql_apt_key_id }}"
+    url: "{{ postgresql_apt_key_url }}"
+    state: present
 
-- name: PostgreSQL | add postgresql repository
+- name: pgbouncer | Add PostgreSQL repository | apt
   apt_repository:
-    repo: 'deb http://apt.postgresql.org/pub/repos/apt/ {{ ansible_distribution_release }}-pgdg main'
-    update_cache: true
+    repo: "{{ postgresql_apt_repository }}"
     state: present
 
 - name: Postgresql | install postgresql server packages
