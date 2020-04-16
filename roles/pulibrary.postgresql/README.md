@@ -13,4 +13,9 @@ Role Variables
 
 The role variable below determines whether the PostgreSQL server used is to be installed and run locally on this server or whether it already exists on a remote server:
 
-- `postgresql_is_local`: true if `project_db_host` indicates the PostgreSQL host is on localhost or a Unix socket; false otherwise
+* postgresql_is_local - set it to `false` defaults to true (which is only valid for testing)
+* postgres_host - currently set it to `lib-postgres3.princeton.edu`
+* postgres_version - Currently set it to `10`
+
+
+If you are seeing `FATAL: no pg_hba.conf entry for host` when running a new role make sure you have `postgresql_is_local: false` in your variables.
