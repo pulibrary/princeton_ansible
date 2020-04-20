@@ -9,6 +9,20 @@
     src: repmgr.conf.j2
     dest: "{{ repmgr_config }}"
 
+- name: Postgresql | ensure postgres sudo users
+  copy:
+    src: pg_sudoers
+    dest: "{{ sudoers_dir }}/pg_sudoers"
+
+- name: Postgresql | ensure replicant pgpass
+  template:
+    src: pg_pass.j2
+    dest: "~/.pgpass"
+    mode: 0600
+    owner: postgres
+  become: true
+  become_user: postgres
+
 - name: PostgreSQL | add replication postgresql configuration
   template:
     src: replication.conf.j2
