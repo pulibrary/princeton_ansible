@@ -1,8 +1,13 @@
 ---
-node_identifier: 1
 replication_database: "replicant"
 replication_user: "replicant"
+replication_user_password: "{{ vault_replicant_password }}"
 repmgr_config: "/etc/repmgr.conf"
+postgresql_settings:
+  - name: port
+    value: 5432
+  - name: listen_addresses
+    value: "*"
 postgresql_ext_install_postgis: true
 postgresql_databases:
   - name: replicant
@@ -10,6 +15,11 @@ postgresql_users:
   - name: replicant
     password: "{{ vault_replicant_password }}"
     db: replicant
+postgresql_user_privileges:
+  - name: replicant
+    db: replicant
+    priv: "ALL"
+    role_attr_flags: "CREATEDB,SUPERUSER"
 postgresql_hba_entries:
   - type: local
     database: all
@@ -28,4 +38,4 @@ postgresql_hba_entries:
     database: replicant
     user: replicant
     address: 127.0.0.1/32
-          method: md5
+    method: md5
