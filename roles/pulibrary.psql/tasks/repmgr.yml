@@ -14,12 +14,20 @@
     src: pg_sudoers
     dest: "{{ sudoers_dir }}/pg_sudoers"
 
+- name: Postgrest | install repmgr config
+  template:
+    src: pg_repmgr.conf.j2
+    dest: "{{ postgresql_conf_directory }}/conf.d/pg_repmgr.conf"
+    mode: 0644
+    owner: postgres
+
 - name: Postgresql | ensure replicant pgpass
   template:
     src: pg_pass.j2
     dest: "~/.pgpass"
     mode: 0600
     owner: postgres
+  changed_when: false
   become: true
   become_user: postgres
 
@@ -28,8 +36,8 @@
     src: replication.conf.j2
     dest: "{{ postgresql_conf_directory }}/conf.d/replication.conf"
   when:
-    - not repmgr_log_stat.stat.exists
-    - node_identifier == 1
+    - ansible_hostname == "lib-postgres-staging1"
+    - running_on_server
   notify: restart postgresql
 
 - name: PostgreSQL | alter replicant db user
@@ -46,14 +54,16 @@
   become_user: postgres
   notify:
     - save repmgr log
-  when: running_on_server
+  when:
+    - ansible_hostname == "lib-postgres-staging1"
+    - running_on_server
 
 - name: PostsgreSQL | stop postgres on standby
   service:
     name: postgresql
     state: stopped
   when:
-    - node_identifier is undefined
+    - ansible_hostname == "lib-postgres-staging2"
     - running_on_server
 
 - name: PostgreSQL | remove pg data
@@ -61,15 +71,15 @@
     path: "{{ postgresql_data_directory }}/*"
     state: absent
   when:
-    - node_identifier is undefined
+    - ansible_hostname == "lib-postgres-staging2"
     - running_on_server
 
 - name: PostgreSQL | cloning standby
-  command: repmgr -h {{ node_identifier.2 }} -U replicant -d replicant -f {{ repmgr_config }} standby clone -F
+  command: repmgr -h {{ master_db_host }} -U replicant -d replicant -f {{ repmgr_config }} standby clone -F
   become: true
   become_user: postgres
   when:
-    - node_identifier is undefined
+    - ansible_hostname == "lib-postgres-staging2"
     - running_on_server
 
 - name: PostgreSQL | start postgres
@@ -77,7 +87,7 @@
     name: postgresql
     state: started
   when:
-    - node_identifier is undefined
+    - ansible_hostname == "lib-postgres-staging2"
     - running_on_server
 
 - name: PostgreSQL | register standby
@@ -86,7 +96,7 @@
   become: true
   become_user: postgres
   when:
-    - node_identifier is undefined
+    - ansible_hostname == "lib-postgres-staging2"
     - running_on_server
   notify:
     - save repmgr log
