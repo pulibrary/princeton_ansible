@@ -3,8 +3,6 @@ Role Name
 
 A role that installs [pgbouncer](https://www.pgbouncer.org/) the connection pooler for postgresql. 
 
-
-
 Requirements
 ------------
 
@@ -17,13 +15,16 @@ find any variables in `defaults/main.yml`, `vars/main.yml` pay special attention
 
 ### pgbouncer_auth_users
 
-This is a list of dict objects which each have a **name** and a *password* property. You may use a plaintext or encrypted password. 
+This is a list of dict objects which each have a **name** and a *password* property. For this example I will use a plaintext password. 
+
 ```yml
 pgbouncer_auth_users:
   - name: postgres
     password: pa55word
 ```
+
 The above will result in a userlist.txt file that looks like this:
+
 ```
 "postgres" "pa55word"
 ```
