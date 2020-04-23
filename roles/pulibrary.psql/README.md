@@ -1,21 +1,34 @@
 PostgreSQL
 =========
 
-Installs PostgreSQL from the official PostGres repository, and configures it.
+Installs PostgreSQL from the official postgresql repository, and configures it.
 
 
 Requirements
 ------------
 
-It expects `apt`
+
 
 Role Variables
 --------------
 
+These variables are set in [defaults/main.yml](defaults/main.yml)
 
-* postgresql_is_local - set it to `false` defaults to true (which is only valid for testing)
-* postgres_host - currently set it to `lib-postgres3.princeton.edu`
-* postgres_version - Currently set it to `10`
+```yaml
+postgres_databases:
+  - name: lib_confluence_staging_db
+postgres_users:
+  - name: lib_conf_staging_user_db
+    password: "{{ vault_lib_conf_user_password }}"
+    db: lib_confluence_staging_db
+postgres_hba_entries:
+  - type: host
+    database: lib_confluence_staging
+    user: lib_conf_staging_user_db
+    address: "1.2.3.4/32"
+    method: md5
+```
 
+Adding the following variables will allow the creating of the db user `lib_conf_staging_user_db` who owns the `lib_confluence_staging_db` 
 
-If you are seeing `FATAL: no pg_hba.conf entry for host` when running a new role make sure you have `postgresql_is_local: false` in your variables.
+It is recommended to then create the same user on [pulibrary.pgbouncer](pulibrary.pgbouncer) role for more reliability/robustness
