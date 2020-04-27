@@ -1,0 +1,19 @@
+---
+# tasks file for roles/pulibrary.adoptopenjdk
+- name: AdoptopenJDK | ensure Apt signing key of AdoptOpenJDK from jfrog.io
+  apt_key:
+    url: https://adoptopenjdk.jfrog.io/adoptopenjdk/api/gpg/key/public
+    state: present
+
+- name: AdoptopenJSK | ensure repository for AdoptOpenJDK
+  apt_repository:
+    repo: "deb https://adoptopenjdk.jfrog.io/adoptopenjdk/deb/ {{ ansible_distribution_release }} main"
+    filename: adoptopenjdk_role
+    state: present
+
+- name: AdoptopenJDK | ensure AdoptOpenJDK package
+  apt:
+    name: "{{ adoptopenjdk_package }}"
+    state: present
+    update_cache: true
+  when: running_on_server
