@@ -6,8 +6,7 @@ Installs composer
 Requirements
 ------------
 
-None
-
+You will want to download a current version of [composer](https://getcomposer.org/download/). Place the file under [local_files/composer](local_files/composer)
 
 Role Variables
 --------------

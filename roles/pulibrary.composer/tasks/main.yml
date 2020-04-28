@@ -8,6 +8,8 @@
   get_url:
     url: "https://getcomposer.org/installer"
     dest: "{{ composer_path }}/composer-setup.php"
+  register: composer_download
+  ignore_errors: true
 
 - name: install composer
   command: php composer-setup.php --quiet
@@ -15,7 +17,17 @@
     chdir: "{{ composer_path }}"
     creates: "/tmp/composer_installed"
   register: composer_installed
+  when: composer_download is success
+  ignore_errors: true
   changed_when: false
+
+- name: copy composer
+  copy:
+    src: local_files/composer/composer.phar
+    dest: "{{ composer_path }}/composer.phar"
+  when: composer_download is failed
+  changed_when: false
+
 
 - name: create symbolic link of composer file
   file:
