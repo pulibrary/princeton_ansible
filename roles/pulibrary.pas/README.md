@@ -10,7 +10,7 @@ Requirements
 
 On slavery-prod1 (get the password from the vault)
 ```
-mysqldump -h maria-prod.princeton.edu -p -u pas pas_prod > /tmp/pas.sql
+mysqldump -h maria-prod1.princeton.edu -p -u pas pas_prod > /tmp/pas.sql
 ```
 
 On your machine
