@@ -6,7 +6,7 @@ A role that installs [pgbouncer](https://www.pgbouncer.org/) the connection pool
 Requirements
 ------------
 
-A virtual machine instance with postgresql install from `pulibrary.psql` that this will pool connections to
+A virtual machine instance with postgresql installed from `pulibrary.psql` that this will pool connections to
 
 Role Variables
 --------------
@@ -41,7 +41,7 @@ echo -n "Sup4rH4ck0r5pgbouncer_user" | md5sum
 md5 -s "Sup4rH4ck0r5pgbouncer_user"
 ```
 
-Then just add `md5` to the beginning of that. Put the resulting of that in the [group_vars/postgresql/vault.yml](group_vars/postgresql/vault.yml) which will result in the `userlist.txt` file on the server looking like this when decrypted.
+Then just add `md5` to the beginning of that. Put the result of that in the [group_vars/postgresql/vault.yml](group_vars/postgresql/vault.yml) which will show up in the `userlist.txt` file on the server looking like this when decrypted looking like this:
 
 ```ini
 "pbbouncer_user" "md5c1c4c3b38e45d23638e84e349da62898"

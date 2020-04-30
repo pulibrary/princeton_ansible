@@ -13,3 +13,11 @@ def test_pgbouncer_ini_file(host):
     assert f.exists
     assert f.user == 'postgres'
     assert f.group == 'postgres'
+
+
+def test_for_postgresql_access(host):
+    command = "sudo -u postgres psql -l"
+    cmd = host.run(command)
+
+    assert "ERROR " not in cmd.stderr
+    assert "awesome_db" in cmd.stdout
