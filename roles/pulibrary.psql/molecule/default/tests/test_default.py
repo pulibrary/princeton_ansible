@@ -28,3 +28,11 @@ def test_for_repmgr_config_file(host):
     f = host.file('/etc/repmgr.conf')
 
     assert f.exists
+
+
+def test_for_postgresql_access(host):
+    command = "sudo -u postgres psql -l"
+    cmd = host.run(command)
+
+    assert "ERROR " not in cmd.stderr
+    assert "awesome_db" in cmd.stdout
