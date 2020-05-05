@@ -1,0 +1,23 @@
+---
+- name: PostgreSQL | Ensure PostgreSQL is running
+  service:
+    name: postgresql
+    state: started
+
+- name: PostgreSQL | Make sure the PostgreSQL users are present
+  postgresql_user:
+    name: "{{ item.name }}"
+    password: "{{ item.password | default(omit) }}"
+    encrypted: "{{ item.encrypted | default(omit) }}"
+    port: "{{ postgresql_port }}"
+    state: present
+    login_host: "{{ item.host | default(omit) }}"
+    login_user: "{{ postgresql_admin_user }}"
+    priv: "{{ item.priv | default(omit) }}"
+    role_attr_flags: "{{ item.role_attr_flags | default(omit) }}"
+    db: "{{ item.db | default(omit) }}"
+  no_log: false
+  become: true
+  become_user: "{{ postgresql_admin_user }}"
+  with_items: "{{ postgresql_users }}"
+  when: postgresql_users|length > 0
