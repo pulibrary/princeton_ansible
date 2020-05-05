@@ -1,0 +1,102 @@
+---
+- name: PostgreSQL | register if we have recorded the repmgr
+  stat:
+    path: "{{ repmgr_init_log }}"
+  register: repmgr_log_stat
+
+- name: PostgreSQL | add repmgr configuration file
+  template:
+    src: repmgr.conf.j2
+    dest: "{{ repmgr_config }}"
+
+- name: Postgresql | ensure postgres sudo users
+  copy:
+    src: pg_sudoers
+    dest: "{{ sudoers_dir }}/pg_sudoers"
+
+- name: Postgrest | install repmgr config
+  template:
+    src: pg_repmgr.conf.j2
+    dest: "{{ postgresql_conf_directory }}/conf.d/pg_repmgr.conf"
+    mode: 0644
+    owner: postgres
+
+- name: Postgresql | ensure replicant pgpass
+  template:
+    src: pg_pass.j2
+    dest: "~/.pgpass"
+    mode: 0600
+    owner: postgres
+  changed_when: false
+  become: true
+  become_user: postgres
+
+- name: PostgreSQL | add replication postgresql configuration
+  template:
+    src: replication.conf.j2
+    dest: "{{ postgresql_conf_directory }}/conf.d/replication.conf"
+  when:
+    - ansible_hostname == "lib-postgres-staging1"
+    - running_on_server
+  notify: restart postgresql
+
+- name: PostgreSQL | alter replicant db user
+  command: psql -c 'alter user {{ replication_user }} set search_path TO {{ replication_user }}, "$user", public;'
+  become: true
+  become_user: postgres
+  changed_when: false
+  ignore_errors: true
+
+- name: PostgreSQL | register master
+  command: repmgr -f {{ repmgr_config }} primary register --force
+  register: repmgr_log
+  become: true
+  become_user: postgres
+  notify:
+    - save repmgr log
+  when:
+    - ansible_hostname == "lib-postgres-staging1"
+    - running_on_server
+
+- name: PostsgreSQL | stop postgres on standby
+  service:
+    name: postgresql
+    state: stopped
+  when:
+    - ansible_hostname == "lib-postgres-staging2"
+    - running_on_server
+
+- name: PostgreSQL | remove pg data
+  file:
+    path: "{{ postgresql_data_directory }}/*"
+    state: absent
+  when:
+    - ansible_hostname == "lib-postgres-staging2"
+    - running_on_server
+
+- name: PostgreSQL | cloning standby
+  command: repmgr -h {{ master_db_host }} -U replicant -d replicant -f {{ repmgr_config }} standby clone -F
+  become: true
+  become_user: postgres
+  when:
+    - ansible_hostname == "lib-postgres-staging2"
+    - running_on_server
+
+- name: PostgreSQL | start postgres
+  service:
+    name: postgresql
+    state: started
+  when:
+    - ansible_hostname == "lib-postgres-staging2"
+    - running_on_server
+
+- name: PostgreSQL | register standby
+  command: repmgr -f {{ repmgr_config }} standby register --force
+  register: repmgr_log
+  become: true
+  become_user: postgres
+  when:
+    - ansible_hostname == "lib-postgres-staging2"
+    - running_on_server
+  notify:
+    - save repmgr log
