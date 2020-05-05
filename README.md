@@ -104,6 +104,7 @@ In all the steps below substitue your role name for `example`
       cp roles/example/molecule.yml roles/pulibrary.example/molecule/default
       cp roles/example/yaml-lint.yml roles/pulibrary.example/molecule/default
       cp roles/example/main.yml roles/pulibrary.example/meta
+      cp roles/example/.ansible-lint roles/pulibrary.example/.ansible-lint
       ```
 
    1. edit `roles/pulibrary.example/meta/main.yml` and change `to include your role name`
