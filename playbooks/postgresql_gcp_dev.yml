@@ -1,0 +1,31 @@
+---
+- hosts: postgresql_gcp_dev
+  remote_user: pulsys
+  become: true
+  vars_files:
+    - ../group_vars/postgresql/gcp_dev.yml
+    - ../host_vars/gcp_postgresql_dev1.yml
+    - ../host_vars/gcp_postgresql_dev2.yml
+    - ../group_vars/postgresql/gcp_vault.yml
+  roles:
+    - role: ../roles/pulibrary.psql
+
+
+- hosts: pgbouncer_gcp_dev
+  remote_user: pulsys
+  become: true
+  vars_files:
+    - ../group_vars/postgresql/gcp_dev.yml
+    - ../group_vars/postgresql/gcp_pgbouncer_dev.yml
+    - ../host_vars/gcp_postgresql_dev1.yml
+    - ../host_vars/gcp_postgresql_dev2.yml
+    - ../group_vars/postgresql/gcp_vault.yml
+  roles:
+    - role: ../roles/pulibrary.pgbouncer
+
+  post_tasks:
+    - name: tell everyone on slack you ran an ansible playbook
+      slack:
+        token: "{{ vault_pul_slack_token }}"
+        msg: "{{ inventory_hostname }} completed"
+        channel: #server-alerts
