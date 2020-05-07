@@ -1,27 +1,16 @@
 # This config file is {{ ansible_managed }}
-# ======================== Elasticsearch Configuration =========================
-#
-# NOTE: Elasticsearch comes with reasonable defaults for most settings.
-#       Before you set out to tweak and tune the configuration, make sure you
-#       understand what are you trying to accomplish and the consequences.
-#
-# The primary way of configuring a node is via this file. This template lists
-# the most important settings you may want to configure for a production cluster.
-#
-# Please consult the documentation for further information on configuration options:
-# https://www.elastic.co/guide/en/elasticsearch/reference/index.html
 #
 # ---------------------------------- Cluster -----------------------------------
 #
 # Use a descriptive name for your cluster:
 #
-#cluster.name: my-application
+cluster.name: pul-elastic
 #
 # ------------------------------------ Node ------------------------------------
 #
 # Use a descriptive name for the node:
 #
-#node.name: node-1
+node.name: {{ item.hostname }}
 #
 # Add custom attributes to the node:
 #
@@ -67,6 +56,9 @@ http.port: {{ elasticsearch_http_port }}
 # The default list of hosts is ["127.0.0.1", "[::1]"]
 #
 #discovery.zen.ping.unicast.hosts: ["host1", "host2"]
+
+discovery.zen.ping.unicast.hosts: ["{{ server1 }}:9300", "{{ server1 }}:9301", "{{ server1 }}:9302", "{{ server2 }}:9300", "{{ server2 }}:9301", "{{ server2 }}:9302", "{{ server3 }}:9300", "{{ server3 }}:9301", "{{ server3 }}:9302"]
+
 #
 # Prevent the "split brain" by configuring the majority of nodes (total number of master-eligible nodes / 2 + 1):
 #
@@ -83,6 +75,7 @@ http.port: {{ elasticsearch_http_port }}
 # For more information, consult the gateway module documentation.
 #
 # ---------------------------------- Various -----------------------------------
+node.master: {{ item.node_master }}
 #
 # Require explicit names when deleting indices:
 #
