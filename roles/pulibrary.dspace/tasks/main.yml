@@ -2,6 +2,14 @@
 - include: maven_install.yml  # this can turn into a role
 - include: apache_ant_install.yml  # this can turn into a role
 
+- name: create the dspace installation directory
+  file:
+    path: "{{ dspace_home }}"
+    state: directory
+    user: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+    mode: "0755"
+
 - name: download dspace release
   unarchive:
     src: https://github.com/DSpace/DSpace/releases/download/dspace-{{ dspace_version }}/dspace-{{ dspace_version }}-release.zip
@@ -10,3 +18,70 @@
     owner: "{{ deploy_user }}"
     group: "{{ deploy_user }}"
   changed_when: false
+
+- name: create the dspace postgresql database
+  postgresql_db:
+    name: "{{ dspace_db }}"
+    encoding: UTF-8
+    lc_collate: en_US.UTF-8
+    lc_ctype: en_US.UTF-8
+
+- name: create the dspace postgresql role
+  postgresql_user:
+    name: "{{ dspace_db_user }}"
+    password: "{{ dspace_db_password }}"
+    db: "{{ dspace_db }}"
+    encrypted: true
+    role_attr_flags: '{{ application_dbuser_role_attr_flags }}'
+    state: 'present'
+
+- name: enable the pgcrypto extension for PostgreSQL
+  postgresql_query:
+    db: "{{ dspace_db }}"
+    query: "CREATE EXTENSION pgcrypto;"
+
+- name: create the DSpace configuration file
+  template:
+    src: 'local.cfg.j2'
+    dest: "{{ dspace_source }}/local.cfg"
+
+- name: create the DSpace home directory
+  file:
+    path: "{{ dspace_home }}"
+    state: directory
+    mode: '0755'
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+
+- name: build the Maven package
+  command:
+    chdir: "{{ dspace_source }}/dspace"
+    cmd: "mvn package"
+    creates: "{{ dspace_source }}/dspace/target/dspace-installer"
+  become: yes
+  become_user: "{{ deploy_user }}"
+
+- name: install DSpace using Ant
+  command:
+    chdir: "{{ dspace_source }}/dspace/target/dspace-installer"
+    cmd: "ant fresh_install"
+  register: ant_install
+  changed_when:
+    - ant_install.rc == 0
+  failed_when:
+    - ant_install.rc == 1
+  become: yes
+  become_user: "{{ deploy_user }}"
+
+- name: create the Tomcat servlet contexts for the DSpace web apps
+  template:
+    src: 'dspace_app_context.xml.j2'
+    dest: "{{ tomcat8_home }}/conf/Catalina/localhost/{{ item }}.xml"
+  loop:
+    - jspui
+    - solr
+    - oai
+    - rest
+    - sword
+    - swordv2
+  notify: restart tomcat
