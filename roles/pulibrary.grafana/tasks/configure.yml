@@ -1,0 +1,20 @@
+---
+- name: Grafana | Insert Grafana config
+  template:
+    src: grafana.ini.j2
+    dest: /etc/grafana/grafana.ini
+    owner: "{{ grafana__system_user }}"
+    group: "{{ grafana__system_group }}"
+    mode: 0640
+  notify: "grafana restart"
+
+- name: Flush handlers in case config was changed(e.g. ip bind)
+  meta: flush_handlers
+
+- name: Grafana | Make sure Grafana is started to config it via api
+  service:
+    name: grafana-server
+    state: started
+
+- name: Grafana | Add datasources
+  import_tasks: datasources.yml

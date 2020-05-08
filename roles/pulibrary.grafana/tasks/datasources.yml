@@ -1,0 +1,20 @@
+---
+- name: Create grafana datasources (api)
+  grafana_datasource:
+    name: "{{ item.name }}"
+    grafana_url: "{{ grafana__api_url }}"
+    url: "{{ item.datasource_url }}"
+    ds_type: "{{ item.ds_type }}"
+    database: "{{ item.database | default(omit) }}"
+    user: "{{ item.database_user | default(omit) }}"
+    password: "{{ item.database_password | default(omit) }}"
+    basic_auth_user: "{{ item.basicAuthUser | default(omit) }}"
+    basic_auth_password: "{{ item.basicAuthPassword | default(omit) }}"
+    grafana_user: "{{ grafana__security.admin_user }}"
+    grafana_password: "{{ grafana__security.admin_password }}"
+    is_default: "{{ item.is_default | default(false) }}"
+  loop: "{{ grafana__datasources }}"
+  no_log: "{{ grafana__no_log }}"
+  become: "{{ false if grafana__api_from_localhost else true }}"
+  delegate_to: "{{ 'localhost' if grafana__api_from_localhost else inventory_hostname  }}"
+  changed_when: false
