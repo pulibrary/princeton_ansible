@@ -1,37 +1,44 @@
 ---
-- name: install php postgres drivers
+- name: ojs | install php postgres drivers
   apt:
     name: ['php-pgsql', 'libapache2-mod-php', 'python-pexpect']
     state: present
 
-- name: create ojs directory
+- name: ojs | install npm for git actions
+  apt:
+    name: ["nodejs-dev", "node-gyp", "npm", "libssl1.0-dev"]
+    state: present
+    update_cache: true
+  changed_when: false
+
+  when: not running_on_server
+- name: ojs | create ojs directory
   file:
     path: "{{ ojs_home }}"
     state: directory
     owner: "{{ deploy_user }}"
     group: "{{ deploy_user }}"
 
-- name: clone the repo
-  git:
+- name: ojs | unarchive the ojs
+  unarchive:
+    src: https://github.com/pkp/ojs/archive/3_2_0-3.zip
     dest: "{{ ojs_home }}"
-    repo: https://github.com/pkp/ojs
-    version: "ojs-{{ ojs_version }}"
-    update: false
+    remote_src: true
   become: true
   become_user: "{{ deploy_user }}"
 
-- name: remove apache document root
+- name: ojs | remove apache document root
   file:
     path: "{{ apache.docroot }}"
     state: absent
 
-- name: create symlink for versions
+- name: ojs | create symlink for versions
   file:
     src: /var/www/ojs-{{ ojs_version }}
     dest: "{{ apache.docroot }}"
     state: link
 
-- name: update db driver
+- name: ojs | update db driver
   lineinfile:
     path: "{{ apache.docroot }}/config.TEMPLATE.inc.php"
     regexp: "driver = mysql"
@@ -39,7 +46,7 @@
   become: true
   become_user: "{{ deploy_user }}"
 
-- name: update password
+- name: ojs | update password
   lineinfile:
     path: "{{ apache.docroot }}/config.TEMPLATE.inc.php"
     regexp: '^password ='
@@ -49,7 +56,7 @@
   notify:
     - restart apache
 
-- name: copy template file for live config
+- name: ojs | copy template file for live config
   copy:
     src: "{{ apache.docroot }}/config.TEMPLATE.inc.php"
     dest: "{{ apache.docroot }}/config.inc.php"
@@ -59,7 +66,7 @@
   notify:
     - restart apache
 
-- name: create uploads directory
+- name: ojs | create uploads directory
   file:
     path: "{{ ojs_file_uploads }}"
     state: directory
@@ -67,7 +74,7 @@
     group: "www-data"
     mode: "ug+w"
 
-- name: upstream README on other directories to modify
+- name: ojs | upstream README on other directories to modify
   file:
     path: "{{ apache.docroot }}/{{ item }}"
     group: "www-data"
@@ -78,7 +85,7 @@
     - "plugins"
     - "public"
 
-- name: ensure config file has correct permissions
+- name: ojs | ensure config file has correct permissions
   file:
     path: "{{ apache.docroot }}/config.inc.php"
     group: "www-data"
@@ -86,7 +93,7 @@
   notify:
     - restart apache
 
-- name: run compose
+- name: ojs | run compose
   composer:
     command: update
     working_dir: "{{ item }}"
@@ -95,21 +102,22 @@
     - "{{ apache.docroot }}/plugins/generic/citationStyleLanguage"
     - "{{ apache.docroot }}/plugins/paymethod/paypal"
 
-- name: install node dependencies
+- name: ojs | install node dependencies
   npm:
     path: "{{ ojs_home }}"
 
-- name: build javascript dependencies
+- name: ojs | build javascript dependencies
   shell:
     cmd: npm run build
     chdir: "{{ ojs_home }}"
+  changed_when: false
 
-- name: Check the site install state
+- name: ojs | Check the site install state
   shell: >
     grep -i '^installed = \(On\|Off\)' "{{ apache.docroot }}"/config.inc.php | cut -d '=' -f 2 | xargs
   register: ojs_installed
 
-- name: Run the OJS install script
+- name: ojs | Run the OJS install script
   expect:
     command: php {{ apache.docroot }}/tools/install.php
     responses:
@@ -139,11 +147,13 @@
     timeout: 300
   ignore_errors: true
   when: (ojs_installed.stdout == "Off")
+  changed_when: false
 
-- name: Mark the site as installed in config.inc.php
+- name: ojs | Mark the site as installed in config.inc.php
   replace:
     dest: "{{ apache.docroot }}/config.inc.php"
     regexp: >
       ^installed = Off$
     replace: "installed = On"
   when: (ojs_installed.stdout == "Off")
+  changed_when: false
