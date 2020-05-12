@@ -21,8 +21,8 @@
 
 - name: ojs | unarchive the ojs
   unarchive:
-    src: https://github.com/pkp/ojs/archive/3_2_0-3.zip
-    dest: "{{ ojs_home }}"
+    src: "https://github.com/pkp/ojs/archive/{{ ojs_version }}.zip"
+    dest: "/var/www"
     remote_src: true
   become: true
   become_user: "{{ deploy_user }}"
@@ -92,25 +92,6 @@
     mode: "ug+w"
   notify:
     - restart apache
-
-- name: ojs | run compose
-  composer:
-    command: update
-    working_dir: "{{ item }}"
-  with_items:
-    - "{{ apache.docroot }}/lib/pkp"
-    - "{{ apache.docroot }}/plugins/generic/citationStyleLanguage"
-    - "{{ apache.docroot }}/plugins/paymethod/paypal"
-
-- name: ojs | install node dependencies
-  npm:
-    path: "{{ ojs_home }}"
-
-- name: ojs | build javascript dependencies
-  shell:
-    cmd: npm run build
-    chdir: "{{ ojs_home }}"
-  changed_when: false
 
 - name: ojs | Check the site install state
   shell: >
