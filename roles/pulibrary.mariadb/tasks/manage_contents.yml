@@ -7,8 +7,12 @@
 - name: Drop databases if requested
   mysql_db:
     name: "{{ item.database | d(item.name) }}"
+    login_host: '{{ item.db_host | default(db_host) | default(omit) }}'
+    login_password: '{{ db_password | default(omit) }}'
+    login_user: 'root'
+    login_port: '{{ db_port | default(omit) }}'
     state: absent
-  with_flattened: "{{ mariadb__databases }}"
+  loop: "{{ mariadb__databases | d([]) }}"
   when: ((item.database|d(false) or item.name|d(false)) and
          (item.state is defined and item.state == 'absent'))
   no_log: true
@@ -16,7 +20,7 @@
 - name: Create databases
   mysql_db:
     name: "{{ item.database | d(item.name) }}"
-    login_host: '{{ db_host | default(omit) }}'
+    login_host: '{{ item.db_host | default(db_host) | default(omit) }}'
     login_password: '{{ db_password | default(omit) }}'
     login_user: 'root'
     login_port: '{{ db_port | default(omit) }}'
@@ -68,7 +72,7 @@
 
 - name: Drop user accounts if requested
   mysql_user:
-    login_host: '{{ db_host | default(omit) }}'
+    login_host: '{{ item.db_host | default(db_host) | default(omit) }}'
     login_password: '{{ db_password | default(omit) }}'
     login_user: 'root'
     login_port: '{{ db_port | default(omit) }}'
@@ -82,7 +86,7 @@
 - name: Create user accounts
   mysql_user:
     name: '{{ item.user | d(item.name) }}'
-    login_host: '{{ db_host | default(omit) }}'
+    login_host: '{{ item.db_host | default(db_host) | default(omit) }}'
     login_password: '{{ db_password | default(omit) }}'
     login_user: 'root'
     login_port: '{{ db_port | default(omit) }}'
@@ -98,7 +102,7 @@
 - name: Grant privileges to users
   mysql_user:
     name: '{{ item.user | d(item.name) }}'
-    login_host: '{{ db_host | default(omit) }}'
+    login_host: '{{ item.db_host | default(db_host) | default(omit) }}'
     login_password: '{{ db_password | default(omit) }}'
     login_user: 'root'
     login_port: '{{ db_port | default(omit) }}'
