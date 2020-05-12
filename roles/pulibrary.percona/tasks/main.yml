@@ -15,7 +15,7 @@
     state: present
     update_cache: true
 
-- name: configure mysql
+- name: percona | configure mysql
   ini_file:
     dest: /etc/mysql/percona-server.conf.d/50-server.cnf
     section: "{{ item.section }}"
@@ -26,6 +26,14 @@
     label: "{{ item.option }}"
   notify:
     - restart mysql server
+
+- name: percona | Copy root my.cnf
+  template:
+    src: my.cnf.j2
+    dest: '/root/.my.cnf'
+    mode: 0644
+    owner: root
+    group: root
 
 - name: percona | start and enable mysql
   service:
