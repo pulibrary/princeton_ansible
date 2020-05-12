@@ -2,4 +2,27 @@
 - name: Converge
   hosts: all
   roles:
-    - role: roles/pulibrary.ojs
+    - role: pulibrary.ojs
+      postgresql_databases:
+        - name: ojs_db
+      postgresql_users:
+        - name: ojs_db_user
+          password: "VoightKampff"
+          db: ojs_db
+          priv: "ALL"
+          role_attr_flags: "CREATEDB,SUPERUSER"
+      postgresql_hba_entries:
+        - type: local
+          database: all
+          user: postgres
+          method: ident
+        - type: host
+          database: all
+          user: postgres
+          address: 127.0.0.1/32
+          method: ident
+        - type: host
+          database: ojs_db
+          user: ojs_db_user
+          address: 127.0.0.1/32
+          method: md5
