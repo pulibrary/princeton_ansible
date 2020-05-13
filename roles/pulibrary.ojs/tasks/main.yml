@@ -1,17 +1,9 @@
 ---
 - name: ojs | install php postgres drivers
   apt:
-    name: ['php-pgsql', 'libapache2-mod-php', 'python-pexpect']
+    name: ['php-pgsql', 'libapache2-mod-php']
     state: present
 
-- name: ojs | install npm for git actions
-  apt:
-    name: ["nodejs-dev", "node-gyp", "npm", "libssl1.0-dev"]
-    state: present
-    update_cache: true
-  changed_when: false
-
-  when: not running_on_server
 - name: ojs | create ojs directory
   file:
     path: "{{ ojs_home }}"
@@ -93,41 +85,15 @@
   notify:
     - restart apache
 
-- name: ojs | Check the site install state
-  shell: >
-    grep -i '^installed = \(On\|Off\)' "{{ apache.docroot }}"/config.inc.php | cut -d '=' -f 2 | xargs
-  register: ojs_installed
-
-- name: ojs | Run the OJS install script
-  expect:
-    command: php {{ apache.docroot }}/tools/install.php
-    responses:
-      'Select \(en_US\):': ''  # Default
-      # yamllint disable-line rule:key-duplicates
-      'Select \(None\):': ''  # Default
-      'Select \(utf-8\):': ''  # Default
-      # yamllint disable-line rule:key-duplicates
-      'Select \(None\):': ''  # Default
-      # yamllint disable-line rule:key-duplicates
-      'Select \(None\):': ''  # Default
-      'Directory for uploads:': '{{ ojs_file_uploads }}'
-      'Select \(md5\):': ''  # Default
-      'Username:': '{{ ojs_site_adminname }}'
-      'Password:': '{{ ojs_site_adminpassword }}'
-      'Repeat password:': '{{ ojs_site_adminpassword }}'
-      'Email:': '{{ ojs_site_email }}'
-      'Select:': 'postgres'
-      'Host \(None\):': '{{ ojs_db_host }}'
-      'Username \(None\):': '{{ application_dbuser_name }}'
-      'Password \(None\):': '{{ application_dbuser_password }}'
-      'Database name:': '{{ application_db_name }}'
-      'Create new database \[Y/n\]': 'n'
-      'Repository Identifier:': '{{ ojs_site_repoid }}'
-      'Provide a unique site ID and OAI base URL to PKP for statistics and security alert purposes only\. \[Y/n\]': 'n'  # Default
-      '\*\*\* Install Open Journal Systems \[y/N\]': 'y'
-    timeout: 300
-  ignore_errors: true
-  when: (ojs_installed.stdout == "Off")
+- name: ojs | new installation
+  uri:
+    url: "{{ deploy_ojs_protocol }}://{{ deploy_ojs_url }}/index.php/index/install/install"
+    method: POST
+    body_format: raw
+    body: "{{ deploy_ojs_query | join('&') }}"
+    status_code: 200
+    headers:
+      Content-Type: "application/x-www-form-urlencoded"
   changed_when: false
 
 - name: ojs | Mark the site as installed in config.inc.php
