@@ -22,6 +22,7 @@
     update_cache: true
   loop:
     - "{{ postgresql_packages }}"
+  when: postgresql_is_local
 
 - name: Postgresql | install postgresql client packages
   apt:
@@ -43,6 +44,7 @@
   loop: "{{ postgresql_settings }}"
   when:
     - postgresql_settings is defined
+    - postgresql_is_local
   notify:
     - restart postgresql
   loop_control:
@@ -53,6 +55,7 @@
     src: pg_hba.conf.j2
     dest: "{{ postgresql_conf_directory }}/pg_hba.conf"
     backup: true
+  when: postgresql_is_local
   notify:
     - reload postgresql
 
@@ -61,6 +64,7 @@
     name: postgresql
     state: started
     enabled: true
+  when: postgresql_is_local
 
 - name: install psycopg2-binary
   pip:
@@ -71,6 +75,8 @@
   when:
     - postgresql_databases is defined or
       postgresql_users is defined
+    - postgresql_is_local
+
 
 - name: flush handlers
   meta: flush_handlers

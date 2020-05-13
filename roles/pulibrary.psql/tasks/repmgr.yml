@@ -3,17 +3,20 @@
   stat:
     path: "{{ repmgr_init_log }}"
   register: repmgr_log_stat
+  when: postgresql_is_local
 
 - name: PostgreSQL | add repmgr configuration file
   template:
     src: repmgr.conf.j2
     dest: "{{ repmgr_config }}"
+  when: postgresql_is_local
   changed_when: false
 
 - name: Postgresql | ensure postgres sudo users
   copy:
     src: pg_sudoers
     dest: "{{ sudoers_dir }}/pg_sudoers"
+  when: postgresql_is_local
   changed_when: false
 
 - name: Postgrest | install repmgr config
@@ -22,6 +25,7 @@
     dest: "{{ postgresql_conf_directory }}/conf.d/pg_repmgr.conf"
     mode: 0644
     owner: postgres
+  when: postgresql_is_local
   changed_when: false
 
 - name: Postgresql | ensure replicant pgpass
@@ -30,6 +34,7 @@
     dest: "~/.pgpass"
     mode: 0600
     owner: postgres
+  when: postgresql_is_local
   changed_when: false
   become: true
   become_user: postgres
@@ -41,12 +46,14 @@
   when:
     - ansible_hostname == "lib-postgres-staging1"
     - running_on_server
+    - postgresql_is_local
   notify: restart postgresql
 
 - name: PostgreSQL | alter replicant db user
   command: psql -c 'alter user {{ replication_user }} set search_path TO {{ replication_user }}, "$user", public;'
   become: true
   become_user: postgres
+  when: postgresql_is_local
   changed_when: false
   ignore_errors: true
 
@@ -60,6 +67,7 @@
   when:
     - ansible_hostname == "lib-postgres-staging1"
     - running_on_server
+    - postgresql_is_local
 
 - name: PostsgreSQL | stop postgres on standby
   service:
@@ -68,6 +76,7 @@
   when:
     - ansible_hostname == "lib-postgres-staging2"
     - running_on_server
+    - postgresql_is_local
 
 - name: PostgreSQL | remove pg data
   file:
@@ -76,6 +85,7 @@
   when:
     - ansible_hostname == "lib-postgres-staging2"
     - running_on_server
+    - postgresql_is_local
 
 - name: PostgreSQL | cloning standby
   command: repmgr -h {{ master_db_host }} -U replicant -d replicant -f {{ repmgr_config }} standby clone -F
@@ -84,6 +94,7 @@
   when:
     - ansible_hostname == "lib-postgres-staging2"
     - running_on_server
+    - postgresql_is_local
 
 - name: PostgreSQL | start postgres
   service:
@@ -92,6 +103,7 @@
   when:
     - ansible_hostname == "lib-postgres-staging2"
     - running_on_server
+    - postgresql_is_local
 
 - name: PostgreSQL | register standby
   command: repmgr -f {{ repmgr_config }} standby register --force
@@ -101,5 +113,6 @@
   when:
     - ansible_hostname == "lib-postgres-staging2"
     - running_on_server
+    - postgresql_is_local
   notify:
     - save repmgr log

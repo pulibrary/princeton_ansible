@@ -1,10 +1,39 @@
 ---
-- hosts: ojs
+- hosts: postgresql_staging
   remote_user: pulsys
   become: true
   vars_files:
-    - ../site_vars.yml
-    - ../group_vars/ojs/main.yml
+    - ../group_vars/postgresql/staging.yml
+    - ../group_vars/ojs/staging.yml
+    - ../group_vars/ojs/vault.yml
+    - ../host_vars/lib-postgres-staging1.princeton.edu.yml
+    - ../host_vars/lib-postgres-staging2.princeton.edu.yml
+    - ../group_vars/postgresql/vault.yml
+  roles:
+    - role: ../roles/pulibrary.psql
+
+
+- hosts: pgbouncer_staging
+  remote_user: pulsys
+  become: true
+  vars_files:
+    - ../group_vars/postgresql/staging.yml
+    - ../group_vars/ojs/staging.yml
+    - ../group_vars/ojs/vault.yml
+    - ../group_vars/postgresql/pg_bouncer_staging.yml
+    - ../host_vars/lib-postgres-staging1.princeton.edu.yml
+    - ../host_vars/lib-postgres-staging2.princeton.edu.yml
+    - ../group_vars/postgresql/vault.yml
+  roles:
+    - role: ../roles/pulibrary.pgbouncer
+
+- hosts: ojs_staging
+  remote_user: pulsys
+  become: true
+  vars_files:
+    - ../group_vars/ojs/staging.yml
+    - ../host_vars/lib-postgres-staging1.princeton.edu.yml
+    - ../host_vars/lib-postgres-staging2.princeton.edu.yml
     - ../group_vars/ojs/vault.yml
 
   roles:
