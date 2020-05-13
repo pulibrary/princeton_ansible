@@ -1,0 +1,22 @@
+# {{ ansible_managed | comment }}
+<VirtualHost *:80>
+
+  ServerAdmin lsupport@princeton.edu
+  DocumentRoot {{ deploy_ojs_dest }}
+  ServerName {{ deploy_ojs_url }}
+
+  <Directory {{ deploy_ojs_dest }}>
+    Options All
+    Allowoverride All
+
+    RewriteEngine On
+    RewriteOptions inherit
+    RewriteBase /
+    RewriteCond %{HTTP_HOST} ^www\.(.*)$ [NC]
+    RewriteRule ^(.*)$ http://%1/$1 [R=301,L]
+  </Directory>
+
+  ErrorLog ${APACHE_LOG_DIR}/{{ deploy_ojs_url }}.error.log 
+  CustomLog ${APACHE_LOG_DIR}/{{ deploy_ojs_url }}.acess.log combined
+
+</VirtualHost>
