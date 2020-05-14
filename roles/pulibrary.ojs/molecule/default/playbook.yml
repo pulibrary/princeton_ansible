@@ -1,10 +1,24 @@
 ---
 - name: Converge
   hosts: all
+  pre_tasks:
+  - name: install iproute
+    apt:
+      name: iproute2
+      state: present
+  - name: rerun setup
+    setup:
+      gather_subset:
+        - network
   vars:
     - running_on_server: false
+    - postgresql_is_local: false
+    - postgres_host: "localhost"
+    - postgres_port: "5432"
+    - postgres_admin_user: "postgres"
+    - postgres_admin_password: "VoightKampff"
   roles:
-    - role: pulibrary.ojs
+    - role: pulibrary.psql
       postgresql_databases:
         - name: ojs_db
       postgresql_users:
@@ -22,9 +36,10 @@
           database: all
           user: postgres
           address: 127.0.0.1/32
-          method: ident
+          method: md5
         - type: host
           database: ojs_db
           user: ojs_db_user
           address: 127.0.0.1/32
           method: md5
+    - role: pulibrary.ojs
