@@ -12,8 +12,27 @@
         - network
   vars:
     - running_on_server: false
-    - xtradb_nodes_group: "all"
-    - xtradb_leader_node: "instance"
+    - postgresql_is_local: false
+    - postgres_host: "localhost"
+    - postgres_port: "5432"
+    - postgres_admin_user: "postgres"
+    - postgres_admin_password: "VoightKampff"
   roles:
-    - role: pulibrary.perconaxdb
+    - role: pulibrary.psql
+      postgresql_users:
+        - name: postgres
+          password: "VoightKampff"
+          db: postgres
+          priv: "ALL"
+          role_attr_flags: "CREATEDB,SUPERUSER"
+      postgresql_hba_entries:
+        - type: local
+          database: all
+          user: postgres
+          method: ident
+        - type: host
+          database: all
+          user: postgres
+          address: 127.0.0.1/32
+          method: md5
     - role: pulibrary.recap-www
