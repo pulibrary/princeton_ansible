@@ -16,11 +16,11 @@ def molecularize(command, role):
                         " Please remove these before attempting to regenerate a"
                         " new configuration.")
 
-    molecule_defaults_path = Path(current_path, "molecule", "default", "molecule.yml")
+    molecule_defaults_path = Path(current_path, "roles", "example", "molecule.yml")
     if not molecule_defaults_path.exists():
         raise Exception(f"Failed to find the molecule default configuration file"
                         " in {molecule_defaults_path}")
-    molecule_playbooks_path = Path(current_path, "molecule", "default", "playbooks.yml")
+    molecule_playbooks_path = Path(current_path, "roles", "example", "playbook.yml")
     if not molecule_playbooks_path.exists():
         raise Exception(f"Failed to find the molecule playbooks file in"
                         " {molecule_defaults_path}")
