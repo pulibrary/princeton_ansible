@@ -12,6 +12,12 @@ def test_ojs_symlink_file(host):
     assert f.exists
 
 
+def test_for_shibboleth_config(host):
+    f = host.file('/etc/shibboleth/shibboleth2.xml')
+
+    assert f.exists
+
+
 def test_for_ojs_db_access(host):
     command = "sudo -u postgres psql -l"
     cmd = host.run(command)
