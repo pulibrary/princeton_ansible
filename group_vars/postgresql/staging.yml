@@ -1,6 +1,8 @@
 ---
 replication_database: "replicant"
 replication_user: "replicant"
+db_clusteradmin_user: "postgres"
+db_clusteradmin_password: "{{ vault_postgres_admin_password }}"
 replication_user_password: "{{ vault_replicant_password }}"
 repmgr_config: "/etc/repmgr.conf"
 postgresql_settings:
@@ -13,6 +15,11 @@ postgresql_databases:
   - name: replicant
   - name: test_db
 postgresql_users:
+  - name: postgres
+    password: "{{ vault_postgres_admin_password }}"
+    db: "postgres"
+    priv: "ALL"
+    role_attr_flags: "SUPERUSER"
   - name: replicant
     password: "{{ vault_replicant_password }}"
     db: replicant
@@ -38,14 +45,29 @@ postgresql_hba_entries:
     address: 127.0.0.1/32
     method: ident
   - type: host
-    database: replication
-    user: replicant
+    database: all
+    user: postgres
     address: "{{ master_db_ip }}/32"
     method: md5
   - type: host
     database: replication
     user: replicant
+    address: "{{ master_db_ip }}/32"
+    method: md5
+  - type: host
+    database: all
+    user: postgres
     address: "{{ standby_db_ip }}/32"
+    method: md5
+  - type: host
+    database: replication
+    user: replicant
+    address: "{{ standby_db_ip }}/32"
+    method: md5
+  - type: host
+    database: all
+    user: postgres
+    address: 127.0.0.1/32
     method: md5
   - type: host
     database: replicant
