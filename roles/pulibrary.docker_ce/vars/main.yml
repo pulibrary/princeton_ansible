@@ -1,0 +1,34 @@
+---
+# vars file for roles/pulibrary.docker_ce
+_docker_ce_conflicting_packages:
+  Ubuntu:
+    - docker
+    - docker-engine
+    - docker.io
+    - containerd
+    - runc
+
+_docker_ce_arches:
+  default: amd64
+  x86_64: amd64
+
+# Debian / Ubuntu repo
+docker_ce_apt_key_url: "https://download.docker.com/linux/{{ ansible_distribution | lower }}/gpg"
+docker_ce_apt_repository_arch: "{{ _docker_ce_arches[ansible_architecture] | default(_docker_ce_arches['default']) }}"
+docker_ce_apt_repository_repo: "deb [arch={{ docker_ce_apt_repository_arch }}] https://download.docker.com/linux/{{ ansible_distribution | lower }} {{ ansible_distribution_release }} stable"
+
+docker_ce_packages:
+  - docker-ce
+  - docker-ce-cli
+  - containerd.io
+
+docker_ce_service: docker
+
+docker_compose_download_url: "https://github.com/docker/compose/releases/download/{{ docker_compose_version }}"
+docker_compose_binary_url: "{{ docker_compose_download_url }}/docker-compose-Linux-x86_64"
+docker_compose_sha256_url: "{{ docker_compose_binary_url }}.sha256"
+
+docker_compose_path: "{{ docker_compose_dest }}/{{ docker_compose_cmd_name }}"
+
+_dcspp: "{{ docker_compose_system_path_prepend }}"
+docker_compose_system_path_value: "{%if _dcspp is true %}{{ docker_compose_path }}:${PATH}{% else %}${PATH}:{{ docker_compose_path }}{% endif %}"
