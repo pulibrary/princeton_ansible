@@ -1,0 +1,21 @@
+---
+# tasks file for roles/pulibrary.dispatch
+- name: dispatch | Clone dispatch repo
+  git:
+    repo: "https://github.com/Netflix/dispatch-docker.git"
+    version: "master"
+    dest: "{{ dispatch_home }}"
+    clone: true
+    update: true
+  become: true
+
+- name: dispatch | copy env file
+  template:
+    src: env_file.j2
+    dest: "{{ dispatch_home }}/.env"
+
+- name: dispatch | run installer
+  command: install.sh
+  args:
+    chdir: "{{ dispatch_home }}"
+  register: dispatch_installed
