@@ -1,5 +1,5 @@
 # {{ ansible_managed | comment }}
-<VirtualHost *:80>
+<VirtualHost *:443>
 
   ServerAdmin lsupport@princeton.edu
   DocumentRoot {{ deploy_ojs_dest }}
@@ -8,25 +8,21 @@
   <Directory {{ deploy_ojs_dest }}>
     Options All
     Allowoverride All
+    Order allow,deny
+    allow from all
 
-    RewriteEngine On
-    RewriteOptions inherit
-    RewriteBase /
-    RewriteCond %{HTTP_HOST} ^www\.(.*)$ [NC]
-    RewriteRule ^(.*)$ http://%1/$1 [R=301,L]
   </Directory>
-
-  <Location /Shibboleth.sso>
-    SetHandler shib
-  </Location>
-
-  <Location /secure>
-    AuthType shibboleth
-	ShibRequestSetting requireSession true
-	Require valid-user
-  </Location>
 
   ErrorLog ${APACHE_LOG_DIR}/{{ deploy_ojs_url }}.error.log 
   CustomLog ${APACHE_LOG_DIR}/{{ deploy_ojs_url }}.acess.log combined
+  SSLCertificateFile /etc/apache2/ssl/certs/ojs-staging1_princeton_edu_cert.cer
+  SSLCertificateKeyFile /etc/apache2/ssl/private/ojs-staging1_princeton_edu_priv.key
+  SSLCertificateChainFile /etc/apache2/ssl/certs/ojs-staging1_princeton_edu_chained.pem
+
+  <Location />
+    AuthType shibboleth
+    ShibRequestSetting requireSession 0
+    require shibboleth
+  </Location>
 
 </VirtualHost>
