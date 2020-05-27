@@ -43,31 +43,24 @@
 
         -->
 
-        <!-- Example of remotely supplied batch of signed metadata. -->
-        <!--
-        <MetadataProvider type="XML" validate="true"
-	            url="http://federation.org/federation-metadata.xml"
-              backingFilePath="federation-metadata.xml" maxRefreshDelay="7200">
-            <MetadataFilter type="RequireValidUntil" maxValidityInterval="2419200"/>
-            <MetadataFilter type="Signature" certificate="fedsigner.pem" verifyBackup="false"/>
-            <DiscoveryFilter type="Blacklist" matcher="EntityAttributes" trimTags="true"
-              attributeName="http://macedir.org/entity-category"
-              attributeNameFormat="urn:oasis:names:tc:SAML:2.0:attrname-format:uri"
-              attributeValue="http://refeds.org/category/hide-from-discovery" />
-        </MetadataProvider>
-        -->
-
-        <!-- Example of remotely supplied "on-demand" signed metadata. -->
-        <!--
-        <MetadataProvider type="MDQ" validate="true" cacheDirectory="mdq"
-	            baseUrl="http://mdq.federation.org" ignoreTransport="true">
-            <MetadataFilter type="RequireValidUntil" maxValidityInterval="2419200"/>
-            <MetadataFilter type="Signature" certificate="mdqsigner.pem" />
-        </MetadataProvider>
-        -->
 
         <!-- Map to extract attributes from SAML assertions. -->
         <AttributeExtractor type="XML" validate="true" reloadChanges="false" path="attribute-map.xml"/>
+
+        <!-- Extracts support information for IdP from its metadata. -->
+        <AttributeExtractor type="Metadata" errorURL="errorURL" DisplayName="displayName"/>
+
+        <!-- Use a SAML query if no attributes are supplied during SSO. -->
+        <AttributeResolver type="Query" subjectMatch="true"/>
+
+        <!-- Default filtering policy for recognized attributes, lets other data pass. -->
+        <AttributeFilter type="XML" validate="true" path="attribute-policy.xml"/>
+
+        <!-- Simple file-based resolvers for separate signing/encryption keys. -->
+        <CredentialResolver type="File" use="signing"
+            key="sp-signing-key.pem" certificate="sp-signing-cert.pem"/>
+        <CredentialResolver type="File" use="encryption"
+            key="sp-encrypt-key.pem" certificate="sp-encrypt-cert.pem"/>
 
 
     </ApplicationDefaults>

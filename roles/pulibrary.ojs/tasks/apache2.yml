@@ -1,4 +1,27 @@
 ---
+- name: ojs | ensure SSL files directories exist
+  file:
+    path: "/etc/apache2/ssl/{{ item }}"
+    state: directory
+  with_items:
+    - private
+    - certs
+
+- name: ojs | copy certificates
+  copy:
+    src: "files/{{ item }}"
+    dest: "/etc/apache/ssl/certs/"
+  with_items:
+    - ojs-staging1_princeton_edu_cert.pem
+    - ojs-staging1_princeton_edu_chained.pem
+  when: running_on_server
+
+- name: ojs | copy private key
+  copy:
+    src: "files/ojs-staging1_princeton_edu_priv.key"
+    dest: "/etc/apache/ssl/private/"
+  when: running_on_server
+
 - name: ojs | set ojs Virtualhost
   template:
     src: virtualhost.conf.j2
@@ -14,18 +37,12 @@
   changed_when: false
   notify:
     - restart apache
+  when: running_on_server
 
-- name: ojs | set apache Virtualhost
+- name: ojs | add in config.inc.php
   template:
-    src: templates/htaccess
-    dest: "{{ deploy_ojs_dest }}/.htaccess"
-  changed_when: false
-
-- name: htaccess in config.inc.php
-  lineinfile:
-    path: "{{ deploy_ojs_dest }}/config.inc.php"
-    regexp: "^restful_urls"
-    line: "restful_urls = On"
+    src: "config.inc.php.j2"
+    dest: "{{ deploy_ojs_dest }}/config.inc.php"
   changed_when: false
 
 - name: ojs | configure shibboleth
@@ -33,3 +50,13 @@
     src: shibboleth2.xml.j2
     dest: /etc/shibboleth/shibboleth2.xml
   changed_when: false
+
+- name: ojs | generate signing key
+  command: shib-keygen -n sp-signing -u _shibd -g _shibd -y 20 -h {{ inventory_hostname }} -e https://{{ inventory_hostname }}/shibboleth
+  changed_when: false
+  when: running_on_server
+
+- name: ojs | generate encryption key
+  command: shib-keygen -n sp-encrypt -u _shibd -g _shibd -y 20 -h {{ inventory_hostname }} -e https://{{ inventory_hostname }}/shibboleth
+  changed_when: false
+  when: running_on_server
