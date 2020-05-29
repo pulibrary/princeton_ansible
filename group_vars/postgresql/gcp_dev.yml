@@ -5,6 +5,8 @@ db_clusteradmin_user: "postgres"
 db_clusteradmin_password: "{{ vault_postgres_admin_password }}"
 replication_user_password: "{{ vault_replicant_password }}"
 repmgr_config: "/etc/repmgr.conf"
+dataspace_db_ip: 10.0.20.4
+oar_db_ip: 10.0.20.3
 postgresql_settings:
   - name: port
     value: 5432
@@ -13,7 +15,8 @@ postgresql_settings:
 postgresql_ext_install_postgis: true
 postgresql_databases:
   - name: replicant
-  - name: test_db
+  - name: dataspace_staging_db
+  - name: dspace_test
 postgresql_users:
   - name: replicant
     password: "{{ vault_replicant_password }}"
@@ -25,6 +28,16 @@ postgresql_users:
     priv: "ALL"
     db: test_db
     role_attr_flags: "CREATEDB"
+  - name: dataspace_db_user
+    password: "{{ vault_dataspace_db_user_password }}"
+    db: dataspace_staging_db
+    priv: "ALL"
+    role_attr_flags: "CREATEDB,SUPERUSER"
+  - name: oai_db_user
+    password: "{{ vault_oai_db_user_password }}"
+    db: oai_staging_db
+    priv: "ALL"
+    role_attr_flags: "CREATEDB,SUPERUSER"
 postgresql_hba_entries:
   - type: local
     database: all
@@ -63,4 +76,24 @@ postgresql_hba_entries:
     database: replicant
     user: replicant
     address: "{{ gcp_standby_db_ip }}/32"
+    method: md5
+  - type: host
+    database: all
+    user: pgbouncer_user
+    address: "{{ gcp_master_db_ip }}/32"
+    method: md5
+  - type: host
+    database: all
+    user: pgbouncer_user
+    address: "{{ gcp_standby_db_ip }}/32"
+    method: md5
+  - type: host
+    database: oai_staging_db
+    user: oai_db_user
+    address: "{{ oar_db_ip }}/32"
+    method: md5
+  - type: host
+    database: dataspace_staging_db
+    user: dataspace_db_user
+    address: "{{ dataspace_db_ip }}/32"
     method: md5
