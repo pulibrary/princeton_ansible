@@ -1,0 +1,109 @@
+---
+# tasks file for roles/pulibrary.opendistro
+- name: OpenDistro | populate the hostfiles
+  blockinfile:
+    dest: /etc/hosts
+    block: |-
+      {% for item in groups['es-cluster'] %}
+      {{ hostvars[item]['ip'] }} {{ item }}.{{ domain_name }} {{ item }}
+      {% endfor %}
+    state: present
+    create: true
+    backup: true
+    marker: "# Ansible inventory hosts {mark}"
+  when:
+    - running_on_server
+
+- name: OpenDistro | include elasticsearch installation
+  include: elasticsearch.yml
+
+- name: OpenDistro | opendistroforelasticsearch_extra_packages
+  apt:
+    name: "{{ opendistroforelasticsearch_extra_packages }}"
+    state: present
+
+- name: OpenDistro | Install opendistroforelasticsearch_package
+  apt:
+    name: opendistroforelasticsearch
+    state: present
+    update_cache: true
+  when:
+    - running_on_server
+
+- name: OpenDistro | Create default/elasticsearch
+  template:
+    src: elasticsearch.j2
+    dest: /etc/default/elasticsearch
+    owner: root
+    group: root
+    validate: sh -n %s
+    mode: 0644
+
+- name: OpenDistro | Create jvm.options
+  template:
+    src: jvm.options.j2
+    dest: "{{ opendistroforelasticsearch_conf_dir }}/jvm.options"
+    owner: "{{ opendistroforelasticsearch_user }}"
+    group: "{{ opendistroforelasticsearch_group }}"
+    mode: 0644
+  notify:
+    - Restart opendistroforelasticsearch
+
+- name: OpenDistro | Create elasticsearch.yml
+  template:
+    src: elasticsearch.yml.j2
+    dest: "{{ opendistroforelasticsearch_conf_file }}"
+    mode: 0440
+    owner: "{{ opendistroforelasticsearch_user }}"
+    group: "{{ opendistroforelasticsearch_group }}"
+  notify:
+    - Restart opendistroforelasticsearch
+
+- name: OpenDistro | Register installed plugins
+  shell: "{{ opendistroforelasticsearch_plugin_command }} list"
+  register: shell_output
+  changed_when: false
+
+- name: OpenDistro | Install plugins
+  command: "{{ opendistroforelasticsearch_plugin_command }} install --batch {% if 'src' in item %}{{ item.src }}{% else %}{{ item.name }}{% endif %}"
+  with_items: "{{ opendistroforelasticsearch_plugins }}"
+  when:
+    - "(not 'state' in item ) or (item['state'] == 'present')"
+    - "not (shell_output.stdout is search(item['name']))"
+
+- name: OpenDistro | Create basedir of opendistroforelasticsearch_extra_plugin_files
+  file:
+    path: "{{ opendistroforelasticsearch_plugins_dir }}/{{ item.path | dirname }}"
+    state: directory
+  with_items: "{{ opendistroforelasticsearch_extra_plugin_files }}"
+  when:
+    - "(not 'state' in item) or (item['state'] == 'present')"
+
+- name: OpenDistro | Create opendistroforelasticsearch_extra_plugin_files
+  template:
+    src: "{{ item.type }}.j2"
+    dest: "{{ opendistroforelasticsearch_plugins_dir }}/{{ item.path }}"
+    mode: "{{ item.mode | default(omit) }}"
+    owner: "{{ item.owner | default(omit) }}"
+    group: "{{ item.group | default(omit) }}"
+  with_items: "{{ opendistroforelasticsearch_extra_plugin_files }}"
+  when:
+    - "(not 'state' in item) or (item['state'] == 'present')"
+
+- name: OpenDistro | Delete opendistroforelasticsearch_extra_plugin_files
+  file:
+    path: "{{ opendistroforelasticsearch_plugins_dir }}/{{ item.path }}"
+    state: absent
+  with_items: "{{ opendistroforelasticsearch_extra_plugin_files }}"
+  when:
+    - "'state' in item"
+    - "item['state'] == 'absent'"
+
+- name: OpenDistro | Start opendistroforelasticsearch
+  service:
+    name: "{{ opendistroforelasticsearch_service }}"
+    state: started
+    enabled: true
+  when:
+    - running_on_server
+  register: register_elasticsearch_start
