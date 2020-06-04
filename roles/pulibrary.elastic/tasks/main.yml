@@ -4,17 +4,6 @@
     name: apt-transport-https
     state: present
 
-- name: Elastic | Add Elasticsearch apt key.
-  apt_key:
-    url: https://artifacts.elastic.co/GPG-KEY-elasticsearch
-    state: present
-
-- name: Elastic | Add Elasticsearch repository.
-  apt_repository:
-    repo: 'deb https://artifacts.elastic.co/packages/{{ elasticsearch_version }}/apt stable main'
-    state: present
-    update_cache: true
-
 - name: Elastic | Modify hosts file
   template:
     src: hosts.j2
@@ -24,10 +13,9 @@
     mode: 0644
   when: running_on_server
 
-- name: Elastic | Install Elasticsearch.
+- name: Elastic | install specific version of Elastic
   apt:
-    name: elasticsearch
-    state: present
+    deb: "{{ elastic_download_url }}/elasticsearch-oss-{{ elasticsearch_version }}-amd64.deb"
 
 - name: Elastic | Pre-installation flight check
   stat:

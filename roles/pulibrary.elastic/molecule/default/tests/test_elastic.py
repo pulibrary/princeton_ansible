@@ -7,7 +7,7 @@ testinfra_hosts = testinfra.utils.ansible_runner.AnsibleRunner(
 
 
 def test_if_elasticsearch_installed(host):
-    pkg = host.package('elasticsearch')
+    pkg = host.package('elasticsearch-oss')
 
     assert pkg.is_installed
 
