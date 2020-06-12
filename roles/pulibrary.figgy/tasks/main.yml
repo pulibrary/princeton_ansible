@@ -18,9 +18,12 @@
     - figgy_binaries
     - figgy_images
     - diglibdata
+    - illiad
     - '{{ figgy_cantaloupe_images_mount }}'
     - 'diglibdata/pudl'
     - 'diglibdata/hydra_binaries'
+    - 'illiad/images'
+    - 'illiad/ocr_scan'
 
 - name: Copy smb credentials
   copy: src=files/{{item}} dest=/etc/{{item}}
@@ -35,6 +38,7 @@
     - libimages2.smb.credentials
     - maplab.smb.credentials
     - geoserver.smb.credentials
+    - illiad.smb.credentials
 
 - name: Create mount to plum binaries
   mount:
@@ -125,6 +129,17 @@
     fstype: cifs
     opts: 'credentials=/etc/geoserver.smb.credentials,uid={{deploy_user_uid}}'
     state: mounted
+
+- name: Create ILLiad mounts
+  mount:
+    name: /mnt/illiad/{{item}}
+    src: //lib-illsql.princeton.edu/{{item}}
+    fstype: cifs
+    opts: 'credentials=/etc/illiad.smb.credentials,uid={{deploy_user_uid}},gid=33'
+    state: mounted
+  with_items:
+    - images
+    - ocr_scan
 
 ## Symlink to Mounts
 - name: Create symlinks
