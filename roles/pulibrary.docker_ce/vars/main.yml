@@ -1,0 +1,32 @@
+---
+# vars file for docker_ce
+_docker_ce_conflicting_packages:
+
+  Ubuntu:
+    - docker
+    - docker-engine
+    - docker.io
+    - containerd
+    - runc
+
+_docker_ce_arches:
+  default: amd64
+  x86_64: amd64
+
+docker_ce_old: "{{ _docker_ce_conflicting_packages[ansible_distribution] }}"
+
+# Debian / Ubuntu repo
+docker_ce_apt_key_url: "https://download.docker.com/linux/{{ ansible_distribution | lower }}/gpg"
+docker_ce_apt_repository_arch: "{{ _docker_ce_arches[ansible_architecture] | default(_docker_ce_arches['default']) }}"
+docker_ce_apt_repository_repo: "deb [arch={{ docker_ce_apt_repository_arch }}] https://download.docker.com/linux/{{ ansible_distribution | lower }} {{ ansible_distribution_release }} stable"
+
+docker_ce_pip_packages:
+  - docker
+  - docker-compose
+
+docker_ce_packages:
+  - docker-ce
+  - docker-ce-cli
+  - containerd.io
+
+docker_ce_service: docker

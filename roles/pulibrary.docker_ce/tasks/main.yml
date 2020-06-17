@@ -1,0 +1,57 @@
+---
+# tasks file for docker_ce
+- name: docker_ce | adjust max map count
+  sysctl:
+    name: vm.max_map_count
+    value: "262144"
+    state: present
+
+- name: docker_ce | adjust redis overcommit
+  sysctl:
+    name: vm.overcommit_memory
+    value: "1"
+    state: present
+
+- name: docker_ce | adjust fs_notify
+  sysctl:
+    name: fs.inotify.max_user_watches
+    value: "524288"
+    state: present
+
+- name: docker_ce | remove any docker installed
+  package:
+    name: "{{ docker_ce_old }}"
+    state: absent
+
+- name: docker_ce | add apt keys
+  apt_key:
+    url: "{{ docker_ce_apt_key_url }}"
+    state: present
+  notify:
+    - apt update cache
+
+- name: docker_ce | install repository for apt
+  apt_repository:
+    repo: "{{ docker_ce_apt_repository_repo }}"
+    state: present
+  notify:
+    - apt update cache
+
+- name: docker_ce | add docker group
+  group:
+    name: docker
+    state: present
+    system: true
+
+- name: docker_ce | install docker_ce
+  package:
+    name: "{{ docker_ce_packages }}"
+    state: present
+  register: docker_ce_install_docker_ce
+  until: docker_ce_install_docker_ce is succeeded
+
+- name: docker_ce | start and enable docker_ce
+  service:
+    name: "{{ docker_ce_service }}"
+    state: started
+    enabled: true

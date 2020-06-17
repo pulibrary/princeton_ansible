@@ -1,28 +1,37 @@
 ---
-- name: Install Elucidate dependencies
+- name: Elucidate | install dependencies
   apt:
     name:
-      - build-essential
       - maven
     state: present
-- name: Create Elucidate package directory
+
+- name: Elucidate | create package directory
   file:
     path: "/opt/elucidate"
     state: "directory"
-- name: Download and untar Elucidate
+
+- name: Elucidate | Download and untar
   unarchive:
     remote_src: true
     src: "{{ elucidate_download_url }}"
     dest: "/opt/elucidate"
-    creates: "/opt/elucidate/elucidate-server-{{ elucidate_version }}"
-- name: Build elucidate-parent
+    creates: "/opt/elucidate/elucidate-server-{{ elucidate_tag }}"
+
+- name: Elucidate | Build elucidate-parent
   shell: cd /opt/elucidate/elucidate-server-{{ elucidate_tag }}/elucidate-parent && mvn clean package install -U
-- name: Build elucidate-common-lib
+  become: true
+
+- name: Elucidate | Build elucidate-common-lib
   shell: cd /opt/elucidate/elucidate-server-{{ elucidate_tag }}/elucidate-common-lib && mvn clean package install -U
-- name: Build elucidate-converter
+  become: true
+
+- name: Elucidate | Build elucidate-converter
   shell: cd /opt/elucidate/elucidate-server-{{ elucidate_tag }}/elucidate-converter && mvn clean package install -U
-- name: Copy annotation.war to tomcat
-  shell: cp /opt/elucidate/elucidate-server-{{ elucidate_tag }}/elucidate_server/target/annotation.war /usr/local/tomcat/webapps
+  become: true
+
+- name: Elucidate | Copy annotation.war to tomcat
+  shell: cp /opt/elucidate/elucidate-server-{{ elucidate_tag }}/elucidate-server/target/annotation.war /var/lib/tomcat8/webapps
+  become: true
 # - name: Add Java 8 repo
 #   apt_repository:
 #     repo: "ppa:webupd8team/java"
