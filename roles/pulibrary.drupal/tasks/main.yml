@@ -135,12 +135,21 @@
     owner: "{{ systems_user }}"
     group: "{{ systems_user }}"
 
-- name: Install drush site alias
+- name: Install drush site alias for drupal 7
   template:
     src: "aliases_drushrc_php.j2"
     dest: "/etc/drush/aliases.drushrc.php"
     owner: "{{ systems_user }}"
     group: "{{ systems_user }}"
+  when: drupal_major_version == 7
+
+- name: Install drush site alias for drupal 8
+  template:
+    src: "prod.site.yml.j2"
+    dest: "/home/{{ deploy_user }}/prod.site.yml"
+    owner: "{{ systems_user }}"
+    group: "{{ systems_user }}"
+  when: drupal_major_version == 8
 
 - name: Check to see if settings.php home file exists.
   stat:
