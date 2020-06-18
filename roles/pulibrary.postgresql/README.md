@@ -12,17 +12,23 @@ Role Variables
 --------------
 
 ### Connection information to the database server: 
-  postgres_host - postgres server
-  postgres_port - defaults to postgres default port
-  postgres_admin_user - defaults to none
-  postgres_admin_password - defaults to none
-  postgresql_is_local - should always be false unless testing
+
+```yaml
+postgres_host: # postgres server
+postgres_port: # defaults to postgres default port
+postgres_admin_user: # defaults to none
+postgres_admin_password: # defaults to none
+postgresql_is_local: # should always be false unless testing
+```
 
 ### Connection information for the database you want to create or connect to
-  application_dbuser_name
-  application_dbuser_password
-  application_db_name
-  application_dbuser_role_attr_flags - for example "SUPERUSER"
+
+```yaml
+application_dbuser_name: your_db_username
+application_dbuser_password: your_vaulted_db_password
+application_db_name: your_db_name
+application_dbuser_role_attr_flags: # for example "SUPERUSER"
+```
     
 Dependencies
 ------------
