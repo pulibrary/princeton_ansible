@@ -15,7 +15,7 @@ If you would like the role to not install a git repo (if you are utilizing capis
 
 ```bash
 drupal_docroot: "/var/www/drupal"
-drupal_major_version: "8"
+drupal_major_version: 8
 drupal_7_branch: "7.x"
 drupal_8_branch: "8.7.x"
 drupal_version_branch: "{{ drupal_8_branch if drupal_major_version == 8 else drupal_7_branch }}"
