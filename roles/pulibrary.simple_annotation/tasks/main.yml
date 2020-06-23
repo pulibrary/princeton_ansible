@@ -5,6 +5,7 @@
     name:
       - maven
     state: present
+  when: running_on_server
 
 - name: Simple annotation | create package directory
   file:
@@ -19,4 +20,8 @@
     creates: "/opt/simple_annotation/SimpleAnnotationServer-server-{{ simple_annotation_tag }}"
 
 - name: Simple annotation | Start jetty
-  shell: cd /opt/simple_annotation/SimpleAnnotationServer-server-{{ simple_annotation_tag }} && mvn jetty:run
+  command: mvn jetty:run
+  args:
+    chdir: /opt/simple_annotation/SimpleAnnotationServer-{{ simple_annotation_tag }}
+  changed_when: false
+  when: running_on_server
