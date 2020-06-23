@@ -7,9 +7,7 @@ testinfra_hosts = testinfra.utils.ansible_runner.AnsibleRunner(
 ).get_hosts('all')
 
 
-def test_hosts_file(host):
-    f = host.file('/etc/hosts')
+def test_simple_annotation_directory(host):
+    f = host.file('/opt/simple_annotation')
 
     assert f.exists
-    assert f.user == 'root'
-    assert f.group == 'root'
