@@ -1,0 +1,26 @@
+---
+## PDF OCR Request Filewatcher Service
+- name: Install startup script for t PDF filewatcher
+  template:
+    src: filewatcher.service
+    dest: /etc/systemd/system/figgy-filewatcher-worker.service
+  notify: 'restart filewatcher worker'
+  when: running_on_server
+
+- name: Keep filewatcher worker running
+  service:
+    name: figgy-filewatcher-worker
+    enabled: true
+    state: started
+  when: running_on_server
+
+- name: Allow deploy user to restart worker
+  lineinfile:
+    dest: /etc/sudoers
+    state: present
+    line: '{{ deploy_user }} ALL=(ALL) NOPASSWD: /usr/sbin/service figgy-filewatcher-worker {{ item }}'
+    validate: 'visudo -cf %s'
+  with_items:
+    - status
+    - restart
+    - start
