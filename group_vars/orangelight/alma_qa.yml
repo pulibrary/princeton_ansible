@@ -1,7 +1,7 @@
 ---
 passenger_server_name: "catalog-alma-qa.*"
 passenger_app_root: "/opt/orangelight/current/public"
-passenger_app_env: "alma-qa"
+passenger_app_env: "alma_qa"
 passenger_extra_config: '{{ lookup("file", "roles/pulibrary.orangelight/templates/nginx_extra_config")  }}'
 rails_app_name: "orangelight"
 rails_app_directory: "orangelight"
@@ -15,7 +15,7 @@ passenger_ruby: "/usr/bin/ruby2.6"
 ruby_version_override: "ruby2.6"
 bundler_version: "2.1.4"
 postgresql_is_local: false
-postgres_host: "lib-postgres3.princeton.edu"
+postgres_host: "lib-postgres-staging1.princeton.edu"
 postgres_version: 10
 ol_db_host: "{{ postgres_host }}"
 ol_db_name: "{{ vault_ol_alma_qa_db_name }}"
@@ -33,7 +33,6 @@ ol_rabbit_user: "{{ vault_figgy_alma_qa_rabbit_user }}"
 ol_rabbit_password: "{{ vault_figgy_alma_qa_rabbit_password }}"
 ol_rabbit_host: "figgy-staging1.princeton.edu"
 ol_rabbit_server: "amqp://{{ ol_rabbit_user }}:{{ ol_rabbit_password }}@{{ ol_rabbit_host }}:5672"
-voyager_ub_id: "{{ vault_voyager_ub_id }}"
 bd_auth_key: "{{ vault_bd_auth_key }}"
 bd_find_barcode: "{{ vault_bd_find_barcode }}"
 scsb_auth_key: "{{ vault_scsb_auth_key }}"
@@ -64,8 +63,6 @@ rails_app_vars:
     value: "{{ ol_graph_api_url }}"
   - name: FIGGY_URL
     value: "{{ ol_figgy_url }}"
-  - name: voyager_ub_id
-    value: "{{ voyager_ub_id }}"
   - name: OL_FEEDBACK_TO
     value: "{{ ol_feedback_to }}"
   - name: OL_FEEDBACK_CC
@@ -84,12 +81,22 @@ rails_app_vars:
     value: "{{ ol_host_name }}"
   - name: APPLICATION_HOST_PROTOCOL
     value: "{{ application_host_protocol }}"
+  - name: ALMA_ACQ_READ_WRITE
+    value: "{{ vault_alma_acq_read_write_key }}"
+  - name: ALMA_BIB_READ_WRITE
+    value: "{{ vault_alma_bib_read_write_key }}"
+  - name: ALMA_BIBS_READ_ONLY
+    value: "{{ vault_alma_bibs_read_only_key }}"
+  - name: ALMA_CONFIG_READ_ONLY
+    value: "{{ vault_alma_config_read_only_key }}"
+  - name: ALMA_USERS_READ_ONLY
+    value: "{{ vault_alma_users_read_only_key }}"
 sneakers_workers: EventHandler
 sneakers_worker_name: orangelight-sneakers
 ol_qa_solr_url: "http://lib-solr8-staging.princeton.edu:8983/solr/catalog-qa"
 datadog_api_key: "{{ vault_datadog_key }}"
 datadog_config:
-  tags: "application:orangelight, environment:qa, type:webserver"
+  tags: "application:orangelight, environment:alma_qa, type:webserver"
   apm_enabled: "true"
   log_enabled: true
   process_config:
@@ -102,7 +109,7 @@ datadog_checks:
     init_config:
     logs:
       - type: file
-        path: /opt/rails_app/current/log/qa.log
+        path: /opt/rails_app/current/log/alma_qa.log
         service: orangelight
         source: ruby
   nginx:
