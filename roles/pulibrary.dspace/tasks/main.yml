@@ -1,4 +1,20 @@
 ---
+- name: dspace | create directory to host atmire scripts
+  file:
+    path: "{{ atmire_path }}"
+    state: directory
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+  when: running_on_server
+
+- name: dspace | setup install scripts
+  git:
+    repo: "{{ atmire_path_git_repo }}"
+    dest: "{{ atmire_path }}"
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+  when: running_on_server
+
 - name: dspace | configure user bashrc
   file:
     src: "{{ atmire_path }}/dspace/config/bash/bashrc"
@@ -34,12 +50,3 @@
     group: "{{ deploy_user }}"
     state: link
   when: running_on_server
-
-- name: download dspace release
-  unarchive:
-    src: https://github.com/DSpace/DSpace/releases/download/dspace-{{ dspace_version }}/dspace-{{ dspace_version }}-release.zip
-    dest: /opt
-    remote_src: true
-    owner: "{{ deploy_user }}"
-    group: "{{ deploy_user }}"
-  changed_when: false
