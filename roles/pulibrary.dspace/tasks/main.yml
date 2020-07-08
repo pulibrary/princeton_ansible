@@ -1,7 +1,39 @@
 ---
-- name: dspace | configure dspace user
-- include: maven_install.yml  # this can turn into a role
-- include: apache_ant_install.yml  # this can turn into a role
+- name: dspace | configure user bashrc
+  file:
+    src: "{{ atmire_path }}/dspace/config/bash/bashrc"
+    dest: "/home/{{ deploy_user }}/.bashrc"
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+    state: link
+  when: running_on_server
+
+- name: dspace | configure user bash_profile
+  file:
+    src: "{{ atmire_path }}/dspace/config/bash/bash_profile"
+    dest: "/home/{{ deploy_user }}/.bash_profile"
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+    state: link
+  when: running_on_server
+
+- name: dspace | configure dspace_local_settings
+  file:
+    src: "{{ atmire_path }}/dspace/config/local-settings.cfg"
+    dest: "/home/{{ deploy_user }}/local-settings.cfg"
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+    state: link
+  when: running_on_server
+
+- name: dspace | configure dspace scripts
+  file:
+    src: "{{ atmire_path }}/dspace/scripts"
+    dest: "/home/{{ deploy_user }}/scripts"
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+    state: link
+  when: running_on_server
 
 - name: download dspace release
   unarchive:
