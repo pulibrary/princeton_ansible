@@ -1,22 +1,26 @@
 ---
-- name: install building software and build essentials
+- name: common | update phusion libraries
+  command: apt-get --allow-releaseinfo-change update
+  changed_when: false
+
+- name: common | install building software and build essentials
   apt:
     name: '{{ common_packages }}'
     state: present
     update_cache: true
   changed_when: false
 
-- name: update python's crypto libs
+- name: common | update python's crypto libs
   pip:
     name: ["urllib3", "pyopenssl", "ndg-httpsclient", "pyasn1"]
     executable: pip3
 
-- name: copy tmux.conf
+- name: common | copy tmux.conf
   template:
     src: "tmux.conf.j2"
     dest: "/etc/tmux.conf"
 
-- name: Install configured dependencies
+- name: common | install configured dependencies
   apt:
     name: '{{ configured_dependencies }}'
     state: present
