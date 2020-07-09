@@ -6,15 +6,49 @@
     state: present
     update_cache: true
 
-- name: Generate an OpenSSL Certificate Signing Request
+- name: oar | create nginx includes directory
+  file:
+    path: /etc/nginx/include/{{ item }}
+    state: directory
+  loop:
+    - csr
+    - certs
+    - private
+
+- name: oar | Generate an OpenSSL private key
+  openssl_privatekey:
+    path: /etc/nginx/include/private/ssl-cert-snakeoil.key
+    size: 2048
+
+- name: oar | Generate an OpenSSL Certificate Signing Request
   openssl_csr:
-    path: /etc/ssl/csr/ssl-cert-snakeoil.csr
-    privatekey_path: /etc/ssl/private/ssl-cert-snakeoil.key
+    path: /etc/nginx/include/csr/ssl-cert-snakeoil.csr
+    privatekey_path: /etc/nginx/include/private/ssl-cert-snakeoil.key
     common_name: oar-staging.princeton.edu
 
 - name: oar | create a Self Signed OpenSSL certificate
   openssl_certificate:
-    path: /etc/ssl/certs/ssl-cert-snakeoil.pem
-    privatekey_path: /etc/ssl/private/ssl-cert-snakeoil.key
-    csr_path: /etc/ssl/csr/ssl-cert-snakeoil.csr
+    path: /etc/nginx/include/certs/ssl-cert-snakeoil.pem
+    privatekey_path: /etc/nginx/include/private/ssl-cert-snakeoil.key
+    csr_path: /etc/nginx/include/csr/ssl-cert-snakeoil.csr
     provider: selfsigned
+
+- name: oar | add nginx config file
+  template:
+    src: oar_nginx.conf.j2
+    dest: /etc/nginx/sites-available/oar_nginx.conf
+
+- name: oar | add nginx config file
+  template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+  loop:
+    - {src: blocked-ips.nginx.j2, dest: /etc/nginx/include/blocked-ips.nginx}
+    - {src: blocked-agents.nginx.j2, dest: /etc/nginx/include/blocked-agents.nginx}
+
+- name: oar | create symlink to enable site
+  file:
+    src: /etc/nginx/sites-available/oar_nginx.conf
+    dest: /etc/nginx/sites-enabled/oar_nginx.conf
+    state: link
+  notify: restart nginx
