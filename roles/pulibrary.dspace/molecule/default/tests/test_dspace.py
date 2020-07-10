@@ -11,5 +11,5 @@ def test_for_dspace_download(host):
 
     assert f.exists
     assert f.is_directory
-    assert f.user == 'deploy'
-    assert f.group == 'deploy'
+    assert f.user == 'dspace'
+    assert f.group == 'dspace'
