@@ -38,6 +38,11 @@
     src: oar_nginx.conf.j2
     dest: /etc/nginx/sites-available/oar_nginx.conf
 
+- name: oar | add apache config file
+  template:
+    src: dspace.conf.j2
+    dest: /etc/apache2/sites-available/dspace.conf
+
 - name: oar | add nginx config file
   template:
     src: "{{ item.src }}"
@@ -45,6 +50,30 @@
   loop:
     - {src: blocked-ips.nginx.j2, dest: /etc/nginx/include/blocked-ips.nginx}
     - {src: blocked-agents.nginx.j2, dest: /etc/nginx/include/blocked-agents.nginx}
+    - {src: grouped-agents.nginx.j2, dest: /etc/nginx/include/grouped-agents.nginx}
+    - {src: proxy-to-apache.nginx.j2, dest: /etc/nginx/include/proxy-to-apache.nginx}
+    - {src: static-headers.nginx.j2, dest: /etc/nginx/include/static-headers.nginx}
+
+- name: oar | enable mod_proxy
+  apache2_module:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - proxy
+    - proxy_ajp
+    - proxy_http
+
+- name: oar | remove apache default
+  file:
+    path: /etc/apache2/sites-enabled/000-default.conf
+    state: absent
+
+- name: oar | create symlink to enable site apache 
+  file:
+    src: /etc/apache2/sites-available/dspace.conf
+    dest: /etc/apache2/sites-enabled/dspace.conf
+    state: link
+  notify: restart apache
 
 - name: oar | create symlink to enable site
   file:
