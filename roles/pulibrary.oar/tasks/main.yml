@@ -1,5 +1,20 @@
 ---
 # tasks file for roles/pulibrary.oar
+- name: oar | configure git credentials
+  command: "git config --global credential.helper store"
+  when: running_on_server
+  changed_when: false
+
+- name: oar | populate the git credential store
+  template:
+    src: git_credentials.j2
+    dest: "/home/{{ deploy_user }}/.git-credentials"
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+    mode: u=rw,g=,o=
+  when: running_on_server
+  no_log: true
+
 - name: oar | install pyopenssl
   apt:
     name: ["python-openssl", "python3-openssl"]
