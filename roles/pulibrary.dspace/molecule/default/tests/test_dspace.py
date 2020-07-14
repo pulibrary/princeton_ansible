@@ -7,7 +7,7 @@ testinfra_hosts = testinfra.utils.ansible_runner.AnsibleRunner(
 
 
 def test_for_dspace_download(host):
-    f = host.file('/opt/dspace-6.3-release/dspace')
+    f = host.file('/etc/hosts')
 
     assert f.exists
     assert f.is_directory
