@@ -74,11 +74,24 @@
     state: link
   when: running_on_server
 
-- name: dspace | download dspace release
-  unarchive:
-    src: https://github.com/DSpace/DSpace/releases/download/dspace-{{ dspace_version }}/dspace-{{ dspace_version }}-release.zip
-    dest: /opt
-    remote_src: true
+- name: dspace | disable systemd tomcat
+  systemd:
+    name: apache-tomcat
+    state: stopped
+  ignore_errors: true
+  when: running_on_server
+
+- name: dspace | remove systemd tomcat
+  file:
+    path: "/usr/lib/systemd/system/{{ tomcat_service_name }}.service"
+    state: absent
+  when: running_on_server
+
+- name: dspace | configure {{ tomcat_service_name }}
+  file:
+    src: "{{ atmire_path }}/tomcat/server.xml"
+    dest: "{{ tomcat_install_path }}/apache-tomcat-{{ tomcat_version }}/conf/server.xml"
     owner: "{{ deploy_user }}"
     group: "{{ deploy_user }}"
-  changed_when: false
+    state: link
+  when: running_on_server
