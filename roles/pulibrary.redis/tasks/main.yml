@@ -1,10 +1,10 @@
 ---
-- name: Install redis packages
+- name: redis | install redis packages
   apt:
     name: ["redis-tools", "python-redis", "redis-server"]
     state: present
 
-- name: Ensure that /etc/redis directory exists
+- name: redis | ensure that /etc/redis directory exists
   file:
     path: "/etc/redis"
     state: directory
@@ -12,7 +12,7 @@
     group: "root"
     mode: 0755
 
-- name: Create stub Redis config file
+- name: redis | create stub Redis config file
   template:
     src: "etc/redis/redis.conf.j2"
     dest: "/etc/redis/redis.conf"
@@ -21,18 +21,24 @@
     mode: 0640
     force: false
 
-- name: Set vm.overcommit
+- name: redis | ulimit value for redis
+  template:
+    src: "redis_ulimit.conf.j2"
+    dest: "/etc/security/limits.d/redis.conf"
+    force: true
+
+- name: redis | Set vm.overcommit
   sysctl:
     name: "vm.overcommit_memory"
     value: 1
     sysctl_file: "/etc/sysctl.d/30-redis.conf"
   when: redis__overcommit_memory_enable|bool
 
-- name: Configure redis-server service
+- name: redis | configure redis-server service
   include: redis-server.yml
   when: redis__server_enabled|bool
 
-- name: Disable Redis Server service if not enabled
+- name: redis | disable Redis Server service if not enabled
   service:
     name: "redis-server"
     state: stopped
