@@ -10,6 +10,5 @@ def test_for_dspace_download(host):
     f = host.file('/etc/hosts')
 
     assert f.exists
-    assert f.is_directory
-    assert f.user == 'dspace'
-    assert f.group == 'dspace'
+    assert f.user == 'root'
+    assert f.group == 'root'

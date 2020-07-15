@@ -1,5 +1,48 @@
 ---
 # tasks file for roles/pulibrary.oar
+- name: oar | setup the dspace mount
+  file:
+    path: "{{ dspace_install_path }}"
+    state: directory
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+
+- name: oar | ensure {{ deploy_user }} netrc
+  template:
+    src: netrc_config.j2
+    dest: "/home/{{ deploy_user }}/.netrc"
+    mode: 0664
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+
+- name: oar | ensure local-settings home is setup
+  lineinfile:
+    path: "/home/{{ deploy_user }}/local-settings.cfg"
+    regexp: 'DSPACE_BASE="{% raw -%}{{dspace_user_home}}{% endraw -%}"'
+    line: 'DSPACE_BASE="/home/{{ deploy_user }}"'
+  changed_when: false
+
+- name: oar | ensure local-settings repo branch is setup
+  lineinfile:
+    path: "/home/{{ deploy_user }}/local-settings.cfg"
+    regexp: 'GIT_BRANCH={% raw -%}{{dspace_git_branch}}{% endraw -%}'
+    line: 'GIT_BRANCH={{ atmire_git_branch }}'
+  changed_when: false
+
+- name: oar | ensure local-setting db user
+  lineinfile:
+    path: "/home/{{ deploy_user }}/local-settings.cfg"
+    regexp: 'DSPACE_DB_USER=dspace'
+    line: 'DSPACE_DB_USER={{ dspace_db_name }}'
+  changed_when: false
+
+- name: oar | ensure local-setting db
+  lineinfile:
+    path: "/home/{{ deploy_user }}/local-settings.cfg"
+    regexp: 'DSPACE_DB=dspace'
+    line: 'DSPACE_DB_USER={{ dspace_db_user }}'
+  changed_when: false
+
 - name: oar | install pyopenssl
   apt:
     name: ["python-openssl", "python3-openssl"]
