@@ -91,6 +91,18 @@
     state: absent
   when: running_on_server
 
+- name: dspace | copy dspace service
+  copy:
+    src: "{{ atmire_path }}/dspace/scripts/tomcat/dspace.service"
+    dest: "/etc/systemd/system/dspace.service"
+    remote_src: true
+  when: running_on_server
+
+- name: dspace | force systemd to reload
+  systemd:
+    daemon_reexec: true
+  when: running_on_server
+
 - name: dspace | configure {{ tomcat_service_name }}
   file:
     src: "{{ atmire_path }}/dspace/config/tomcat/server.xml"
