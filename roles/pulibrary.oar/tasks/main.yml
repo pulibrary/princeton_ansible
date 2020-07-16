@@ -125,3 +125,22 @@
     mode: 0600
     owner: "{{ deploy_user }}"
   changed_when: false
+
+- name: oar | ensure private directory exists
+  file:
+    path: "{{ atmire_path }}/private"
+    state: directory
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+
+- name: oar | ensure private repo config
+  template:
+    src: private.cfg.j2
+    dest: "{{ atmire_path }}/private/config"
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+
+- name: oar | bootstrap environment
+  command: "{{ atmire_path }}/common/init/bootstrap.sh"
+  become: true
+  when: running_on_server
