@@ -140,7 +140,41 @@
     owner: "{{ deploy_user }}"
     group: "{{ deploy_user }}"
 
-- name: oar | bootstrap environment
-  command: "{{ atmire_path }}/common/init/bootstrap.sh"
+- name: oar | Create symbolic link for the {{ maven_home }} directory
+  file:
+    src: "/opt/apache-maven-{{ maven_version }}"
+    dest: "{{ dspace_maven_home }}"
+    state: link
+
+- name: oar | clone src
+  git:
+    repo: "{{ atmire_dspace_git_path }}"
+    dest: "/home/{{ deploy_user }}/src"
+    force: true
+    version: "{{ atmire_git_branch }}"
+
+- name: oar | make sure recursive permissions
+  file:
+    path: "/home/{{ deploy_user }}/src"
+    recurse: true
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+    mode: u=rwx,g=rw,o=r
+
+- name: oar | clean build out environment
+  command: "{{ atmire_path }}/dspace/scripts/build/clean-build.sh"
   become: true
+  become_user: "{{ deploy_user }}"
+  when: running_on_server
+
+- name: oar | clean build environment
+  command: "{{ atmire_path }}/dspace/scripts/build/build.sh"
+  become: true
+  become_user: "{{ deploy_user }}"
+  when: running_on_server
+
+- name: oar | deploy environment
+  command: "{{ atmire_path }}/dspace/scripts/build/deploy.sh"
+  become: true
+  become_user: "{{ deploy_user }}"
   when: running_on_server
