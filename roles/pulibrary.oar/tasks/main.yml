@@ -43,6 +43,13 @@
     line: 'DSPACE_DB_USER={{ dspace_db_user }}'
   changed_when: false
 
+- name: oar | ensure build config
+  lineinfile:
+    path: "/home/{{ deploy_user }}/local-settings.cfg"
+    regexp: 'DSPACE_BUILD_CFG={%raw -%}{{dspace_build_cfg}}{% endraw -%}'
+    line: 'DSPACE_BUILD_CFG={{ env }}'
+  changed_when: false
+
 - name: oar | install pyopenssl
   apt:
     name: ["python-openssl", "python3-openssl"]
@@ -146,6 +153,20 @@
     dest: "{{ dspace_maven_home }}"
     state: link
 
+- name: oar | Create symbolic link for the {{ ant_home }} directory
+  file:
+    src: "/opt/apache-ant-{{ ant_version }}"
+    dest: "{{ dspace_ant_home }}"
+    state: link
+
+- name: oar | Create symbolic link for aliases
+  template:
+    src: aliases.local.j2
+    dest: "/home/{{ deploy_user }}/.aliases.local"
+    mode: 0664
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+
 - name: oar | clone src
   git:
     repo: "{{ atmire_dspace_git_path }}"
@@ -162,19 +183,23 @@
     mode: u=rwx,g=rw,o=r
 
 - name: oar | clean build out environment
-  command: "{{ atmire_path }}/dspace/scripts/build/clean-build.sh"
+  shell: "{{ atmire_path }}/dspace/scripts/build/clean-build.sh"
   become: true
   become_user: "{{ deploy_user }}"
   when: running_on_server
 
 - name: oar | clean build environment
-  command: "{{ atmire_path }}/dspace/scripts/build/build.sh"
+  shell: /home/dspace/scripts/build/build.sh
+  args:
+    executable: /bin/bash
   become: true
   become_user: "{{ deploy_user }}"
   when: running_on_server
 
 - name: oar | deploy environment
-  command: "{{ atmire_path }}/dspace/scripts/build/deploy.sh"
+  shell: /home/dspace/scripts/build/deploy.sh
+  args:
+    executable: /bin/bash
   become: true
   become_user: "{{ deploy_user }}"
   when: running_on_server
