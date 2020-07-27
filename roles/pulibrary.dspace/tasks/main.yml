@@ -41,34 +41,36 @@
   when: running_on_server
 
 - name: dspace | configure user bashrc
-  file:
-    src: "{{ atmire_path }}/dspace/config/bash/bashrc"
+  template:
+    src: "bashrc.j2"
     dest: "/home/{{ deploy_user }}/.bashrc"
     owner: "{{ deploy_user }}"
     group: "{{ deploy_user }}"
-    force: true
-    state: link
   when: running_on_server
 
 - name: dspace | configure user bash_profile
-  file:
-    src: "{{ atmire_path }}/dspace/config/bash/bash_profile"
+  template:
+    src: "bash_profile.j2"
     dest: "/home/{{ deploy_user }}/.bash_profile"
     owner: "{{ deploy_user }}"
     group: "{{ deploy_user }}"
-    force: true
-    state: link
   when: running_on_server
 
-- name: dspace | configure dspace_local_settings
-  file:
-    src: "{{ atmire_path }}/dspace/config/local-settings.cfg"
-    dest: "/home/{{ deploy_user }}/local-settings.cfg"
+- name: dspace | Create exception for aliases
+  template:
+    src: aliases.local.j2
+    dest: "/home/{{ deploy_user }}/.aliases.local"
+    mode: 0664
     owner: "{{ deploy_user }}"
     group: "{{ deploy_user }}"
-    force: true
-    state: link
-  when: running_on_server
+
+- name: dspace | add dsdb alias
+  template:
+    src: bash_alias.j2
+    dest: "/home/{{ deploy_user }}/.bash_aliases"
+    mode: 0664
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
 
 - name: dspace | configure dspace scripts
   file:
@@ -87,15 +89,9 @@
   ignore_errors: true
   when: running_on_server
 
-- name: dspace | remove systemd tomcat
-  file:
-    path: "/usr/lib/systemd/system/{{ tomcat_service_name }}.service"
-    state: absent
-  when: running_on_server
-
 - name: dspace | copy dspace service
   copy:
-    src: "{{ atmire_path }}/dspace/scripts/tomcat/dspace.service"
+    src: "/usr/lib/systemd/system/{{ tomcat_service_name }}.service"
     dest: "/etc/systemd/system/dspace.service"
     remote_src: true
   when: running_on_server
@@ -106,11 +102,9 @@
   when: running_on_server
 
 - name: dspace | configure {{ tomcat_service_name }}
-  file:
-    src: "{{ atmire_path }}/dspace/config/tomcat/server.xml"
+  template:
+    src: "dspace_server.xml.j2"
     dest: "{{ tomcat_install_path }}/apache-tomcat-{{ tomcat_version }}/conf/server.xml"
     owner: "{{ deploy_user }}"
     group: "{{ deploy_user }}"
-    force: true
-    state: link
   when: running_on_server
