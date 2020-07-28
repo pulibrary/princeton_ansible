@@ -1,0 +1,44 @@
+---
+# - name: Ensure that the PHP config. for Apache has been installed
+#   stat:
+#     path: /etc/php/7.2/apache2/php.ini
+#   register: modphp
+
+- name: Ensure that the PHP config for the CLI has been installed
+  stat:
+    path: /etc/php/7.2/cli/php.ini
+  register: phpcli
+
+- name: Run the tasks for the PHP CLI
+  include: php-cli.yml
+  when: phpcli.stat.exists
+
+- name: install php
+  apt:
+    name: "php{{ php_version }}-fpm"
+    state: present
+    update_cache: true
+
+- name: uninstall Apache
+  apt:
+    name: apache2
+    state: absent
+
+- name: Change fpm ownership for nginx
+  file:
+    path: /var/run/php/php{{ php_version }}-fpm.sock
+    owner: nginx
+    group: adm
+  when: running_on_server
+
+- name: make sure fpm runs as nginx
+  lineinfile:
+    dest: /etc/php/{{ php_version }}/fpm/pool.d/www.conf
+    regexp: "{{ item.regexp }}"
+    line: "{{ item.line }}"
+  with_items:
+    - { regexp: '^user =', line: 'user = nginx' }
+    - { regexp: '^group =', line: 'group = adm' }
+    - { regexp: '^listen.owner =', line: 'listen.owner = nginx' }
+    - { regexp: '^listen.group =', line: 'listen.group = adm' }
+  notify: Restart php-fpm

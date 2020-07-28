@@ -1,12 +1,22 @@
 ---
+- name: 'debug web server'
+  debug:
+    msg: PHP Web Server {{ php_webserver }}
+
+- name: "Install Required Ubuntu Dependencies"
+  apt:
+    name:
+      - apt-transport-https
+      - dirmngr
+
 - name: Add ondrej sury repository
   apt_repository:
     repo: "ppa:ondrej/php"
-  when: ansible_distribution_release == "xenial"
+  when: ansible_distribution_release == "xenial" or php_version == '7.4'
 
-- name: install php7.2
+- name: install php
   apt:
-    name: ["php7.2", "php7.2-dev", "php7.2-curl", "php7.2-zip"]
+    name: ["php{{ php_version }}", "php{{ php_version }}-dev", "php{{ php_version }}-curl", "php{{ php_version }}-zip"]
     state: latest
     update_cache: true
   changed_when: false
@@ -21,3 +31,9 @@
   when: datadog_enabled
 
 - include: configure.yml
+  when: php_webserver == 'apache2'
+  notify: restart apache
+
+- include: configure-nginx.yml
+  when: php_webserver == 'nginx'
+  notify: restart nginx
