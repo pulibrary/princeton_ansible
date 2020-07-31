@@ -31,29 +31,26 @@
     force: true
   when: running_on_server
 
-- name: dspace | remove bash dot files
-  file:
-    path: "/home/{{ deploy_user }}/{{ item }}"
-    state: absent
-  loop:
-    - .bashrc
-    - .bash_profile
+- name: dspace | add bashrc 
+  blockinfile:
+    path: "/home/{{ deploy_user }}/.bashrc"
+    marker: "# {mark} ANSIBLE MANAGED BLOCK "
+    block: |
+      for f in ~/app_configs/*; do source $f; done
+      export PATH=/opt/apache-ant/bin:/opt/apache-maven/bin:$PATH
+      . ~/scripts/dspace-common/env-profile.sh
+      . ~/scripts/.aliases
+      . ~/.aliases.local
+      dswork $USER
+      alias 'dsdb=psql -U {{ dspace_db_user }} -d {{ dspace_db_name }}'
   when: running_on_server
 
-- name: dspace | configure user bashrc
-  template:
-    src: "bashrc.j2"
-    dest: "/home/{{ deploy_user }}/.bashrc"
-    owner: "{{ deploy_user }}"
-    group: "{{ deploy_user }}"
-  when: running_on_server
-
-- name: dspace | configure user bash_profile
-  template:
-    src: "bash_profile.j2"
-    dest: "/home/{{ deploy_user }}/.bash_profile"
-    owner: "{{ deploy_user }}"
-    group: "{{ deploy_user }}"
+- name: dspace | add bash_profile 
+  blockinfile:
+    path: "/home/{{ deploy_user }}/.bash_profile"
+    marker: "# {mark} ANSIBLE MANAGED BLOCK"
+    block: |
+      [ -e ~/.bashrc ] && . ~/.bashrc
   when: running_on_server
 
 - name: dspace | Create exception for aliases
