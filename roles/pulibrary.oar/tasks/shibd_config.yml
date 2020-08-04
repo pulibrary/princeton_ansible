@@ -9,7 +9,11 @@
     - /etc/shibboleth/sp-key.pem
 
 - name: oar | generate metadata file
-  command: /usr/sbin/shib-metagen -c /etc/shibboleth/sp-cert.pem" -h "{{ inventory_hostname }}" -e "{{ inventory_hostname }}" > /etc/shibboleth/{{ ansible_hostname }}_metadata.xml"
+  command:
+    cmd: /usr/bin/shib-metagen -c /etc/shibboleth/sp-cert.pem -h "{{ shib_hostname }}" -e "{{ shib_hostname }}"
+    creates: "/etc/shibboleth/{{ shib_host }}_metadata.xml"
+  changed_when: false
+  when: running_on_server
 
 - name: oar | add attributes for shibboleth
   copy:
