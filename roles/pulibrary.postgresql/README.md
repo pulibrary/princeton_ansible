@@ -12,17 +12,21 @@ Role Variables
 --------------
 
 ### Connection information to the database server: 
+```ini
   postgres_host - postgres server
   postgres_port - defaults to postgres default port
   postgres_admin_user - defaults to none
   postgres_admin_password - defaults to none
   postgresql_is_local - should always be false unless testing
+```
 
 ### Connection information for the database you want to create or connect to
+```ini
   application_dbuser_name
   application_dbuser_password
   application_db_name
   application_dbuser_role_attr_flags - for example "SUPERUSER"
+```
     
 Dependencies
 ------------
