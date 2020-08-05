@@ -1,13 +1,21 @@
 ---
+- name: detect vips commands
+  command: vips -l
+  register: vips_list
+  changed_when: false
+  ignore_errors: true
+
 - name: delete old vips package
   file:
     path: "/opt/vips"
     state: "absent"
+  when: vips_list.failed or not "pdfload" in vips_list.stdout
 
 - name: delete old vips binary
   file:
     path: "/usr/local/bin/vips"
     state: "absent"
+  when: vips_list.failed or not "pdfload" in vips_list.stdout
 
 - name: Install VIPS dependencies
   apt:
