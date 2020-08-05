@@ -1,4 +1,22 @@
 ---
+- name: detect vips commands
+  command: vips -l
+  register: vips_list
+  changed_when: false
+  ignore_errors: true
+
+- name: delete old vips package
+  file:
+    path: "/opt/vips"
+    state: "absent"
+  when: vips_list.failed or not "pdfload" in vips_list.stdout
+
+- name: delete old vips binary
+  file:
+    path: "/usr/local/bin/vips"
+    state: "absent"
+  when: vips_list.failed or not "pdfload" in vips_list.stdout
+
 - name: Install VIPS dependencies
   apt:
     name:
@@ -14,21 +32,26 @@
       - liblcms2-dev
       - liblcms2-2
       - libpng-dev
+      - libpoppler-glib-dev
     state: present
+
 - name: Create VIPS package directory
   file:
     path: "/opt/vips"
     state: "directory"
+
 - name: Download and untar VIPS
   unarchive:
     remote_src: true
     src: "{{ vips_download_url }}"
     dest: "/opt/vips"
     creates: "/opt/vips/vips-{{ vips_version }}"
+
 - name: Compile VIPS
   shell: cd /opt/vips/vips-{{ vips_version }} && ./configure && make && make install
   args:
     creates: /usr/local/bin/vips
+
 - name: Setup ldconfig for vips
   template: src=ldconfig.vips.conf dest=/etc/ld.so.conf.d/vips.conf
   notify:
