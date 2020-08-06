@@ -1,0 +1,28 @@
+---
+- name: dataspace | generate keys
+  command: /usr/sbin/shib-keygen
+  when: running_on_server
+  args:
+    creates: "{{ item }}"
+  loop:
+    - /etc/shibboleth/sp-cert.pem
+    - /etc/shibboleth/sp-key.pem
+
+- name: dataspace | generate metadata file
+  command:
+    cmd: /usr/bin/shib-metagen -c /etc/shibboleth/sp-cert.pem -h "{{ shib_hostname }}" -e "{{ shib_hostname }}"
+    creates: "/etc/shibboleth/{{ shib_host }}_metadata.xml"
+  changed_when: false
+  when: running_on_server
+
+- name: dataspace | add attributes for shibboleth
+  copy:
+    src: attribute-map.xml
+    dest: "{{ shib_home }}/attribute-map.xml"
+  when: running_on_server
+
+- name: dataspace | add shibboleth config
+  template:
+    src: shibboleth2.xml.j2
+    dest: "{{ shib_home }}/shibboleth2.xml"
+  when: running_on_server
