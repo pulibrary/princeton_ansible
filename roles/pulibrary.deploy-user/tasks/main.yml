@@ -1,10 +1,10 @@
 ---
-- name: Create system user group
+- name: deploy-user | create system user group
   group:
     name: "{{ deploy_user }}"
     gid: "{{ deploy_user_uid }}"
 
-- name: Create system user
+- name: deploy-user | create- system user
   user:
     name: "{{ deploy_user }}"
     uid: "{{ deploy_user_uid }}"
@@ -12,33 +12,36 @@
     home: "/home/{{ deploy_user }}"
     shell: "{{ deploy_user_shell }}"
 
-- name: Add SSH keys
+- name: deploy-user | add SSH keys
   authorized_key:
     user: "{{ deploy_user }}"
     key: "{{ item.key }}"
   with_items: "{{ deploy_ssh_users }}"
 
-- name: Create app_configs directory
+- name: deploy-user | create app_configs directory
   file:
     path: '/home/{{ deploy_user }}/app_configs'
     state: 'directory'
     owner: '{{ deploy_user }}'
     group: '{{ deploy_user }}'
-- name: Load app configs
+
+- name: deploy-user | load app configs
   lineinfile: >
-              dest='/home/{{ deploy_user }}/.bashrc'
+              dest="/home/{{ deploy_user }}/.bashrc"
               state=present
               regexp='^for f in ~/app_configs/\*; do source \$f; done$'
               line="for f in ~/app_configs/*; do source $f; done"
               insertbefore=BOF
-- name: Allow "authorized_key" files
+
+- name: deploy-user | allow "authorized_key" files
   lineinfile: >
               dest=/etc/ssh/sshd_config
               state=present
               backrefs=yes
               regexp='^#AuthorizedKeysFile(.*?)$'
               line="AuthorizedKeysFile\1"
-- name: Allow deploy user to SSH
+
+- name: deploy-user | allow deploy user to SSH
   lineinfile: >
               dest=/etc/ssh/sshd_config
               state=present
@@ -49,28 +52,28 @@
   notify:
     - restart ssh
 
-- name: Create the .ssh directory
+- name: deploy-user | create the .ssh directory
   file:
-    path: /home/{{ deploy_user }}/.ssh/
+    path: "/home/{{ deploy_user }}/.ssh/"
     state: directory
     owner: "{{ deploy_user }}"
     group: "{{ deploy_user }}"
     mode: 0700
   when: not running_on_server
 
-- name: Install deploy github key
+- name: deploy-user | install deploy github key
   copy:
-    content: '{{ deploy_id_rsa_private_key }}'
-    dest: '/home/{{ deploy_user }}/.ssh/id_rsa'
+    content: "{{ deploy_id_rsa_private_key }}"
+    dest: "/home/{{ deploy_user }}/.ssh/id_rsa"
     owner: "{{ deploy_user }}"
     group: "{{ deploy_user }}"
     mode: 0600
   when: running_on_server
 
-- name: Install deploy github ssh config
+- name: deploy-user | install deploy github ssh config
   copy:
     src: files/ssh_config
-    dest: '/home/{{ deploy_user }}/.ssh/config'
+    dest: "/home/{{ deploy_user }}/.ssh/config"
     owner: "{{ deploy_user }}"
     group: "{{ deploy_user }}"
     mode: 0644

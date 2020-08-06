@@ -3,11 +3,12 @@ import os
 import testinfra.utils.ansible_runner
 
 testinfra_hosts = testinfra.utils.ansible_runner.AnsibleRunner(
-    os.environ['MOLECULE_INVENTORY_FILE']).get_hosts('all')
+    os.environ['MOLECULE_INVENTORY_FILE']
+).get_hosts('all')
 
 
-def test_for_dspace_download(host):
-    f = host.file('/etc/hosts')
+def test_hosts_file(host):
+    f = host.file('/etc/nginx/include')
 
     assert f.exists
     assert f.user == 'root'
