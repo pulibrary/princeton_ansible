@@ -94,7 +94,7 @@
 
 - name: install php packages
   apt:
-    name: ["php{{ php_version }}-gd", "postgresql-client"]
+    name: ["php{{ php_version }}-gd", "postgresql-client", "php-mbstring"]
     state: present
     update_cache: true
 
@@ -104,3 +104,18 @@
     global: true
   become: true
   when: running_on_server
+
+- name: Allow www-data to access deploy's drush dir
+  file:
+    state: directory
+    path: "/home/{{ deploy_user }}/.drush"
+    owner: "{{ deploy_user }}"
+    group: "www-data"
+
+
+- name: Allow www-data to access deploy's drush cache
+  file:
+    state: directory
+    path: "/home/{{ deploy_user }}/.drush/cache"
+    owner: "{{ deploy_user }}"
+    group: "{{ drupal_web_owner }}"
