@@ -1,19 +1,23 @@
 ---
-- name: oar | Install site configuration
+- name: dataspace: install awscli
+  pip:
+    name: awscli
+
+- name: dataspace | Install site configuration
   template:
     src: "dspace_app_config.j2"
     dest: "/home/{{ deploy_user }}/app_configs/{{ dspace_app_name }}"
     owner: "{{ deploy_user }}"
     group: "{{ deploy_user }}"
 
-- name: oar | ensure {{ deploy_user }} sudo access
+- name: dataspace | ensure {{ deploy_user }} sudo access
   copy:
     src: "files/dspace"
     dest: "{{ sudoers_dir }}/dspace"
     validate: /usr/sbin/visudo -csf %s
   changed_when: false
 
-- name: oar | ensure {{ deploy_user }} has local-settings
+- name: dataspace | ensure {{ deploy_user }} has local-settings
   template:
     src: "local_settings.cfg.j2"
     dest: "/home/{{ deploy_user }}/local-settings.cfg"
@@ -22,7 +26,7 @@
   when: running_on_server
   changed_when: false
 
-- name: oar | setup the dspace mount
+- name: dataspace | setup the dspace mount
   file:
     path: "{{ dspace_install_path }}"
     state: directory
@@ -30,7 +34,7 @@
     group: "{{ deploy_user }}"
   when: running_on_server
 
-- name: oar | ensure {{ deploy_user }} netrc
+- name: dataspace | ensure {{ deploy_user }} netrc
   template:
     src: netrc_config.j2
     dest: "/home/{{ deploy_user }}/.netrc"
@@ -39,7 +43,7 @@
     group: "{{ deploy_user }}"
   when: running_on_server
 
-- name: oar | ensure {{ deploy_user }} pgpass
+- name: dataspace | ensure {{ deploy_user }} pgpass
   template:
     src: pg_pass.j2
     dest: "/home/{{ deploy_user }}/.pgpass"
@@ -47,7 +51,7 @@
     owner: "{{ deploy_user }}"
   changed_when: false
 
-- name: oar | Create settings configuration
+- name: dataspace | Create settings configuration
   template:
     src: settings.xml.j2
     dest: "/home/{{ deploy_user }}/.m2/settings.xml"
@@ -56,7 +60,7 @@
     group: "{{ deploy_user }}"
   when: running_on_server
 
-- name: oar | make sure recursive .m2 permissions
+- name: dataspace | make sure recursive .m2 permissions
   file:
     path: "/home/{{ deploy_user }}/.m2"
     recurse: true
@@ -65,7 +69,7 @@
     mode: u=rwx,g=rw,o=r
   when: running_on_server
 
-- name: oar | ensure private directory exists
+- name: dataspace | ensure private directory exists
   file:
     path: "{{ atmire_path }}/private"
     state: directory
@@ -73,7 +77,7 @@
     group: "{{ deploy_user }}"
   when: running_on_server
 
-- name: oar | ensure private repo config
+- name: dataspace | ensure private repo config
   template:
     src: private.cfg.j2
     dest: "{{ atmire_path }}/private/config"
@@ -81,7 +85,7 @@
     group: "{{ deploy_user }}"
   when: running_on_server
 
-- name: oar | ensure {{ deploy_user }} pgpass
+- name: dataspace | ensure {{ deploy_user }} pgpass
   template:
     src: pg_pass.j2
     dest: "/home/{{ deploy_user }}/.pgpass"
@@ -89,7 +93,7 @@
     owner: "{{ deploy_user }}"
   changed_when: false
 
-- name: oar | ensure private directory exists
+- name: dataspace | ensure private directory exists
   file:
     path: "{{ atmire_path }}/private"
     state: directory
