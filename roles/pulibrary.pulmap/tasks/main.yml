@@ -22,15 +22,6 @@
     state: mounted
   when: running_on_server
 
-- name: Pulmap | Create a sitemap cron job
-  cron:
-    name: Regenerate the Sitemap weekly
-    hour: 23
-    weekday: 3
-    job: "/bin/bash -l -c 'export PATH=\"/usr/local/bin/:$PATH\" && cd /opt/{{rails_app_directory}}/current && RAILS_ENV=production bundle exec rake sitemap:refresh >> /tmp/pulmap_sitemap.log 2>&1'"
-    minute: 0
-    user: "{{ deploy_user }}"
-
 - name: Pulmap | Create cloud_config directory
   file:
     path: "/home/{{ deploy_user }}/cloud_config"
@@ -41,21 +32,3 @@
     src: files/{{ rails_app_env }}-google_cloud_credentials.json
     dest: /home/{{ deploy_user }}/cloud_config/google_cloud_credentials.json
   when: running_on_server
-
-## Symlink to Mounts
-- name: Pulmap| Create a sitemap cron job
-  cron:
-    name: Regenerate the Sitemap weekly
-    hour: 23
-    weekday: 3
-    job: "/bin/bash -l -c 'export PATH=\"/usr/local/bin/:$PATH\" && cd /opt/{{ rails_app_directory }}/current && RAILS_ENV=production bundle exec rake sitemap:refresh >> /tmp/pulmap_sitemap.log 2>&1'"
-    minute: 0
-    user: "{{ deploy_user }}"
-
-- name: Pulmap | precache thumbnails cron job
-  cron:
-    name: Precache thumbnails nightly
-    hour: 3
-    job: "/bin/bash -l -c 'export PATH=\"/usr/local/bin/:$PATH\" && cd /opt/{{rails_app_directory}}/current && RAILS_ENV=production bundle exec rake pulmap:thumbnails:precache_all'"
-    minute: 0
-    user: "{{ deploy_user }}"
