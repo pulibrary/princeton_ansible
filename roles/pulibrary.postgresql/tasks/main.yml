@@ -5,15 +5,14 @@
     state: present
 
 - name: PostgreSQL | Add PostgreSQL repository apt-key
-  shell: >
-      set -o pipefail |
-      wget --quiet -O - {{ postgresql_apt_key_url }} | sudo apt-key add -
-  changed_when: false
+  apt_key:
+    url: "{{ postgresql_apt_key_url }}"
+    state: present
 
 - name: add postgresql repository
   apt_repository:
-    repo: 'deb http://apt.postgresql.org/pub/repos/apt/ {{ ansible_distribution_release }}-pgdg main'
-    update_cache: 'yes'
+    repo: "deb http://apt.postgresql.org/pub/repos/apt/ {{ ansible_distribution_release }}-pgdg main"
+    update_cache: true
     state: present
 
 - name: install postgresql server packages
