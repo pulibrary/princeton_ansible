@@ -47,12 +47,12 @@
 
 - name: Check for the sites files directory.
   stat:
-    path: "{{ drupal_docroot }}/sites/default/files"
+    path: "{{ drupal_docroot }}/current/sites/default/files"
   register: file_dir_exists
 
 - name: Drupal | Give appropriate permissions for files directory
   file:
-    dest: "{{ drupal_docroot }}/sites/default/files"
+    dest: "{{ drupal_docroot }}/current/sites/default/files"
     recurse: true
     state: directory
     mode: a+w
@@ -119,3 +119,12 @@
     path: "/home/{{ deploy_user }}/.drush/cache"
     owner: "{{ deploy_user }}"
     group: "{{ drupal_web_owner }}"
+
+- name: dspace | add bash_profile
+  blockinfile:
+    path: "/home/{{ deploy_user }}/.bashrc"
+    marker: "# {mark} ANSIBLE MANAGED BLOCK"
+    block: |
+      export PATH={{ drupal_docroot }}/current/vendor/bin/:$PATH
+    insertbefore: "# If not running interactively, don't do anything"
+  when: running_on_server
