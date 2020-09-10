@@ -52,6 +52,16 @@ postgresql_settings:
     value: "on"
   - name: autovacuum_max_workers
     value: 3
+  - name: wal_level
+    value: "replica"
+  - name: max_wal_senders
+    value: 10
+  - name: max_replication_slots
+    value: 10
+  - name: archive_mode
+    value: on
+  - name: archive_command
+    value: "rsync -a %p barman@{{ barman_leader_db_ip }}:/var/lib/barman/ssh/incoming/%f"
 
 postgresql_ext_install_postgis: true
 postgresql_databases:
@@ -63,6 +73,16 @@ postgresql_users:
     db: "postgres"
     priv: "ALL"
     role_attr_flags: "SUPERUSER"
+  - name: barman
+    password: "{{ vault_barman_admin_password }}"
+    db: "postgres"
+    priv: "ALL"
+    role_attr_flags: "SUPERUSER"
+  - name: streaming_barman
+    password: "{{ vault_streaming_barman_password }}"
+    db: "postgres"
+    priv: "ALL"
+    role_attr_flags: "REPLICATION"
   - name: replicant
     password: "{{ vault_replicant_password }}"
     db: replicant
@@ -79,6 +99,10 @@ postgresql_hba_entries:
     user: postgres
     method: ident
   - type: local
+    database: all
+    user: barman
+    method: ident
+  - type: local
     database: replicant
     user: replicant
     method: md5
@@ -89,8 +113,18 @@ postgresql_hba_entries:
     method: ident
   - type: host
     database: all
+    user: barman
+    address: 127.0.0.1/32
+    method: ident
+  - type: host
+    database: all
     user: postgres
     address: "{{ leader_db_ip }}/32"
+    method: md5
+  - type: host
+    database: all
+    user: postgres
+    address: "{{ barman_leader_db_ip }}/32"
     method: md5
   - type: host
     database: replication
@@ -108,8 +142,18 @@ postgresql_hba_entries:
     address: "{{ standby_db_ip }}/32"
     method: md5
   - type: host
+    database: replication
+    user: streaming_barman
+    address: "{{ barman_leader_db_ip }}/32"
+    method: md5
+  - type: host
     database: all
     user: postgres
+    address: 127.0.0.1/32
+    method: md5
+  - type: host
+    database: all
+    user: barman
     address: 127.0.0.1/32
     method: md5
   - type: host
@@ -131,6 +175,16 @@ postgresql_hba_entries:
     database: all
     user: pgbouncer_user
     address: "{{ standby_db_ip }}/32"
+    method: md5
+  - type: host
+    database: all
+    user: barman
+    address: "{{ barman_leader_db_ip }}/32"
+    method: md5
+  - type: host
+    database: all
+    user: streaming_barman
+    address: "{{ barman_leader_db_ip }}/32"
     method: md5
 
 datadog_api_key: "{{ vault_datadog_key }}"
