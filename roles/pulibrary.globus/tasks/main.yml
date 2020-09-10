@@ -1,0 +1,25 @@
+---
+# tasks file for roles/pulibrary.globus
+- name: globus | install globus repo
+  apt:
+    deb: "{{ globus_dl_url }}/gt6/stable/installers/repo/deb/globus-toolkit-repo_latest_all.deb"
+
+- name: globus | uncomment stable repo
+  replace:
+    path: "{{ item }}"
+    regexp: "^#.(deb.*)"
+    replace: '\1'
+  loop:
+    - "/etc/apt/sources.list.d/globus-toolkit-6-stable-bionic.list"
+    - "/etc/apt/sources.list.d/globus-connect-server-stable-bionic.list"
+
+- name: globus | sign key for repo
+  apt_key:
+    file: "/usr/share/globus-toolkit-repo/RPM-GPG-KEY-Globus.gpg"
+    state: present
+
+- name: globus | install globus
+  apt:
+    name: globus-connect-server54
+    state: present
+    update_cache: true
