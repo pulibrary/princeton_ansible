@@ -1,42 +1,34 @@
 ---
-- name: Install dependencies
-  apt: name={{item}} state=present
-  with_items:
-    - cifs-utils
-- name: Copy smb credentials
-  copy: src=files/{{item}} dest=/etc/{{item}}
+- name: Pulmap | Install dependencies
+  apt:
+    name: ["cifs-utils"]
+    state: present
+    update_cache: true
+
+- name: Pulmap | Copy smb credentials
+  copy:
+    src: files/{{ item }}
+    dest: "/etc/{{ item }}"
   with_items:
     - maplab.smb.credentials
-- name: Create maplab mount
+  when: running_on_server
+
+- name: Pulmap | Create maplab mount
   mount:
     name: /mnt/maplab
     src: //diglibdata1.princeton.edu/maplab
     fstype: cifs
-    opts: 'credentials=/etc/maplab.smb.credentials,uid={{deploy_user_uid}}'
+    opts: "credentials=/etc/maplab.smb.credentials,uid={{ deploy_user_uid }}"
     state: mounted
-- name: Create a sitemap cron job
-  cron:
-    name: Regenerate the Sitemap weekly
-    hour: 23
-    weekday: 3
-    job: "/bin/bash -l -c 'export PATH=\"/usr/local/bin/:$PATH\" && cd /opt/{{rails_app_directory}}/current && RAILS_ENV=production bundle exec rake sitemap:refresh >> /tmp/pulmap_sitemap.log 2>&1'"
-    minute: 0
-    user: '{{deploy_user}}'
-- name: Create cloud_config directory
+  when: running_on_server
+
+- name: Pulmap | Create cloud_config directory
   file:
-    path: '/home/{{deploy_user}}/cloud_config'
-    state: 'directory'
-- name: Install Google Cloud Authorization
-  copy: src=files/{{rails_app_env}}-google_cloud_credentials.json dest=/home/{{deploy_user}}/cloud_config/google_cloud_credentials.json
-## Symlink to Mounts
-- name: Create symlinks
-  file:
-    src: '{{item.src}}'
-    dest: '{{item.link}}'
-    owner: '{{deploy_user}}'
-    group: '{{deploy_user}}'
-    state: 'link'
-    force: true
-  with_items:
-    - src: '/mnt/maplab'
-      link: '/opt/{{rails_app_directory}}/shared/maplab'
+    path: "/home/{{ deploy_user }}/cloud_config"
+    state: directory
+
+- name: Pulmap | Install Google Cloud Authorization
+  copy:
+    src: files/{{ rails_app_env }}-google_cloud_credentials.json
+    dest: /home/{{ deploy_user }}/cloud_config/google_cloud_credentials.json
+  when: running_on_server
