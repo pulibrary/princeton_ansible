@@ -8,17 +8,16 @@ testinfra_hosts = testinfra.utils.ansible_runner.AnsibleRunner(
 
 
 @pytest.mark.parametrize("name", [
-    "cifs-utils",
-    "libmysqlclient-dev",
-    "python-mysqldb",
+    "samba-common",
+    "samba",
     ])
-def test_for_bibdata_software(host, name):
+def test_for_samba_packages(host, name):
     pkg = host.package(name)
 
     assert pkg.is_installed
 
 
-def test_for_approvals_mnt_directory(host):
+def test_for_hr_mnt_directory(host):
     f = host.file('/mnt/dms-smbserve')
 
     assert f.exists
