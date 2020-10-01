@@ -28,6 +28,7 @@
 
 - name: Copy smb credentials
   copy: src=files/{{item}} dest=/etc/{{item}}
+  when: running_on_server
   with_items:
     - pudl.smb.credentials
     - archives.smb.credentials
@@ -48,6 +49,7 @@
     fstype: cifs
     opts: 'credentials=/etc/plum_mount.smb.credentials,uid={{deploy_user_uid}},gid=33'
     state: mounted
+  when: running_on_server
 
 - name: Create mount to pudl binaries (for migration)
   mount:
@@ -56,6 +58,7 @@
     fstype: cifs
     opts: 'credentials=/etc/pudl.smb.credentials,uid={{deploy_user_uid}},gid=33'
     state: mounted
+  when: running_on_server
 
 - name: Create mount to scratch space (for bulk ingests)
   mount:
@@ -64,8 +67,10 @@
     fstype: cifs
     opts: 'credentials=/etc/plum_mount.smb.credentials,uid={{deploy_user_uid}},gid=33'
     state: mounted
+  when: running_on_server
 
 - name: Create cantaloupe images mount
+  when: running_on_server
   mount:
     name: '/mnt/{{figgy_cantaloupe_images_mount}}/data'
     src: '//{{figgy_cantaloupe_images_mount}}.princeton.edu/data'
@@ -79,6 +84,7 @@
     state: directory
 
 - name: Create diglibdata mounts (hydra sources)
+  when: running_on_server
   mount:
     name: /mnt/hydra_sources/{{item}}
     src: //diglibdata1.princeton.edu/{{item}}
@@ -92,6 +98,7 @@
     - maplab
 
 - name: Create mount to studio (hydra sources)
+  when: running_on_server
   mount:
     name: /mnt/hydra_sources/studio
     src: //libserv64.princeton.edu/studio
@@ -100,6 +107,7 @@
     state: absent
 
 - name: Create mount to studio (hydra sources)
+  when: running_on_server
   mount:
     name: /mnt/hydra_sources/studio_new
     src: //lib-dps-server.princeton.edu/studio
@@ -108,6 +116,7 @@
     state: mounted
 
 - name: Create mount to music reserves (hydra sources)
+  when: running_on_server
   mount:
     name: /mnt/hydra_sources/music
     src: '//diglibdata1.princeton.edu/music'
@@ -116,6 +125,7 @@
     state: mounted
 
 - name: Create mount to numismatics (hydra sources)
+  when: running_on_server
   mount:
     name: /mnt/hydra_sources/numismatics
     src: '//diglibdata1.princeton.edu/numismatics'
@@ -124,6 +134,7 @@
     state: mounted
 
 - name: Create geoserver derivatives mount
+  when: running_on_server
   mount:
     name: /mnt/geoserver/figgy_geo_data
     src: //geoserv1.princeton.edu/figgy_geo_data
@@ -132,6 +143,7 @@
     state: mounted
 
 - name: Create ILLiad mounts
+  when: running_on_server
   mount:
     name: /mnt/illiad/{{item}}
     src: //lib-illsql.princeton.edu/{{item}}
