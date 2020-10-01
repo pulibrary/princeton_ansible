@@ -1,17 +1,17 @@
 ---
 - name: Create repository directory structure
   file:
-    path: '/opt/{{item}}'
+    path: '/opt/{{ item }}'
     state: 'directory'
-    owner: '{{deploy_user}}'
-    group: '{{deploy_user}}'
+    owner: '{{ deploy_user }}'
+    group: '{{ deploy_user }}'
   with_items:
     - 'repository'
 
 ## Create Mounts
 - name: Create mount directories
   file:
-    path: '/mnt/{{item}}'
+    path: '/mnt/{{ item }}'
     state: 'directory'
   with_items:
     - hydra_sources
@@ -27,7 +27,7 @@
     - 'illiad/cdl_scans'
 
 - name: Copy smb credentials
-  copy: src=files/{{item}} dest=/etc/{{item}}
+  copy: src=files/{{ item }} dest=/etc/{{ item }}
   when: running_on_server
   with_items:
     - pudl.smb.credentials
@@ -47,7 +47,7 @@
     name: '/mnt/diglibdata/hydra_binaries'
     src: '//diglibdata1.princeton.edu/hydra/binaries'
     fstype: cifs
-    opts: 'credentials=/etc/plum_mount.smb.credentials,uid={{deploy_user_uid}},gid=33'
+    opts: 'credentials=/etc/plum_mount.smb.credentials,uid={{ deploy_user_uid }},gid=33'
     state: mounted
   when: running_on_server
 
@@ -56,7 +56,7 @@
     name: '/mnt/diglibdata/pudl'
     src: '//diglibdata1.princeton.edu/pudl'
     fstype: cifs
-    opts: 'credentials=/etc/pudl.smb.credentials,uid={{deploy_user_uid}},gid=33'
+    opts: 'credentials=/etc/pudl.smb.credentials,uid={{ deploy_user_uid }},gid=33'
     state: mounted
   when: running_on_server
 
@@ -65,31 +65,31 @@
     name: '/mnt/hydra_sources/ingest_scratch'
     src: '//diglibdata1.princeton.edu/hydra/binaries/ingest_scratch'
     fstype: cifs
-    opts: 'credentials=/etc/plum_mount.smb.credentials,uid={{deploy_user_uid}},gid=33'
+    opts: 'credentials=/etc/plum_mount.smb.credentials,uid={{ deploy_user_uid }},gid=33'
     state: mounted
   when: running_on_server
 
 - name: Create cantaloupe images mount
   when: running_on_server
   mount:
-    name: '/mnt/{{figgy_cantaloupe_images_mount}}/data'
-    src: '//{{figgy_cantaloupe_images_mount}}.princeton.edu/data'
+    name: '/mnt/{{ figgy_cantaloupe_images_mount }}/data'
+    src: '//{{ figgy_cantaloupe_images_mount }}.princeton.edu/data'
     fstype: cifs
-    opts: 'credentials=/etc/libimages2.smb.credentials,uid={{deploy_user_uid}},gid={{deploy_user_uid}}'
+    opts: 'credentials=/etc/libimages2.smb.credentials,uid={{ deploy_user_uid }},gid={{ deploy_user_uid }}'
     state: mounted
 
 - name: Ensure figgy derivatives mount directory exists
   file:
-    path: '{{figgy_derivatives_mount}}'
+    path: '{{ figgy_derivatives_mount }}'
     state: directory
 
 - name: Create diglibdata mounts (hydra sources)
   when: running_on_server
   mount:
-    name: /mnt/hydra_sources/{{item}}
-    src: //diglibdata1.princeton.edu/{{item}}
+    name: /mnt/hydra_sources/{{ item }}
+    src: //diglibdata1.princeton.edu/{{ item }}
     fstype: cifs
-    opts: 'credentials=/etc/{{item}}.smb.credentials,uid={{deploy_user_uid}}'
+    opts: 'credentials=/etc/{{ item }}.smb.credentials,uid={{ deploy_user_uid }}'
     state: mounted
   with_items:
     - pudl
@@ -103,7 +103,7 @@
     name: /mnt/hydra_sources/studio
     src: //libserv64.princeton.edu/studio
     fstype: cifs
-    opts: 'credentials=/etc/studio.smb.credentials,uid={{deploy_user_uid}}'
+    opts: 'credentials=/etc/studio.smb.credentials,uid={{ deploy_user_uid }}'
     state: absent
 
 - name: Create mount to studio (hydra sources)
@@ -112,7 +112,7 @@
     name: /mnt/hydra_sources/studio_new
     src: //lib-dps-server.princeton.edu/studio
     fstype: cifs
-    opts: 'credentials=/etc/studio.new.smb.credentials,uid={{deploy_user_uid}}'
+    opts: 'credentials=/etc/studio.new.smb.credentials,uid={{ deploy_user_uid }}'
     state: mounted
 
 - name: Create mount to music reserves (hydra sources)
@@ -121,7 +121,7 @@
     name: /mnt/hydra_sources/music
     src: '//diglibdata1.princeton.edu/music'
     fstype: cifs
-    opts: 'credentials=/etc/plum_mount.smb.credentials,uid={{deploy_user_uid}},gid=33'
+    opts: 'credentials=/etc/plum_mount.smb.credentials,uid={{ deploy_user_uid }},gid=33'
     state: mounted
 
 - name: Create mount to numismatics (hydra sources)
@@ -130,7 +130,7 @@
     name: /mnt/hydra_sources/numismatics
     src: '//diglibdata1.princeton.edu/numismatics'
     fstype: cifs
-    opts: 'credentials=/etc/numis.smb.credentials,uid={{deploy_user_uid}},gid=33'
+    opts: 'credentials=/etc/numis.smb.credentials,uid={{ deploy_user_uid }},gid=33'
     state: mounted
 
 - name: Create geoserver derivatives mount
@@ -139,16 +139,16 @@
     name: /mnt/geoserver/figgy_geo_data
     src: //geoserv1.princeton.edu/figgy_geo_data
     fstype: cifs
-    opts: 'credentials=/etc/geoserver.smb.credentials,uid={{deploy_user_uid}}'
+    opts: 'credentials=/etc/geoserver.smb.credentials,uid={{ deploy_user_uid }}'
     state: mounted
 
 - name: Create ILLiad mounts
   when: running_on_server
   mount:
-    name: /mnt/illiad/{{item}}
-    src: //lib-illsql.princeton.edu/{{item}}
+    name: /mnt/illiad/{{ item }}
+    src: //lib-illsql.princeton.edu/{{ item }}
     fstype: cifs
-    opts: 'credentials=/etc/illiad.smb.credentials,uid={{deploy_user_uid}},gid=33'
+    opts: 'credentials=/etc/illiad.smb.credentials,uid={{ deploy_user_uid }},gid=33'
     state: mounted
   with_items:
     - images
@@ -158,22 +158,22 @@
 ## Symlink to Mounts
 - name: Create symlinks
   file:
-    src: '{{item.src}}'
-    dest: '{{item.link}}'
-    owner: '{{deploy_user}}'
-    group: '{{deploy_user}}'
+    src: '{{ item.src }}'
+    dest: '{{ item.link }}'
+    owner: '{{ deploy_user }}'
+    group: '{{ deploy_user }}'
     state: 'link'
     force: true
   with_items:
     - src: '/mnt/hydra_sources'
-      link: '/opt/{{rails_app_directory}}/shared/staged_files'
-    - src: '{{figgy_repository_mount}}'
+      link: '/opt/{{ rails_app_directory }}/shared/staged_files'
+    - src: '{{ figgy_repository_mount }}'
       link: '/opt/repository/files'
-    - src: '{{figgy_derivatives_mount}}'
+    - src: '{{ figgy_derivatives_mount }}'
       link: '/opt/repository/derivatives'
-    - src: '{{figgy_geo_derivatives_mount}}'
+    - src: '{{ figgy_geo_derivatives_mount }}'
       link: '/opt/repository/geo_derivatives'
-    - src: '{{figgy_stream_derivatives_mount}}'
+    - src: '{{ figgy_stream_derivatives_mount }}'
       link: '/opt/repository/stream_derivatives'
 
 - name: Install GDAL
@@ -183,13 +183,13 @@
 
 ## Simple tiles dependency
 - name: Compile simple-tiles from source
-  shell: curl -L {{ simple_tiles_url }} | tar -xz && cd simple-tiles-{{simple_tiles_version}} && ./configure && make && make install
+  shell: curl -L {{ simple_tiles_url }} | tar -xz && cd simple-tiles-{{ simple_tiles_version }} && ./configure && make && make install
   args:
     creates: /usr/local/lib/libsimple-tiles.so
 - name: Create cloud_config directory
   file:
-    path: '/home/{{deploy_user}}/cloud_config'
+    path: '/home/{{ deploy_user }}/cloud_config'
     state: 'directory'
 - name: Install Google Cloud Authorization
   when: running_on_server
-  copy: src=files/{{rails_app_env}}-google_cloud_credentials.json dest=/home/{{deploy_user}}/cloud_config/google_cloud_credentials.json
+  copy: src=files/{{ rails_app_env }}-google_cloud_credentials.json dest=/home/{{ deploy_user }}/cloud_config/google_cloud_credentials.json
