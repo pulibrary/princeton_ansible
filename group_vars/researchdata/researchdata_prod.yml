@@ -13,3 +13,33 @@ drupal_db_name: 'researchdata_prod'
 drupal_db_password: '{{ researchdata_password }}'
 drupal_base_url: 'researchdata-prod.princeton.edu'
 drupal_web_owner: 'nginx'
+datadog_api_key: "{{ vault_datadog_key }}"
+datadog_service_name: researchdata
+datadog_environment: prod
+
+force_vhosts_update: true
+datadog_enabled: true
+datadog_config:
+  log_enabled: true
+  apm_enabled: true
+datadog_checks:
+  tls:
+    init_config:
+    instances:
+      - server: researchdata.princeton.edu
+        port: 443
+  researchdata_datadog_nginx_check:
+    init_config:
+    logs:
+      - type: file
+        path: /var/log/nginx/access.log
+        service: researchdata
+        source: nginx
+        sourcecategory: http_web_access
+        tags: "researchdata, env:prod, role:reserachdata"
+      - type: file
+        path: /var/log/nginx/error.log
+        service: researchdata
+        source: nginx
+        sourcecategory: http_web_access
+        tags: "researchdata, env:prod, role:researchdata"
