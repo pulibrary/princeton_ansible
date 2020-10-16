@@ -7,7 +7,7 @@ GIT = REPO.git
 
 
 def changed_files():
-    return GIT.diff('--name-only', 'master').splitlines()
+    return GIT.diff('--name-only', 'main').splitlines()
 
 
 def role_name(path):
@@ -62,7 +62,7 @@ def run_test(role):
 
 
 def evaluate(role):
-    if current_branch() == 'master':
+    if current_branch() == 'main':
         run_test(role)
     elif role in changed_roles():
         run_test(role)
