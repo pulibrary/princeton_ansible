@@ -1,0 +1,77 @@
+---
+- hosts: monitor_backends
+  collections:
+    - sensu.sensu_go
+  remote_user: pulsys
+  vars_files:
+    - ../group_vars/sensu/production.yml
+    - ../group_vars/sensu/vault.yml
+  become: true
+
+  tasks:
+    - name: install sensu backend
+      include_role:
+        name: sensu.sensu_go.install
+      vars:
+        components: [ sensu-go-cli ]
+
+    - name: Install sensu backend
+      include_role:
+        name: sensu.sensu_go.backend
+      vars:
+        version: 6.1.0
+
+- hosts: monitor_agents
+  collections:
+    - sensu.sensu_go
+  remote_user: pulsys
+  vars_files:
+    - ../group_vars/sensu/production.yml
+    - ../group_vars/sensu/vault.yml
+  become: true
+
+  tasks:
+- name: configure system monitor
+  hosts: monitor_agents
+  remote_user: pulsys
+  vars_files:
+    - ../group_vars/sensu/production.yml
+    - ../group_vars/sensu/vault.yml
+  become: true
+
+  tasks:
+    - name: Add subscriptions to agent entity
+      sensu.sensu_go.entity:
+        auth: &auth
+          url: http://{{ groups['monitor_backends'][0] }}:8080
+        name: "pul_agent"
+        entity_class: agent
+        deregister: true
+        subscriptions:
+          - linux
+
+    - name: Create system profile asset
+      sensu.sensu_go.bonsai_asset:
+        auth: *auth
+        name: sensu/system-profile-linux
+        version: 0.10.1
+
+    - name: Create sensu ntp check
+      sensu.sensu_go.check:
+        auth: *auth
+        name: ntp
+        runtime_assets: sensu/monitoring-plugins
+        command: check_ntp_time -H time.nist.gov --warn 0.5 --critical 1.0
+        output_metric_format: nagios_perfdata
+        publish: true
+        interval: 30
+        timeout: 10
+        subscriptions:
+          - linux
+
+  post_tasks:
+    - name: tell everyone on slack you ran an ansible playbook
+      slack:
+        token: "{{ vault_pul_slack_token }}"
+        msg: "{{ inventory_hostname }} completed"
+        channel: #server-alerts
