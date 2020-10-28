@@ -1,19 +1,17 @@
 <VirtualHost  *:80>
-    ServerName {{ sites[ firestone_renovations_index].server_name }}.princeton.edu
-    ServerAlias  {{ sites[ firestone_renovations_index].server_name }}
-    DocumentRoot {{ sites[ firestone_renovations_index].doc_root }}
+    ServerName {{ lib_static_site.server_name }}.princeton.edu
+    ServerAlias  {{ lib_static_site.server_name }}
+    DocumentRoot {{ lib_static_site.doc_root }}
 
-    <Directory {{ sites[ firestone_renovations_index].doc_root }}>
-        AllowOverride All
-        Options -Indexes +FollowSymLinks
-        Require all granted
-
-    </Directory>
-
-    Alias /republic  {{ sites[republic_index].doc_root }}
-    <Directory "{{ sites[republic_index].doc_root }}">
-      Options Indexes FollowSymLinks MultiViews
+    {% for site in sites -%}
+    <Directory "{{ site.doc_root }}">
+      Options {{ site.options | default("-Indexes +FollowSymLinks") }}
       AllowOverride All
       Require all granted
     </Directory>
+    {% endfor %}
+
+    {% for site in sites -%}
+    Alias /{{ site.alias }} {{ site.doc_root }}
+    {% endfor %}
 </VirtualHost>
