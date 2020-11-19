@@ -1,4 +1,5 @@
 import os
+import pytest
 
 import testinfra.utils.ansible_runner
 
@@ -22,3 +23,12 @@ def test_nginxplus_user(host):
     assert user.group == 'www-data'
     assert user.shell == '/usr/sbin/nologin'
     assert user.home == '/var/www'
+
+
+@pytest.mark.parametrize("line",
+                         ["'^example.com$'",
+                          "'^example-also.com$'"])
+def test_for_libwww_sudoer(host, line):
+    file = host.file("//home/deploy/settings.php")
+
+    assert file.contains(line)
