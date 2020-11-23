@@ -3,6 +3,7 @@
   file:
     path: "/etc/apache2/ssl/{{ item }}"
     state: directory
+    mode: '0755'
   with_items:
     - private
     - certs
@@ -26,6 +27,7 @@
   template:
     src: virtualhost.conf.j2
     dest: "/etc/apache2/sites-available/{{ deploy_ojs_url }}.conf"
+    mode: '0644'
   changed_when: false
 
 - name: ojs | deactivate ojs virtualhost
@@ -43,12 +45,14 @@
   template:
     src: "config.inc.php.j2"
     dest: "{{ deploy_ojs_dest }}/config.inc.php"
+    mode: '0644'
   changed_when: false
 
 - name: ojs | configure shibboleth
   template:
     src: shibboleth2.xml.j2
     dest: /etc/shibboleth/shibboleth2.xml
+    mode: '0644'
   changed_when: false
 
 - name: ojs | generate signing key

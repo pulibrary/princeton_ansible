@@ -268,3 +268,30 @@ ansible-vault rekey /path/to/file/webhost_priv.key
 ```
 
 update the file on lastpass so others can use
+
+## Upgrading Ansible version
+
+   1. In a pipenv shell
+      ```bash
+      pipenv sync
+      pipenv shell
+      ```
+
+   1. Upgrade ansible
+      ```
+      pipenv update ansible
+      ```
+
+      If this fails you may need to 
+      ```
+      pipenv uninstall ansible
+      pipenv install ansible
+      ```
+
+   1. Create the  CI ansible environment
+      ```
+      pipenv lock -r > requirements.txt
+      ```
+
+   1.  Create a PR and commit
+   

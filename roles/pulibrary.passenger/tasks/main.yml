@@ -46,12 +46,14 @@
   template:
     src: nginx.conf.j2
     dest: /etc/nginx/nginx.conf
+    mode: '0644'
   notify: restart nginx
 
 - name: Phusion | Copy Passenger configuration into place.
   template:
     src: passenger.conf.j2
     dest: /etc/nginx/passenger.conf
+    mode: '0644'
   notify: restart nginx
   when: ansible_distribution == 'Ubuntu' and ansible_distribution_major_version|int < 18
 
@@ -59,6 +61,7 @@
   template:
     src: passenger.j2
     dest: /etc/nginx/sites-available/passenger
+    mode: '0644'
   notify: restart nginx
 
 - name: Phusion | Ensure passenger virtual host is enabled.
@@ -71,6 +74,7 @@
   file:
     path: /etc/nginx/sites-enabled/default
     state: absent
+    mode: '0644'
   when: nginx_remove_default_vhost
   notify:
     - restart nginx
