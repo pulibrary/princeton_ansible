@@ -15,6 +15,7 @@
     dest: "/home/{{ deploy_user }}/.env.local"
     owner: "{{ deploy_user }}"
     group: "{{ deploy_user }}"
+    mode: 0644
   when: not env_home_exists.stat.exists or force_settings
 
 - name: Add apache rules for discovery utils
@@ -41,6 +42,7 @@
     dest: '/home/deploy/{{ drupal_dbimport_file }}'
     owner: '{{ deploy_user }}'
     group: '{{ deploy_user }}'
+    mode: 'preserve'
   when: (drupal_dbimport_file is defined) and (inventory_hostname ==  groups[group_names[0]][0])
 
 - name: Import database from local dump file
@@ -114,6 +116,7 @@
     group: "{{ deploy_user }}"
     recurse: true
     follow: false
+    mode: 0755
   become: true
   when: not special_collections_drupal_docroot_exists.stat.exists
 
@@ -128,6 +131,7 @@
     dest: "/home/{{ deploy_user }}/special_collections_settings.php"
     owner: "{{ deploy_user }}"
     group: "{{ deploy_user }}"
+    mode: 0644
   when: not special_collections_settings_php_home_exists.stat.exists or force_settings
 
 - name: Add apache rules for special collections

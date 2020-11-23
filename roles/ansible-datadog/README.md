@@ -61,7 +61,7 @@ Example Playbooks
 ```yml
 - hosts: servers
   roles:
-    - { role: Datadog.datadog, become: yes }  # On Ansible < 1.9, use `sudo: yes` instead of `become: yes`
+    - { role: Datadog.datadog, become: true }  # On Ansible < 1.9, use `sudo: yes` instead of `become: true`
   vars:
     datadog_api_key: "123456"
     datadog_agent_version: "1:6.0.0-1" # for apt-based platforms, use a `6.0.0-1` format on yum-based platforms
@@ -122,7 +122,7 @@ Example Playbooks
 ```yml
 - hosts: servers
   roles:
-    - { role: Datadog.datadog, become: yes, datadog_api_key: "mykey" }  # On Ansible < 1.9, use `sudo: yes` instead of `become: yes`
+    - { role: Datadog.datadog, become: true, datadog_api_key: "mykey" }  # On Ansible < 1.9, use `sudo: yes` instead of `become: true`
 ```
 
 Known Issues and Workarounds
@@ -137,13 +137,13 @@ to the playbooks that make use of the present role:
 - hosts: all
   pre_tasks:
     - name: Debian Stretch requires dirmngr package to be installed in order to use apt_key
-      become: yes  # On Ansible < 1.9, use `sudo: yes` instead of `become: yes`
+      become: true  # On Ansible < 1.9, use `sudo: yes` instead of `become: true`
       apt:
         name: dirmngr
         state: present
 
   roles:
-    - { role: Datadog.datadog, become: yes, datadog_api_key: "mykey" }  # On Ansible < 1.9, use `sudo: yes` instead of `become: yes`
+    - { role: Datadog.datadog, become: true, datadog_api_key: "mykey" }  # On Ansible < 1.9, use `sudo: yes` instead of `become: true`
 ```
 
 License

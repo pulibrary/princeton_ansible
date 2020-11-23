@@ -40,6 +40,7 @@
   template:
     src: "{{ tomcat_template_server }}"
     dest: "{{ tomcat_install_path }}/apache-tomcat-{{ tomcat_version }}/conf/server.xml"
+    mode: 0640
   notify: restart tomcat
 
 - name: apache_tomcat | user roles to be enabled
@@ -52,6 +53,7 @@
   template:
     src: "{{ tomcat_template_users }}"
     dest: "{{ tomcat_install_path }}/apache-tomcat-{{ tomcat_version }}/conf/tomcat-users.xml"
+    mode: 0640
   notify: restart tomcat
 
 - name: apache_tomcat | create symlink {{ tomcat_install_path }}/apache-tomcat-{{ tomcat_version }} to {{ tomcat_install_path }}/{{ tomcat_service_name }}
@@ -67,12 +69,14 @@
   file:
     path: "/usr/lib/systemd/system"
     state: directory
+    mode: 0755
   when: running_on_server
 
 - name: apache_tomcat | configure service file {{ tomcat_service_name }}.service
   template:
     src: "{{ tomcat_template_systemd_service }}"
     dest: "/usr/lib/systemd/system/{{ tomcat_service_name }}.service"
+    mode: 0644
   when: running_on_server
   notify: restart tomcat
 

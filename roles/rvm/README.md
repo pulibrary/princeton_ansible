@@ -99,7 +99,7 @@ If you need to pass a list of ruby versions, pass it in an array like so.
   roles:
     - { role: rvm.ruby,
         tags: ruby,
-        become: yes,
+        become: true,
 
         rvm1_rubies: ['ruby-2.2.5','ruby-2.3.1'],
         rvm1_install_flags: '--auto-dotfiles',     # Remove --user-install from defaults
