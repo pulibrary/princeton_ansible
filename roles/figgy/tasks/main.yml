@@ -5,6 +5,7 @@
     state: 'directory'
     owner: '{{ deploy_user }}'
     group: '{{ deploy_user }}'
+    mode: '0644'
   with_items:
     - 'repository'
 
@@ -13,6 +14,7 @@
   file:
     path: '/mnt/{{ item }}'
     state: 'directory'
+    mode: '0755'
   with_items:
     - hydra_sources
     - figgy_binaries
@@ -27,7 +29,10 @@
     - 'illiad/cdl_scans'
 
 - name: Copy smb credentials
-  copy: src=files/{{ item }} dest=/etc/{{ item }}
+  copy:
+    src: "files/{{ item }}"
+    dest: "/etc/{{ item }}"
+    mode: '0644'
   when: running_on_server
   with_items:
     - pudl.smb.credentials
@@ -187,10 +192,16 @@
   shell: curl -L {{ simple_tiles_url }} | tar -xz && cd simple-tiles-{{ simple_tiles_version }} && ./configure && make && make install
   args:
     creates: /usr/local/lib/libsimple-tiles.so
+
 - name: Create cloud_config directory
   file:
     path: '/home/{{ deploy_user }}/cloud_config'
     state: 'directory'
+    mode: '0755'
+
 - name: Install Google Cloud Authorization
   when: running_on_server
-  copy: src=files/{{ rails_app_env }}-google_cloud_credentials.json dest=/home/{{ deploy_user }}/cloud_config/google_cloud_credentials.json
+  copy:
+    src: "files/{{ rails_app_env }}-google_cloud_credentials.json"
+    dest: "/home/{{ deploy_user }}/cloud_config/google_cloud_credentials.json"
+    mode: '0644'
