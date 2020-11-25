@@ -1,0 +1,21 @@
+---
+---
+- name: Verify
+  hosts: all
+  gather_facts: false
+  tasks:
+  - name: test for libwww sudoer
+    lineinfile:
+      path: "/etc/sudoers"
+      line: "{{ item }}"
+      state: present
+    loop:
+      - "deploy ALL=(ALL) NOPASSWD: /usr/sbin/service apache2 *"
+      - "Runas_Alias WWW = www-data"
+      - "deploy ALL = (WWW) NOPASSWD: ALL"
+      - "deploy ALL=(ALL) NOPASSWD: /bin/chown -R www-data /var/www/drupal*"
+      - "deploy ALL=(ALL) NOPASSWD: /bin/chown -R deploy /var/www/drupal*"
+    check_mode: true
+    register: present
+    failed_when:
+      - present is changed
