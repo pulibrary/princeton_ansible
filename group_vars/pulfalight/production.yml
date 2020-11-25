@@ -79,3 +79,30 @@ redis__server_default_configuration:
   maxmemory: "{{ redis__server_maxmemory }}"
   maxmemory-policy: "{{ redis__server_maxmemory_policy }}"
   maxmemory-samples: "{{ redis__server_maxmemory_samples }}"
+datadog_api_key: "{{ vault_datadog_key }}"
+
+datadog_config:
+  log_enabled: true
+  apm_enabled: true
+  process_config:
+    enabled: true
+  apm_config:
+    analyzed_spans:
+      pulfalight|rack.request: 1
+datadog_checks:
+  tls:
+    init_config:
+    instances:
+      - server: findingaids-beta.princeton.edu
+        port: 443
+        tags:
+          - 'tls_service:findingaids-beta'
+  findingaids_beta_datadog_ruby_check:
+    init_config:
+    logs:
+      - type: file
+        path: /opt/pulfalight/current/log/production.log
+        service: pulfalight
+        source: ruby
+        sourcecategory: sourcecode
+        tags: "pulfalight, environment:production, role:pulfalight"
