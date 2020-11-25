@@ -1,0 +1,22 @@
+---
+- name: Converge
+  hosts: all
+  vars:
+    - running_on_server: false
+    - xtradb_nodes_group: "all"
+    - xtradb_leader_node: "instance"
+    - mariadb_server__root_password: "{{ vault_maridb_password | default('change_me') }}"
+    - drupal_major_version: 7
+  become: true
+  pre_tasks:
+    - name: update cache
+      apt:
+        update_cache: true
+        cache_valid_time: 600
+  tasks:
+    - name: "Include perconaxdb"
+      include_role:
+        name: perconaxdb
+    - name: "Include libwww"
+      include_role:
+        name: libwww

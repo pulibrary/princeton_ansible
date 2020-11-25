@@ -1,0 +1,18 @@
+---
+- name: Verify
+  hosts: all
+  gather_facts: false
+  tasks:
+  - name: test for libwww apache config
+    lineinfile:
+      path: "/etc/apache2/sites-available/000-default.conf"
+      line: "{{ item }}"
+      state: present
+    loop:
+      - "Alias /utils /var/www/discoveryutils_cap/current/public"
+      - "DocumentRoot /var/www/library_cap/current"
+      - "Alias /special-collections /var/www/special_collections_cap/current"
+    check_mode: true
+    register: present
+    failed_when:
+      - present is changed
