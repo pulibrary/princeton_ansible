@@ -1,0 +1,27 @@
+---
+# This is an example playbook to execute Ansible tests.
+
+- name: Verify
+  hosts: all
+  gather_facts: false
+  tasks:
+  - name: verify rails app config path
+    stat:
+      path: "/home/deploy/app_configs/rails_app"
+    register: app_config
+    failed_when:
+      - not app_config.stat.exists
+
+  - name: verify rails app directory
+    stat:
+      path: "/opt/rails_app/shared/tmp"
+    register: app_dir
+    failed_when:
+      - not app_dir.stat.isdir is defined and app_dir is directory
+
+  - name: verify rails logrotate
+    stat:
+      path: "/etc/logrotate.d/rails_app"
+    register: app_logs
+    failed_when:
+      - not app_logs.stat.exists
