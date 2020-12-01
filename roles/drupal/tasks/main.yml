@@ -62,9 +62,11 @@
     state: directory
     owner: "{{ deploy_user }}"
     group: "{{ deploy_user }}"
+    recurse: yes
   become: true
-  become_user: "{{ deploy_user }}"
   when: drupal_major_version == 8
+  changed_when: false
+  # TODO: This changed when should be removed when we upgrade to molecule 3
 
 - name: Drupal | Run composer if we are running D8
   composer:
@@ -73,6 +75,8 @@
   become: false
   become_user: "{{ deploy_user }}"
   when: drupal_major_version == 8
+  changed_when: false
+  # TODO: This changed when should be removed when we upgrade to molecule 3
 
 - name: Check for the sites files directory.
   stat:
@@ -86,6 +90,7 @@
     state: directory
     mode: a+w
   become: true
+  become_user: "{{ deploy_user }}"
   when: not file_dir_exists.stat.exists
 
 # Create Mounts
@@ -159,7 +164,7 @@
   changed_when: false
   when: not running_on_server
 
-- name: Install php7.2 requirements for libwww
+- name: Install php7.2 requirements for drupal
   apt:
     name: ["php7.2-common", "php7.2-mbstring", "sendmail"]
     state: present
