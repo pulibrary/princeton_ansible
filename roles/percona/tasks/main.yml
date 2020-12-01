@@ -1,0 +1,74 @@
+---
+# tasks file for roles/percona
+- name: percona | manually import key
+  get_url:
+    url: "https://repo.percona.com/apt/percona-release_latest.{{ ansible_distribution_release }}_all.deb"
+    dest: "/tmp/{{ ansible_distribution_release }}_all.deb"
+
+- name: percona | configure apt repo
+  apt:
+    deb: "/tmp/{{ ansible_distribution_release }}_all.deb"
+
+- name: percona | install percona server
+  apt:
+    name: "{{ percona_packages }}"
+    state: present
+    update_cache: true
+
+- name: percona | configure mysql
+  ini_file:
+    dest: /etc/mysql/percona-server.conf.d/50-server.cnf
+    section: "{{ item.section }}"
+    option: "{{ item.option }}"
+    value: "{{ item.value }}"
+  loop: "{{ mysql_configuration_options }}"
+  loop_control:
+    label: "{{ item.option }}"
+  notify:
+    - restart mysql server
+
+- name: percona | Copy root my.cnf
+  template:
+    src: my.cnf.j2
+    dest: '/root/.my.cnf'
+    mode: 0644
+    owner: root
+    group: root
+
+- name: percona | start and enable mysql
+  service:
+    name: mysql
+    state: started
+    enabled: true
+
+- name: percona | create databases
+  mysql_db:
+    name: "{{ item.name }}"
+    state: "{{ item.state | default('present') }}"
+    target: "{{ item.target | default(omit) }}"
+    encoding: "{{ item.encoding | default(omit) }}"
+    collation: "{{ item.collation | default(omit) }}"
+    login_unix_socket: "{{ mysql_socket }}"
+  loop: "{{ mysql_databases }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when:
+    - mysql_databases is defined
+
+- name: percona | create users
+  mysql_user:
+    name: "{{ item.name }}"
+    state: present
+    password: "{{ item.password | default(omit) }}"
+    priv: "{{ item.priv | default(omit) }}"
+    host: "{{ item.host | default(omit) }}"
+    update_password: on_create
+    login_unix_socket: "{{ mysql_socket }}"
+  loop: "{{ mysql_users }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when:
+    - mysql_users is defined
+
+- name: flush handlers
+  meta: flush_handlers

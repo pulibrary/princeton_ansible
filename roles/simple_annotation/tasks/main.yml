@@ -1,0 +1,27 @@
+---
+# tasks file for roles/simple_annotation
+- name: Simple annotation | install dependencies
+  apt:
+    name:
+      - maven
+    state: present
+  when: running_on_server
+
+- name: Simple annotation | create package directory
+  file:
+    path: "/opt/simple_annotation"
+    state: "directory"
+
+- name: Simple annotation | Download and untar
+  unarchive:
+    remote_src: true
+    src: "{{ simple_annotation_download_url }}"
+    dest: "/opt/simple_annotation"
+    creates: "/opt/simple_annotation/SimpleAnnotationServer-server-{{ simple_annotation_tag }}"
+
+- name: Simple annotation | Start jetty
+  shell: nohup mvn jetty:run > simple_annotation.out 2>&1 &
+  args:
+    chdir: /opt/simple_annotation/SimpleAnnotationServer-{{ simple_annotation_tag }}
+  changed_when: false
+  when: running_on_server

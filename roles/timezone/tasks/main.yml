@@ -1,0 +1,18 @@
+---
+# tasks file for roles/timezone
+- name: timezone | Install tzdata
+  apt:
+    name: "{{ timezone_package }}"
+    state: present
+
+- name: timezone | Set timezone config
+  template:
+    src: "timezone.j2"
+    dest: "{{ timezone_file }}"
+
+- name: timezone | Set link to localtime
+  file:
+    state: link
+    src: "{{ zoneinfo_dir }}{{ timezone }}"
+    dest: "{{ localtime_file }}"
+    force: true
