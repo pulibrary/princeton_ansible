@@ -6,7 +6,7 @@ A role that installs [pgbouncer](https://www.pgbouncer.org/) the connection pool
 Requirements
 ------------
 
-A virtual machine instance with postgresql installed from `pulibrary.psql` that this will pool connections to
+A virtual machine instance with postgresql installed from `psql` that this will pool connections to
 
 Role Variables
 --------------

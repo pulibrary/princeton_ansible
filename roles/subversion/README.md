@@ -34,7 +34,7 @@ passed in as parameters) is always nice for users too:
 
     - hosts: servers
       roles:
-         - { role: pulibrary.subversion, x: 42 }
+         - { role: subversion, x: 42 }
 
 License
 -------

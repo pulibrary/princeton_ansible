@@ -20,8 +20,8 @@ composer_checksum: 'sha384:a5c698ffe4b8e849a443b120cd5ba38043260d5c4023dbf93e155
 Dependencies
 ------------
 
-- pulibrary.common
-- pulibrary.php
+- common
+- php
 
 Example Playbook
 ----------------
@@ -31,7 +31,7 @@ passed in as parameters) is always nice for users too:
 
     - hosts: servers
       roles:
-         - { role: roles/pulibrary.composer }
+         - { role: roles/composer }
 
 License
 -------

@@ -15,7 +15,7 @@ find the variables under `defaults/main.yml`
 Dependencies
 ------------
 
-This role depends on `pulibrary.common` and `pulibrary.deploy-user`
+This role depends on `common` and `deploy-user`
 
 Example Playbook
 ----------------
@@ -25,7 +25,7 @@ passed in as parameters) is always nice for users too:
 
     - hosts: servers
       roles:
-         - { role: pulibrary.cantaloupe }
+         - { role: cantaloupe }
 
 License
 -------

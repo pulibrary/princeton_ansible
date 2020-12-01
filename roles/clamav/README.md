@@ -1,14 +1,14 @@
-# pulibrary.clamav
+# clamav
 
 Installs ClamAV
 
 ## Requirements
 
-The target system should have apt and the `pulibrary.common` role
+The target system should have apt and the `common` role
 
 ## Role variables
 
 
 ## Dependencies
 
-The `pulibrary.common` role
+The `common` role

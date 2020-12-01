@@ -479,7 +479,7 @@ This is a sample playbook file for deploying the localhost and installing the op
 - hosts: localhost
   become: true
   roles:
-    - role: pulibrary.nginxplus
+    - role: nginxplus
 ```
 
 License

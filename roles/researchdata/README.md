@@ -34,7 +34,7 @@ passed in as parameters) is always nice for users too:
 
     - hosts: servers
       roles:
-         - { role: roles/pulibrary.researchdata, x: 42 }
+         - { role: roles/researchdata, x: 42 }
 
 License
 -------

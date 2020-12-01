@@ -41,7 +41,7 @@ passed in as parameters) is always nice for users too:
 
     - hosts: servers
       roles:
-         - { role: pulibrary.postgresql, x: 42 }
+         - { role: postgresql, x: 42 }
 
 License
 -------

@@ -11,4 +11,4 @@ Including an example of how to use your role (for instance, with variables passe
 
     - hosts: servers
       roles:
-         - { role: pulibrary.mediainfo }
+         - { role: mediainfo }

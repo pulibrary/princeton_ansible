@@ -25,7 +25,7 @@ None
 ```yaml
 - hosts: localhost
   roles:
-    - role: pulibrary.ruby
+    - role: ruby
 ```
 
 ### Notes

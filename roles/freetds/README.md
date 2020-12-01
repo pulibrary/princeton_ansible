@@ -19,7 +19,7 @@ Example Playbook
 
     - hosts: servers
       roles:
-         - { role: pulibrary.freetds }
+         - { role: freetds }
 
 License
 -------

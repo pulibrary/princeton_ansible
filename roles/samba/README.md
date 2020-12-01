@@ -21,7 +21,7 @@ Example Playbook
 
     - hosts: servers
       roles:
-         - { role: pulibrary.samba }
+         - { role: samba }
 
 License
 -------

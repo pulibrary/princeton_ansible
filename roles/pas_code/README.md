@@ -15,7 +15,7 @@ mysqldump -h mariadb-prod1.princeton.edu -p -u pas pas_prod > /tmp/pas.sql
 
 On your machine
 ```
-cd <princeton-ansible projectdir>/roles/pulibrary.pas_code/files
+cd <princeton-ansible projectdir>/roles/pas_code/files
 scp pulsys@slavery-prod1:/tmp/pas.sql .
 zip pas.zip pas.sql
 rm pas.sql
@@ -46,7 +46,7 @@ pas_upload_path: 'pas/pas-staging'
 Dependencies
 ------------
 
- pulibrary.pas     #installs the machine requirements for PAS
+ pas     #installs the machine requirements for PAS
 
 Example Playbook
 ----------------
@@ -58,5 +58,5 @@ passed in as parameters) is always nice for users too:
       vars:
         - running_on_server: true # needed to force the docker samba items to run
       roles:
-        - role: roles/pulibrary.pas
-        - role: roles/pulibrary.pas_code
+        - role: roles/pas
+        - role: roles/pas_code

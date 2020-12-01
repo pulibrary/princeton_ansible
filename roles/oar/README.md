@@ -14,7 +14,7 @@ all the variables are under [group_vars/oar]
 Dependencies
 ------------
 
-`pulibrary.dspace`
+`dspace`
 
 Example Playbook
 ----------------
@@ -24,7 +24,7 @@ passed in as parameters) is always nice for users too:
 
     - hosts: servers
       roles:
-         - { role: roles/pulibrary.oar, x: 42 }
+         - { role: roles/oar, x: 42 }
 
 License
 -------

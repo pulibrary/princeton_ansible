@@ -14,7 +14,7 @@ all the variables are under [group_vars/dataspace]
 Dependencies
 ------------
 
-`pulibrary.dspace`
+`dspace`
 
 Example Playbook
 ----------------
@@ -24,7 +24,7 @@ passed in as parameters) is always nice for users too:
 
     - hosts: servers
       roles:
-         - { role: roles/pulibrary.dataspace, x: 42 }
+         - { role: roles/dataspace, x: 42 }
 
 License
 -------

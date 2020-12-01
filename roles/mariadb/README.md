@@ -30,7 +30,7 @@ mariadb__users:
 Dependencies
 ------------
 
-- pulibrary.common
+- common
 
 Example Playbook
 ----------------
@@ -38,7 +38,7 @@ Example Playbook
 ```bash
 - hosts: servers
   roles:
-     - { role: roles/pulibrary.mariadb}
+     - { role: roles/mariadb}
 ```
 
 License

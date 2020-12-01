@@ -23,7 +23,7 @@ passed in as parameters) is always nice for users too:
 
     - hosts: servers
       roles:
-         - { role: pulibrary.ffmpeg }
+         - { role: ffmpeg }
 
 License
 -------

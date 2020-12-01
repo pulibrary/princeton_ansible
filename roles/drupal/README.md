@@ -50,9 +50,9 @@ mysql_databases:
 Dependencies
 ------------
 
-- pulibrary.deploy-user
-- pulibrary.php
-- pulibrary.drush
+- deploy-user
+- php
+- drush
 
 Example Playbook
 ----------------
@@ -62,7 +62,7 @@ passed in as parameters) is always nice for users too:
 
     - hosts: servers
       roles:
-         - { role: roles/pulibrary.drupal}
+         - { role: roles/drupal}
 
 License
 -------

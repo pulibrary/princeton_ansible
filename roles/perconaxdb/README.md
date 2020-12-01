@@ -17,7 +17,7 @@ generally static are in `vars/main.yml`
 Dependencies
 ------------
 
-`pulibrary.common` and `pulibrary.samba` (for backup mounts)
+`common` and `samba` (for backup mounts)
 
 Example Playbook
 ----------------
@@ -27,14 +27,14 @@ Example Playbook
   gather_facts: true
   become: true
   roles:
-    - role: pulibrary.perconaxdb      
+    - role: perconaxdb      
 
 ```
 
 Adding Databases and Users
 ------------
 
-This should be done via the `pulibrary.mariadb` role
+This should be done via the `mariadb` role
 
 Migrating your role's database from the MariaDB cluster to Percona
 ------------
@@ -63,7 +63,7 @@ Migrating your role's database from the MariaDB cluster to Percona
 
     1. Modify the molecule playbook to use the perconaxdb role in `<your role>/molecule/default/playbook.yml`
        ```
-         - role: pulibrary.perconaxdb        
+         - role: perconaxdb        
        ```
 
     Full example playbook below
@@ -85,8 +85,8 @@ Migrating your role's database from the MariaDB cluster to Percona
         - xtradb_nodes_group: "all"
         - xtradb_leader_node: "instance"
       roles:
-        - role: pulibrary.perconaxdb
-        - role: pulibrary.<your role>
+        - role: perconaxdb
+        - role: <your role>
     ```
 
   1. Modify your group_vars for your playbook database_host & database_password

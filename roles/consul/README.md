@@ -20,7 +20,7 @@ Example Playbook
 
     - hosts: servers
       roles:
-         - { role: roles/pulibrary.consul }
+         - { role: roles/consul }
 
 License
 -------

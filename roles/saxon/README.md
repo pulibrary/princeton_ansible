@@ -17,7 +17,7 @@ Role Variables
 Dependencies
 ------------
 
-This role depends on `pulibrary.openjdk`
+This role depends on `openjdk`
 
 Example Playbook
 ----------------
@@ -27,7 +27,7 @@ passed in as parameters) is always nice for users too:
 
     - hosts: servers
       roles:
-         - { role: roles/pulibrary.saxon, x: 42 }
+         - { role: roles/saxon, x: 42 }
 
 License
 -------

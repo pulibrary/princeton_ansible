@@ -33,7 +33,7 @@ Dependencies
 ------------
 
 
-This role depends on `pulibrary.common`
+This role depends on `common`
 
 Example Playbook
 ----------------
@@ -43,7 +43,7 @@ passed in as parameters) is always nice for users too:
 
     - hosts: servers
       roles:
-         - { role: roles/pulibrary.openjdk }
+         - { role: roles/openjdk }
 
 License
 -------

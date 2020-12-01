@@ -6,7 +6,7 @@ Installs Tomcat via "wget" instead of package
 Requirements
 ------------
 
-Expects pulibrary.openjdk (version 1.8)
+Expects openjdk (version 1.8)
 
 Role Variables
 --------------
@@ -23,7 +23,7 @@ passed in as parameters) is always nice for users too:
 
     - hosts: servers
       roles:
-         - { role: roles/pulibrary.apache_tomcat, x: 42 }
+         - { role: roles/apache_tomcat, x: 42 }
 
 License
 -------

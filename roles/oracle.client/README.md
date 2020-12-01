@@ -9,4 +9,4 @@ This role installs the Oracle Instant Client.
 	- SDK
 	- SQL*Plus
 
-- Copy them into the `local_files/pulibrary.oracle.client` directory (make the directory if needed).
+- Copy them into the `local_files/oracle.client` directory (make the directory if needed).

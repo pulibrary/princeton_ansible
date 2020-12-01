@@ -25,7 +25,7 @@ passed in as parameters) is always nice for users too:
 
     - hosts: servers
       roles:
-         - { role: pulibrary.apache2, x: 42 }
+         - { role: apache2, x: 42 }
 
 License
 -------

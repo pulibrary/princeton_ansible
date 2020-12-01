@@ -47,13 +47,13 @@ Example Playbook
         - group_vars/ojs/vault.yml
 
       roles:
-        - role: roles/pulibrary.common
-        - role: roles/pulibrary.deploy-user
-        - role: roles/pulibrary.postgresql
-        - role: roles/pulibrary.php
-        - role: roles/pulibrary.composer
-        - role: roles/pulibrary.nodejs
-        - role: roles/pulibrary.ojs
+        - role: roles/common
+        - role: roles/deploy-user
+        - role: roles/postgresql
+        - role: roles/php
+        - role: roles/composer
+        - role: roles/nodejs
+        - role: roles/ojs
 ```
 
 License

@@ -36,4 +36,4 @@ None.
 
     - hosts: server
       roles:
-        - { role: pulibrary.rails-app }
+        - { role: rails-app }

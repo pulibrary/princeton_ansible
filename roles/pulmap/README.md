@@ -34,7 +34,7 @@ passed in as parameters) is always nice for users too:
 
     - hosts: servers
       roles:
-         - { role: pulibrary.pulmap, x: 42 }
+         - { role: pulmap, x: 42 }
 
 License
 -------
