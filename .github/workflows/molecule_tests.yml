@@ -54,6 +54,27 @@ jobs:
           - pulibrary.apache_maven
           - pulibrary.pulmap
           - pulibrary.memcached
+    steps:
+      - name: Checkout branch
+        run: |
+          git clone https://github.com/pulibrary/princeton_ansible.git .
+          git checkout ${{ github.sha }}
+      - name: Set up Python
+        uses: actions/setup-python@v1
+        with:
+          python-version: 3.9
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Disable apparmor
+        run: |
+          sudo service apparmor stop
+          sudo service apparmor teardown
+          sudo /usr/sbin/update-rc.d -f apparmor remove
+      - name: Run tests
+        run: |
+          ROLE=${{ matrix.role }} python run_molecule.py
   test-molecule3:
     runs-on: ubuntu-latest
     strategy:
@@ -78,7 +99,6 @@ jobs:
           - subversion
           - postgresql
           - freetds
-          - ruby
     steps:
       - name: Checkout branch
         run: |
@@ -91,7 +111,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install -r requirements3.txt
       - name: Disable apparmor
         run: |
           sudo service apparmor stop
@@ -100,3 +120,4 @@ jobs:
       - name: Run tests
         run: |
           ROLE=${{ matrix.role }} python run_molecule.py
+          - ruby
