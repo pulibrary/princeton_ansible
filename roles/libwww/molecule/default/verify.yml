@@ -3,15 +3,94 @@
   hosts: all
   gather_facts: false
   tasks:
-  - name: test for libwww apache config
+  - name: test for presence libwww apache config
     lineinfile:
       path: "/etc/apache2/sites-available/000-default.conf"
       line: "{{ item }}"
       state: present
     loop:
       - "Alias /utils /var/www/discoveryutils_cap/current/public"
-      - "DocumentRoot /var/www/library_cap/current"
       - "Alias /special-collections /var/www/special_collections_cap/current"
+    check_mode: true
+    register: present
+    failed_when:
+      - present is changed
+
+  - name: test for absence libwww apache config
+    lineinfile:
+      path: "/etc/apache2/sites-available/000-default.conf"
+      line: "{{ item }}"
+      state: absent
+    loop:
+      - "DocumentRoot /var/www/library_cap/current"
+    check_mode: true
+    register: present
+    failed_when:
+      - present is changed
+
+  - name: test for files existence
+    stat:
+      path: "{{ item }}"
+    loop:
+      - "/home/deploy/settings.php"
+      - "/home/deploy/special_collections_settings.php"
+      - "/home/deploy/.env.local"
+      - "/etc/drush/aliases.drushrc.php"
+    register: remote_file
+    failed_when:
+      - not remote_file.stat.exists
+      - not remote_file.stat.isreg
+      - not remote_file.stat.mode == '0755'
+
+  - name: test for crontab
+    command: crontab -l -u deploy
+    check_mode: true
+    register: cron_results
+    failed_when:
+      - crontab_results.stdout != "0 * * * * sudo -u www-data drush @prod cron"
+      - crontab_results.stdout != "0 7 * * * /usr/bin/get_staff_updates.sh >/tmp/staff_updates.out 2>&1"
+      - crontab_results.stdout != "10 * * * * sudo -u www-data drush -r /var/www/special_collections_cap/current cron"
+
+  - name: test for sudoers
+    lineinfile:
+      path: "/etc/sudoers"
+      line: "{{ item }}"
+      state: present
+    loop:
+      - "deploy ALL=(ALL) NOPASSWD: /usr/sbin/service apache2 *"
+      - "Runas_Alias WWW = www-data"
+      - "deploy ALL = (WWW) NOPASSWD: ALL"
+      - "deploy ALL=(ALL) NOPASSWD: /bin/chown -R www-data /var/www/library_cap*"
+      - "deploy ALL=(ALL) NOPASSWD: /bin/chown -R deploy /var/www/library_cap*"
+      - "deploy ALL=(ALL) NOPASSWD: /bin/chown -R www-data /var/www/special_collections_cap*"
+      - "deploy ALL=(ALL) NOPASSWD: /bin/chown -R deploy /var/www/special_collections_cap*"
+    check_mode: true
+    register: present
+    failed_when:
+      - present is changed
+
+  - name: test for php.ini
+    lineinfile:
+      path: "/etc/php/7.2/apache2/php.ini"
+      line: "{{ item }}"
+      state: present
+    loop:
+      - "upload_max_filesize = 8M"
+      - "memory_limit = 256M"
+    check_mode: true
+    register: present
+    failed_when:
+      - present is changed
+
+  - name: test for php software
+    apt:
+      name: "{{ item }}"
+      state: present
+    loop:
+      - php7.2
+      - php7.2-common
+      - php7.2-mbstring
+      - sendmail
     check_mode: true
     register: present
     failed_when:
