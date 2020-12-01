@@ -34,7 +34,7 @@ passed in as parameters) is always nice for users too:
 
     - hosts: servers
       roles:
-         - { role: pulibrary.dss, x: 42 }
+         - { role: dss, x: 42 }
 
 License
 -------

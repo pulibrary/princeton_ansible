@@ -20,7 +20,7 @@ Example Playbook
 
     - hosts: servers
       roles:
-         - { role: pulibrary.figgy_filewatcher_worker }
+         - { role: figgy_filewatcher_worker }
 
 License
 -------

@@ -16,7 +16,7 @@ maven_version: (currently 3.6.3)
 Dependencies
 ------------
 
-depends on `pulibrary.openjdk`
+depends on `openjdk`
 
 Example Playbook
 ----------------

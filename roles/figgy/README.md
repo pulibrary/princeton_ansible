@@ -6,8 +6,8 @@ This role installs [figgy](https://github.com/pulibrary/figgy) a Valkyrie based 
 Requirements
 ------------
 
-Figgy will need a [postgresql](../pulibrary.psql/) database, a [sidekiq](../pulibrary.pulibrary.sidekiq) worker, a [filewatcher](../pulibrary.filewatcher) worker, a [pubsub](../pulibrary.figgy_pubsub_worker) worker.
-In addition figgy will need [memcached](../pulibrary.memcached) and [rabbitmq](../pulibrary.rabbitmq)
+Figgy will need a [postgresql](../psql/) database, a [sidekiq](../sidekiq) worker, a [filewatcher](../filewatcher) worker, a [pubsub](../figgy_pubsub_worker) worker.
+In addition figgy will need [memcached](../memcached) and [rabbitmq](../rabbitmq)
 
 Role Variables
 --------------
@@ -36,13 +36,13 @@ The playbook has to sets of hosts. One for figgy and the figgy workers listed in
 - hosts: figgy
   remote_user: pulsys
   roles:
-    - role: roles/pulibrary.figgy
+    - role: roles/figgy
 - hosts: figgy_worker
   remote_user: pulsys
   roles:
-    - role: roles/pulibrary.memcached
-    - role: roles/pulibrary.rabbitmq
-    - role: roles/pulibrary.figgy
+    - role: roles/memcached
+    - role: roles/rabbitmq
+    - role: roles/figgy
 ```
 
 License

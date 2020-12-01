@@ -27,7 +27,7 @@ passed in as parameters) is always nice for users too:
 
     - hosts: servers
       roles:
-         - { role: roles/pulibrary.common, x: 42 }
+         - { role: roles/common, x: 42 }
 
 License
 -------

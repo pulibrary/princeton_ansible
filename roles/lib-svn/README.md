@@ -22,14 +22,14 @@ Create a new vaulted user and saved the username and password under `group_vars/
 Dependencies
 ------------
 
-This role depends on `pulibrary.svn` and `pulibrary.deploy-user`
+This role depends on `svn` and `deploy-user`
 
 Example Playbook
 ----------------
 
     - hosts: servers
       roles:
-         - { role: roles/pulibrary.lib-svn }
+         - { role: roles/lib-svn }
 
 License
 -------

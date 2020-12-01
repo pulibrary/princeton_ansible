@@ -27,7 +27,7 @@ passed in as parameters) is always nice for users too:
 
     - hosts: servers
       roles:
-         - { role: roles/pulibrary.mailcatcher, x: 42 }
+         - { role: roles/mailcatcher, x: 42 }
 
 License
 -------

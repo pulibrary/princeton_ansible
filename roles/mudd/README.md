@@ -39,4 +39,4 @@ Example Playbook
 
     - hosts: servers
       roles:
-         - { role: roles/pulibrary.mudd, rails_app_name: 'example' }
+         - { role: roles/mudd, rails_app_name: 'example' }

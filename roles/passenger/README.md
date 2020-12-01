@@ -44,7 +44,7 @@ None.
 
     - hosts: server
       roles:
-        - { role: pulibrary.passenger }
+        - { role: passenger }
 
 ## License
 

@@ -6,7 +6,7 @@ This role installs sidekiq_workers
 Requirements
 ------------
 
-This role expects the `pulibrary.rails-app`
+This role expects the `rails-app`
 
 Role Variables
 --------------

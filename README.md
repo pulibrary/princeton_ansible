@@ -78,7 +78,7 @@ pipenv shell
 Make sure docker is running before you run the following to test the installation
 
 ```bash
-cd roles/pulibrary.common
+cd roles/common
 molecule test
 ```
 
@@ -91,36 +91,36 @@ In all the steps below substitue your role name for `example`
    Run the following command from the root of this repo:
 
    ```bash
-   molecule init role -r roles/pulibrary.example
+   molecule init role -r roles/example
    ```
 1. Set up to run from github actions `vi .github/workflows/molecule_tests.yml` add for your role at the end matrix of the roles
    ```
-       - pulibrary.example
+       - example
    ```
 1. Setup the directory to run molecule
 
    1. copy over the root molecule.yml
       ```bash
-      cp roles/example/molecule.yml roles/pulibrary.example/molecule/default
-      cp roles/example/yaml-lint.yml roles/pulibrary.example/molecule/default
-      cp roles/example/main.yml roles/pulibrary.example/meta
-      cp roles/example/.ansible-lint roles/pulibrary.example/.ansible-lint
+      cp roles/example/molecule.yml roles/example/molecule/default
+      cp roles/example/yaml-lint.yml roles/example/molecule/default
+      cp roles/example/main.yml roles/example/meta
+      cp roles/example/.ansible-lint roles/example/.ansible-lint
       ```
 
-   1. edit `roles/pulibrary.example/meta/main.yml` and change `to include your role name`
+   1. edit `roles/example/meta/main.yml` and change `to include your role name`
 
-   1. edit `roles/pulibrary.example/molecule/default/playbook.yml`
+   1. edit `roles/example/molecule/default/playbook.yml`
       1. Add:
          ```
          vars:
            - running_on_server: false
          ```
-      1. remove `role\` from `- role: role\pulibrary.example`
+      1. remove `role\` from `- role: role\example`
 
 1. Test that your role is now working
    All tests should pass
    ```
-   cd roles/pulibrary.example
+   cd roles/example
    molecule test
    ```
 1. Push your branch and verify that circle ci runs and passes.
@@ -131,7 +131,7 @@ One can use the `invoke molecularize` task in order to generate new molecule
 suites for existing roles:
 
 ```bash
-invoke molecularize pulibrary.bind9
+invoke molecularize bind9
 ```
 
 Please note that this should only be used for cases where the role already
@@ -139,7 +139,7 @@ exists.
 
 ## Molecule tests
 
-You can run `molecule test` from either the root directory or the role directory (for example roles/pulibrary.example)
+You can run `molecule test` from either the root directory or the role directory (for example roles/example)
 If you are writing tests we have found it is easier to test just your examples by running from the role directory.
 
 We also recommend instead of running just `molecule test` which takes a very long time your run `molecule converge` to build a docker container with your ansible playbook loaded.  You can run converge and/or verify as many times as needed to get your playbook working.

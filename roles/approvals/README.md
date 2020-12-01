@@ -39,4 +39,4 @@ Example Playbook
 
     - hosts: servers
       roles:
-         - { role: roles/pulibrary.approvals, rails_app_name: 'example' }
+         - { role: roles/approvals, rails_app_name: 'example' }

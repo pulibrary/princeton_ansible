@@ -6,7 +6,7 @@ A role to install Elasticsearch
 Requirements
 ------------
 
-It needs the `pulibrary.openjdk` roles to run
+It needs the `openjdk` roles to run
 
 Role Variables
 --------------
@@ -24,7 +24,7 @@ elasticsearch_http_port: 9200
 Dependencies
 ------------
 
-* `pulibrary.openjdk`
+* `openjdk`
 
 Example Playbook
 ----------------
@@ -34,7 +34,7 @@ passed in as parameters) is always nice for users too:
 
     - hosts: servers
       roles:
-         - { role: roles/pulibrary.elastic, x: 42 }
+         - { role: roles/elastic, x: 42 }
 
 License
 -------

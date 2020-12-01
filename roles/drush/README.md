@@ -18,7 +18,7 @@ drush_path: "/usr/local/bin"
 Dependencies
 ------------
 
-- pulibrary.composer
+- composer
 
 Example Playbook
 ----------------
@@ -28,7 +28,7 @@ passed in as parameters) is always nice for users too:
 
     - hosts: servers
       roles:
-         - { role: roles/pulibrary.drush }
+         - { role: roles/drush }
 
 License
 -------

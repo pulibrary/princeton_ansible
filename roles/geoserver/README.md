@@ -15,7 +15,7 @@ Role Variables
 Dependencies
 ------------
 
-The role depends on `pulibrary.deploy-users` and `pulibrary.tomcat8`
+The role depends on `deploy-users` and `tomcat8`
 
 
 Example Playbook
@@ -26,7 +26,7 @@ passed in as parameters) is always nice for users too:
 
     - hosts: servers
       roles:
-         - { role: pulibrary.geoserver }
+         - { role: geoserver }
 
 License
 -------

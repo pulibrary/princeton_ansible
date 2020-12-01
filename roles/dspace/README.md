@@ -1,4 +1,4 @@
-pulibrary.dspace
+dspace
 =========
 
 This role installs all the prerequisite software to install dspace. It is
@@ -30,7 +30,7 @@ passed in as parameters) is always nice for users too:
 
     - hosts: servers
       roles:
-         - { role: roles/pulibrary.dspace }
+         - { role: roles/dspace }
 
 License
 -------

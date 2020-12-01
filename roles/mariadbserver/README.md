@@ -6,7 +6,7 @@ This role installs MariaDB Server.
 Requirements
 ------------
 
-If you want to manage users use the pulibrary.mariadb role
+If you want to manage users use the mariadb role
 
 Role Variables
 --------------
@@ -16,7 +16,7 @@ Sane defaults but look in the defaults directory
 Dependencies
 ------------
 
-- pulibrary.common
+- common
 
 Example Playbook
 ----------------
@@ -26,7 +26,7 @@ passed in as parameters) is always nice for users too:
 
     - hosts: servers
       roles:
-         - { role: roles/pulibrary.mariadbserver }
+         - { role: roles/mariadbserver }
 
 License
 -------

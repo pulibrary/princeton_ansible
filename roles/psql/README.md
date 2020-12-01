@@ -33,4 +33,4 @@ postgres_hba_entries:
 
 Adding the following variables will allow the creating of the db user `confluence_staging_user_db` who owns the `confluence_staging_db` 
 
-It is recommended to then create the same user on [pulibrary.pgbouncer](pulibrary.pgbouncer) role for more reliability/robustness
+It is recommended to then create the same user on [pgbouncer](pgbouncer) role for more reliability/robustness

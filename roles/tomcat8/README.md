@@ -34,7 +34,7 @@ Dependencies
 ------------
 
 <<<<<<< HEAD
-This role depends on `pulibrary.openjdk`
+This role depends on `openjdk`
 =======
 A list of other roles hosted on Galaxy should go here, plus any details in
 regards to parameters that may need to be set for other roles, or variables that
@@ -50,9 +50,9 @@ passed in as parameters) is always nice for users too:
     - hosts: servers
       roles:
 <<<<<<< HEAD
-         - { role: roles/pulibrary.tomcat8 }
+         - { role: roles/tomcat8 }
 =======
-         - { role: roles/pulibrary.tomcat8, x: 42 }
+         - { role: roles/tomcat8, x: 42 }
 >>>>>>> first pass moleculizing tomcat8
 
 License

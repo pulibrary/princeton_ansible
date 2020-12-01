@@ -15,12 +15,12 @@ propagate worldwide.
   here averages about 12 hours.
 
 * Create your nginx configuration files for your service. Examples can be found
-  at `roles/pulibrary.nginxplus/files/conf/http` for HTTP based services and
-  `roles/pulibrary.nginxplus/files/conf/stream` for all others. You will need to
+  at `roles/nginxplus/files/conf/http` for HTTP based services and
+  `roles/nginxplus/files/conf/stream` for all others. You will need to
   use `ansible-vault` to protect any file that will be placed here.
 
 * When the ssl files are received from OIT they will be placed under
-  `roles/pulibrary.nginxplus/files/ssl` and will also need to be protected.
+  `roles/nginxplus/files/ssl` and will also need to be protected.
 
 * Once you have your application ready you can then re-run the
   `playbooks/nginxplus.yml` playbook which will upload the new configuration

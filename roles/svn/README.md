@@ -21,7 +21,7 @@ Example Playbook
 
     - hosts: servers
       roles:
-         - { role: roles/pulibrary.svn }
+         - { role: roles/svn }
 
 License
 -------

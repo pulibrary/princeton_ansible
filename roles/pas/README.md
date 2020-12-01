@@ -15,7 +15,7 @@ mysqldump -h mariadb-prod1.princeton.edu -p -u pas pas_prod > /tmp/pas.sql
 
 On your machine
 ```
-cd <princeton-ansible projectdir>/roles/pulibrary.pas/files
+cd <princeton-ansible projectdir>/roles/pas/files
 scp pulsys@slavery-prod1:/tmp/pas.sql .
 zip pas.zip pas.sql
 rm pas.sql
@@ -54,4 +54,4 @@ passed in as parameters) is always nice for users too:
 
     - hosts: servers
       roles:
-         - { role: roles/pulibrary.pas, x: 42 }
+         - { role: roles/pas, x: 42 }

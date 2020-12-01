@@ -24,7 +24,7 @@ Example Playbook
       roles:
 	  vars:
 	    timezone: America/New_York
-         - { role: roles/pulibrary.timezone }
+         - { role: roles/timezone }
 
 License
 -------

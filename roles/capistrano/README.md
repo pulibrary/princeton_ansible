@@ -19,4 +19,4 @@ These are listed in `meta/main.yml`
 
     - hosts: server
       roles:
-        - { role: pulibrary.capistrano }
+        - { role: capistrano }

@@ -20,7 +20,7 @@ Example Playbook
 
     - hosts: servers
       roles:
-         - { role: roles/pulibrary.matomo }
+         - { role: roles/matomo }
 
 License
 -------

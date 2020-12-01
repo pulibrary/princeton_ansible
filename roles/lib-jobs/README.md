@@ -17,16 +17,16 @@ vault_wc_key: Worldcat API key
 Dependencies
 ------------
 
-pulibrary.ruby
-pulibrary.deploy-user
-pulibrary.mariadb
+ruby
+deploy-user
+mariadb
 
 Example Playbook
 ----------------
 
     - hosts: servers
       roles:
-         - { role: roles/pulibrary.lib-jobs }
+         - { role: roles/lib-jobs }
 
 License
 -------

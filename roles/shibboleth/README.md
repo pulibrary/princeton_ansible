@@ -16,7 +16,7 @@ The [defaults/main.yml](defaults/main.yml) lists the ubuntu release
 Dependencies
 ------------
 
-The pulibrary.common and pulibrary.apache roles.
+The common and apache roles.
 
 Example Playbook
 ----------------

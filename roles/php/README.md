@@ -21,7 +21,7 @@ server:
 Dependencies
 ------------
 
- - pulibrary.apache2
+ - apache2
 
 Example Playbook
 ----------------
@@ -31,7 +31,7 @@ passed in as parameters) is always nice for users too:
 
     - hosts: servers
       roles:
-         - { role: roles/pulibrary.php }
+         - { role: roles/php }
 
 License
 -------
