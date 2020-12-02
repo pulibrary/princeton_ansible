@@ -15,7 +15,7 @@ find the variables under `defaults/main.yml`
 Dependencies
 ------------
 
-This role depends on `common` and `deploy-user`
+This role depends on `common` and `deploy_user`
 
 Example Playbook
 ----------------

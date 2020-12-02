@@ -42,7 +42,7 @@ Dependencies
   php
   mariadbserver
   mariadb
-  deploy-user
+  deploy_user
   nodejs
   samba
 

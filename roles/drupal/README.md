@@ -50,7 +50,7 @@ mysql_databases:
 Dependencies
 ------------
 
-- deploy-user
+- deploy_user
 - php
 - drush
 

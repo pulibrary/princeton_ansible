@@ -48,7 +48,7 @@ Example Playbook
 
       roles:
         - role: roles/common
-        - role: roles/deploy-user
+        - role: roles/deploy_user
         - role: roles/postgresql
         - role: roles/php
         - role: roles/composer
