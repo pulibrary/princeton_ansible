@@ -1,0 +1,40 @@
+---
+- name: Converge
+  hosts: all
+  vars:
+    - running_on_server: false
+    - node_identifier: 1
+    - replication_database: "replicant"
+    - replication_user: "replicant"
+    - repmgr_config: "/etc/repmgr.conf"
+  become: true
+  pre_tasks:
+    - name: update cache
+      apt:
+        update_cache: true
+        cache_valid_time: 600
+  tasks:
+    - name: "Include psql"
+      include_role:
+        name: psql
+      vars:
+        postgresql_ext_install_postgis: true
+        postgresql_hba_entries:
+          - type: local
+            database: all
+            user: postgres
+            method: ident
+          - type: local
+            database: replicant
+            user: replicant
+            method: md5
+          - type: host
+            database: all
+            user: postgres
+            address: 127.0.0.1/32
+            method: ident
+          - type: host
+            database: replicant
+            user: replicant
+            address: 127.0.0.1/32
+            method: md5
