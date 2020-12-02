@@ -1,0 +1,38 @@
+---
+- name: Verify
+  hosts: all
+  gather_facts: false
+  tasks:
+  - name: check nginx package status
+    package:
+      name: "{{ item }}"
+      state: present
+    check_mode: true
+    register: pkg_status
+    loop:
+      - nginx
+
+  - name: test for nginx packages
+    assert:
+      that:
+        - not pkg_status.changed
+
+  - name: test for nginx conf file existence
+    stat:
+      path: "{{ item }}"
+    loop:
+      - "/etc/nginx/nginx.conf"
+    register: nginx_conf_file
+    failed_when:
+      - not nginx_conf_file.stat.exists
+
+  - name: check if user nginx does exist
+    user:
+      name: nginx
+      shell: /usr/sbin/nologin
+      create_home: /var/www
+      state: present
+    check_mode: true
+    register: users_check_user_nginx
+    failed_when:
+      - users_check_user_nginx is changed
