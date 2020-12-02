@@ -1,0 +1,97 @@
+---
+- name: Get upstream APT GPG key
+  apt_key:
+    id: "{{ nodejs__upstream_key_id }}"
+    keyserver: "hkp://pool.sks-keyservers.net"
+    state: present
+  register: pool_servers
+  ignore_errors: true
+
+- name: Get upstream APT GPG key from MIT
+  apt_key:
+    id: "{{ nodejs__upstream_key_id }}"
+    state: present
+    keyserver: "pgp.mit.edu"
+  register: mit_servers
+  when: pool_servers is failed
+  ignore_errors: true
+
+- name: Get upstream APT GPG key from PGP
+  apt_key:
+    id: "{{ nodejs__upstream_key_id }}"
+    state: present
+    keyserver: "keyserver.pgp.com"
+  when: mit_servers is failed
+  ignore_errors: true
+
+- name: Add upstream Yarn APT key from PGP
+  apt_key:
+    id: "{{ nodejs__yarn_upstream_key_id }}"
+    keyserver: "hkp://pool.sks-keyservers.net"
+    state: present
+  register: yarnpool_servers
+  ignore_errors: true
+  changed_when: false
+  # TODO: This changed when should be removed when we upgrade to molecule 3
+
+- name: Add upstream Yarn APT key from MIT
+  apt_key:
+    id: "{{ nodejs__yarn_upstream_key_id }}"
+    state: present
+    keyserver: "pgp.mit.edu"
+  when: yarnpool_servers is failed
+  register: yarnmit_servers
+  ignore_errors: true
+
+- name: Add upstream Yarn APT key from PGP
+  apt_key:
+    id: "{{ nodejs__yarn_upstream_key_id }}"
+    state: present
+    keyserver: "keyserver.pgp.com"
+  when: yarnmit_servers is failed
+  ignore_errors: true
+  changed_when: false
+  # TODO: This changed when should be removed when we upgrade to molecule 3
+
+- name: Configure upstream APT repository
+  apt_repository:
+    repo: "{{ nodejs__upstream_repository }}"
+    state: present
+    update_cache: true
+
+- name: Add upstream Yarn APT repository
+  apt_repository:
+    repo: "{{ nodejs__yarn_upstream_repository }}"
+    state: present
+    update_cache: true
+  ignore_errors: true
+  changed_when: false
+  # TODO: This changed when should be removed when we upgrade to molecule 3
+
+- name: Gather the apt package facts
+  package_facts:
+    manager: auto
+
+- name: Get the versions of nodejs installed
+  set_fact:
+    nodejs_versions: "{{ packages['nodejs'] | map(attribute='version') | list }}"
+  when: "'nodejs' in packages"
+
+- name: Check for the LTS release
+  set_fact:
+    nodejs_lts_installed: "{{ nodejs_versions | select('match', '^12.') | list | length > 0 }}"
+  when: nodejs_versions is defined and nodejs__upstream_release == 'node_12.x'
+
+- name: Uninstall any existing nodejs releases
+  apt:
+    name: nodejs
+    state: absent
+  when: nodejs_lts_installed is defined and not nodejs_lts_installed
+
+- name: Install node packages
+  apt:
+    name: ["nodejs", "yarn"]
+    state: present
+    autoremove: true
+  changed_when: false
+  # TODO: This changed when should be removed when we upgrade to molecule 3

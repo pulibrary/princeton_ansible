@@ -1,0 +1,33 @@
+---
+# tasks file for roles/hr_share
+- name: Create mount directories
+  file:
+    path: '/mnt/dms-smbserve'
+    state: 'directory'
+
+- name: Copy smb credentials
+  copy:
+    src: files/hr_share.smb.credentials
+    dest: /etc/hr_share.smb.credentials
+  when: running_on_server
+
+- name: Check mount for hr shared files
+  mount:
+    path: '/mnt/dms-smbserve/bi-library-hr'
+    src: '//dms-smbserve/bi-library-hr'
+    fstype: cifs
+    opts: 'defaults,uid=33,gid={{ deploy_user_uid }},credentials=/etc/hr_share.smb.credentials'
+    state: present
+  register: mount_info
+  when: running_on_server
+  become: true
+
+- name: Create mount for hr shared files
+  mount:
+    path: '/mnt/dms-smbserve/bi-library-hr'
+    src: '//dms-smbserve/bi-library-hr'
+    fstype: cifs
+    opts: 'defaults,uid=33,gid={{ deploy_user_uid }},credentials=/etc/hr_share.smb.credentials'
+    state: mounted
+  when: running_on_server and mount_info.changed
+  become: true
