@@ -152,7 +152,7 @@ molecule verify
 
 If your are having issues with your tests passing and have run `molecule converge` you can connect to the running container by running
 ```
-docker exec -it instance bash
+molecule login
 ```
 
 ## Vagrant for testing
