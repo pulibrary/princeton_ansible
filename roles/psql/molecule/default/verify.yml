@@ -1,0 +1,40 @@
+---
+- name: Verify
+  hosts: all
+  gather_facts: false
+  tasks:
+  - name: check psql package status
+    package:
+      name: "{{ item }}"
+      state: present
+    check_mode: true
+    register: pkg_status
+    loop:
+      - postgresql-12
+      - postgresql-12-repmgr
+      - postgresql-client-12
+
+  - name: test for psql packages
+    assert:
+      that:
+        - not pkg_status.changed
+
+  - name: postgresql listening on port 5432
+    command: netstat -tunlp | grep ":5432 "
+    register: process
+    changed_when: false
+    failed_when:
+      - process | length == 0
+
+  - name: test for repmgr config file
+    stat:
+      path: "{{ item }}"
+    loop:
+      - "/etc/repmgr.conf"
+
+  - name: test for databases
+    command: sudo -u postgres psql -l
+    check_mode: true
+    register: psql_results
+    failed_when:
+      - psql_results.stdout != "awesome_db"
