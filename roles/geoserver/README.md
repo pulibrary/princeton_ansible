@@ -15,7 +15,7 @@ Role Variables
 Dependencies
 ------------
 
-The role depends on `deploy-users` and `tomcat8`
+The role depends on `deploy_users` and `tomcat8`
 
 
 Example Playbook
