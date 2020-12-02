@@ -22,7 +22,7 @@ Create a new vaulted user and saved the username and password under `group_vars/
 Dependencies
 ------------
 
-This role depends on `svn` and `deploy-user`
+This role depends on `svn` and `deploy_user`
 
 Example Playbook
 ----------------

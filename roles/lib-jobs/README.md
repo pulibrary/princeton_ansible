@@ -18,7 +18,7 @@ Dependencies
 ------------
 
 ruby
-deploy-user
+deploy_user
 mariadb
 
 Example Playbook

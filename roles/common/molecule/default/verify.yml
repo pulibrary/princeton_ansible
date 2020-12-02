@@ -1,0 +1,29 @@
+---
+- name: Verify
+  hosts: all
+  gather_facts: false
+  tasks:
+  - name: check common package status
+    package:
+      name: "{{ item }}"
+      state: present
+    check_mode: true
+    register: pkg_status
+    loop:
+      - acl
+      - htop
+      - python-apt
+      - build-essential
+      - curl
+      - git
+      - unzip
+      - zip
+      - tmux
+      - vim
+      - silversearcher-ag
+      - vector
+
+  - name: test packages are installed
+    assert:
+      that:
+        - not pkg_status.changed
