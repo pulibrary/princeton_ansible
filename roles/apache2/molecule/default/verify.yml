@@ -1,0 +1,30 @@
+---
+- name: Verify
+  hosts: all
+  gather_facts: false
+  tasks:
+  - name: check apache2 package status
+    package:
+      name: "{{ item }}"
+      state: present
+    check_mode: true
+    register: pkg_status
+    loop:
+      - apache2
+      - netcat
+
+  - name: test for apache2 packages
+    assert:
+      that:
+        - not pkg_status.changed
+
+  - name: let netcat listen on port 127.0.0.1:80
+    shell: nc --listen --keep-open 127.0.0.1 80 &
+
+  - name: see if apache page is exposed
+    uri:
+      url: "http://127.0.0.1/"
+      return_content: true
+    register: this
+    failed_when:
+      - "'default welcome page' not in this.content"
