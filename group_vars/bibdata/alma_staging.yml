@@ -1,0 +1,130 @@
+---
+postgres_host: "lib-postgres-staging1.princeton.edu"
+postgres_version: 12
+passenger_server_name: "bibdata-alma-staging.*"
+passenger_app_root: "/opt/marc_liberation/current/public"
+passenger_app_env: "production"
+passenger_ruby: "/usr/bin/ruby2.6"
+ruby_version_override: "ruby2.6"
+bundler_version: "2.1.4"
+rails_app_name: "marc_liberation"
+rails_app_directory: "marc_liberation"
+rails_app_symlinks: []
+rails_app_dependencies:
+  - libpq-dev
+  - pkg-config
+  - libtool
+  - autoconf
+rails_app_env: "production"
+rails_app_vars:
+  - name: ALMA_REGION
+    value: "{{ vault_alma_region }}"
+  - name: ALMA_ACQ_READ_WRITE
+    value: "{{ vault_alma_acq_read_write_key }}"
+  - name: ALMA_BIB_READ_WRITE
+    value: "{{ vault_alma_bib_read_write_key }}"
+  - name: ALMA_BIBS_READ_ONLY
+    value: "{{ vault_alma_bibs_read_only_key }}"
+  - name: ALMA_CONFIG_READ_ONLY
+    value: "{{ vault_alma_config_read_only_key }}"
+  - name: ALMA_USERS_READ_ONLY
+    value: "{{ vault_alma_users_read_only_key }}"
+  - name: VOYAGER_DB_USER
+    value: '{{voyager_db_username}}'
+  - name: VOYAGER_DB_PASSWORD
+    value: '{{voyager_db_password}}'
+  - name: VOYAGER_DB_NAME
+    value: '{{voyager_test_db_name}}'
+  - name: NEWRELIC_KEY
+    value: '{{bibdata_newrelic_key}}'
+  - name: NEWRELIC_APP_NAME
+    value: '{{bibdata_newrelic_app_name}}'
+  - name: RECAP_TRANSFER_KEY
+    value: '{{recap_transfer_key}}'
+  - name: RECAP_SERVER
+    value: '{{recap_server}}'
+  - name: RECAP_UPDATE_DIR
+    value: '{{recap_update_dir}}'
+  - name: RECAP_UPDATE_NOCGD_DIR
+    value: '{{recap_update_nocgd_dir}}'
+  - name: RECAP_PARTNER_UPDATE_DIR
+    value: '{{recap_partner_update_dir}}'
+  - name: RECAP_PARTNER_DELETE_DIR
+    value: '{{recap_partner_delete_dir}}'
+  - name: RECAP_UPDATE_USER
+    value: '{{recap_update_user}}'
+  - name: SCSB_FILE_DIR
+    value: '{{scsb_file_dir}}'
+  - name: SCSB_AUTH_KEY
+    value: '{{vault_scsb_auth_key}}'
+  - name: SCSB_SERVER
+    value: '{{vault_scsb_server}}'
+  - name: HONEYBADGER_API_KEY
+    value: '{{bibdata_honeybadger_key}}'
+  - name: SECRET_KEY_BASE
+    value: '{{bibdata_rails_key}}'
+  - name: BIBDATA_DB
+    value: "{{ bibdata_db }}"
+  - name: BIBDATA_DB_USERNAME
+    value: '{{bibdata_db_username}}'
+  - name: BIBDATA_DB_PASSWORD
+    value: '{{bibdata_db_password}}'
+  - name: BIBDATA_DB_HOST
+    value: '{{ postgres_host }}'
+  - name: BIBDATA_IP_ALLOWLIST
+    value: '"{{bibdata_ip_allowlist | join(" ") }}"'
+  - name: BIBDATA_RAILS_KEY
+    value: '{{bibdata_rails_key}}'
+  - name: BIBDATA_DATA_DIR
+    value: '{{bibdata_data_dir}}'
+  - name: SOLR_URL
+    value: 'http://lib-solr8-staging.princeton.edu:8983/solr/catalog-alma-qa'
+  - name: SOLR_REINDEX_URL
+    value: 'http://lib-solr8-staging.princeton.edu:8983/solr/catalog-alma-qa'
+  - name: TRAJECT_CONFIG
+    value: 'marc_to_solr/lib/traject_config.rb'
+  - name: BIBDATA_ADMIN_NETIDS
+    value: '"{{ bibdata_admin_netids | join(" ") }}"'
+  - name: SCSB_FILE_DIR
+    value: "/data/marc_liberation_files/scsb_update_files"
+  - name: HATHI_INPUT_DIR
+    value: '/opt/marc_liberation/shared/hathi/input'
+  - name: HATHI_OUTPUT_DIR
+    value: '/opt/marc_liberation/shared/hathi/output'
+  - name: BIBDATA_ACCESS_DIRECTORY
+    value: '/mnt/dms-smbserve/bi-library-hr/prod'
+sidekiq_worker_name: bibdata-workers
+samba_users:
+  - name: pulsys
+    password: '{{samba_pulsys_password}}'
+samba_shares:
+  - name: marc_liberation_files
+    group: sambashare
+    write_list: +sambashare
+    writable: yes
+    create_mode: 0777
+    force_create_mode: 0777
+    directory_mode: 0777
+    force_directory_mode: 0777
+  - name: marc_liberation_files/scsb_update_files
+    group: sambashare
+    write_list: +sambashare
+    writable: yes
+    create_mode: 0777
+    force_create_mode: 0777
+    directory_mode: 0777
+    force_directory_mode: 0777
+
+bibdata_db: "bibdata_alma_staging"
+bibdata_db_port: 5432
+application_dbuser_name: "bibdata"
+application_db_name: "{{ bibdata_db }}"
+application_dbuser_password: "{{ bibdata_db_password }}"
+application_dbuser_role_attr_flags: "SUPERUSER,INHERIT,NOCREATEDB,NOCREATEROLE,NOREPLICATION"
+db_clusteradmin_password: "{{ vault_postgres_admin_password }}"
+db_clusteradmin_user: "postgres"
+
+postgres_port: "{{ bibdata_db_port }}"
+postgres_admin_user: "{{ db_clusteradmin_user }}"
+postgres_admin_password: "{{ db_clusteradmin_password }}"
+postgresql_is_local: false
