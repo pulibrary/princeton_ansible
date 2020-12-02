@@ -32,7 +32,7 @@ Example Playbook
     - running_on_server: true
     - generic_app_user: 'aspace'
   roles:
-    - role: deploy-user
+    - role: deploy_user
   pre_tasks:
     # To allow the app user to access a specific private git repo you need to add an deploy key.
     # There is documentation on creating a deploy key and setting up github to use it here: https://developer.github.com/v3/guides/managing-deploy-keys/#deploy-keys

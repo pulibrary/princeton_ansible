@@ -1,0 +1,21 @@
+---
+# This is an example playbook to execute Ansible tests.
+
+- name: Verify
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: record status of config file
+      stat:
+        path: /home/deploy/.ssh/config
+      register: result
+      failed_when:
+        - not result.stat.exists
+
+    - name: check if user deploy exists
+      user:
+        name: deploy
+        state: present
+      register: users_check_user_deploy
+      failed_when:
+        - users_check_user_deploy is changed
