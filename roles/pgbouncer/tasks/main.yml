@@ -1,0 +1,39 @@
+---
+# tasks file for pgbouncer
+- name: pgbouncer | Add PostgreSQL repository apt-key | apt
+  apt_key:
+    id: "{{ postgresql_apt_key_id }}"
+    url: "{{ postgresql_apt_key_url }}"
+    state: present
+
+- name: pgbouncer | Add PostgreSQL repository | apt
+  apt_repository:
+    repo: "{{ postgresql_apt_repository }}"
+    state: present
+
+- name: pgbouncer | ensure pgbouncer is installed
+  apt:
+    name: pgbouncer
+    state: present
+    update_cache: true
+
+- name: pgbouncer | ensure postgresql-client is installed
+  apt:
+    name: postgresql-client-{{ postgresql_version }}
+    state: present
+
+- name: pgbouncer | Configure pgbouncer
+  template:
+    src: pgbouncer.ini.j2
+    dest: "{{ pgbouncer_conf_file }}"
+
+- name: pgbouncer | Configure auth_users list
+  template:
+    src: userlist.txt.j2
+    dest: "{{ pgbouncer_auth_file }}"
+
+- name: pgbouncer | (re)Start pgbouncer service
+  service:
+    name: pgbouncer
+    state: restarted
+  changed_when: false

@@ -1,0 +1,25 @@
+---
+# tasks file for roles/approvals
+
+- name: Download node apt update script
+  get_url:
+    url: https://deb.nodesource.com/setup_10.x
+    dest: /tmp/setup_10.x
+    mode: '0755'
+
+- name: update the node source repository
+  command: '/tmp/setup_10.x'
+  become: true
+  changed_when: false
+
+- name: Install latest node
+  apt:
+    name: 'nodejs'
+    state: latest
+
+- name: Allow deploy to restart, stop, start nginx
+  lineinfile:
+    dest: "/etc/sudoers"
+    state: "present"
+    line: "{{ deploy_user }} ALL=(ALL) NOPASSWD: /usr/sbin/service nginx *"
+    validate: "visudo -cf %s"

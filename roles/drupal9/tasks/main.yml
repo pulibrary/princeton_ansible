@@ -1,0 +1,130 @@
+---
+# tasks file for roles/drupal9
+
+- name: Install dependencies
+  apt:
+    name: []
+    state: present
+
+- name: install postgres php driver
+  apt:
+    name: ["php7.4-pgsql", "php7.4-xml"]
+    state: present
+    update_cache: true
+
+- name: Check to see if settings.php home file exists.
+  stat:
+    path: "{{ drupal_docroot }}"
+  register: drupal_docroot_exists
+
+- name: create drupal docroot
+  file:
+    path: "{{ drupal_docroot }}"
+    state: directory
+    owner: "{{ systems_user }}"
+    group: "{{ systems_user }}"
+    recurse: true
+    follow: false
+  become: true
+  when: not drupal_docroot_exists.stat.exists
+
+- name: allow temporary full permissions
+  file:
+    path: "{{ drupal_docroot }}"
+    mode: 0777
+    state: directory
+  become: true
+
+- name: grant permissions on deploy user
+  file:
+    path: "{{ drupal_docroot }}"
+    state: directory
+    owner: "{{ drupal_web_owner }}"
+    group: "{{ deploy_user }}"
+    follow: false
+    recurse: true
+  changed_when: false
+
+- name: Check for the sites files directory.
+  stat:
+    path: "{{ drupal_docroot }}/current/sites/default/files"
+  register: file_dir_exists
+
+- name: Drupal | Give appropriate permissions for files directory
+  file:
+    dest: "{{ drupal_docroot }}/current/sites/default/files"
+    recurse: true
+    state: directory
+    mode: a+w
+  become: true
+  when: not file_dir_exists.stat.exists
+
+# Create Mounts
+- name: Create mount directories
+  file:
+    path: '/mnt/{{ item }}'
+    state: 'directory'
+  with_items:
+    - drupal_fileshare_mount
+
+- name: Install settings.php
+  template:
+    src: "settings.php.j2"
+    dest: "/home/{{ deploy_user }}/settings.php"
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+
+- name: Install nginx configuration
+  template:
+    src: "default.conf.j2"
+    dest: "/etc/nginx/conf.d/default.conf"
+    owner: "{{ drupal_web_owner }}"
+    group: "adm"
+  notify: Restart NGINX
+
+- include: capistrano_setup.yml
+
+- name: install npm for git actions
+  apt:
+    name: ["nodejs", "nodejs-dev", "node-gyp", "libssl1.0-dev"]
+    state: build-dep
+    update_cache: true
+  changed_when: false
+  when: not running_on_server
+
+- name: install php packages
+  apt:
+    name: ["php{{ php_version }}-gd", "postgresql-client", "php-mbstring"]
+    state: present
+    update_cache: true
+
+- name: Install gulp globally
+  npm:
+    name: gulp-cli
+    global: true
+  become: true
+  when: running_on_server
+
+- name: Allow www-data to access deploy's drush dir
+  file:
+    state: directory
+    path: "/home/{{ deploy_user }}/.drush"
+    owner: "{{ deploy_user }}"
+    group: "www-data"
+
+
+- name: Allow www-data to access deploy's drush cache
+  file:
+    state: directory
+    path: "/home/{{ deploy_user }}/.drush/cache"
+    owner: "{{ deploy_user }}"
+    group: "{{ drupal_web_owner }}"
+
+- name: dspace | add bash_profile
+  blockinfile:
+    path: "/home/{{ deploy_user }}/.bashrc"
+    marker: "# {mark} ANSIBLE MANAGED BLOCK"
+    block: |
+      export PATH={{ drupal_docroot }}/current/vendor/bin/:$PATH
+    insertbefore: "# If not running interactively, don't do anything"
+  when: running_on_server
