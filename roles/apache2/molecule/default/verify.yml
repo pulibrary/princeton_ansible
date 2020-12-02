@@ -1,0 +1,23 @@
+---
+# This is an example playbook to execute Ansible tests.
+
+- name: Verify
+  hosts: all
+  gather_facts: false
+  tasks:
+  - name: test for apache2 packages
+    apt:
+      name: "{{ item }}"
+      state: present
+    loop:
+      - apache2
+    check_mode: true
+    register: present
+    failed_when:
+      - present is changed
+  - name: apache listening on port 80
+    command: netstat -tunlp | grep ":80 " |grep apache2
+    register: process
+    changed_when: false
+    failed_when:
+      - process | length == 0
