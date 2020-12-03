@@ -1,0 +1,18 @@
+---
+- name: Verify
+  hosts: all
+  gather_facts: true
+  tasks:
+  - name: test for imagemagick output
+    command: identify -list resource
+    register: identity_results
+    ignore_errors: true
+  - name: assert values for imagemagick
+    assert:
+      that:
+        - "'Disk: 8GiB' in identity_results.stdout"
+        - "'Memory: 2GiB' in identity_results.stdout"
+        - "'Map: 4GiB' in identity_results.stdout"
+        - "'Width: 214.7MP' in identity_results.stdout"
+        - "'Height: 214.7MP' in identity_results.stdout"
+        - "'Area: 1.0737GP' in identity_results.stdout"
