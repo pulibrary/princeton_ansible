@@ -1,0 +1,19 @@
+---
+- name: Verify
+  hosts: all
+  gather_facts: false
+  tasks:
+  - name: check passenger package status
+    package:
+      name: "{{ item }}"
+      state: present
+    check_mode: true
+    register: pkg_status
+    loop:
+      - libnginx-mod-http-passenger
+      - nginx-extras
+
+  - name: test for passenger packages
+    assert:
+      that:
+        - not pkg_status.changed
