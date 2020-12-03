@@ -1,0 +1,33 @@
+---
+# This is an example playbook to execute Ansible tests.
+
+- name: Verify
+  hosts: all
+  gather_facts: false
+  tasks:
+  - name: test for mariadb packages
+    apt:
+      name: "{{ item }}"
+      state: present
+    loop:
+      - python-mysqldb
+      - mysql-client
+    check_mode: true
+    register: present
+    failed_when:
+      - present is changed
+  - name: mysql user and database exists
+    command: mysql -usome_user -pchange_me some_database -e'show tables'
+    register: process
+    changed_when: false
+    failed_when: process is search("ERROR ")
+  - name: test for mysql files
+    stat:
+      path: "{{ item }}"
+    loop:
+      - "/home/deploy/sql/permissive.sql"
+      - "/home/deploy/sql/set_permission.sh"
+      - "/home/deploy/.my.cnf"
+    register: remote_file
+    failed_when:
+      - not remote_file.stat.exists
