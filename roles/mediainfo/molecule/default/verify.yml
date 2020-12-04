@@ -1,0 +1,18 @@
+---
+- name: Verify
+  hosts: all
+  gather_facts: false
+  tasks:
+  - name: check mediainfo package status
+    package:
+      name: "{{ item }}"
+      state: present
+    check_mode: true
+    register: pkg_status
+    loop:
+      - mediainfo
+
+  - name: test for mediainfo packages
+    assert:
+      that:
+        - not pkg_status.changed
