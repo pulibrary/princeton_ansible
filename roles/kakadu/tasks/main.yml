@@ -7,10 +7,11 @@
   with_items:
     - unzip
   become: true
+
 - name: Download Kakadu
   unarchive:
     src: http://kakadusoftware.com/wp-content/uploads/2014/06/KDU78_Demo_Apps_for_Linux-x86-64_160226.zip
-    copy: no
+    copy: false
     dest: '{{ kdu_install }}'
     creates: '{{ kdu_install }}/KDU78_Demo_Apps_for_Linux-x86-64_160226/kdu_compress'
   become: true
@@ -25,16 +26,16 @@
 
 - name: Symlink Kakadu Libraries
   file:
-    state: link
     src: "{{ kdu_install }}/kakadu/{{ item }}"
     dest: "/usr/lib/{{ item }}"
+    state: link
   with_items:
     - libkdu_v78R.so
 
 - name: Setup ldconfig for kakadu
-  template: 
-    src: 'ldconfig.kakadu.conf'
-    dest: '/etc/ld.so.conf.d/kakadu.conf'
+  template:
+    src: ldconfig.kakadu.conf
+    dest: "/etc/ld.so.conf.d/kakadu.conf"
     mode: 0644
   notify:
     - run ldconfig
