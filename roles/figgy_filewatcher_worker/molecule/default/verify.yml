@@ -1,0 +1,18 @@
+---
+- name: Verify
+  hosts: all
+  gather_facts: false
+  tasks:
+  - name: test for deploy user on sudoers
+    lineinfile:
+      path: "/etc/sudoers"
+      line: "{{ item }}"
+      state: present
+    loop:
+      - "deploy ALL=(ALL) NOPASSWD: /usr/sbin/service figgy-filewatcher-worker status"
+      - "deploy ALL=(ALL) NOPASSWD: /usr/sbin/service figgy-filewatcher-worker restart"
+      - "deploy ALL=(ALL) NOPASSWD: /usr/sbin/service figgy-filewatcher-worker start"
+    check_mode: true
+    register: present
+    failed_when:
+      - present is changed
