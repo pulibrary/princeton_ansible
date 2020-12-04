@@ -101,11 +101,15 @@
   file:
     path: '/mnt/{{ item }}'
     state: 'directory'
+    mode: 0755
   with_items:
     - drupal_fileshare_mount
 
 - name: Copy smb credentials
-  copy: src=files/{{ item }} dest=/etc/{{ item }}
+  copy:
+    src: 'files/{{ item }}'
+    dest: '/etc/{{ item }}'
+    mode: 0644
   with_items:
     - drupalweb.smb.credentials
   when: running_on_server
@@ -162,7 +166,6 @@
 
 - include: capistrano_setup.yml
 
-
 - name: install npm for git actions
   apt:
     name: ["nodejs-dev", "node-gyp", "npm", "libssl1.0-dev"]
@@ -188,7 +191,7 @@
     state: absent
     name: php7.0
   notify: restart apache
-  ignore_errors: yes
+  ignore_errors: true
 
 - name: enable apache php7.2 module
   apache2_module:
