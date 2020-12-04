@@ -11,12 +11,12 @@ none
 Role Variables
 --------------
 
-This role contains no additional variables beyond the rails-app
+This role contains no additional variables beyond the rails_app
 
 Dependencies
 ------------
 
-rails-app
+rails_app
   rails_app_name: 
   rails_app_directory:
   rails_app_env: 
