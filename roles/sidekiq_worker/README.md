@@ -6,7 +6,7 @@ This role installs sidekiq_workers
 Requirements
 ------------
 
-This role expects the `rails-app`
+This role expects the `rails_app`
 
 Role Variables
 --------------
