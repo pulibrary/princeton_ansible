@@ -1,0 +1,26 @@
+---
+- name: Verify
+  hosts: all
+  gather_facts: false
+  tasks:
+  - name: check bind9 package status
+    package:
+      name: "{{ item }}"
+      state: present
+    check_mode: true
+    register: pkg_status
+    loop:
+      - bind9
+
+  - name: test for bind9 packages
+    assert:
+      that:
+        - not pkg_status.changed
+
+  - name: get service facts
+    service_facts:
+
+  - name: check if bind9 is installed
+    fail:
+      msg: bind9 is not installed
+    when: ansible_facts.services["bind9"] is not defined
