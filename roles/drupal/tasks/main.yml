@@ -23,6 +23,7 @@
     group: "{{ systems_user }}"
     recurse: true
     follow: false
+    mode: 0755
   become: true
   when: not drupal_docroot_exists.stat.exists
 
@@ -32,6 +33,7 @@
     mode: 0777
     state: directory
   become: true
+  changed_when: false
 
 - name: clone the drupal repo
   git:
@@ -54,6 +56,7 @@
     group: "{{ deploy_user }}"
     follow: false
     recurse: true
+    mode: 0755
   changed_when: false
 
 - name: create composer directory
@@ -62,7 +65,8 @@
     state: directory
     owner: "{{ deploy_user }}"
     group: "{{ deploy_user }}"
-    recurse: yes
+    recurse: true
+    mode: 0755
   become: true
   when: drupal_major_version == 8
   changed_when: false
@@ -90,7 +94,6 @@
     state: directory
     mode: a+w
   become: true
-  become_user: "{{ deploy_user }}"
   when: not file_dir_exists.stat.exists
 
 # Create Mounts
@@ -123,6 +126,7 @@
     state: directory
     owner: "{{ systems_user }}"
     group: "{{ systems_user }}"
+    mode: 0755
 
 - name: Install drush site alias for drupal 7
   template:
@@ -130,6 +134,7 @@
     dest: "/etc/drush/aliases.drushrc.php"
     owner: "{{ systems_user }}"
     group: "{{ systems_user }}"
+    mode: 0644
   when: drupal_major_version == 7
 
 - name: Install drush site alias for drupal 8
@@ -138,6 +143,7 @@
     dest: "/home/{{ deploy_user }}/prod.site.yml"
     owner: "{{ systems_user }}"
     group: "{{ systems_user }}"
+    mode: 0644
   when: drupal_major_version == 8
 
 - name: Check to see if settings.php home file exists.
@@ -151,6 +157,7 @@
     dest: "/home/{{ deploy_user }}/settings.php"
     owner: "{{ deploy_user }}"
     group: "{{ deploy_user }}"
+    mode: 0644
   when: not settings_php_home_exists.stat.exists or force_settings
 
 - include: capistrano_setup.yml
