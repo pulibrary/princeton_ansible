@@ -36,4 +36,4 @@ None.
 
     - hosts: server
       roles:
-        - { role: rails-app }
+        - { role: rails_app }
