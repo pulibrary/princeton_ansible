@@ -5,6 +5,7 @@
     state: directory
     owner: "{{ deploy_user }}"
     group: "www-data"
+    mode: 0755
 
 - name: lib-svn | create svn logs home
   file:
@@ -12,6 +13,7 @@
     state: directory
     owner: "{{ deploy_user }}"
     group: "{{ deploy_user }}"
+    mode: 0755
 
 - name: lib-svn | Check if repo exists in svn home
   stat:
@@ -57,6 +59,7 @@
   template:
     src: passwd.j2
     dest: "{{ lib_svn_repo_dir }}/conf/passwd"
+    mode: 0644
   notify:
     - restart subversion
 
@@ -96,6 +99,7 @@
   template:
     src: svnserve.j2
     dest: '/etc/logrotate.d/svnserve'
+    mode: 0644
 
 - name: lib-svn | install apache modules
   apt:
@@ -131,6 +135,7 @@
   template:
     src: "svn_host.conf.j2"
     dest: "/etc/apache2/sites-available/svn_host.conf"
+    mode: 0644
 
 - name: lib-svn | enable svn site
   command: /usr/sbin/a2ensite svn_host.conf
