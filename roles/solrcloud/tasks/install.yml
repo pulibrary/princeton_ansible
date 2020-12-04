@@ -41,12 +41,16 @@
       service_solrcloud_status is success and
         (solrcloud_check is failed or
         solr_config_xml not in solrcloud_check.content)
+  retries: 3
+  delay: 10
+  until: not solr_downloaded.failed
   ignore_errors: true
 
 - name: copy local copy if download fails
   copy:
     src: 'local_files/solr/{{ solr_cloud_package }}'
     dest: '/tmp/{{ solr_cloud_package }}'
+    mode: 0644
   when: solr_downloaded is failed
 
 - name: Extract SolrCloud installation script
