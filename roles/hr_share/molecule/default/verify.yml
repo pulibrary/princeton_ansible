@@ -1,0 +1,29 @@
+---
+- name: Verify
+  hosts: all
+  gather_facts: false
+  tasks:
+  - name: check for samba software status
+    package:
+      name: "{{ item }}"
+      state: present
+    check_mode: true
+    register: pkg_status
+    loop:
+      - samba-common
+      - samba
+
+  - name: test for samba software packages
+    assert:
+      that:
+        - not pkg_status.changed
+
+  - name: test for hr mount dir
+    stat:
+      path: "{{ item }}"
+    loop:
+      - "/mnt/dms-smbserve"
+    register: hr_mount
+    failed_when:
+      - not hr_mount.stat.exists
+      - not hr_mount.stat.isdir
