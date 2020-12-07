@@ -1,0 +1,42 @@
+---
+- name: Verify
+  hosts: all
+  gather_facts: false
+  tasks:
+  - name: test for approvals rails conf
+    stat:
+      path: "/home/deploy/app_configs/approvals"
+    register: approvals_rails_conf
+    failed_when:
+      - not approvals_rails_conf.stat.exists
+      - not approvals_rails_conf.stat.isreg
+
+  - name: test for approvals app dir
+    stat:
+      path: "/opt/approvals/shared/tmp"
+    register: approvals_app
+    failed_when:
+      - not approvals_app.stat.exists
+      - not approvals_app.stat.isdir
+
+  - name: test for approvals mount dir
+    stat:
+      path: "/mnt/dms-smbserve"
+    register: approvals_mnt
+    failed_when:
+      - not approvals_mnt.stat.exists
+      - not approvals_mnt.stat.isdir
+
+  - name: install mail catcher
+    gem:
+      name: mailcatcher
+      user_install: false
+
+  - name: test mailcatcher
+    command: gem list
+    register: gem_results
+    ignore_errors: true
+  - name: assert gem output has mailcatcher
+    assert:
+      that:
+        - "'mailcatcher' in gem_results.stdout"
