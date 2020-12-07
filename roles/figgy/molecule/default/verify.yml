@@ -1,0 +1,23 @@
+---
+- name: Verify
+  hosts: all
+  gather_facts: false
+  tasks:
+  - name: test for figgy mounts existence
+    stat:
+      path: "{{ item }}"
+    loop:
+      - "/mnt/hydra_sources"
+      - "/mnt/figgy_binaries"
+      - "/mnt/figgy_images"
+      - "/mnt/diglibdata"
+      - "/mnt/illiad"
+      - "/mnt/diglibdata/pudl"
+      - "/mnt/diglibdata/hydra_binaries"
+      - "/mnt/illiad/images"
+      - "/mnt/illiad/ocr_scan"
+      - "/mnt/illiad/cdl_scans"
+    register: figgy_mount
+    failed_when:
+      - not figgy_mount.stat.exists
+      - not figgy_mount.stat.isreg
