@@ -1,0 +1,20 @@
+---
+- name: Verify
+  hosts: all
+  gather_facts: false
+  tasks:
+  - name: test for tomcat8 packages
+    apt:
+      name: "tomcat8"
+      state: present
+    check_mode: true
+    register: present
+    failed_when:
+      - present is changed
+
+  - name: tomcat8 listening on port 8080
+    command: netstat -tunlp | grep ":8080 " |grep java
+    register: process
+    changed_when: false
+    failed_when:
+      - process | length == 0
