@@ -1,0 +1,25 @@
+---
+- name: Converge
+  hosts: all
+  pre_tasks:
+    - name: install iproute
+      apt:
+        name: iproute2
+        state: present
+        update_cache: true
+    - name: rerun setup
+      setup:
+        gather_subset:
+          - network
+  vars:
+    - running_on_server: false
+    - xtradb_nodes_group: "all"
+    - xtradb_leader_node: "instance"
+    - drupal_major_version: 8
+  tasks:
+    - name: "Include roles/perconaxdb for local database"
+      include_role:
+        name: "perconaxdb"
+    - name: "Include roles/recap_www"
+      include_role:
+        name: "recap_www"
