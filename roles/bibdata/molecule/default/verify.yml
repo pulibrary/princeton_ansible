@@ -1,0 +1,28 @@
+---
+- name: Verify
+  hosts: all
+  gather_facts: false
+  tasks:
+  - name: check bibdata software status
+    package:
+      name: "{{ item }}"
+      state: present
+    check_mode: true
+    register: pkg_status
+    loop:
+      - cifs-utils
+
+  - name: test for bibdata software packages
+    assert:
+      that:
+        - not pkg_status.changed
+
+  - name: test for approvals mount dir
+    stat:
+      path: "{{ item }}"
+    loop:
+      - "/mnt/dms-smbserve"
+    register: approvals_mount
+    failed_when:
+      - not approvals_mount.stat.exists
+      - not approvals_mount.stat.isdir
