@@ -1,0 +1,24 @@
+---
+- name: Verify
+  hosts: all
+  gather_facts: false
+  tasks:
+  - name: test for pulmap directory existence
+    stat:
+      path: "{{ item }}"
+    loop:
+      - "/opt/rails_app/shared/tmp"
+    register: pulmap_dir
+    failed_when:
+      - not pulmap_dir.stat.exists
+      - not pulmap_dir.stat.isdir
+
+  - name: test for pulmap google cloud
+    stat:
+      path: "{{ item }}"
+    loop:
+      - "/home/deploy/cloud_config"
+    register: gcloud_conf_dir
+    failed_when:
+      - not gcloud_conf_dir.stat.exists
+      - not gcloud_conf_dir.stat.isdir
