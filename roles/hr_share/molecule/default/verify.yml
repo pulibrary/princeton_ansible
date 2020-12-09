@@ -1,0 +1,27 @@
+---
+- name: Verify
+  hosts: all
+  gather_facts: false
+  tasks:
+  - name: check samba status
+    package:
+      name: "{{ item }}"
+      state: present
+    check_mode: true
+    register: pkg_status
+    loop:
+      - samba-common
+      - samba
+
+  - name: test for samba packages
+    assert:
+      that:
+        - not pkg_status.changed
+
+  - name: test for hr mount directory
+    stat:
+      path: "/mnt/dms-smbserve"
+    register: cantaloupe
+    failed_when:
+      - not cantaloupe.stat.exists
+      - not cantaloupe.stat.isdir
