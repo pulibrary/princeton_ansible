@@ -1,22 +1,31 @@
 ---
 - name: Install dependencies
-  apt: name={{item}} state=present
-  with_items:
-    - cifs-utils
+  apt:
+    name: ["cifs-utils"]
+    state: present
+
 - name: Copy smb credentials
-  copy: src=files/{{item}} dest=/etc/{{item}}
+  copy:
+    src: "files/{{ item }}"
+    dest: "/etc/{{ item }}"
+    mode: 0644
   with_items:
     - shared_data.smb.credentials
+  when: running_on_server
+
 - name: Create mount directories
   file:
-    path: '/mnt/{{item}}'
-    state: 'directory'
+    path: "/mnt/{{ item }}"
+    state: "directory"
+    mode: 0755
   with_items:
     - shared_data
+
 - name: Mount shared_data share
   mount:
-    name: /mnt/shared_data
-    src: //diglibdata1.princeton.edu/shared_data
+    name: "/mnt/shared_data"
+    src: "//diglibdata1.princeton.edu/shared_data"
     fstype: cifs
-    opts: 'credentials=/etc/shared_data.smb.credentials,uid={{deploy_user_uid}}'
+    opts: "credentials=/etc/shared_data.smb.credentials,uid={{ deploy_user_uid }}"
     state: mounted
+  when: running_on_server
