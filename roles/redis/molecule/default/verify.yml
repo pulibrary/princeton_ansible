@@ -1,0 +1,27 @@
+---
+- name: Verify
+  hosts: all
+  gather_facts: false
+  tasks:
+  - name: check redis package status
+    package:
+      name: "{{ item }}"
+      state: present
+    check_mode: true
+    register: pkg_status
+    loop:
+      - redis-server
+      - redis-tools
+      - python-redis
+
+  - name: test for redis packages
+    assert:
+      that:
+        - not pkg_status.changed
+
+  - name: redis listening on port 6379
+    command: netstat -tunlp | grep "0.0.0.0:6379 "
+    register: process
+    changed_when: false
+    failed_when:
+      - process | length == 0
