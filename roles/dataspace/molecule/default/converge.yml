@@ -1,0 +1,44 @@
+---
+- name: Converge
+  hosts: all
+  vars:
+    - running_on_server: false
+    - deploy_user: "dspace"
+    - nginx_type: opensource
+    - nginx_install_from: nginx_repository
+    - postgresql_is_local: false
+    - postgres_host: "localhost"
+    - postgres_port: "5432"
+    - postgres_admin_user: "postgres"
+    - postgres_admin_password: "VoightKampff"
+    - shib_hostname: "instance"
+  become: true
+  pre_tasks:
+    - name: update cache
+      apt:
+        update_cache: true
+        cache_valid_time: 600
+  tasks:
+    - name: "Include psql"
+      include_role:
+        name: psql
+      vars:
+        postgresql_users:
+          - name: postgres
+            password: "VoightKampff"
+            db: postgres
+            priv: "ALL"
+            role_attr_flags: "CREATEDB,SUPERUSER"
+        postgresql_hba_entries:
+          - type: local
+            database: all
+            user: postgres
+            method: ident
+          - type: host
+            database: all
+            user: postgres
+            address: 127.0.0.1/32
+            method: md5
+    - name: "Include dataspace"
+      include_role:
+        name: dataspace
