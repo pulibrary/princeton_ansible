@@ -1,5 +1,5 @@
 ---
-- name: lib-svn | create svn home
+- name: lib_svn | create svn home
   file:
     path: "{{ svn_home }}"
     state: directory
@@ -7,7 +7,7 @@
     group: "www-data"
     mode: 0755
 
-- name: lib-svn | create svn logs home
+- name: lib_svn | create svn logs home
   file:
     path: "/var/log/svnserve"
     state: directory
@@ -15,47 +15,50 @@
     group: "{{ deploy_user }}"
     mode: 0755
 
-- name: lib-svn | Check if repo exists in svn home
+- name: lib_svn | Check if repo exists in svn home
   stat:
     path: "{{ lib_svn_repo_dir }}"
   register: repo_dir
 
-- name: lib-svn | create repo
+- name: lib_svn | create repo
   command: svnadmin create "{{ lib_svn_repo_dir }}"
   when: not repo_dir.stat.exists
 
-- name: lib-svn | modify file permissions
+- name: lib_svn | modify file permissions
   file:
     path: "{{ lib_svn_repo_dir }}"
     owner: "{{ deploy_user }}"
     group: "www-data"
 
-- name: lib-svn | copy svn default file
+- name: lib_svn | copy svn default file
   copy:
     src: files/svnserve
     dest: /etc/default/svnserve
     owner: root
     group: root
+    mode: 0600
 
-- name: lib-svn | add svn systemd file
+- name: lib_svn | add svn systemd file
   copy:
     src: files/svnserve.service
     dest: /etc/systemd/system/svnserve.service
     owner: root
     group: root
+    mode: 0644
   when: running_on_server
 
-- name: lib-svn | make systemd re-read itself
+- name: lib_svn | make systemd re-read itself
   systemd:
     daemon_reload: true
   when: running_on_server
 
-- name: lib-svn | copy svnserve config file
+- name: lib_svn | copy svnserve config file
   copy:
     src: files/svnserve.conf
     dest: "{{ lib_svn_repo_dir }}/conf"
+    mode: 0644
 
-- name: lib-svn | copy svnserve credentials file
+- name: lib_svn | copy svnserve credentials file
   template:
     src: passwd.j2
     dest: "{{ lib_svn_repo_dir }}/conf/passwd"
@@ -63,23 +66,23 @@
   notify:
     - restart subversion
 
-- name: lib-svn | get LOC ead file
+- name: lib_svn | get LOC ead file
   get_url:
     url: https://www.loc.gov/ead/ead.xsd
     dest: "{{ lib_svn_repo_dir }}/ead.xsd"
 
-- name: lib-svn | point to local file
+- name: lib_svn | point to local file
   lineinfile:
     dest: "{{ lib_svn_repo_dir }}/ead.xsd"
     regexp: 'schemaLocation="http://www.loc.gov/standards/xlink/xlink.xsd"/>'
     line: 'schemaLocation="xlink.xsd"/>'
 
-- name: lib-svn | get LOC xlink file
+- name: lib_svn | get LOC xlink file
   get_url:
     url: https://www.loc.gov/standards/xlink/xlink.xsd
     dest: "{{ lib_svn_repo_dir }}/xlink.xsd"
 
-- name: lib-svn | setup pre-revprop-change hook to allow editing properties
+- name: lib_svn | setup pre-revprop-change hook to allow editing properties
   template:
     src: pre-revprop-change.j2
     dest: "{{ lib_svn_repo_dir }}/hooks/pre-revprop-change"
@@ -87,7 +90,7 @@
     owner: "{{ deploy_user }}"
     group: "www-data"
 
-- name: lib-svn | setup pre-commit hook for ead files
+- name: lib_svn | setup pre-commit hook for ead files
   template:
     src: ead_pre_commit.sh.j2
     dest: "{{ lib_svn_repo_dir }}/hooks/pre-commit"
@@ -95,33 +98,33 @@
     owner: "{{ deploy_user }}"
     group: "www-data"
 
-- name: lib-svn | rotate the logs
+- name: lib_svn | rotate the logs
   template:
     src: svnserve.j2
     dest: '/etc/logrotate.d/svnserve'
     mode: 0644
 
-- name: lib-svn | install apache modules
+- name: lib_svn | install apache modules
   apt:
     name: ["libapache2-mod-svn", "libsvn-dev", "apache2-utils", "python-passlib"]
     state: present
 
-- name: lib-svn | install xmllint
+- name: lib_svn | install xmllint
   apt:
     name: ["libxml2-utils", "bash-completion"]
     state: present
 
-- name: lib-svn | enable svn module
+- name: lib_svn | enable svn module
   apache2_module:
     state: present
     name: dav
 
-- name: lib-svn | enable dav_svn module
+- name: lib_svn | enable dav_svn module
   apache2_module:
     state: present
     name: dav_svn
 
-- name: lib-svn | create svn authentication
+- name: lib_svn | create svn authentication
   htpasswd:
     path: "{{ item.path }}"
     name: "{{ item.name }}"
@@ -131,17 +134,17 @@
     mode: "{{ item.mode | default('u+rw,g+r') }}"
   with_items: "{{ svn_credentials }}"
 
-- name: lib-svn | setup virtual host
+- name: lib_svn | setup virtual host
   template:
     src: "svn_host.conf.j2"
     dest: "/etc/apache2/sites-available/svn_host.conf"
     mode: 0644
 
-- name: lib-svn | enable svn site
+- name: lib_svn | enable svn site
   command: /usr/sbin/a2ensite svn_host.conf
   changed_when: false
 
-- name: lib-svn | disable default site
+- name: lib_svn | disable default site
   command: /usr/sbin/a2dissite 000-default.conf
   changed_when: false
   notify: reload apache
