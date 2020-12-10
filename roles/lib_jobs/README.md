@@ -26,7 +26,7 @@ Example Playbook
 
     - hosts: servers
       roles:
-         - { role: roles/lib-jobs }
+         - { role: roles/lib_jobs }
 
 License
 -------
