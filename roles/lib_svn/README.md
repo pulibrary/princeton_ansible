@@ -11,7 +11,7 @@ An already configured subversion server
 Role Variables
 --------------
 
-Create a new vaulted user and saved the username and password under `group_vars/lib-svn/vault.yml`
+Create a new vaulted user and saved the username and password under `group_vars/lib_svn/vault.yml`
 
 * in `vars/main.yml` # the name of the subversion user
 * in `defaults/main.yml` # the `svn_users` dictionary 
@@ -29,7 +29,7 @@ Example Playbook
 
     - hosts: servers
       roles:
-         - { role: roles/lib-svn }
+         - { role: roles/lib_svn }
 
 License
 -------
