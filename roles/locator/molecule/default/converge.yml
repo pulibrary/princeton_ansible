@@ -1,6 +1,7 @@
 ---
 - name: Converge
   hosts: all
+  become: true
   pre_tasks:
   - name: install iproute
     apt:
@@ -10,10 +11,18 @@
     setup:
       gather_subset:
         - network
+  - name: update cache
+    apt:
+      update_cache: true
+      cache_valid_time: 600
   vars:
     - running_on_server: false
     - xtradb_nodes_group: "all"
     - xtradb_leader_node: "instance"
-  roles:
-  - role: perconaxdb
-  - role: locator
+  tasks:
+    - name: "Include perconaxdb"
+      include_role:
+        name: perconaxdb
+    - name: "Include locator"
+      include_role:
+        name: locator
