@@ -1,0 +1,27 @@
+---
+- name: Verify
+  hosts: all
+  gather_facts: false
+  tasks:
+  - name: check oracle dependencies package status
+    package:
+      name: "{{ item }}"
+      state: present
+    check_mode: true
+    register: pkg_status
+    loop:
+      - libaio1
+      - build-essential
+      - unzip
+
+  - name: test for oracle dependencies
+    assert:
+      that:
+        - not pkg_status.changed
+
+  - name: test for oracle client directory
+    stat:
+      path: "/opt/oracle"
+    register: oracle
+    failed_when:
+      - not oracle.stat.exists
