@@ -1,0 +1,22 @@
+---
+- name: Verify
+  hosts: all
+  gather_facts: false
+  tasks:
+  - name: test for db config file
+    stat:
+      path: "/home/deploy/db_config.php"
+    register: db_conf
+    failed_when:
+      - db_conf.stat.isreg is not defined
+      - db_conf.stat.pw_name != deploy
+      - db_conf.stat.gr_name != deploy
+
+  - name: test for www directory
+    stat:
+      path: "/var/www"
+    register: web_dir
+    failed_when:
+      - web_dir.stat.isdir is not defined
+      - web_dir.stat.pw_name != deploy
+      - web_dir.stat.gr_name != deploy
