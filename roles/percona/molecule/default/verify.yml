@@ -1,0 +1,27 @@
+---
+- name: Verify
+  hosts: all
+  gather_facts: false
+  tasks:
+  - name: check percona server package status
+    package:
+      name: "{{ item }}"
+      state: present
+    check_mode: true
+    register: pkg_status
+    loop:
+      - percona-server-server-5.7
+      - python-pymysql
+      - python3-mysqldb
+
+  - name: test for percona server software
+    assert:
+      that:
+        - not pkg_status.changed
+
+  - name: mysql user and database exists
+    command: mysql -umy_user -pmy_pass my_db -e'show tables'
+    register: process
+    changed_when: false
+    failed_when:
+      - process is search("ERROR")
