@@ -1,11 +1,12 @@
 ---
 - name: Create capistrano directory structure
   file:
-    path: '/opt/{{ item }}'
+    path: '{{ capistrano_base_dir }}/{{ item }}'
     state: 'directory'
     owner: '{{ deploy_user }}'
     group: '{{ deploy_user }}'
     mode: 0755
+  changed_when: false
   with_items:
     - '{{ capistrano_directory }}'
     - '{{ capistrano_directory }}/shared'
@@ -19,3 +20,54 @@
     group: '{{ deploy_user }}'
     state: 'link'
   with_items: '{{ capistrano_shared_links }}'
+
+- name: Change owner to lib/www so deploy has access
+  file:
+    path: "{{ capistrano_base_dir }}"
+    state: directory
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+    mode: 0755
+
+- name: Define WWW user sudoer group nginx
+  lineinfile:
+    dest: "/etc/sudoers"
+    state: "present"
+    line: "Runas_Alias WWW = {{ capistrano_web_owner }}"
+    validate: "visudo -cf %s"
+
+- name: Allow deploy user to run any command as nginx
+  lineinfile:
+    dest: "/etc/sudoers"
+    state: "present"
+    line: "{{ deploy_user }} ALL = (WWW) NOPASSWD: ALL"
+    validate: "visudo -cf %s"
+
+- name: Allow deploy to restart, stop, start nginx
+  lineinfile:
+    dest: "/etc/sudoers"
+    state: "present"
+    line: "{{ deploy_user }} ALL=(ALL) NOPASSWD: /usr/sbin/service {{ capistrano_web_service }} *"
+    validate: "visudo -cf %s"
+
+
+- name: Allow deploy user to change ownership of the library directory to nginx
+  lineinfile:
+    dest: "/etc/sudoers"
+    state: "present"
+    line: "{{ deploy_user }} ALL=(ALL) NOPASSWD: /bin/chown -R {{ capistrano_web_owner }} {{ capistrano_base_dir }}/{{ capistrano_directory }}*"
+    validate: "visudo -cf %s"
+
+- name: Allow deploy user to change ownership of the caches
+  lineinfile:
+    dest: "/etc/sudoers"
+    state: "present"
+    line: "{{ deploy_user }} ALL=(ALL) NOPASSWD: /bin/chown -R {{ capistrano_web_owner }} /home/{{ deploy_user }}/*"
+    validate: "visudo -cf %s"
+
+- name: Allow deploy user to change ownership of the library directory to deploy
+  lineinfile:
+    dest: "/etc/sudoers"
+    state: "present"
+    line: "{{ deploy_user }} ALL=(ALL) NOPASSWD: /bin/chown -R deploy {{ capistrano_base_dir }}/{{ capistrano_directory }}*"
+    validate: "visudo -cf %s"
