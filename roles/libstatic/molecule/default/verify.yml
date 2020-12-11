@@ -1,0 +1,50 @@
+---
+- name: Verify
+  hosts: all
+  gather_facts: false
+  tasks:
+  - name: test for libstatic code git repos
+    stat:
+      path: "{{ item }}"
+    loop:
+      - "/var/local/firestone-renovations"
+      - "var/local/republic"
+      - "/var/local/milberg"
+      - "/var/local/capping_liberty"
+      - "/var/local/pathebaby"
+      - "/var/local/thankful_nation"
+      - "/var/local/jameslyon"
+      - "/var/local/njmaps"
+      - "/var/local/versailles"
+      - "/etc/apache2/sites-enabled/000-lib-static-staging1.conf"
+      - "/etc/apache2/sites-enabled/000-milberg-staging.conf"
+    register: libstatic_repos
+    failed_when:
+      - not libstatic_repos.stat.exists
+
+  - name: test for presence libwww apache config
+    lineinfile:
+      path: "/etc/apache2/sites-enabled/000-lib-static-staging1.conf"
+      line: "{{ item }}"
+      state: present
+    loop:
+      - '<Directory "/var/local/firestone-renovations">'
+      - '<Directory "/var/local/republic">'
+      - '<Directory "/var/local/capping_liberty">'
+      - '<Directory "/var/local/pathebaby">'
+      - '<Directory "/var/local/thankful_nation">'
+      - '<Directory "/var/local/jameslyon">'
+      - '<Directory "/var/local/njmaps">'
+      - '<Directory "/var/local/versailles">'
+      - 'Alias /renovations /var/local/firestone-renovations'
+      - 'Alias /republic /var/local/republic'
+      - 'Alias /capping-liberty /var/local/capping_liberty'
+      - 'Alias /pathebaby /var/local/pathebaby'
+      - 'Alias /thankful-nation /var/local/thankful_nation'
+      - 'Alias /jameslyon /var/local/jameslyon'
+      - 'Alias /njmaps /var/local/njmaps'
+      - 'Alias /versailles /var/local/versailles'
+    check_mode: true
+    register: content_present
+    failed_when:
+      - content_present is not changed
