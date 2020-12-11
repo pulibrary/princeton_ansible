@@ -1,0 +1,72 @@
+---
+# This is an example playbook to execute Ansible tests.
+
+- name: Verify
+  hosts: all
+  gather_facts: false
+  tasks:
+  - name: test for presence sudoers config for capistrano
+    lineinfile:
+      path: "/etc/sudoers"
+      line: "{{ item }}"
+      state: present
+    loop:
+      - "deploy ALL=(ALL) NOPASSWD: /usr/sbin/service apache2 *"
+      - "Runas_Alias WWW = www-data"
+      - "deploy ALL = (WWW) NOPASSWD: ALL"
+      - "deploy ALL=(ALL) NOPASSWD: /bin/chown -R www-data /opt/pas_cap*"
+      - "deploy ALL=(ALL) NOPASSWD: /bin/chown -R deploy /opt/pas_cap*"
+    check_mode: true
+    register: present
+    failed_when:
+      - present is changed
+  - name: test for craft3 packages
+    apt:
+      name: "{{ item }}"
+      state: present
+    loop:
+      - 'php7.2'
+      - 'php7.2-curl'
+      - 'php7.2-gd'
+      - 'php7.2-json'
+      - 'php7.2-mbstring'
+      - 'php7.2-mysql'
+      - 'php7.2-zip'
+      - 'php7.2-intl'
+      - 'cifs-utils'
+      - 'zip'
+    check_mode: true
+    register: present
+    failed_when:
+      - present is changed
+  - name: test for pas config in apache
+    lineinfile:
+      path: "/etc/apache2/sites-available/000-default.conf"
+      line: "{{ item }}"
+      state: present
+    loop:
+      - "    DocumentRoot /opt/pas/web"
+    check_mode: true
+    register: present
+    failed_when:
+      - present is changed
+  - name: load apache2 modules
+    command: 'apache2ctl -M'
+    register: apache_results
+    ignore_errors: true
+    changed_when: false
+
+  - name: assert apache2 modules loaded
+    assert:
+      that:
+        - "'remoteip_module' in apache_results.stdout"
+        - "'proxy_module' in apache_results.stdout"
+        - "'proxy_fcgi_module' in apache_results.stdout"
+        - "'php7_module' in apache_results.stdout"
+
+  - name: test for pas conf files existence
+    stat:
+      path: "{{ item }}"
+    loop:
+      - "/home/deploy/.env"
+      - "/home/deploy/license.key"
