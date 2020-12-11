@@ -1,0 +1,44 @@
+---
+- name: Verify
+  hosts: all
+  gather_facts: false
+  tasks:
+  - name: test for mudd rails conf
+    stat:
+      path: "/home/deploy/app_configs/mudd-dbs"
+    register: mudd_rails_conf
+    failed_when:
+      - not mudd_rails_conf.stat.exists
+      - not mudd_rails_conf.stat.isreg
+      - not mudd_rails_conf.stat.pw_name == deploy
+      - not mudd_rails_conf.stat.gr_name == deploy
+
+  - name: test for mudd directory
+    stat:
+      path: "/opt/mudd-dbs/shared/tmp"
+    register: mudd_dir
+    failed_when:
+      - not mudd_dir.stat.exists
+      - not mudd_dir.stat.isdir
+      - not mudd_dir.stat.pw_name == deploy
+      - not mudd_dir.stat.gr_name == deploy
+
+  - name: test for mudd database file
+    stat:
+      path: "/opt/mudd-dbs/shared/config/database.yml"
+    register: mudd_db
+    failed_when:
+      - not mudd_db.stat.exists
+      - not mudd_db.stat.isreg
+      - not mudd_db.stat.pw_name == deploy
+      - not mudd_db.stat.gr_name == deploy
+
+  - name: test for mudd logrotate file
+    stat:
+      path: "/etc/logrotate.d/mudd-dbs"
+    register: mudd_logr
+    failed_when:
+      - not mudd_logr.stat.exists
+      - not mudd_logr.stat.isreg
+      - not mudd_logr.stat.pw_name == root
+      - not mudd_logr.stat.gr_name == root
