@@ -1,0 +1,31 @@
+---
+- name: Verify
+  hosts: all
+  gather_facts: false
+  tasks:
+  - name: test for solr directory ownership
+    stat:
+      path: "/solr"
+    loop:
+    register: solr
+    failed_when:
+      - not solr.stat.exists
+      - not solr.stat.pw_name != deploy
+      - not solr.stat.gr_name != deploy
+
+  - name: solr listening on port 8983
+    uri:
+      url: http://localhost:8983/solr
+      return_content: true
+    register: solr_page
+    failed_when:
+      - "'Solr Admin' not in solr_page.content"
+
+  - name: test for configured core
+    stat:
+      path: "/solr/data/catalog/core.properties"
+    register: core
+    failed_when:
+      - not core.stat.exists
+      - not core.stat.pw_name != deploy
+      - not core.stat.gr_name != deploy
