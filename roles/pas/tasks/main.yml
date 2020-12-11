@@ -38,11 +38,13 @@
   file:
     path: '/mnt/diglibdata1'
     state: 'directory'
+    mode: '0755'
 
 - name: Copy smb credentials
   copy:
     src: files/pas.smb.credentials
     dest: /etc/pas.smb.credentials
+    mode: '0644'
   when: running_on_server
 
 - name: Create mount for pas shared files
@@ -53,3 +55,18 @@
     opts: 'defaults,uid=33,gid={{ deploy_user_uid }},credentials=/etc/pas.smb.credentials'
     state: mounted
   when: running_on_server
+
+- name: Install the license key
+  copy:
+    src: files/license.key
+    dest: /home/{{ deploy_user }}/license.key
+    mode: '0644'
+  when: running_on_server
+
+- name: update .env
+  template:
+    src: 'files/env.j2'
+    dest: '/home/{{ deploy_user }}/.env'
+    owner: 'deploy'
+    group: 'deploy'
+    mode: 0644
