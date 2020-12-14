@@ -1,0 +1,48 @@
+---
+# ## Install the system package dependencies
+# - name: Install dependencies
+#   apt: name={{item}} state=present
+#   with_items:
+#     - nfs-common
+#
+# ## Create the mount for the Solr backup network share
+# - name: Create mount directories
+#   file:
+#     path: '/mnt/{{item}}'
+#     state: 'directory'
+#   with_items:
+#     - solrbackup
+#
+# ## Mount the share
+# - name: Create mount to the Solr backup
+#   mount:
+#     name: '/mnt/solrbackup'
+#     src: 'diglibdata1.princeton.edu:/ifs/solrbackup'
+#     fstype: nfs
+#     state: mounted
+
+## Create Mounts
+- name: Create mount directories
+  file:
+    path: '/mnt/solr_backup'
+    state: 'directory'
+    mode: 0755
+
+# TODO: put the credentials file in `files`
+- name: Copy smb credentials
+  copy:
+    src: "files/{{ item }}"
+    dest: "/etc/{{ item }}"
+    mode: 0644
+  when: running_on_server
+  with_items:
+    - solr.smb.credentials
+
+- name: Create mount to solr_backup
+  mount:
+    name: /mnt/solr_backup
+    src: //diglibdata1.princeton.edu/solr_backup
+    fstype: cifs
+    opts: 'credentials=/etc/solr.smb.credentials,uid={{ deploy_user_uid }}'
+    state: mounted
+  when: running_on_server
