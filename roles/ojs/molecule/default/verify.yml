@@ -1,0 +1,23 @@
+---
+# This is an example playbook to execute Ansible tests.
+
+- name: Verify
+  hosts: all
+  gather_facts: false
+  tasks:
+  - name: test for databases
+    command: sudo -u postgres psql -l
+    register: ojs_db_results
+    failed_when:
+      - "'ojs_db' not in ojs_db_results.stdout"
+    changed_when: false
+  - name: test for ojs files existence
+    stat:
+      path: "{{ item }}"
+    loop:
+      - "/etc/shibboleth/shibboleth2.xml"
+      - "/var/www/ojs"
+      - "/var/www/ojs/plugins/themes/"
+    register: file
+    failed_when:
+      - not file.stat.exists

@@ -6,6 +6,7 @@
     apt:
       name: iproute2
       state: present
+      update_cache: true
   - name: rerun setup
     setup:
       gather_subset:
@@ -17,11 +18,9 @@
     - postgres_port: "5432"
     - postgres_admin_user: "postgres"
     - postgres_admin_password: "VoightKampff"
-  roles:
-    - role: psql
-      postgresql_databases:
+    - postgresql_databases:
         - name: ojs_db
-      postgresql_users:
+    - postgresql_users:
         - name: ojs_db_user
           password: "change_me"
           db: ojs_db
@@ -32,7 +31,7 @@
           db: postgres
           priv: "ALL"
           role_attr_flags: "CREATEDB,SUPERUSER"
-      postgresql_hba_entries:
+    - postgresql_hba_entries:
         - type: local
           database: all
           user: postgres
@@ -47,4 +46,10 @@
           user: ojs_db_user
           address: 127.0.0.1/32
           method: md5
-    - role: ojs
+  tasks:
+    - name: "Include roles/psql"
+      include_role:
+        name: "psql"
+    - name: "Include roles/ojs"
+      include_role:
+        name: "ojs"
