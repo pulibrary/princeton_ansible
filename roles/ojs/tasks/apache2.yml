@@ -12,6 +12,7 @@
   copy:
     src: "files/{{ item }}"
     dest: "/etc/apache/ssl/certs/"
+    mode: 0644
   with_items:
     - ojs-staging1_princeton_edu_cert.pem
     - ojs-staging1_princeton_edu_chained.pem
@@ -21,6 +22,7 @@
   copy:
     src: "files/ojs-staging1_princeton_edu_priv.key"
     dest: "/etc/apache/ssl/private/"
+    mode: 0644
   when: running_on_server
 
 - name: ojs | set ojs Virtualhost
@@ -58,9 +60,11 @@
 - name: ojs | generate signing key
   command: shib-keygen -n sp-signing -u _shibd -g _shibd -y 20 -h {{ inventory_hostname }} -e https://{{ inventory_hostname }}/shibboleth
   changed_when: false
+  ignore_errors: true
   when: running_on_server
 
 - name: ojs | generate encryption key
   command: shib-keygen -n sp-encrypt -u _shibd -g _shibd -y 20 -h {{ inventory_hostname }} -e https://{{ inventory_hostname }}/shibboleth
   changed_when: false
+  ignore_errors: true
   when: running_on_server
