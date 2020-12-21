@@ -3,13 +3,13 @@
 # Things needed for discover utils after this
 
 # needed for capistrano to have access to this file
-- name: Check to see if .env.local file exists.
+- name: libwww | Check to see if .env.local file exists.
   stat:
     path: "/home/{{ deploy_user }}/.env.local"
   register: env_home_exists
 
 # needed for capistrano to have access to this file
-- name: Install .env.local in deploy user home directory for cap
+- name: libwww | Install .env.local in deploy user home directory for cap
   template:
     src: "env.local.j2"
     dest: "/home/{{ deploy_user }}/.env.local"
@@ -18,7 +18,7 @@
     mode: 0644
   when: not env_home_exists.stat.exists or force_settings
 
-- name: Add apache rules for discovery utils
+- name: libwww | Add apache rules for discovery utils
   blockinfile:
     path: "/etc/apache2/sites-available/000-default.conf"
     marker: "## {mark} ANSIBLE MANAGED BLOCK ##"
@@ -36,7 +36,7 @@
 ########### Drupal Start ######
 # Drupal after this
 
-- name: Copy database dump
+- name: libwww | Copy database dump
   copy:
     src: 'files/{{ drupal_dbimport_file }}'
     dest: '/home/deploy/{{ drupal_dbimport_file }}'
@@ -45,7 +45,7 @@
     mode: 'preserve'
   when: (drupal_dbimport_file is defined) and (inventory_hostname ==  groups[group_names[0]][0])
 
-- name: Import database from local dump file
+- name: libwww | Import database from local dump file
   mysql_db:
     state: 'import'
     name: '{{ drupal_db_name }}'
@@ -56,7 +56,7 @@
     target: '/home/deploy/{{ drupal_dbimport_file }}'
   when: (drupal_dbimport_file is defined) and (inventory_hostname ==  groups[group_names[0]][0])
 
-- name: Copy the staff script
+- name: libwww | Copy the staff script
   copy:
     src: 'files/get_staff_updates.sh'
     dest: '/usr/bin/get_staff_updates.sh'
@@ -64,7 +64,7 @@
     group: '{{ deploy_user }}'
     mode: 0777
 
-- name: install the cron job for staff
+- name: libwww | install the cron job for staff
   cron:
     name: "staff profile"
     minute: 0
@@ -73,7 +73,7 @@
     user: "{{ deploy_user }}"
   when: (inventory_hostname ==  groups[group_names[0]][0])
 
-- name: install the cron for running drush cron
+- name: libwww | install the cron for running drush cron
   cron:
     name: "run drush cron"
     minute: 0
@@ -81,15 +81,15 @@
     user: "{{ deploy_user }}"
   when: (inventory_hostname ==  groups[group_names[0]][0])
 
-- name: ensure max file size is set in apache2 php.ini
+- name: libwww | ensure max file size is set in apache2 php.ini
   lineinfile:
-    dest: "/etc/php/7.2/apache2/php.ini"
+    dest: "/etc/php/7.4/apache2/php.ini"
     regexp: "upload_max_filesize ="
     line: "upload_max_filesize = 8M"
 
-- name: ensure memory limit is set in apache2 php.ini
+- name: libwww | ensure memory limit is set in apache4 php.ini
   lineinfile:
-    dest: "/etc/php/7.2/apache2/php.ini"
+    dest: "/etc/php/7.4/apache2/php.ini"
     regexp: "memory_limit ="
     line: "memory_limit = 256M"
 
@@ -97,12 +97,12 @@
 ###### Special Collections ######
 # after this is the tasks to setup special collections
 
-- name: Check to see if special collections drupal docroot home file exists.
+- name: libwww | Check to see if special collections drupal docroot home file exists.
   stat:
     path: "{{ special_collections_drupal_docroot }}"
   register: special_collections_drupal_docroot_exists
 
-- name: create special collections drupal docroot
+- name: libwww | create special collections drupal docroot
   file:
     path: "{{ special_collections_drupal_docroot }}"
     state: directory
@@ -114,12 +114,12 @@
   become: true
   when: not special_collections_drupal_docroot_exists.stat.exists
 
-- name: Check to see if special_collections_settings.php home file exists.
+- name: libwww | Check to see if special_collections_settings.php home file exists.
   stat:
     path: "/home/{{ deploy_user }}/special_collections_settings.php"
   register: special_collections_settings_php_home_exists
 
-- name: Install settings.php
+- name: libwww | Install settings.php
   template:
     src: "special_collections_settings.php.j2"
     dest: "/home/{{ deploy_user }}/special_collections_settings.php"
@@ -128,7 +128,7 @@
     mode: 0644
   when: not special_collections_settings_php_home_exists.stat.exists or force_settings
 
-- name: Add apache rules for special collections
+- name: libwww | Add apache rules for special collections
   blockinfile:
     path: "/etc/apache2/sites-available/000-default.conf"
     marker: "## {mark} ANSIBLE SPECIAL COLLECTIONS MANAGED BLOCK ##"
@@ -142,21 +142,21 @@
       </Directory>
   notify: restart apache
 
-- name: Allow deploy user to change ownership of the special collections directory to www-data
+- name: libwww | Allow deploy user to change ownership of the special collections directory to www-data
   lineinfile:
     dest: "/etc/sudoers"
     state: "present"
     line: "{{ deploy_user }} ALL=(ALL) NOPASSWD: /bin/chown -R www-data {{ special_collections_drupal_docroot }}*"
     validate: "visudo -cf %s"
 
-- name: Allow deploy user to change ownership of the special collections directory to deploy
+- name: libwww | Allow deploy user to change ownership of the special collections directory to deploy
   lineinfile:
     dest: "/etc/sudoers"
     state: "present"
     line: "{{ deploy_user }} ALL=(ALL) NOPASSWD: /bin/chown -R deploy {{ special_collections_drupal_docroot }}*"
     validate: "visudo -cf %s"
 
-- name: install the cron for running drush cron for special collections
+- name: libwww | install the cron for running drush cron for special collections
   cron:
     name: "run special collections drush cron"
     minute: 10
