@@ -3,15 +3,6 @@ Princeton Ansible Playbooks
 <p align="left">
   <a href="https://github.com/pulibrary/princeton_ansible"><img alt="Princeton Ansible Workflow" src="https://github.com/pulibrary/princeton_ansible/workflows/Molecule%20Tests/badge.svg"></a>
 </p>
-# Import PUL Box
-
-Download `ubuntu-16.04.virtualbox.box` from the google drive and place it in the `images` directory. It is an image built from the [https://github.com/pulibrary/vmimages](https://github.com/pulibrary/vmimages) repository. It will need the relatively insecure `pulsys_rsa_key` to log into the VM. Ask for the untracked private key.
-
-Import the box with
-
-```
-$ vagrant box add --name princeton_box images/ubuntu-16.04.virtualbox.box
-```
 
 # Setting up your Python Environment
 
@@ -20,7 +11,6 @@ $ vagrant box add --name princeton_box images/ubuntu-16.04.virtualbox.box
 ### MacOS
 
  * `brew cask install virtualbox`
- * `brew cask install vagrant`
  * `brew install python`
  * `brew install pipenv`
  * `brew install rbenv`
@@ -30,7 +20,6 @@ $ vagrant box add --name princeton_box images/ubuntu-16.04.virtualbox.box
 
  * `sudo add-apt-repository multiverse && sudo apt -y update`
  * `sudo apt -y install virtualbox`
- * `sudo apt -y install vagrant`
  * `sudo apt -y install python-pip`
  * `sudo apt install apt-transport-https ca-certificates curl software-properties-common`
  * `curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add
@@ -86,56 +75,46 @@ molecule test
 # Developing
 
 ## Create a new role
-In all the steps below substitue your role name for `example`
+In all the steps below substitue your role name for `your_new_role`
 1. Initialize the role with molecule.
    Run the following command from the root of this repo:
 
    ```bash
-   molecule init role -r roles/example
+   molecule init role roles/your_new_role --driver-name docker
    ```
 1. Set up to run from github actions `vi .github/workflows/molecule_tests.yml` add for your role at the end matrix of the roles
    ```
-       - example
+       - your_new_role
    ```
 1. Setup the directory to run molecule
 
    1. copy over the root molecule.yml
       ```bash
-      cp roles/example/molecule.yml roles/example/molecule/default
-      cp roles/example/yaml-lint.yml roles/example/molecule/default
-      cp roles/example/main.yml roles/example/meta
-      cp roles/example/.ansible-lint roles/example/.ansible-lint
+      cp roles/example/molecule.yml roles/your_new_role/molecule/default
+      cp roles/example/main.yml roles/your_new_role/meta/main.yml
+      cp roles/example/.ansible-lint roles/your_new_role/.ansible-lint
       ```
 
-   1. edit `roles/example/meta/main.yml` and change `to include your role name`
+   1. edit `roles/your_new_role/meta/main.yml` and add a description
 
-   1. edit `roles/example/molecule/default/playbook.yml`
+   1. edit `roles/your_new_role/molecule/default/converge.yml`
       1. Add:
          ```
          vars:
            - running_on_server: false
          ```
-      1. remove `role\` from `- role: role\example`
+      1. replace `name: roles/your_new_role` with `name: your_new_role`
 
 1. Test that your role is now working
    All tests should pass
    ```
-   cd roles/example
+   cd roles/your_new_role
    molecule test
    ```
 1. Push your branch and verify that circle ci runs and passes.
 
 ## Generating Molecule Tests
 
-One can use the `invoke molecularize` task in order to generate new molecule
-suites for existing roles:
-
-```bash
-invoke molecularize bind9
-```
-
-Please note that this should only be used for cases where the role already
-exists.
 
 ## Molecule tests
 
@@ -154,24 +133,6 @@ If your are having issues with your tests passing and have run `molecule converg
 ```
 molecule login
 ```
-
-## Vagrant for testing
-
-Depending on what project you are working on there are example Vagrantfile's in
-the `Vagrant` directory. If you are working on the lae project as an example
-create a symbolic link to it with
-
-```
-ln -s /path/to/thisclonedrepo/Vagrant/laeVagrantfile
-/path/to/thisclonedrepo/Vagrantfile
-```
-
-You can use a vagrant machine to develop and test these ansible playbooks. In
-order to do so, run `vagrant up` from this directory.
-
-After the box is built, you can re-run the scripts via `vagrant provision`.
-
-You will need to enter the Ansible Vault password.
 
 # Usage
 
