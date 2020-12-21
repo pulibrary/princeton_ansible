@@ -1,5 +1,5 @@
 ---
-- name: 'debug web server'
+- name: php | debug web server
   debug:
     msg: PHP Web Server {{ php_webserver }}
 
@@ -9,12 +9,12 @@
       - apt-transport-https
       - dirmngr
 
-- name: Add ondrej sury repository
+- name: php | Add ondrej sury repository
   apt_repository:
     repo: "ppa:ondrej/php"
   when: ansible_distribution_release == "xenial" or php_version == '7.4'
 
-- name: install php
+- name: php | install php
   apt:
     name: ["php{{ php_version }}", "php{{ php_version }}-dev", "php{{ php_version }}-curl", "php{{ php_version }}-zip"]
     state: latest
@@ -23,7 +23,7 @@
   tags: ['skip_ansible_lint']
   notify: restart apache
 
-- name: Install datadog trace php repository
+- name: php | Install datadog trace php repository
   apt:
     deb: "https://github.com/DataDog/dd-trace-php/releases/download/{{ ddtrace_repo_version }}/datadog-php-tracer_{{ ddtrace_repo_version }}_amd64.deb"
     state: present
@@ -37,3 +37,10 @@
 - include: configure-nginx.yml
   when: php_webserver == 'nginx'
   notify: restart nginx
+
+- name: php | uninstall eol php
+  apt:
+    name: ["php{{ php_eolversion }}", "php{{ php_eolversion }}-dev", "php{{ php_eolversion }}-curl", "php{{ php_eolversion }}-zip"]
+    autoremove: true
+    state: absent
+  notify: restart apache
