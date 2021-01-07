@@ -1,7 +1,7 @@
 Role Name
 =========
 
-Installs PHP 7.2
+Installs PHP 7.4
 
 Requirements
 ------------

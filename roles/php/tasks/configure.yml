@@ -1,18 +1,31 @@
 ---
-- name: Ensure that the PHP config. for Apache has been installed
+- name: php | Ensure that the PHP config. for Apache has been installed
   stat:
-    path: /etc/php/7.2/apache2/php.ini
+    path: /etc/php/{{ php_version }}/apache2/php.ini
   register: modphp
 
-- name: Ensure that the PHP config for the CLI has been installed
+- name: php | Ensure that the PHP config for the CLI has been installed
   stat:
-    path: /etc/php/7.2/cli/php.ini
+    path: /etc/php/{{ php_version }}/cli/php.ini
   register: phpcli
 
-- name: Run the tasks for the PHP CLI
+- name: php | Run the tasks for the PHP CLI
   include: php-cli.yml
   when: phpcli.stat.exists
 
-- name: Run the tasks for the Apache PHP module
+- name: php | Run the tasks for the Apache PHP module
   include: mod-php.yml
   when: modphp.stat.exists
+
+- name: php | disable php apache module
+  apache2_module:
+    state: absent
+    name: php{{ php_eolversion }}
+  notify: restart apache
+  ignore_errors: true
+
+- name: php | enable php apache module
+  apache2_module:
+    state: present
+    name: php{{ php_version }}
+  notify: restart apache
