@@ -1,0 +1,28 @@
+---
+- hosts: friends_of_pul_staging
+  remote_user: pulsys
+  become: true
+  vars:
+    - force_settings: true
+    - drupal_git_repo: ''
+    - post_install: |
+        Possible Things left to do:
+        - run a cap for friends_of_pul
+        - where needed make sure server is greenlisted on [lib-ponyexpress](https://github.com/pulibrary/pul-the-hard-way/blob/master/services/smtp-mail-server.md)
+  vars_files:
+    - ../group_vars/friends_of_pul/friends_of_pul_staging.yml
+    - ../group_vars/friends_of_pul/vault.yml
+    # need information to connect to solr staging cluster
+  roles:
+    - role: friends_of_pul
+
+  post_tasks:
+    - name: tell everyone on slack you ran an ansible playbook
+      slack:
+        token: "{{ vault_pul_slack_token }}"
+        msg: "{{ inventory_hostname }} completed"
+        channel: #server-alerts
+
+    - name: post role reminders
+      debug:
+        msg: "{{ post_install.split('\n') }}"
