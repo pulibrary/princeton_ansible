@@ -1,13 +1,13 @@
 ---
 # tasks file for roles/locator
-- name: install mysql php driver & cif utils
+- name: locator | install mysql php driver & cif utils
   apt:
-    name: ["php7.2-mysql", "cifs-utils"]
+    name: ["php7.4-mysql", "cifs-utils"]
     state: present
     update_cache: true
 
 # needed for capistrano to have access to this file
-- name: Copy template into deploy user home directory for cap
+- name: locator | Copy template into deploy user home directory for cap
   template:
     src: "db_config.php.j2"
     dest: "/home/{{ deploy_user }}/db_config.php"
@@ -16,7 +16,7 @@
     mode: 0644
   notify: restart apache
 
-- name: Change owner to lib/www so deploy has access
+- name: locator | Change owner to lib/www so deploy has access
   file:
     path: "/var/www"
     state: directory
@@ -24,20 +24,20 @@
     group: "{{ deploy_user }}"
     mode: 0755
 
-- name: Create mount directories
+- name: locator | Create mount directories
   file:
     path: '/mnt/diglibdata/{{ locator_fileshare_mount }}'
     state: directory
     mode: 0755
 
-- name: Copy smb credentials
+- name: locator |  Copy smb credentials
   copy:
     src: "files/locator.smb.credentials"
     dest: "/etc/locator.smb.credentials"
     mode: 0644
   when: running_on_server
 
-- name: Mount Drupal fileshare
+- name: locator | Mount Drupal fileshare
   mount:
     name: '/mnt/diglibdata/{{ locator_fileshare_mount }}'
     src: '//diglibdata1.princeton.edu/{{ locator_fileshare_mount }}'
