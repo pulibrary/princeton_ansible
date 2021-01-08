@@ -1,25 +1,25 @@
 ---
-## Bibdata sqs poll watcher
-- name: Install startup script for AwsSqsPoller
+## Setup daemon for AwsSqsPoller
+- name: Setup daemon for AwsSqsPoller
   template:
-    src: pubsub.service
-    dest: /etc/systemd/system/figgy-pubsub-worker.service
+    src: sqs-poller.service
+    dest: /etc/systemd/system/bidata-sqs-poller.service
     mode: 0644
-  notify: 'restart pubsub worker'
+  notify: 'restart sqs poller'
   when: running_on_server
 
-- name: Keep pubsub worker running
+- name: Keep poller running
   service:
-    name: figgy-pubsub-worker
+    name: bidata-sqs-poller
     enabled: true
     state: started
   when: running_on_server
 
-- name: Allow deploy user to restart worker
+- name: Allow deploy user to restart poller
   lineinfile:
     dest: /etc/sudoers
     state: present
-    line: '{{ deploy_user }} ALL=(ALL) NOPASSWD: /usr/sbin/service figgy-pubsub-worker {{ item }}'
+    line: '{{ deploy_user }} ALL=(ALL) NOPASSWD: /usr/sbin/service bidata-sqs-poller {{ item }}'
     validate: 'visudo -cf %s'
   with_items:
     - status
