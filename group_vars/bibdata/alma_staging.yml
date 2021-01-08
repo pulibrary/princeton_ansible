@@ -152,3 +152,40 @@ postgres_port: "{{ bibdata_db_port }}"
 postgres_admin_user: "{{ db_clusteradmin_user }}"
 postgres_admin_password: "{{ db_clusteradmin_password }}"
 postgresql_is_local: false
+
+datadog_api_key: "{{ vault_datadog_key }}"
+datadog_config:
+  tags: "application:bibdata, environment:production, type:webserver"
+  apm_enabled: "true"
+  log_enabled: true
+  process_config:
+    enabled: "true"
+  apm_config:
+    analyzed_spans:
+      bibdata|rack.request: 1
+datadog_checks:
+  ruby:
+    init_config:
+    logs:
+      - type: file
+        path: /opt/marc_liberation/current/log/production.log
+        service: bibdata
+        source: ruby
+  nginx:
+    init_config:
+    logs:
+      - type: file
+        path: /var/log/nginx/access.log
+        service: bibdata
+        source: nginx
+        sourcecategory: http_web_access
+      - type: file
+        path: /var/log/nginx/error.log
+        service: bibdata
+        source: nginx
+        sourcecategory: http_web_access
+  tls:
+    init_config:
+    instances:
+      - server: bibdata-alma-staging.princeton.edu
+        port: 443
