@@ -3,18 +3,12 @@
   hosts: all
   gather_facts: false
   tasks:
-  - name: check ruby package status
-    package:
-      name: "{{ item }}"
-      state: present
-    check_mode: true
-    register: pkg_status
-    loop:
-      - ruby-switch
-      - ruby2.6-dev
-      - ruby2.6
-
-  - name: test for ruby packages
-    assert:
-      that:
-        - not pkg_status.changed
+  - name: test for lae-blacklight dir
+    stat:
+      path: "/opt/lae-blacklight/shared/tmp"
+    register: lae
+    failed_when:
+      - not lae.stat.exists
+      - not lae.stat.isdir
+      - not lae.stat.pw_name == deploy
+      - not lae.stat.gr_name == deploy
