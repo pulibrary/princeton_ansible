@@ -46,6 +46,9 @@
     - maplab.smb.credentials
     - geoserver.smb.credentials
     - illiad.smb.credentials
+    - marquand.smb.credentials
+    - mendel.smb.credentials
+    - mudd.smb.credentials
 
 - name: Create mount to plum binaries
   mount:
@@ -120,6 +123,19 @@
     fstype: cifs
     opts: 'credentials=/etc/studio.new.smb.credentials,uid={{ deploy_user_uid }}'
     state: mounted
+
+- name: Create lib-dps mounts
+  when: running_on_server
+  mount:
+    name: /mnt/hydra_sources/{{ item }}
+    src: //lib-dps-server.princeton.edu/{{ item }}
+    fstype: cifs
+    opts: 'credentials=/etc/{{ item }}.smb.credentials,uid={{ deploy_user_uid }}'
+    state: mounted
+  with_items:
+    - marquand
+    - mendel
+    - mudd
 
 - name: Create mount to music reserves (hydra sources)
   when: running_on_server
