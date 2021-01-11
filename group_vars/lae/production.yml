@@ -66,3 +66,31 @@ rails_app_vars:
     value: '{{lae_honeybadger_key}}'
 sneakers_workers: PlumEventHandler
 sneakers_worker_name: lae-sneakers
+
+datadog_api_key: "{{ vault_datadog_key }}"
+
+datadog_config:
+  log_enabled: true
+  apm_enabled: true
+  process_config:
+    enabled: true
+  apm_config:
+    analyzed_spans:
+      approvals|rack.request: 1
+datadog_checks:
+  tls:
+    init_config:
+    instances:
+      - server: lae.princeton.edu
+        port: 443
+        tags:
+          - 'tls_service:lae'
+  approval_datadog_ruby_check:
+    init_config:
+    logs:
+      - type: file
+        path: /opt/lae-blacklight/current/log/production.log
+        service: lae
+        source: ruby
+        sourcecategory: sourcecode
+        tags: "lae, environment:production, role:lae"
