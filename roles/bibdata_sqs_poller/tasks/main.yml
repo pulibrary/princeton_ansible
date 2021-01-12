@@ -1,0 +1,27 @@
+---
+## Setup daemon for AwsSqsPoller
+- name: Setup daemon for AwsSqsPoller
+  template:
+    src: sqs-poller.service
+    dest: /etc/systemd/system/bibdata-sqs-poller.service
+    mode: 0644
+  notify: 'restart sqs poller'
+  when: running_on_server
+
+- name: Keep poller running
+  service:
+    name: bibdata-sqs-poller
+    enabled: true
+    state: started
+  when: running_on_server
+
+- name: Allow deploy user to restart poller
+  lineinfile:
+    dest: /etc/sudoers
+    state: present
+    line: '{{ deploy_user }} ALL=(ALL) NOPASSWD: /usr/sbin/service bibdata-sqs-poller {{ item }}'
+    validate: 'visudo -cf %s'
+  with_items:
+    - status
+    - restart
+    - start
