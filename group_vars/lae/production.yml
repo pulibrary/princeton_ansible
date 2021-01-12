@@ -1,9 +1,9 @@
 ---
 postgres_host: 'lib-postgres3.princeton.edu'
 postgres_version: 10
-passenger_server_name: "lae-staging1.princeton.edu"
+passenger_server_name: "lae1.princeton.edu"
 passenger_app_root: "/opt/lae-blacklight/current/public"
-passenger_app_env: "staging"
+passenger_app_env: "production"
 passenger_ruby: "/usr/bin/ruby2.6"
 ruby_version_override: "ruby2.6"
 bundler_version: "2.1.4"
@@ -20,19 +20,18 @@ rails_app_dependencies:
   - pkg-config
   - libtool
   - autoconf
-lae_db_name: 'lae_staging'
-lae_db_user: '{{vault_lae_staging_db_user}}'
-lae_db_password: '{{vault_lae_staging_db_password}}'
+lae_db_name: 'lae_production'
+lae_db_user: '{{vault_lae_db_user}}'
+lae_db_password: '{{vault_lae_db_password}}'
 lae_rabbit_user: '{{vault_lae_rabbit_user}}'
 lae_rabbit_password: '{{vault_lae_rabbit_password}}'
 lae_rabbit_host: '{{ figgy_rabbit_host }}'
 lae_rabbit_server: 'amqp://{{lae_rabbit_user}}:{{lae_rabbit_password}}@{{lae_rabbit_host}}:5672'
-lae_solr_url: 'http://lib-solr-staging.princeton.edu:8983/solr/lae-staging'
 rabbitmq_user: '{{lae_rabbit_user}}'
 rabbitmq_password: '{{lae_rabbit_password}}'
-rails_app_env: "staging"
-lae_host_name: 'lae-staging1.princeton.edu'
-lae_honeybadger_key: ''
+rails_app_env: "production"
+lae_host_name: 'lae1.princeton.edu'
+lae_honeybadger_key: '{{vault_lae_honeybadger_key}}'
 application_db_name: '{{lae_db_name}}'
 application_dbuser_name: '{{lae_db_user}}'
 application_dbuser_password: '{{lae_db_password}}'
@@ -42,7 +41,7 @@ application_host_protocol: 'https'
 project_db_host: '{{postgres_host}}'
 rails_app_vars:
   - name: SECRET_KEY_BASE
-    value: '{{vault_lae_staging_secret_key}}'
+    value: '{{vault_lae_secret_key}}'
   - name: LAE_DB
     value: '{{lae_db_name}}'
   - name: LAE_DB_USERNAME
@@ -62,8 +61,36 @@ rails_app_vars:
   - name: APPLICATION_HOST_PROTOCOL
     value: '{{application_host_protocol}}'
   - name: SOLR_URL
-    value: '{{lae_solr_url}}'
+    value: 'http://lib-solr.princeton.edu:8983/solr/lae'
   - name: HONEYBADGER_API_KEY
     value: '{{lae_honeybadger_key}}'
 sneakers_workers: PlumEventHandler
 sneakers_worker_name: lae-sneakers
+
+datadog_api_key: "{{ vault_datadog_key }}"
+
+datadog_config:
+  log_enabled: true
+  apm_enabled: true
+  process_config:
+    enabled: true
+  apm_config:
+    analyzed_spans:
+      approvals|rack.request: 1
+datadog_checks:
+  tls:
+    init_config:
+    instances:
+      - server: lae.princeton.edu
+        port: 443
+        tags:
+          - 'tls_service:lae'
+  approval_datadog_ruby_check:
+    init_config:
+    logs:
+      - type: file
+        path: /opt/lae-blacklight/current/log/production.log
+        service: lae
+        source: ruby
+        sourcecategory: sourcecode
+        tags: "lae, environment:production, role:lae"
