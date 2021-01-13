@@ -1,0 +1,25 @@
+---
+- name: Converge
+  hosts: all
+  pre_tasks:
+  - name: install iproute
+    apt:
+      name: iproute2
+      state: present
+      update_cache: true
+  - name: rerun setup
+    setup:
+      gather_subset:
+        - network
+  vars:
+    - running_on_server: false
+    - xtradb_nodes_group: "all"
+    - xtradb_leader_node: "instance"
+    - mariadb_server__root_password: "{{ vault_maridb_password | default('change_me') }}"
+  tasks:
+    - name: "Include roles/perconaxdb for local database"
+      include_role:
+        name: "perconaxdb"
+    - name: "Include roles/friends_of_pul"
+      include_role:
+        name: "friends_of_pul"
