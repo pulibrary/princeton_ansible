@@ -1,0 +1,43 @@
+---
+drupal_ssl_base_path: 'https://fpul-prod.princeton.edu'
+
+drupal_db_user: 'fpul-prod'
+drupal_db_password: "{{ fpul_db_password | default('change_this') }}"
+drupal_db_name: 'fpul-prod'
+
+
+db_host: 'mariadb-prod2.princeton.edu'
+db_password: '{{ vault_xtradb_root_password }}'
+mariadb__server: "{{ db_host }}"
+
+datadog_api_key: "{{ vault_datadog_key }}"
+datadog_service_name: fpul
+datadog_environment: prod
+
+force_vhosts_update: true
+datadog_enabled: true
+datadog_config:
+  log_enabled: true
+  apm_enabled: true
+datadog_checks:
+  tls:
+    init_config:
+    instances:
+      - server: fpul-prod1.princeton.edu
+        port: 443
+  fpul_datadog_apache_check:
+    init_config:
+    logs:
+      - type: file
+        path: /var/log/apache2/other_vhosts_access.log
+        service: fpul
+        source: apache
+        sourcecategory: http_web_access
+        tags: "fpul, env:prod, role:fpul"
+      - type: file
+        path: /var/log/apache2/error.log
+        service: fpul
+        source: apache
+        sourcecategory: http_web_access
+        tags: "fpul, env:prod, role:fpul"
+drupal_major_version: 7
