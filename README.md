@@ -80,7 +80,8 @@ In all the steps below substitue your role name for `your_new_role`
    Run the following command from the root of this repo:
 
    ```bash
-   molecule init role roles/your_new_role --driver-name docker
+   export your_new_role=<fil in the role name here>
+   molecule init role roles/$your_new_role --driver-name docker
    ```
 1. Set up to run from github actions `vi .github/workflows/molecule_tests.yml` add for your role at the end matrix of the roles
    ```
@@ -90,14 +91,14 @@ In all the steps below substitue your role name for `your_new_role`
 
    1. copy over the root molecule.yml
       ```bash
-      cp roles/example/molecule.yml roles/your_new_role/molecule/default
-      cp roles/example/main.yml roles/your_new_role/meta/main.yml
-      cp roles/example/.ansible-lint roles/your_new_role/.ansible-lint
+      cp roles/example/molecule.yml roles/$your_new_role/molecule/default
+      cp roles/example/main.yml roles/$your_new_role/meta/main.yml
+      cp roles/example/.ansible-lint roles/$your_new_role/.ansible-lint
       ```
 
-   1. edit `roles/your_new_role/meta/main.yml` and add a description
+   1. edit `vi roles/$your_new_role/meta/main.yml` and add a description
 
-   1. edit `roles/your_new_role/molecule/default/converge.yml`
+   1. edit `vi roles/$your_new_role/molecule/default/converge.yml`
       1. Add:
          ```
          vars:
@@ -108,7 +109,7 @@ In all the steps below substitue your role name for `your_new_role`
 1. Test that your role is now working
    All tests should pass
    ```
-   cd roles/your_new_role
+   cd roles/$your_new_role
    molecule test
    ```
 1. Push your branch and verify that circle ci runs and passes.
