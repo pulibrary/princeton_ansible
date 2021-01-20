@@ -1,0 +1,26 @@
+---
+## Create Mounts
+- name: Create mount directories
+  file:
+    path: '/mnt/{{ item }}'
+    state: 'directory'
+    mode: 0755
+  with_items:
+    - isilon
+# Scratch Credentials
+- name: Copy smb credentials
+  copy:
+    src: "files/{{ item }}"
+    dest: "/etc/{{ item }}"
+    mode: 0644
+  when: running_on_server
+  with_items:
+    - scratch.smb.credentials
+- name: Create mount to scratch space (used for bulk ingest and other bulk operations)
+  mount:
+    name: '/mnt/isilon/ingest_scratch'
+    src: '//diglibdata1.princeton.edu/hydra/binaries/ingest_scratch/bibdata_scratch'
+    fstype: cifs
+    opts: 'credentials=/etc/scratch.smb.credentials,uid={{ deploy_user_uid }},gid=33'
+    state: mounted
+  when: running_on_server
