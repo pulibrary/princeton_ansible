@@ -1,0 +1,46 @@
+---
+# This is an example playbook to execute Ansible tests.
+
+- name: Verify
+  hosts: all
+  gather_facts: false
+  tasks:
+  - name: test for lib_statistics rails conf
+    stat:
+      path: "/home/deploy/app_configs/lib_statistics"
+    register: lib_statistics_rails_conf
+    failed_when:
+      - not lib_statistics_rails_conf.stat.exists
+      - not lib_statistics_rails_conf.stat.isreg
+      - not lib_statistics_rails_conf.stat.pw_name == deploy
+      - not lib_statistics_rails_conf.stat.gr_name == deploy
+
+  - name: test for lib_statistics app dir
+    stat:
+      path: "/opt/lib_statistics/shared/tmp"
+    register: lib_statistics_app
+    failed_when:
+      - not lib_statistics_app.stat.exists
+      - not lib_statistics_app.stat.isdir
+      - not lib_statistics_app.stat.pw_name == deploy
+      - not lib_statistics_app.stat.gr_name == deploy
+
+  - name: test for lib_statistics logrotate
+    stat:
+      path: "/etc/logrotate.d/lib_statistics"
+    register: logrotate
+    failed_when:
+      - not logrotate.stat.exists
+      - not logrotate.stat.isreg
+      - not logrotate.stat.pw_name == root
+      - not logrotate.stat.gr_name == root
+
+  - name: test mailcatcher
+    command: gem list
+    register: gem_results
+    ignore_errors: true
+    changed_when: false
+  - name: assert gem output has mailcatcher
+    assert:
+      that:
+        - "'mailcatcher' in gem_results.stdout"
