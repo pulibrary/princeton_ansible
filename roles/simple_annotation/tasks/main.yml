@@ -1,11 +1,50 @@
 ---
 # tasks file for roles/simple_annotation
+- name: Simple annotation | install apache2 modules
+  apache2_module:
+    name: "{{ item }}"
+    state: present
+  notify: restart apache
+  with_items:
+    - proxy
+    - proxy_http
+    - proxy_balancer
+    - lbmethod_byrequests
+    - remoteip
+
+- name: Simple annotation | install dependencies
+  apt:
+    name:
+      - libapache2-mod-auth-cas
+
 - name: Simple annotation | install dependencies
   apt:
     name:
       - maven
     state: present
   when: running_on_server
+
+- name: Simple annotation | add our location based config
+  template:
+    src: "apache2-site.conf.j2"
+    dest: "/etc/apache2/sites-available/000-default.conf"
+    mode: 0644
+  changed_when: false
+  notify: restart apache
+  become: true
+  with_items: "{{ named_sites }}"
+
+- name: Simple annotation | Add apache rules for cas
+  blockinfile:
+    path: "/etc/apache2/sites-available/000-default.conf"
+    marker: "## {mark} ANSIBLE MANAGED BLOCK ##"
+    insertafter: "</VirtualHost>"
+    block: |
+      ProxyPass / http://127.0.0.1:8888/
+      ProxyPassReverse / http://127.0.0.1:8888/
+      {{ cas_environment }}
+  changed_when: false
+  notify: restart apache
 
 - name: Simple annotation | create package directory
   file:
