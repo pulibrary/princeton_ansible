@@ -10,7 +10,7 @@ Princeton Ansible Playbooks
 
 ### MacOS
 
- * `brew cask install virtualbox`
+ * `brew install --cask virtualbox`
  * `brew install python`
  * `brew install pipenv`
  * `brew install rbenv`
@@ -64,7 +64,7 @@ pipenv shell
 
 ## Determine if everything is installed correctly
 
-Make sure docker is running before you run the following to test the installation
+Make sure docker is running before you run the following (from inside the `pipenv shell`) to test the installation:
 
 ```bash
 cd roles/common
@@ -191,6 +191,11 @@ Currently there's no automation on firewall changes when the box you're provisio
 * https://github.com/pulibrary/pul-the-hard-way/blob/master/services/solr.md#allow-access-from-a-new-box
 
 # Vault
+Use `ansible-vault edit` to make changes to the `vault.yml` file, for example:
+
+```
+ansible-vault edit group_vars/bibdata/vault.yml
+```
 
 If you need to diff an ansible-vault file, run
 ```
