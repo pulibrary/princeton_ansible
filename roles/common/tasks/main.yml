@@ -1,8 +1,8 @@
 ---
-- name: common | update phusion libraries
-  command: apt-get --allow-releaseinfo-change update
-  changed_when: false
-  ignore_errors: true
+- name: common | get yarn key
+  apt_key:
+    url: https://dl.yarnpkg.com/debian/pubkey.gpg
+    state: present
 
 - name: common | install building software and build essentials
   apt:
@@ -10,11 +10,6 @@
     state: present
     update_cache: true
   changed_when: false
-
-- name: common | update python's crypto libs
-  pip:
-    name: ["urllib3", "pyopenssl", "ndg-httpsclient", "pyasn1"]
-    executable: pip3
 
 - name: common | copy tmux.conf
   template:
@@ -27,13 +22,26 @@
     name: '{{ configured_dependencies }}'
     state: present
 
+- name: common | add vector repository
+  get_url:
+    url: https://repositories.timber.io/public/vector/cfg/setup/bash.deb.sh
+    dest: /tmp/bash.deb.sh
+  changed_when: false
+
+- name: common | add vector repository
+  command: bash /tmp/bash.deb.sh
+  become: true
+  changed_when: false
+
 - name: common | install vector
   apt:
-    deb: "{{ vector_url }}/{{ vector_version }}/vector-amd64.deb"
+    name: vector
+  ignore_errors: true
+  when: running_on_server
 
 - name: common | install duf
   apt:
-    deb: "{{ duf_url }}/v{{ duf_version }}/duf_0.5.0_linux_amd64.deb"
+    deb: "{{ duf_url }}/v{{ duf_version }}/duf_0.6.0_linux_amd64.deb"
   register: duf_repo
   retries: 3
   delay: 60
