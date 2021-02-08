@@ -15,12 +15,15 @@
     dest: '{{ kdu_install }}'
     creates: '{{ kdu_install }}/KDU78_Demo_Apps_for_Linux-x86-64_160226/kdu_compress'
   become: true
+  when: running_on_server
+  ignore_errors: true
 
 - name: Set Default Symlink
   file:
     path: '{{ kdu_install }}/kakadu'
     src: KDU78_Demo_Apps_for_Linux-x86-64_160226
     state: link
+    force: true
   become: true
   ignore_errors: '{{ ansible_check_mode }}'
 
@@ -29,6 +32,7 @@
     src: "{{ kdu_install }}/kakadu/{{ item }}"
     dest: "/usr/lib/{{ item }}"
     state: link
+    force: true
   with_items:
     - libkdu_v78R.so
 
