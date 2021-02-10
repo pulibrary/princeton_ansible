@@ -1,0 +1,96 @@
+---
+- hosts: ansible_tower
+  remote_user: pulsys
+  become: true
+  vars_files:
+    - ../group_vars/ansible_tower/main.yml
+    - ../group_vars/researchdata/vault.yml
+  tasks:
+    - name: add postgres:10 appstream
+      dnf:
+        name: "@postgresql:10/client"
+        state: present
+
+    - name: install postgresql client packages
+      dnf:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - libpq-devel
+        - python2-psycopg2
+        - python3-psycopg2
+
+    - name: install access rules
+      copy:
+        src: pg_hba.conf
+        dest: /etc/postgresql/{{ postgres_version }}/main/pg_hba.conf
+        group: postgres
+        owner: postgres
+        mode: 0644
+      register: configure_postgres
+      when: postgresql_is_local
+
+    - name: install configuration file
+      template:
+        src: 'postgresql.conf.j2'
+        dest: '/etc/postgresql/{{ postgres_version }}/main/postgresql.conf'
+        group: postgres
+        owner: postgres
+        mode: 0644
+      register: configure_postgres
+      when: postgresql_is_local
+
+    - name: ensure postgres starts on boot
+      service:
+        name: postgresql
+        enabled: true
+      when: postgresql_is_local
+
+    - name: restart postgres server
+      service:
+        name: postgresql
+        state: started
+      when: postgresql_is_local
+
+    - name: ensure access to postgres server
+      lineinfile:
+        path: '/etc/postgresql/{{ postgres_version }}/main/pg_hba.conf'
+        line: 'host    all             all             {{ ansible_default_ipv4.address }}/32       md5'
+      delegate_to: '{{ postgres_host }}'
+      register: remote_postgres_configured
+      when:
+        - postgres_host is not none
+        - not postgresql_is_local
+        - running_on_server
+        - not postgresql_is_cloud
+      ignore_errors: true
+
+    - name: create postgresql db users
+      postgresql_user:
+        name: '{{ application_dbuser_name }}'
+        port: '{{ postgres_port | default(omit) }}'
+        login_host: '{{ postgres_host | default(omit) }}'
+        login_user: '{{ postgres_admin_user | default(omit) }}'
+        login_password: '{{ postgres_admin_password | default(omit) }}'
+        password: '{{ application_dbuser_password }}'
+        encrypted: true
+        role_attr_flags: '{{ application_dbuser_role_attr_flags }}'
+        state: 'present'
+
+    - name: create postgresql database
+      postgresql_db:
+        name: '{{ application_db_name }}'
+        port: '{{ postgres_port | default(omit) }}'
+        login_host: '{{ postgres_host | default(omit) }}'
+        login_user: '{{ postgres_admin_user | default(omit) }}'
+        login_password: '{{ postgres_admin_password | default(omit) }}'
+        encoding: 'UTF-8'
+        owner: '{{ application_dbuser_name }}'
+        state: 'present'
+      changed_when: false
+
+    - name: tell everyone on slack you ran an ansible playbook
+      slack:
+        token: "{{ vault_pul_slack_token }}"
+        msg: "{{ inventory_hostname }} completed"
+        channel: #server-alerts
