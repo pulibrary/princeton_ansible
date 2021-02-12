@@ -9,13 +9,21 @@
     url: "{{ postgresql_apt_key_url }}"
     state: present
 
-- name: add postgresql repository
+- name: PostgreSQL | add postgres:10 appstream
+  dnf:
+    name: "@postgresql:10/client"
+    state: present
+  when:
+    - running_on_server
+    - ansible_distribution == "CentOS"
+
+- name: PostgreSQL | add postgresql repository
   apt_repository:
     repo: 'deb http://apt.postgresql.org/pub/repos/apt/ {{ ansible_distribution_release }}-pgdg main'
     update_cache: true
     state: present
 
-- name: install postgresql server packages
+- name: PostgreSQL | install postgresql server packages
   apt:
     name: '{{ item }}'
     state: present
@@ -25,7 +33,7 @@
     - postgresql-{{ postgres_version }}
   when: postgresql_is_local
 
-- name: install postgresql client packages
+- name: PostgreSQL | install postgresql client packages
   apt:
     name: '{{ item }}'
     state: present
@@ -36,6 +44,18 @@
     - python-psycopg2
     - python3-psycopg2
     - postgresql-client-{{ postgres_version }}
+
+- name: install postgresql client packages
+  dnf:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - libpq-devel
+    - python2-psycopg2
+    - python3-psycopg2
+  when:
+    - running_on_server
+    - ansible_distribution == "CentOS"
 
 - name: install access rules
   copy:
