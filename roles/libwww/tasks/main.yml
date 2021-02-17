@@ -64,23 +64,6 @@
     group: '{{ deploy_user }}'
     mode: 0777
 
-- name: libwww | install the cron job for staff
-  cron:
-    name: "staff profile"
-    minute: 0
-    hour: 7
-    job: "/usr/bin/get_staff_updates.sh >/tmp/staff_updates.out 2>&1"
-    user: "{{ deploy_user }}"
-  when: (inventory_hostname ==  groups[group_names[0]][0])
-
-- name: libwww | install the cron for running drush cron
-  cron:
-    name: "run drush cron"
-    minute: 0
-    job: "sudo -u www-data drush @prod cron"
-    user: "{{ deploy_user }}"
-  when: (inventory_hostname ==  groups[group_names[0]][0])
-
 - name: libwww | ensure max file size is set in apache2 php.ini
   lineinfile:
     dest: "/etc/php/7.4/apache2/php.ini"
