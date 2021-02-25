@@ -1,16 +1,54 @@
 ---
 # tasks file for roles/vireo
 #
+
 - name: vireo | download play framework
   unarchive:
     src: "https://github.com/playframework/play1/archive/1.3.4.zip"
     dest: "/opt"
     remote_src: true
 
-# https://github.com/TexasDigitalLibrary/Vireo/archive/v3.0.0.zip
-#
+- name: vireo | create play symbolic link
+  file:
+    src: "/opt/play1-1.3.4"
+    dest: "/opt/play"
+    state: link
+
 - name: vireo | download vireo
   unarchive:
     src: "https://github.com/TexasDigitalLibrary/Vireo/archive/v3.0.6.zip"
     dest: "/opt"
     remote_src: true
+
+- name: vireo | create vireo symbolic link
+  file:
+    src: "/opt/Vireo-3.0.6"
+    dest: "/opt/vireo"
+    state: link
+
+- name: vireo | add file mounts
+  file:
+    path: /opt/vireo/vireo_datastore
+    state: directory
+    mode: 0755
+
+- name: vireo | enter db config
+  lineinfile:
+    path: /opt/vireo/conf/application.conf
+    regexp: '^db=postgres://host/database_name'
+    insertafter: '^#db=postgres://host/database_name'
+    line: db=postgres://localhost/vireo_db
+
+- name: vireo | enter db user config
+  lineinfile:
+    path: /opt/vireo/conf/application.conf
+    regexp: '^db.user = user'
+    insertafter: '^#db.user = user'
+    line: db.user = vireo_user
+
+- name: vireo | enter db pass config
+  lineinfile:
+    path: /opt/vireo/conf/application.conf
+    regexp: '^db.pass = secret'
+    insertafter: '^#db.pass = secret'
+    line: db.user = vireo_password
