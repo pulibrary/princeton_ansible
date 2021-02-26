@@ -1,18 +1,13 @@
 ---
 # tasks file for roles/vireo
 #
+#
+- include_tasks: play_framework.yml
 
-- name: vireo | download play framework
-  unarchive:
-    src: "https://github.com/playframework/play1/archive/1.3.4.zip"
-    dest: "/opt"
-    remote_src: true
-
-- name: vireo | create play symbolic link
-  file:
-    src: "/opt/play1-1.3.4"
-    dest: "/opt/play"
-    state: link
+- name: vireo |  check if we already downloaded/unarchived
+  stat:
+    path: "/opt/Vireo-3.0.6"
+  register: vireo_path
 
 - name: vireo | download vireo
   unarchive:
@@ -28,9 +23,15 @@
 
 - name: vireo | add file mounts
   file:
-    path: /opt/vireo/vireo_datastore
+    path: /opt/Vireo-3.0.6/vireo_datastore
     state: directory
     mode: 0755
+
+- name: vireo | create vireo symbolic link
+  file:
+    src: "/opt/Vireo-3.0.6/vireo_datastore"
+    dest: "/opt/Vireo-3.0.6/data"
+    state: link
 
 - name: vireo | enter db config
   lineinfile:
