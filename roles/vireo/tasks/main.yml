@@ -13,6 +13,8 @@
   unarchive:
     src: "https://github.com/TexasDigitalLibrary/Vireo/archive/v3.0.6.zip"
     dest: "/opt"
+    group: "{{ deploy_user }}"
+    owner: "{{ deploy_user }}"
     remote_src: true
 
 - name: vireo | create vireo symbolic link
@@ -25,6 +27,8 @@
   file:
     path: /opt/Vireo-3.0.6/vireo_datastore
     state: directory
+    group: "{{ deploy_user }}"
+    owner: "{{ deploy_user }}"
     mode: 0755
 
 - name: vireo | create vireo symbolic link
@@ -33,23 +37,48 @@
     dest: "/opt/Vireo-3.0.6/data"
     state: link
 
+- name: vireo | enter base url
+  lineinfile:
+    path: /opt/vireo/conf/application.conf
+    regexp: '^application.baseUrl=http://www.yourdomain.com/'
+    insertafter: '^#application.baseUrl=http://www.yourdomain.com/'
+    line: "application.baseUrl=https://{{ shib_hostname }}/"
+
 - name: vireo | enter db config
   lineinfile:
     path: /opt/vireo/conf/application.conf
     regexp: '^db=postgres://host/database_name'
     insertafter: '^#db=postgres://host/database_name'
-    line: db=postgres://localhost/vireo_db
+    line: "db=postgres://{{ postgres_host}}:5432/{{ vireo_db_name }}"
 
 - name: vireo | enter db user config
   lineinfile:
     path: /opt/vireo/conf/application.conf
     regexp: '^db.user = user'
     insertafter: '^#db.user = user'
-    line: db.user = vireo_user
+    line: "db.user = {{ vireo_db_user }}"
 
 - name: vireo | enter db pass config
   lineinfile:
     path: /opt/vireo/conf/application.conf
     regexp: '^db.pass = secret'
     insertafter: '^#db.pass = secret'
-    line: db.user = vireo_password
+    line: "db.user = {{ vireo_db_password }}"
+
+- name: vireo | create dependencies
+  command: /opt/play/play dependencies --sync --clearcache --%test
+  args:
+    chdir: "/opt/Vireo-3.0.6/"
+  changed_when: false
+  become: true
+  become_user: "{{ deploy_user }}"
+
+- name: vireo | create random key
+  command: /opt/play/play secret
+  args:
+    chdir: "/opt/Vireo-3.0.6/"
+  changed_when: false
+  become: true
+  become_user: "{{ deploy_user }}"
+
+- include_tasks: vireo_config.yml
