@@ -64,7 +64,25 @@
     dest: "/home/{{ deploy_user }}/src"
     force: true
     version: "{{ atmire_git_branch }}"
-  when: running_on_server
+  when:
+    - running_on_server
+    - not running_on_test
+
+- name: dataspace | clone src
+  git:
+    repo: "{{ prds_dspace_git_repo }}"
+    dest: "/home/{{ deploy_user }}/src"
+    force: true
+    version: "{{ prds_git_branch }}"
+    accept_hostkey: true
+    clone: true
+    update: false
+  ignore_errors: true
+  become: true
+  become_user: "{{ deploy_user }}"
+  when:
+    - running_on_server
+    - running_on_test
 
 - name: dataspace | make sure recursive permissions
   file:
@@ -96,4 +114,13 @@
     src: "/home/{{ deploy_user }}/dspace"
     dest: "/dspace"
     state: link
+  when: running_on_server
+
+- name: dataspace | fix permissions on hosting path
+  file:
+    path: "{{ atmire_path }}"
+    state: directory
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+    mode: 0755
   when: running_on_server
