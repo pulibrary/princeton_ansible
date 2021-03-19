@@ -9,10 +9,12 @@
     - /etc/shibboleth/sp-key.pem
 
 - name: dataspace | generate metadata file
-  command: /usr/bin/shib-metagen -c /etc/shibboleth/sp-cert.pem -h "{{ shib_hostname }}" -e "{{ shib_hostname }}"
+  shell: /usr/bin/shib-metagen -c /etc/shibboleth/sp-cert.pem -h "{{ shib_hostname }}" -e "{{ shib_hostname }}" > "{{ shib_home }}/{{ shib_host }}_metadata.xml"
   args:
+    chdir: /etc/shibboleth/
     creates: "/etc/shibboleth/{{ shib_host }}_metadata.xml"
   changed_when: false
+  become: true
   when: running_on_server
 
 - name: dataspace | add attributes for shibboleth
