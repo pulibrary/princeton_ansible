@@ -1,15 +1,20 @@
 ---
 - name: manually import key
   get_url:
-    url: "https://repo.percona.com/apt/percona-release_latest.{{ ansible_distribution_release }}_all.deb"
+    url: "https://repo.percona.com/apt/percona-release_1.0-9.generic_all.deb"
+    # url: "https://repo.percona.com/apt/percona-release_latest.{{ ansible_distribution_release }}_all.deb"
     dest: "/tmp/{{ ansible_distribution_release }}_all.deb"
+  become: true
 
 - name: configure apt repo
   apt:
     deb: "/tmp/{{ ansible_distribution_release }}_all.deb"
+    update_cache: true
+  become: true
 
 - name: update cache
   apt:
     update_cache: true
     cache_valid_time: 600
+  become: true
   changed_when: false
