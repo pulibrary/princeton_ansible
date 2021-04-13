@@ -4,24 +4,27 @@
     name: ['libapache2-mod-php', 'php{{ php_version }}-pgsql', 'php{{ php_version }}-mbstring', 'php{{ php_version }}-ldap', 'php{{ php_version }}-xml']
     state: present
 
+- name: ojs | add {{ deploy_user }} to www-data
+  user:
+    name: "{{ deploy_user }}"
+    groups: www-data
+    append: true
+
 - name: ojs | create ojs directory
   file:
     path: "{{ ojs_home }}"
     state: directory
-    owner: "www-data"
+    owner: "{{ deploy_user }}"
     group: "www-data"
-    mode: 0755
+    mode: 0775
 
-- name: ojs | unarchive the ojs
-  unarchive:
-    src: "http://pkp.sfu.ca/ojs/download/ojs-{{ ojs_version }}.tar.gz"
-    dest: "/var/www"
-    remote_src: true
-    creates: "ojs-{{ ojs_version }}"
+- name: ojs | create ojs local directory
+  file:
+    path: "{{ ojs_home }}/local"
+    state: directory
     owner: "www-data"
-    group: "www-data"
-  become: true
-  changed_when: false
+    group: "{{ deploy_user }}"
+    mode: 0775
 
 - name: ojs | remove apache document root
   file:
@@ -29,96 +32,29 @@
     state: absent
   changed_when: false
 
-- name: ojs | create symlink for versions
+- name: ojs | install node environment settings
+  template:
+    src: config.inc.php.j2
+    dest: "{{ ojs_home }}/config.inc.php"
+    mode: 0644
+  changed_when: false
+
+- name: ojs | add OJS template
+  template:
+    src: "ojs.conf.j2"
+    dest: "/etc/apache2/sites-available/ojs.conf"
+    mode: 0644
+
+- name: ojs | remove apache2 default
   file:
-    src: /var/www/ojs-{{ ojs_version }}
-    dest: "{{ apache.docroot }}"
+    path: "/etc/apache2/sites-enabled/000-default.conf"
+    state: absent
+  changed_when: false
+
+- name: ojs | symbolic link to ojs config
+  file:
+    src: "/etc/apache2/sites-available/ojs.conf"
+    dest: "/etc/apache2/sites-enabled/ojs.conf"
     state: link
   changed_when: false
-
-- name: ojs | update db driver
-  lineinfile:
-    path: "{{ apache.docroot }}/config.TEMPLATE.inc.php"
-    regexp: "driver = mysql"
-    line: "driver = postgres"
-  changed_when: false
-  become: true
-
-- name: ojs | update password
-  lineinfile:
-    path: "{{ apache.docroot }}/config.TEMPLATE.inc.php"
-    regexp: '^password ='
-    line: "password = {{ ojs_db_password }}"
-  changed_when: false
-  become: true
-  notify:
-    - restart apache
-
-- name: ojs | copy template file for live config
-  copy:
-    src: "{{ apache.docroot }}/config.TEMPLATE.inc.php"
-    dest: "{{ apache.docroot }}/config.inc.php"
-    remote_src: true
-    mode: 0644
-    owner: "www-data"
-    group: "www-data"
-  become: true
-  changed_when: false
-  notify:
-    - restart apache
-
-- name: configure apache2
-  import_tasks: apache2.yml
-
-- name: ojs | create uploads directory
-  file:
-    path: "{{ ojs_file_uploads }}"
-    state: directory
-    owner: "www-data"
-    group: "www-data"
-    mode: "ug+w"
-  changed_when: false
-
-- name: ojs | upstream README on other directories to modify
-  file:
-    path: "{{ apache.docroot }}/{{ item }}"
-    group: "www-data"
-    mode: "ug+w"
-    recurse: true
-  changed_when: false
-  with_items:
-    - "cache"
-    - "plugins"
-    - "public"
-
-- name: ojs | ensure config file has correct permissions
-  file:
-    path: "{{ apache.docroot }}/config.inc.php"
-    group: "www-data"
-    mode: "ug+w"
-  changed_when: false
-  notify:
-    - restart apache
-
-- name: get the health and sciences theme
-  unarchive:
-    src: "{{ health_and_science_theme_url }}"
-    dest: "/var/www/ojs-{{ ojs_version }}/plugins/themes/"
-    remote_src: true
-    owner: "www-data"
-    group: "www-data"
-  become: true
-  changed_when: false
-  register: sciences_theme
-  retries: 3
-  delay: 60
-  until: sciences_theme is succeeded
-
-- name: ojs | give www-data access to /var/local/files/journals
-  file:
-    path: "/var/local/files/journals"
-    group: "www-data"
-    owner: "www-data"
-    mode: "ug+w"
-    recurse: true
-  changed_when: false
+  notify: restart apache2
