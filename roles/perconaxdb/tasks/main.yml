@@ -22,6 +22,17 @@
   include_tasks: repository.yml
   tags: install
 
+- name: Configure perconaxdb Installation
+  debconf:
+    name: perconaxdb
+    question: "{{ item }}"
+    vtype: password
+    value: "{{ xtradb_root_password }}"
+  with_items:
+    - mysql-server/root_password
+    - mysql-server/root_password_again
+  register: configure_install
+
 - name: Install packages
   apt:
     name: "{{ xtradb_packages }}"

@@ -1,0 +1,22 @@
+---
+- name: Verify
+  hosts: all
+  gather_facts: false
+  tasks:
+  - name: check perconadb package status
+    package:
+      name: "{{ item }}"
+      state: present
+    check_mode: true
+    register: pkg_status
+    loop:
+      - percona-xtradb-cluster-57
+      - percona-xtradb-cluster-client-5.7
+      - percona-xtradb-cluster-common-5.7
+      - percona-xtradb-cluster-server-5.7
+      - percona-xtrabackup-24
+
+  - name: test for perconadb packages
+    assert:
+      that:
+        - not pkg_status.changed

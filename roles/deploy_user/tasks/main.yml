@@ -79,3 +79,13 @@
     group: "{{ deploy_user }}"
     mode: 0644
   register: deploy_ssh_config
+
+- name: set sudo options for {{ deploy_user }}
+  template:
+    src: sudo.j2
+    dest: "/etc/sudoers.d/{{ deploy_user }}"
+    mode: 0600
+  when:
+    - sudo_options is defined
+  loop_control:
+    label: "{{ deploy_user }}"
