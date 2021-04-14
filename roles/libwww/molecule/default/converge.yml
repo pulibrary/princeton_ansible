@@ -2,20 +2,9 @@
 - name: Converge
   hosts: all
   pre_tasks:
-  - name: install iproute
-    apt:
-      name: iproute2
-      state: present
-      update_cache: true
-  - name: rerun setup
-    setup:
-      gather_subset:
-        - network
   vars:
     - running_on_server: false
-    - xtradb_nodes_group: "all"
-    - xtradb_leader_node: "instance"
-    - mariadb_server__root_password: "{{ vault_maridb_password | default('change_me') }}"
+    - mariadb_root_password: "{{ vault_maridb_password | default('change_me') }}"
     - drupal_major_version: 7
     ### Uncomment this to force a dump file to be imported
     # - drupal_dbimport_file: 'dump.sql'
@@ -24,9 +13,68 @@
   vars_files:
     - ../../../../site_vars.yml
   tasks:
-    - name: "Include roles/perconaxdb for local database"
-      include_role:
-        name: "perconaxdb"
-    - name: "Include roles/libwww"
-      include_role:
-        name: "libwww"
+    # - name: Add repository key to the system
+    #   apt_key: 
+    #     keyserver: keyserver.ubuntu.com 
+    #     id: 0xcbcb082a1bb943db
+    # - name: Install MariaDB repository
+    #   apt_repository: 
+    #     repo: deb [arch=amd64,i386,ppc64el] http://mirrors.coreix.net/mariadb/repo/10.3/debian jessie main
+    #     state: present
+    # - name: Install MariaDB Server
+    #   apt:
+    #     name:
+    #         - python3-pkg-resources
+    #         - python3-pip
+    #       - mariadb-server
+    #       - python3-pymysql
+    #     state: latest
+    #     update_cache: true
+    # - name: start mysql
+    #   service:
+    #     name: mysql
+    #     enabled: true
+    #     state: started
+    # - name: "Include mysql"
+    #   include_role:
+    #     name: "tschifftner.mariadb"
+
+    # - name: common software
+    #   apt:
+    #     name:
+    #         - software-properties-common
+    #         - python3-pymysql
+    #     state: latest
+    #     update_cache: true
+    # - name: Install MariaDB key
+    #   apt_key: 
+    #     url: https://mariadb.org/mariadb_release_signing_key.asc
+    #     state: present
+    # - name: Install MariaDB repository
+    #   apt_repository: 
+    #     repo: deb [arch=amd64,i386,ppc64el] http://nyc2.mirrors.digitalocean.com/mariadb/repo/10.4/debian jessie main
+    #     state: present
+    #     validate_certs: false
+    #   ignore_errors: true
+    # - name: mariadb
+    #   apt:
+    #     name:
+    #         - mariadb-server
+    #     state: latest
+    #     update_cache: true
+    # - name: Start the service
+    #   service:
+    #     name: mysql
+    #     enabled: true
+    #     state: started
+    - name: mysql_root_password
+      mysql_user:
+        login_user: root
+        # login_password: "{{ mariadb_root_password }}"
+        login_host: localhost
+        name: 'cac9'
+        password: "{{ mariadb_root_password }}"
+
+    # - name: "Include roles/libwww"
+    #   include_role:
+    #     name: "libwww"
