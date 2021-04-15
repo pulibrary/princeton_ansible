@@ -30,6 +30,16 @@
   with_items: '{{ datadog_checks|list }}'
   notify: restart datadog-agent
 
+- name: Create a configuration file for each type Datadog check
+  template:
+    src: checks-typed.yaml.j2
+    dest: "/etc/datadog-agent/conf.d/{{ item.type }}.d/conf.yaml"
+    owner: '{{ datadog_user }}'
+    group: '{{ datadog_group }}'
+    mode: 0644
+  with_items: '{{ datadog_typed_checks }}'
+  notify: restart datadog-agent
+
 - name: Create trace agent configuration file
   template:
     src: datadog.conf.j2

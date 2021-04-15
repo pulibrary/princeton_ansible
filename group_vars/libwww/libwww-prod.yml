@@ -48,25 +48,39 @@ datadog_enabled: true
 datadog_config:
   log_enabled: true
   apm_enabled: true
-datadog_checks:
-  tls:
-    init_config:
-    instances:
-      - server: library.princeton.edu
-        port: 443
-  libwww_datadog_apache_check:
-    init_config:
-    logs:
-      - type: file
-        path: /var/log/apache2/other_vhosts_access.log
-        service: library
-        source: apache
-        sourcecategory: http_web_access
-        tags: "library, env:prod, role:libwww"
-      - type: file
-        path: /var/log/apache2/error.log
-        service: library
-        source: apache
-        sourcecategory: http_web_access
-        tags: "library, env:prod, role:libwww"
+  process_enabled: true
+datadog_typed_checks:
+  - type: tls
+    configuration:
+      init_config:
+      instances:
+        - server: library.princeton.edu
+          port: 443
+  - type: process
+    configuration:
+      init_config:
+      instances:
+        -   name: library
+            service: library
+            search_string:
+              - apache2
+  - type: apache
+    configuration:
+      init_config:
+      instances:
+        -   apache_status_url: http://127.0.0.1/server-status?auto
+      logs:
+        - type: file
+          path: /var/log/apache2/other_vhosts_access.log
+          service: library
+          source: apache
+          sourcecategory: http_web_access
+          tags: "library, env:prod, role:libwww"
+        - type: file
+          path: /var/log/apache2/error.log
+          service: library
+          source: apache
+          sourcecategory: http_web_access
+          tags: "library, env:prod, role:libwww"
+
 drupal_major_version: 7
