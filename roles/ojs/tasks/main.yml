@@ -39,6 +39,37 @@
     mode: 0644
   changed_when: false
 
+- name: ojs | create ojs local directory
+  file:
+    path: "/etc/apache2/ssl/{{ item }}"
+    state: directory
+    owner: "root"
+    group: "root"
+    mode: 0775
+  with_items:
+    - private
+    - certs
+  changed_when: false
+
+- name: ojs | copy apache cert files
+  copy:
+    src: "files/certs/{{ item }}"
+    dest: "/etc/apache2/ssl/certs/"
+  changed_when: false
+  when: running_on_server
+  with_items:
+    - "{{ apache.servername }}_cert.cer"
+    - "{{ apache.servername }}_chained.pem"
+
+- name: ojs | copy apache private files
+  copy:
+    src: "files/private/{{ item }}"
+    dest: "/etc/apache2/ssl/private/"
+  changed_when: false
+  when: running_on_server
+  with_items:
+    - "{{ apache.servername }}_priv.key"
+
 - name: ojs | add OJS template
   template:
     src: "ojs.conf.j2"
@@ -56,5 +87,6 @@
     src: "/etc/apache2/sites-available/ojs.conf"
     dest: "/etc/apache2/sites-enabled/ojs.conf"
     state: link
+  when: running_on_server
   changed_when: false
   notify: restart apache2
