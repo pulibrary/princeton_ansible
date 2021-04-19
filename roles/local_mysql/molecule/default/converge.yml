@@ -1,0 +1,33 @@
+---
+- name: Converge
+  hosts: all
+  pre_tasks:
+  - name: update cache
+    apt:
+      update_cache: true
+      cache_valid_time: 600
+  - name: install iproute
+    apt:
+      name: iproute2
+      state: present
+      update_cache: true
+  - name: rerun setup
+    setup:
+      gather_subset:
+        - network
+  vars:
+    - running_on_server: false
+  become: true
+  tasks:
+    - name: "Include local mysql"
+      include_role:
+        name: local_mysql
+      vars:
+        mysql_databases:
+        - name: my_db
+          encoding: utf8
+          collation: utf8_bin
+        mysql_users:
+        - name: my_user
+          password: my_pass
+          priv: "my_db.*:ALL"
