@@ -1,0 +1,84 @@
+---
+# tasks file for roles/postfix
+- name: postfix | pre-configure debian systems
+  ansible.builtin.debconf:
+    name: postfix
+    question: postfix/main_mailer_type
+    vtype: string
+    value: "No configuration"
+
+- name: postfix | install package
+  ansible.builtin.apt:
+    name: "{{ postfix_packages }}"
+    state: present
+
+- name: postfix | configure postfix (main.cf)
+  ansible.builtin.template:
+    src: main.cf.j2
+    dest: /etc/postfix/main.cf
+    validate: postconf -d -c %s
+    mode: "0644"
+  notify:
+    - reload postfix
+
+- name: postfix | configure postfix (master.cf)
+  ansible.builtin.template:
+    src: master.cf.j2
+    dest: /etc/postfix/master.cf
+    validate: postconf -d -c %s
+    mode: "0644"
+  notify:
+    - restart postfix
+
+- name: postfix | configure aliases
+  ansible.builtin.lineinfile:
+    path: "{{ postfix_alias_path }}"
+    regexp: "^{{ item.name }}:"
+    line: "{{ item.name }}: {{ item.destination }}"
+    mode: "0644"
+  when:
+    - postfix_aliases is defined
+  loop: "{{ postfix_aliases }}"
+  notify:
+    - rebuild alias database
+    - reload postfix
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: postfix | configure sender_access
+  ansible.builtin.lineinfile:
+    path: "{{ postfix_sender_access_path }}"
+    regexp: "^{{ item.domain }}"
+    line: "{{ item.domain }} {{ item.action }}"
+    create: true
+    mode: "0644"
+  when:
+    - postfix_sender_access is defined
+  loop: "{{ postfix_sender_access }}"
+  notify:
+    - rebuild sender_access database
+    - reload postfix
+  loop_control:
+    label: "{{ item.domain }}"
+
+- name: postfix | configure recipient_access
+  ansible.builtin.lineinfile:
+    path: "{{ postfix_recipient_access_path }}"
+    regexp: "^{{ item.domain }}"
+    line: "{{ item.domain }} {{ item.action }}"
+    create: true
+    mode: "0644"
+  when:
+    - postfix_recipient_access is defined
+  loop: "{{ postfix_recipient_access }}"
+  notify:
+    - rebuild recipient_access database
+    - reload postfix
+  loop_control:
+    label: "{{ item.domain }}"
+
+- name: start and enable postfix
+  ansible.builtin.service:
+    name: "{{ postfix_service }}"
+    state: started
+    enabled: true
