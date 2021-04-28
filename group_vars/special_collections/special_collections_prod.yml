@@ -1,0 +1,60 @@
+---
+
+drupal_db_user: 'libwww-prod'
+drupal_db_password: "{{ libwww_db_password | default('change_this') }}"
+drupal_base_path: 'https://library.princeton.edu/special-collections'
+drupal_ssl_base_path: 'https://library.princeton.edu/special-collections'
+drupal_db_name: 'special_collections_prod'
+drupal_db_host: 'mariadb-prod3.princeton.edu'
+bundler_version: '2.1.4'
+
+
+db_host: 'mariadb-prod3.princeton.edu'
+db_password: '{{ vault_xtradb_root_password }}'
+mariadb__server: "{{ db_host }}"
+
+datadog_api_key: "{{ vault_datadog_key }}"
+datadog_service_name: special-collections
+datadog_environment: prod
+
+force_vhosts_update: true
+datadog_enabled: true
+datadog_config:
+  log_enabled: true
+  apm_enabled: true
+  process_enabled: true
+datadog_typed_checks:
+  - type: tls
+    configuration:
+      init_config:
+      instances:
+        - server: lib-sc-prod.princeton.edu
+          port: 443
+  - type: process
+    configuration:
+      init_config:
+      instances:
+        -   name: special-collections
+            service: special-collections
+            search_string:
+              - apache2
+  - type: apache
+    configuration:
+      init_config:
+      instances:
+        -   apache_status_url: http://127.0.0.1/server-status?auto
+      logs:
+        - type: file
+          path: /var/log/apache2/other_vhosts_access.log
+          service: special-collections
+          source: apache
+          sourcecategory: http_web_access
+          tags: "special-collections, env:prod, role:libwww"
+        - type: file
+          path: /var/log/apache2/error.log
+          service: special-collections
+          source: apache
+          sourcecategory: http_web_access
+          tags: "special-collections, env:prod, role:libwww"
+
+drupal_major_version: 7
