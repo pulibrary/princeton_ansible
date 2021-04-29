@@ -1,10 +1,8 @@
 ---
-replication_database: "replicant"
-replication_user: "replicant"
+postgresql_version: "13"
 db_clusteradmin_user: "postgres"
 db_clusteradmin_password: "{{ vault_postgres_admin_password }}"
 replication_user_password: "{{ vault_replicant_password }}"
-repmgr_config: "/etc/repmgr.conf"
 postgresql_settings:
   - name: port
     value: 5432
@@ -12,7 +10,6 @@ postgresql_settings:
     value: "*"
 postgresql_ext_install_postgis: true
 postgresql_databases:
-  - name: replicant
   - name: test_db
 postgresql_users:
   - name: postgres
@@ -20,25 +17,11 @@ postgresql_users:
     db: "postgres"
     priv: "ALL"
     role_attr_flags: "SUPERUSER"
-  - name: replicant
-    password: "{{ vault_replicant_password }}"
-    db: replicant
-    priv: "ALL"
-    role_attr_flags: "CREATEDB,SUPERUSER"
-  - name: pgbouncer_user
-    password: "{{ vault_md5_free_password }}"
-    priv: "ALL"
-    db: test_db
-    role_attr_flags: "CREATEDB"
 postgresql_hba_entries:
   - type: local
     database: all
     user: postgres
     method: ident
-  - type: local
-    database: replicant
-    user: replicant
-    method: md5
   - type: host
     database: all
     user: postgres
@@ -47,45 +30,5 @@ postgresql_hba_entries:
   - type: host
     database: all
     user: postgres
-    address: "{{ leader_db_ip }}/32"
-    method: md5
-  - type: host
-    database: replication
-    user: replicant
-    address: "{{ leader_db_ip }}/32"
-    method: md5
-  - type: host
-    database: all
-    user: postgres
-    address: "{{ standby_db_ip }}/32"
-    method: md5
-  - type: host
-    database: replication
-    user: replicant
-    address: "{{ standby_db_ip }}/32"
-    method: md5
-  - type: host
-    database: all
-    user: postgres
     address: 127.0.0.1/32
-    method: md5
-  - type: host
-    database: replicant
-    user: replicant
-    address: 127.0.0.1/32
-    method: md5
-  - type: host
-    database: replicant
-    user: replicant
-    address: "{{ leader_db_ip }}/32"
-    method: md5
-  - type: host
-    database: replicant
-    user: replicant
-    address: "{{ standby_db_ip }}/32"
-    method: md5
-  - type: host
-    database: all
-    user: pgbouncer_user
-    address: "{{ standby_db_ip }}/32"
     method: md5

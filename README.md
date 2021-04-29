@@ -146,16 +146,16 @@ ansible-playbook playbooks/example.yml
 ## Provisioning to a service with multiple hosts (no downtime)
 
 Check to make sure you're going to run on the correct host
-`$ ansible-playbook playbooks/figgy_production.yml --limit figgy2.princeton.edu --list-hosts`
+`$ ansible-playbook playbooks/figgy_production.yml --limit figgy3.princeton.edu --list-hosts`
 
 coordinate with operations to take the machine off load balancer
 run playbook:
-`$ ansible-playbook playbooks/figgy_production.yml --limit figgy2.princeton.edu`
+`$ ansible-playbook playbooks/figgy_production.yml --limit figgy3.princeton.edu`
 
 capistrano deploy to the box that's off the load balancer.
 Make sure you're depoying the already-deployed commit! Note the way to do this
 may vary by project in figgy it's the BRANCH env var
-`$ bundle exec HOSTS=figgy2 BRANCH=commit_hash cap production deploy`
+`$ bundle exec HOSTS=figgy3 BRANCH=commit_hash cap production deploy`
 
 SSH to the box that's off the load balancer and check that the index page still looks okay
 `$ curl localhost:80`
