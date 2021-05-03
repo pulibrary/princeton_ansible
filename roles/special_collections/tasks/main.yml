@@ -1,0 +1,25 @@
+---
+# tasks file for roles/special_collections
+
+# needed for capistrano to have access to this file
+- name: special-collections | Check to see if .env.local file exists.
+  stat:
+    path: "/home/{{ deploy_user }}/.env.local"
+  register: env_home_exists
+
+- name: special-collections | install the cron for running drush cron for special collections
+  cron:
+    name: "run special collections drush cron"
+    minute: 10
+    job: "sudo -u www-data drush -r {{ drupal_docroot }}/current cron"
+    user: "{{ deploy_user }}"
+  when: inventory_hostname ==  groups[group_names[0]][0]
+
+- name: special-collections | Add apache alias for special collections
+  blockinfile:
+    path: "/etc/apache2/sites-available/000-default.conf"
+    marker: "## {mark} ANSIBLE SPECIAL COLLECTIONS MANAGED BLOCK ##"
+    insertbefore: "</VirtualHost>"
+    block: |
+      Alias /special-collections {{ drupal_docroot }}/current
+  notify: restart apache
