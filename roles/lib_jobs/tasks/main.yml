@@ -21,3 +21,75 @@
   apt:
     name: 'libmysqlclient-dev'
     state: present
+
+# PeopleSoft Mount
+
+- name: Create peoplesoft mount directories
+  file:
+    path: '/mnt/dms-smbserve'
+    state: 'directory'
+    mode: 0755
+
+- name: Copy peoplesoft smb credentials
+  copy:
+    src: files/peoplesoft.smb.credentials
+    dest: /etc/peoplesoft.smb.credentials
+    mode: 0644
+  when: running_on_server
+
+- name: Check mount for peoplesoft shared files
+  mount:
+    path: '/mnt/dms-smbserve/peoplesoft'
+    src: '//10.6.49.226/{{ peoplesoft_samba_directory }}'  # Use IP, //dms-smbserve isn't routable.
+    fstype: cifs
+    opts: 'defaults,uid=33,gid={{ deploy_user_uid }},credentials=/etc/peoplesoft.smb.credentials'
+    state: present
+  register: mount_info
+  when: running_on_server
+  become: true
+
+- name: Create mount for peoplesoft shared files
+  mount:
+    path: '/mnt/dms-smbserve/peoplesoft'
+    src: '//10.6.49.226/{{ peoplesoft_samba_directory }}'  # Use IP, //dms-smbserve isn't routable.
+    fstype: cifs
+    opts: 'defaults,uid=33,gid={{ deploy_user_uid }},credentials=/etc/peoplesoft.smb.credentials'
+    state: mounted
+  when: running_on_server and mount_info.changed
+  become: true
+
+# Onbase Mount
+
+- name: Create onbase mount directories
+  file:
+    path: '/mnt/oby14qa'
+    state: 'directory'
+    mode: 0755
+
+- name: Copy onbase smb credentials
+  copy:
+    src: files/onbase.smb.credentials
+    dest: /etc/onbase.smb.credentials
+    mode: 0644
+  when: running_on_server
+
+- name: Check mount for onbase shared files
+  mount:
+    path: '/mnt/oby14qa/onbase'
+    src: '//{{ onbase_samba_server }}/{{ onbase_samba_directory }}'  # Use IP, //dms-smbserve isn't routable.
+    fstype: cifs
+    opts: 'defaults,uid=33,gid={{ deploy_user_uid }},credentials=/etc/onbase.smb.credentials'
+    state: present
+  register: mount_info
+  when: running_on_server
+  become: true
+
+- name: Create mount for onbase shared files
+  mount:
+    path: '/mnt/oby14qa/onbase'
+    src: '//{{ onbase_samba_server }}/{{ onbase_samba_directory }}'  # Use IP, //dms-smbserve isn't routable.
+    fstype: cifs
+    opts: 'defaults,uid=33,gid={{ deploy_user_uid }},credentials=/etc/onbase.smb.credentials'
+    state: mounted
+  when: running_on_server and mount_info.changed
+  become: true
