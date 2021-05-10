@@ -10,16 +10,16 @@ Princeton Ansible Playbooks
 
 ### MacOS
 
- * `brew install --cask virtualbox`
- * `brew install python`
- * `brew install pipenv`
- * `brew install rbenv`
  * `brew install docker`
+ * If using asdf, install the plugins as listed in .tool-versions
+ * Otherwise:
+  * `brew install python`
+  * `brew install pipenv`
+  * `brew install rbenv`
 
 ### Ubuntu Bionic
 
  * `sudo add-apt-repository multiverse && sudo apt -y update`
- * `sudo apt -y install virtualbox`
  * `sudo apt -y install python-pip`
  * `sudo apt install apt-transport-https ca-certificates curl software-properties-common`
  * `curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add
