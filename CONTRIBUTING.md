@@ -7,8 +7,7 @@ to abide by its [code of conduct].
 ## Contributing
 
 - We always test with the newest version of
-  [Molecule](https://molecule.readthedocs.io/en/latest/), [Ansible](https://ansible.com),
-  [Vagrant](https://vagrantup.com), and [Virtualbox](https://www.virtualbox.org)
+  [Molecule](https://molecule.readthedocs.io/en/latest/) and [Ansible](https://ansible.com)
 - Fork and clone the repo.
 - Make your changes.
 - Submit a pull request on GitHub.
