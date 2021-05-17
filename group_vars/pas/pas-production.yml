@@ -33,39 +33,57 @@ mariadb__databases:
 datadog_api_key: "{{ vault_datadog_key }}"
 
 datadog_config:
-    log_enabled: true
-datadog_checks:
-    pas_datadog_apache_check:
-        init_config:
-        logs:
-            - type: file
-              path: /var/log/apache2/other_vhosts_access.log
-              service: pas
-              source: pas
-              sourcecategory: pas
-            - type: file
-              path: /var/log/apache2/error.log
-              service: pas
-              source: pas
-              sourcecategory: pas
-            - type: file
-              path: /opt/pas/storage/logs/web.log
-              service: pas
-              source: pas
-              sourcecategory: pas
-            - type: file
-              path: /opt/pas/storage/logs/phperrors.log
-              service: pas
-              source: pas
-              sourcecategory: pas
-            - type: file
-              path: /opt/pas/storage/logs/web-404s.log
-              service: pas
-              source: pas
-              sourcecategory: pas
-        tags: "slavery, environment:production, role:pas"
-    tls:
-        init_config:
-        instances:
-            - server: slavery.princeton.edu
-              port: 443
+  log_enabled: true
+  apm_enabled: true
+  process_enabled: true
+datadog_typed_checks:
+  - type: tls
+    configuration:
+      init_config:
+      instances:
+        - server: slavery.princeton.edu
+          port: 443
+  - type: process
+    configuration:
+      init_config:
+      instances:
+        -   name: pas
+            service: pas
+            search_string:
+              - apache2
+  - type: apache
+    configuration:
+      init_config:
+      instances:
+        -   apache_status_url: http://127.0.0.1/server-status?auto
+      logs:
+        - type: file
+          path: /var/log/apache2/other_vhosts_access.log
+          service: pas
+          source: apache
+          sourcecategory: http_web_access
+          tags: "pas, env:prod, role:pas"
+        - type: file
+          path: /var/log/apache2/error.log
+          service: pas
+          source: apache
+          sourcecategory: http_web_access
+          tags: "pas, env:prod, role:pas"
+        - type: file
+          path: /opt/pas/storage/logs/web.log
+          service: pas
+          source: pas
+          sourcecategory: pas
+          tags: "pas, env:prod, role:pas"
+        - type: file
+          path: /opt/pas/storage/logs/phperrors.log
+          service: pas
+          source: pas
+          sourcecategory: pas
+          tags: "pas, env:prod, role:pas"
+        - type: file
+          path: /opt/pas/storage/logs/web-404s.log
+          service: pas
+          source: pas
+          sourcecategory: pas
+          tags: "pas, env:prod, role:pas"
