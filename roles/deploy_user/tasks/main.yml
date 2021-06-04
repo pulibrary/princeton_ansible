@@ -50,9 +50,6 @@
               regexp='^AllowUsers(.*?)( ?)({{ deploy_user }})?$'
               line="AllowUsers\1 {{ deploy_user }}"
 
-  notify:
-    - restart ssh
-
 - name: deploy_user | create the .ssh directory
   file:
     path: "/home/{{ deploy_user }}/.ssh/"
@@ -89,3 +86,7 @@
     - sudo_options is defined
   loop_control:
     label: "{{ deploy_user }}"
+
+- name: restart sshd
+  become: true
+  command: systemctl restart sshd
