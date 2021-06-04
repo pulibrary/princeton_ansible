@@ -1,0 +1,19 @@
+---
+- hosts: abid_staging
+  remote_user: pulsys
+  become: true
+  vars_files:
+    - ../site_vars.yml
+    - ../group_vars/abid/staging.yml
+    - ../group_vars/abid/vault.yml
+  roles:
+    - role: roles/ruby
+    - role: roles/postgresql
+    # - role: roles/abid
+
+  post_tasks:
+    - name: tell everyone on slack you ran an ansible playbook
+      slack:
+        token: "{{ vault_pul_slack_token }}"
+        msg: "{{ inventory_hostname }} completed"
+        channel: #server-alerts
