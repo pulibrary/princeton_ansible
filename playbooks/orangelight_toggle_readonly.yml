@@ -1,0 +1,33 @@
+# NOTE
+# You must use command-line "extra variables" to use this playbook. They are
+# used to specify the host group you want to toggle, and the value of
+# read_only_mode, e.g.:
+# $ ansible-playbook -e "orangelight_hosts=orangelight_staging" -e "ol_read_only_mode=true" orangelight_toggle_readonly.yml
+---
+- hosts: "{{ orangelight_hosts }}"
+  remote_user: pulsys
+  become: true
+  vars:
+    - deploy_user: "deploy"
+  vars_files:
+    - ../site_vars.yml
+  tasks:
+    - name: Install site configuration
+      template:
+        src: 'roles/rails_app/templates/rails_app_config'
+        dest: '/home/{{ deploy_user }}/app_configs/{{ rails_app_name }}'
+        owner: '{{ deploy_user }}'
+        group: '{{ deploy_user }}'
+        mode: 0644
+    - name: restart the app
+      file:
+        state: touch
+        path: "/opt/{{ rails_app_directory }}/current/tmp/restart.txt"
+      become: true
+      become_user: "{{ deploy_user }}"
+  post_tasks:
+    - name: tell everyone on slack you ran an ansible playbook
+      slack:
+        token: "{{ vault_pul_slack_token }}"
+        msg: "{{ inventory_hostname }} toggled read-only mode to {{ ol_read_only_mode }}"
+        channel: #server-alerts
