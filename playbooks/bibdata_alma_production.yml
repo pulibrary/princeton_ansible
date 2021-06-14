@@ -16,34 +16,20 @@
     - role: 'hr_share'
     - role: roles/datadog
   post_tasks:
-    - name: Correct file permissions for /data/marc_liberation_files
-      file:
-        path: "/data/marc_liberation_files"
-        owner: "{{ deploy_user }}"
-        group: "sambashare"
-        mode: 0777
-      when: running_on_server
-
-    - name: Correct file permissions for /data/marc_liberation_files/scsb_update_files
-      file:
-        path: "/data/marc_liberation_files/scsb_update_files"
-        owner: "{{ deploy_user }}"
-        group: "sambashare"
-        mode: 0777
-      when: running_on_server
-
     - name: tell everyone on slack you ran an ansible playbook
       slack:
         token: "{{ vault_pul_slack_token }}"
         msg: "{{ inventory_hostname }} completed"
         channel: #server-alerts
-- hosts: bibdata_alma_production
+
+- hosts: bibdata_alma_production_webservers
   remote_user: pulsys
   become: true
   vars_files:
     - ../site_vars.yml
     - ../group_vars/bibdata/vault.yml
     - ../group_vars/bibdata/alma_production.yml
+    - ../group_vars/bibdata/alma_webservers.yml
   vars:
     passenger_server_name: bibdata-alma.*
     samba_status: "client"
@@ -52,24 +38,7 @@
     - role: roles/bibdata_sqs_poller
     - role: 'hr_share'
     - role: roles/datadog
-
   post_tasks:
-    - name: Correct file permissions for /data/marc_liberation_files
-      file:
-        path: "/data/marc_liberation_files"
-        owner: "{{ deploy_user }}"
-        group: "sambashare"
-        mode: 0777
-      when: running_on_server
-
-    - name: Correct file permissions for /data/marc_liberation_files/scsb_update_files
-      file:
-        path: "/data/marc_liberation_files/scsb_update_files"
-        owner: "{{ deploy_user }}"
-        group: "sambashare"
-        mode: 0777
-      when: running_on_server
-
     - name: tell everyone on slack you ran an ansible playbook
       slack:
         token: "{{ vault_pul_slack_token }}"
