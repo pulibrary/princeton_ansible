@@ -8,8 +8,8 @@
     - ../group_vars/bibdata/alma_staging.yml
   vars:
     passenger_server_name: bibdata-alma-staging.*
-    samba_status: server
     samba_shares_root: /data
+    samba_status: "server"
   roles:
     - role: roles/bibdata
     - role: roles/bibdata_sqs_poller
@@ -17,22 +17,6 @@
     - role: roles/datadog
 
   post_tasks:
-    - name: Correct file permissions for /data/marc_liberation_files
-      file:
-        path: "/data/marc_liberation_files"
-        owner: "{{ deploy_user }}"
-        group: "sambashare"
-        mode: 0777
-      when: running_on_server
-
-    - name: Correct file permissions for /data/marc_liberation_files/scsb_update_files
-      file:
-        path: "/data/marc_liberation_files/scsb_update_files"
-        owner: "{{ deploy_user }}"
-        group: "sambashare"
-        mode: 0777
-      when: running_on_server
-
     - name: tell everyone on slack you ran an ansible playbook
       slack:
         token: "{{ vault_pul_slack_token }}"
