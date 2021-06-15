@@ -1,18 +1,4 @@
 ---
-- hosts: bibdata
-  remote_user: pulsys
-  become: true
-  vars_files:
-    - ../site_vars.yml
-    - ../group_vars/bibdata/vault.yml
-    - ../group_vars/bibdata/production.yml
-  vars:
-    samba_status: client
-  roles:
-    - role: 'oracle_client'
-    - role: roles/bibdata
-    - role: 'hr_share'
-    - role: roles/datadog
 - hosts: bibdata_workers
   remote_user: pulsys
   become: true
@@ -28,7 +14,27 @@
     - role: 'oracle_client'
     - role: roles/bibdata
     - role: roles/datadog
+  post_tasks:
+    - name: tell everyone on slack you ran an ansible playbook
+      slack:
+        token: "{{ vault_pul_slack_token }}"
+        msg: "{{ inventory_hostname }} completed"
+        channel: #server-alerts
 
+- hosts: bibdata
+  remote_user: pulsys
+  become: true
+  vars_files:
+    - ../site_vars.yml
+    - ../group_vars/bibdata/vault.yml
+    - ../group_vars/bibdata/production.yml
+  vars:
+    samba_status: client
+  roles:
+    - role: 'oracle_client'
+    - role: roles/bibdata
+    - role: 'hr_share'
+    - role: roles/datadog
   post_tasks:
     - name: tell everyone on slack you ran an ansible playbook
       slack:
