@@ -1,5 +1,17 @@
 ---
 # Needed in order to add the rabbitmq repository
+- name: remove old erlang apt repository
+  apt_repository:
+    repo: 'deb https://dl.bintray.com/rabbitmq-erlang/debian {{ ansible_distribution_release }} erlang-21.x'
+    state: absent
+    update_cache: false
+
+- name: remove old rabbitmq official apt repository
+  apt_repository:
+    repo: 'deb https://dl.bintray.com/rabbitmq/debian {{ ansible_distribution_release }} main'
+    state: absent
+    update_cache: false
+
 - name: ensure software-properties-common is installed
   apt:
     name: ['software-properties-common', 'apt-transport-https']
@@ -11,14 +23,13 @@
     url: https://github.com/rabbitmq/signing-keys/releases/download/2.0/rabbitmq-release-signing-key.asc
     state: present
 
-- name: add erlang apt repository, dependency for rabbitmq repo
+- name: add rabbitmq launchpad repository
   apt_repository:
-    repo: 'deb https://dl.bintray.com/rabbitmq-erlang/debian {{ ansible_distribution_release }} erlang-21.x'
+    repo: 'deb http://ppa.launchpad.net/rabbitmq/rabbitmq-erlang/ubuntu {{ ansible_distribution_release }} main'
     state: present
-
-- name: add rabbitmq official apt repository
+- name: add rabbitmq launchpad src repository
   apt_repository:
-    repo: 'deb https://dl.bintray.com/rabbitmq/debian {{ ansible_distribution_release }} main'
+    repo: 'deb-src http://ppa.launchpad.net/rabbitmq/rabbitmq-erlang/ubuntu {{ ansible_distribution_release }} main'
     state: present
 
 - name: install package
