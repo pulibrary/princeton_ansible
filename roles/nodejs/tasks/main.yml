@@ -1,10 +1,18 @@
 ---
+- name: nodejs | Get debsource APT GPG key
+  apt_key:
+    url: https://deb.nodesource.com/gpgkey/nodesource.gpg.key
+    state: present
+  register: debsource_servers
+  ignore_errors: true
+
 - name: Get upstream APT GPG key
   apt_key:
     id: "{{ nodejs__upstream_key_id }}"
     keyserver: "hkp://pool.sks-keyservers.net"
     state: present
   register: pool_servers
+  when: debsource_servers is failed
   ignore_errors: true
 
 - name: Get upstream APT GPG key from MIT
@@ -26,13 +34,19 @@
 
 - name: Add upstream Yarn APT key from PGP
   apt_key:
+    url: https://dl.yarnpkg.com/debian/pubkey.gpg
+    state: present
+  register: yarn_servers
+  ignore_errors: true
+
+- name: Add upstream Yarn APT key from PGP
+  apt_key:
     id: "{{ nodejs__yarn_upstream_key_id }}"
     keyserver: "hkp://pool.sks-keyservers.net"
     state: present
   register: yarnpool_servers
+  when: yarn_servers is failed
   ignore_errors: true
-  changed_when: false
-  # TODO: This changed when should be removed when we upgrade to molecule 3
 
 - name: Add upstream Yarn APT key from MIT
   apt_key:
@@ -50,8 +64,16 @@
     keyserver: "keyserver.pgp.com"
   when: yarnmit_servers is failed
   ignore_errors: true
-  changed_when: false
-  # TODO: This changed when should be removed when we upgrade to molecule 3
+
+- name: Configure upstream APT repository
+  apt_repository:
+    repo: deb https://deb.nodesource.com/node_12.x {{ ansible_lsb.codename }} main
+    state: present
+    update_cache: true
+  register: nodejs_repo
+  retries: 3
+  delay: 60
+  until: nodejs_repo is succeeded
 
 - name: Configure upstream APT repository
   apt_repository:
@@ -69,8 +91,6 @@
     state: present
     update_cache: true
   ignore_errors: true
-  changed_when: false
-  # TODO: This changed when should be removed when we upgrade to molecule 3
 
 - name: Gather the apt package facts
   package_facts:
@@ -97,5 +117,3 @@
     name: ["nodejs", "yarn"]
     state: present
     autoremove: true
-  changed_when: false
-  # TODO: This changed when should be removed when we upgrade to molecule 3
