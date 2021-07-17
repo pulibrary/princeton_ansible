@@ -7,6 +7,7 @@
     mode: 0755
   with_items:
     - isilon
+    - bibdata_share
 
 # Scratch Credentials
 - name: Copy smb credentials
@@ -17,6 +18,7 @@
   when: running_on_server
   with_items:
     - scratch.smb.credentials
+    - bibdata_share.smb.credentials
 
 - name: Create mount to scratch space (used for bulk ingest and other bulk operations)
   mount:
@@ -26,3 +28,36 @@
     opts: 'credentials=/etc/scratch.smb.credentials,uid={{ deploy_user_uid }},gid=33'
     state: mounted
   when: running_on_server
+- name: Create mount to bibdata share (isilon mount for file storage)
+  mount:
+    name: '/mnt/bibdata_share'
+    src: '//diglibdata1.princeton.edu/bibdata'
+    fstype: cifs
+    opts: 'credentials=/etc/bibdata_share.smb.credentials,uid={{ deploy_user_uid }},gid=33'
+    state: mounted
+  when: running_on_server
+
+## Symlink to Mounts
+- name: Create symlinks
+  file:
+    src: '{{ item.src }}'
+    dest: '{{ item.link }}'
+    owner: '{{ deploy_user }}'
+    group: '{{ deploy_user }}'
+    state: 'link'
+    force: true
+  with_items:
+    - src: '/mnt/bibdata_share/{{ bibdata_mount_env }}'
+      link: '{{ bibdata_data_dir }}'
+
+- name: Create mount directory structure
+  file:
+    path: '/{{ item }}'
+    state: 'directory'
+    owner: '{{ deploy_user }}'
+    group: '{{ deploy_user }}'
+    mode: 0755
+  with_items:
+    - '{{ bibdata_data_dir }}/campus_access_files'
+    - '{{ bibdata_data_dir }}/scsb_update_files'
+    - '{{ bibdata_data_dir }}/figgy_ark_cache'
