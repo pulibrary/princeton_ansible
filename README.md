@@ -61,6 +61,7 @@ You will need to relaunch your shell.
 
 **Note: These commands should be run for each shell you run**
 ```bash
+bin/setup
 pipenv sync
 pipenv shell
 ```
