@@ -1,0 +1,29 @@
+---
+- name: Verify
+  hosts: all
+  gather_facts: false
+  tasks:
+  - name: Forever installed
+    shell: 'forever --version | grep v4.0.1'
+    register: result
+    failed_when: result.rc != 0
+    changed_when: false
+  - name: Coffee script installed
+    shell: 'coffee --version | grep "CoffeeScript version"'
+    register: result
+    failed_when: result.rc != 0
+    changed_when: false
+  - name: Redis installed
+    shell: 'redis-server --version | grep "Redis server"'
+    register: result
+    failed_when: result.rc != 0
+    changed_when: false
+  - name: register pulbot directory
+    stat:
+      path: "/opt/pulbot"
+    register: pulbot_directory
+  - name: Ensure directory structure for pulbot is created
+    assert:
+      that:
+        - "pulbot_directory.stat.exists"
+        - "pulbot_directory.stat.isdir"
