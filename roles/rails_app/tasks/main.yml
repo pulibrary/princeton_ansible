@@ -1,11 +1,11 @@
 ---
-- name: Install dependencies
+- name: rails_app | Install dependencies
   apt:
     name: '{{ item }}'
     state: present
   loop: '{{ rails_app_dependencies }}'
 
-- name: Install site configuration
+- name: rails_app | Install site configuration
   template:
     src: 'rails_app_config'
     dest: '/home/{{ deploy_user }}/app_configs/{{ rails_app_name }}'
@@ -15,7 +15,7 @@
   tags:
     - site_config
 
-- name: Create app directory structure
+- name: rails_app | Create app directory structure
   file:
     path: '/opt/{{ item }}'
     state: 'directory'
@@ -28,7 +28,7 @@
     - '{{ rails_app_directory }}/shared/tmp'
 
 # todo should we remove this since it is not being used
-- name: Create symlinks
+- name: rails_app | Create symlinks
   file:
     src: '{{ item.src }}'
     dest: '{{ item.link }}'
@@ -38,7 +38,14 @@
     force: true
   with_items: '{{ rails_app_symlinks }}'
 
-- name: rotate the logs for the rails applications
+- name: rails_app | Allow deploy to restart, stop, start nginx
+  lineinfile:
+    dest: "/etc/sudoers"
+    state: "present"
+    line: "{{ deploy_user }} ALL=(ALL) NOPASSWD: /usr/sbin/service nginx *"
+    validate: "visudo -cf %s"
+
+- name: rails_app | rotate the logs for the rails applications
   template:
     src: 'logrotate.d.rails.j2'
     dest: '/etc/logrotate.d/{{ rails_app_name }}'
