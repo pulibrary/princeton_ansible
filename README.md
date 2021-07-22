@@ -98,6 +98,7 @@ In all the steps below substitue your role name for `your_new_role`
       cp roles/example/molecule.yml roles/$your_new_role/molecule/default
       cp roles/example/main.yml roles/$your_new_role/meta/main.yml
       cp roles/example/.ansible-lint roles/$your_new_role/.ansible-lint
+      cp roles/example/yamllint roles/$your_new_role/.yamllint
       ```
 
    1. edit `vi roles/$your_new_role/meta/main.yml` and add a description
