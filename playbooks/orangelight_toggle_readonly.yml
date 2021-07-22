@@ -2,15 +2,17 @@
 # You must use command-line "extra variables" to use this playbook. They are
 # used to specify the host group you want to toggle, and the value of
 # read_only_mode, e.g.:
-# $ ansible-playbook -e "orangelight_hosts=orangelight_staging" -e "ol_read_only_mode=true" orangelight_toggle_readonly.yml
+# $ ansible-playbook -e "orangelight_hosts=orangelight_staging" -e "@group_vars/orangelight/staging.yml" -e "ol_read_only_mode=true" playbooks/orangelight_toggle_readonly.yml
 ---
 - hosts: "{{ orangelight_hosts }}"
   remote_user: pulsys
   become: true
   vars:
     - deploy_user: "deploy"
+    - rails_app_name: "orangelight"
   vars_files:
     - ../site_vars.yml
+    - ../group_vars/orangelight/vault.yml
   tasks:
     - name: Install site configuration
       template:
