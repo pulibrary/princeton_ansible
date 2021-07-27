@@ -1,42 +1,80 @@
 ---
-passenger_server_name: "oawaiver-prod1.princeton.edu"
-passenger_app_env: "production"
+# Molecule
+running_on_server: true
+
+# Apache Solr
+oawaiver_solr_core: "oawaiver-production"
+solr_version: "8.2.0"
+solr_cores:
+  - "{{ oawaiver_solr_core }}"
+solr_mirror: "https://archive.apache.org/dist"
+
+# MariaDB
+db_host: 'mariadb-prod3.princeton.edu'
+db_password: "{{ vault_xtradb_root_password }}"
+mariadb__server: "{{ db_host }}"
+mariadb__users:
+  - name: "{{ vault_oawaiver_prod_db_user }}"
+    host: "%"
+    password: "{{ vault_oawaiver_prod_db_password }}"
+    priv: "{{ vault_oawaiver_prod_db_name }}.*:ALL"
+mariadb__databases:
+  - name: "{{ vault_oawaiver_prod_db_name }}"
+    encoding: utf8mb4
+    collation: utf8mb4_general_ci
+
+# PostgreSQL
 postgres_host: "lib-postgres-prod1.princeton.edu"
 postgres_version: 13
 postgres_is_local: false
 postgres_admin_password: "{{ vault_postgres_admin_password }}"
 postgres_admin_user: "postgres"
-app_db_host: "{{ postgres_host }}"
+## These are used by the postgresql Role
+application_db_name: "{{ vault_oawaiver_prod_db_name }}"
+application_dbuser_name: "{{ vault_oawaiver_prod_db_user }}"
+application_dbuser_password: "{{ vault_oawaiver_prod_db_password }}"
+application_dbuser_role_attr_flags: 'SUPERUSER'
+
+# System Ruby
+ruby_version_override: "ruby2.6"
+bundler_version: "2.2.19"
+
+# System Node.js
+nodejs__upstream_release: "node_12.x"
+nodejs__upstream_key_id: "68576280"
+
+# NGINX
+nginx_remove_default_vhost: true
+application_host_protocol: "https"
+
+# mod_passenger
+passenger_ruby: "/usr/bin/ruby2.6"
+passenger_server_name: "oawaiver-prod1.princeton.edu"
+passenger_app_env: "production"
+
+# Rails
+rails_app_env: "production"
+
+## MariaDB
+app_db_host: "{{ db_host }}"
 app_db_name: "{{ vault_oawaiver_prod_db_name }}"
 app_db_user: "{{ vault_oawaiver_prod_db_user }}"
 app_db_password: "{{ vault_oawaiver_prod_db_password }}"
+
+## PostgreSQL
+# app_db_host: "{{ postgres_host }}"
+# app_db_name: "{{ vault_oawaiver_prod_db_name }}"
+# app_db_user: "{{ vault_oawaiver_prod_db_user }}"
+# app_db_password: "{{ vault_oawaiver_prod_db_password }}"
+
+## Apache Solr
+app_solr_host: 'lib-solr.princeton.edu'
+app_solr_port: 8983
+app_solr_path: "/solr/{{ oawaiver_solr_core }}"
+
 app_secret_key: "{{ vault_oawaiver_prod_secret_key }}"
-rails_app_env: "production"
-application_db_name: "{{ app_db_name }}"
-application_dbuser_name: "{{ app_db_user }}"
-application_dbuser_password: "{{ app_db_password }}"
-application_dbuser_role_attr_flags: 'SUPERUSER'
-app_host_name: "oawaiver-prod.princeton.edu"
-application_host_protocol: "https"
-running_on_server: true
-install_mailcatcher: true
-mailcatcher_user: "pulsys"
-mailcatcher_group: "pulsys"
-ruby_version_override: "ruby2.6"
-bundler_version: "2.2.19"
-nodejs__upstream_release: "node_12.x"
-nodejs__upstream_key_id: "68576280"
-passenger_app_root: "/opt/oawaiver/current/public"
-passenger_ruby: "/usr/bin/ruby2.6"
-nginx_remove_default_vhost: true
-rails_app_name: "oawaiver"
-rails_app_directory: "oawaiver"
-rails_app_symlinks: []
-rails_app_dependencies:
-  - zlib1g-dev
-  - libsqlite3-dev
-  - nodejs
-  - cifs-utils
+app_host_name: "oawaiver.princeton.edu"
+
 rails_app_vars:
   - name: APP_SECRET_KEY_BASE
     value: "{{ app_secret_key }}"
@@ -48,6 +86,12 @@ rails_app_vars:
     value: "{{ app_db_password }}"
   - name: APP_DB_HOST
     value: "{{ app_db_host }}"
+  - name: APP_SOLR_HOST
+    value: "{{ app_solr_host }}"
+  - name: APP_SOLR_PORT
+    value: "{{ app_solr_port }}"
+  - name: APP_SOLR_PATH
+    value: "{{ app_solr_path }}"
   - name: APPLICATION_HOST
     value: "{{ app_host_name }}"
   - name: APPLICATION_HOST_PROTOCOL
