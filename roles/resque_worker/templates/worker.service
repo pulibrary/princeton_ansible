@@ -1,0 +1,22 @@
+[Unit]
+Description=manage resque worker instances as a service, instance %i
+Requires={{ resque_worker_name }}.service
+Before={{ resque_worker_name }}.service
+BindsTo={{ resque_worker_name }}.service
+
+[Service]
+PermissionsStartOnly=true
+Type=idle
+User={{deploy_user}}
+Group={{deploy_user}}
+UMask=0002
+WorkingDirectory=/opt/{{rails_app_directory}}/current
+ExecStart=/bin/bash --login -c "/usr/local/bin/bundle exec rake resque:work QUEUE=* RAILS_ENV={{rails_app_env}}"
+RestartSec=1
+Restart=on-failure
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=resque
+
+[Install]
+WantedBy={{resque_worker_name}}.service

@@ -1,7 +1,34 @@
 ---
+postgres_host: 'lib-postgres-prod1.princeton.edu'
+postgres_version: 13
+postgresql_is_local: false
+postgres_port: "5432"
+postgres_admin_user: 'postgres'
+postgres_admin_password: '{{ vault_postgres_admin_password }}'
+db_name: 'appdeploy_prod'
+application_db_name: '{{db_name}}'
+db_user: '{{vault_appdeploy_production_db_user}}'
+db_password: '{{vault_appdeploy_production_db_password}}'
 nodejs__upstream_release: 'node_12.x'
 nodejs__upstream_key_id: '68576280'
+passenger_server_name: "appdeploy.princeton.edu"
+passenger_app_root: "/opt/appdeploy/current/public"
+passenger_app_env: "production"
+passenger_ruby: "/usr/bin/ruby2.6"
+ruby_version_override: "ruby2.6"
+bundler_version: "2.2.19"
+rails_app_name: "abid"
+rails_app_env: "production"
+rails_app_directory: "abid"
 rails_app_vars:
+  - name: APP_DB
+    value: '{{db_name}}'
+  - name: APP_DB_USERNAME
+    value: '{{db_user}}'
+  - name: APP_DB_PASSWORD
+    value: '{{db_password}}'
+  - name: APP_DB_HOST
+    value: '{{postgres_host}}'
   - name: HUBOT_SLACK_TOKEN
     value: '{{vault_hubot_slack_token}}'
   - name: HUBOT_GITHUB_TOKEN
@@ -10,3 +37,23 @@ rails_app_vars:
     value: '{{vault_hubot_deploy_fernet_secrets}}'
   - name: HUBOT_DEPLOY_EMIT_GITHUB_DEPLOYMENTS
     value: 'true'
+  - name: DEPLOYMENT_TIMEOUT
+    value: 3600
+  - name: GITHUB_TOKEN
+    value: '{{vault_hubot_github_token}}'
+  - name: GITHUB_CLIENT_ID
+    value: '{{vault_github_client_id}}'
+  - name: GITHUB_CLIENT_SECRET
+    value: '{{vault_github_client_token}}'
+  - name: RAILS_SECRET_KEY_BASE
+    value: '{{vault_rails_secret_key_base}}'
+  - name: GITHUB_TEAM_ID
+    value: '{{vault_github_team_id}}'
+  - name: SLACK_WEBHOOK_URL
+    value: '{{vault_slack_webhook_url}}'
+  - name: SLACK_BOT_NAME
+    value: 'pulbot'
+  - name: DEPLOYMENT_PRIVATE_KEY
+    value: '"{{vault_deployment_private_key}}"'
+  - name: RAILS_ENV
+    value: '{{rails_app_env}}'
