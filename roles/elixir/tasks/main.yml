@@ -1,2 +1,27 @@
 ---
-# tasks file for roles/elixir
+- name: erlang | Get erlang-solutions APT GPG key
+  apt_key:
+    url: https://packages.erlang-solutions.com/ubuntu/erlang_solutions.asc
+    state: present
+  register: debsource_servers
+  ignore_errors: true
+
+- name: Add upstream erlang APT repository
+  apt_repository:
+    repo: "deb https://packages.erlang-solutions.com/ubuntu {{ ansible_lsb.codename }} contrib"
+    state: present
+    update_cache: true
+  register: erlang_repo
+  retries: 3
+  delay: 60
+  until: erlang_repo is succeeded
+
+- name: Install erlang
+  apt:
+    name: esl-erlang=1:23.0.3-1
+    state: present
+
+- name: Install elixir
+  apt:
+    name: elixir=1.10.4-1
+    state: present
