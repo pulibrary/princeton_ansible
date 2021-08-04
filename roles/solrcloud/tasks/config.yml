@@ -56,18 +56,21 @@
     force: true
   notify: restart SolrCloud
 
-- name: Add orangelight cjk jar file
-  get_url:
-    url: "{{ cjkfoldingfilter }}"
-    dest: "{{ jardirectory }}"
-    force: true
-  changed_when: false
+- name: Copy orangelight plugin jar files
+  copy:
+    src: files/{{ item }}
+    dest: "{{ jardirectory }}/{{ item }}"
+    mode: 0644
+  with_items:
+    - CJKFoldingFilter.jar
+    - lucene-umich-solr-filters-6.0.0-SNAPSHOT.jar
   notify: restart SolrCloud
 
-- name: Add orangelight call number jar file
-  get_url:
-    url: "{{ umichsolrfilters }}"
-    dest: "{{ jardirectory }}"
-    force: true
-  changed_when: false
+- name: Copy webapp directory plugin jar files
+  copy:
+    src: files/{{ item }}
+    dest: "{{ webapp_jardirectory }}/{{ item }}"
+    mode: 0644
+  with_items:
+    - jts-core-1.15.1.jar
   notify: restart SolrCloud
