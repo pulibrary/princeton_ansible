@@ -9,20 +9,6 @@ solr_cores:
   - "{{ oawaiver_solr_core }}"
 solr_mirror: "https://archive.apache.org/dist"
 
-# MariaDB
-db_host: 'mariadb-prod3.princeton.edu'
-db_password: "{{ vault_xtradb_root_password }}"
-mariadb__server: "{{ db_host }}"
-mariadb__users:
-  - name: "{{ vault_oawaiver_prod_db_user }}"
-    host: "%"
-    password: "{{ vault_oawaiver_prod_db_password }}"
-    priv: "{{ vault_oawaiver_prod_db_name }}.*:ALL"
-mariadb__databases:
-  - name: "{{ vault_oawaiver_prod_db_name }}"
-    encoding: utf8mb4
-    collation: utf8mb4_general_ci
-
 # PostgreSQL
 postgres_host: "lib-postgres-prod1.princeton.edu"
 postgres_version: 13
@@ -55,20 +41,15 @@ passenger_app_env: "production"
 # Rails
 rails_app_env: "production"
 
-## MariaDB
-app_db_host: "{{ db_host }}"
+## PostgreSQL
+app_db_host: "{{ postgres_host }}"
+app_db_port: 5432
 app_db_name: "{{ vault_oawaiver_prod_db_name }}"
 app_db_user: "{{ vault_oawaiver_prod_db_user }}"
 app_db_password: "{{ vault_oawaiver_prod_db_password }}"
 
-## PostgreSQL
-# app_db_host: "{{ postgres_host }}"
-# app_db_name: "{{ vault_oawaiver_prod_db_name }}"
-# app_db_user: "{{ vault_oawaiver_prod_db_user }}"
-# app_db_password: "{{ vault_oawaiver_prod_db_password }}"
-
 ## Apache Solr
-app_solr_host: 'lib-solr.princeton.edu'
+app_solr_host: 'lib-solr-prod4.princeton.edu'
 app_solr_port: 8983
 app_solr_path: "/solr/{{ oawaiver_solr_core }}"
 
@@ -86,6 +67,8 @@ rails_app_vars:
     value: "{{ app_db_password }}"
   - name: APP_DB_HOST
     value: "{{ app_db_host }}"
+  - name: APP_DB_PORT
+    value: "{{ app_db_port }}"
   - name: APP_SOLR_HOST
     value: "{{ app_solr_host }}"
   - name: APP_SOLR_PORT
