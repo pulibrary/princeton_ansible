@@ -22,6 +22,14 @@
   include_tasks: repository.yml
   tags: install
 
+- name: Install packages
+  apt:
+    name: "{{ xtradb_packages }}"
+    state: present
+  register: install_result
+  changed_when: false
+  tags: install
+
 - name: Configure perconaxdb Installation
   debconf:
     name: perconaxdb
@@ -33,13 +41,6 @@
     - mysql-server/root_password_again
   register: configure_install
 
-- name: Install packages
-  apt:
-    name: "{{ xtradb_packages }}"
-    state: present
-  register: install_result
-  changed_when: false
-  tags: install
 
 - name: Ensure service is stopped
   service:

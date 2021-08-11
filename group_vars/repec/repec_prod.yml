@@ -1,0 +1,52 @@
+---
+db_host: 'mariadb-prod2.princeton.edu'
+db_password: '{{ vault_xtradb_root_password }}'
+db_port: "{{ drupal_db_port }}"
+mariadb__server: "{{ db_host }}"
+passenger_server_name: "repec-prod1.princeton.edu"
+passenger_app_env: "production"
+app_db_host: '{{ db_host }}'
+app_db_name: '{{ vault_repec_prod_db_name }}'
+app_db_user: '{{ vault_repec_prod_db_user }}'
+app_db_password: '{{ vault_repec_prod_db_password }}'
+app_secret_key: '{{ vault_repec_prod_secret_key }}'
+rails_app_env: "production"
+application_db_name: '{{ app_db_name }}'
+application_dbuser_name: '{{ app_db_user }}'
+application_dbuser_password: '{{ app_db_password }}'
+application_dbuser_role_attr_flags: 'SUPERUSER'
+app_host_name: 'repec-prod.princeton.edu'
+application_host_protocol: 'https'
+running_on_server: true
+ruby_version_override: "ruby2.6"
+bundler_version: '2.2.19'
+
+passenger_extra_config: "rewrite ^/econlib/RePEc/pri(.*)$ /$1;"
+
+datadog_api_key: "{{ vault_datadog_key }}"
+
+datadog_config:
+  log_enabled: true
+  apm_enabled: true
+  process_config:
+    enabled: true
+  apm_config:
+    analyzed_spans:
+      repec|rack.request: 1
+datadog_checks:
+  tls:
+    init_config:
+    instances:
+      - server: repec.princeton.edu
+        port: 443
+        tags:
+          - 'tls_service:repec'
+  repec_datadog_ruby_check:
+    init_config:
+    logs:
+      - type: file
+        path: /opt/repec/current/log/production.log
+        service: repec
+        source: ruby
+        sourcecategory: sourcecode
+        tags: "repec, environment:production, role:repec"
