@@ -1,0 +1,41 @@
+---
+- name: Verify
+  hosts: all
+  gather_facts: false
+  tasks:
+  - name: "Ensure that the system packages are installed"
+    package:
+      name: "{{ item }}"
+      state: present
+    check_mode: true
+    register: pkg_status
+    loop:
+      - libpq-dev
+      - python-psycopg2
+      - python3-psycopg2
+      - postgresql-client-13
+
+  - name: "Ensure that the directory structure for the Rails app. is created"
+    stat:
+      path: "/opt/oawaiver"
+    register: oawaiver_directory
+    failed_when:
+      - "not oawaiver_directory.stat['exists']"
+      - "not oawaiver_directory.stat['isdir']"
+      - "oawaiver_directory.stat['pw_name'] != 'deploy'"
+      - "oawaiver_directory.stat['gr_name'] != 'deploy'"
+      - "oawaiver_directory.stat['mode'] != 0755"
+
+  - name: "Ensure that the directory structure for Capistrano deployments is created"
+    stat:
+      path: "{{ item }}"
+    loop:
+      - "/opt/oawaiver/shared/bundle"
+      - "/opt/oawaiver/shared/log"
+    register: capistrano_shared_dir
+    failed_when:
+      - "not capistrano_shared_dir.stat['exists']"
+      - "not capistrano_shared_dir.stat['isdir']"
+      - "capistrano_shared_dir.stat['pw_name'] != 'deploy'"
+      - "capistrano_shared_dir.stat['gr_name'] != 'deploy'"
+      - "capistrano_shared_dir.stat['mode'] != 0775"
