@@ -1,15 +1,18 @@
 ---
-- hosts: orangelight_qa
+- hosts: repec_staging
   remote_user: pulsys
   become: true
   vars_files:
-    - ../group_vars/orangelight/qa.yml
-    - ../group_vars/orangelight/vault.yml
+    - ../group_vars/repec/repec_staging.yml
+    - ../group_vars/repec/vault.yml
   roles:
-    - role: roles/postgresql
-    - role: roles/orangelight
+    - role: roles/repec
 
   post_tasks:
+    - name: restart nginx
+      service:
+        name: nginx
+        state: restarted
     - name: tell everyone on slack you ran an ansible playbook
       slack:
         token: "{{ vault_pul_slack_token }}"

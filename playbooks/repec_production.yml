@@ -1,16 +1,18 @@
 ---
-- hosts: orangelight
+- hosts: repec_prod
   remote_user: pulsys
   become: true
   vars_files:
-    - ../site_vars.yml
-    - ../group_vars/orangelight/production.yml
+    - ../group_vars/repec/repec_prod.yml
+    - ../group_vars/repec/vault.yml
   roles:
-    - role: roles/datadog
-    - role: roles/orangelight
-      when: postgresql_is_local is not defined or not postgresql_is_local
+    - role: roles/repec
 
   post_tasks:
+    - name: restart nginx
+      service:
+        name: nginx
+        state: restarted
     - name: tell everyone on slack you ran an ansible playbook
       slack:
         token: "{{ vault_pul_slack_token }}"

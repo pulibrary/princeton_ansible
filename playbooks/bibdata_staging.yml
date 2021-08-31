@@ -8,12 +8,14 @@
     - ../group_vars/bibdata/staging.yml
   vars:
     passenger_server_name: bibdata-staging.*
-    samba_status: server
     samba_shares_root: /data
+    samba_status: client
   roles:
-    - role: 'oracle_client'
     - role: roles/bibdata
+    - role: roles/sidekiq_worker
+    - role: roles/bibdata_sqs_poller
     - role: 'hr_share'
+    - role: roles/datadog
 
   post_tasks:
     - name: tell everyone on slack you ran an ansible playbook
