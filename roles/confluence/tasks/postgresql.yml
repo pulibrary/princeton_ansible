@@ -1,0 +1,80 @@
+---
+- name: PostgreSQL | Add PostgreSQL repository apt-key
+  apt_key:
+    url: "{{ postgresql_apt_key_url }}"
+    state: present
+
+- name: PostgreSQL | add postgresql repository
+  apt_repository:
+    repo: 'deb http://apt.postgresql.org/pub/repos/apt/ {{ ansible_distribution_release }}-pgdg main'
+    update_cache: true
+    state: present
+
+- name: PostgreSQL | install postgresql server packages
+  apt:
+    name: '{{ item }}'
+    state: present
+    update_cache: true
+  loop:
+    - postgresql-{{ postgres_version }}
+
+- name: PostgreSQL | install postgresql client packages
+  apt:
+    name: '{{ item }}'
+    state: present
+    update_cache: true
+  loop:
+    - libpq-dev
+    - python-psycopg2
+    - python3-psycopg2
+    - postgresql-client-{{ postgres_version }}
+
+- name: install access rules
+  copy:
+    src: pg_hba.conf
+    dest: /etc/postgresql/{{ postgres_version }}/main/pg_hba.conf
+    group: postgres
+    owner: postgres
+    mode: 0644
+  register: configure_postgres
+  when: postgresql_is_local
+
+- name: install configuration file
+  template:
+    src: 'postgresql.conf.j2'
+    dest: '/etc/postgresql/{{ postgres_version }}/main/postgresql.conf'
+    group: postgres
+    owner: postgres
+    mode: 0644
+  register: configure_postgres
+  when: postgresql_is_local
+
+- name: ensure postgres starts on boot
+  service:
+    name: postgresql
+    enabled: true
+
+- name: restart postgres server
+  service:
+    name: postgresql
+    state: started
+
+- name: ensure access to postgres server
+  lineinfile:
+    path: '/etc/postgresql/{{ postgres_version }}/main/pg_hba.conf'
+    line: 'host    all             all             {{ ansible_default_ipv4.address }}/32       md5'
+  delegate_to: '{{ postgres_host }}'
+  register: remote_postgres_configured
+  when:
+    - running_on_server
+  ignore_errors: true
+
+- name: reload remote postgres now for the access to take place
+  service:
+    name: postgresql
+    state: reloaded
+  become: true
+  delegate_to: '{{ postgres_host }}'
+  when:
+    - running_on_server
+  ignore_errors: true
