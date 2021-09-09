@@ -148,6 +148,11 @@ If you need to run a playbook
 ansible-playbook playbooks/example.yml
 ```
 
+Running a playbook from an error or a specific task
+```bash
+ansible-playbook playbooks/example.yml --start-at-task="Task Name"
+```
+
 ## Provisioning to a service with multiple hosts (no downtime)
 
 Check to make sure you're going to run on the correct host
