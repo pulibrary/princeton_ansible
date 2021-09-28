@@ -1,0 +1,68 @@
+# NOTE
+# You must use command-line "extra variables" to use this playbook. They are
+# used to specify the host group, and the value of the db_name you intend to backup
+# and the flag for the remote host e.g.:
+# $ ansible-playbook -e db_name=oawaiver_staging -e origin_host=lib-postgres-staging1.princeton.edu -e remote_host=lib-postgres-prod1.princeton.edu playbooks/postgresql_db_migration.yml # to back up
+# $ ansible-playbook -e db_name=oawaiver_staging -e origin_host=lib-postgres-staging1.princeton.edu -e remote_host=lib-postgres-prod1.princeton.edu --tags never playbooks/postgresql_db_migration.yml
+---
+- hosts: postgres_hosts
+  remote_user: pulsys
+  become: true
+  vars:
+    - deploy_user: "pulsys"
+    - file_path: "/var/lib/migrate"
+    - now: "{{ ansible_date_time.date }}"
+  tasks:
+    - name: Create a backup directory
+      file:
+        path: "/var/lib/migrate/{{ now }}/"
+        mode: 0777
+        owner: "{{ deploy_user }}"
+        state: directory
+
+    - name: run a database dump
+      postgresql_db:
+        state: dump
+        name: "{{ db_name }}"
+        target: "{{ file_path }}/{{ now }}/{{ db_name }}.dump.sql"
+      become: true
+      become_user: postgres
+      ignore_errors: true
+
+    - name: file permissions
+      ansible.builtin.file:
+        path: "{{ file_path }}/{{ now }}/{{ db_name }}.dump.gz"
+        owner: "{{ deploy_user }}"
+        group: "{{ deploy_user }}"
+        mode: 0644
+
+    - name: transfer of databases
+      ansible.builtin.command: /usr/bin/rsync -avz "{{ file_path }}/{{ now }}/{{ db_name }}.dump.gz" "{{ remote_host }}:{{ file_path }}/{{ now }}" -e "ssh -o StrictHostKeyChecking=no"
+      become: true
+      become_user: "{{ deploy_user }}"
+
+    - name: Create a new database with name "{{ db_name }}"
+      community.postgresql.postgresql_db:
+        name: "{{ db_name }}"
+      become: true
+      become_user: postgres
+      tags: never
+
+
+    - name: Restore the database
+      community.postgresql.postgresql_db:
+        state: restore
+        name: "{{ db_name }}"
+        target: "{{ file_path }}/{{ now }}/{{ db_name }}.dump.sql"
+      become: true
+      become_user: postgres
+      delegate_to: "{{ remote_host }}"
+      tags: never
+
+
+  post_tasks:
+    - name: tell everyone on slack you ran an ansible playbook
+      slack:
+        token: "{{ vault_pul_slack_token }}"
+        msg: "{{ inventory_hostname }} backed up {{ db_name }}"
+        channel: #server-alerts
