@@ -1,4 +1,23 @@
 ---
+- name: Remove specified repository from sources list
+  ansible.builtin.apt_repository:
+    repo: 'deb https://oss-binaries.phusionpassenger.com/apt/passenger {{ ansible_distribution_release }} main'
+    state: absent
+  ignore_errors: true
+
+- name: common | update cache
+  apt:
+    update_cache: true
+
+- name: common | Add apt HTTPS capabilities.
+  apt:
+    name: "{{ item }}"
+    state: present
+    update_cache: true
+  loop:
+    - ca-certificates
+    - apt-transport-https
+
 - name: common | get yarn key
   apt_key:
     url: https://dl.yarnpkg.com/debian/pubkey.gpg
