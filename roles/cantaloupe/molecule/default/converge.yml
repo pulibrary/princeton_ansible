@@ -6,6 +6,17 @@
     - cantaloupe_user: deploy
     - cantaloupe_group: deploy
   become: true
+  pre_tasks:
+    - name: Remove specified repository from sources list
+      ansible.builtin.apt_repository:
+        repo: 'deb https://oss-binaries.phusionpassenger.com/apt/passenger {{ ansible_distribution_release }} main'
+        state: absent
+      ignore_errors: true
+
+    - name: update cache
+      apt:
+        update_cache: true
+        cache_valid_time: 600
   tasks:
     - name: "Include cantaloupe"
       include_role:
