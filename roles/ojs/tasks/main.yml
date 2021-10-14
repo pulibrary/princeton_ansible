@@ -1,8 +1,15 @@
 ---
-- name: ojs | install php postgres drivers
-  apt:
-    name: ['libapache2-mod-php', 'php{{ php_version }}-pgsql', 'php{{ php_version }}-mbstring', 'php{{ php_version }}-ldap', 'php{{ php_version }}-xml']
-    state: present
+## Note: Invoke this task with --tags clean to remove the database and config
+## file so you can start over with a fresh installation.
+
+- name: ojs | install prerequisites
+  include: "install_prerequisites.yml"
+
+- name: ojs | clean, if necessary
+  include: "clean.yml"
+
+- name: ojs | determine if ojs is installed already
+  include: "check_ojs_installation.yml"
 
 - name: ojs | add {{ deploy_user }} to www-data
   user:
@@ -10,21 +17,68 @@
     groups: www-data
     append: true
 
-- name: ojs | create ojs directory
-  file:
-    path: "{{ ojs_home }}"
+- name: ojs | unarchive ojs code
+  unarchive:
+    src: "https://pkp.sfu.ca/ojs/download/ojs-{{ ojs_version}}.tar.gz"
+    dest: "/var/www"
+    remote_src: true
+    owner: deploy
+    group: www-data
+    creates: "{{ ojs_home }}"
+  become: true
+
+- name: ojs | ensure cache directories are writable
+  ansible.builtin.file:
+    path: "{{ ojs_home }}/{{ item }}"
     state: directory
     owner: "{{ deploy_user }}"
-    group: "www-data"
+    group: www-data
+    mode: 0775
+  with_items:
+    - public
+    - cache
+    - cache/t_cache
+    - cache/t_config
+    - cache/t_compile
+    - cache/_db
+
+- name: ojs | create a directory to store uploaded files
+  ansible.builtin.file:
+    path: "{{ ojs_file_uploads }}"
+    state: directory
+    owner: "{{ deploy_user }}"
+    group: www-data
     mode: 0775
 
-- name: ojs | create ojs local directory
+- name: ojs | copy config file
+  ansible.builtin.command: "cp config.TEMPLATE.inc.php config.inc.php"
+  args:
+    chdir: "{{ ojs_home}}"
+  become: true
+  become_user: "{{ deploy_user }}"
+  when: ojs_is_installed is false
+
+- name: ojs | write expect script for OJS interactive installation
+  template:
+    src: "script.exp.j2"
+    dest: "{{ ojs_home }}/script.exp"
+    owner: "{{ deploy_user }}"
+    group: www-data
+    mode: 0700
+  when: ojs_is_installed is false
+
+- name: ojs | run expect script for OJS interactive installation
+  ansible.builtin.command: "/usr/bin/expect {{ ojs_home}}/script.exp"
+  args:
+    chdir: "{{ ojs_home}}"
+  become: true
+  become_user: "{{ deploy_user }}"
+  when: ojs_is_installed is false
+
+- name: ojs | remove expect script
   file:
-    path: "{{ ojs_home }}/local"
-    state: directory
-    owner: "www-data"
-    group: "{{ deploy_user }}"
-    mode: 0775
+    path: "{{ ojs_home }}/script.exp"
+    state: absent
 
 - name: ojs | remove apache document root
   file:
@@ -32,17 +86,12 @@
     state: absent
   changed_when: false
 
-- name: ojs | install ojs config
-  template:
-    src: config.inc.php.j2
-    dest: "{{ ojs_home }}/config.inc.php"
-    mode: 0644
-  changed_when: false
-
 - name: ojs | install htaccess config for mod_rewrite
   template:
     src: htaccess
     dest: "{{ ojs_home }}/.htaccess"
+    owner: "{{ deploy_user }}"
+    group: www-data
     mode: 0644
   changed_when: false
 
