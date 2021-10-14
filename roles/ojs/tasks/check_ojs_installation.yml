@@ -1,0 +1,21 @@
+---
+- name: ojs | set installation flag fact false by default
+  ansible.builtin.set_fact:
+    ojs_is_installed: false
+
+- name: ojs | determine if ojs is installed already
+  ansible.builtin.shell: "grep 'installed =' config.inc.php"
+  args:
+    chdir: "{{ ojs_home}}"
+  register: ojs_installation_flag
+  ignore_errors: true
+
+- name: ojs | set installation flag fact true if indicated
+  ansible.builtin.set_fact:
+    ojs_is_installed: true
+  when: ojs_installation_flag.stdout.find('On') != -1
+  ignore_errors: true
+
+- name: ojs | Is OJS already installed?
+  debug:
+    msg: "{{ ojs_is_installed }}"
