@@ -12,22 +12,9 @@ Role Variables
 --------------
 
 ```bash
-ojs_version: "3_1_1-4"
-apache:
-  docroot: "/var/www/ojs"
-  servername: "{{ ansible_hostname }}"
-
-server:
-  timezone: "America/New_York"
-
+ojs_version: "3.3.0-8"
 ojs_file_uploads: "/var/local/files"
 ojs_home: "/var/www/ojs-{{ ojs_version }}"
-ojs_db_password: "vault_ojs_db_password"
-application_dbuser_name: "ojs"
-application_db_name: "ojs"
-application_dbuser_password: "ojs_db_password"
-application_dbuser_role_attr_flags: "SUPERUSER,INHERIT,NOCREATEDB,NOCREATEROLE,NOREPLICATION"
-postgres_version: "10"
 ```
 
 Dependencies
