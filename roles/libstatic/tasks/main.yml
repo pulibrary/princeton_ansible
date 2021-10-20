@@ -1,5 +1,18 @@
 ---
 # tasks file for roles/libstatic
+
+- name: install github deploy keys
+  template: 
+    src: "{{ item }}"
+    dest: "/home/{{ deploy_user }}/.ssh/{{ item }}"
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+    mode: 0600
+  with_items: '{{ deploy_keys }}'
+  when: running_on_server
+  tags:
+    - install_keys
+
 - name: Install all git repos
   git:
     repo: '{{ item.git_repo }}'
