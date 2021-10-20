@@ -1,6 +1,6 @@
 ---
 # tasks file for roles/libstatic
-- name: Install Firestone renovations
+- name: Install all git repos
   git:
     repo: '{{ item.git_repo }}'
     dest: '{{ item.doc_root }}'
@@ -8,9 +8,12 @@
     update: true
     force: true
     version: '{{ item.version }}'
+    ssh_opts: '{{ item.ssh_opts | default(omit) }}'
   become: true
   notify: restart apache
   with_items: '{{ named_sites + sites }}'
+  tags:
+    - install_sites
 
 - name: Add all the named sites
   template:

@@ -1,0 +1,36 @@
+---
+# This is an example playbook to execute Ansible tests.
+
+- name: Verify
+  hosts: all
+  gather_facts: false
+  tasks:
+  - name: test for geaccirc rails conf
+    stat:
+      path: "/home/deploy/app_configs/geaccirc"
+    register: geaccirc_rails_conf
+    failed_when:
+      - not geaccirc_rails_conf.stat.exists
+      - not geaccirc_rails_conf.stat.isreg
+      - not geaccirc_rails_conf.stat.pw_name == deploy
+      - not geaccirc_rails_conf.stat.gr_name == deploy
+
+  - name: test for geaccirc app dir
+    stat:
+      path: "/opt/geaccirc/shared/tmp"
+    register: geaccirc_app
+    failed_when:
+      - not geaccirc_app.stat.exists
+      - not geaccirc_app.stat.isdir
+      - not geaccirc_app.stat.pw_name == deploy
+      - not geaccirc_app.stat.gr_name == deploy
+
+  - name: test for geaccirc logrotate
+    stat:
+      path: "/etc/logrotate.d/geaccirc"
+    register: logrotate
+    failed_when:
+      - not logrotate.stat.exists
+      - not logrotate.stat.isreg
+      - not logrotate.stat.pw_name == root
+      - not logrotate.stat.gr_name == root
