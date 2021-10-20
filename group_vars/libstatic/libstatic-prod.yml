@@ -9,3 +9,46 @@ lib_static_site:
    site_name: 'lib-static-prod1'
    server_name: 'lib-static-prod'
    doc_root: '/var/local/firestone-renovations'
+datadog_api_key: "{{ vault_datadog_key }}"
+datadog_service_name: lib-static
+datadog_environment: prod
+
+datadog_enabled: true
+
+datadog_config:
+  log_enabled: true
+  apm_enabled: true
+  process_enabled: true
+datadog_typed_checks:
+  - type: tls
+    configuration:
+      init_config:
+      instances:
+        - server: lib-static-prod.princeton.edu
+          port: 443
+  - type: process
+    configuration:
+      init_config:
+      instances:
+        -   name: lib-static
+            service: lib-static
+            search_string:
+              - apache2
+  - type: apache
+    configuration:
+      init_config:
+      instances:
+        -   apache_status_url: http://127.0.0.1/server-status?auto
+      logs:
+        - type: file
+          path: /var/log/apache2/other_vhosts_access.log
+          service: lib-static
+          source: apache
+          sourcecategory: http_web_access
+          tags: "lib-static, env:prod, role:libstatic"
+        - type: file
+          path: /var/log/apache2/error.log
+          service: library
+          source: apache
+          sourcecategory: http_web_access
+          tags: "lib-static, env:prod, role:libstatic"
