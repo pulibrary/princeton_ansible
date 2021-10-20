@@ -1,0 +1,21 @@
+---
+- hosts: geaccirc_prod
+  remote_user: pulsys
+  become: true
+  vars_files:
+    - ../group_vars/geaccirc/geaccirc_prod.yml
+    - ../group_vars/geaccirc/vault.yml
+  roles:
+    - role: datadog
+    - role: roles/geaccirc
+
+  post_tasks:
+    - name: restart nginx
+      service:
+        name: nginx
+        state: restarted
+    - name: tell everyone on slack you ran an ansible playbook
+      slack:
+        token: "{{ vault_pul_slack_token }}"
+        msg: "{{ inventory_hostname }} completed"
+        channel: #server-alerts
