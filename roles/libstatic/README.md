@@ -1,7 +1,7 @@
 Role Name
 =========
 
-A brief description of the role goes here.
+A machine to hold legacy static web content.
 
 Requirements
 ------------
@@ -13,11 +13,49 @@ good idea to mention in this section that the boto package is required.
 Role Variables
 --------------
 
-A description of the settable variables for this role should go here, including
-any variables that are in defaults/main.yml, vars/main.yml, and any variables
-that can/should be set via parameters to the role. Any variables that are read
-from other roles and/or the global scope (ie. hostvars, group vars, etc.) should
-be mentioned here as well.
+libstatic role deploys a list of repos from github to the libstatic server.  To configure a new site you will need to add a item to the sites list like the following:
+```
+   sites:
+   - doc_root: "/var/local/<your repo>"
+      git_repo: 'git@github.com:pulibrary/<your repo>.git'
+      options: 'Indexes FollowSymLinks MultiViews'
+      version: 'main'
+      alias: '<your repo>'
+```
+`doc_root` is where the code gets deployed to.
+`git_repo` is the ssh clone url of the repo
+`options` are Apache options for the site
+`version` is the branch to deploy
+`alias` the url path to your repo from the top level server
+
+You may need to generate a deploy key for this role to deploy your private repo. Run the following commands to generate the key
+```
+export repo_name=<your repo>
+ssh-keygen -t ed25519 -C deploy@princeton.edu -f $repo_name  -P ""
+ansible-vault encrypt $repo_name
+mv $repo_name* roles/libstatic/templates/ 
+```
+
+cat the public key and it as a deploy key in your repo in github (/settings/keys)
+
+Your site will look like.  Note the ssh_opts:
+```
+   sites:
+   ...
+   - doc_root: "/var/local/<your repo>"
+      git_repo: 'git@github.com:PrincetonUniversityLibrary/<your repo>.git'
+      options: 'Indexes FollowSymLinks MultiViews'
+      version: 'main'
+      alias: '<your repo>'
+      ssh_opts: -i /home/deploy/.ssh/<your repo>_ed25519 -o StrictHostKeyChecking=no
+```
+
+You will also need to put the key into the deploy key list
+```
+deploy_keys:
+    ...
+    - <your repo>_ed25519
+```
 
 Dependencies
 ------------
