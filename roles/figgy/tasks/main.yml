@@ -222,3 +222,21 @@
     dest: "/home/{{ deploy_user }}/cloud_config/google_cloud_credentials.json"
     mode: 0644
   when: running_on_server
+
+
+- name: Install startup script for figx
+  template:
+    src: figx.service
+    dest: "/etc/systemd/system/figx.service"
+    mode: 0644
+
+- name: Allow deploy user to restart figx
+  lineinfile:
+    dest: /etc/sudoers
+    state: present
+    line: '{{ deploy_user }} ALL=(ALL) NOPASSWD: /usr/sbin/service figx {{ item }}'
+    validate: 'visudo -cf %s'
+  with_items:
+    - status
+    - restart
+    - start
