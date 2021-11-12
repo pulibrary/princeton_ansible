@@ -1,7 +1,63 @@
 ---
 nodejs__upstream_release: 'node_12.x'
 nodejs__upstream_key_id: '68576280'
+
+postgresql_is_local: false
+postgres_host: 'lib-postgres-staging1.princeton.edu'
+
+passenger_server_name: "ouranos-staging1.princeton.edu"
+passenger_app_root: "/opt/ouranos/current/public"
+passenger_app_env: "staging"
+
+ouranos_db_name: 'ouranos_staging'
+ouranos_db_user: '{{vault_ouranos_staging_db_user}}'
+ouranos_db_password: '{{vault_ouranos_staging_db_password}}'
+
+rails_app_env: "staging"
+
+ouranos_host_name: 'ouranos-staging.princeton.edu'
+
+application_db_name: '{{ouranos_db_name}}'
+application_dbuser_name: '{{ouranos_db_user}}'
+application_dbuser_password: '{{ouranos_db_password}}'
+application_dbuser_role_attr_flags: 'SUPERUSER'
+application_host: '{{passenger_server_name}}'
+application_host_protocol: 'https'
+project_db_host: '{{postgres_host}}'
+
+ouranos_honeybadger_key: '{{vault_ouranos_staging_honeybadger_key}}'
+
+sidekiq_worker_name: ouranos-workers
+
+redis__server_default_configuration:
+  syslog-enabled: "{{ redis__server_syslog | bool }}"
+  syslog-ident: "{{ redis__server_syslog_ident }}"
+  syslog-facility: "{{ redis__server_syslog_facility }}"
+  loglevel: "{{ redis__server_loglevel }}"
+  bind: "{{ redis__server_bind }}"
+  port: "{{ redis__server_port }}"
+  save: "{{ redis__server_save }}"
+  maxmemory: "{{ redis__server_maxmemory }}"
+  maxmemory-policy: "{{ redis__server_maxmemory_policy }}"
+  maxmemory-samples: "{{ redis__server_maxmemory_samples }}"
+
 rails_app_vars:
+  - name: SECRET_KEY_BASE
+    value: '{{vault_ouranos_staging_secret_key}}'
+  - name: OURANOS_DB
+    value: '{{ouranos_db_name}}'
+  - name: OURANOS_DB_USERNAME
+    value: '{{ouranos_db_user}}'
+  - name: OURANOS_DB_PASSWORD
+    value: '{{ouranos_db_password}}'
+  - name: OURANOS_DB_HOST
+    value: '{{postgres_host}}'
+  - name: APPLICATION_HOST
+    value: '{{ouranos_host_name}}'
+  - name: APPLICATION_HOST_PROTOCOL
+    value: '{{application_host_protocol}}'
+  - name: HONEYBADGER_API_KEY
+    value: '{{ouranos_honeybadger_key}}'
   - name: HUBOT_SLACK_TOKEN
     value: '{{vault_hubot_slack_token}}'
   - name: HUBOT_GITHUB_TOKEN
