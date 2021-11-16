@@ -1,0 +1,30 @@
+---
+- name: vireo | copy vireo .war file into place
+  shell: wget https://lib-solr-mirror.princeton.edu/vireo-4.1.0.war
+  args:
+    chdir: /var/lib/tomcat8/webapps
+    creates: /var/lib/tomcat8/webapps/vireo-4.1.0.war
+    warn: false
+
+- name: vireo | install tomcat admin
+  apt:
+    name: tomcat8-admin
+    state: present
+
+- name: vireo | install tomcat user
+  apt:
+    name: tomcat8-user
+    state: present
+
+- name: vireo | configure tomcat management app
+  template:
+    src: tomcat_users.xml.j2
+    dest: /etc/tomcat8/tomcat-users.xml
+    owner: root
+    group: tomcat8
+    mode: '0640'
+
+- name: vireo | restart tomcat
+  service:
+    name: tomcat8
+    state: restarted
