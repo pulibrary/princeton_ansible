@@ -1,30 +1,81 @@
 ---
-- name: vireo | copy vireo .war file into place
-  shell: wget https://lib-solr-mirror.princeton.edu/vireo-4.1.0.war
+- name: vireo | add a vireo user
+  ansible.builtin.user:
+    name: vireo
+    shell: /bin/bash
+    groups: tomcat8
+    append: yes
+
+- name: vireo | install maven
+  apt:
+    name: maven
+    state: present
+
+- name: vireo | create a directory for compilation
+  become: yes
+  file:
+    path: "/var/lib/tomcat8/.m2/repository"
+    state: directory
+    owner: vireo
+    group: tomcat8
+    mode: 0775
+  when:
+    - running_on_server
+
+- name: vireo | create a directory for assets
+  file:
+    path: "/opt/vireo/config"
+    state: directory
+    owner: vireo
+    group: tomcat8
+    mode: 0775
+  when:
+    - running_on_server
+
+- name: vireo | create a directory for application code
+  file:
+    path: "/opt/vireo/application"
+    state: directory
+    owner: vireo
+    group: tomcat8
+    mode: 0775
+  when:
+    - running_on_server
+
+- name: vireo | check out source
+  become: true
+  become_user: vireo
+  ansible.builtin.git:
+    repo: 'https://github.com/PrincetonUniversityLibrary/pul-vireo.git'
+    dest: "/opt/vireo/application"
+    version: main
+    update: yes
+
+- name: vireo | compile application
+  become: true
+  become_user: vireo
+  shell: "mvn clean package -DskipTests -Dproduction -Dassets.uri=file:/opt/vireo/ -Dconfig.uri=file:/opt/vireo/config/"
   args:
-    chdir: /var/lib/tomcat8/webapps
-    creates: /var/lib/tomcat8/webapps/vireo-4.1.0.war
-    warn: false
+    chdir: /opt/vireo/application
+    # creates: "/etc/shibboleth/{{ shib_host }}_metadata.xml"
+  when: running_on_server
 
-- name: vireo | install tomcat admin
-  apt:
-    name: tomcat8-admin
-    state: present
-
-- name: vireo | install tomcat user
-  apt:
-    name: tomcat8-user
-    state: present
-
-- name: vireo | configure tomcat management app
+- name: vireo | write external configuration file
   template:
-    src: tomcat_users.xml.j2
-    dest: /etc/tomcat8/tomcat-users.xml
-    owner: root
+    src: application.yml.j2
+    dest: /opt/vireo/config/application.yml
+    owner: vireo
     group: tomcat8
     mode: '0640'
 
-- name: vireo | restart tomcat
-  service:
-    name: tomcat8
-    state: restarted
+# - name: vireo | copy vireo .war file into place
+#   shell: wget https://lib-solr-mirror.princeton.edu/vireo-4.1.0.war
+#   args:
+#     chdir: /var/lib/tomcat8/webapps
+#     creates: /var/lib/tomcat8/webapps/vireo-4.1.0.war
+#     warn: false
+
+# - name: vireo | restart tomcat
+#   service:
+#     name: tomcat8
+#     state: restarted
