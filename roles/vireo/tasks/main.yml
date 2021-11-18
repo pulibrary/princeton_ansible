@@ -50,6 +50,7 @@
     dest: "/opt/vireo/application"
     version: main
     update: yes
+    force: yes
 
 - name: vireo | compile application
   become: true
@@ -57,8 +58,15 @@
   shell: "mvn clean package -DskipTests -Dproduction -Dassets.uri=file:/opt/vireo/ -Dconfig.uri=file:/opt/vireo/config/"
   args:
     chdir: /opt/vireo/application
-    # creates: "/etc/shibboleth/{{ shib_host }}_metadata.xml"
   when: running_on_server
+
+- name: vireo | configure tomcat to point at the .war file we just compiled
+  template:
+    src: server.xml.j2
+    dest: /var/lib/tomcat8/conf/server.xml
+    owner: tomcat8
+    group: tomcat8
+    mode: '0640'
 
 - name: vireo | write external configuration file
   template:
@@ -68,6 +76,8 @@
     group: tomcat8
     mode: '0640'
 
+
+
 # - name: vireo | copy vireo .war file into place
 #   shell: wget https://lib-solr-mirror.princeton.edu/vireo-4.1.0.war
 #   args:
@@ -75,7 +85,7 @@
 #     creates: /var/lib/tomcat8/webapps/vireo-4.1.0.war
 #     warn: false
 
-# - name: vireo | restart tomcat
-#   service:
-#     name: tomcat8
-#     state: restarted
+- name: vireo | restart tomcat
+  service:
+    name: tomcat8
+    state: restarted
