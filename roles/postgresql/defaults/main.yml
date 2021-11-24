@@ -18,3 +18,51 @@ apt_cache_timeout: 1800
 application_dbuser_name: pguser
 application_dbuser_password: changethis
 application_db_name: dbname
+
+postgresql_packages:
+  - postgresql-{{ postgres_version }}
+  - postgresql-{{ postgres_version }}-repmgr
+  - postgresql-client-{{ postgres_version }}
+  - postgresql-contrib-{{ postgres_version }}
+
+postgresql_client_packages:
+  - libpq-dev
+  - python-psycopg2
+  - python3-psycopg2
+  - postgresql-client-{{ postgres_version }}
+
+postgres_service_name: "postgresql-{{ postgres_version }}"
+postgres_database_owner: "postgres"
+postgres_cluster_name: "main"
+postgres_conf_directory: "/etc/postgresql/{{ postgres_version }}/{{ postgres_cluster_name }}"
+
+replication_user: []
+replication_database: []
+replication_user_password: "{{ omit }}"
+db_clusteradmin_password: "{{ omit }}"
+postgres_admin_user_password: "{{ omit }}"
+sudoers_dir: "/etc/sudoers.d"
+postgres_locale_parts:
+  - "en_US"  # Locale
+  - "UTF-8"  # Encoding
+postgres_locale: "{{ postgres_locale_parts | join('.') }}"
+postgres_ctype_parts:
+  - "en_US"  # Locale
+  - "UTF-8"  # Encoding
+postgres_ctype: "{{ postgres_ctype_parts | join('.') }}"
+
+postgres_env:
+  LC_ALL: "{{ postgres_locale }}"
+  LC_LCTYPE: "{{ postgres_locale }}"
+
+# Extensions
+postgres_ext_install_contrib: true
+postgres_ext_install_dev_headers: true
+postgres_ext_install_postgis: true
+postgres_database_extensions: []
+
+postgres_ext_postgis_version: "3"
+postgres_ext_postgis_deps:
+  - postgresql-{{ postgresql_version }}-pgrouting
+  - postgresql-{{ postgresql_version }}-postgis-{{ postgresql_ext_postgis_version }}
+  - postgresql-{{ postgresql_version }}-postgis-{{ postgresql_ext_postgis_version }}-scripts

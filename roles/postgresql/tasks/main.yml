@@ -31,7 +31,7 @@
     cache_valid_time: '{{ apt_cache_timeout }}'
     update_cache: true
   loop:
-    - postgresql-{{ postgres_version }}
+    - "{{ postgresql_packages }}"
   when: postgresql_is_local
 
 - name: PostgreSQL | install postgresql client packages
@@ -41,12 +41,9 @@
     cache_valid_time: '{{ apt_cache_timeout }}'
     update_cache: true
   loop:
-    - libpq-dev
-    - python-psycopg2
-    - python3-psycopg2
-    - postgresql-client-{{ postgres_version }}
+    - "{{ postgresql_client_packages }}"
 
-- name: install postgresql client packages
+- name: PostgreSQL | install postgresql client packages Centos
   dnf:
     name: "{{ item }}"
     state: present
@@ -58,7 +55,9 @@
     - running_on_server
     - ansible_distribution == "CentOS"
 
-- name: install access rules
+- import_tasks: extensions.yml
+
+- name: PostgreSQL | install access rules
   copy:
     src: pg_hba.conf
     dest: /etc/postgresql/{{ postgres_version }}/main/pg_hba.conf
@@ -68,7 +67,7 @@
   register: configure_postgres
   when: postgresql_is_local
 
-- name: install configuration file
+- name: PostgreSQL | install configuration file
   template:
     src: 'postgresql.conf.j2'
     dest: '/etc/postgresql/{{ postgres_version }}/main/postgresql.conf'
@@ -78,19 +77,19 @@
   register: configure_postgres
   when: postgresql_is_local
 
-- name: ensure postgres starts on boot
+- name: PostgreSQL | ensure postgres starts on boot
   service:
     name: postgresql
     enabled: true
   when: postgresql_is_local
 
-- name: restart postgres server
+- name: PostgreSQL | restart postgres server
   service:
     name: postgresql
     state: started
   when: postgresql_is_local
 
-- name: ensure access to postgres server
+- name: PostgreSQL | ensure access to postgres server
   lineinfile:
     path: '/etc/postgresql/{{ postgres_version }}/main/pg_hba.conf'
     line: 'host    all             all             {{ ansible_default_ipv4.address }}/32       md5'
@@ -103,7 +102,7 @@
     - not postgresql_is_cloud
   ignore_errors: true
 
-- name: reload remote postgres now for the access to take place
+- name: PostgreSQL | reload remote postgres now for the access to take place
   service:
     name: postgresql
     state: reloaded
@@ -118,3 +117,4 @@
 
 - include: create_users.yml
 - include: create_db.yml
+- include: repmgr.yml

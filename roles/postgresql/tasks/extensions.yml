@@ -1,0 +1,33 @@
+---
+- name: PostgreSQL | Extensions | Make sure the postgres contrib extensions are installed
+  apt:
+    name: "postgresql-contrib-{{ postgres_version }}"
+    state: present
+    update_cache: true
+  when:
+    - postgresql_ext_install_contrib
+    - postgresql_is_local
+  notify:
+    - restart postgresql
+
+- name: PostgreSQL | Extensions | Make sure the development headers are installed
+  apt:
+    name: libpq-dev
+    state: present
+    update_cache: true
+  when:
+    - postgresql_ext_install_dev_headers
+    - postgresql_is_local
+  notify:
+    - restart postgresql
+
+- name: PostgreSQL | Extensions | Make sure the postgis extensions are installed
+  apt:
+    name: "{{ postgresql_ext_postgis_deps }}"
+    state: present
+    update_cache: true
+  when:
+    - postgresql_ext_install_postgis
+    - postgresql_is_local
+  notify:
+    - restart postgresql
