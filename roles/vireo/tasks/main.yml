@@ -1,4 +1,7 @@
 ---
+# tasks file for roles/dataspace
+- include_tasks: apache_config.yml
+
 - name: vireo | add a vireo user
   ansible.builtin.user:
     name: vireo
@@ -34,7 +37,17 @@
 
 - name: vireo | create a directory for application code
   file:
-    path: "/opt/vireo/application"
+    path: "{{ application_code_dir }}"
+    state: directory
+    owner: vireo
+    group: tomcat8
+    mode: 0775
+  when:
+    - running_on_server
+
+- name: vireo | create a directory for compiled war files
+  file:
+    path: "{{ war_file_dir }}"
     state: directory
     owner: vireo
     group: tomcat8
@@ -47,45 +60,74 @@
   become_user: vireo
   ansible.builtin.git:
     repo: 'https://github.com/PrincetonUniversityLibrary/pul-vireo.git'
-    dest: "/opt/vireo/application"
+    dest: "{{ application_code_dir }}"
     version: main
     update: yes
     force: yes
 
-- name: vireo | compile application
+- name: vireo | determine latest git SHA
   become: true
   become_user: vireo
-  shell: "mvn clean package -DskipTests -Dproduction -Dassets.uri=file:/opt/vireo/ -Dconfig.uri=file:/opt/vireo/config/"
+  shell: "git log --pretty=oneline -n 1 --abbrev-commit | awk '{print $1}'"
   args:
-    chdir: /opt/vireo/application
+    chdir: "{{ application_code_dir }}"
+  register: latest_git_sha
   when: running_on_server
+  
+- name: vireo | set git SHA fact
+  set_fact:
+    checked_out_git_sha: "{{ latest_git_sha.stdout }}"
 
-- name: vireo | configure tomcat to point at the .war file we just compiled
-  template:
-    src: server.xml.j2
-    dest: /var/lib/tomcat8/conf/server.xml
-    owner: tomcat8
-    group: tomcat8
-    mode: '0640'
+- name: vireo | set expected war file name
+  set_fact:
+    expected_war_file: "{{war_file_dir}}/{{ checked_out_git_sha }}.war"
 
-- name: vireo | write external configuration file
-  template:
-    src: application.yml.j2
-    dest: /opt/vireo/config/application.yml
-    owner: vireo
-    group: tomcat8
-    mode: '0640'
+- name: vireo | check if expected war file exists already
+  stat:
+    path: "{{ expected_war_file}}"
+  register: file_data
 
+- name: vireo | print latest git SHA
+  ansible.builtin.debug:
+    msg: expected war file {{ expected_war_file }}
 
+# Only recompile the application if the code has changed
+- name: vireo | re-compile new version of the war file
+  block:
+    - name: vireo | compile application
+      become: true
+      become_user: vireo
+      shell: "mvn clean package -DskipTests -Dproduction -Dassets.uri=file:/opt/vireo/ -Dconfig.uri=file:/opt/vireo/config/"
+      args:
+        chdir: "{{ application_code_dir }}"
 
-# - name: vireo | copy vireo .war file into place
-#   shell: wget https://lib-solr-mirror.princeton.edu/vireo-4.1.0.war
-#   args:
-#     chdir: /var/lib/tomcat8/webapps
-#     creates: /var/lib/tomcat8/webapps/vireo-4.1.0.war
-#     warn: false
+    - name: vireo | copy vireo .war file into place
+      shell: "cp {{ application_code_dir }}/target/vireo-4.1.0.war {{ expected_war_file }}"
+      args:
+        creates: "{{ expected_war_file }}"
 
-- name: vireo | restart tomcat
-  service:
-    name: tomcat8
-    state: restarted
+    - name: vireo | copy vireo .war file into place
+      shell: "chown tomcat8:tomcat8 {{ expected_war_file }}"
+
+    - name: vireo | configure tomcat to point at the .war file we just compiled
+      template:
+        src: server.xml.j2
+        dest: /var/lib/tomcat8/conf/server.xml
+        owner: tomcat8
+        group: tomcat8
+        mode: '0640'
+
+    - name: vireo | write external configuration file
+      template:
+        src: application.yml.j2
+        dest: /opt/vireo/config/application.yml
+        owner: vireo
+        group: tomcat8
+        mode: '0640'
+
+    - name: vireo | restart tomcat
+      service:
+        name: tomcat8
+        state: restarted
+
+  when: running_on_server and not file_data.stat.exists
