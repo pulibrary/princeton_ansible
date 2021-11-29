@@ -29,11 +29,6 @@ spring:
     maxRequestSize: 20MB
 
   datasource:
-    # H2
-    # platform: h2
-    # url: jdbc:h2:mem:AZ;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
-    # # url: jdbc:h2:file:./vireoh2.db;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
-    # driverClassName: org.h2.Driver
 
     # PostgreSQL
     platform: postgresql
@@ -50,13 +45,9 @@ spring:
     validation-query: select version();
 
   jpa:
-    # H2
-    # database-platform: org.hibernate.dialect.H2Dialect
     # PostgreSQL
     database-platform: org.hibernate.dialect.PostgreSQLDialect
-    # MySQL
-    #database-platform: org.hibernate.dialect.MySQL5InnoDBDialect
-  
+
     generate-ddl: true
     show-sql: false
     hibernate.ddl-auto: create-drop
@@ -65,7 +56,6 @@ spring:
   thymeleaf:
     cache: false
     model: LEGACYHTML5
-
 
 # logging
 logging:
@@ -82,15 +72,14 @@ logging:
 # generated values
 info:
   build:
-    production: ${production}
+    production: true
     artifact: ${project.artifactId}
     name: ${project.name}
     description: ${project.description}
     version: ${project.version}
 
-
 app:
-  url: http://localhost:9000
+  url: "{{ application_fqdn }}"
 
   # value generated from property assets.uri
   # either defined in pom.xml or via package argument
@@ -116,13 +105,13 @@ app:
     # edu.tamu.weaver.auth.service.CryptoService
     secret: verysecretsecret
     # edu.tamu.weaver.filter.CorsFilter
-    allow-access: http://localhost:9000
+    allow-access: http://localhost:8080
     
   # edu.tamu.weaver.email.config.WeaverEmailConfig
   email:
     host: relay.tamu.edu
-    from: noreply@library.tamu.edu
-    replyTo: helpdesk@library.tamu.edu
+    from: noreply@library.princeton.edu
+    replyTo: helpdesk@library.princeton.edu
     # additional email configurations
     #username:
     #password:
@@ -150,17 +139,68 @@ auth:
   # edu.tamu.weaver.token.provider.controller.TokenController
   path: /auth
 
+  # Force all authenticated sessions to use SSL
+  auth.forceSSL = false
 
-# edu.tamu.weaver.token.provider.controller.TokenController
-shib:
-  keys: netid,uin,lastName,firstName,email
-  subject: email
-  netid: edupersonprincipalnameunscoped
-  uin: tamuuin
-  lastName: tdl-sn
-  firstName: tdl-givenname
-  email: tdl-mail
+  # Password Authentication Module
+  auth.pass.enabled = true
+  auth.pass.visible = true
+  auth.pass.name = Vireo Account
+  auth.pass.description = Users who are not able to use other options should select this option to login with Vireo account.
 
+  # Shibboleth Authentication Module
+  auth.shib.enabled = true
+  auth.shib.visible = true
+  auth.shib.name = Princeton Authentication
+  auth.shib.description = Users who are currently active with the university may login using the <a href="http://shibboleth.net" />Shibboleth protocol</a> to provide secure attributes about the user.
+  auth.shib.login.forceSSL = true
+  auth.shib.login.url = /Shibboleth.sso/Login?target=%1s
+  auth.shib.logout.url = /Shibboleth.sso/Logout?return=%1s
+  auth.shib.logout.enabled = false
+  # primary identifier may be either netid or email.
+  auth.shib.primaryIdentifier = netid
+  # Shib-specific settings to assist with debugging
+  auth.shib.mock = false
+  auth.shib.log = true 
+
+  # Required attributes, netid is only required if it is the primary identifier
+  auth.shib.attribute.netid = shib_netid
+  auth.shib.attribute.email = shib_mail
+  auth.shib.attribute.firstName = shib_givenname
+  auth.shib.attribute.lastName = shib_sn
+
+
+  # Optional attributes
+  auth.shib.attribute.institutionalIdentifier = SHIB_uin
+  auth.shib.attribute.middleName = SHIB_initials
+  auth.shib.attribute.birthYear = SHIB_birthYear
+  auth.shib.attribute.affiliations = SHIB_eduPersonAffiliation
+  auth.shib.attribute.currentPhoneNumber = SHIB_phone
+  auth.shib.attribute.currentPostalAddress = SHIB_postal
+  auth.shib.attribute.currentEmailAddress = SHIB_mail
+  auth.shib.attribute.permanentPhoneNumber = SHIB_permanentPhone
+  auth.shib.attribute.permanentPostalAddress = SHIB_permanentPostal
+  auth.shib.attribute.permanentEmailAddress = SHIB_permanentEmail
+  auth.shib.attribute.currentDegree = SHIB_degree
+  auth.shib.attribute.currentDepartment = SHIB_department
+  auth.shib.attribute.currentCollege = SHIB_college
+  auth.shib.attribute.currentMajor = SHIB_major
+  auth.shib.attribute.currentGraduationYear = SHIB_gradYear
+  auth.shib.attribute.currentGraduationMonth = SHIB_gradMonth
+  auth.shib.attribute.orcid = SHIB_orcid
+
+  # Limit advisor's affiliation
+
+  # This option requires that your authentication source (probably LDAP or 
+  # Shibboleth) receive an attribute similar to eduPersonAffilation which
+  # describes how the person is affiliated with the institution. When this
+  # parameter is supplied then you can limit advisors to only those who have a 
+  # particular affiliation(s). Supply all the acceptable affiliations below 
+  # separated by a semicolon. if the list is empty or commented out then, all 
+  # affiliations will be allowed to act as an advisor in Vireo and approve 
+  # applications.
+  #
+  advisor.affiliation.restrict = faculty
 
 # WRO Configuration
 wro:
@@ -177,4 +217,4 @@ theme:
   managerService: org.tdl.vireo.service.VireoThemeManagerService
   # define the location of sass/css files 
   default.css: sass/app.scss
-  cacheReloadUrl: ${app.url}/wro/wroAPI/reloadCache
+  cacheReloadUrl: "{{ application_fqdn }}/wro/wroAPI/reloadCache"

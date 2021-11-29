@@ -1,0 +1,29 @@
+---
+- name: vireo | add apache config file
+  template:
+    src: vireo.conf.j2
+    dest: /etc/apache2/sites-available/vireo.conf
+    mode: 0644
+  when: running_on_server
+
+- name: vireo | enable mod_proxy
+  apache2_module:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - proxy
+    - proxy_ajp
+    - proxy_http
+
+- name: vireo | remove apache default
+  file:
+    path: /etc/apache2/sites-enabled/000-default.conf
+    state: absent
+
+- name: vireo | create symlink to enable site apache
+  file:
+    src: /etc/apache2/sites-available/vireo.conf
+    dest: /etc/apache2/sites-enabled/vireo.conf
+    state: link
+  notify: restart apache
+  when: running_on_server

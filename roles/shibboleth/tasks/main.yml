@@ -16,3 +16,98 @@
     state: present
     update_cache: true
     install_recommends: true
+
+- name: shibboleth | generate keys
+  command: /usr/sbin/shib-keygen
+  when: running_on_server
+  args:
+    creates: "{{ item }}"
+  loop:
+    - /etc/shibboleth/sp-cert.pem
+    - /etc/shibboleth/sp-key.pem
+
+- name: shibboleth | generate metadata file
+  shell: /usr/bin/shib-metagen -c /etc/shibboleth/sp-cert.pem -h "{{ shib_hostname }}" -e "{{ shib_hostname }}" > "{{ shib_host }}_metadata.xml"
+  args:
+    chdir: /etc/shibboleth/
+    creates: "/etc/shibboleth/{{ shib_host}}_metadata.xml"
+  changed_when: false
+  become: true
+  when: running_on_server
+
+- name: shibboleth | add attributes for shibboleth
+  copy:
+    src: attribute-map.xml
+    dest: "{{ shib_home }}/attribute-map.xml"
+    mode: 0644
+  when: running_on_server
+
+- name: shibboleth | add security policy for shibboleth
+  copy:
+    src: security-policy.xml
+    dest: "{{ shib_home }}/security-policy.xml"
+    mode: 0644
+  when: running_on_server
+
+- name: shibboleth | add protocols for shibboleth
+  copy:
+    src: protocols.xml
+    dest: "{{ shib_home }}/protocols.xml"
+    mode: 0644
+  when: running_on_server
+
+- name: shibboleth | add attribute-policy for shibboleth
+  copy:
+    src: attribute-policy.xml
+    dest: "{{ shib_home }}/attribute-policy.xml"
+    mode: 0644
+  when: running_on_server
+
+- name: shibboleth | add logging config for shibboleth
+  copy:
+    src: shibd.logger
+    dest: "{{ shib_home }}/shibd.logger"
+    mode: 0644
+  when: running_on_server
+
+
+- name: shibboleth | add shibboleth sp config
+  template:
+    src: shibboleth2.xml.j2
+    dest: "{{ shib_home }}/shibboleth2.xml"
+    mode: 0644
+    force: true
+  when: running_on_server
+
+- name: shibboleth | add shibboleth idp config
+  get_url:
+    url: "https://idp.princeton.edu/idp/shibboleth"
+    dest: "{{ shib_home }}/idp-metadata.xml"
+  when: running_on_server
+
+- name: shibboleth | install libapache2-mod-shib2
+  apt:
+    name: maven
+    state: present
+
+- name: shibboleth | enable apache shib modules
+  apache2_module:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - auth_basic
+    - shib2
+
+- name: shibboleth | restart shibd
+  become: true
+  service:
+    name: shibd
+    enabled: true
+    state: restarted
+
+- name: shibboleth | restart apache2
+  become: true
+  service:
+    name: apache2
+    enabled: true
+    state: restarted
