@@ -8,24 +8,24 @@ cache_size: '{{ two_third_system_memory | default("4GB") }}'
 min_wal: '{{ one_gig | default("80MB") }}'
 max_wal: '{{ two_gig | default("1GB") }}'
 # APT settings
-postgresql_apt_key_id: ACCC4CF8
-postgresql_apt_key_url: "https://www.postgresql.org/media/keys/ACCC4CF8.asc"
-postgresql_apt_repository: 'deb http://apt.postgresql.org/pub/repos/apt/ {{ansible_distribution_release}}-pgdg main {{postgresql_version}}'
+postgres_apt_key_id: ACCC4CF8
+postgres_apt_key_url: "https://www.postgresql.org/media/keys/ACCC4CF8.asc"
+postgres_apt_repository: 'deb http://apt.postgresql.org/pub/repos/apt/ {{ansible_distribution_release}}-pgdg main {{postgresql_version}}'
 # Pin-Priority of PGDG repository
-postgresql_apt_pin_priority: 500
+postgres_apt_pin_priority: 500
 postgres_version: 13
 apt_cache_timeout: 1800
 application_dbuser_name: pguser
 application_dbuser_password: changethis
 application_db_name: dbname
 
-postgresql_packages:
+postgres_packages:
   - postgresql-{{ postgres_version }}
   - postgresql-{{ postgres_version }}-repmgr
   - postgresql-client-{{ postgres_version }}
   - postgresql-contrib-{{ postgres_version }}
 
-postgresql_client_packages:
+postgres_client_packages:
   - libpq-dev
   - python-psycopg2
   - python3-psycopg2
@@ -63,6 +63,15 @@ postgres_database_extensions: []
 
 postgres_ext_postgis_version: "3"
 postgres_ext_postgis_deps:
-  - postgresql-{{ postgresql_version }}-pgrouting
-  - postgresql-{{ postgresql_version }}-postgis-{{ postgresql_ext_postgis_version }}
-  - postgresql-{{ postgresql_version }}-postgis-{{ postgresql_ext_postgis_version }}-scripts
+  - postgresql-{{ postgres_version }}-pgrouting
+  - postgresql-{{ postgres_version }}-postgis-{{ postgres_ext_postgis_version }}
+  - postgresql-{{ postgres_version }}-postgis-{{ postgres_ext_postgis_version }}-scripts
+
+postgres_bin_directory: /usr/bin
+postgres_data_directory: "/var/lib/postgresql/{{ postgres_version }}/{{ postgres_cluster_name }}"
+
+postgres_hba_entries: []
+repmgr_config: "/etc/repmgr.conf"
+repmgr_init_log: "/etc/repmgr_init.log"
+node_identifier: "{{ omit }}"
+
