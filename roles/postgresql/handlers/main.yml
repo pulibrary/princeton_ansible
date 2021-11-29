@@ -1,15 +1,21 @@
 ---
 - name: restart postgres
-  systemd:
+  service:
     name: postgresql
     state: restarted
   become: true
   when: postgresql_is_local
 
 - name: reload remote postgres
-  systemd:
+  service:
     name: postgresql
     state: reloaded
   become: true
   delegate_to: '{{ postgres_host }}'
   when: not postgresql_is_local
+
+- name: save repmgr log
+  copy:
+    content: "{{ repmgr_log }}"
+    dest: "{{ repmgr_init_log }}"
+    mode: 0644
