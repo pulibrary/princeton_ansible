@@ -5,6 +5,12 @@
     dest: /etc/apache2/sites-available/vireo.conf
     mode: 0644
   when: running_on_server
+  
+# - name: vireo | ensure MaxRequestWorkers is set for system use
+#   lineinfile:
+#     dest: "/etc/apache2/mods-available/mpm_event.conf"
+#     regexp: "\\s*MaxRequestWorkers\\s*150"
+#     line: "\tMaxRequestWorkers\t 388"
 
 - name: vireo | enable mod_proxy
   apache2_module:
@@ -25,5 +31,9 @@
     src: /etc/apache2/sites-available/vireo.conf
     dest: /etc/apache2/sites-enabled/vireo.conf
     state: link
-  notify: restart apache
   when: running_on_server
+
+- name: vireo | restart apache2
+  service:
+    name: apache2
+    state: restarted
