@@ -1,9 +1,9 @@
 # {{ ansible_managed | comment }}
-<VirtualHost *:80>
+<VirtualHost *:443>
   # Since we are reverse proxying to this server via upstream nginx, the scheme, hostname, and port
   # are important to include in the ServerName so that certain Apache modules, like shib, if used,
   # can know that they are being accessed over a secure channel, and generate correct self-referential URLs.
-  ServerName https://{{ shib_hostname }}:443
+  ServerName localhost
 
   ErrorDocument 503 "Our apologies for the interruption in service. System maintenance is being performed and the site will be back online momentarily."
 
@@ -12,23 +12,16 @@
   ProxyPreserveHost On
 
   # Don't proxy urls that should be handled solely by mod_shib
-  ProxyPass        /Shibboleth.sso/ http://vireo-staging1.princeton.edu/Shibboleth.sso/
-
-#  ProxyPass        "/Shibboleth.sso" "!"
-#  ProxyPass        "/shibboleth-sp" "!"
+  ProxyPass        /Shibboleth.sso !
+  ProxyPass        /shibboleth-sp !
 
   # Proxy all other traffic to Tomcat
   ProxyPass        / ajp://localhost:8009/
   ProxyPassReverse / ajp://localhost:8009/
-
-  # Invoke mod_shib before proxying to DSpace's shib AuthN url
-  <Location /shibboleth-login>
-    AuthType shibboleth
-    ShibRequestSetting requireSession 1
-    ShibUseHeaders on
-    require shibboleth
-  </Location>
   
-  CustomLog /var/log/apache2/vireo-access.log combined
-  ErrorLog /var/log/apache2/vireo-error.log
+  ErrorLog ${APACHE_LOG_DIR}/{{ inventory_hostname }}.error.log
+  CustomLog ${APACHE_LOG_DIR}/{{ inventory_hostname }}.acess.log combined
+  SSLCertificateFile /etc/apache2/ssl/certs/{{ inventory_hostname }}_cert.cer
+  SSLCertificateKeyFile /etc/apache2/ssl/private/{{ inventory_hostname }}_priv.key
+  SSLCertificateChainFile /etc/apache2/ssl/certs/{{ inventory_hostname }}_chained.pem
 </VirtualHost>
