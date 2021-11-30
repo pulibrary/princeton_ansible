@@ -18,13 +18,13 @@
     install_recommends: true
 
 - name: shibboleth | generate keys
-  command: /usr/sbin/shib-keygen
+  command: "/usr/sbin/shib-keygen -f -u _shibd -h {{ shib_hostname }} -y 10 -o /etc/shibboleth/"
   when: running_on_server
-  args:
-    creates: "{{ item }}"
-  loop:
-    - /etc/shibboleth/sp-cert.pem
-    - /etc/shibboleth/sp-key.pem
+  # args:
+  #   creates: "{{ item }}"
+  # loop:
+  #   - /etc/shibboleth/sp-cert.pem
+  #   - /etc/shibboleth/sp-key.pem
 
 - name: shibboleth | generate metadata file
   shell: /usr/bin/shib-metagen -c /etc/shibboleth/sp-cert.pem -h "{{ shib_hostname }}" -e "{{ shib_hostname }}" > "{{ shib_host }}_metadata.xml"
@@ -85,9 +85,14 @@
     dest: "{{ shib_home }}/idp-metadata.xml"
   when: running_on_server
 
-- name: shibboleth | install libapache2-mod-shib2
+- name: shibboleth | install maven
   apt:
     name: maven
+    state: present
+
+- name: shibboleth | install libapache2-mod-shib2
+  apt:
+    name: libapache2-mod-shib2
     state: present
 
 - name: shibboleth | enable apache shib modules
@@ -97,6 +102,49 @@
   loop:
     - auth_basic
     - shib2
+    - ssl
+
+- name: shibboleth | enable basic ssl
+  become: yes
+  command: "a2ensite default-ssl.conf"
+  when: running_on_server
+
+- name: shibboleth | create ssl dir
+  file:
+    path: /etc/apache2/ssl
+    state: directory
+    mode: 0755
+
+- name: shibboleth | create directory for ssl certs
+  file:
+    path: "/etc/apache2/ssl/{{ item }}"
+    state: directory
+    owner: "root"
+    group: "root"
+    mode: 0775
+  with_items:
+    - private
+    - certs
+  changed_when: false
+
+- name: shibboleth | copy apache cert files
+  copy:
+    src: "{{ inventory_dir }}/group_vars/{{ project_name }}/certs/"
+    dest: "/etc/apache2/ssl/certs/"
+  changed_when: false
+  when: running_on_server
+  with_items:
+    - "{{ inventory_hostname }}_cert.cer"
+    - "{{ inventory_hostname }}_chained.pem"
+
+- name: ojs | copy apache private files
+  copy:
+    src: "{{ inventory_dir }}/group_vars/{{ project_name }}/private/"
+    dest: "/etc/apache2/ssl/private/"
+  changed_when: false
+  when: running_on_server
+  with_items:
+    - "{{ inventory_hostname }}_priv.key"
 
 - name: shibboleth | restart shibd
   become: true
