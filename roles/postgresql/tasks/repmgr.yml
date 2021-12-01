@@ -52,7 +52,7 @@
     dest: "{{ postgres_conf_directory }}/conf.d/replication.conf"
     mode: 0644
   when:
-    - ansible_hostname == "lib-postgres-staging1"
+    - ansible_hostname == "{{ postgres_leader }}"
     - running_on_server
     - postgresql_is_local
   notify: restart postgresql
@@ -74,7 +74,7 @@
   notify:
     - save repmgr log
   when:
-    - ansible_hostname == "lib-postgres-staging1"
+    - ansible_hostname == "{{ postgres_leader }}"
     - running_on_server
     - postgresql_is_local
 
@@ -83,7 +83,7 @@
     name: postgresql
     state: stopped
   when:
-    - ansible_hostname == "lib-postgres-staging2"
+    - ansible_hostname == "{{ postgres_standby }}"
     - running_on_server
     - postgresql_is_local
 
@@ -92,7 +92,7 @@
     path: "{{ postgres_data_directory }}/*"
     state: absent
   when:
-    - ansible_hostname == "lib-postgres-staging2"
+    - ansible_hostname == "{{ postgres_standby }}"
     - running_on_server
     - postgresql_is_local
 
@@ -101,7 +101,7 @@
   become: true
   become_user: postgres
   when:
-    - ansible_hostname == "lib-postgres-staging2"
+    - ansible_hostname == "{{ postgres_standby }}"
     - running_on_server
     - postgresql_is_local
 
@@ -110,7 +110,7 @@
     name: postgresql
     state: started
   when:
-    - ansible_hostname == "lib-postgres-staging2"
+    - ansible_hostname == "{{ postgres_standby }}"
     - running_on_server
     - postgresql_is_local
 
@@ -120,7 +120,7 @@
   become: true
   become_user: postgres
   when:
-    - ansible_hostname == "lib-postgres-staging2"
+    - ansible_hostname == "{{ postgres_standby }}"
     - running_on_server
     - postgresql_is_local
   notify:
