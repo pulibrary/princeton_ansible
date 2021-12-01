@@ -1,7 +1,7 @@
-Role Name
+Shibboleth
 =========
 
-A role that installs a shibboleth service provider. Note that running this role 
+A role that installs a shibboleth service provider (sp). Note that running this role 
 alone will not be enough to set up shibboleth authentication. 
 
 This installation attempts to follow the guides here: 
