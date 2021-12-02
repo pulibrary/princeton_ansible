@@ -1,4 +1,6 @@
 ---
+- include_tasks: apache_config.yml
+
 # tasks file for roles/shibboleth
 - name: shibboleth | Download repository package
   get_url:
@@ -85,77 +87,9 @@
     dest: "{{ shib_home }}/idp-metadata.xml"
   when: running_on_server
 
-- name: shibboleth | install maven
-  apt:
-    name: maven
-    state: present
-
-- name: shibboleth | install libapache2-mod-shib2
-  apt:
-    name: libapache2-mod-shib2
-    state: present
-
-- name: shibboleth | enable apache shib modules
-  apache2_module:
-    name: "{{ item }}"
-    state: present
-  loop:
-    - auth_basic
-    - shib2
-    - ssl
-
-- name: shibboleth | enable basic ssl
-  become: yes
-  command: "a2ensite default-ssl.conf"
-  when: running_on_server
-
-- name: shibboleth | create ssl dir
-  file:
-    path: /etc/apache2/ssl
-    state: directory
-    mode: 0755
-
-- name: shibboleth | create directory for ssl certs
-  file:
-    path: "/etc/apache2/ssl/{{ item }}"
-    state: directory
-    owner: "root"
-    group: "root"
-    mode: 0775
-  with_items:
-    - private
-    - certs
-  changed_when: false
-
-- name: shibboleth | copy apache cert files
-  copy:
-    src: "{{ inventory_dir }}/group_vars/{{ project_name }}/certs/"
-    dest: "/etc/apache2/ssl/certs/"
-  changed_when: false
-  when: running_on_server
-  with_items:
-    - "{{ inventory_hostname }}_cert.cer"
-    - "{{ inventory_hostname }}_chained.pem"
-
-- name: ojs | copy apache private files
-  copy:
-    src: "{{ inventory_dir }}/group_vars/{{ project_name }}/private/"
-    dest: "/etc/apache2/ssl/private/"
-  changed_when: false
-  when: running_on_server
-  with_items:
-    - "{{ inventory_hostname }}_priv.key"
-
 - name: shibboleth | restart shibd
   become: true
   service:
     name: shibd
-    enabled: true
-    state: restarted
-
-- name: shibboleth | restart apache2
-  become: true
-  service:
-    name: apache2
     enabled: true
     state: restarted
