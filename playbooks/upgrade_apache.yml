@@ -1,0 +1,25 @@
+---
+- hosts: apache-servers
+  remote_user: pulsys
+  become: true
+
+  tasks:
+    - name: update apache versions
+      package:
+        name: ['apache2']
+        state: latest
+      update_cache: true
+      # version 2.4.49 patched CVE-2021-40438, but apparently had troubles of its own
+      # see https://ubuntu.com/security/CVE-2021-42013
+      # as of Dec 3, 2.4.29 is the latest available on Ubuntu Bionic
+
+    - name: restart apache
+      service:
+        name: apache2
+        state: restarted
+
+    - name: tell everyone on slack you ran an ansible playbook
+      slack:
+        token: "{{ vault_pul_slack_token }}"
+        msg: "apache upgrade and restart complete on {{ inventory_hostname }}"
+        channel: #server-alerts
