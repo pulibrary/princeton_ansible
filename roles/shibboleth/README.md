@@ -19,7 +19,7 @@ your shibboleth metadata.
 curl --insecure https://localhost/Shibboleth.sso/Metadata
 ```
 
-In your playbook, you will also need to set up an SSL enabled virtual host. Again, see
+In your playbook, you will also need to set up an SSL enabled virtual host (and remove the default SSL virtual host). Again, see
 the vireo role for an example. After setting that up, you should be able to visit the 
 following url and see the same shibboleth metadata (except it will have your server name
 instead of localhost)
