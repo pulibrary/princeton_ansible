@@ -106,32 +106,33 @@
       args:
         creates: "{{ expected_war_file }}"
 
-    - name: vireo | copy vireo .war file into place
-      file:
-        path: "{{ expected_war_file }}"
-        owner: "tomcat8"
-        group: "tomcat8"
-        mode: "0644"
-
-    - name: vireo | configure tomcat to point at the .war file we just compiled
-      template:
-        src: server.xml.j2
-        dest: /var/lib/tomcat8/conf/server.xml
-        owner: tomcat8
-        group: tomcat8
-        mode: '0640'
-
-    - name: vireo | write external configuration file
-      template:
-        src: application.yml.j2
-        dest: /opt/vireo/config/application.yml
-        owner: vireo
-        group: tomcat8
-        mode: '0640'
-
-    - name: vireo | restart tomcat
-      service:
-        name: tomcat8
-        state: restarted
-
   when: running_on_server and not file_data.stat.exists
+
+- name: vireo | set war file ownership and permissions
+  file:
+    path: "{{ expected_war_file }}"
+    owner: "tomcat8"
+    group: "tomcat8"
+    mode: "0644"
+
+- name: vireo | configure tomcat to point at the .war file
+  template:
+    src: server.xml.j2
+    dest: /var/lib/tomcat8/conf/server.xml
+    owner: tomcat8
+    group: tomcat8
+    mode: '0640'
+    force: yes
+
+- name: vireo | write external configuration file
+  template:
+    src: application.yml.j2
+    dest: /opt/vireo/config/application.yml
+    owner: vireo
+    group: tomcat8
+    mode: '0640'
+
+- name: vireo | restart tomcat
+  service:
+    name: tomcat8
+    state: restarted
