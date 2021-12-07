@@ -45,6 +45,21 @@
   when:
     - postgresql_is_local
 
+- name: PostgreSQL | move postgres pgpass
+  stat:
+    path: "~/.pgpass"
+  register: pgpass_stat
+  when:
+    - postgresql_is_local
+
+- name: PostgreSQL | move file from root
+  command: mv /root/.pgpass /var/lib/postgresql/.pgpass
+  become: true
+  changed_when: false
+  when:
+    - pgpass_stat.stat.exists
+    - postgresql_is_local
+
 - name: PostgreSQL | add replication postgresql configuration
   template:
     src: replication.conf.j2
