@@ -1,0 +1,72 @@
+---
+# Shibboleth requires that apache2 have SSL enabled, even if we're doing SSL
+# at the load balancer
+
+- name: shibboleth | install libapache2-mod-shib2
+  apt:
+    name: libapache2-mod-shib2
+    state: present
+
+- name: shibboleth | enable apache shib modules
+  apache2_module:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - auth_basic
+    - shib2
+    - ssl
+
+- name: shibboleth | enable basic ssl
+  become: yes
+  command: "a2ensite default-ssl.conf"
+  when: running_on_server
+
+- name: shibboleth | create ssl dir
+  file:
+    path: /etc/apache2/ssl
+    state: directory
+    mode: 0755
+
+- name: shibboleth | create directory for ssl certs
+  file:
+    path: "/etc/apache2/ssl/{{ item }}"
+    state: directory
+    owner: "root"
+    group: "root"
+    mode: 0775
+  with_items:
+    - private
+    - certs
+  changed_when: false
+
+- name: shibboleth | copy apache cert files
+  copy:
+    src: "{{ inventory_dir }}/group_vars/{{ project_name }}/certs/{{ item }}"
+    dest: "/etc/apache2/ssl/certs/"
+    owner: "root"
+    group: "root"
+    mode: 0600
+  changed_when: false
+  when: running_on_server
+  with_items:
+    - "{{ inventory_hostname }}.cert.cer"
+    - "{{ inventory_hostname }}.chained.pem"
+
+- name: shibboleth | copy apache private files
+  copy:
+    src: "{{ inventory_dir }}/group_vars/{{ project_name }}/private/"
+    dest: "/etc/apache2/ssl/private/"
+    owner: "root"
+    group: "root"
+    mode: 0600
+  changed_when: false
+  when: running_on_server
+  with_items:
+    - "{{ inventory_hostname }}.priv.key"
+
+- name: shibboleth | restart apache2
+  become: true
+  service:
+    name: apache2
+    enabled: true
+    state: restarted
