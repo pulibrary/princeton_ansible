@@ -1,0 +1,220 @@
+server:
+  port: 8080
+  contextPath:
+
+
+# TODO: determine if this is required
+security.basic.enabled: false
+
+
+# TODO: determine if these are required
+multipart:
+  enabled: true
+  location: ${java.io.tmpdir}
+  fileSizeThreshold: 0
+  # File size limit
+  maxFileSize: 100Mb
+  # Total request size for a multipart/form-data
+  maxRequestSize: 1000Mb
+
+
+spring:
+  profiles.active: ${profile}
+  template.cache: false
+  http.multipart:
+    enabled: true
+    location: ${java.io.tmpdir}
+    fileSizeThreshold: 0
+    maxFileSize: 20MB
+    maxRequestSize: 20MB
+
+  datasource:
+
+    # PostgreSQL
+    platform: postgresql
+    url: "jdbc:postgresql://{{ postgres_host }}:{{ vireo_db_port }}/{{ vireo_db_name }}"
+    driverClassName: org.postgresql.Driver
+
+    # database username and password
+    username: "{{ vireo_db_user }}"
+    password: "{{ vireo_db_password }}"
+
+    # common database config -- might be needed for postgres
+    defaultAutoCommit: false
+    test-on-borrow: true
+    validation-query: select version();
+
+  jpa:
+    # PostgreSQL
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+
+    generate-ddl: true
+    show-sql: false
+    hibernate.ddl-auto: create-drop
+    properties.hibernate.event.merge.entity_copy_observer: allow
+
+  thymeleaf:
+    cache: false
+    model: LEGACYHTML5
+
+# logging
+logging:
+  level:
+    org:
+      tdl: INFO
+      hibernate: INFO
+      springframework: INFO
+    edu.tamu: INFO
+    ro.isdc.wro: INFO
+  file: logs/vireo.log
+
+
+# generated values
+info:
+  build:
+    production: true
+    artifact: ${project.artifactId}
+    name: ${project.name}
+    description: ${project.description}
+    version: ${project.version}
+
+app:
+  url: "{{ application_fqdn }}"
+
+  # value generated from property assets.uri
+  # either defined in pom.xml or via package argument
+  # i.e. `mvn clean package -Dassets.uri=file:/opt/vireo/`
+  assets.uri: ${assets.uri}
+
+  public.folder: public
+
+  document.folder: private
+
+  cvcache.duration: 3600000
+
+  # VUG ETD-Centric config
+  # Comma delimited names of the document types that are to be renamed on upload as LASTNAME-DOCUMENTTYPE-YEAR.pdf as per VUG recommendations.
+  # Leave blank to not rename any.
+  documentType.rename: PRIMARY
+
+  # edu.tamu.weaver.auth.service.UserCredentialsService
+  authority.admins: admin@tdl.org,aggieJack@tamu.edu
+  
+  
+  security:
+    # edu.tamu.weaver.auth.service.CryptoService
+    secret: verysecretsecret
+    # edu.tamu.weaver.filter.CorsFilter
+    allow-access: http://localhost:8080
+    
+  # edu.tamu.weaver.email.config.WeaverEmailConfig
+  email:
+    host: relay.tamu.edu
+    from: noreply@library.princeton.edu
+    replyTo: helpdesk@library.princeton.edu
+    # additional email configurations
+    #username:
+    #password:
+    #port: 587
+    #protocol: smtp
+    #channel: starttls
+
+  # edu.tamu.weaver.reporting.controller.ReportingController
+  reporting.address: reporting@tdl.org
+  
+  # edu.tamu.weaver.validation.controller.ValidationsController
+  model.packages: org.tdl.vireo.model
+  
+  # edu.tamu.weaver.utility.HttpUtility
+  http.timeout: 10000
+
+
+# edu.tamu.weaver.token.service.TokenService
+auth:
+  security.jwt:
+    secret: verysecretsecret
+    issuer: localhost
+    duration: 5
+
+  # edu.tamu.weaver.token.provider.controller.TokenController
+  path: /auth
+
+  # Force all authenticated sessions to use SSL
+  auth.forceSSL = false
+
+  # Password Authentication Module
+  auth.pass.enabled = true
+  auth.pass.visible = true
+  auth.pass.name = Vireo Account
+  auth.pass.description = Users who are not able to use other options should select this option to login with Vireo account.
+
+  # Shibboleth Authentication Module
+  auth.shib.enabled = true
+  auth.shib.visible = true
+  auth.shib.name = Princeton Authentication
+  auth.shib.description = Users who are currently active with the university may login using the <a href="http://shibboleth.net" />Shibboleth protocol</a> to provide secure attributes about the user.
+  auth.shib.login.forceSSL = true
+  auth.shib.login.url = /Shibboleth.sso/Login?target=%1s
+  auth.shib.logout.url = /Shibboleth.sso/Logout?return=%1s
+  auth.shib.logout.enabled = false
+  # primary identifier may be either netid or email.
+  auth.shib.primaryIdentifier = netid
+  # Shib-specific settings to assist with debugging
+  auth.shib.mock = false
+  auth.shib.log = true 
+
+  # Required attributes, netid is only required if it is the primary identifier
+  auth.shib.attribute.netid = shib_netid
+  auth.shib.attribute.email = shib_mail
+  auth.shib.attribute.firstName = shib_givenname
+  auth.shib.attribute.lastName = shib_sn
+
+
+  # Optional attributes
+  auth.shib.attribute.institutionalIdentifier = SHIB_uin
+  auth.shib.attribute.middleName = SHIB_initials
+  auth.shib.attribute.birthYear = SHIB_birthYear
+  auth.shib.attribute.affiliations = SHIB_eduPersonAffiliation
+  auth.shib.attribute.currentPhoneNumber = SHIB_phone
+  auth.shib.attribute.currentPostalAddress = SHIB_postal
+  auth.shib.attribute.currentEmailAddress = SHIB_mail
+  auth.shib.attribute.permanentPhoneNumber = SHIB_permanentPhone
+  auth.shib.attribute.permanentPostalAddress = SHIB_permanentPostal
+  auth.shib.attribute.permanentEmailAddress = SHIB_permanentEmail
+  auth.shib.attribute.currentDegree = SHIB_degree
+  auth.shib.attribute.currentDepartment = SHIB_department
+  auth.shib.attribute.currentCollege = SHIB_college
+  auth.shib.attribute.currentMajor = SHIB_major
+  auth.shib.attribute.currentGraduationYear = SHIB_gradYear
+  auth.shib.attribute.currentGraduationMonth = SHIB_gradMonth
+  auth.shib.attribute.orcid = SHIB_orcid
+
+  # Limit advisor's affiliation
+
+  # This option requires that your authentication source (probably LDAP or 
+  # Shibboleth) receive an attribute similar to eduPersonAffilation which
+  # describes how the person is affiliated with the institution. When this
+  # parameter is supplied then you can limit advisors to only those who have a 
+  # particular affiliation(s). Supply all the acceptable affiliations below 
+  # separated by a semicolon. if the list is empty or commented out then, all 
+  # affiliations will be allowed to act as an advisor in Vireo and approve 
+  # applications.
+  #
+  advisor.affiliation.restrict = faculty
+
+# WRO Configuration
+wro:
+  managerFactoryClassName: org.tdl.vireo.wro.manager.factory.VireoConfigurableWroManagerFactory
+  # define which preProcessors should be used to process SASS
+  preProcessors: lessCssImport
+  # define which postProcessors should be used to process SASS
+  postProcessors: vireoPostProcessor,rubySassCss
+
+
+# ThemeManagerService implementation
+# NOTE: weaver-wro dependency will not be able to access class when deployed as jar
+theme:
+  managerService: org.tdl.vireo.service.VireoThemeManagerService
+  # define the location of sass/css files 
+  default.css: sass/app.scss
+  cacheReloadUrl: "{{ application_fqdn }}/wro/wroAPI/reloadCache"
