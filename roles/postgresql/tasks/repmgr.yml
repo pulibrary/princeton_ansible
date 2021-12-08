@@ -1,0 +1,142 @@
+---
+- name: PostgreSQL | register if we have recorded the repmgr
+  stat:
+    path: "{{ repmgr_init_log }}"
+  when:
+    - postgresql_is_local
+  register: repmgr_log_stat
+
+- name: PostgreSQL | add repmgr configuration file
+  template:
+    src: repmgr.conf.j2
+    dest: "{{ repmgr_config }}"
+    mode: 0644
+  when:
+    - postgresql_is_local
+  changed_when: false
+
+- name: Postgresql | ensure postgres sudo users
+  copy:
+    src: pg_sudoers
+    dest: "{{ sudoers_dir }}/pg_sudoers"
+    mode: 0600
+  when:
+    - postgresql_is_local
+  changed_when: false
+
+- name: Postgrest | install repmgr config
+  template:
+    src: pg_repmgr.conf.j2
+    dest: "{{ postgres_conf_directory }}/conf.d/pg_repmgr.conf"
+    mode: 0644
+    owner: postgres
+  when:
+    - postgresql_is_local
+  changed_when: false
+
+- name: Postgresql | ensure replicant pgpass
+  template:
+    src: pg_pass.j2
+    dest: "~/.pgpass"
+    mode: 0600
+    owner: postgres
+  changed_when: false
+  become: true
+  when:
+    - postgresql_is_local
+
+- name: PostgreSQL | move postgres pgpass
+  stat:
+    path: "~/.pgpass"
+  register: pgpass_stat
+  when:
+    - postgresql_is_local
+
+- name: PostgreSQL | move file from root
+  command: mv /root/.pgpass /var/lib/postgresql/.pgpass
+  become: true
+  changed_when: false
+  ignore_errors: true
+  when:
+    - pgpass_stat.stat.exists
+    - postgresql_is_local
+
+- name: PostgreSQL | add replication postgresql configuration
+  template:
+    src: replication.conf.j2
+    dest: "{{ postgres_conf_directory }}/conf.d/replication.conf"
+    mode: 0644
+  when:
+    - ansible_hostname == "{{ postgres_leader }}"
+    - running_on_server
+    - postgresql_is_local
+  notify: restart postgresql
+
+- name: PostgreSQL | alter replicant db user
+  command: psql -c 'alter user {{ replication_user }} set search_path TO {{ replication_user }}, "$user", public;'
+  become: true
+  become_user: postgres
+  changed_when: false
+  when:
+    - postgresql_is_local
+  ignore_errors: true
+
+- name: PostgreSQL | register master
+  command: repmgr -f {{ repmgr_config }} primary register --force
+  register: repmgr_log
+  become: true
+  become_user: postgres
+  notify:
+    - save repmgr log
+  when:
+    - ansible_hostname == "{{ postgres_leader }}"
+    - running_on_server
+    - postgresql_is_local
+
+- name: PostsgreSQL | stop postgres on standby
+  service:
+    name: postgresql
+    state: stopped
+  when:
+    - ansible_hostname == "{{ postgres_standby }}"
+    - running_on_server
+    - postgresql_is_local
+
+- name: PostgreSQL | remove pg data
+  file:
+    path: "{{ postgres_data_directory }}/*"
+    state: absent
+  when:
+    - ansible_hostname == "{{ postgres_standby }}"
+    - running_on_server
+    - postgresql_is_local
+
+- name: PostgreSQL | cloning standby
+  command: repmgr -h {{ postgres_leader }} -U replicant -d replicant -f {{ repmgr_config }} standby clone -F
+  become: true
+  become_user: postgres
+  when:
+    - ansible_hostname == "{{ postgres_standby }}"
+    - running_on_server
+    - postgresql_is_local
+
+- name: PostgreSQL | start postgres
+  service:
+    name: postgresql
+    state: started
+  when:
+    - ansible_hostname == "{{ postgres_standby }}"
+    - running_on_server
+    - postgresql_is_local
+
+- name: PostgreSQL | register standby
+  command: repmgr -f {{ repmgr_config }} standby register --force
+  register: repmgr_log
+  become: true
+  become_user: postgres
+  when:
+    - ansible_hostname == "{{ postgres_standby }}"
+    - running_on_server
+    - postgresql_is_local
+  notify:
+    - save repmgr log
