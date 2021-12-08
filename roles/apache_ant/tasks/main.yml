@@ -10,13 +10,17 @@
     src: "{{ apache_ant_download_url }}apache-ant-{{ ant_version }}-bin.tar.gz"
     dest: /opt
     copy: false
-  when: ant_path.stat.exists == false
+  ignore_errors: true
+  when:
+    - ant_path.stat.exists == false
+    - running_on_server
 
 - name: apache_ant | create symbolic link for the {{ ant_home }} directory
   file:
     src: "/opt/apache-ant-{{ ant_version }}"
     dest: "{{ ant_home }}"
     state: link
+  when: running_on_server
 
 - name: apache_ant | set up the environment profile for Ant in /etc/profile.d
   template:
