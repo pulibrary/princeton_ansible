@@ -1,0 +1,27 @@
+# {{ ansible_managed | comment }}
+<VirtualHost *:443>
+  # Since we are reverse proxying to this server via upstream nginx, the scheme, hostname, and port
+  # are important to include in the ServerName so that certain Apache modules, like shib, if used,
+  # can know that they are being accessed over a secure channel, and generate correct self-referential URLs.
+  ServerName localhost
+
+  ErrorDocument 503 "Our apologies for the interruption in service. System maintenance is being performed and the site will be back online momentarily."
+
+  ProxyRequests Off
+  ProxyTimeout 600
+  ProxyPreserveHost On
+
+  # Don't proxy urls that should be handled solely by mod_shib
+  ProxyPass        /Shibboleth.sso !
+  ProxyPass        /shibboleth-sp !
+
+  # Proxy all other traffic to Tomcat
+  ProxyPass        / ajp://localhost:8009/
+  ProxyPassReverse / ajp://localhost:8009/
+  
+  ErrorLog ${APACHE_LOG_DIR}/{{ inventory_hostname }}.error.log
+  CustomLog ${APACHE_LOG_DIR}/{{ inventory_hostname }}.acess.log combined
+  SSLCertificateFile /etc/apache2/ssl/certs/{{ inventory_hostname }}.cert.cer
+  SSLCertificateKeyFile /etc/apache2/ssl/private/{{ inventory_hostname }}.priv.key
+  SSLCertificateChainFile /etc/apache2/ssl/certs/{{ inventory_hostname }}.chained.pem
+</VirtualHost>
