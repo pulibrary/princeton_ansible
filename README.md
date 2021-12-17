@@ -202,13 +202,6 @@ how to do a dry run? it's unclear. documentation suggests it's `--check`
 
 Finally, deploy from robots channel to get the new functionality on all the boxes at once
 
-
-## SolrCloud Vagrantfile
-
-*Please be aware that the [Vagrantfile for the SolrCloud Role](Vagrant/solrcloudVagrantfile)
-is extremely resource intensive and may not provision properly on host machines
-lacking adequate hardware resources.*
-
 # Connections to other boxes
 
 Currently there's no automation on firewall changes when the box you're provisioning needs to talk to the postgres or solr machines. See instructions for manual edits at:
