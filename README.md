@@ -140,6 +140,22 @@ If your are having issues with your tests passing and have run `molecule converg
 molecule login
 ```
 
+## Troubleshooting a test run
+
+If you need to ensure you're getting the newest docker image for your local
+test run you can do a dance like this to delete your ansible docker machines,
+volumes, and images:
+
+```
+cd to the role in question
+% molecule destroy
+% docker ps -qaf ancestor=pulibrary/puldocker-ubuntu1804-ansible:latest | xargs docker stop
+% docker ps -qaf ancestor=pulibrary/puldocker-ubuntu1804-ansible:latest | xargs docker rm
+% docker volume ls -qf dangling=true | xargs docker volume rm
+% docker rmi pulibrary/puldocker-ubuntu1804-ansible
+% molecule converage
+```
+
 # Usage
 
 If you need to run a playbook
