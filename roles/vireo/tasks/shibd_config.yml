@@ -1,5 +1,5 @@
 ---
-- name: dataspace | generate keys
+- name: vireo | generate keys
   command: /usr/sbin/shib-keygen
   when: running_on_server
   args:
@@ -8,7 +8,7 @@
     - /etc/shibboleth/sp-cert.pem
     - /etc/shibboleth/sp-key.pem
 
-- name: dataspace | generate metadata file
+- name: vireo | generate metadata file
   shell: /usr/bin/shib-metagen -c /etc/shibboleth/sp-cert.pem -h "{{ shib_hostname }}" -e "{{ shib_hostname }}" > "{{ shib_home }}/{{ shib_host }}_metadata.xml"
   args:
     chdir: /etc/shibboleth/
@@ -17,14 +17,14 @@
   become: true
   when: running_on_server
 
-- name: dataspace | add attributes for shibboleth
+- name: vireo | add attributes for shibboleth
   copy:
     src: attribute-map.xml
     dest: "{{ shib_home }}/attribute-map.xml"
     mode: 0644
   when: running_on_server
 
-- name: dataspace | add shibboleth config
+- name: vireo | add shibboleth config
   template:
     src: shibboleth2.xml.j2
     dest: "{{ shib_home }}/shibboleth2.xml"
