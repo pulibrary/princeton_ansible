@@ -199,10 +199,32 @@
     - src: '{{ figgy_stream_derivatives_mount }}'
       link: '/opt/repository/stream_derivatives'
 
+- name: add GDAL repository
+  apt_repository:
+    repo: "ppa:ubuntugis/ppa"
+
 - name: Install GDAL
   apt:
-    name: ['libgdal-dev', 'gdal-bin']
+    name: ['libgdal-dev=2.4.2+dfsg-1~bionic0', 'gdal-bin=2.4.2+dfsg-1~bionic0']
     state: present
+    update_cache: true
+
+- name: Install cogeo-mosaic prerequisites
+  apt:
+    name: ['python3-setuptools', 'cython3']
+    state: present
+
+- name: update pip3 for cogeo-mosaic
+  pip:
+    name: pip
+    executable: pip3
+    state: latest
+
+- name: Install cogeo-mosaic
+  pip:
+    name: cogeo-mosaic
+    executable: pip3
+    extra_args: --pre
 
 ## Simple tiles dependency
 - name: Compile simple-tiles from source
