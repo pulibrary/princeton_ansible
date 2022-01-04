@@ -117,7 +117,7 @@ In all the steps below substitue your role name for `your_new_role`
    cd roles/$your_new_role
    molecule test
    ```
-1. Push your branch and verify that circle ci runs and passes.
+1. Push your branch and verify that CI runs and passes on GitHub Actions.
 
 ## Generating Molecule Tests
 
