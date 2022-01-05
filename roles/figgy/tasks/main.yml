@@ -199,10 +199,47 @@
     - src: '{{ figgy_stream_derivatives_mount }}'
       link: '/opt/repository/stream_derivatives'
 
+- name: add GDAL repository
+  apt_repository:
+    repo: "ppa:ubuntugis/ppa"
+
 - name: Install GDAL
   apt:
-    name: ['libgdal-dev', 'gdal-bin']
+    name: ['libgdal-dev=2.4.2+dfsg-1~bionic0', 'gdal-bin=2.4.2+dfsg-1~bionic0']
     state: present
+    update_cache: true
+
+- name: Install cogeo-mosaic prerequisites
+  apt:
+    name: ['python3-setuptools', 'cython3']
+    state: present
+
+- name: update pip3 for cogeo-mosaic
+  pip:
+    name: pip
+    executable: pip3
+    state: latest
+
+- name: remove cogeo-mosaic requests dependency to ensure the correct version
+  pip:
+    name: requests
+    executable: pip3
+    state: absent
+  changed_when: "'molecule-idempotence-notest' not in ansible_skip_tags"
+
+- name: remove cogeo-mosaic urllib3 dependency to ensure the correct version
+  pip:
+    name: urllib3
+    executable: pip3
+    state: absent
+  changed_when: "'molecule-idempotence-notest' not in ansible_skip_tags"
+
+- name: Install cogeo-mosaic
+  pip:
+    name: cogeo-mosaic
+    executable: pip3
+    extra_args: --pre
+  changed_when: "'molecule-idempotence-notest' not in ansible_skip_tags"
 
 ## Simple tiles dependency
 - name: Compile simple-tiles from source
