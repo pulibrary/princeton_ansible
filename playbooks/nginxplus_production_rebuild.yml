@@ -1,16 +1,20 @@
 ---
-- name: update nginx
+- name: rebuild nginx with datadog
   hosts: nginxplus
   remote_user: pulsys
+  strategy: free
   become: true
 
-# updates existing load balancer
+# rebuilds the load balancer from scratch
   roles:
+    - role: ../roles/datadog
+    - role: ../roles/deploy_user
     - role: ../roles/nginxplus
 
 - name: restart nginx and announce success
   hosts: nginxplus
   remote_user: pulsys
+  strategy: linear
   become: true
 
   tasks:
