@@ -1,13 +1,13 @@
 Role Name
 =========
 
-* This role installs NGINX Open Source and NGINX Plus on a target host.
+* This role installs NGINX Open Source and NGINX Plus on a target host. To rebuild NGINX Plus, run the `nginx_production_rebuild.yml` playbook.
 
 * If you just need to add a [New Host](ADDHOSTS.md)
 
-* If you just need to add or update SSL Certs and Keys:
-  - add the new cert and key to the `files/ssl` directory
-  - run the nginx_production.yml playbook with `-t SSL` 
+* If you just need to add or update SSL Certs and Keys, you can use the `SSL` tag to run only the required tasks quickly:
+  - add the new cert and key to the `files/ssl/` directory
+  - run the `nginx_production.yml` playbook with `-t SSL` (this runs tasks with `tags: SSL` and tasks with `tags: always`)
 
 **Note** This role is a stripped down version (to allow us to understand what it
 does for us) of
