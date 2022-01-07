@@ -5,6 +5,10 @@ Role Name
 
 * If you just need to add a [New Host](ADDHOSTS.md)
 
+* If you just need to add or update SSL Certs and Keys:
+  - add the new cert and key to the `files/ssl` directory
+  - run the nginx_production.yml playbook with `-t SSL` 
+
 **Note** This role is a stripped down version (to allow us to understand what it
 does for us) of
 [https://github.com/nginxinc/ansible-role-nginx](https://github.com/nginxinc/ansible-role-nginx)
