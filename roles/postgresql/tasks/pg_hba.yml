@@ -1,0 +1,15 @@
+---
+- name: PostgreSQL | create local pg_hba.conf
+  community.postgresql.postgresql_pg_hba:
+    contype: "host"
+    dest: "/etc/postgresql/{{ postgres_version }}/pg_hba.conf"
+    backup: true
+    users: "{{ pg_hba_postgresql_user }}"
+    databases: "{{ pg_hba_postgresql_database }}"
+    method: "{{ pg_hba_method }}"
+    source: "{{ pg_hba_source }}"
+    mode: "0644"
+  when:
+    - running_on_server
+  notify:
+    - reload postgres
