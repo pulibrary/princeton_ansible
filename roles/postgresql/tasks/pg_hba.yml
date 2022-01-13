@@ -1,8 +1,8 @@
 ---
 - name: PostgreSQL | create local pg_hba.conf
   community.postgresql.postgresql_pg_hba:
-    contype: "host"
-    dest: "/etc/postgresql/{{ postgres_version }}/pg_hba.conf"
+    contype: "{{ pg_hba_contype | default(host) }}"
+    dest: "/etc/postgresql/{{ postgres_version }}/main/pg_hba.conf"
     backup: true
     users: "{{ pg_hba_postgresql_user }}"
     databases: "{{ pg_hba_postgresql_database }}"
@@ -11,5 +11,6 @@
     mode: "0644"
   when:
     - running_on_server
+  ignore_errors: true
   notify:
     - reload postgres

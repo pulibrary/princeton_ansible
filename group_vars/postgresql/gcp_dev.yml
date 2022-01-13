@@ -1,0 +1,38 @@
+---
+postgres_version: "13"
+db_clusteradmin_user: "postgres"
+db_clusteradmin_password: "{{ vault_postgres_admin_password }}"
+replication_user_password: "{{ vault_replicant_password }}"
+postgresql_settings:
+  - name: port
+    value: 5432
+  - name: listen_addresses
+    value: "*"
+postgresql_ext_install_postgis: true
+postgresql_databases:
+  - name: replicant
+postgresql_users:
+  - name: postgres
+    password: "{{ vault_postgres_admin_password }}"
+    db: "postgres"
+    priv: "ALL"
+    role_attr_flags: "SUPERUSER"
+  - name: replicant
+    password: "{{ vault_postgres_admin_password }}"
+    db: "replicant"
+    priv: "ALL"
+    role_attr_flags: "SUPERUSER"
+pg_hba_postgresql_user: replicant
+pg_hba_postgresql_database: replication
+pg_hba_source: "10.0.10.10,10.0.10.11"
+pg_hba_contype: host
+postgres_leader: "{{ leader_db_ip }}"
+postgres_standby: "{{ standy_db_ip }}"
+postgresql_is_local: true
+postgresadmin: "postgres"
+postgres_admin_password: '{{ vault_postgres_admin_password }}'
+replication_user: "replicant"
+replication_database: "replicant"
+postgres_host: "localhost"
+postgres_port: 5432
+postgres_admin_user: "{{ postgresadmin }}"
