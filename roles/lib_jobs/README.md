@@ -19,7 +19,6 @@ Dependencies
 
 ruby
 deploy_user
-mariadb
 
 Example Playbook
 ----------------
