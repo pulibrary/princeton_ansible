@@ -1,0 +1,55 @@
+---
+# tasks file for lib_proc4
+- name: Create mount directories
+  file:
+    path: "/mnt/{{ item }}"
+    state: "directory"
+    mode: 0755
+  with_items:
+    - libimages
+    - diglibdata
+
+- name: Copy smb credentials
+  copy:
+    src: "files/{{ item }}"
+    dest: "/etc/{{ item }}"
+    mode: 0644
+  with_items:
+    - libimages.smb.credentials
+    - bluemountain.smb.credentials
+    - archives.smb.credentials
+    - archives_bd.smb.credentials
+    - historicalperiodicals.smb.credentials
+    - princetonperiodicals.smb.credentials
+    - pudl.smb.credentials
+    - ddd.smb.credentials
+    - pul_store.smb.credentials
+    - ingest_scratch.smb.credentials
+
+- name: Create mount to diglibdata shares
+  mount:
+    path: "/mnt/diglibdata/{{ item.path }}"
+    src: "//diglibdata1.princeton.edu/{{ item.src }}"
+    fstype: cifs
+    opts: "credentials=/etc/{{ item.opts }}.smb.credentials"
+    state: mounted
+  loop:
+    - {path: "bluemountain", src: "bluemountain", opts: "bluemountain"}
+    - {path: "archives", src: "archives", opts: "archives"}
+    - {path: "archives_bd", src: "archives_bd", opts: "archives_bd"}
+    - {path: "ddd", src: "ddd", opts: "ddd"}
+    - {path: "historicalperiodicals", src: "historicalperiodicals", opts: "historicalperiodicals"}
+    - {path: "princetonperiodicals", src: "princetonperiodicals", opts: "princetonperiodicals"}
+    - {path: "pudl", src: "pudl", opts: "pudl"}
+    - {path: "pul_store", src: "pul_store", opts: "pul_store"}
+    - {path: "ingest_scratch", src: "hydra/binaries/ingest_scratch", opts: "ingest_scratch"}
+  become: true
+
+- name: Create mount to libimages bluemountain shares
+  mount:
+    path: "/mnt/libimages/data"
+    src: "//libimages.princeton.edu/data"
+    fstype: cifs
+    opts: "credentials=/etc/libimages.smb.credentials"
+    state: mounted
+  become: true
