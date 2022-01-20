@@ -18,11 +18,18 @@
   ProxyPass        /shibboleth-sp !
 
   # Proxy all other traffic to Tomcat
-  ProxyPass        / ajp://localhost:8009/
-  ProxyPassReverse / ajp://localhost:8009/
+  ProxyPass / http://127.0.0.1:8080/
+  ProxyPassReverse / http://127.0.0.1:8080/
   
+  RewriteEngine on
+  RewriteCond %{HTTP:UPGRADE} ^WebSocket$ [NC]
+  RewriteCond %{HTTP:CONNECTION} Upgrade$ [NC]
+  RewriteRule .* ws://localhost:8080%{REQUEST_URI} [P]
+  
+  ProxyPass       /ws2/  ws://localhost:8180/ws
+
   ErrorLog ${APACHE_LOG_DIR}/{{ inventory_hostname }}.error.log
-  CustomLog ${APACHE_LOG_DIR}/{{ inventory_hostname }}.acess.log combined
+  CustomLog ${APACHE_LOG_DIR}/{{ inventory_hostname }}.access.log combined
   SSLCertificateFile /etc/apache2/ssl/certs/{{ inventory_hostname }}.cert.cer
   SSLCertificateKeyFile /etc/apache2/ssl/private/{{ inventory_hostname }}.priv.key
   SSLCertificateChainFile /etc/apache2/ssl/certs/{{ inventory_hostname }}.chained.pem
