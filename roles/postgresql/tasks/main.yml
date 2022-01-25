@@ -81,7 +81,42 @@
     state: started
   when: postgresql_is_local
 
+- name: PostgreSQL | ensure pgpass
+  template:
+    src: pg_pass.j2
+    dest: "~/.pgpass"
+    mode: 0600
+    owner: postgres
+  changed_when: false
+  when: postgresql_is_local
+  become: true
+  become_user: postgres
+
+- name: PostgreSQL | ensure access to postgres server
+  blockinfile:
+    path: '/etc/postgresql/{{ postgres_version }}/main/pg_hba.conf'
+    insertafter: "# Put your actual configuration here"
+    block: |
+      # localhost
+      local all postgres peer
+      host replication replicant 127.0.0.1/32 md5
+      host all all {{ leader_db_ip }}/32 md5
+      host all all {{ standy_db_ip }}/32 md5
+      # PostgreSQL leader IP address
+      host replication replicant {{ leader_db_ip }}/32 md5
+      # PostgreSQL standy IP address
+      host replication replicant {{ standy_db_ip }}/32 md5
+  when:
+    - postgres_host is not none
+    - postgresql_is_local
+  become: true
+
+- name: Restart PostgreSQL server
+  service:
+    name: postgresql
+    state: restarted
+
 - include: pg_hba.yml
-- include: create_users.yml
 - include: create_db.yml
+- include: create_users.yml
 - include: repmgr.yml
