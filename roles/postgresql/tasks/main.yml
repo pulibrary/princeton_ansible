@@ -67,6 +67,7 @@
     mode: 0644
   register: configure_postgres
   when: postgresql_is_local
+  notify: restart postgres
 
 - name: PostgreSQL | ensure postgres starts on boot
   service:
@@ -80,32 +81,7 @@
     state: started
   when: postgresql_is_local
 
-- name: PostgreSQL | ensure access to postgres server
-  lineinfile:
-    path: '/etc/postgresql/{{ postgres_version }}/main/pg_hba.conf'
-    line: 'host    all             all             {{ ansible_default_ipv4.address }}/32       md5'
-  delegate_to: '{{ postgres_host }}'
-  register: remote_postgres_configured
-  when:
-    - postgres_host is not none
-    - not postgresql_is_local
-    - running_on_server
-    - not postgresql_is_cloud
-  ignore_errors: true
-
-- name: PostgreSQL | reload remote postgres now for the access to take place
-  service:
-    name: postgresql
-    state: reloaded
-  become: true
-  delegate_to: '{{ postgres_host }}'
-  when:
-    - running_on_server
-    - remote_postgres_configured
-    - not postgresql_is_cloud
-  ignore_errors: true
-
-
+- include: pg_hba.yml
 - include: create_users.yml
 - include: create_db.yml
 - include: repmgr.yml
