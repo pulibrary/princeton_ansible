@@ -7,24 +7,20 @@
     login_user: '{{ postgres_admin_user | default(omit) }}'
     login_password: '{{ postgres_admin_password | default(omit) }}'
     encoding: 'UTF-8'
-    owner: '{{ application_dbuser_name }}'
     state: 'present'
   when:
     - running_on_server
     - not postgresql_is_local
   changed_when: false
 
-- name: PostgreSQL | create postgresql database
+- name: PostgreSQL | create postgresql server database
   postgresql_db:
     name: "{{ item.name }}"
-    port: '{{ postgres_port | default(omit) }}'
-    #    login_host: '{{ ansible_host | default(omit) }}'
-    #    login_user: '{{ postgres_admin_user | default(omit) }}'
-    #    login_password: '{{ postgres_admin_password | default(omit) }}'
     encoding: 'UTF-8'
-    owner: "{{ item.owner | default(postgres_admin_user) }}"
     state: "present"
     login_user: "{{ postgres_admin_user }}"
+    owner: "{{ item.owner | default(postgres_admin_user) }}"
+  delegate_to: '{{ postgres_host }}'
   when:
     - running_on_server
     - postgresql_is_local
@@ -33,4 +29,3 @@
   become: true
   become_user: "{{ postgres_admin_user }}"
   with_items: "{{ postgresql_databases }}"
-  #  delegate_to: "{{ ansible_host }}"

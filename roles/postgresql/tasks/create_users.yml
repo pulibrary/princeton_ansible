@@ -15,18 +15,16 @@
     - not postgresql_is_local
   changed_when: false
 
-- name: PostgreSQL | create postgresql db users
+- name: PostgreSQL | create postgresql db server users
   postgresql_user:
     name: "{{ item.name }}"
-    #    login_host: '{{ ansible_host | default(omit) }}'
-    #    login_user: '{{ postgres_admin_user | default(omit) }}'
-    #    login_password: '{{ postgres_admin_password | default(omit) }}'
     login_host: "{{ item.host | default(omit) }}"
     password: "{{ item.password | default(omit) }}"
     encrypted: true
     priv: "{{ item.priv | default(omit) }}"
     state: "present"
     db: "{{ item.db | default(omit) }}"
+  delegate_to: '{{ postgres_host }}'
   when:
     - running_on_server
     - postgresql_is_local
@@ -35,4 +33,18 @@
   become: true
   become_user: "{{ postgres_admin_user }}"
   with_items: "{{ postgresql_users }}"
-  #  delegate_to: "{{ ansible_host }}"
+
+- name: PostgreSQL | change postgresql database owner
+  postgresql_db:
+    name: '{{ application_db_name }}'
+    port: '{{ postgres_port | default(omit) }}'
+    login_host: '{{ postgres_host | default(omit) }}'
+    login_user: '{{ postgres_admin_user | default(omit) }}'
+    login_password: '{{ postgres_admin_password | default(omit) }}'
+    encoding: 'UTF-8'
+    state: 'present'
+    owner: '{{ application_dbuser_name }}'
+  when:
+    - running_on_server
+    - not postgresql_is_local
+  changed_when: false
