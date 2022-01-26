@@ -66,8 +66,8 @@
     src: replication.conf.j2
     dest: "{{ postgres_conf_directory }}/conf.d/replication.conf"
     mode: 0644
+  delegate_to: '{{ postgres_leader }}'
   when:
-    - ansible_hostname == "{{ postgres_leader }}"
     - running_on_server
     - postgresql_is_local
   notify: restart postgresql
@@ -79,26 +79,28 @@
   changed_when: false
   when:
     - postgresql_is_local
+    - running_on_server
   ignore_errors: true
 
-- name: PostgreSQL | register master
-  command: repmgr -f {{ repmgr_config }} primary register --force
+- name: PostgreSQL | register leader
+  command: repmgr -f {{ repmgr_config }} primary register --force -S postgres
   register: repmgr_log
   become: true
   become_user: postgres
   notify:
     - save repmgr log
+  delegate_to: '{{ postgres_leader }}'
   when:
-    - ansible_hostname == "{{ postgres_leader }}"
     - running_on_server
     - postgresql_is_local
+  ignore_errors: true
 
 - name: PostsgreSQL | stop postgres on standby
   service:
     name: postgresql
     state: stopped
+  delegate_to: '{{ postgres_standby }}'
   when:
-    - ansible_hostname == "{{ postgres_standby }}"
     - running_on_server
     - postgresql_is_local
 
@@ -106,17 +108,17 @@
   file:
     path: "{{ postgres_data_directory }}/*"
     state: absent
+  delegate_to: '{{ postgres_standby }}'
   when:
-    - ansible_hostname == "{{ postgres_standby }}"
     - running_on_server
     - postgresql_is_local
 
 - name: PostgreSQL | cloning standby
-  command: repmgr -h {{ postgres_leader }} -U replicant -d replicant -f {{ repmgr_config }} standby clone -F
+  command: repmgr -h {{ postgres_leader }} -U postgres -d replicant -f {{ repmgr_config }} standby clone -F
   become: true
   become_user: postgres
+  delegate_to: '{{ postgres_standby }}'
   when:
-    - ansible_hostname == "{{ postgres_standby }}"
     - running_on_server
     - postgresql_is_local
 
@@ -124,8 +126,8 @@
   service:
     name: postgresql
     state: started
+  delegate_to: '{{ postgres_standby }}'
   when:
-    - ansible_hostname == "{{ postgres_standby }}"
     - running_on_server
     - postgresql_is_local
 
@@ -134,8 +136,8 @@
   register: repmgr_log
   become: true
   become_user: postgres
+  delegate_to: '{{ postgres_standby }}'
   when:
-    - ansible_hostname == "{{ postgres_standby }}"
     - running_on_server
     - postgresql_is_local
   notify:
