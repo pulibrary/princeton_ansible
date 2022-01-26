@@ -1,0 +1,21 @@
+---
+- hosts: gcp_ojs_dev
+  remote_user: pulsys
+  become: true
+  vars_files:
+    - ../group_vars/ojs/ojs_gcp_dev.yml
+    - ../group_vars/gcp/dev.yml
+    - ../group_vars/gcp/vault.yml
+    - ../group_vars/ojs/vault.yml
+    - ../host_vars/gcp_postgres_dev1.yml
+    - ../host_vars/gcp_postgres_dev2.yml
+
+  roles:
+    - role: ../roles/ojs
+
+  post_tasks:
+    - name: tell everyone on slack you ran an ansible playbook
+      slack:
+        token: "{{ vault_pul_slack_token }}"
+        msg: "{{ inventory_hostname }} completed"
+        channel: #server-alerts
