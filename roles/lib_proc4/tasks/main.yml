@@ -8,6 +8,7 @@
   with_items:
     - libimages
     - diglibdata
+    - hydra_sources
 
 - name: Copy smb credentials
   copy:
@@ -25,6 +26,7 @@
     - ddd.smb.credentials
     - pul_store.smb.credentials
     - ingest_scratch.smb.credentials
+    - studio.new.smb.credentials
 
 - name: Create mount to diglibdata shares
   mount:
@@ -51,5 +53,14 @@
     src: "//libimages.princeton.edu/data"
     fstype: cifs
     opts: "credentials=/etc/libimages.smb.credentials"
+    state: mounted
+  become: true
+
+- name: Create mount to new studio shares
+  mount:
+    path: "/mnt/hydra_sources/studio_new"
+    src: "//lib-dps-server.princeton.edu/studio"
+    fstype: cifs
+    opts: "credentials=/etc/studio.new.smb.credentials"
     state: mounted
   become: true
