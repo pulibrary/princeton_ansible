@@ -1,17 +1,21 @@
 ---
-- name: PostgreSQL | create local pg_hba.conf
-  community.postgresql.postgresql_pg_hba:
-    contype: "{{ pg_hba_contype | default(host) }}"
-    dest: "/etc/postgresql/{{ postgres_version }}/main/pg_hba.conf"
-    backup: true
-    users: "{{ pg_hba_postgresql_user }}"
-    databases: "{{ pg_hba_postgresql_database }}"
-    method: "{{ pg_hba_method }}"
-    source: "{{ pg_hba_source }}"
-    mode: "0644"
+- name: PostgreSQL | ensure access to postgres server
+  lineinfile:
+    path: '/etc/postgresql/{{ postgres_version }}/main/pg_hba.conf'
+    line: 'host  {{ pg_hba_postgresql_database }}      {{ pg_hba_postgresql_user }} {{ ansible_default_ipv4.address }}/32       md5'
+  delegate_to: '{{ postgres_host }}'
+  register: remote_postgres_configured
+  when:
+    - postgres_host is not none
+    - not postgresql_is_local
+    - running_on_server
+  ignore_errors: true
+
+- name: PostgreSQL | reload postgresql
+  service:
+    name: postgresql
+    state: reloaded
   when:
     - running_on_server
     - not postgresql_is_local
-  ignore_errors: true
-  notify:
-    - reload postgres
+  delegate_to: '{{ postgres_host }}'
