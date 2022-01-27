@@ -76,11 +76,12 @@
   command: psql -c 'alter user {{ replication_user }} set search_path TO {{ replication_user }}, "$user", public;'
   become: true
   become_user: postgres
+  delegate_to: '{{ postgres_leader }}'
   changed_when: false
   when:
     - postgresql_is_local
     - running_on_server
-  ignore_errors: true
+    - inventory_hostname in groups["gcp_postgresql_leader"]
 
 - name: PostgreSQL | register leader
   command: repmgr -f {{ repmgr_config }} primary register --force -S postgres
@@ -89,12 +90,12 @@
   become_user: postgres
   notify:
     - save repmgr log
+    - restart postgresql
   delegate_to: '{{ postgres_leader }}'
   when:
     - running_on_server
     - postgresql_is_local
     - inventory_hostname in groups["gcp_postgresql_leader"]
-  notify: restart postgresql
   ignore_errors: true
 
 - name: PostsgreSQL | stop postgres on standby
