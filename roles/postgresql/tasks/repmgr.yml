@@ -93,6 +93,8 @@
   when:
     - running_on_server
     - postgresql_is_local
+    - inventory_hostname in groups["gcp_postgresql_leader"]
+  notify: restart postgresql
   ignore_errors: true
 
 - name: PostsgreSQL | stop postgres on standby
@@ -103,6 +105,7 @@
   when:
     - running_on_server
     - postgresql_is_local
+    - inventory_hostname in groups["gcp_postgresql_standby"]
 
 - name: PostgreSQL | remove pg data
   file:
@@ -112,15 +115,17 @@
   when:
     - running_on_server
     - postgresql_is_local
+    - inventory_hostname in groups["gcp_postgresql_standby"]
 
 - name: PostgreSQL | cloning standby
-  command: repmgr -h {{ postgres_leader }} -U postgres -d replicant -f {{ repmgr_config }} standby clone -F
+  command: repmgr -h {{ postgres_leader }} -U replicant -d replicant -f {{ repmgr_config }} standby clone -F
   become: true
   become_user: postgres
   delegate_to: '{{ postgres_standby }}'
   when:
     - running_on_server
     - postgresql_is_local
+    - inventory_hostname in groups["gcp_postgresql_standby"]
 
 - name: PostgreSQL | start postgres
   service:
@@ -130,6 +135,7 @@
   when:
     - running_on_server
     - postgresql_is_local
+    - inventory_hostname in groups["gcp_postgresql_standby"]
 
 - name: PostgreSQL | register standby
   command: repmgr -f {{ repmgr_config }} standby register --force
@@ -140,5 +146,7 @@
   when:
     - running_on_server
     - postgresql_is_local
+    - inventory_hostname in groups["gcp_postgresql_standby"]
   notify:
     - save repmgr log
+    - restart postgresql
