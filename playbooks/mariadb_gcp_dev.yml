@@ -1,0 +1,19 @@
+---
+- hosts: gcp_mariadb_dev
+  remote_user: pulsys
+  become: true
+  vars_files:
+    - ../group_vars/mysql/mariadb_gcp_dev.yml
+    - ../group_vars/gcp/dev.yml
+    - ../group_vars/gcp/vault.yml
+    - ../group_vars/mysql/vault.yml
+
+  roles:
+    - role: ../roles/mysql
+
+  post_tasks:
+    - name: tell everyone on slack you ran an ansible playbook
+      slack:
+        token: "{{ vault_pul_slack_token }}"
+        msg: "{{ inventory_hostname }} completed"
+        channel: #server-alerts
