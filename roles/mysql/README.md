@@ -1,17 +1,39 @@
-Role Name
+MariaDB (MySQL) role
 =========
 
-A brief description of the role goes here.
+This role installs and manages connections to mariadb. The role supports different modes of operation depending on the presence of MariaDB installed locally or not
 
 Requirements
 ------------
 
-Any pre-requisites that may not be covered by Ansible itself or the role should be mentioned here. For instance, if the role uses the EC2 module, it may be a good idea to mention in this section that the boto package is required.
 
 Role Variables
 --------------
 
-A description of the settable variables for this role should go here, including any variables that are in defaults/main.yml, vars/main.yml, and any variables that can/should be set via parameters to the role. Any variables that are read from other roles and/or the global scope (ie. hostvars, group vars, etc.) should be mentioned here as well.
+
+```bash
+mysql_server: false
+
+mysql_host: "some.remotedb.edu"
+
+mysql_root_password: "{{ vault_maria_mysql_root_password }}"
+mysql_databases:
+  - name: "some_database"
+    encoding: utf8mb4
+    collation: utf8mb4_general_ci
+
+mysql_users:
+  - name: "some_user"
+    host: "%"
+    password: "change_me"
+    priv: "some_database.*:ALL"
+```
+
+If installing a new mariadb server
+
+```bash
+mysql_server: true
+```
 
 Dependencies
 ------------
