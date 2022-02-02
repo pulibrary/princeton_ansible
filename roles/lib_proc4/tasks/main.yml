@@ -5,7 +5,7 @@
     path: "/mnt/{{ item }}"
     state: "directory"
     mode: 0755
-  with_items:
+  loop:
     - libimages
     - diglibdata
     - hydra_sources
@@ -15,7 +15,9 @@
     src: "files/{{ item }}"
     dest: "/etc/{{ item }}"
     mode: 0644
-  with_items:
+  when:
+    - running_on_server
+  loop:
     - libimages.smb.credentials
     - bluemountain.smb.credentials
     - archives.smb.credentials
@@ -35,6 +37,8 @@
     fstype: cifs
     opts: "credentials=/etc/{{ item.opts }}.smb.credentials"
     state: mounted
+  when:
+    - running_on_server
   loop:
     - {path: "bluemountain", src: "bluemountain", opts: "bluemountain"}
     - {path: "archives", src: "archives", opts: "archives"}
@@ -46,15 +50,16 @@
     - {path: "pul_store", src: "pul_store", opts: "pul_store"}
     - {path: "ingest_scratch", src: "hydra/binaries/ingest_scratch", opts: "ingest_scratch"}
   become: true
-  ignore_errors: true
 
-- name: Create mount to libimages bluemountain shares
+- name: Create mount to libimages shares
   mount:
     path: "/mnt/libimages/data"
     src: "//libimages.princeton.edu/data"
     fstype: cifs
     opts: "credentials=/etc/libimages.smb.credentials"
     state: mounted
+  when:
+    - running_on_server
   become: true
 
 - name: Create mount to new studio shares
@@ -64,4 +69,6 @@
     fstype: cifs
     opts: "credentials=/etc/studio.new.smb.credentials"
     state: mounted
+  when:
+    - running_on_server
   become: true
