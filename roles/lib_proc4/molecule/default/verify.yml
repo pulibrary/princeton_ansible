@@ -3,18 +3,13 @@
   hosts: all
   gather_facts: false
   tasks:
-  - name: check ruby package status
-    package:
-      name: "{{ item }}"
-      state: present
-    check_mode: true
-    register: pkg_status
+  - name: test for mount directories
+    stat:
+      path: "/mnt/{{ item }}"
+    register: smb_dir
     loop:
-      - ruby-switch
-      - ruby2.6-dev
-      - ruby2.6
-
-  - name: test for ruby packages
-    assert:
-      that:
-        - not pkg_status.changed
+      - libimages
+      - diglibdata
+      - hydra_sources
+    failed_when:
+      - smb_dir.stat.isdir is not defined
