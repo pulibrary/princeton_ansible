@@ -40,6 +40,17 @@
   with_items: '{{ datadog_typed_checks }}'
   notify: restart datadog-agent
 
+- name: Create a nginx config file if it is configures
+  template:
+    src: nginx.status.conf
+    dest: "/etc/nginx/conf.d/status.conf"
+    owner: '{{ datadog_user }}'
+    group: '{{ datadog_group }}'
+    mode: 0644
+  when: item.type == 'nginx'
+  with_items: '{{ datadog_typed_checks }}'
+  notify: restart datadog-agent
+
 - name: Create trace agent configuration file
   template:
     src: datadog.conf.j2
