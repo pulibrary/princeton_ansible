@@ -31,21 +31,34 @@ datadog_config:
     enabled: true
   apm_config:
     analyzed_spans:
-      approvals|rack.request: 1
-datadog_checks:
-  tls:
-    init_config:
-    instances:
-      - server: approvals.princeton.edu
-        port: 443
-        tags:
-          - 'tls_service:approvals'
-  approval_datadog_ruby_check:
-    init_config:
-    logs:
-      - type: file
-        path: /opt/approvals/current/log/production.log
-        service: approvals
-        source: ruby
-        sourcecategory: sourcecode
-        tags: "approvals, environment:production, role:approvals"
+      lockers-and-study-spaces|rack.request: 1
+datadog_typed_checks:
+  - type: tls
+    configuration:
+      init_config:
+      instances:
+        - server: lockers-and-study-spaces.princeton.edu
+          port: 443
+  - type: process
+    configuration:
+      init_config:
+      instances:
+        -   name: lockers-and-study-spaces
+            service: lockers-and-study-spaces
+            search_string:
+              - nginx
+  - type: nginx
+    configuration:
+      init_config:
+      instances:
+        - nginx_status_url: http://localhost:81/nginx_status/
+      logs:
+        - type: file
+          path: /var/log/nginx/access.log
+          source: nginx
+        - type: file
+          path: /var/log/nginx/error.log
+          source: nginx
+        - type: file
+          path: /opt/lockers_and_study_spaces/current/log/production.log
+          source: rails
