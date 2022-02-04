@@ -10,6 +10,8 @@ Requirements
 Role Variables
 --------------
 
+Most use cases will have the variables below and only the mysql-common client
+will be installed
 
 ```bash
 mysql_server: false
@@ -29,7 +31,8 @@ mysql_users:
     priv: "some_database.*:ALL"
 ```
 
-If installing a new mariadb server
+If installing a brand new mariadb server the `mysql_server` will be set to true
+which means mariadb server will be installed
 
 ```bash
 mysql_server: true
