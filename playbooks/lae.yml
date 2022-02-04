@@ -1,0 +1,22 @@
+---
+# by default this playbook runs in the staging environment
+# to run in production, pass '-e runtime_env=production'
+- name: build the Latin American Ephemera site
+  hosts: lae_{{ runtime_env | default('staging') }}
+  remote_user: pulsys
+  become: true
+
+  vars_files:
+    - ../group_vars/lae/{{ runtime_env | default('staging') }}.yml
+
+  roles:
+    - role: roles/lae
+
+  post_tasks:
+    - name: tell everyone on slack you ran an ansible playbook
+      slack:
+        token: "{{ vault_pul_slack_token }}"
+        msg: "{{ inventory_hostname }} completed"
+        channel: #server-alerts
+      delegate_to: localhost
+      when: not ansible_check_mode
