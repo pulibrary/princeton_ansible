@@ -1,0 +1,65 @@
+---
+# tasks file for system_ldap
+#
+- name: system_ldap | Install sssd
+  apt:
+    name: "{{ item }}"
+    state: "present"
+  loop:
+    - "{{ sssd_pkg_list }}"
+
+- name: system_ldap | Remove unwanted packages
+  package:
+    name: "{{ item }}"
+    state: "{{ sssd__unwanted_packages_state }}"
+  loop:
+    - "{{ sssd__unwanted_packages_list }}"
+
+- name: system_ldap | configure sudoers nsswitch.conf
+  lineinfile:
+    dest: /etc/nsswitch.conf
+    state: present
+    regexp: '^sudoers:'
+    line: 'sudoers:        files'
+    owner: root
+    group: root
+    mode: 0644
+
+- name: system_ldap | configure sssd.conf
+  template:
+    src: "{{ sssd_main_conf_tpl }}"
+    dest: "{{ sssd_main_conf_path }}"
+    mode: 0600
+    owner: root
+    group: root
+    backup: true
+  when:
+    - running_on_server
+  notify:
+    - restart sssd
+    - restart logind
+
+- name: "system_ldap | configure conf.d/{{ sssd_domain }}.conf"
+  blockinfile:
+    state: present
+    create: yes
+    mode: 0600
+    owner: root
+    group: root
+    insertbefore: BOF
+    dest: "/etc/sssd/conf.d/{{ sssd_domain }}.conf"
+  when:
+    - running_on_server
+  notify:
+    - restart sssd
+    - restart logind
+
+- name: system_ldap | Ensure home directories are created upon login with pam
+  lineinfile:
+    dest: /etc/pam.d/common-account
+    regexp: 'pam_mkhomedir\.so'
+    line: "session required                        pam_mkhomedir.so        umask=0022      skel=/etc/skel/ silent"
+    state: present
+
+- name: system_ldap | Flush handlers to be able to use SSSD authentication
+  meta: flush_handlers
