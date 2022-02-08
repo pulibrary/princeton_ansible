@@ -1,16 +1,14 @@
 ---
 # tasks file for mysql
 #
-- name: MySQL | configure apt repositories
+- name: MySQL | add mariadb repo keys
   ansible.builtin.apt_key:
-    keyserver: keyserver.ubuntu.com
+    keyserver: "keyserver.ubuntu.com"
     id: "0xF1656F24C74CD1D8"
 
-- name: MySQL | add apt repositories
+- name: MySQL | add maria db repository
   ansible.builtin.apt_repository:
-    repo: "deb [arch=amd64] {{ mariadb_repo }} {{ ansible_distribution_release }} main"
-    state: present
-    update_cache: true
+    repo: "deb [arch=amd64] https://mirrors.accretive-networks.net/mariadb/repo/10.2/ubuntu {{ ansible_distribution_release }} main"
 
 - name: MySQL | Install database client packages
   apt:
@@ -34,8 +32,6 @@
     - mysql_server
   notify:
     - set root password
-    - systemctl daemon-reexec
-
 
 - name: MySQL | configure mysql server
   community.general.ini_file:
