@@ -3,7 +3,7 @@ passenger_server_name: "repec-staging1.princeton.edu"
 passenger_app_env: "staging"
 passenger_ruby: "/usr/bin/ruby2.7"
 ruby_version_override: "ruby2.7"
-db_host: "maria-staging2.princeton.edu"
+db_host: "mysql-staging1.princeton.edu"
 db_password: "{{ vault_xtradb_root_password }}"
 db_port: "{{ drupal_db_port }}"
 app_db_host: '{{ db_host }}'
@@ -25,3 +25,18 @@ mailcatcher_group: 'pulsys'
 bundler_version: '2.2.19'
 desired_nodejs_version: v12.22.5
 passenger_extra_config: "rewrite ^/econlib/RePEc/pri(.*)$ /$1;"
+
+mysql_server: false
+
+mysql_host: "mysql-staging1.princeton.edu"
+mysql_root_password: "{{ vault_maria_mysql_root_password }}"
+mysql_databases:
+    - name: "{{ app_db_name }}"
+      encoding: utf8mb4
+      collation: utf8mb4_general_ci
+mysql_users:
+    - name: "{{ app_db_user }}"
+      host: "{{ ansible_default_ipv4.address }}"
+      password: "{{ app_db_password }}"
+      priv: "{{ app_db_name }}.*:ALL"
+      update_password: on_create
