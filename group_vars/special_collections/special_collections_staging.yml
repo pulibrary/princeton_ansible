@@ -2,16 +2,14 @@
 drupal_base_path: 'https://library-staging.princeton.edu/special-collections'
 drupal_ssl_base_path: 'https://library-staging.princeton.edu/special-collections'
 drupal_db_name: 'special_collections_staging'
-drupal_db_host: 'maria-staging2.princeton.edu'
+drupal_db_host: 'mysql-staging1.princeton.edu'
 
 drupal_db_user: 'libwww_staging'
 drupal_db_password: "{{ libwww_db_password | default('change_this') }}"
 drupal_db_port: '3306'
 
 db_host: "{{ drupal_db_host }}"
-db_password: "{{ vault_xtradb_root_password }}"
 db_port: "{{ drupal_db_port }}"
-mariadb__server: "{{ db_host }}"
 
 datadog_environment: staging
 
@@ -20,3 +18,18 @@ install_mailcatcher: true
 mailcatcher_user: "pulsys"
 mailcatcher_group: "pulsys"
 mailcatcher_install_location: "/var/lib/gems/2.6.0/gems/mailcatcher-0.7.1/bin/mailcatcher"
+
+mysql_server: false
+
+mysql_host: "mysql-staging1.princeton.edu"
+mysql_root_password: "{{ vault_maria_mysql_root_password }}"
+mysql_databases:
+    - name: "{{ drupal_db_name }}"
+      encoding: utf8mb4
+      collation: utf8mb4_general_ci
+mysql_users:
+    - name: "{{ drupal_db_user }}"
+      host: "{{ ansible_default_ipv4.address }}"
+      password: "{{ drupal_db_password }}"
+      priv: "{{ drupal_db_name }}.*:ALL"
+      update_password: on_create
