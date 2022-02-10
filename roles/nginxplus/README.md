@@ -1,19 +1,34 @@
 Role Name
 =========
 
-* This role installs NGINX Open Source and NGINX Plus on a target host. To rebuild NGINX Plus, run the `nginx_production_rebuild.yml` playbook.
+nginxplus
 
-* If you just need to add a [New Host](ADDHOSTS.md)
+**Note** We copied [https://github.com/nginxinc/ansible-role-nginx](https://github.com/nginxinc/ansible-role-nginx), then removed things we don't use to simplify it. All credit goes to NGINX for writing the upstream role. 
 
-* If you just need to add or update SSL Certs and Keys, you can use the `SSL` tag to run only the required tasks quickly:
-  - add the new cert and key to the `files/ssl/` directory
-  - run the `nginx_production.yml` playbook with `-t SSL` (this runs tasks with `tags: SSL` and tasks with `tags: always`)
+Using this role
+===============
 
-**Note** This role is a stripped down version (to allow us to understand what it
-does for us) of
-[https://github.com/nginxinc/ansible-role-nginx](https://github.com/nginxinc/ansible-role-nginx)
-of upstream's role. We've removed everything that we don't use. All credit goes
-to NGINX and by default it expects Ubuntu
+* The `nginxplus` role installs NGINX Open Source and NGINX Plus on a target host. By default it expects Ubuntu. Two main playbooks use this role:
+  * The `nginx_production_rebuild.yml` playbook builds new NGINX Plus load balancers from scratch.
+  * The `nginx_production.yml` playbook updates existing NGINX Plus load balancers.
+
+Adding hosts
+------------
+
+* To add a new host to the load balancers, you need to do more than just run this role. See the [Add Hosts Guide](ADDHOSTS.md) for details.
+
+Updating SSL or configuration with tags: quick focused updates
+--------------------------------------------------------------
+
+The two tags in this role let you run subsets of its actions, so you can quickly update the load balancer in specific ways.
+
+  * The `SSL` tag adds or updates SSL Certs and Keys. To use it:
+    - add the new cert and key to the `files/ssl/` directory
+    - run the `nginx_production.yml` playbook with `-t SSL` (this runs tasks with `tags: SSL` and tasks with `tags: always`)
+
+  * The `update_conf` tag updates configuration for existing sites. To use it:
+    - add the configuration file to the `files/html/` directory
+    - run the `nginx_production.yml` playbook with `-t update_conf` (this runs tasks with `tags: update_conf` and tasks with `tags: always`)
 
 
 Requirements
