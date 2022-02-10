@@ -29,16 +29,30 @@ maria_db_user: 'libwww-prod'
 maria_db_name: 'libwww-prod'
 files_mount_dir: 'production_files'
 
-db_host: 'mariadb-prod2.princeton.edu'
+db_host: 'mysql-db-prod1.princeton.edu'
 db_password: '{{ vault_xtradb_root_password }}'
-mariadb__server: "{{ db_host }}"
 
 special_collections_drupal_base_path: 'https://library.princeton.edu/special-collections'
 special_collections_drupal_ssl_base_path: 'https://library.princeton.edu/special-collections'
 special_collections_drupal_db_name: 'special_collections_prod'
-special_collections_drupal_db_host: 'mariadb-prod3.princeton.edu'
+special_collections_drupal_db_host: 'mysql-db-prod1.princeton.edu'
 bundler_version: '2.2.19'
 desired_nodejs_version: v11.15.0
+
+mysql_server: false
+
+mysql_host: "mysql-db-prod1.princeton.edu"
+mysql_root_password: "{{ vault_maria_mysql_root_password }}"
+mysql_databases:
+    - name: "{{ drupal_db_name }}"
+      encoding: utf8mb4
+      collation: utf8mb4_general_ci
+mysql_users:
+    - name: "{{ drupal_db_user }}"
+      host: "{{ ansible_default_ipv4.address }}"
+      password: "{{ drupal_db_password }}"
+      priv: "{{ drupal_db_name }}.*:ALL"
+      update_password: on_create
 
 datadog_api_key: "{{ vault_datadog_key }}"
 datadog_service_name: library
