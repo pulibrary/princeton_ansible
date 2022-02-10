@@ -12,6 +12,8 @@ Using this role
   * The `nginx_production_rebuild.yml` playbook builds new NGINX Plus load balancers from scratch.
   * The `nginx_production.yml` playbook updates existing NGINX Plus load balancers.
 
+When updating existing load balancers, best practice is to run on a single host with `-limit`.
+
 Adding hosts
 ------------
 
