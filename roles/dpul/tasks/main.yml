@@ -1,21 +1,26 @@
 ---
 ## Symlink to Mounts
-- name: Create uploads directory
+- name: dpul | create uploads directory
   file:
     path: '/mnt/shared_data/dpul_{{ rails_app_env }}/uploads'
     state: 'directory'
     mode: 0755
   when: running_on_server
 
-- name: Create symlinks
+- name: dpul | create shared public directory
   file:
-    src: '{{ item.src }}'
-    dest: '{{ item.link }}'
+    path: '/opt/{{ rails_app_directory }}/shared/public'
+    state: 'directory'
     owner: '{{ deploy_user }}'
     group: '{{ deploy_user }}'
+    mode: 0775
+  when: running_on_server
+
+- name: dpul | create uploads symlink as deploy user
+  become: true
+  become_user: '{{ deploy_user }}'
+  file:
+    src: '/mnt/shared_data/dpul_{{ rails_app_env }}/uploads'
+    dest: '/opt/{{ rails_app_directory }}/shared/public/uploads'
     state: 'link'
-    force: true
-  with_items:
-    - src: '/mnt/shared_data/dpul_{{ rails_app_env }}/uploads'
-      link: '/opt/{{ rails_app_directory }}/shared/public/uploads'
   when: running_on_server
