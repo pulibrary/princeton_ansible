@@ -1,0 +1,33 @@
+---
+- name: installs mysql on staging
+  hosts: mysql-db-staging1.princeton.edu
+  remote_user: pulsys
+  become: true
+  vars_files:
+    - ../group_vars/mysql/mysql_staging.yml
+    - ../group_vars/mysql/vault.yml
+  pre_tasks:
+    - name: Upgrade all apt packages
+      apt:
+        upgrade: dist
+        force_apt_get: true
+
+    - name: install pip on new VM
+      raw: test -e /usr/bin/python
+      changed_when: false
+      failed_when: false
+      register: check_python
+
+    - name: Install Python  # this has to be raw in the event python is not installed 
+      raw: apt -y update && apt install -y python-minimal python-pip
+      when: check_python.rc != 0
+
+  roles:
+    - role: ../roles/mysql
+
+  post_tasks:
+    - name: tell everyone on slack you ran an ansible playbook
+      slack:
+        token: "{{ vault_pul_slack_token }}"
+        msg: "{{ inventory_hostname }} completed"
+        channel: #server-alerts
