@@ -176,6 +176,7 @@
   when:
     - mysql_databases is defined
     - running_on_server
+  no_log: true
 
 - name: MySQL | create users on server
   community.mysql.mysql_user:
@@ -204,13 +205,12 @@
     password: "{{ item.password | default(omit) }}"
     priv: "{{ item.priv | default(omit) }}"  # least privilege access preferred
     host: "{{ item.host }}"
-    host_all: "{{ item.host_all }}"
     update_password: "{{ item.update_password }}"
     login_host: "{{ mysql_host }}"
     login_user: root
     login_password: "{{ mysql_root_password }}"
     login_unix_socket: "{{ mysql_socket }}"
-  delegate_to: "{{ gcp_mariadb_dev }}"
+  delegate_to: "{{ mysql_host }}"
   loop: "{{ mysql_users }}"
   loop_control:
     label: "{{ item.name }}"
