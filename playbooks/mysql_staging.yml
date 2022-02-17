@@ -7,12 +7,8 @@
     - ../group_vars/mysql/mysql_staging.yml
     - ../group_vars/mysql/vault.yml
   pre_tasks:
-    - name: Upgrade all apt packages
-      apt:
-        upgrade: dist
-        force_apt_get: true
 
-    - name: install pip on new VM
+    - name: test for python on new VM
       raw: test -e /usr/bin/python
       changed_when: false
       failed_when: false
@@ -21,6 +17,11 @@
     - name: Install Python  # this has to be raw in the event python is not installed 
       raw: apt -y update && apt install -y python-minimal python-pip
       when: check_python.rc != 0
+
+    - name: Upgrade all apt packages
+      apt:
+        upgrade: dist
+        force_apt_get: true
 
   roles:
     - role: ../roles/mysql
