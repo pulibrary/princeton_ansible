@@ -66,8 +66,8 @@
     src: replication.conf.j2
     dest: "{{ postgres_conf_directory }}/conf.d/replication.conf"
     mode: 0644
+  delegate_to: '{{ postgres_leader }}'
   when:
-    - ansible_hostname == "{{ postgres_leader }}"
     - running_on_server
     - postgresql_is_local
   notify: restart postgresql
@@ -76,67 +76,78 @@
   command: psql -c 'alter user {{ replication_user }} set search_path TO {{ replication_user }}, "$user", public;'
   become: true
   become_user: postgres
+  delegate_to: '{{ postgres_leader }}'
   changed_when: false
   when:
     - postgresql_is_local
-  ignore_errors: true
+    - running_on_server
+    - inventory_hostname in groups["gcp_postgresql_leader"]
 
-- name: PostgreSQL | register master
-  command: repmgr -f {{ repmgr_config }} primary register --force
+- name: PostgreSQL | register leader
+  command: repmgr -f {{ repmgr_config }} primary register --force -S postgres
   register: repmgr_log
   become: true
   become_user: postgres
   notify:
     - save repmgr log
+    - restart postgresql
+  delegate_to: '{{ postgres_leader }}'
   when:
-    - ansible_hostname == "{{ postgres_leader }}"
     - running_on_server
     - postgresql_is_local
+    - inventory_hostname in groups["gcp_postgresql_leader"]
+  ignore_errors: true
 
 - name: PostsgreSQL | stop postgres on standby
   service:
     name: postgresql
     state: stopped
+  delegate_to: '{{ postgres_standby }}'
   when:
-    - ansible_hostname == "{{ postgres_standby }}"
     - running_on_server
     - postgresql_is_local
+    - inventory_hostname in groups["gcp_postgresql_standby"]
 
 - name: PostgreSQL | remove pg data
   file:
     path: "{{ postgres_data_directory }}/*"
     state: absent
+  delegate_to: '{{ postgres_standby }}'
   when:
-    - ansible_hostname == "{{ postgres_standby }}"
     - running_on_server
     - postgresql_is_local
+    - inventory_hostname in groups["gcp_postgresql_standby"]
 
 - name: PostgreSQL | cloning standby
   command: repmgr -h {{ postgres_leader }} -U replicant -d replicant -f {{ repmgr_config }} standby clone -F
   become: true
   become_user: postgres
+  delegate_to: '{{ postgres_standby }}'
   when:
-    - ansible_hostname == "{{ postgres_standby }}"
     - running_on_server
     - postgresql_is_local
+    - inventory_hostname in groups["gcp_postgresql_standby"]
 
 - name: PostgreSQL | start postgres
   service:
     name: postgresql
     state: started
+  delegate_to: '{{ postgres_standby }}'
   when:
-    - ansible_hostname == "{{ postgres_standby }}"
     - running_on_server
     - postgresql_is_local
+    - inventory_hostname in groups["gcp_postgresql_standby"]
 
 - name: PostgreSQL | register standby
   command: repmgr -f {{ repmgr_config }} standby register --force
   register: repmgr_log
   become: true
   become_user: postgres
+  delegate_to: '{{ postgres_standby }}'
   when:
-    - ansible_hostname == "{{ postgres_standby }}"
     - running_on_server
     - postgresql_is_local
+    - inventory_hostname in groups["gcp_postgresql_standby"]
   notify:
     - save repmgr log
+    - restart postgresql
