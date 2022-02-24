@@ -1,0 +1,124 @@
+## { ansible_managed }
+# this template uses proxies_by_box.yml for data
+# and exports a list of proxy rules for nginx load balancers
+
+# sites that run on libphp-prod
+
+{% for item in lib-phpprod_proxies %}
+    location /"{{ item }}" {
+        proxy_pass "https://libphp-prod.princeton.edu/{{ item }}";
+    }
+{% endfor %}
+
+# sites that run on libwebprod
+
+{% for item in libwebprod_proxies %}
+    location /"{{ item }}" {
+        proxy_pass "https://libwebprod.princeton.edu/{{ item }}";
+    }
+{% endfor %}
+
+
+
+    # dpul
+    location /projects/islamic {
+        return 301 https://dpul.princeton.edu/islamicmss;
+    }
+
+    # 5 libserv39
+    location /catalogs/pdfs {
+        proxy_pass http://libserv39.princeton.edu/catalogs/pdfs;
+    }
+    location /departments/tsd {
+        proxy_pass http://libserv39.princeton.edu/departments/tsd;
+    }
+    location /libraries/firestone/rbsc {
+        proxy_pass http://libserv39.princeton.edu/libraries/firestone/rbsc;
+    }
+    location /projects {
+        proxy_pass http://libserv39.princeton.edu/projects;
+    }
+    location /libraries/cotsen {
+        proxy_pass http://libserv39.princeton.edu/libraries/cotsen;
+    }
+
+    # 1 lib-illiad
+    location /illiad {
+        proxy_pass https://lib-illiad.princeton.edu/illiad/;
+    }
+
+# done
+    # 2 lib-aeon
+    location /aeon {
+        proxy_pass https://lib-aeon.princeton.edu/aeon/;
+    }
+
+    location /AeonBibRequest {
+        proxy_pass https://lib-aeon.princeton.edu/AeonBibRequest/;
+    }
+
+    # 12 lib-dbserver
+    location /PreservationRequest {
+        proxy_pass https://lib-dbserver.princeton.edu/PreservationRequest/;
+    }
+    location /PreservationTracking {
+        proxy_pass https://lib-dbserver.princeton.edu/PreservationTracking/;
+    }
+    location /ppl2 {
+        proxy_pass https://lib-dbserver.princeton.edu/ppl2/;
+    }
+    location /ppl {
+        proxy_pass https://lib-dbserver.princeton.edu/ppl/;
+    }
+    # bb, Circus, hb, maps, Misc & pulc and Scheide are off of lib-dbserver
+    location /visual_materials/bb {
+        proxy_pass https://lib-static-prod.princeton.edu/visual_materials/bb/;
+    }
+    location /visual_materials/Circus {
+        proxy_pass https://lib-static-prod.princeton.edu/visual_materials/Circus/;
+    }
+    location /visual_materials/hb {
+        proxy_pass https://lib-static-prod.princeton.edu/visual_materials/hb/;
+    }
+    location /visual_materials/maps {
+        proxy_pass https://lib-static-prod.princeton.edu/visual_materials/maps/;
+    }
+    location /visual_materials/Misc/ {
+        proxy_pass https://lib-static-prod.princeton.edu/visual_materials/Misc/;
+    }
+    location /visual_materials/pulc {
+        proxy_pass https://lib-static-prod.princeton.edu/visual_materials/pulc/;
+    }
+    location /visual_materials/Scheide {
+        proxy_pass https://lib-static-prod.princeton.edu/visual_materials/Scheide/;
+    }
+    location /visual_materials {
+        proxy_pass https://lib-dbserver.princeton.edu/visual_materials;
+    }
+    location /mssimages {
+        proxy_pass https://lib-static-prod.princeton.edu/mssimages/;
+    }
+    location /geaccirc {
+        proxy_pass https://lib-dbserver.princeton.edu/geaccirc/;
+    }
+    location /music/programs {
+        proxy_pass https://lib-dbserver.princeton.edu/music/programs/;
+    }
+    location /music/ReelToReel {
+        proxy_pass https://lib-dbserver.princeton.edu/music/ReelToReel/;
+    }
+
+    # 1 libphp-dev
+    location /hrc {
+        proxy_pass http://libphp-dev.princeton.edu/hrc/;
+    }
+
+    proxy_ssl_server_name on;
+
+    rewrite ^/papyrus(.*)$ https://dpul.princeton.edu/papyri redirect;
+
+    location /mudd-exhibits/ {
+        proxy_pass https://lib-static-prod.princeton.edu/mudd-exhibits/;
+    }
+
+# Note!  All new sites should proxy_pass to https not http
