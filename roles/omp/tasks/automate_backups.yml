@@ -1,0 +1,59 @@
+---
+# This automates OJS backups. The postgres database is dumped, and the OJS files
+# directory has a snapshot taken. Both the database and the files are required
+# to restore.
+
+# How to restore:
+# 1. Copy the backup you want from /var/local/ojs_backups to the system where you want to restore
+# 2. Shut down apache: `sudo service apache2 stop`
+# 3. Restore the database: pg_restore --verbose --clean --no-acl --no-owner --host localhost -U USERNAME --dbname my-destination-database /path/to/sqlfile.dump
+# 4. Copy the files directory to /var/local/files and ensure it is owned by deploy:www-data
+# 5. Restart apache: `sudo service apache2 start`
+
+- name: "ojs | create backups directory"
+  file:
+    path: "{{ ojs_backups }}"
+    state: directory
+    owner: "{{ deploy_user }}"
+    group: "www-data"
+    mode: 0775
+  when:
+    - running_on_server
+
+- name: "ojs | create backup script directory"
+  file:
+    path: "{{ backup_scripts_dir }}"
+    state: directory
+    owner: "{{ deploy_user }}"
+    group: "www-data"
+    mode: 0775
+  when:
+    - running_on_server
+
+- name: ojs | write pgpass file
+  template:
+    src: "pgpass.j2"
+    dest: "/home/{{ deploy_user }}/.pgpass"
+    owner: "{{ deploy_user }}"
+    group: www-data
+    mode: 0600
+  when:
+    - running_on_server
+
+- name: ojs | write backup script
+  template:
+    src: "sql_backups.sh.j2"
+    dest: "{{ backup_scripts_dir }}/sql_backups.sh"
+    owner: "{{ deploy_user }}"
+    group: www-data
+    mode: 0700
+  when:
+    - running_on_server
+
+- name: ojs | schedule the backup to run daily
+  ansible.builtin.cron:
+    name: "automate ojs backups"
+    user: "{{ deploy_user }}"
+    minute: "30"
+    hour: "1"
+    job: "{{ backup_scripts_dir }}/sql_backups.sh"

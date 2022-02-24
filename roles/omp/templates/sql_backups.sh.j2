@@ -1,0 +1,33 @@
+#!/bin/bash
+
+# Database name
+db_name="{{ ojs_db_name }}"
+
+# Backup storage directory 
+backupfolder="{{ ojs_backups }}"
+
+# Number of days to store the backup 
+keep_day=90
+date_string=$(date +%Y-%m-%d_%H-%M-%S)
+
+#create backup folder
+mkdir -p $backupfolder
+
+#create folder for today's backup
+mkdir -p $backupfolder/$date_string
+
+sqlfile=$backupfolder/$date_string/ojs-database-$date_string.dump
+
+# Create a sql backup
+sql_backup_command="pg_dump --file $sqlfile --format=custom --host {{ postgres_host }} --username {{ ojs_db_user }} --dbname {{ ojs_db_name }} "
+
+`$sql_backup_command`
+
+# Snapshot the files dir
+files_snapshot_file="$backupfolder/$date_string/files-$date_string.tar.gz"
+files_backup_command="tar zcf $files_snapshot_file {{ ojs_file_uploads }}"
+
+`$files_backup_command`
+
+# Delete old backups 
+find $backupfolder -mtime +$keep_day -delete
