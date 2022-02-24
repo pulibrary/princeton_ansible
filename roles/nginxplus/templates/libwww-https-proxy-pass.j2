@@ -5,6 +5,30 @@
 proxy_ssl_server_name on;
 
 rewrite ^/papyrus(.*)$ https://dpul.princeton.edu/papyri redirect;
+rewrite ^/locator/(.*)$ https://locator-prod.princeton.edu/$1 redirect;
+rewrite ^/special-collections/mudd-dbs(.*)$ /mudd-dbs$1 redirect;
+rewrite ^/research-data(.*)$ https://researchdata.princeton.edu redirect;
+rewrite ^/hours(.*)$ https://libcal.princeton.edu/hours redirect;
+rewrite ^/AssignedSpaceApplication(.*)$ https://lockers-and-study-spaces.princeton.edu/ redirect;
+rewrite ^/AssignedSpaces https://lockers-and-study-spaces.princeton.edu/ redirect;
+
+# these rewrite rules also have related proxy_pass rules
+rewrite ^/special-collections/republic(.*)$ /republic/$1 redirect;
+rewrite ^/special-collections/thankful-nation(.*)$ /thankful-nation/$1 redirect;
+rewrite ^/special-collections/capping-liberty(.*)$ /capping-liberty/$1 redirect;
+rewrite ^/special-collections/pathebaby(.*)$ /pathebaby/$1 redirect;
+rewrite ^/special-collections/hogarth(.*)$ /hogarth/$1 redirect;
+rewrite ^/special-collections/jameslyon(.*)$ /jameslyon/$1 redirect;
+rewrite ^/special-collections/versailles(.*)$ /versailles/$1 redirect;
+
+# this is our only remaining hard-coded proxy rule
+# proxies_by_box.yml does not include this data
+location /special-collections {
+    proxy_pass https://lib-sc-prod.princeton.edu/special-collections/;
+    proxy_connect_timeout      2h;
+    proxy_send_timeout         2h;
+    proxy_read_timeout         2h;
+}
 
 # sites that run on dss2
 
@@ -61,3 +85,4 @@ rewrite ^/papyrus(.*)$ https://dpul.princeton.edu/papyri redirect;
         proxy_pass "https://{{ item.host }}.princeton.edu/{{ item.url }}";
     }
 {% endfor %}
+
