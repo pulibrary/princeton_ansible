@@ -53,7 +53,15 @@
         group: "{{ deploy_user }}"
         mode: 0644
 
-    - name: transfer of databases
+    - name: create /var/lib/migrate on remote_host
+      file:
+        path: "/var/lib/migrate/{{ now }}/"
+        mode: 0777
+        owner: "{{ deploy_user }}"
+        state: directory
+      delegate_to: "{{ remote_host }}"
+
+    - name: transfer the databases
       ansible.builtin.command: /usr/bin/rsync -avz "{{ file_path }}/{{ now }}/{{ db_name }}.dump.gz" "{{ remote_host }}:{{ file_path }}/{{ now }}" -e "ssh -o StrictHostKeyChecking=no"
       become: true
       become_user: "{{ deploy_user }}"
@@ -64,7 +72,6 @@
       become: true
       become_user: postgres
       tags: never
-
 
     - name: Restore the database
       community.postgresql.postgresql_db:
