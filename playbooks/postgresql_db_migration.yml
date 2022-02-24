@@ -2,7 +2,7 @@
 # You must use command-line "extra variables" with this playbook to define:
 # - the db_name you intend to backup
 # - the origin_host (where the current database lives)
-# - the remote_host (where you want the database backup to go)
+# - the dest_host (where you want the database backup to go)
 #
 # You must also define the hosts more specifically (staging? prod?)
 # For example: --limit lib-postgres-staging1
@@ -11,9 +11,9 @@
 # To restore, run the playbook a second time, and pass --tags never
 #
 # For example, to back up:
-# $ ansible-playbook -e db_name=oawaiver_staging -e origin_host=lib-postgres-staging1.princeton.edu -e remote_host=lib-postgres-prod1.princeton.edu playbooks/postgresql_db_migration.yml --limit lib-postgres-staging1
+# $ ansible-playbook -e db_name=cdh_geniza -e origin_host=lib-postgres-prod1.princeton.edu -e dest_host=lib-postgres-staging1.princeton.edu playbooks/postgresql_db_migration.yml --limit lib-postgres-staging1
 # and to restore:
-# $ ansible-playbook -e db_name=oawaiver_staging -e origin_host=lib-postgres-staging1.princeton.edu -e remote_host=lib-postgres-prod1.princeton.edu --tags never playbooks/postgresql_db_migration.yml --limit lib-postgres-staging1
+# $ ansible-playbook -e db_name=cdh_geniza -e origin_host=lib-postgres-prod1.princeton.edu -e dest_host=lib-postgres-staging1.princeton.edu --tags never playbooks/postgresql_db_migration.yml --limit lib-postgres-staging1
 ---
 - hosts: postgres_hosts
   remote_user: pulsys
@@ -53,20 +53,20 @@
         group: "{{ deploy_user }}"
         mode: 0644
 
-    - name: create /var/lib/migrate on remote_host
+    - name: create /var/lib/migrate on dest_host
       file:
         path: "/var/lib/migrate/{{ now }}/"
         mode: 0777
         owner: "{{ deploy_user }}"
         state: directory
-      delegate_to: "{{ remote_host }}"
+      delegate_to: "{{ dest_host }}"
 
     - name: transfer the databases
-      ansible.builtin.command: /usr/bin/rsync -avz "{{ file_path }}/{{ now }}/{{ db_name }}.dump.gz" "{{ remote_host }}:{{ file_path }}/{{ now }}" -e "ssh -o StrictHostKeyChecking=no"
+      ansible.builtin.command: /usr/bin/rsync -avz "{{ file_path }}/{{ now }}/{{ db_name }}.dump.gz" "{{ dest_host }}:{{ file_path }}/{{ now }}" -e "ssh -o StrictHostKeyChecking=no"
       become: true
       become_user: "{{ deploy_user }}"
 
-    - name: unzip dumped database on remote_host
+    - name: unzip dumped database on dest_host
       ansible.builtin.unarchive:
         src: "{{ file_path }}/{{ now }}/{{ db_name }}.dump.gz"
         dest: "{{ file_path }}/{{ now }}/"
@@ -74,7 +74,7 @@
         owner: postgres
         group: postgres
         mode: 0644
-      delegate_to: "{{ remote_host }}"
+      delegate_to: "{{ dest_host }}"
       tags: never
 
     - name: Create a new database with name "{{ db_name }}"
@@ -82,7 +82,7 @@
         name: "{{ db_name }}"
       become: true
       become_user: postgres
-      delegate_to: "{{ remote_host }}"
+      delegate_to: "{{ dest_host }}"
       tags: never
 
     - name: Restore the database
@@ -92,7 +92,7 @@
         target: "{{ file_path }}/{{ now }}/{{ db_name }}.dump.sql"
       become: true
       become_user: postgres
-      delegate_to: "{{ remote_host }}"
+      delegate_to: "{{ dest_host }}"
       tags: never
 
 
