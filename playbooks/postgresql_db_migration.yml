@@ -1,9 +1,19 @@
 # NOTE
-# You must use command-line "extra variables" to use this playbook. They are
-# used to specify the host group, and the value of the db_name you intend to backup
-# and the flag for the remote host e.g.:
-# $ ansible-playbook -e db_name=oawaiver_staging -e origin_host=lib-postgres-staging1.princeton.edu -e remote_host=lib-postgres-prod1.princeton.edu playbooks/postgresql_db_migration.yml # to back up
-# $ ansible-playbook -e db_name=oawaiver_staging -e origin_host=lib-postgres-staging1.princeton.edu -e remote_host=lib-postgres-prod1.princeton.edu --tags never playbooks/postgresql_db_migration.yml
+# You must use command-line "extra variables" with this playbook to define:
+# - the db_name you intend to backup
+# - the origin_host (where the current database lives)
+# - the remote_host (where you want the database backup to go)
+#
+# You must also define the hosts more specifically (staging? prod?)
+# For example: --limit lib-postgres-staging1
+#
+# By default, the playbook creates a backup, but it does not restore
+# To restore, run the playbook a second time, and pass --tags never
+#
+# For example, to back up:
+# $ ansible-playbook -e db_name=oawaiver_staging -e origin_host=lib-postgres-staging1.princeton.edu -e remote_host=lib-postgres-prod1.princeton.edu playbooks/postgresql_db_migration.yml --limit lib-postgres-staging1
+# and to restore:
+# $ ansible-playbook -e db_name=oawaiver_staging -e origin_host=lib-postgres-staging1.princeton.edu -e remote_host=lib-postgres-prod1.princeton.edu --tags never playbooks/postgresql_db_migration.yml --limit lib-postgres-staging1
 ---
 - hosts: postgres_hosts
   remote_user: pulsys
