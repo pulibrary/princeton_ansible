@@ -66,6 +66,18 @@
       become: true
       become_user: "{{ deploy_user }}"
 
+    - name: unzip dumped database on remote_host
+      community.general.unarchive:
+        src: "{{ file_path }}/{{ now }}/{{ db_name }}.dump.gz"
+        dest: "{{ file_path }}/{{ now }}/{{ db_name }}.dump.sql"
+        remote_src: true
+        owner: postgres
+        group: postgres
+        mode: 0644
+
+      delegate_to: "{{ remote_host }}"
+      tags: never
+
     - name: Create a new database with name "{{ db_name }}"
       community.postgresql.postgresql_db:
         name: "{{ db_name }}"
