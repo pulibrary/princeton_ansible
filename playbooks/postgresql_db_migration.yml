@@ -16,8 +16,13 @@
 # $ ansible-playbook -e db_name=cdh_geniza -e origin_host=lib-postgres-prod1.princeton.edu -e dest_host=lib-postgres-staging1.princeton.edu --tags never playbooks/postgresql_db_migration.yml --limit lib-postgres-staging1
 ---
 - hosts: postgres_{{ runtime_env | default('staging') }}
+# once the "big postgres PR" goes in change this to:
+# - hosts: "{{ leader_db_host }}"
   remote_user: pulsys
   become: true
+# and add
+# include_vars: /path/to/group_vars/postgresql/
+# where leader_db_host is defined for all pgsql machines
   vars:
     - deploy_user: "pulsys"
     - file_path: "/var/lib/migrate"
