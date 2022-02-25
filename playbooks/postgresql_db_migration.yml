@@ -1,13 +1,28 @@
 # NOTE
-# You must use command-line "extra variables" to use this playbook. They are
-# used to specify the host group, and the value of the db_name you intend to backup
-# and the flag for the remote host e.g.:
-# $ ansible-playbook -e db_name=oawaiver_staging -e origin_host=lib-postgres-staging1.princeton.edu -e remote_host=lib-postgres-prod1.princeton.edu playbooks/postgresql_db_migration.yml # to back up
-# $ ansible-playbook -e db_name=oawaiver_staging -e origin_host=lib-postgres-staging1.princeton.edu -e remote_host=lib-postgres-prod1.princeton.edu --tags never playbooks/postgresql_db_migration.yml
+# You must use command-line "extra variables" with this playbook to define:
+# - the db_name you intend to backup
+# - the origin_host (where the current database lives)
+# - the dest_host (where you want the database backup to go)
+#
+# You must also define the hosts more specifically (staging? prod?)
+# For example: --limit lib-postgres-staging1
+#
+# By default, the playbook creates a backup, but it does not restore
+# To restore, run the playbook a second time, and pass --tags never
+#
+# For example, to back up:
+# $ ansible-playbook -e db_name=cdh_geniza -e origin_host=lib-postgres-prod1.princeton.edu -e dest_host=lib-postgres-staging1.princeton.edu playbooks/postgresql_db_migration.yml --limit lib-postgres-staging1
+# and to restore:
+# $ ansible-playbook -e db_name=cdh_geniza -e origin_host=lib-postgres-prod1.princeton.edu -e dest_host=lib-postgres-staging1.princeton.edu --tags never playbooks/postgresql_db_migration.yml --limit lib-postgres-staging1
 ---
-- hosts: postgres_hosts
+- hosts: postgres_{{ runtime_env | default('staging') }}
+# once the "big postgres PR" goes in change this to:
+# - hosts: "{{ leader_db_host }}"
   remote_user: pulsys
   become: true
+# and add
+# include_vars: /path/to/group_vars/postgresql/
+# where leader_db_host is defined for all pgsql machines
   vars:
     - deploy_user: "pulsys"
     - file_path: "/var/lib/migrate"
@@ -29,6 +44,13 @@
       become_user: postgres
       ignore_errors: true
 
+    - name: gzip dumped database
+      community.general.archive:
+        path: "{{ file_path }}/{{ now }}/{{ db_name }}.dump.sql"
+        dest: "{{ file_path }}/{{ now }}/{{ db_name }}.dump.gz"
+        format: gz
+        force_archive: true
+
     - name: file permissions
       ansible.builtin.file:
         path: "{{ file_path }}/{{ now }}/{{ db_name }}.dump.gz"
@@ -36,18 +58,37 @@
         group: "{{ deploy_user }}"
         mode: 0644
 
-    - name: transfer of databases
-      ansible.builtin.command: /usr/bin/rsync -avz "{{ file_path }}/{{ now }}/{{ db_name }}.dump.gz" "{{ remote_host }}:{{ file_path }}/{{ now }}" -e "ssh -o StrictHostKeyChecking=no"
+    - name: create /var/lib/migrate on dest_host
+      file:
+        path: "/var/lib/migrate/{{ now }}/"
+        mode: 0777
+        owner: "{{ deploy_user }}"
+        state: directory
+      delegate_to: "{{ dest_host }}"
+
+    - name: transfer the databases
+      ansible.builtin.command: /usr/bin/rsync -avz "{{ file_path }}/{{ now }}/{{ db_name }}.dump.gz" "{{ dest_host }}:{{ file_path }}/{{ now }}" -e "ssh -o StrictHostKeyChecking=no"
       become: true
       become_user: "{{ deploy_user }}"
+
+    - name: unzip dumped database on dest_host
+      ansible.builtin.unarchive:
+        src: "{{ file_path }}/{{ now }}/{{ db_name }}.dump.gz"
+        dest: "{{ file_path }}/{{ now }}/"
+        remote_src: true
+        owner: postgres
+        group: postgres
+        mode: 0644
+      delegate_to: "{{ dest_host }}"
+      tags: never
 
     - name: Create a new database with name "{{ db_name }}"
       community.postgresql.postgresql_db:
         name: "{{ db_name }}"
       become: true
       become_user: postgres
+      delegate_to: "{{ dest_host }}"
       tags: never
-
 
     - name: Restore the database
       community.postgresql.postgresql_db:
@@ -56,7 +97,7 @@
         target: "{{ file_path }}/{{ now }}/{{ db_name }}.dump.sql"
       become: true
       become_user: postgres
-      delegate_to: "{{ remote_host }}"
+      delegate_to: "{{ dest_host }}"
       tags: never
 
 
