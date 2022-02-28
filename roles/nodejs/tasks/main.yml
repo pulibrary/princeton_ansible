@@ -91,9 +91,13 @@
     nodejs_versions: "{{ packages['nodejs'] | map(attribute='version') | list }}"
   when: "'nodejs' in packages"
 
+- name: nodejs | deconstruct upstream variable
+  set_fact:
+    nodejs_deconstructed: "{{ nodejs__upstream_release.split('.')[0] }}"
+
 - name: Get the version we are trying to install from the upstream release number
   set_fact:
-    nodejs_wanted_version: "{{ nodejs__upstream_release | split ('_') | last | split ('.') | first }}"
+    nodejs_wanted_version: "{{ nodejs_deconstructed.split('__')[1] }}"
 
 - name: Desired node version match regex
   debug:
