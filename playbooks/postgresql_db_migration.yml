@@ -27,6 +27,9 @@
     - deploy_user: "pulsys"
     - file_path: "/var/lib/migrate"
     - now: "{{ ansible_date_time.date }}"
+  vars_files:
+    - ../group_vars/{{ project_name }}/{{ runtime_env | default('staging') }}.yml
+
   tasks:
     - name: Create a backup directory
       file:
@@ -38,8 +41,8 @@
     - name: run a database dump
       postgresql_db:
         state: dump
-        name: "{{ db_name }}"
-        target: "{{ file_path }}/{{ now }}/{{ db_name }}.dump.sql"
+        name: "{{ application_db_name }}"
+        target: "{{ file_path }}/{{ now }}/{{ application_db_name }}.dump.sql"
       become: true
       become_user: postgres
       # async allows for long-running tasks
@@ -49,14 +52,14 @@
 
     - name: gzip dumped database
       community.general.archive:
-        path: "{{ file_path }}/{{ now }}/{{ db_name }}.dump.sql"
-        dest: "{{ file_path }}/{{ now }}/{{ db_name }}.dump.gz"
+        path: "{{ file_path }}/{{ now }}/{{ application_db_name }}.dump.sql"
+        dest: "{{ file_path }}/{{ now }}/{{ application_db_name }}.dump.gz"
         format: gz
         force_archive: true
 
     - name: file permissions
       ansible.builtin.file:
-        path: "{{ file_path }}/{{ now }}/{{ db_name }}.dump.gz"
+        path: "{{ file_path }}/{{ now }}/{{ application_db_name }}.dump.gz"
         owner: "{{ deploy_user }}"
         group: "{{ deploy_user }}"
         mode: 0644
@@ -85,19 +88,35 @@
       delegate_to: "{{ dest_host }}"
       tags: never
 
-    - name: Create a new database with name "{{ db_name }}"
-      community.postgresql.postgresql_db:
-        name: "{{ db_name }}"
+# eventually maybe we can do this:
+#    - name: import the postgresql user creation tasks
+#      import_tasks: ../roles/postgresql/tasks/create_user.yml
+
+    - name: PostgreSQL | create postgresql '{{ application_dbuser_name }}'
+      postgresql_user:
+       name: '{{ application_dbuser_name }}'
+        port: '{{ postgres_port | default(omit) }}'
+        login_host: '{{ postgres_host | default(omit) }}'
+        login_user: '{{ postgres_admin_user | default(omit) }}'
+        login_password: '{{ postgres_admin_password | default(omit) }}'
+        password: '{{ application_dbuser_password }}'
+        encrypted: true
+        role_attr_flags: '{{ application_dbuser_role_attr_flags }}'
+        state: 'present'
       become: true
       become_user: postgres
       delegate_to: "{{ dest_host }}"
       tags: never
 
-    - name: Restore the database
+
+    - name: Restore the database with name "{{ application_db_name }}"
       community.postgresql.postgresql_db:
-        state: restore
-        name: "{{ db_name }}"
+        name: "{{ application_db_name }}"
+        encoding: 'UTF-8'
+        owner: '{{ application_dbuser_name }}'
         target: "{{ file_path }}/{{ now }}/{{ db_name }}.dump.sql"
+      state: 'restore'
+        # need to specify the db owner and make sure it owns all the tables as well as the db itself
       become: true
       become_user: postgres
       delegate_to: "{{ dest_host }}"
