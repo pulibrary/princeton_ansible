@@ -42,7 +42,12 @@
         target: "{{ file_path }}/{{ now }}/{{ db_name }}.dump.sql"
       become: true
       become_user: postgres
-      ignore_errors: true
+      # async allows for long-running tasks
+      # sets the timeout to 30 minutes, checks every minute
+      async: 1800
+      poll: 60
+      # was probably to avoid timeouts
+      # ignore_errors: true
 
     - name: gzip dumped database
       community.general.archive:
