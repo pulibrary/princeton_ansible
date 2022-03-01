@@ -11,11 +11,11 @@
 # To restore, run the playbook a second time, and pass --tags never
 #
 # For example, to back up:
-# $ ansible-playbook -e db_name=cdh_geniza -e origin_host=lib-postgres-prod1.princeton.edu -e dest_host=lib-postgres-staging1.princeton.edu playbooks/postgresql_db_migration.yml --limit lib-postgres-staging1
+# $ ansible-playbook -e db_name=cdh_geniza -e origin_host=lib-postgres-prod1.princeton.edu -e dest_host=lib-postgres-staging3.princeton.edu playbooks/postgresql_db_migration.yml --limit lib-postgres-prod1
 # and to restore:
-# $ ansible-playbook -e db_name=cdh_geniza -e origin_host=lib-postgres-prod1.princeton.edu -e dest_host=lib-postgres-staging1.princeton.edu --tags never playbooks/postgresql_db_migration.yml --limit lib-postgres-staging1
+# $ ansible-playbook -e db_name=cdh_geniza -e origin_host=lib-postgres-prod1.princeton.edu -e dest_host=lib-postgres-staging3.princeton.edu --tags never playbooks/postgresql_db_migration.yml --limit lib-postgres-prod1
 ---
-- hosts: postgres_{{ runtime_env | default('staging') }}
+- hosts: postgres
 # once the "big postgres PR" goes in change this to:
 # - hosts: "{{ leader_db_host }}"
   remote_user: pulsys
@@ -46,8 +46,6 @@
       # sets the timeout to 30 minutes, checks every minute
       async: 1800
       poll: 60
-      # was probably to avoid timeouts
-      # ignore_errors: true
 
     - name: gzip dumped database
       community.general.archive:
@@ -103,6 +101,8 @@
       become: true
       become_user: postgres
       delegate_to: "{{ dest_host }}"
+      async: 1800
+      poll: 60
       tags: never
 
 
