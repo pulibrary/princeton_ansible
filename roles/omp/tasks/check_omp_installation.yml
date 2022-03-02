@@ -1,0 +1,22 @@
+---
+- name: omp | set installation flag fact false by default
+  ansible.builtin.set_fact:
+    omp_is_installed: false
+
+- name: omp | determine if omp is installed already
+  command: "grep 'installed =' config.inc.php"
+  args:
+    chdir: "{{ omp_home }}"
+  register: omp_installation_flag
+  ignore_errors: true
+  changed_when: false
+
+- name: omp | set installation flag fact true if indicated
+  ansible.builtin.set_fact:
+    omp_is_installed: true
+  when: omp_installation_flag.stdout.find('On') != -1
+  ignore_errors: true
+
+- name: omp | Is omp already installed?
+  debug:
+    msg: "{{ omp_is_installed }}"
