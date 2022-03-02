@@ -15,7 +15,7 @@
 # and to restore:
 # $ ansible-playbook -e db_name=cdh_geniza -e origin_host=lib-postgres-prod1.princeton.edu -e dest_host=lib-postgres-staging3.princeton.edu --tags never playbooks/postgresql_db_migration.yml --limit lib-postgres-prod1
 ---
-- hosts: postgres
+- hosts: postgresql_{{ runtime_env | default('staging') }}
 # once the "big postgres PR" goes in change this to:
 # - hosts: "{{ leader_db_host }}"
   remote_user: pulsys
@@ -29,6 +29,7 @@
     - now: "{{ ansible_date_time.date }}"
   vars_files:
     - ../group_vars/{{ project_name }}/{{ runtime_env | default('staging') }}.yml
+    - ../group_vars/{{ project_name }}/vault.yml
 
   tasks:
     - name: Create a backup directory
@@ -73,13 +74,13 @@
       delegate_to: "{{ dest_host }}"
 
     - name: transfer the databases
-      ansible.builtin.command: /usr/bin/rsync -avz "{{ file_path }}/{{ now }}/{{ db_name }}.dump.gz" "{{ dest_host }}:{{ file_path }}/{{ now }}" -e "ssh -o StrictHostKeyChecking=no"
+      ansible.builtin.command: /usr/bin/rsync -avz "{{ file_path }}/{{ now }}/{{ application_db_name }}.dump.gz" "{{ dest_host }}:{{ file_path }}/{{ now }}" -e "ssh -o StrictHostKeyChecking=no"
       become: true
       become_user: "{{ deploy_user }}"
 
     - name: unzip dumped database on dest_host
       ansible.builtin.unarchive:
-        src: "{{ file_path }}/{{ now }}/{{ db_name }}.dump.gz"
+        src: "{{ file_path }}/{{ now }}/{{ application_db_name }}.dump.gz"
         dest: "{{ file_path }}/{{ now }}/"
         remote_src: true
         owner: postgres
@@ -94,7 +95,7 @@
 
     - name: PostgreSQL | create postgresql '{{ application_dbuser_name }}'
       postgresql_user:
-       name: '{{ application_dbuser_name }}'
+        name: '{{ application_dbuser_name }}'
         port: '{{ postgres_port | default(omit) }}'
         login_host: '{{ postgres_host | default(omit) }}'
         login_user: '{{ postgres_admin_user | default(omit) }}'
@@ -114,7 +115,7 @@
         name: "{{ application_db_name }}"
         encoding: 'UTF-8'
         owner: '{{ application_dbuser_name }}'
-        target: "{{ file_path }}/{{ now }}/{{ db_name }}.dump.sql"
+        target: "{{ file_path }}/{{ now }}/{{ application_db_name }}.dump.sql"
         state: 'restore'
       become: true
       become_user: postgres
@@ -128,5 +129,5 @@
     - name: tell everyone on slack you ran an ansible playbook
       slack:
         token: "{{ vault_pul_slack_token }}"
-        msg: "{{ inventory_hostname }} backed up {{ db_name }}"
+        msg: "{{ inventory_hostname }} backed up {{ application_db_name }}"
         channel: #server-alerts
