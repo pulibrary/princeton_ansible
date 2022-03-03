@@ -1,45 +1,12 @@
 ---
-- name: nodejs | Get debsource APT GPG key
-  apt_key:
-    url: https://deb.nodesource.com/gpgkey/nodesource.gpg.key
-    state: present
-  register: debsource_servers
-  ignore_errors: true
-
-- name: Get upstream APT GPG key
-  apt_key:
-    id: "{{ nodejs__upstream_key_id }}"
-    keyserver: "hkp://pool.sks-keyservers.net"
-    state: present
-  register: pool_servers
-  when: debsource_servers is failed
-  ignore_errors: true
-
-- name: Get upstream APT GPG key from MIT
-  apt_key:
-    id: "{{ nodejs__upstream_key_id }}"
-    state: present
-    keyserver: "pgp.mit.edu"
-  register: mit_servers
-  when: pool_servers is failed
-  ignore_errors: true
-
-- name: Get upstream APT GPG key from PGP
-  apt_key:
-    id: "{{ nodejs__upstream_key_id }}"
-    state: present
-    keyserver: "keyserver.pgp.com"
-  when: mit_servers is failed
-  ignore_errors: true
-
-- name: Add upstream Yarn APT key from PGP
+- name: nodejs | Add upstream Yarn APT key yarn
   apt_key:
     url: https://dl.yarnpkg.com/debian/pubkey.gpg
     state: present
   register: yarn_servers
   ignore_errors: true
 
-- name: Add upstream Yarn APT key from PGP
+- name: nodejs | Add upstream Yarn APT key from sks-keyservsers
   apt_key:
     id: "{{ nodejs__yarn_upstream_key_id }}"
     keyserver: "hkp://pool.sks-keyservers.net"
@@ -48,7 +15,7 @@
   when: yarn_servers is failed
   ignore_errors: true
 
-- name: Add upstream Yarn APT key from MIT
+- name: nodejs | Add upstream Yarn APT key from MIT
   apt_key:
     id: "{{ nodejs__yarn_upstream_key_id }}"
     state: present
@@ -57,7 +24,7 @@
   register: yarnmit_servers
   ignore_errors: true
 
-- name: Add upstream Yarn APT key from PGP
+- name: nodejs | Add upstream Yarn APT key from PGP
   apt_key:
     id: "{{ nodejs__yarn_upstream_key_id }}"
     state: present
@@ -65,46 +32,25 @@
   when: yarnmit_servers is failed
   ignore_errors: true
 
-- name: Configure upstream APT repository
-  apt_repository:
-    repo: "{{ nodejs__upstream_repository }}"
-    state: present
-    update_cache: true
-  register: nodejs_repo
-  retries: 3
-  delay: 60
-  until: nodejs_repo is succeeded
-
-- name: Add upstream Yarn APT repository
+- name: nodejs | Add upstream Yarn APT repository
   apt_repository:
     repo: "{{ nodejs__yarn_upstream_repository }}"
     state: present
     update_cache: true
   ignore_errors: true
 
-- name: Gather the apt package facts
-  package_facts:
-    manager: auto
-
-- name: Get the versions of nodejs installed
-  set_fact:
-    nodejs_versions: "{{ packages['nodejs'] | map(attribute='version') | list }}"
-  when: "'nodejs' in packages"
-
-- name: Get the version we are trying to install into a regex
-  set_fact:
-    nodejs_wanted_version: "{{ nodejs__upstream_release | regex_replace('node_') | regex_replace('.x') | regex_replace('^(.*)$', '^\\1.') }}"
-
-- name: Desired node version match regex
-  debug:
-    msg: "{{ nodejs_wanted_version }}"
-
-- name: Check for the LTS release
-  set_fact:
-    nodejs_lts_installed: "{{ nodejs_versions | select('match', nodejs_wanted_version) | list | length > 0 }}"
-  when: nodejs_versions is defined
-
-- name: Install node packages
+- name: nodejs | uninstall any apt installed node
   apt:
-    name: ["nodejs", "yarn"]
+    name: ["nodejs"]
+    state: absent
+
+- name: nodejs | download nodejs version
+  ansible.builtin.unarchive:
+    src: "{{ nodejs_release_url }}/{{ desired_version }}/node-{{ desired_version }}-linux-x64.tar.gz"
+    dest: /usr/local/bin
+    remote_src: true
+
+- name: nodejs | Install yarn packages
+  apt:
+    name: ["yarn"]
     state: present
