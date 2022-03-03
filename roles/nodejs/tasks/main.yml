@@ -47,8 +47,16 @@
 - name: nodejs | download nodejs version
   ansible.builtin.unarchive:
     src: "{{ nodejs_release_url }}/{{ desired_version }}/node-{{ desired_version }}-linux-x64.tar.gz"
-    dest: /usr/local/bin
+    dest: /usr/local
     remote_src: true
+
+- name: nodejs | create symbolic link
+  ansible.builtin.file:
+    src: "/usr/local/node-{{ desired_version }}-linux-x64/bin/node"
+    dest: "/usr/local/bin/node"
+    owner: root
+    group: root
+    state: link
 
 - name: nodejs | Install yarn packages
   apt:
