@@ -1,43 +1,29 @@
 ---
-- name: nodejs | Add upstream Yarn APT key yarn
+- name: nodejs | get yarn key from yarnpkg
   apt_key:
     url: https://dl.yarnpkg.com/debian/pubkey.gpg
     state: present
-  register: yarn_servers
-  ignore_errors: true
+  register: yarn_pkg_registered
 
-- name: nodejs | Add upstream Yarn APT key from sks-keyservsers
+- name: nodejs | get yarn keys from other sources
   apt_key:
     id: "{{ nodejs__yarn_upstream_key_id }}"
-    keyserver: "hkp://pool.sks-keyservers.net"
+    keyserver: "{{ item }}"
     state: present
-  register: yarnpool_servers
-  when: yarn_servers is failed
-  ignore_errors: true
-
-- name: nodejs | Add upstream Yarn APT key from MIT
-  apt_key:
-    id: "{{ nodejs__yarn_upstream_key_id }}"
-    state: present
-    keyserver: "pgp.mit.edu"
-  when: yarnpool_servers is failed
-  register: yarnmit_servers
-  ignore_errors: true
-
-- name: nodejs | Add upstream Yarn APT key from PGP
-  apt_key:
-    id: "{{ nodejs__yarn_upstream_key_id }}"
-    state: present
-    keyserver: "keyserver.pgp.com"
-  when: yarnmit_servers is failed
-  ignore_errors: true
+  when: yarn_pkg_registered is failed
+  register: yarn_key_registered
+  loop:
+    - "hkp://pool.sks-keyservers.net"
+    - "pgp.mit.edu"
+    - "keyserver.pgp.com"
+  failed_when:
+    - yarn_key_registered == 0
 
 - name: nodejs | Add upstream Yarn APT repository
   apt_repository:
     repo: "{{ nodejs__yarn_upstream_repository }}"
     state: present
     update_cache: true
-  ignore_errors: true
 
 - name: nodejs | uninstall any apt installed node
   ansible.builtin.apt:
@@ -52,22 +38,16 @@
     remote_src: true
   changed_when: false
 
-- name: nodejs | create symbolic link for node
+- name: nodejs | create symbolic links for node and npm
   ansible.builtin.file:
-    src: "/usr/local/node-{{ desired_version }}-linux-x64/bin/node"
-    dest: "/usr/local/bin/node"
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
     owner: root
     group: root
     state: link
-  changed_when: false
-
-- name: nodejs | create symbolic link for npm
-  ansible.builtin.file:
-    src: "/usr/local/node-{{ desired_version }}-linux-x64/lib/node_modules/npm/bin/npm-cli.js"
-    dest: "/usr/local/bin/npm"
-    owner: root
-    group: root
-    state: link
+  loop:
+    - { src: "/usr/local/node-{{ desired_version }}-linux-x64/bin/node", dest: "/usr/local/bin/node" }
+    - { src: "/usr/local/node-{{ desired_version }}-linux-x64/lib/node_modules/npm/bin/npm-cli.js", dest: "/usr/local/bin/npm" }
   changed_when: false
 
 - name: nodejs | Install yarn packages
