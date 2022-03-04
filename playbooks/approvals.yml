@@ -1,11 +1,17 @@
 ---
-- hosts: approvals_staging
+# by default this playbook runs in the staging environment
+# to run in production, pass '-e runtime_env=prod'
+- name: build the Absence and Travel Requests site
+  hosts: approvals_{{ runtime_env | default('staging') }}
   remote_user: pulsys
   become: true
   vars_files:
-    - ../group_vars/approvals/approvals_staging.yml
+    - ../group_vars/approvals/approvals_{{ runtime_env | default('staging') }}.yml
     - ../group_vars/approvals/vault.yml
+
   roles:
+    - role: datadog
+      when: runtime_env == "prod"
     - role: roles/approvals
 
   post_tasks:
@@ -13,6 +19,7 @@
       service:
         name: nginx
         state: restarted
+
     - name: tell everyone on slack you ran an ansible playbook
       slack:
         token: "{{ vault_pul_slack_token }}"
