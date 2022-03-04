@@ -1,10 +1,13 @@
 ---
-- hosts: annotations_staging
+# by default this playbook runs in the staging environment
+# to run in production, pass '-e runtime_env=production'
+- name: build the annotations editing site
+  hosts: annotations_{{ runtime_env | default('staging') }}
   remote_user: pulsys
   become: true
   vars_files:
     - ../group_vars/annotations/vault.yml
-    - ../group_vars/annotations/staging.yml
+    - ../group_vars/annotations/{{ runtime_env | default('staging') }}.yml
 
   roles:
     - role: roles/simple_annotation
