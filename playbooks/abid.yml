@@ -1,10 +1,13 @@
 ---
-- hosts: abid_staging
+# by default this playbook runs in the staging environment
+# to run in production, pass '-e runtime_env=production'
+- name: build the Absolute Identifier Management site
+  hosts: abid_{{ runtime_env | default('staging') }}
   remote_user: pulsys
   become: true
   vars_files:
     - ../site_vars.yml
-    - ../group_vars/abid/staging.yml
+    - ../group_vars/abid/{{ runtime_env | default('staging') }}.yml
     - ../group_vars/abid/vault.yml
   roles:
     - role: roles/ruby
