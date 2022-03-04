@@ -9,18 +9,19 @@
     - ../site_vars.yml
     - ../group_vars/solrcloud/solrcloud_{{ runtime_env | default('staging') }}.yml
     - ../group_vars/solrcloud/vault.yml
-# the staging playbook included ../group_vars/zookeeper_staging.yml but there's no prod version
+    - ../group_vars/zookeeper/zookeeper_{{ runtime_env | default('staging') }}.yml
 
   roles:
     - role: roles/openjdk
     - role: roles/deploy_user
     - role: roles/zookeeper
-# the staging playbook included roles/datadog - do we want the staging boxes on datadog?
+    - role: roles/datadog
+      when: runtime_env == production
 
   post_tasks:
     - name: tell everyone on slack you ran an ansible playbook
-      when: runtime_env == "prod"
+      when: runtime_env == production
       slack:
         token: "{{ vault_pul_slack_token }}"
-        msg: "{{ inventory_hostname }} completed"
+        msg: Ansible ran {{ ansible_play_name }}successfully on {{ inventory_hostname }}
         channel: #server-alerts
