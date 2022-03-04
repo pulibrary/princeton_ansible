@@ -38,6 +38,23 @@
     state: mounted
   when: running_on_server
 
+- name: Create data directory
+  file:
+    path: '{{ bibdata_data_dir | dirname }}'
+    state: directory
+    recurse: yes
+    owner: '{{ deploy_user }}'
+    group: '{{ deploy_user }}'
+
+- name: Make sure the mount directory exists
+  file:
+    path: '/mnt/bibdata_share/{{ bibdata_mount_env }}'
+    state: directory
+    recurse: no
+    owner: '{{ deploy_user }}'
+    group: '{{ deploy_user }}'
+  run_once: true
+
 ## Symlink to Mounts
 - name: Create symlinks
   file:
