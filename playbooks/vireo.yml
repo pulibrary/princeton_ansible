@@ -1,11 +1,14 @@
 ---
-- hosts: vireo_staging
+# by default this playbook runs in the staging environment
+# to run in production, pass '-e runtime_env=production'
+- name: build an Electronic Theses and Dissertations system with vireo
+  hosts: vireo__{{ runtime_env | default('staging') }}.yml
   remote_user: pulsys
   become: true
   vars_files:
     - ../site_vars.yml
     - ../group_vars/vireo/common.yml
-    - ../group_vars/vireo/staging.yml
+    - ../group_vars/vireo/_{{ runtime_env | default('staging') }}.yml.yml
     - ../group_vars/vireo/vault.yml
 
   roles:
