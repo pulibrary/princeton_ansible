@@ -1,0 +1,26 @@
+---
+# by default this playbook runs in the staging environment
+# to run in production, pass '-e runtime_env=production'
+- name: build zookeeper boxes
+  hosts: zookeeper_{{ runtime_env | default('staging') }}
+  remote_user: pulsys
+  become: true
+  vars_files:
+    - ../site_vars.yml
+    - ../group_vars/solrcloud.yml # is this the production version?
+    - ../group_vars/solrcloud/vault.yml
+# the staging playbook included ../group_vars/zookeeper_staging.yml but there's no prod version
+
+  roles:
+    - role: roles/openjdk
+    - role: roles/deploy_user
+    - role: roles/zookeeper
+# the staging playbook included roles/datadog - do we want the staging boxes on datadog?
+
+  post_tasks:
+    - name: tell everyone on slack you ran an ansible playbook
+      when: runtime_env == "prod"
+      slack:
+        token: "{{ vault_pul_slack_token }}"
+        msg: "{{ inventory_hostname }} completed"
+        channel: #server-alerts
