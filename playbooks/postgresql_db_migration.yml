@@ -97,7 +97,7 @@
 #    - name: import the postgresql user creation tasks
 #      import_tasks: ../roles/postgresql/tasks/create_user.yml
 
-    - name: PostgreSQL | create postgresql '{{ application_dbuser_name }}'
+    - name: create postgresql user '{{ application_dbuser_name }}'
       postgresql_user:
         name: '{{ application_dbuser_name }}'
         port: '{{ postgres_port | default(omit) }}'
@@ -113,10 +113,27 @@
       delegate_to: "{{ dest_host }}"
       tags: never
 
+    - name: create the new database with name "{{ application_db_name }}"
+      community.postgresql.postgresql_db:
+        name: "{{ application_db_name }}"
+        encoding: 'UTF-8'
+        login_host: '{{ postgres_host | default(omit) }}'
+        login_user: '{{ postgres_admin_user | default(omit) }}'
+        login_password: '{{ postgres_admin_password | default(omit) }}'
+        owner: '{{ application_dbuser_name }}'
+        state: 'present'
+      become: true
+      become_user: postgres
+      delegate_to: "{{ dest_host }}"
+      tags: never
+
     - name: Restore the database with name "{{ application_db_name }}"
       community.postgresql.postgresql_db:
         name: "{{ application_db_name }}"
         encoding: 'UTF-8'
+        login_host: '{{ postgres_host | default(omit) }}'
+        login_user: '{{ postgres_admin_user | default(omit) }}'
+        login_password: '{{ postgres_admin_password | default(omit) }}'
         owner: '{{ application_dbuser_name }}'
         target: "{{ file_path }}/{{ now }}/{{ application_db_name }}.dump.sql"
         state: 'restore'
