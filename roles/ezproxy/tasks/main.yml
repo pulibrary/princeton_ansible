@@ -7,17 +7,11 @@
     owner: "{{ deploy_user }}"
     mode: 0755
 
-- name: Ezproxy | check for ezproxy version
-  command: /var/local/ezproxy/ezproxy -v
-  register: ezproxy_version
-  changed_when: false
-
 - name: Ezproxy | copy ezproxy binary
   copy:
     src: "files/ezproxy.bin"
     dest: "/var/local/ezproxy/ezproxy"
     mode: 0755
-  when: ezproxy_version is search('7')
 
 - name: Ezproxy | install dependencies for 64bit
   apt:
@@ -29,6 +23,7 @@
   command: /var/local/ezproxy/ezproxy -m
   become: true
   become_user: "{{ deploy_user }}"
+  ignore_errors: true
   changed_when: false
 
 - name: Ezproxy | run command with WSKey
@@ -123,25 +118,6 @@
     hour: 8
     job: "/usr/bin/geoipupdate"
   when: running_on_server
-
-- name: create base config file
-  copy:
-    src: "{{ ezproxy_repo_root }}/config.txt.tmp"
-    dest: "/var/local/ezproxy/config.txt"
-    owner: "{{ deploy_user }}"
-    group: "{{ deploy_user }}"
-    mode: 0644
-    remote_src: true
-
-- name: setting up user.txt file
-  copy:
-    src: "{{ ezproxy_repo_root }}/user.txt.tmp"
-    dest: "/var/local/ezproxy/user.txt"
-    owner: "{{ deploy_user }}"
-    group: "{{ deploy_user }}"
-    mode: 0644
-    remote_src: true
-  ignore_errors: true
 
 - name: Ezproxy | assign hostname
   template:
