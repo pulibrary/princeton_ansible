@@ -1,0 +1,34 @@
+---
+- name: Remove NetData so it stops crying wolf
+  hosts: "{{ netdata_hosts }}"
+  remote_user: pulsys
+  become: true
+  vars:
+    - deploy_user: "pulsys"
+    - netdata_path: "/etc/netdata"
+
+  tasks:
+    - name: Check if netdata is installed
+      stat:
+        path: "{{ netdata_path }}"
+      register: netdata_installed
+
+    - name: Download the uninstall script
+      get_url:
+        dest: "{{ netdata_path }}/netdata-uninstaller.sh"
+        mode: 0777
+        owner: "{{ deploy_user }}"
+        url: https://raw.githubusercontent.com/netdata/netdata/master/packaging/installer/netdata-uninstaller.sh
+      when: netdata_installed.stat.exists
+
+    - name: run the uninstall script
+      shell:
+        cmd: "{{ netdata_path }}/netdata-uninstaller.sh --yes --force --env {{ netdata_path }}/.environment"
+      when: netdata_installed.stat.exists
+
+  post_tasks:
+    - name: tell everyone on slack you ran an ansible playbook
+      slack:
+        token: "{{ vault_pul_slack_token }}"
+        msg: Ansible ran `{{ ansible_play_name }}` on {{ inventory_hostname }}
+        channel: #server-alerts
