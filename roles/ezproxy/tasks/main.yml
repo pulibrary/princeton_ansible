@@ -32,6 +32,26 @@
   changed_when: false
   when: running_on_server
 
+- name: Ezproxy | create ezproxy tls directory
+  file:
+    path: "/var/local/ezproxy/tls"
+    state: directory
+    group: "{{ deploy_user }}"
+    owner: "{{ deploy_user }}"
+    mode: 0755
+
+- name: Ezproxy | move certificate files
+  ansible.builtin.copy:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+    recurse: true
+  loop:
+    - {src: "files/tls/certs/*", dest: "/var/local/ezproxy/tls/"}
+    - {src: "files/tls/priv/*", dest: "/var/local/ezproxy/tls/"}
+  when: running_on_server
+
 - name: Ezproxy | Creates a log directory for ezproxy
   file:
     path: "/var/local/ezproxy/log"
