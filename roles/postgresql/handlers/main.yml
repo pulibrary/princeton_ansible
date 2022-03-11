@@ -1,5 +1,5 @@
 ---
-- name: restart postgres
+- name: restart local postgres
   service:
     name: postgresql
     state: restarted
@@ -13,6 +13,13 @@
   become: true
   delegate_to: '{{ postgres_host }}'
   when: not postgresql_is_local
+
+- name: reload local postgres
+  service:
+    name: postgresql
+    state: reloaded
+  become: true
+  when: postgresql_is_local
 
 - name: save repmgr log
   copy:
