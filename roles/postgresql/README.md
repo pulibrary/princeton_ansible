@@ -25,7 +25,7 @@ Role Variables
   application_dbuser_name
   application_dbuser_password
   application_db_name
-  application_dbuser_role_attr_flags - for example "CREATEDB,CREATEROLE"
+  application_dbuser_role_attr_flags - for example "CREATEDB"
 ```
     
 Dependencies
