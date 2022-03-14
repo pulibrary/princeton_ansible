@@ -66,7 +66,7 @@
     src: replication.conf.j2
     dest: "{{ postgres_conf_directory }}/conf.d/replication.conf"
     mode: 0644
-  delegate_to: '{{ postgres_leader }}'
+  delegate_to: '{{ leader_db_host }}'
   when:
     - running_on_server
     - postgresql_is_local
@@ -76,7 +76,7 @@
   command: psql -c 'alter user {{ replication_user }} set search_path TO {{ replication_user }}, "$user", public;'
   become: true
   become_user: postgres
-  delegate_to: '{{ postgres_leader }}'
+  delegate_to: '{{ leader_db_host }}'
   changed_when: false
   when:
     - postgresql_is_local
@@ -91,7 +91,7 @@
   notify:
     - save repmgr log
     - restart postgresql
-  delegate_to: '{{ postgres_leader }}'
+  delegate_to: '{{ leader_db_host }}'
   when:
     - running_on_server
     - postgresql_is_local
@@ -102,7 +102,7 @@
   service:
     name: postgresql
     state: stopped
-  delegate_to: '{{ postgres_standby }}'
+  delegate_to: '{{ standby_db_host }}'
   when:
     - running_on_server
     - postgresql_is_local
@@ -112,17 +112,17 @@
   file:
     path: "{{ postgres_data_directory }}/*"
     state: absent
-  delegate_to: '{{ postgres_standby }}'
+  delegate_to: '{{ standby_db_host }}'
   when:
     - running_on_server
     - postgresql_is_local
     - inventory_hostname in groups["gcp_postgresql_standby"]
 
 - name: PostgreSQL | cloning standby
-  command: repmgr -h {{ postgres_leader }} -U replicant -d replicant -f {{ repmgr_config }} standby clone -F
+  command: repmgr -h {{ leader_db_host }} -U replicant -d replicant -f {{ repmgr_config }} standby clone -F
   become: true
   become_user: postgres
-  delegate_to: '{{ postgres_standby }}'
+  delegate_to: '{{ standby_db_host }}'
   when:
     - running_on_server
     - postgresql_is_local
@@ -132,7 +132,7 @@
   service:
     name: postgresql
     state: started
-  delegate_to: '{{ postgres_standby }}'
+  delegate_to: '{{ standby_db_host }}'
   when:
     - running_on_server
     - postgresql_is_local
@@ -143,7 +143,7 @@
   register: repmgr_log
   become: true
   become_user: postgres
-  delegate_to: '{{ postgres_standby }}'
+  delegate_to: '{{ standby_db_host }}'
   when:
     - running_on_server
     - postgresql_is_local
