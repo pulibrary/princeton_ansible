@@ -34,17 +34,15 @@ postgres_port: 5432
 postgres_admin_user: "{{ postgresadmin }}"
 
 datadog_api_key: "{{ vault_datadog_key }}"
-datadog_service_name: postgresql
-datadog_environment: prod
 datadog_config:
   log_enabled: true
-  process_enabled: true
-datadog_typed_checks:
-  init_config:
-  logs:
-    - type: file
-      path: /var/lib/postgresql/{{ postgresql_version }}/main/pg_log/*.csv
-      service: database
-      source: postgresql
-      sourcecategory: postgresql_logs
-      tags: "postgresql, env:prod, role:postgresql"
+datadog_checks:
+  postgresql_log_check:
+    init_config:
+    logs:
+      - type: file
+        path: /var/lib/postgresql/{{ postgresql_version }}/main/pg_log/*.csv
+        service: database
+        source: postgresql
+        sourcecategory: postgresql_logs
+        tags: "postgresql, env:prod, role:postgresql"
