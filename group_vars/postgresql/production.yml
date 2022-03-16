@@ -1,5 +1,5 @@
 ---
-postgresql_version: "13"
+postgres_version: "13"
 db_clusteradmin_user: "postgres"
 db_clusteradmin_password: "{{ vault_postgres_admin_password }}"
 replication_user_password: "{{ vault_replicant_password }}"
@@ -11,6 +11,7 @@ postgresql_settings:
 postgresql_ext_install_postgis: true
 postgresql_databases:
   - name: replicant
+  - name: postgres
 postgresql_users:
   - name: postgres
     password: "{{ vault_postgres_admin_password }}"
@@ -18,7 +19,7 @@ postgresql_users:
     priv: "ALL"
     role_attr_flags: "SUPERUSER"
   - name: replicant
-    password: "{{ vault_postgres_admin_password }}"
+    password: "{{ vault_replicant_password }}"
     db: "replicant"
     priv: "ALL"
     role_attr_flags: "SUPERUSER"
@@ -34,17 +35,16 @@ postgres_port: 5432
 postgres_admin_user: "{{ postgresadmin }}"
 
 datadog_api_key: "{{ vault_datadog_key }}"
-datadog_service_name: postgresql
-datadog_environment: prod
 datadog_config:
   log_enabled: true
-  process_enabled: true
 datadog_typed_checks:
-  init_config:
-  logs:
-    - type: file
-      path: /var/lib/postgresql/{{ postgresql_version }}/main/pg_log/*.csv
-      service: database
-      source: postgresql
-      sourcecategory: postgresql_logs
-      tags: "postgresql, env:prod, role:postgresql"
+  - type: file
+    configuration:
+      init_config:
+      logs:
+        - type: file
+          path: /var/lib/postgresql/{{ postgres_version }}/main/pg_log/*.csv
+          service: database
+          source: postgresql
+          sourcecategory: postgresql_logs
+          tags: "postgresql, env:prod, role:postgresql"
