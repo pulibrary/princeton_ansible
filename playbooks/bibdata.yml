@@ -1,0 +1,24 @@
+---
+# by default this playbook runs in the staging environment
+# to run in production, pass '-e runtime_env=production'
+- Build bibdata infrastructure
+  hosts: bibdata_{{ runtime_env | default('staging') }}
+  remote_user: pulsys
+  become: true
+  vars_files:
+    - ../site_vars.yml
+    - ../group_vars/bibdata/vault.yml
+    - ../group_vars/bibdata/{{ runtime_env | default('staging') }}.yml
+  roles:
+    - role: roles/bibdata
+    - role: roles/bibdata_sqs_poller
+    - role: roles/sidekiq_worker
+      when: "'worker' in inventory_hostname"
+    - role: 'hr_share'
+    - role: roles/datadog
+  post_tasks:
+    - name: tell everyone on slack you ran an ansible playbook
+      slack:
+        token: "{{ vault_pul_slack_token }}"
+        msg: "Ansible ran {{ ansible_play_name }} on {{ inventory_hostname }}"
+        channel: #server-alerts
