@@ -1,5 +1,6 @@
 ---
 # by default this playbook runs in the staging environment
+# to run in qa, pass '-e runtime_env=qa'
 # to run in production, pass '-e runtime_env=production'
 - Build bibdata infrastructure
   hosts: bibdata_{{ runtime_env | default('staging') }}
@@ -16,6 +17,7 @@
       when: "'worker' in inventory_hostname"
     - role: 'hr_share'
     - role: roles/datadog
+      when: runtime_env=production
   post_tasks:
     - name: tell everyone on slack you ran an ansible playbook
       slack:
