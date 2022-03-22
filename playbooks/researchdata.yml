@@ -1,9 +1,12 @@
 ---
-- hosts: researchdata_staging
+# by default this playbook runs in the staging environment
+# to run in production, pass '-e runtime_env=production'
+- name: build the research data site
+  hosts: researchdata_{{ runtime_env | default('staging') }}
   remote_user: pulsys
   become: true
   vars_files:
-    - ../group_vars/researchdata/researchdata_staging.yml
+    - ../group_vars/researchdata/{{ runtime_env | default('staging') }}.yml
     - ../group_vars/researchdata/vault.yml
   roles:
     - role: roles/researchdata
@@ -16,5 +19,5 @@
     - name: tell everyone on slack you ran an ansible playbook
       slack:
         token: "{{ vault_pul_slack_token }}"
-        msg: "{{ inventory_hostname }} completed"
+        msg: Ansible ran `{{ ansible_play_name }}` on {{ inventory_hostname }}
         channel: #server-alerts
