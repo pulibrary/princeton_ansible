@@ -3,8 +3,9 @@
   ansible.builtin.apt_repository:
     repo: 'deb https://oss-binaries.phusionpassenger.com/apt/passenger {{ ansible_distribution_release }} main'
     state: absent
-  changed_when: false
-  ignore_errors: true
+  register: phusion_repo
+  failed_when:
+    - phusion_repo is failed
 
 - name: common | update cache
   apt:
@@ -57,7 +58,6 @@
 - name: common | install vector
   apt:
     name: vector
-  ignore_errors: true
   when: running_on_server
 
 - name: common | install duf
