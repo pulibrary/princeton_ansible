@@ -4,13 +4,13 @@
   include_vars: "main.yml"
 
 - name: Phusion | Define nginx_user.
-  set_fact:
+  ansible.builtin.set_fact:
     nginx_user: "{{ __nginx_user }}"
   when: nginx_user is not defined
 
 # Passenger repository setup.
 - name: Phusion | Add Passenger apt key.
-  apt_key:
+  ansible.builtin.apt_key:
     keyserver: keyserver.ubuntu.com
     id: 561F9B9CAC40B2F7
     state: present
@@ -25,32 +25,32 @@
     - results is failed
 
 - name: Phusion | update our repos
-  apt:
+  ansible.builtin.apt:
     update_cache: true
   changed_when: false
   # TODO: This changed when should be removed when we upgrade to molecule 3
 
 # Nginx and passenger installation.
 - name: Phusion | Define nginx_passenger_packages
-  set_fact:
+  ansible.builtin.set_fact:
     nginx_passenger_packages: "{{ __nginx_passenger_packages_16_04 }}"
   when: ansible_distribution == 'Ubuntu' and ansible_distribution_major_version|int < 18
 
 - name: Phusion | Install Nginx and Passenger.
-  apt:
+  ansible.builtin.apt:
     name: "{{ nginx_passenger_packages }}"
     state: present
 
 # Nginx and passenger configuration.
 - name: Phusion | Copy Nginx configuration into place.
-  template:
+  ansible.builtin.template:
     src: nginx.conf.j2
     dest: /etc/nginx/nginx.conf
     mode: 0644
   notify: restart nginx
 
 - name: Phusion | Copy Passenger configuration into place.
-  template:
+  ansible.builtin.template:
     src: passenger.conf.j2
     dest: /etc/nginx/passenger.conf
     mode: 0644
@@ -58,20 +58,20 @@
   when: ansible_distribution == 'Ubuntu' and ansible_distribution_major_version|int < 18
 
 - name: Phusion | Configure passenger virtual host.
-  template:
+  ansible.builtin.template:
     src: passenger.j2
     dest: /etc/nginx/sites-available/passenger
     mode: 0644
   notify: restart nginx
 
 - name: Phusion | Ensure passenger virtual host is enabled.
-  file:
+  ansible.builtin.file:
     src: /etc/nginx/sites-available/passenger
     dest: /etc/nginx/sites-enabled/passenger
     state: link
 
 - name: Phusion | Ensure default virtual host is removed.
-  file:
+  ansible.builtin.file:
     path: /etc/nginx/sites-enabled/default
     state: absent
     mode: 0644
