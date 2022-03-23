@@ -1,6 +1,6 @@
 ---
-- name: Install Cantaloupe
-  unarchive:
+- name: cantaloupe | Install Cantaloupe
+  ansible.builtin.unarchive:
     remote_src: true
     src: https://github.com/medusa-project/cantaloupe/releases/download/v{{ cantaloupe_version }}/Cantaloupe-{{ cantaloupe_version }}.zip
     dest: "{{ cantaloupe_install_root }}"
@@ -8,8 +8,8 @@
     group: "{{ cantaloupe_group }}"
     creates: "{{ cantaloupe_install_root }}/{{ cantaloupe_src_prefix }}-{{ cantaloupe_version }}"
 
-- name: Create Cantaloupe symlink
-  file:
+- name: cantaloupe | Create Cantaloupe symlink
+  ansible.builtin.file:
     state: link
     src: "{{ cantaloupe_install_root }}/{{ cantaloupe_src_prefix }}-{{ cantaloupe_version }}"
     dest: "{{ cantaloupe_symlink }}"
@@ -18,30 +18,30 @@
     force: true
   changed_when: false
 
-- name: Create Cantaloupe log path
-  file:
+- name: cantaloupe | Create Cantaloupe log path
+  ansible.builtin.file:
     state: directory
     path: "{{ cantaloupe_log_path }}"
     owner: "{{ cantaloupe_user }}"
     group: "{{ cantaloupe_group }}"
     mode: 0755
 
-- name: Create Cantaloupe image directory
-  file:
+- name: cantaloupe | Create Cantaloupe image directory
+  ansible.builtin.file:
     state: directory
     path: "{{ cantaloupe_FilesystemSource_BasicLookupStrategy_path_prefix }}"
     owner: "{{ cantaloupe_user }}"
     group: "{{ cantaloupe_group }}"
     mode: 0755
 
-- name: Fix /dev/stdout
-  file:
+- name: cantaloupe | Fix /dev/stdout
+  ansible.builtin.file:
     path: "/dev/stdout"
     mode: o+w
     force: true
 
-- name: Symlink Kakadu Libraries
-  file:
+- name: cantaloupe | Symlink Kakadu Libraries
+  ansible.builtin.file:
     state: link
     src: "{{ cantaloupe_install_root }}/{{ cantaloupe_src_prefix }}-{{ cantaloupe_version }}/deps/Linux-x86-64/lib/{{ item }}"
     dest: "/usr/lib/{{ item }}"
@@ -52,16 +52,16 @@
     - libkdu_v7AR.so
   when: cantaloupe_version != "3.3.2"
 
-- name: Install startup script for workers
-  template:
+- name: cantaloupe | Install startup script for workers
+  ansible.builtin.template:
     src: cantaloupe.service.j2
     dest: /etc/systemd/system/cantaloupe.service
     mode: 0644
   when: running_on_server
   notify: restart cantaloupe
 
-- name: Keep cantaloupe running
-  service:
+- name: cantaloupe | Keep cantaloupe running
+  ansible.builtin.service:
     name: cantaloupe
     enabled: true
     state: started
