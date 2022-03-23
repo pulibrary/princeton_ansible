@@ -1,6 +1,6 @@
 ---
-- name: Create Samba shares root directory
-  file:
+- name: samba | Create Samba shares root directory
+  ansible.builtin.file:
     state: directory
     path: "{{ samba_shares_root }}"
     owner: root
@@ -9,18 +9,18 @@
   when: samba_shares
   tags: samba
 
-- name: Create share directories
-  with_items: "{{ samba_shares }}"
-  file:
+- name: samba | Create share directories
+  ansible.builtin.file:
     state: directory
     path: "{{ item.path|default([samba_shares_root,item.name]|join('/')) }}"
     owner: "{{ item.owner|default('root') }}"
     group: "{{ item.group|default('users') }}"
     mode: 0775
+  with_items: "{{ samba_shares }}"
   tags: samba
 
-- name: Samba configuration
-  template:
+- name: samba | Samba configuration
+  ansible.builtin.template:
     dest: /etc/samba/smb.conf
     src: smb.conf.j2
     validate: 'testparm -s %s'
@@ -29,8 +29,8 @@
     - Restart Samba services
   tags: samba
 
-- name: Start Samba service(s)
-  service:
+- name: samba | Start Samba service(s)
+  ansible.builtin.service:
     name: "{{ item }}"
     state: started
     enabled: true
@@ -39,14 +39,14 @@
     - nmbd
   tags: samba
 
-- name: Create samba users
-  user:
+- name: samba | Create samba users
+  ansible.builtin.user:
     name: "{{ item.name }}"
     password: "{{ item.password }}"
   with_items: "{{ samba_users }}"
 
-- name: Create Samba users if they don't exist yet
-  shell: >
+- name: samba | Create Samba users if they don't exist yet
+  ansible.builtin.shell: >
     set -o pipefail; \
     (pdbedit --user={{ item.name }} 2>&1 > /dev/null) \
     || (echo {{ item.password }}; echo {{ item.password }}) \
