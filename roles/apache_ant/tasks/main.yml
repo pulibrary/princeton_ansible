@@ -1,12 +1,12 @@
 ---
 # tasks file for roles/apache_ant
 - name: apache_ant |  check if we already downloaded/unarchived
-  stat:
+  ansible.builtin.stat:
     path: "/opt/apache-ant-{{ ant_version }}"
   register: ant_path
 
 - name: apache_ant | Unpack Ant
-  unarchive:
+  ansible.builtin.unarchive:
     src: "{{ apache_ant_download_url }}apache-ant-{{ ant_version }}-bin.tar.gz"
     dest: /opt
     copy: false
@@ -17,14 +17,14 @@
     - running_on_server
 
 - name: apache_ant | create symbolic link for the {{ ant_home }} directory
-  file:
+  ansible.builtin.file:
     src: "/opt/apache-ant-{{ ant_version }}"
     dest: "{{ ant_home }}"
     state: link
   when: running_on_server
 
 - name: apache_ant | set up the environment profile for Ant in /etc/profile.d
-  template:
+  ansible.builtin.template:
     src: ant_env.j2
     dest: "/etc/profile.d/ant.env.sh"
     mode: 0644
