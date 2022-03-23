@@ -1,13 +1,13 @@
 ---
 - name: rails_app | Install dependencies
-  apt:
+  ansible.builtin.apt:
     name: '{{ item }}'
     state: present
   loop: '{{ rails_app_dependencies }}'
   changed_when: false
 
 - name: rails_app | Install site configuration
-  template:
+  ansible.builtin.template:
     src: 'rails_app_config'
     dest: '/home/{{ deploy_user }}/app_configs/{{ rails_app_name }}'
     owner: '{{ deploy_user }}'
@@ -17,7 +17,7 @@
     - site_config
 
 - name: rails_app | Create app directory structure
-  file:
+  ansible.builtin.file:
     path: '/opt/{{ item }}'
     state: 'directory'
     owner: '{{ deploy_user }}'
@@ -30,7 +30,7 @@
 
 # todo should we remove this since it is not being used
 - name: rails_app | Create symlinks
-  file:
+  ansible.builtin.file:
     src: '{{ item.src }}'
     dest: '{{ item.link }}'
     owner: '{{ deploy_user }}'
@@ -40,14 +40,14 @@
   with_items: '{{ rails_app_symlinks }}'
 
 - name: rails_app | Allow deploy to restart, stop, start nginx
-  lineinfile:
+  ansible.builtin.lineinfile:
     dest: "/etc/sudoers"
     state: "present"
     line: "{{ deploy_user }} ALL=(ALL) NOPASSWD: /usr/sbin/service nginx *"
     validate: "visudo -cf %s"
 
 - name: rails_app | rotate the logs for the rails applications
-  template:
+  ansible.builtin.template:
     src: 'logrotate.d.rails.j2'
     dest: '/etc/logrotate.d/{{ rails_app_name }}'
     mode: 0644
