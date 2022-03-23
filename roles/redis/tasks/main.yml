@@ -1,11 +1,11 @@
 ---
 - name: redis | install redis packages
-  apt:
+  ansible.builtin.apt:
     name: ["redis-tools", "python-redis", "redis-server"]
     state: present
 
 - name: redis | ensure that /etc/redis directory exists
-  file:
+  ansible.builtin.file:
     path: "/etc/redis"
     state: directory
     owner: "root"
@@ -13,7 +13,7 @@
     mode: 0755
 
 - name: redis | create stub Redis config file
-  template:
+  ansible.builtin.template:
     src: "etc/redis/redis.conf.j2"
     dest: "/etc/redis/redis.conf"
     owner: "root"
@@ -22,14 +22,14 @@
     force: false
 
 - name: redis | ulimit value for redis
-  template:
+  ansible.builtin.template:
     src: "redis_ulimit.conf.j2"
     dest: "/etc/security/limits.d/redis.conf"
     force: true
     mode: 0644
 
 - name: redis | Set vm.overcommit
-  sysctl:
+  ansible.posix.sysctl:
     name: "vm.overcommit_memory"
     value: 1
     sysctl_file: "/etc/sysctl.d/30-redis.conf"
@@ -40,7 +40,7 @@
   when: redis__server_enabled|bool
 
 - name: redis | disable Redis Server service if not enabled
-  service:
+  ansible.builtin.service:
     name: "redis-server"
     state: stopped
     enabled: false

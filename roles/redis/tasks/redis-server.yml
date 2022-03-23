@@ -1,6 +1,6 @@
 ---
 - name: Generate redis-server configuration
-  template:
+  ansible.builtin.template:
     src: "etc/redis/redis-conf.j2"
     dest: "/etc/redis/ansible-redis-static.conf"
     owner: "root"
@@ -9,14 +9,14 @@
   register: redis__register_config_ansible_redis_static
 
 - name: Remove Ansible include line from redis.conf
-  lineinfile:
+  ansible.builtin.lineinfile:
     dest: "/etc/redis/redis.conf"
     regexp: '^include\s+/etc/redis/ansible-redis-static.conf'
     state: absent
   when: redis__register_config_ansible_redis_static is changed
 
 - name: Include Ansible configuration in redis.conf
-  lineinfile:
+  ansible.builtin.lineinfile:
     dest: "/etc/redis/redis.conf"
     regexp: '^include\s+/etc/redis/ansible-redis-static.conf'
     line: 'include /etc/redis/ansible-redis-static.conf'
@@ -25,7 +25,7 @@
   register: redis__register_config_redis
 
 - name: Restart redis-server if modified
-  service:
+  ansible.builtin.service:
     name: "redis-server"
     state: restarted
   register: redis__register_server_restart
