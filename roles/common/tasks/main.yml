@@ -1,11 +1,11 @@
 ---
 - name: common | update cache
-  apt:
+  ansible.builtin.apt:
     update_cache: true
     cache_valid_time: 600
 
 - name: common | Add apt HTTPS capabilities.
-  apt:
+  ansible.builtin.apt:
     name: "{{ item }}"
     state: present
     update_cache: true
@@ -19,7 +19,7 @@
     state: present
 
 - name: common | install building software and build essentials
-  apt:
+  ansible.builtin.apt:
     name: '{{ common_packages }}'
     state: present
     update_cache: true
@@ -32,11 +32,11 @@
     mode: 0644
 
 - name: common | install configured dependencies
-  apt:
+  ansible.builtin.apt:
     name: '{{ configured_dependencies }}'
     state: present
 
-- name: common | add vector repository
+- name: common | add vector repository configuration
   get_url:
     url: https://repositories.timber.io/public/vector/cfg/setup/bash.deb.sh
     dest: /tmp/bash.deb.sh
@@ -48,12 +48,15 @@
   changed_when: false
 
 - name: common | install vector
-  apt:
+  ansible.builtin.apt:
     name: vector
+<<<<<<< HEAD
   when: running_on_server
+=======
+>>>>>>> 4ef1e9d4 (all our roles will break if we upgrade)
 
 - name: common | install duf
-  apt:
+  ansible.builtin.apt:
     deb: "{{ duf_url }}/v{{ duf_version }}/duf_{{ duf_version }}_linux_amd64.deb"
   register: duf_repo
   retries: 3
