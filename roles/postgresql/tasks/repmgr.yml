@@ -1,13 +1,13 @@
 ---
 - name: PostgreSQL | register if we have recorded the repmgr
-  stat:
+  ansible.builtin.stat:
     path: "{{ repmgr_init_log }}"
   when:
     - postgresql_is_local
   register: repmgr_log_stat
 
 - name: PostgreSQL | add repmgr configuration file
-  template:
+  ansible.builtin.template:
     src: repmgr.conf.j2
     dest: "{{ repmgr_config }}"
     mode: 0644
@@ -16,7 +16,7 @@
   changed_when: false
 
 - name: Postgresql | ensure postgres sudo users
-  copy:
+  ansible.builtin.copy:
     src: pg_sudoers
     dest: "{{ sudoers_dir }}/pg_sudoers"
     mode: 0600
@@ -25,7 +25,7 @@
   changed_when: false
 
 - name: Postgrest | install repmgr config
-  template:
+  ansible.builtin.template:
     src: pg_repmgr.conf.j2
     dest: "{{ postgres_conf_directory }}/conf.d/pg_repmgr.conf"
     mode: 0644
@@ -35,7 +35,7 @@
   changed_when: false
 
 - name: Postgresql | ensure replicant pgpass
-  template:
+  ansible.builtin.template:
     src: pg_pass.j2
     dest: "~/.pgpass"
     mode: 0600
@@ -46,14 +46,14 @@
     - postgresql_is_local
 
 - name: PostgreSQL | move postgres pgpass
-  stat:
+  ansible.builtin.stat:
     path: "~/.pgpass"
   register: pgpass_stat
   when:
     - postgresql_is_local
 
 - name: PostgreSQL | move file from root
-  command: mv /root/.pgpass /var/lib/postgresql/.pgpass
+  ansible.builtin.command: mv /root/.pgpass /var/lib/postgresql/.pgpass
   become: true
   changed_when: false
   ignore_errors: true
@@ -62,7 +62,7 @@
     - postgresql_is_local
 
 - name: PostgreSQL | add replication postgresql configuration
-  template:
+  ansible.builtin.template:
     src: replication.conf.j2
     dest: "{{ postgres_conf_directory }}/conf.d/replication.conf"
     mode: 0644
@@ -73,7 +73,7 @@
   notify: restart postgresql
 
 - name: PostgreSQL | alter replicant db user
-  command: psql -c 'alter user {{ replication_user }} set search_path TO {{ replication_user }}, "$user", public;'
+  ansible.builtin.command: psql -c 'alter user {{ replication_user }} set search_path TO {{ replication_user }}, "$user", public;'
   become: true
   become_user: postgres
   delegate_to: '{{ leader_db_host }}'
@@ -84,7 +84,7 @@
     - inventory_hostname in groups["gcp_postgresql_leader"]
 
 - name: PostgreSQL | register leader
-  command: repmgr -f {{ repmgr_config }} primary register --force -S postgres
+  ansible.builtin.command: repmgr -f {{ repmgr_config }} primary register --force -S postgres
   register: repmgr_log
   become: true
   become_user: postgres
@@ -99,7 +99,7 @@
   ignore_errors: true
 
 - name: PostsgreSQL | stop postgres on standby
-  service:
+  ansible.builtin.service:
     name: postgresql
     state: stopped
   delegate_to: '{{ standby_db_host }}'
@@ -109,7 +109,7 @@
     - inventory_hostname in groups["gcp_postgresql_standby"]
 
 - name: PostgreSQL | remove pg data
-  file:
+  ansible.builtin.file:
     path: "{{ postgres_data_directory }}/*"
     state: absent
   delegate_to: '{{ standby_db_host }}'
@@ -119,7 +119,7 @@
     - inventory_hostname in groups["gcp_postgresql_standby"]
 
 - name: PostgreSQL | cloning standby
-  command: repmgr -h {{ leader_db_host }} -U replicant -d replicant -f {{ repmgr_config }} standby clone -F
+  ansible.builtin.command: repmgr -h {{ leader_db_host }} -U replicant -d replicant -f {{ repmgr_config }} standby clone -F
   become: true
   become_user: postgres
   delegate_to: '{{ standby_db_host }}'
@@ -129,7 +129,7 @@
     - inventory_hostname in groups["gcp_postgresql_standby"]
 
 - name: PostgreSQL | start postgres
-  service:
+  ansible.builtin.service:
     name: postgresql
     state: started
   delegate_to: '{{ standby_db_host }}'
@@ -139,7 +139,7 @@
     - inventory_hostname in groups["gcp_postgresql_standby"]
 
 - name: PostgreSQL | register standby
-  command: repmgr -f {{ repmgr_config }} standby register --force
+  ansible.builtin.command: repmgr -f {{ repmgr_config }} standby register --force
   register: repmgr_log
   become: true
   become_user: postgres

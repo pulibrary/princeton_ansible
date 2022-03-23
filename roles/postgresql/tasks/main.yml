@@ -1,16 +1,16 @@
 ---
 - name: PostgreSQL | Make sure the CA certificates are available
-  apt:
+  ansible.builtin.apt:
     pkg: ca-certificates
     state: present
 
 - name: PostgreSQL | Add PostgreSQL repository apt-key
-  apt_key:
+  ansible.builtin.apt_key:
     url: "{{ postgres_apt_key_url }}"
     state: present
 
 - name: PostgreSQL | add postgres:10 appstream
-  dnf:
+  ansible.builtin.dnf:
     name: "@postgresql:10/client"
     state: present
     ignore_errors: true
@@ -19,13 +19,13 @@
     - ansible_distribution == "CentOS"
 
 - name: PostgreSQL | add postgresql repository
-  apt_repository:
+  ansible.builtin.apt_repository:
     repo: 'deb http://apt.postgresql.org/pub/repos/apt/ {{ ansible_distribution_release }}-pgdg main'
     update_cache: true
     state: present
 
 - name: PostgreSQL | install postgresql server packages
-  apt:
+  ansible.builtin.apt:
     name: '{{ item }}'
     state: present
     cache_valid_time: '{{ apt_cache_timeout }}'
@@ -35,7 +35,7 @@
   when: postgresql_is_local
 
 - name: PostgreSQL | install postgresql client packages
-  apt:
+  ansible.builtin.apt:
     name: '{{ item }}'
     state: present
     cache_valid_time: '{{ apt_cache_timeout }}'
@@ -45,7 +45,7 @@
   changed_when: false
 
 - name: PostgreSQL | install postgresql client packages Centos
-  dnf:
+  ansible.builtin.dnf:
     name: "{{ item }}"
     state: present
   loop:
@@ -59,7 +59,7 @@
 - import_tasks: extensions.yml
 
 - name: PostgreSQL | install configuration file
-  template:
+  ansible.builtin.template:
     src: 'postgresql.conf.j2'
     dest: '/etc/postgresql/{{ postgres_version }}/main/postgresql.conf'
     group: postgres
@@ -70,19 +70,19 @@
   notify: restart local postgres
 
 - name: PostgreSQL | ensure postgres starts on boot
-  service:
+  ansible.builtin.service:
     name: postgresql
     enabled: true
   when: postgresql_is_local
 
 - name: PostgreSQL | restart postgres server
-  service:
+  ansible.builtin.service:
     name: postgresql
     state: started
   when: postgresql_is_local
 
 - name: PostgreSQL | ensure pgpass
-  template:
+  ansible.builtin.template:
     src: pg_pass.j2
     dest: "~/.pgpass"
     mode: 0600
@@ -92,7 +92,7 @@
   become: true
 
 - name: PostgreSQL | ensure access to postgres server
-  blockinfile:
+  ansible.builtin.blockinfile:
     path: '/etc/postgresql/{{ postgres_version }}/main/pg_hba.conf'
     insertafter: "# Put your actual configuration here"
     block: |
