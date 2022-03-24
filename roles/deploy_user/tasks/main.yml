@@ -80,7 +80,7 @@
     mode: 0644
   register: deploy_ssh_config
 
-- name: set sudo options for {{ deploy_user }}
+- name: deploy_user | set sudo options for {{ deploy_user }}
   ansible.builtin.template:
     src: sudo.j2
     dest: "/etc/sudoers.d/{{ deploy_user }}"
@@ -90,8 +90,5 @@
   loop_control:
     label: "{{ deploy_user }}"
 
-# Note that this should not be necessary, but the `restart sshd` handler does not work
-- name: restart sshd for real
-  become: true
-  ansible.builtin.command: systemctl restart sshd
-  when: running_on_server
+- name: deploy_user | Run all handlers notified by the deploy_user role
+  meta: flush_handlers
