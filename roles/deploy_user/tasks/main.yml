@@ -1,11 +1,11 @@
 ---
 - name: deploy_user | create system user group
-  group:
+  ansible.builtin.group:
     name: "{{ deploy_user }}"
     gid: "{{ deploy_user_uid }}"
 
 - name: deploy_user | create- system user
-  user:
+  ansible.builtin.user:
     name: "{{ deploy_user }}"
     uid: "{{ deploy_user_uid }}"
     group: "{{ deploy_user }}"
@@ -13,13 +13,13 @@
     shell: "{{ deploy_user_shell }}"
 
 - name: deploy_user | add SSH keys
-  authorized_key:
+  ansible.posix.authorized_key:
     user: "{{ deploy_user }}"
     key: "{{ item.key }}"
   with_items: "{{ deploy_ssh_users }}"
 
 - name: deploy_user | create app_configs directory
-  file:
+  ansible.builtin.file:
     path: '/home/{{ deploy_user }}/app_configs'
     state: 'directory'
     owner: '{{ deploy_user }}'
@@ -27,7 +27,7 @@
     mode: '0744'
 
 - name: deploy_user | load app configs
-  lineinfile: >
+  ansible.builtin.lineinfile: >
               dest="/home/{{ deploy_user }}/.bashrc"
               state=present
               regexp='^for f in ~/app_configs/\*; do source \$f; done$'
@@ -35,7 +35,7 @@
               insertbefore=BOF
 
 - name: deploy_user | allow "authorized_key" files
-  lineinfile: >
+  ansible.builtin.lineinfile: >
               dest=/etc/ssh/sshd_config
               state=present
               backrefs=yes
@@ -43,7 +43,7 @@
               line="AuthorizedKeysFile\1"
 
 - name: deploy_user | allow deploy user to SSH
-  lineinfile: >
+  ansible.builtin.lineinfile: >
               dest=/etc/ssh/sshd_config
               state=present
               backrefs=yes
@@ -54,7 +54,7 @@
     - restart sshd
 
 - name: deploy_user | create the .ssh directory
-  file:
+  ansible.builtin.file:
     path: "/home/{{ deploy_user }}/.ssh/"
     state: directory
     owner: "{{ deploy_user }}"
@@ -63,7 +63,7 @@
   when: not running_on_server
 
 - name: deploy_user | install deploy github key
-  copy:
+  ansible.builtin.copy:
     content: "{{ deploy_id_rsa_private_key }}"
     dest: "/home/{{ deploy_user }}/.ssh/id_rsa"
     owner: "{{ deploy_user }}"
@@ -72,7 +72,7 @@
   when: running_on_server
 
 - name: deploy_user | install deploy github ssh config
-  copy:
+  ansible.builtin.copy:
     src: files/ssh_config
     dest: "/home/{{ deploy_user }}/.ssh/config"
     owner: "{{ deploy_user }}"
@@ -80,8 +80,8 @@
     mode: 0644
   register: deploy_ssh_config
 
-- name: set sudo options for {{ deploy_user }}
-  template:
+- name: deploy_user | set sudo options for {{ deploy_user }}
+  ansible.builtin.template:
     src: sudo.j2
     dest: "/etc/sudoers.d/{{ deploy_user }}"
     mode: 0600
@@ -90,8 +90,5 @@
   loop_control:
     label: "{{ deploy_user }}"
 
-# Note that this should not be necessary, but the `restart sshd` handler does not work
-- name: restart sshd for real
-  become: true
-  command: systemctl restart sshd
-  when: running_on_server
+- name: deploy_user | Run all handlers notified by the deploy_user role
+  meta: flush_handlers
