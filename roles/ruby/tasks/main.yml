@@ -13,32 +13,44 @@
   failed_when:
     - brightbox_repo is failed
 
-- name: install Ruby "{{ ruby_version }}"
+- name: ruby |check ruby version
+  ansible.builtin.command: ruby -v
+  register: installed_ruby
+  ignore_errors: true
+
+- name: print ruby version
+  debug:
+    var: installed_ruby
+
+- name: ruby | install Ruby "{{ ruby_version }}"
   ansible.builtin.apt:
     name: ["{{ ruby_version }}", "{{ ruby_version }}-dev", "ruby-switch"]
     state: present
     update_cache: true
+  when: installed_ruby.rc !=0 or installed_ruby.stdout.split()[1] != ruby_version
   register: packages_installed
 
-- name: switch to Ruby "{{ ruby_version }}" release for the system default
+- name: ruby | switch to Ruby "{{ ruby_version }}" release for the system default
   ansible.builtin.command: ruby-switch --set "{{ ruby_version }}"
+  command: ruby-switch --set "{{ ruby_version }}"
+  when: installed_ruby.rc !=0 or installed_ruby.stdout.split()[1] != ruby_version
   changed_when: false
 
-- name: uninstall bundler to get specific version
+- name: ruby | uninstall bundler to get specific version
   community.general.gem:
     name: bundler
     state: absent
     user_install: false
   when: bundler_version is defined
 
-- name: install global bundler, specific version
+- name: ruby | install global bundler, specific version
   community.general.gem:
     name: bundler
     version: "{{ bundler_version }}"
     user_install: false
   when: bundler_version is defined
 
-- name: install global bundler, any version
+- name: ruby | install global bundler, any version
   community.general.gem:
     name: bundler
     user_install: false
