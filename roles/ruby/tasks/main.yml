@@ -9,6 +9,7 @@
   ansible.builtin.apt_repository:
     repo: "ppa:brightbox/ruby-ng"
     state: present
+    update_cache: true
   register: brightbox_repo
   failed_when:
     - brightbox_repo is failed
@@ -17,6 +18,7 @@
   ansible.builtin.command: ruby -v
   register: installed_ruby
   ignore_errors: true
+  changed_when: false
 
 - name: print ruby version
   debug:
@@ -26,7 +28,6 @@
   ansible.builtin.apt:
     name: ["{{ ruby_version }}", "{{ ruby_version }}-dev", "ruby-switch"]
     state: present
-    update_cache: true
   when: installed_ruby.rc !=0 or installed_ruby.stdout.split()[1] != ruby_version
   register: packages_installed
 
