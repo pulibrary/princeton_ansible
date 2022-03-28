@@ -9,22 +9,18 @@
   apt_repository:
     repo: "ppa:brightbox/ruby-ng"
     state: present
-  ignore_errors: true
+    update_cache: true
 
 - name: check ruby version
   command: ruby -v
   register: installed_ruby
-  ignore_errors: True
-
-- name: print ruby version
-  debug:
-    var: installed_ruby
+  ignore_errors: true
+  changed_when: false
 
 - name: install Ruby "{{ ruby_version }}"
   apt:
     name: ["{{ ruby_version }}", "{{ ruby_version }}-dev", "ruby-switch"]
     state: present
-    update_cache: true
   when: installed_ruby.rc !=0 or installed_ruby.stdout.split()[1] != ruby_version
   register: packages_installed
 
