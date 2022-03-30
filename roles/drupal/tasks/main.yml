@@ -1,22 +1,22 @@
 ---
-- name: Install dependencies
-  apt:
+- name: drupal | Install dependencies
+  ansible.builtin.apt:
     name: ["cifs-utils"]
     state: present
 
-- name: install mysql php driver
-  apt:
+- name: drupal | install mysql php driver
+  ansible.builtin.apt:
     name: ["libapache2-mod-php7.4", "php7.4-gd", "php7.4-mysql", "php7.4-xml"]
     state: present
     update_cache: true
 
-- name: Check to see if settings.php home file exists.
-  stat:
+- name: drupal | Check to see if settings.php home file exists.
+  ansible.builtin.stat:
     path: "{{ drupal_docroot }}"
   register: drupal_docroot_exists
 
-- name: create drupal docroot
-  file:
+- name: drupal | create drupal docroot
+  ansible.builtin.file:
     path: "{{ drupal_docroot }}"
     state: directory
     owner: "{{ systems_user }}"
@@ -27,16 +27,16 @@
   become: true
   when: not drupal_docroot_exists.stat.exists
 
-- name: allow temporary full permissions
-  file:
+- name: drupal | allow temporary full permissions
+  ansible.builtin.file:
     path: "{{ drupal_docroot }}"
     mode: 0777
     state: directory
   become: true
   changed_when: false
 
-- name: clone the drupal repo
-  git:
+- name: drupal | clone the drupal repo
+  ansible.builtin.git:
     repo: "{{ drupal_git_repo }}"
     version: "{{ drupal_version_branch | default('master') }}"
     dest: "{{ drupal_docroot }}"
@@ -45,12 +45,11 @@
     key_file: "{{ drupal_key_file | default(omit) }}"
     clone: true
     update: true
-
   become: true
   when: running_on_server and (drupal_git_repo is defined) and (drupal_git_repo)
 
-- name: grant permissions on deploy user
-  file:
+- name: drupal | grant permissions on deploy user
+  ansible.builtin.file:
     path: "{{ drupal_docroot }}"
     state: directory
     owner: "www-data"
@@ -60,8 +59,8 @@
     mode: 0775
   changed_when: false
 
-- name: create composer directory
-  file:
+- name: drupal | create composer directory
+  ansible.builtin.file:
     path: "{{ drush_path }}/vendor"
     state: directory
     owner: "{{ deploy_user }}"
@@ -73,8 +72,8 @@
   changed_when: false
   # TODO: This changed when should be removed when we upgrade to molecule 3
 
-- name: Drupal | Run composer if we are running D8
-  composer:
+- name: drupal | Run composer if we are running D8
+  community.general.composer:
     command: require
     working_dir: "{{ drush_path }}"  # need to make a better decision for this
   become: false
@@ -83,13 +82,13 @@
   changed_when: false
   # TODO: This changed when should be removed when we upgrade to molecule 3
 
-- name: Check for the sites files directory.
-  stat:
+- name: drupal | Check for the sites files directory.
+  ansible.builtin.stat:
     path: "{{ drupal_docroot }}/sites/default/files"
   register: file_dir_exists
 
-- name: Drupal | Give appropriate permissions for files directory
-  file:
+- name: drupal | Give appropriate permissions for files directory
+  ansible.builtin.file:
     dest: "{{ drupal_docroot }}/sites/default/files"
     recurse: true
     state: directory
@@ -98,16 +97,16 @@
   when: not file_dir_exists.stat.exists
 
 # Create Mounts
-- name: Create mount directories
-  file:
+- name: drupal | Create mount directories
+  ansible.builtin.file:
     path: '/mnt/{{ item }}'
     state: 'directory'
     mode: 0755
   with_items:
     - drupal_fileshare_mount
 
-- name: Copy smb credentials
-  copy:
+- name: drupal | Copy smb credentials
+  ansible.builtin.copy:
     src: 'files/{{ item }}'
     dest: '/etc/{{ item }}'
     mode: 0644
@@ -115,8 +114,8 @@
     - drupalweb.smb.credentials
   when: running_on_server
 
-- name: Mount Drupal fileshare
-  mount:
+- name: drupal | Mount Drupal fileshare
+  ansible.builtin.mount:
     name: '/mnt/diglibdata/drupalweb'
     src: '//lib-smb-serve.princeton.edu/library_shared_data'
     fstype: cifs
@@ -125,16 +124,16 @@
   become: true
   when: running_on_server
 
-- name: Create directory for drush site alias
-  file:
+- name: drupal | Create directory for drush site alias
+  ansible.builtin.file:
     path: "/etc/drush"
     state: directory
     owner: "{{ systems_user }}"
     group: "{{ systems_user }}"
     mode: 0755
 
-- name: Install drush site alias for drupal 7
-  template:
+- name: drupal | Install drush site alias for drupal 7
+  ansible.builtin.template:
     src: "aliases_drushrc_php.j2"
     dest: "/etc/drush/aliases.drushrc.php"
     owner: "{{ systems_user }}"
@@ -142,8 +141,8 @@
     mode: 0644
   when: drupal_major_version == 7
 
-- name: Install drush site alias for drupal 8
-  template:
+- name: drupal | Install drush site alias for drupal 8
+  ansible.builtin.template:
     src: "prod.site.yml.j2"
     dest: "/home/{{ deploy_user }}/prod.site.yml"
     owner: "{{ systems_user }}"
@@ -151,13 +150,13 @@
     mode: 0644
   when: drupal_major_version == 8
 
-- name: Check to see if settings.php home file exists.
-  stat:
+- name: drupal | Check to see if settings.php home file exists.
+  ansible.builtin.stat:
     path: "/home/{{ deploy_user }}/settings.php"
   register: settings_php_home_exists
 
-- name: Install settings.php
-  template:
+- name: drupal | Install settings.php
+  ansible.builtin.template:
     src: "settings.php.j2"
     dest: "/home/{{ deploy_user }}/settings.php"
     owner: "{{ deploy_user }}"
@@ -165,33 +164,28 @@
     mode: 0644
   when: not settings_php_home_exists.stat.exists or force_settings
 
-- name: install npm for git actions
-  apt:
+- name: drupal | install npm for git actions
+  ansible.builtin.apt:
     name: ["nodejs-dev", "node-gyp", "npm", "libssl1.0-dev"]
     state: build-dep
     update_cache: true
   changed_when: false
   when: not running_on_server
 
-- name: Install php7.4 requirements for drupal
-  apt:
+- name: drupal | Install php7.4 requirements for drupal
+  ansible.builtin.apt:
     name: ["php7.4-common", "php7.4-mbstring", "sendmail"]
     state: present
     update_cache: true
 
-- name: Install gulp globally
-  npm:
+- name: drupal | Install gulp globally
+  community.general.npm:
     name: gulp-cli
     global: true
   become: true
 
-- name: disable apache php7.2 module
-  apache2_module:
-    state: absent
-    name: php7.2
-
-- name: enable apache php7.4 module
-  apache2_module:
+- name: drupal | enable apache php7.4 module
+  community.general.apache2_module:
     state: present
     name: php7.4
   notify: restart apache
