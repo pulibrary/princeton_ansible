@@ -1,13 +1,13 @@
 ---
 
 - name: ensure required packages are present
-  apt:
+  ansible.builtin.apt:
     name: ['apache2']
     state: present
     update_cache: true
 
 - name: install apache modules
-  apache2_module:
+  community.general.apache2_module:
     name: "{{ item }}"
     state: present
   notify: restart apache
@@ -19,7 +19,7 @@
     - vhost_alias
 
 - name: check for update of config needed
-  lineinfile:
+  ansible.builtin.lineinfile:
     dest: "/etc/apache2/sites-available/000-default.conf"
     line: "    DocumentRoot {{ apache.docroot }}"
     state: present
@@ -29,7 +29,7 @@
   register: update_config
 
 - name: modify the default apache site
-  template:
+  ansible.builtin.template:
     src: "vhosts24.conf.j2"
     dest: "/etc/apache2/sites-available/000-default.conf"
     mode: 0644
