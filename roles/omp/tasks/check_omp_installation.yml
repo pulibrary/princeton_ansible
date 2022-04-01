@@ -8,14 +8,16 @@
   args:
     chdir: "{{ omp_home }}"
   register: omp_installation_flag
-  ignore_errors: true
   changed_when: false
+  when:
+    - running_on_server
 
 - name: omp | set installation flag fact true if indicated
   ansible.builtin.set_fact:
     omp_is_installed: true
-  when: omp_installation_flag.stdout.find('On') != -1
-  ignore_errors: true
+  when:
+    - omp_installation_flag.stdout.find('On') != -1
+    - running_on_server
 
 - name: omp | Is omp already installed?
   debug:
