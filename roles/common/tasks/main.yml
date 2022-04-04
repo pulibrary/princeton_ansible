@@ -1,9 +1,4 @@
 ---
-- name: common | update cache
-  ansible.builtin.apt:
-    update_cache: true
-    cache_valid_time: 600
-
 - name: common | Add apt HTTPS capabilities.
   ansible.builtin.apt:
     name: "{{ item }}"
@@ -14,7 +9,7 @@
     - apt-transport-https
 
 - name: common | get yarn key
-  apt_key:
+  ansible.builtin.apt_key:
     url: https://dl.yarnpkg.com/debian/pubkey.gpg
     state: present
 
@@ -26,7 +21,7 @@
   changed_when: false
 
 - name: common | copy tmux.conf
-  template:
+  ansible.builtin.template:
     src: "tmux.conf.j2"
     dest: "/etc/tmux.conf"
     mode: 0644
@@ -37,13 +32,13 @@
     state: present
 
 - name: common | add vector repository configuration
-  get_url:
+  ansible.builtin.get_url:
     url: https://repositories.timber.io/public/vector/cfg/setup/bash.deb.sh
     dest: /tmp/bash.deb.sh
   changed_when: false
 
 - name: common | add vector repository
-  command: bash /tmp/bash.deb.sh
+  ansible.builtin.command: bash /tmp/bash.deb.sh
   become: true
   changed_when: false
 
