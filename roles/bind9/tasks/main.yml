@@ -1,11 +1,11 @@
 ---
-- name: Install local nameserver
-  apt:
+- name: bind9 | Install local nameserver
+  ansible.builtin.apt:
     name: ["bind9"]
     state: present
 
-- name: Start nameserver
-  service:
+- name: bind9 | Start nameserver
+  ansible.builtin.service:
     name: bind9
     enabled: true
     state: started
@@ -13,15 +13,15 @@
 #####
 # Note these are not tested because docker will not allow it
 #
-- name: Remove other nameservers
-  lineinfile:
+- name: bind9 | Remove other nameservers
+  ansible.builtin.lineinfile:
     dest: "/etc/resolv.conf"
     state: absent
     regexp: '.*nameserver.*'
   when: running_on_server
 
-- name: Use local dns nameserver
-  lineinfile:
+- name: bind9 | Use local dns nameserver
+  ansible.builtin.lineinfile:
     dest: "/etc/resolv.conf"
     state: present
     line: 'nameserver 127.0.0.53'
