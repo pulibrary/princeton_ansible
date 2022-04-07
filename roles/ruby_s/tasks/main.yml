@@ -1,12 +1,15 @@
 ---
 - name: ruby | check version
-  ansible.builtin.command: ruby -v
+  ansible.builtin.shell: ruby -v | awk '{print $2}'
   register: installed_ruby
   ignore_errors: true
-  changed_when: false
+
+- name: prints out the installed_ruby variables
+  ansible.builtin.debug:
+    msg: ruby version "{{ installed_ruby.stdout }}"
 
 - include_tasks: cleanup.yml
-  when: installed_ruby.failed
+  when: not "{{ 'desired_ruby_version' in installed_ruby.stdout }}"
 
 - name: ruby |lookup download path and checksum from ruby-lang release index
   ansible.builtin.shell: curl https://cache.ruby-lang.org/pub/ruby/index.txt | grep {{ ruby_version }}.tar.gz
