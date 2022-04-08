@@ -81,7 +81,6 @@
   when:
     - postgresql_is_local
     - running_on_server
-    # - inventory_hostname in groups["gcp_postgresql_leader"]
 
 - name: PostgreSQL | register leader
   ansible.builtin.command: repmgr -f {{ repmgr_config }} primary register --force -S postgres
@@ -95,7 +94,6 @@
   when:
     - running_on_server
     - postgresql_is_local
-    # - inventory_hostname in groups["gcp_postgresql_leader"]
   ignore_errors: true
 
 - name: PostsgreSQL | stop postgres on standby
@@ -106,7 +104,6 @@
   when:
     - running_on_server
     - postgresql_is_local
-    # - inventory_hostname in groups["gcp_postgresql_standby"]
 
 - name: PostgreSQL | remove pg data
   ansible.builtin.file:
@@ -116,7 +113,6 @@
   when:
     - running_on_server
     - postgresql_is_local
-    # - inventory_hostname in groups["gcp_postgresql_standby"]
 
 - name: PostgreSQL | cloning standby
   ansible.builtin.command: repmgr -h {{ leader_db_host }} -U replicant -d replicant -f {{ repmgr_config }} standby clone -F
@@ -126,7 +122,6 @@
   when:
     - running_on_server
     - postgresql_is_local
-    # - inventory_hostname in groups["gcp_postgresql_standby"]
 
 - name: PostgreSQL | start postgres
   ansible.builtin.service:
@@ -136,7 +131,6 @@
   when:
     - running_on_server
     - postgresql_is_local
-    # - inventory_hostname in groups["gcp_postgresql_standby"]
 
 - name: PostgreSQL | register standby
   ansible.builtin.command: repmgr -f {{ repmgr_config }} standby register --force
@@ -147,7 +141,6 @@
   when:
     - running_on_server
     - postgresql_is_local
-    # - inventory_hostname in groups["gcp_postgresql_standby"]
   notify:
     - save repmgr log
     - restart postgresql
