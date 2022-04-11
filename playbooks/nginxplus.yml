@@ -3,13 +3,13 @@
 # to update configuration for existing sites, run with '-t update_conf' for example `ansible-playbook -v --limit lib-adc2.princeton.edu playbooks/nginxplus_production.yml -t update_conf`
 # to replace SSL certificates and keys, run with `-t SSL`
 
-- name: update nginx
+- name: update loadbalancer configuration
   hosts: nginxplus
   remote_user: pulsys
   strategy: linear
   become: true
 
-# updates existing load balancer
+  # updates existing load balancer
   roles:
     - role: ../roles/nginxplus
 
@@ -21,7 +21,7 @@
 
   tasks:
     - name: nginxplus | restart nginx for realsies
-      service: 
+      service:
         name: nginx
         state: restarted
       tags: always
@@ -30,6 +30,6 @@
     - name: tell everyone on slack you ran an ansible playbook
       slack:
         token: "{{ vault_pul_slack_token }}"
-        msg: "{{ inventory_hostname }} completed"
+        msg: "Ansible ran `{{ ansible_play_name }}` on {{ inventory_hostname }}"
         channel: #server-alerts
       tags: always
