@@ -6,6 +6,15 @@ Installs a generic rails app
 
 None.
 
+## Using Ruby 3.x
+
+By default, this role uses ruby 2.7. To instead use 3.x, define the following variables:
+
+```
+install_ruby_from_source: true
+ruby_version_override: "ruby-3.0.3"
+```
+
 ## Role Variables
 
 Available variables are listed below, along with default values (see `defaults/main.yml`):
