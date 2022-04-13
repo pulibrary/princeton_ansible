@@ -8,7 +8,8 @@
     msg: ruby version "{{ installed_ruby.stdout }}"
 
 - include_tasks: cleanup.yml
-  when: installed_ruby.stdout != "{{ desired_ruby_version }}"
+  when:
+    - installed_ruby.stdout | length > 0 and installed_ruby.stdout != "{{ desired_ruby_version }}"
 
 - name: ruby |lookup download path and checksum from ruby-lang release index
   ansible.builtin.shell: curl https://cache.ruby-lang.org/pub/ruby/index.txt | grep {{ ruby_version }}.tar.gz
