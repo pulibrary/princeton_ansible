@@ -16,6 +16,9 @@
 # $ ansible-playbook -e project_name=libwww -e dest_host=mysql-db-staging1.princeton.edu playbooks/mysql_db_migration.yml --limit maria-staging1.princeton.edu
 # and to restore:
 # $ ansible-playbook -e project_name=libwww -e dest_host=mysql-db-staging1.princeton.edu --tags never playbooks/mysql_db_migration.yml --limit maria-staging1.princeton.edu
+#
+# If you utilize the common pattern in your vars then remember to uncomment the `group_vars/{{ project_name }}/common.yml` below
+#
 - name: dump and restore mysql databases
   hosts: mysql_{{ runtime_env | default('staging') }}
   remote_user: pulsys
@@ -26,6 +29,7 @@
     - now: "{{ ansible_date_time.date }}"
   vars_files:
     - ../group_vars/{{ project_name }}/{{ runtime_env | default('staging') }}.yml
+    - ../group_vars/{{ project_name }}/common.yml
     - ../group_vars/{{ project_name }}/vault.yml
 
   tasks:
@@ -39,26 +43,29 @@
     - name: run a database dump
       community.mysql.mysql_db:
         state: dump
-        name: "{{ mysql_databases.name }}"
-        target: "{{ file_path }}/{{ now }}/{{ mysql_databases.name }}.dump.sql"
+        name: "{{ item.name }}"
+        target: "{{ file_path }}/{{ now }}/{{ item.name }}.dump.sql"
       # async allows for long-running tasks
       # sets the timeout to 30 minutes, checks every minute
       async: 1800
       poll: 60
+      loop: "{{ mysql_databases | default([]) }}"
 
     - name: gzip dumped database
       community.general.archive:
-        path: "{{ file_path }}/{{ now }}/{{ mysql_databases.name }}.dump.sql"
-        dest: "{{ file_path }}/{{ now }}/{{ mysql_databases.name }}.dump.gz"
+        path: "{{ file_path }}/{{ now }}/{{ item.name }}.dump.sql"
+        dest: "{{ file_path }}/{{ now }}/{{ item.name }}.dump.gz"
         format: gz
         force_archive: true
+      loop: "{{ mysql_databases | default([]) }}"
 
     - name: file permissions
       ansible.builtin.file:
-        path: "{{ file_path }}/{{ now }}/{{ mysql_databases.name }}.dump.gz"
+        path: "{{ file_path }}/{{ now }}/{{ item.name }}.dump.gz"
         owner: "{{ deploy_user }}"
         group: "{{ deploy_user }}"
         mode: 0644
+      loop: "{{ mysql_databases | default([]) }}"
 
     - name: create /var/lib/migrate on dest_host
       ansible.builtin.file:
@@ -68,38 +75,75 @@
         state: directory
       delegate_to: "{{ dest_host }}"
 
-    - name: transfer the databases
-      ansible.builtin.command: /usr/bin/rsync -avz "{{ file_path }}/{{ now }}/{{ mysql_databases.name }}.dump.gz" "{{ dest_host }}:{{ file_path }}/{{ now }}" -e "ssh -o StrictHostKeyChecking=no"
+    - name: generate SSH key mysql_sync_key
+      community.crypto.openssh_keypair:
+        path: "~/.ssh/mysql_sync_key"
+        type: rsa
+        size: 4096
+        state: present
+        force: no
       become: true
       become_user: "{{ deploy_user }}"
 
-    - name: unzip dumped database on dest_host
+    - name: Fetch the mysql_sync_key from the current database host
+      run_once: yes
+      ansible.builtin.fetch: 
+        src: "~/.ssh/mysql_sync_key.pub"
+        dest: "/tmp/"
+        flat: yes
+      become: true
+      become_user: "{{ deploy_user }}"
+
+    - name: push the mysql_sync_key to {{ dest_host }}
+      ansible.builtin.copy: 
+        src: /tmp/mysql_sync_key.pub
+        dest: /tmp/
+      delegate_to: "{{ dest_host }}"
+
+    - name: install the key
+      ansible.posix.authorized_key:
+        user: "{{ deploy_user }}"
+        state: present
+        key: "{{ lookup('file', '/tmp/mysql_sync_key.pub') }}"
+      delegate_to: "{{ dest_host }}"
+      
+    - name: transfer the databases
+      ansible.builtin.command: /usr/bin/rsync -avz "{{ file_path }}/{{ now }}/{{ item.name }}.dump.gz" "{{ dest_host }}:{{ file_path }}/{{ now }}" -e "ssh -o StrictHostKeyChecking=no -i ~/.ssh/mysql_sync_key"
+      become: true
+      become_user: "{{ deploy_user }}"
+      loop: "{{ mysql_databases | default([]) }}"
+disable php apache module
+    - name: unzip dumped database on {{ dest_host }}
       ansible.builtin.unarchive:
-        src: "{{ file_path }}/{{ now }}/{{ mysql_databases.name }}.dump.gz"
+        src: "{{ file_path }}/{{ now }}/{{ item.name }}.dump.gz"
         dest: "{{ file_path }}/{{ now }}/"
         remote_src: true
         mode: 0644
       delegate_to: "{{ dest_host }}"
       tags: never
+      loop: "{{ mysql_databases | default([]) }}"
 
-    - name: create mysql user '{{ mysql_users.name }}'
+    - name: create mysql user
       community.mysql.mysql_user:
-        name: "{{ mysql_users.name }}"
-        host: "{{ mysql_users.host }}"
-        password: "{{ mysql_users.password }}"
-        priv: "{{ mysql_users.priv }}"
+        name: "{{ item.name }}"
+        host: "{{ item.host }}"
+        password: "{{ item.password }}"
+        priv: "{{ item.priv }}"
         update_password: on_create
         state: 'present'
+      loop: "{{ mysql_users | default([]) }}"
       delegate_to: "{{ dest_host }}"
       tags: never
 
-    - name: Restore the database with name "{{ mysql_databases.name }}"
+    - name: Restore the database
       community.mysql.mysql_db:
         login_host: "{{ mysql_host }}"
         login_password: "{{ mysql_root_password }}"
         login_user: "root"
         state: "import"
-        target: "{{ file_path }}/{{ now }}/{{ mysql_databases.name }}.sql"
+        target: "{{ file_path }}/{{ now }}/{{ item.name }}.dump.sql"
+        name: "{{ item.name }}"
+      loop: "{{ mysql_databases | default([]) }}"
       delegate_to: "{{ dest_host }}"
       async: 1800
       poll: 60
@@ -109,5 +153,6 @@
     - name: tell everyone on slack you ran an ansible playbook
       slack:
         token: "{{ vault_pul_slack_token }}"
-        msg: "{{ inventory_hostname }} backed up {{ application_db_name }}"
+        msg: "{{ inventory_hostname }} backed up {{ item.name }}"
         channel: #server-alerts
+      loop: "{{ mysql_databases | default([]) }}"
