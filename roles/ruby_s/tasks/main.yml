@@ -1,18 +1,21 @@
 ---
 - name: ruby | check version
-  ansible.builtin.shell: ruby -v | awk '{print $2}'
+  ansible.builtin.shell: ruby -v | awk "{print $2}"
   register: installed_ruby
+  changed_when: false
 
 - name: prints out the installed_ruby variables
   ansible.builtin.debug:
     msg: ruby version "{{ installed_ruby.stdout }}"
 
 - include_tasks: cleanup.yml
-  when: installed_ruby.stdout != "{{ desired_ruby_version }}"
+  when:
+    - installed_ruby.stdout | length > 0 and installed_ruby.stdout != "{{ desired_ruby_version }}"
 
 - name: ruby |lookup download path and checksum from ruby-lang release index
   ansible.builtin.shell: curl https://cache.ruby-lang.org/pub/ruby/index.txt | grep {{ ruby_version }}.tar.gz
   register: ruby_index_line
+  changed_when: false
 
 - name: ruby | separate index entry values
   ansible.builtin.set_fact:
@@ -54,14 +57,17 @@
 
 - name: ruby | make ruby
   ansible.builtin.shell: cd {{ install_path }}/{{ ruby_version }} && make
+  changed_when: false
 
 - name: ruby | install ruby
   ansible.builtin.shell: cd {{ install_path }}/{{ ruby_version }} && make install
   become: true
+  changed_when: false
 
 - name: ruby | update rubygems
   ansible.builtin.command: gem update --system
   become: true
+  changed_when: false
 
 - name: ruby | install global bundler, specific version
   community.general.gem:
