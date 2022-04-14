@@ -3,20 +3,18 @@
   community.general.gem:
     name: bundler
     state: absent
-  when: running_on_server
+  changed_when: false
 
 - name: ruby | remove installed ruby
   ansible.builtin.apt:
     name: ["{{ ubuntu_ruby_version }}", "{{ ubuntu_ruby_version }}-dev", "ruby-switch"]
     state: absent
     update_cache: true
-  when: running_on_server
 
 - name: ruby | remove the Brightbox repository
   ansible.builtin.apt_repository:
     repo: "ppa:brightbox/ruby-ng"
     state: absent
-  when: running_on_server
 
 - name: ruby | uninstall bundler to get specific version
   community.general.gem:
@@ -26,4 +24,3 @@
   changed_when: false
   when:
     - bundler_version is defined
-    - running_on_server
