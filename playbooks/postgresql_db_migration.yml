@@ -1,17 +1,43 @@
 # NOTE
-# You must use command-line "extra variables" to use this playbook. They are
-# used to specify the host group, and the value of the db_name you intend to backup
-# and the flag for the remote host e.g.:
-# $ ansible-playbook -e db_name=oawaiver_staging -e origin_host=lib-postgres-staging1.princeton.edu -e remote_host=lib-postgres-prod1.princeton.edu playbooks/postgresql_db_migration.yml # to back up
-# $ ansible-playbook -e db_name=oawaiver_staging -e origin_host=lib-postgres-staging1.princeton.edu -e remote_host=lib-postgres-prod1.princeton.edu --tags never playbooks/postgresql_db_migration.yml
+# If you are backing up `bibdata` please be sure to notify the @dacs team to turn off scheduling of publishing jobs in alma
+# You must use command-line "extra variables" with this playbook to define:
+# - the project_name you intend to backup
+# - the host where the current database lives, with --limit 
+# - the dest_host (where you want the database backup to go)
+#
+# By default, this playbook runs against the staging infrastructure
+# to backup from production, pass -e runtime_env=production
+# since backups should come from a single server, not a group, be sure to pass a limit
+# For example: --limit lib-postgres-staging1.princeton.edu
+#
+# By default, the playbook creates a backup, but it does not restore
+# To restore, run the playbook a second time, and pass --tags never
+#
+# For example, to back up:
+# $ ansible-playbook -e project_name=bibdata -e dest_host=lib-postgres-staging3.princeton.edu playbooks/postgresql_db_migration.yml --limit lib-postgres-prod1.princeton.edu
+# and to restore:
+# $ ansible-playbook -e project_name=bibdata -e dest_host=lib-postgres-staging3.princeton.edu --tags never playbooks/postgresql_db_migration.yml --limit lib-postgres-prod1.princeton.edu
+
 ---
-- hosts: postgres_hosts
+- name: dump and restore postgresql databases
+  hosts: postgresql_{{ runtime_env | default('staging') }}
+# To-do: once the "big postgres PR" goes in, can we use:
+# - hosts: "{{ leader_db_host }}" ?
   remote_user: pulsys
   become: true
+# we would need to add
+# /path/to/group_vars/postgresql/
+# where leader_db_host is defined for all pgsql machines
+# to the vars_files: section
   vars:
     - deploy_user: "pulsys"
     - file_path: "/var/lib/migrate"
     - now: "{{ ansible_date_time.date }}"
+  vars_files:
+    - ../group_vars/{{ project_name }}/{{ runtime_env | default('staging') }}.yml
+    # - ../group_vars/{{ project_name }}/main.yml  # some roles have this
+    - ../group_vars/{{ project_name }}/vault.yml
+
   tasks:
     - name: Create a backup directory
       file:
@@ -23,40 +49,102 @@
     - name: run a database dump
       postgresql_db:
         state: dump
-        name: "{{ db_name }}"
-        target: "{{ file_path }}/{{ now }}/{{ db_name }}.dump.sql"
+        name: "{{ application_db_name }}"
+        target: "{{ file_path }}/{{ now }}/{{ application_db_name }}.dump.sql"
       become: true
       become_user: postgres
-      ignore_errors: true
+      # async allows for long-running tasks
+      # sets the timeout to 30 minutes, checks every minute
+      async: 1800
+      poll: 60
+
+    - name: gzip dumped database
+      community.general.archive:
+        path: "{{ file_path }}/{{ now }}/{{ application_db_name }}.dump.sql"
+        dest: "{{ file_path }}/{{ now }}/{{ application_db_name }}.dump.gz"
+        format: gz
+        force_archive: true
 
     - name: file permissions
       ansible.builtin.file:
-        path: "{{ file_path }}/{{ now }}/{{ db_name }}.dump.gz"
+        path: "{{ file_path }}/{{ now }}/{{ application_db_name }}.dump.gz"
         owner: "{{ deploy_user }}"
         group: "{{ deploy_user }}"
         mode: 0644
 
-    - name: transfer of databases
-      ansible.builtin.command: /usr/bin/rsync -avz "{{ file_path }}/{{ now }}/{{ db_name }}.dump.gz" "{{ remote_host }}:{{ file_path }}/{{ now }}" -e "ssh -o StrictHostKeyChecking=no"
+    - name: create /var/lib/migrate on dest_host
+      file:
+        path: "/var/lib/migrate/{{ now }}/"
+        mode: 0777
+        owner: "{{ deploy_user }}"
+        state: directory
+      delegate_to: "{{ dest_host }}"
+
+    - name: transfer the databases
+      ansible.builtin.command: /usr/bin/rsync -avz "{{ file_path }}/{{ now }}/{{ application_db_name }}.dump.gz" "{{ dest_host }}:{{ file_path }}/{{ now }}" -e "ssh -o StrictHostKeyChecking=no"
       become: true
       become_user: "{{ deploy_user }}"
 
-    - name: Create a new database with name "{{ db_name }}"
-      community.postgresql.postgresql_db:
-        name: "{{ db_name }}"
-      become: true
-      become_user: postgres
+    - name: unzip dumped database on dest_host
+      ansible.builtin.unarchive:
+        src: "{{ file_path }}/{{ now }}/{{ application_db_name }}.dump.gz"
+        dest: "{{ file_path }}/{{ now }}/"
+        remote_src: true
+        owner: postgres
+        group: postgres
+        mode: 0644
+      delegate_to: "{{ dest_host }}"
       tags: never
 
+#  To-do - can we use the existing task files from the postgresql role here?:
+#    - name: import the postgresql user creation tasks
+#      import_tasks: ../roles/postgresql/tasks/create_user.yml
 
-    - name: Restore the database
-      community.postgresql.postgresql_db:
-        state: restore
-        name: "{{ db_name }}"
-        target: "{{ file_path }}/{{ now }}/{{ db_name }}.dump.sql"
+    - name: create postgresql user '{{ application_dbuser_name }}'
+      postgresql_user:
+        name: '{{ application_dbuser_name }}'
+        port: '{{ postgres_port | default(omit) }}'
+        login_host: '{{ postgres_host | default(omit) }}'
+        login_user: '{{ postgres_admin_user | default(omit) }}'
+        login_password: '{{ postgres_admin_password | default(omit) }}'
+        password: '{{ application_dbuser_password }}'
+        encrypted: true
+        role_attr_flags: '{{ application_dbuser_role_attr_flags }}'
+        state: 'present'
       become: true
       become_user: postgres
-      delegate_to: "{{ remote_host }}"
+      delegate_to: "{{ dest_host }}"
+      tags: never
+
+    - name: create the new database with name "{{ application_db_name }}"
+      community.postgresql.postgresql_db:
+        name: "{{ application_db_name }}"
+        encoding: 'UTF-8'
+        login_host: '{{ postgres_host | default(omit) }}'
+        login_user: '{{ postgres_admin_user | default(omit) }}'
+        login_password: '{{ postgres_admin_password | default(omit) }}'
+        owner: '{{ application_dbuser_name }}'
+        state: 'present'
+      become: true
+      become_user: postgres
+      delegate_to: "{{ dest_host }}"
+      tags: never
+
+    - name: Restore the database with name "{{ application_db_name }}"
+      community.postgresql.postgresql_db:
+        name: "{{ application_db_name }}"
+        encoding: 'UTF-8'
+        login_host: '{{ postgres_host | default(omit) }}'
+        login_user: '{{ postgres_admin_user | default(omit) }}'
+        login_password: '{{ postgres_admin_password | default(omit) }}'
+        owner: '{{ application_dbuser_name }}'
+        target: "{{ file_path }}/{{ now }}/{{ application_db_name }}.dump.sql"
+        state: 'restore'
+      become: true
+      become_user: postgres
+      delegate_to: "{{ dest_host }}"
+      async: 1800
+      poll: 60
       tags: never
 
 
@@ -64,5 +152,5 @@
     - name: tell everyone on slack you ran an ansible playbook
       slack:
         token: "{{ vault_pul_slack_token }}"
-        msg: "{{ inventory_hostname }} backed up {{ db_name }}"
+        msg: "{{ inventory_hostname }} backed up {{ application_db_name }}"
         channel: #server-alerts

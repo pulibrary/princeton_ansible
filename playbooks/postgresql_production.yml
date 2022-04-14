@@ -1,14 +1,27 @@
 ---
-- hosts: postgresql_production
+- name: install a replication postgresql cluster
+  hosts: postgresql_production
   remote_user: pulsys
   become: true
   vars_files:
     - ../group_vars/postgresql/production.yml
+    - ../host_vars/lib-postgres-prod3.princeton.edu.yml
+    - ../host_vars/lib-postgres-prod2.princeton.edu.yml
     - ../group_vars/postgresql/vault.yml
   roles:
-    - role: ../roles/postgresql
+    - role: datadog
+    - role: postgresql
 
   post_tasks:
+    - name: Replace node identifier on "{{ leader_db_host }}"
+      ansible.builtin.lineinfile:
+        path: /etc/repmgr.conf
+        regexp: "node_id=2"
+        line: "node_id=1"
+        owner: root
+        group: root
+        mode: '0644'
+      delegate_to: "{{ leader_db_host }}"
     - name: tell everyone on slack you ran an ansible playbook
       slack:
         token: "{{ vault_pul_slack_token }}"

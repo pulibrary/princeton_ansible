@@ -1,0 +1,19 @@
+---
+# use the `--limit you-project-vm1.princeton.edu` flag to select the vm that needs updated certificates
+- name: update expired TLS certificates
+  hosts: all
+  remote_user: pulsys
+  become: true
+  tasks:
+    - name: Update apt
+      ansible.builtin.apt:
+        name: ca-certificates
+        update_cache: true
+        force_apt_get: true
+
+  post_tasks:
+    - name: tell everyone on slack you ran an ansible playbook
+      community.general.slack:
+        token: "{{ vault_pul_slack_token }}"
+        msg: "Ansible ran `{{ ansible_play_name }}` on {{ inventory_hostname }}"
+        channel: #server-alerts

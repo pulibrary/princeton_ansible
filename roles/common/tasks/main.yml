@@ -1,18 +1,6 @@
 ---
-- name: Remove specified repository from sources list
-  ansible.builtin.apt_repository:
-    repo: 'deb https://oss-binaries.phusionpassenger.com/apt/passenger {{ ansible_distribution_release }} main'
-    state: absent
-  changed_when: false
-  ignore_errors: true
-
-- name: common | update cache
-  apt:
-    update_cache: true
-    cache_valid_time: 600
-
 - name: common | Add apt HTTPS capabilities.
-  apt:
+  ansible.builtin.apt:
     name: "{{ item }}"
     state: present
     update_cache: true
@@ -21,48 +9,47 @@
     - apt-transport-https
 
 - name: common | get yarn key
-  apt_key:
+  ansible.builtin.apt_key:
     url: https://dl.yarnpkg.com/debian/pubkey.gpg
     state: present
 
 - name: common | install building software and build essentials
-  apt:
+  ansible.builtin.apt:
     name: '{{ common_packages }}'
     state: present
     update_cache: true
   changed_when: false
 
 - name: common | copy tmux.conf
-  template:
+  ansible.builtin.template:
     src: "tmux.conf.j2"
     dest: "/etc/tmux.conf"
     mode: 0644
 
 - name: common | install configured dependencies
-  apt:
+  ansible.builtin.apt:
     name: '{{ configured_dependencies }}'
     state: present
 
-- name: common | add vector repository
-  get_url:
+- name: common | add vector repository configuration
+  ansible.builtin.get_url:
     url: https://repositories.timber.io/public/vector/cfg/setup/bash.deb.sh
     dest: /tmp/bash.deb.sh
   changed_when: false
 
 - name: common | add vector repository
-  command: bash /tmp/bash.deb.sh
+  ansible.builtin.command: bash /tmp/bash.deb.sh
   become: true
   changed_when: false
 
 - name: common | install vector
-  apt:
+  ansible.builtin.apt:
     name: vector
-  ignore_errors: true
   when: running_on_server
 
 - name: common | install duf
-  apt:
-    deb: "{{ duf_url }}/v{{ duf_version }}/duf_0.6.0_linux_amd64.deb"
+  ansible.builtin.apt:
+    deb: "{{ duf_url }}/v{{ duf_version }}/duf_{{ duf_version }}_linux_amd64.deb"
   register: duf_repo
   retries: 3
   delay: 60

@@ -1,0 +1,31 @@
+---
+# Run this role with --tags clean to drop the database and start over
+- name: omp | CLEAN INSTALL ONLY drop database if it exists
+  postgresql_db:
+    login_host: "{{ postgres_host }}"
+    login_user: "{{ omp_db_user }}"
+    login_password: "{{ omp_db_password }}"
+    name: "{{ omp_db_name }}"
+    state: absent
+  tags: ['never', 'clean']
+
+- name: omp | CLEAN INSTALL ONLY recreate database
+  postgresql_db:
+    login_host: "{{ postgres_host }}"
+    login_user: "{{ omp_db_user }}"
+    login_password: "{{ omp_db_password }}"
+    name: "{{ omp_db_name }}"
+    state: present
+  tags: ['never', 'clean']
+
+- name: omp | CLEAN INSTALL ONLY remove config file if it exists
+  ansible.builtin.file:
+    path: "{{ omp_home }}/config.inc.php"
+    state: absent
+  tags: ['never', 'clean']
+
+- name: omp | CLEAN INSTALL ONLY remove any previous instance of install script
+  ansible.builtin.file:
+    path: "{{ omp_home }}/script.exp"
+    state: absent
+  tags: ['never', 'clean']
