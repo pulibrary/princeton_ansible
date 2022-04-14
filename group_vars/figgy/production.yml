@@ -6,8 +6,7 @@ postgres_version: 10
 passenger_server_name: "figgy.princeton.edu"
 passenger_app_root: "/opt/figgy/current/public"
 passenger_app_env: "production"
-nodejs__upstream_release: 'node_12.x'
-nodejs__upstream_key_id: '68576280'
+desired_nodejs_version: "v12.22.6"
 figgy_db_name: 'figgy_production'
 figgy_db_user: '{{vault_figgy_db_user}}'
 figgy_db_password: '{{vault_figgy_db_password}}'
@@ -26,14 +25,13 @@ figgy_pudl_root: '{{vault_figgy_pudl_root}}'
 figgy_ezid_shoulder: '{{vault_figgy_ezid_shoulder}}'
 figgy_ezid_username: '{{vault_figgy_ezid_username}}'
 figgy_ezid_password: '{{vault_figgy_ezid_password}}'
-figgy_svn_user: '{{vault_figgy_svn_user}}'
-figgy_svn_pass: '{{vault_figgy_svn_pass}}'
-figgy_svn_url: '{{vault_figgy_svn_url}}'
-figgy_svn_dir: '{{vault_figgy_svn_dir}}'
+figgy_geoserver_user: '{{ vault_figgy_geoserver_user }}'
+figgy_geoserver_password: '{{ vault_figgy_geoserver_password }}'
 rabbitmq_user: '{{figgy_rabbit_user}}'
 rabbitmq_password: '{{figgy_rabbit_password}}'
 rails_app_env: "production"
-figgy_solr_name: figgy-staging
+figgy_solr_name: figgy-production
+solr_port: "8983"
 figgy_host_name: 'figgy.princeton.edu'
 figgy_honeybadger_key: '{{vault_figgy_honeybadger_key}}'
 application_db_name: '{{figgy_db_name}}'
@@ -46,7 +44,7 @@ application_host: '{{passenger_server_name}}'
 application_host_protocol: 'https'
 project_db_host: '{{postgres_host}}'
 redis_bind_interface: '0.0.0.0'
-figgy_solr_url: 'http://lib-solr8-prod.princeton.edu:8983/solr/figgy-production'
+figgy_solr_url: 'http://lib-solr8-prod.princeton.edu:{{solr_port}}/solr/{{figgy_solr_name}}'
 rails_app_vars:
   - name: SECRET_KEY_BASE
     value: '{{vault_figgy_secret_key}}'
@@ -98,18 +96,16 @@ rails_app_vars:
     value: '{{ vault_figgy_google_client_secret }}'
   - name: GEOSERVER_DERIVATIVES_PATH
     value: '{{ vault_figgy_geoserver_derivatives_path }}'
-  - name: GEOSERVER_URL
+  - name: GEOSERVER_BASE_URL
     value: 'https://geoserver.princeton.edu/geoserver'
+  - name: GEOSERVER_URL
+    value: 'https://geoserver.princeton.edu/geoserver/rest'
+  - name: GEOSERVER_USER
+    value: '{{ figgy_geoserver_user }}'
+  - name: GEOSERVER_PASSWORD
+    value: '{{ figgy_geoserver_password }}'
   - name: MEDIAINFO_PATH
     value: '/usr/bin/mediainfo'
-  - name: SVN_USER
-    value: '{{figgy_svn_user}}'
-  - name: SVN_PASS
-    value: '{{figgy_svn_pass}}'
-  - name: SVN_URL
-    value: '{{figgy_svn_url}}'
-  - name: SVN_DIR
-    value: '{{figgy_svn_dir}}'
   - name: STORAGE_CREDENTIALS
     value: '/home/{{deploy_user}}/cloud_config/google_cloud_credentials.json'
   - name: STORAGE_PROJECT
@@ -172,8 +168,8 @@ cantaloupe_create_FilesystemCache_dir: yes
 cantaloupe_version: 3.3.2
 cantaloupe_KakaduProcessor_path_to_binaries: /opt/kakadu
 cantaloupe_log_application_level: all
-passenger_ruby: "/usr/bin/ruby2.6"
-ruby_version_override: "ruby2.6"
+passenger_ruby: "/usr/bin/ruby2.7"
+ruby_version_override: "ruby2.7"
 bundler_version: "2.2.16"
 passenger_extra_config: "{{ lookup('file', 'roles/figgy/templates/nginx_extra_config')  }}"
 simple_tiles_version: 0.6.0

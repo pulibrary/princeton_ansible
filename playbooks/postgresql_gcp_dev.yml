@@ -1,0 +1,30 @@
+---
+- name: google cloud demo machines
+  hosts: gcp_postgres_dev
+  remote_user: pulsys
+  become: true
+  vars_files:
+    - ../host_vars/gcp_postgres_dev1.yml
+    - ../group_vars/gcp/dev.yml
+    - ../group_vars/postgresql/gcp_dev.yml
+    - ../group_vars/postgresql/vault.yml
+  roles:
+    - role: ../roles/postgresql
+
+- hosts: gcp_postgres-dev2
+  remote_user: pulsys
+  become: true
+  vars_files:
+    - ../host_vars/gcp_postgres_dev2.yml
+    - ../group_vars/gcp/dev.yml
+    - ../group_vars/postgresql/gcp_dev.yml
+    - ../group_vars/postgresql/vault.yml
+  roles:
+    - role: ../roles/postgresql
+
+  post_tasks:
+    - name: tell everyone on slack you ran an ansible playbook
+      slack:
+        token: "{{ vault_pul_slack_token }}"
+        msg: "{{ inventory_hostname }} completed"
+        channel: #server-alerts

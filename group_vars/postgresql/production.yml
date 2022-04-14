@@ -1,7 +1,8 @@
 ---
-postgresql_version: "13"
+postgres_version: "13"
 db_clusteradmin_user: "postgres"
 db_clusteradmin_password: "{{ vault_postgres_admin_password }}"
+replication_user_password: "{{ vault_replicant_password }}"
 postgresql_settings:
   - name: port
     value: 5432
@@ -9,27 +10,41 @@ postgresql_settings:
     value: "*"
 postgresql_ext_install_postgis: true
 postgresql_databases:
-  - name: test_db
+  - name: replicant
+  - name: postgres
 postgresql_users:
   - name: postgres
     password: "{{ vault_postgres_admin_password }}"
     db: "postgres"
     priv: "ALL"
     role_attr_flags: "SUPERUSER"
-postgresql_hba_entries:
-  - type: local
-    database: all
-    user: postgres
-    method: ident
-  - type: host
-    database: all
-    user: postgres
-    address: 127.0.0.1/32
-    method: ident
-  - type: host
-    database: all
-    user: postgres
-    address: 127.0.0.1/32
-    method: md5
-postgres_leader: "lib-postgres-prod1"
-postgres_standby: "lib-postgres-prod2"
+  - name: replicant
+    password: "{{ vault_replicant_password }}"
+    db: "replicant"
+    priv: "ALL"
+    role_attr_flags: "SUPERUSER"
+postgres_leader: "{{ leader_db_ip }}"
+postgres_standby: "{{ standby_db_ip }}"
+postgresql_is_local: true
+postgresadmin: "postgres"
+postgres_admin_password: '{{ vault_postgres_admin_password }}'
+replication_user: "replicant"
+replication_database: "replicant"
+postgres_host: "{{ leader_db_ip }}"
+postgres_port: 5432
+postgres_admin_user: "{{ postgresadmin }}"
+
+datadog_api_key: "{{ vault_datadog_key }}"
+datadog_config:
+  log_enabled: true
+datadog_typed_checks:
+  - type: file
+    configuration:
+      init_config:
+      logs:
+        - type: file
+          path: /var/lib/postgresql/{{ postgres_version }}/main/pg_log/*.csv
+          service: database
+          source: postgresql
+          sourcecategory: postgresql_logs
+          tags: "postgresql, env:prod, role:postgresql"

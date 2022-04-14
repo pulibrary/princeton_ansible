@@ -1,25 +1,25 @@
 ---
-- name: check for ruby role apps
-  shell: dpkg-query -W 'ruby-switch'
+- name: rvm | check for ruby role apps
+  ansible.builtin.shell: dpkg-query -W 'ruby-switch'
   ignore_errors: true
   changed_when: false
   register: switch
 
-- name: uninstall global bundler
-  gem:
+- name: rvm | uninstall global bundler
+  community.general.gem:
     name: bundler
     state: absent
   when: switch is success
 
-- name: remove installed ruby
-  apt:
-    name: ["ruby2.4", "ruby2.4-dev", "ruby-switch"]
+- name: rvm | remove installed ruby
+  ansible.builtin.apt:
+    name: ["ruby2.7", "ruby2.7-dev", "ruby-switch"]
     state: absent
     update_cache: true
   when: switch is success
 
-- name: remove the Brightbox repository
-  apt_repository:
+- name: rvm | remove the Brightbox repository
+  ansible.builtin.apt_repository:
     repo: "ppa:brightbox/ruby-ng"
     state: absent
   when: switch is success

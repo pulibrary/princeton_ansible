@@ -7,18 +7,11 @@
     owner: "{{ deploy_user }}"
     mode: 0755
 
-- name: check for ezproxy version
-  command: /var/local/ezproxy/ezproxy -v
-  register: ezproxy_version
-  ignore_errors: true
-  changed_when: false
-
 - name: Ezproxy | copy ezproxy binary
   copy:
     src: "files/ezproxy.bin"
     dest: "/var/local/ezproxy/ezproxy"
     mode: 0755
-  when: ezproxy_version is search('6')
 
 - name: Ezproxy | install dependencies for 64bit
   apt:
@@ -30,13 +23,34 @@
   command: /var/local/ezproxy/ezproxy -m
   become: true
   become_user: "{{ deploy_user }}"
-  ignore_errors: true
   changed_when: false
+  when:
+    - running_on_server
 
 - name: Ezproxy | run command with WSKey
   command: /var/local/ezproxy/ezproxy -k "{{ oclc_wskey }}"
   become: true
   changed_when: false
+  when: running_on_server
+
+- name: Ezproxy | create ezproxy tls directory
+  file:
+    path: "/var/local/ezproxy/tls"
+    state: directory
+    group: "{{ deploy_user }}"
+    owner: "{{ deploy_user }}"
+    mode: 0755
+
+- name: Ezproxy | move certificate files
+  ansible.builtin.copy:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+    recurse: true
+  loop:
+    - {src: "files/tls/certs/*", dest: "/var/local/ezproxy/tls/"}
+    - {src: "files/tls/priv/*", dest: "/var/local/ezproxy/tls/"}
   when: running_on_server
 
 - name: Ezproxy | Creates a log directory for ezproxy
@@ -47,6 +61,12 @@
     group: "{{ deploy_user }}"
     mode: 0755
   become: true
+
+- name: Ezproxy | rotate the logs
+  template:
+    src: ezproxy.j2
+    dest: '/etc/logrotate.d/ezproxy'
+    mode: 0644
 
 - name: Ezproxy | Create app directory
   file:
@@ -66,19 +86,6 @@
     owner: "{{ deploy_user }}"
     group: "{{ deploy_user }}"
 
-- name: Ezproxy | Clone EZproxy Repo
-  git:
-    repo: "{{ ezproxy_git_repo }}"
-    version: "{{ ezproxy_default_branch }}"
-    dest: "{{ ezproxy_repo_root }}"
-    accept_hostkey: true
-    clone: true
-    update: false
-  ignore_errors: true
-  become: true
-  become_user: "{{ deploy_user }}"
-  when: running_on_server
-
 - name: Ezproxy | chmod back permissions
   file:
     path: "{{ ezproxy_repo_root }}"
@@ -89,7 +96,7 @@
     group: "{{ deploy_user }}"
   become: true
 
-- name: Ezproxy | Clone EZproxy blacklist
+- name: Ezproxy | Clone EZproxy blacklist (sic) repo
   git:
     repo: "https://github.com/prbutler/EZProxy_IP_Blacklist.git"
     version: 'master'
@@ -98,7 +105,7 @@
     update: true
   become: true
 
-- name: Ezproxy | Assigns blacklist repo to ezproxy user
+- name: Ezproxy | Assigns deny list repo to ezproxy user
   file:
     path: "/var/local/ezproxy/EZProxy_IP_Blacklist"
     state: directory
@@ -132,26 +139,6 @@
     hour: 8
     job: "/usr/bin/geoipupdate"
   when: running_on_server
-
-- name: create base config file
-  copy:
-    src: "{{ ezproxy_repo_root }}/config.txt.tmp"
-    dest: "/var/local/ezproxy/config.txt"
-    owner: "{{ deploy_user }}"
-    group: "{{ deploy_user }}"
-    mode: 0644
-    remote_src: true
-  ignore_errors: true
-
-- name: setting up user.txt file
-  copy:
-    src: "{{ ezproxy_repo_root }}/user.txt.tmp"
-    dest: "/var/local/ezproxy/user.txt"
-    owner: "{{ deploy_user }}"
-    group: "{{ deploy_user }}"
-    mode: 0644
-    remote_src: true
-  ignore_errors: true
 
 - name: Ezproxy | assign hostname
   template:

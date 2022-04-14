@@ -1,0 +1,23 @@
+datadog_api_key: "{{vault_datadog_key}}"
+datadog_config:
+  tags: "zookeeper, env:production, role:zookeeper"
+  apm_enabled: "false"
+  log_enabled: true
+  process_config:
+    enabled: "false"
+datadog_checks:
+  zk:
+    init_config:
+    instances:
+      - host: localhost
+        port: 2181
+    logs:
+      - type: file
+        path: /var/log/zookeeper/zookeeper.log
+        source: zookeeper
+        service: zookeeper
+          #To handle multi line that starts with yyyy-mm-dd use the following pattern
+        log_processing_rules:
+          - type: multi_line
+            name: start_with_date
+            pattern: \d{4}\-(0?[1-9]|1[012])\-(0?[1-9]|[12][0-9]|3[01])
