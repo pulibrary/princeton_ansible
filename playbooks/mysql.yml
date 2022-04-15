@@ -1,0 +1,37 @@
+---
+# by default this playbook runs in the staging environment
+# to run in production, pass '-e runtime_env=production'
+- name: installs mysql on staging environment
+  hosts: mysql_{{ runtime_env | default('staging') }}
+  remote_user: pulsys
+  become: true
+  vars_files:
+    - ../group_vars/mysql/{{ runtime_env | default('staging') }}.yml
+    - ../group_vars/mysql/vault.yml
+  pre_tasks:
+
+    - name: test for python on new VM
+      raw: test -e /usr/bin/python
+      changed_when: false
+      failed_when: false
+      register: check_python
+
+    - name: Install Python  # this has to be raw in the event python is not installed 
+      raw: apt -y update && apt install -y python-minimal python-pip
+      when: check_python.rc != 0
+
+    - name: Upgrade all apt packages
+      apt:
+        upgrade: dist
+        force_apt_get: true
+
+  roles:
+    - role: ../roles/mysql
+
+  post_tasks:
+    - name: tell everyone on slack you ran an ansible playbook
+      when: runtime_env == production
+      community.general.slack:
+        token: "{{ vault_pul_slack_token }}"
+        msg: "Ansible ran `{{ ansible_play_name }}` on {{ inventory_hostname }}"
+        channel: #server-alerts
