@@ -1,7 +1,7 @@
 ---
 # by default this playbook runs in the staging environment
 # to run in production, pass '-e runtime_env=production'
-- name: installs mysql on staging environment
+- name: installs mysql
   hosts: mysql_{{ runtime_env | default('staging') }}
   remote_user: pulsys
   become: true
@@ -27,10 +27,10 @@
 
   roles:
     - role: ../roles/mysql
+    - role: ../roles/datadog
 
   post_tasks:
     - name: tell everyone on slack you ran an ansible playbook
-      when: runtime_env == production
       community.general.slack:
         token: "{{ vault_pul_slack_token }}"
         msg: "Ansible ran `{{ ansible_play_name }}` on {{ inventory_hostname }}"
