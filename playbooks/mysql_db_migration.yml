@@ -1,0 +1,158 @@
+---
+# You must use command-line "extra variables" with this playbook to define:
+# - the project_name you intend to backup
+# - the host where the current database lives, with --limit 
+# - the dest_host (where you want the database backup to go)
+#
+# By default, this playbook runs against the staging infrastructure
+# to backup from production, pass -e runtime_env=production
+# since backups should come from a single server, not a group, be sure to pass a limit
+# For example: --limit mariadb-staging1.princeton.edu
+#
+# By default, the playbook creates a backup, but it does not restore
+# To restore, run the playbook a second time, and pass --tags never
+#
+# For example, to back up:
+# $ ansible-playbook -e project_name=libwww -e dest_host=mysql-db-staging1.princeton.edu playbooks/mysql_db_migration.yml --limit maria-staging1.princeton.edu
+# and to restore:
+# $ ansible-playbook -e project_name=libwww -e dest_host=mysql-db-staging1.princeton.edu --tags never playbooks/mysql_db_migration.yml --limit maria-staging1.princeton.edu
+#
+# If you utilize the common pattern in your vars then remember to uncomment the `group_vars/{{ project_name }}/common.yml` below
+#
+- name: dump and restore mysql databases
+  hosts: mysql_{{ runtime_env | default('staging') }}
+  remote_user: pulsys
+  become: true
+  vars:
+    - deploy_user: "pulsys"
+    - file_path: "/var/lib/migrate"
+    - now: "{{ ansible_date_time.date }}"
+  vars_files:
+    - ../group_vars/{{ project_name }}/{{ runtime_env | default('staging') }}.yml
+    - ../group_vars/{{ project_name }}/common.yml
+    - ../group_vars/{{ project_name }}/vault.yml
+
+  tasks:
+    - name: Create a backup directory
+      ansible.builtin.file:
+        path: "/var/lib/migrate/{{ now }}/"
+        mode: 0755
+        owner: "{{ deploy_user }}"
+        state: directory
+
+    - name: run a database dump
+      community.mysql.mysql_db:
+        state: dump
+        name: "{{ item.name }}"
+        target: "{{ file_path }}/{{ now }}/{{ item.name }}.dump.sql"
+      # async allows for long-running tasks
+      # sets the timeout to 30 minutes, checks every minute
+      async: 1800
+      poll: 60
+      loop: "{{ mysql_databases | default([]) }}"
+
+    - name: gzip dumped database
+      community.general.archive:
+        path: "{{ file_path }}/{{ now }}/{{ item.name }}.dump.sql"
+        dest: "{{ file_path }}/{{ now }}/{{ item.name }}.dump.gz"
+        format: gz
+        force_archive: true
+      loop: "{{ mysql_databases | default([]) }}"
+
+    - name: file permissions
+      ansible.builtin.file:
+        path: "{{ file_path }}/{{ now }}/{{ item.name }}.dump.gz"
+        owner: "{{ deploy_user }}"
+        group: "{{ deploy_user }}"
+        mode: 0644
+      loop: "{{ mysql_databases | default([]) }}"
+
+    - name: create /var/lib/migrate on dest_host
+      ansible.builtin.file:
+        path: "/var/lib/migrate/{{ now }}/"
+        mode: 0755
+        owner: "{{ deploy_user }}"
+        state: directory
+      delegate_to: "{{ dest_host }}"
+
+    - name: generate SSH key mysql_sync_key
+      community.crypto.openssh_keypair:
+        path: "~/.ssh/mysql_sync_key"
+        type: rsa
+        size: 4096
+        state: present
+        force: no
+      become: true
+      become_user: "{{ deploy_user }}"
+
+    - name: Fetch the mysql_sync_key from the current database host
+      run_once: yes
+      ansible.builtin.fetch: 
+        src: "~/.ssh/mysql_sync_key.pub"
+        dest: "/tmp/"
+        flat: yes
+      become: true
+      become_user: "{{ deploy_user }}"
+
+    - name: push the mysql_sync_key to {{ dest_host }}
+      ansible.builtin.copy: 
+        src: /tmp/mysql_sync_key.pub
+        dest: /tmp/
+      delegate_to: "{{ dest_host }}"
+
+    - name: install the key
+      ansible.posix.authorized_key:
+        user: "{{ deploy_user }}"
+        state: present
+        key: "{{ lookup('file', '/tmp/mysql_sync_key.pub') }}"
+      delegate_to: "{{ dest_host }}"
+      
+    - name: transfer the databases
+      ansible.builtin.command: /usr/bin/rsync -avz "{{ file_path }}/{{ now }}/{{ item.name }}.dump.gz" "{{ dest_host }}:{{ file_path }}/{{ now }}" -e "ssh -o StrictHostKeyChecking=no -i ~/.ssh/mysql_sync_key"
+      become: true
+      become_user: "{{ deploy_user }}"
+      loop: "{{ mysql_databases | default([]) }}"
+
+    - name: unzip dumped database on {{ dest_host }}
+      ansible.builtin.unarchive:
+        src: "{{ file_path }}/{{ now }}/{{ item.name }}.dump.gz"
+        dest: "{{ file_path }}/{{ now }}/"
+        remote_src: true
+        mode: 0644
+      delegate_to: "{{ dest_host }}"
+        #      tags: never
+      loop: "{{ mysql_databases | default([]) }}"
+
+    - name: create mysql user
+      community.mysql.mysql_user:
+        name: "{{ item.name }}"
+        host: "{{ item.host }}"
+        password: "{{ item.password }}"
+        priv: "{{ item.priv }}"
+        update_password: on_create
+        state: 'present'
+      loop: "{{ mysql_users | default([]) }}"
+      delegate_to: "{{ dest_host }}"
+      tags: never
+
+    - name: Restore the database
+      community.mysql.mysql_db:
+        login_host: "{{ mysql_host }}"
+        login_password: "{{ mysql_root_password }}"
+        login_user: "root"
+        state: "import"
+        target: "{{ file_path }}/{{ now }}/{{ item.name }}.dump.sql"
+        name: "{{ item.name }}"
+      loop: "{{ mysql_databases | default([]) }}"
+      delegate_to: "{{ dest_host }}"
+      async: 1800
+      poll: 60
+      tags: never
+
+  post_tasks:
+    - name: tell everyone on slack you ran an ansible playbook
+      slack:
+        token: "{{ vault_pul_slack_token }}"
+        msg: "{{ inventory_hostname }} backed up {{ item.name }}"
+        channel: #server-alerts
+      loop: "{{ mysql_databases | default([]) }}"
