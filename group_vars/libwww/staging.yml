@@ -19,11 +19,17 @@ apache_app_path: '/var/www/library_cap/current'
 ### Uncomment this to force a dump file to be imported
 # drupal_dbimport_file: 'dump.sql'
 
+# the 30 is the length of the host name in quotes and is needed to be correct if you change this
+search_api_solr_host: '30:"lib-solr-staging.princeton.edu"'
+
+# the 20 is the length of the path in the quotes and is needed to be correct if you change the path
+search_api_solr_path: '20:"/solr/libwww-staging"'
+
 ### Uncomment this to force a dump file to be imported
 # drupal_dbimport_file: 'dump.sql'
 
-db_host: "maria-staging1.princeton.edu"
-db_password: "{{ vault_xtradb_root_password }}"
+db_host: "mysql-db-staging1.princeton.edu"
+root_db_password: "{{ vault_maria_mysql_root_password }}"
 db_port: "{{ drupal_db_port }}"
 mariadb__server: "{{ db_host }}"
 catalog_url: "https://catalog-qa.princeton.edu"
@@ -41,3 +47,18 @@ mailcatcher_group: "pulsys"
 mailcatcher_install_location: "/var/lib/gems/2.6.0/gems/mailcatcher-0.7.1/bin/mailcatcher"
 bundler_version: '2.2.19'
 desired_nodejs_version: "v11.15.0"
+
+mysql_server: false
+
+mysql_host: "mmysql-db-staging1.princeton.edu"
+mysql_root_password: "{{ vault_maria_mysql_root_password }}"
+mysql_databases:
+    - name: "{{ drupal_db_name }}"
+      encoding: utf8mb4
+      collation: utf8mb4_general_ci
+mysql_users:
+    - name: "{{ drupal_db_user }}"
+      host: "{{ ansible_default_ipv4.address }}"
+      password: "{{ drupal_db_password }}"
+      priv: "{{ drupal_db_name }}.*:ALL"
+      update_password: on_create
