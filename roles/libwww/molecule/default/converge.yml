@@ -1,18 +1,33 @@
 ---
 - name: Converge
   hosts: all
+  pre_tasks:
+    - name: install iproute
+      apt:
+        name: iproute2
+        state: present
+        update_cache: true
+    - name: rerun setup
+      setup:
+        gather_subset:
+          - network
+  vars_files:
+    - ../../../../group_vars/libwww/common.yml
   vars:
     - running_on_server: false
     - mysql_root_password: 'change_me'
     - drupal_major_version: 7
     - root_db_password: change_me
-    - mysql_server: true  # allows mysql to be installed
-    - db_is_mysql: true
+    - db_host: localhost
+    - db_password: '{{ mysql_root_password }}'
     ### Uncomment this to force a dump file to be imported
     # - drupal_dbimport_file: 'dump.sql'
     # go back to this once percona db staging is up and running.
     # - mariadb__server: 'maria-staging1.princeton.edu'
   tasks:
+    - name: "Include roles/molecule_mariadb for local database"
+      include_role:
+        name: "molecule_mariadb"
     - name: "Include roles/libwww"
       include_role:
         name: "libwww"
