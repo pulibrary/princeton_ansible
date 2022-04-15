@@ -1,10 +1,12 @@
 ---
-- name: installs mysql on staging
-  hosts: mysql-db-staging1.princeton.edu
+# by default this playbook runs in the staging environment
+# to run in production, pass '-e runtime_env=production'
+- name: installs mysql on staging environment
+  hosts: mysql_{{ runtime_env | default('staging') }}
   remote_user: pulsys
   become: true
   vars_files:
-    - ../group_vars/mysql/mysql_staging.yml
+    - ../group_vars/mysql/{{ runtime_env | default('staging') }}.yml
     - ../group_vars/mysql/vault.yml
   pre_tasks:
 
@@ -28,7 +30,8 @@
 
   post_tasks:
     - name: tell everyone on slack you ran an ansible playbook
-      slack:
+      when: runtime_env == production
+      community.general.slack:
         token: "{{ vault_pul_slack_token }}"
-        msg: "{{ inventory_hostname }} completed"
+        msg: "Ansible ran `{{ ansible_play_name }}` on {{ inventory_hostname }}"
         channel: #server-alerts
