@@ -39,3 +39,15 @@
       - "capistrano_shared_dir.stat['pw_name'] != 'deploy'"
       - "capistrano_shared_dir.stat['gr_name'] != 'deploy'"
       - "capistrano_shared_dir.stat['mode'] != 0775"
+
+  - name: "Ensure that a 3.0 release of Ruby is installed" # noqa no-changed-when
+    ansible.builtin.command:
+      cmd: "/usr/bin/env ruby --version"
+    failed_when:
+      - "'ruby 3.0' not in result.stdout"
+
+  - name: "Ensure that a 2.3 release of the Bundler Gem is installed" # noqa no-changed-when
+    ansible.builtin.command:
+      cmd: "/usr/bin/env gem info bundler"
+    failed_when:
+      - "'bundler (2.3' not in result.stdout"
