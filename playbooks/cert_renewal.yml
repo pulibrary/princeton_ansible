@@ -1,10 +1,14 @@
 ---
+# automates step 1 of https://github.com/pulibrary/pul-the-hard-way/blob/main/services/create_ssl_certs.md
 # you must pass two variables:
 # pass the first element of the FQDN as '-e host_name=value'
 # for example: '-e host_name=fun' would generate a cert for fun.princeton.edu
 # also pass the path of the directory where you want the key and cert to live
 # with no trailing slash
 # for example: '-e cert_path=/home/foo/ssl_certs'
+# if your cert needs one or more Subject Alt Names, pass a third variable for those
+# for example: "-e SAN_name='DNS:altname.princeton.edu,DNS:otheraltname.princeton.edu'"
+# once you have the private key and CSR, return to https://github.com/pulibrary/pul-the-hard-way/blob/main/services/create_ssl_certs.md for next steps
 - name: Generate a new cert and key
   hosts: localhost
   tasks:
@@ -26,6 +30,7 @@
       email_address: lsupport@princeton.edu
       organization_name: "The Trustees of Princeton University"
       organizational_unit_name: OIT
+      subject_alt_name: "{{ SAN_name | default(omit) }}"
 
 # Do we need this bit of config?
 # default_bits = 2048
