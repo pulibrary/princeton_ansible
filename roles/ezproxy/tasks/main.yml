@@ -1,6 +1,6 @@
 ---
 - name: Ezproxy | create ezproxy directory
-  file:
+  ansible.builtin.file:
     path: "/var/local/ezproxy"
     state: directory
     group: "{{ deploy_user }}"
@@ -8,19 +8,19 @@
     mode: 0755
 
 - name: Ezproxy | copy ezproxy binary
-  copy:
+  ansible.builtin.copy:
     src: "files/ezproxy.bin"
     dest: "/var/local/ezproxy/ezproxy"
     mode: 0755
 
 - name: Ezproxy | install dependencies for 64bit
-  apt:
+  ansible.builtin.apt:
     name: ["lib32ncurses5", "lib32z1"]
     state: present
     update_cache: true
 
 - name: Ezproxy | install missing file replacements
-  command: /var/local/ezproxy/ezproxy -m
+  ansible.builtin.command: /var/local/ezproxy/ezproxy -m
   become: true
   become_user: "{{ deploy_user }}"
   changed_when: false
@@ -28,13 +28,13 @@
     - running_on_server
 
 - name: Ezproxy | run command with WSKey
-  command: /var/local/ezproxy/ezproxy -k "{{ oclc_wskey }}"
+  ansible.builtin.command: /var/local/ezproxy/ezproxy -k "{{ oclc_wskey }}"
   become: true
   changed_when: false
   when: running_on_server
 
 - name: Ezproxy | create ezproxy tls directory
-  file:
+  ansible.builtin.file:
     path: "/var/local/ezproxy/tls"
     state: directory
     group: "{{ deploy_user }}"
@@ -54,7 +54,7 @@
   when: running_on_server
 
 - name: Ezproxy | Creates a log directory for ezproxy
-  file:
+  ansible.builtin.file:
     path: "/var/local/ezproxy/log"
     state: directory
     owner: "{{ deploy_user }}"
@@ -63,13 +63,13 @@
   become: true
 
 - name: Ezproxy | rotate the logs
-  template:
+  ansible.builtin.template:
     src: ezproxy.j2
     dest: '/etc/logrotate.d/ezproxy'
     mode: 0644
 
 - name: Ezproxy | Create app directory
-  file:
+  ansible.builtin.file:
     path: "{{ ezproxy_repo_root }}"
     state: directory
     owner: "{{ deploy_user }}"
@@ -79,7 +79,7 @@
   become: true
 
 - name: Ezproxy | Ensure .ssh directory exists.
-  file:
+  ansible.builtin.file:
     path: "/home/{{ deploy_user }}/.ssh"
     state: directory
     mode: 0700
@@ -87,7 +87,7 @@
     group: "{{ deploy_user }}"
 
 - name: Ezproxy | chmod back permissions
-  file:
+  ansible.builtin.file:
     path: "{{ ezproxy_repo_root }}"
     state: directory
     recurse: true
@@ -96,17 +96,23 @@
     group: "{{ deploy_user }}"
   become: true
 
+- name: Ezproxy | make repo safe
+  ansible.builtin.command: git config --global --add safe.directory /var/local/ezproxy/EZProxy_IP_Blacklist
+  become: true
+  changed_when: false
+
 - name: Ezproxy | Clone EZproxy blacklist (sic) repo
-  git:
+  ansible.builtin.git:
     repo: "https://github.com/prbutler/EZProxy_IP_Blacklist.git"
     version: 'master'
     dest: "/var/local/ezproxy/EZProxy_IP_Blacklist"
     clone: true
     update: true
+    force: true
   become: true
 
 - name: Ezproxy | Assigns deny list repo to ezproxy user
-  file:
+  ansible.builtin.file:
     path: "/var/local/ezproxy/EZProxy_IP_Blacklist"
     state: directory
     mode: 0755
@@ -115,25 +121,25 @@
   become: true
 
 - name: Ezproxy | add geoip ppa
-  apt_repository:
+  ansible.builtin.apt_repository:
     repo: "ppa:maxmind/ppa"
     state: present
 
 - name: Ezproxy | install geoupdate
-  apt:
+  ansible.builtin.apt:
     name: geoipupdate
     state: present
     update_cache: true
 
 - name: Ezproxy | add geoip configuration file
-  template:
+  ansible.builtin.template:
     src: geoip_conf.j2
     dest: "/etc/GeoIP.conf"
     mode: 0644
   when: running_on_server
 
 - name: Ezproxy | run a cronjob to update
-  cron:
+  ansible.builtin.cron:
     name: "run the update"
     minute: 49
     hour: 8
@@ -141,7 +147,7 @@
   when: running_on_server
 
 - name: Ezproxy | assign hostname
-  template:
+  ansible.builtin.template:
     src: "hostname.txt.j2"
     dest: "/var/local/ezproxy/hostname.txt"
     owner: "{{ deploy_user }}"
@@ -149,14 +155,14 @@
     mode: 0644
 
 - name: Ezproxy | install ezproxy startup script (requires root)
-  command: /var/local/ezproxy/ezproxy -si
+  ansible.builtin.command: /var/local/ezproxy/ezproxy -si
   become: true
   become_user: 'root'
   changed_when: false
   when: running_on_server
 
 - name: Ezproxy | copy ezproxy init.d
-  copy:
+  ansible.builtin.copy:
     src: "files/ezproxy"
     dest: /etc/init.d/ezproxy
     owner: root
@@ -165,13 +171,13 @@
   changed_when: false
 
 - name: Ezproxy | start ezproxy
-  service:
+  ansible.builtin.service:
     name: ezproxy
     state: started
   when: running_on_server
 
 - name: Ezproxy | enable ezproxy
-  service:
+  ansible.builtin.service:
     name: ezproxy
     enabled: true
   when: running_on_server
