@@ -1,6 +1,6 @@
 ---
 - name: PostgreSQL | create postgresql db users
-  community.general.postgresql_user:
+  community.postgresql.postgresql_user:
     name: '{{ application_dbuser_name }}'
     port: '{{ postgres_port }}'
     login_host: '{{ postgres_host }}'
@@ -16,15 +16,15 @@
   changed_when: false
 
 - name: PostgreSQL | create postgresql db server users
-  community.general.postgresql_user:
+  community.postgresql.postgresql_user:
     name: "{{ item.name }}"
     #    login_host: "{{ item.host }}"
     password: "{{ item.password }}"
     encrypted: true
-    priv: "{{ item.priv | default(omit) }}" # least privilege is better
+    priv: "{{ item.priv | default(omit) }}"  # least privilege is better
     state: "present"
     db: "{{ item.db }}"
-    role_attr_flags: "{{ item.role_attr_flags | default(omit) }}" # see above
+    role_attr_flags: "{{ item.role_attr_flags | default(omit) }}"  # see above
   delegate_to: '{{ postgres_host }}'
   when:
     - running_on_server
@@ -37,7 +37,7 @@
   no_log: true
 
 - name: PostgreSQL | change postgresql database owner
-  community.general.postgresql_db:
+  community.postgresql.postgresql_db:
     name: "{{ application_db_name }}"
     port: "{{ postgres_port }}"
     login_host: "{{ postgres_host }}"
