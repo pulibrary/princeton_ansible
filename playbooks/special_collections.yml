@@ -1,5 +1,8 @@
 ---
-- hosts: special_collections_staging
+# by default this playbook runs in the staging environment
+# to run in production, pass '-e runtime_env=production'
+- name: build special collections website
+  hosts: special_collections_{{ runtime_env | default('staging') }}
   remote_user: pulsys
   become: true
   vars:
@@ -10,17 +13,17 @@
         - run a cap for special_collections
         - where needed make sure server is greenlisted on [lib-ponyexpress](https://github.com/pulibrary/pul-the-hard-way/blob/master/services/smtp-mail-server.md)
   vars_files:
-    - ../group_vars/special_collections/special_collections_staging.yml
+    - ../group_vars/special_collections/{{ runtime_env | default('staging') }}.yml
     - ../group_vars/special_collections/vault.yml
-    # need information to connect to solr staging cluster
   roles:
+    - role: datadog
     - role: special_collections
 
   post_tasks:
     - name: tell everyone on slack you ran an ansible playbook
-      slack:
+      community.general.slack:
         token: "{{ vault_pul_slack_token }}"
-        msg: "{{ inventory_hostname }} completed"
+        msg: "Ansible ran `{{ ansible_play_name }}` on {{ inventory_hostname }}"
         channel: #server-alerts
 
     - name: post role reminders
