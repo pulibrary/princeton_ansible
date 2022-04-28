@@ -1,0 +1,21 @@
+---
+# by default this playbook runs in the staging environment
+# to run in production, pass '-e runtime_env=production'
+- name: build the princeton and slavery site
+  hosts: pas_{{ runtime_env | default('staging') }}
+  remote_user: pulsys
+  become: true
+  vars_files:
+    - ../group_vars/pas/{{ runtime_env | default('staging') }}.yml
+    - ../group_vars/pas/vault.yml
+  vars:
+    - pas_upload_path: 'pas/pas-production'
+  roles:
+    - role: roles/datadog
+    - role: roles/pas
+  post_tasks:
+    - name: tell everyone on slack you ran an ansible playbook
+      community.general.slack:
+        token: "{{ vault_pul_slack_token }}"
+        msg: "Ansible ran `{{ ansible_play_name }}` on {{ inventory_hostname }}"
+        channel: #server-alerts
