@@ -81,21 +81,21 @@
         type: rsa
         size: 4096
         state: present
-        force: no
+        force: false
       become: true
       become_user: "{{ deploy_user }}"
 
     - name: Fetch the mysql_sync_key from the current database host
-      run_once: yes
-      ansible.builtin.fetch: 
+      run_once: true
+      ansible.builtin.fetch:
         src: "~/.ssh/mysql_sync_key.pub"
         dest: "/tmp/"
-        flat: yes
+        flat: true
       become: true
       become_user: "{{ deploy_user }}"
 
     - name: push the mysql_sync_key to {{ dest_host }}
-      ansible.builtin.copy: 
+      ansible.builtin.copy:
         src: /tmp/mysql_sync_key.pub
         dest: /tmp/
       delegate_to: "{{ dest_host }}"
@@ -106,7 +106,7 @@
         state: present
         key: "{{ lookup('file', '/tmp/mysql_sync_key.pub') }}"
       delegate_to: "{{ dest_host }}"
-      
+
     - name: transfer the databases
       ansible.builtin.command: /usr/bin/rsync -avz "{{ file_path }}/{{ now }}/{{ item.name }}.dump.gz" "{{ dest_host }}:{{ file_path }}/{{ now }}" -e "ssh -o StrictHostKeyChecking=no -i ~/.ssh/mysql_sync_key"
       become: true
