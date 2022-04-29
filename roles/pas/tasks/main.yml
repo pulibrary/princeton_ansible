@@ -1,19 +1,19 @@
 ---
 # tasks file for roles/pas
 - name: pas | Install php7.2 requirements for craft
-  apt:
+  ansible.builtin.apt:
     name: ["php7.4-gd", "php7.4-json", "php7.4-mbstring", "php7.4-mysql", "php7.4-zip", "php7.4-intl", "php7.4-dom"]
     state: present
     update_cache: true
 
 - name: Install other packages
-  apt:
+  ansible.builtin.apt:
     name: ["cifs-utils", "zip"]
     state: present
     update_cache: true
 
 - name: Install apache2 requirements for craft
-  apache2_module:
+  community.general.apache2_module:
     name: "{{ item }}"
     state: present
   notify: restart apache
@@ -23,32 +23,32 @@
     - proxy_fcgi
 
 - name: Install "sass" node.js package globally.
-  npm:
+  community.general.npm:
     name: sass
     global: true
   ignore_errors: true
 
 - name: Install "grunt-cli" node.js package globally.
-  npm:
+  community.general.npm:
     name: grunt-cli
     global: true
   ignore_errors: true
 
 - name: Create mount directories
-  file:
+  ansible.builtin.file:
     path: '/mnt/diglibdata1'
     state: 'directory'
     mode: '0755'
 
 - name: Copy smb credentials
-  copy:
+  ansible.builtin.copy:
     src: files/pas.smb.credentials
     dest: /etc/pas.smb.credentials
     mode: '0644'
   when: running_on_server
 
 - name: Create mount for pas shared files
-  mount:
+  ansible.builtin.mount:
     path: /mnt/diglibdata1/pas
     src: //diglibdata1.princeton.edu/pas
     fstype: cifs
@@ -57,14 +57,14 @@
   when: running_on_server
 
 - name: Install the license key
-  copy:
+  ansible.builtin.copy:
     src: files/license.key
     dest: /home/{{ deploy_user }}/license.key
     mode: '0644'
   when: running_on_server
 
 - name: update .env
-  template:
+  ansible.builtin.template:
     src: 'files/env.j2'
     dest: '/home/{{ deploy_user }}/.env'
     owner: 'deploy'
