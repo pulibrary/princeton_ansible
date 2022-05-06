@@ -37,6 +37,41 @@
       organization_name: "The Trustees of Princeton University"
       organizational_unit_name: OIT
       subject_alt_name: "{{ SAN_name | default(omit) }}"
+    register: host_name_csr
 
-# Do we need this bit of config?
-# default_bits = 2048
+# This is a first approximation of automating the next step in cert renewals
+# We will need an API account to connect to the Princeton ServiceNow installation
+# and we will need the data field names for these four fields in the existing manual form:
+# Certificate Signing Request
+# Is this a SAN Certificate?
+# Webserver Software
+# Additional Comments
+
+  - name: if a SAN_name is defined, set san_cert to true
+    ansible.builtin.set_fact:
+      san_cert: yes
+    when: SAN_name is defined
+
+  - name: Create the ServiceNow Requested Item for a new SSL cert
+    servicenow.servicenow.snow_record:
+      state: present
+      table: requested_item
+      username: "{{ sn_username }}"
+      password: "{{ sn_password }}"
+      instance: "{{ sn_instance }}"
+      data:
+# not sure what standard (non-custom) fields we need here
+# these are two examples from a blog post
+#        severity: "{{ sn_severity }}"
+#        priority: "{{ sn_priority }}"
+        short_description: "Allow website creators to request SSL certificate."
+        csr: "{{ host_name_csr.text }}" # check the JSON here!
+        is_san_cert: "{{ san_cert | default 'no' }}"
+        web_software: "Apache2 and Nginx"
+# Ask OIT how they use this field.
+# I discovered that some library sites don't run on apache, but I have always put "apache2 and nginx" here
+    register: ssl_ritm
+
+  - name: look at new snow_record
+    debug:
+      var: ssl_ritm.record
