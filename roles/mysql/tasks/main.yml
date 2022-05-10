@@ -1,0 +1,218 @@
+---
+# tasks file for mysql
+#
+- name: MySQL | Install MariaDB key
+  ansible.builtin.apt_key:
+    url: https://mariadb.org/mariadb_release_signing_key.asc
+    state: present
+  register: install_app_key
+
+- name: MySQL | Install MariaDB repository
+  ansible.builtin.apt_repository:
+    repo: "deb [arch=amd64] https://mirrors.accretive-networks.net/mariadb/repo/10.2/ubuntu {{ ansible_distribution_release }} main"
+    state: present
+    validate_certs: false
+  when: install_app_key.changed
+
+
+- name: MySQL | Install database client packages
+  ansible.builtin.apt:
+    name: "{{ mysql_client_packages }}"
+    state: present
+    install_recommends: false
+    update_cache: true
+
+- name: MySQL | Install python database client packages
+  pip:
+    name: mysqlclient
+  when:
+    - running_on_server
+
+- name: MySQL | install mysql
+  ansible.builtin.apt:
+    name: "{{ mysql_packages }}"
+    state: present
+    update_cache: true
+  when:
+    - mysql_server
+
+- name: MySQL | Restart MySQL
+  ansible.builtin.service:
+    name: mysql
+    state: restarted
+  when: install_app_key.changed
+
+- name: MySQL | mysql_root_password
+  community.mysql.mysql_user:
+    login_unix_socket: "{{ mysql_socket }}"
+    login_user: root
+    login_host: localhost
+    login_password: ""
+    name: 'root'
+    password: "{{ mysql_root_password }}"
+  when: install_app_key.changed
+
+- name: MySQL | remove unix_plugin
+  command: mysql -u root --execute="UPDATE mysql.user SET plugin = '' WHERE user = 'root' AND host = 'localhost'; FLUSH PRIVILEGES;"
+  when:
+    - running_on_server
+    - install_app_key.changed
+
+- name: MySQL | configure mysql server
+  community.general.ini_file:
+    dest: "{{ mysql_configuration_destination }}/{{ mysql_name }}-server.cnf"
+    section: "{{ item.section }}"
+    option: "{{ item.option }}"
+    value: "{{ item.value }}"
+    mode: "0644"
+  loop: "{{ mysql_configuration_options }}"
+  loop_control:
+    label: "{{ item.option }}"
+  when:
+    - mysql_server
+  notify:
+    - restart mysql server
+
+- name: MySQL | configure mysql client
+  community.general.ini_file:
+    dest: "{{ mysql_configuration_destination }}/{{ mysql_name }}-client.cnf"
+    section: client
+    option: socket
+    value: "{{ mysql_socket }}"
+    mode: "0644"
+  when:
+    - mysql_server
+
+- name: MySQL | start and enable mysql
+  ansible.builtin.service:
+    name: "mysql"
+    state: started
+    enabled: true
+  when:
+    - mysql_server
+
+- name: MySQL | add root my.cnf
+  ansible.builtin.template:
+    src: my.cnf.j2
+    dest: /root/.my.cnf
+    mode: "0640"
+  when:
+    - mysql_server
+
+- name: MySQL | create wildcard user
+  community.mysql.mysql_user:
+    host: "{{ item }}"
+    name: root
+    password: "{{ mysql_root_password }}"
+    login_host: "{{ mysql_host }}"
+    login_unix_socket: "{{ mysql_socket }}"
+    login_user: root
+    login_password: "{{ mysql_root_password }}"
+  loop:
+    - "{{ ansible_hostname }}"
+    - 127.0.0.1
+    - ::1
+    - localhost
+  when:
+    - mysql_server
+    - running_on_server
+
+- name: MySQL | remove Anonymous users in the database
+  community.mysql.mysql_user:
+    name: ''
+    host: "{{ item }}"
+    state: absent
+  with_items:
+    - localhost
+    - "{{ ansible_hostname }}"
+    - 127.0.0.1
+  when:
+    - mysql_server
+    - running_on_server
+
+- name: MySQL | Remove the test database
+  community.mysql.mysql_db:
+    name: test
+    state: absent
+  when:
+    - mysql_server
+    - running_on_server
+  notify:
+    - restart mysql server
+
+- name: MySQL | create databases on server
+  community.mysql.mysql_db:
+    name: "{{ item.name }}"
+    state: "{{ item.state | default('present') }}"
+    target: "{{ item.target | default(omit) }}"
+    encoding: "{{ item.encoding | default(omit) }}"
+    collation: "{{ item.collation | default(omit) }}"
+    login_host: "{{ mysql_host }}"
+    login_unix_socket: "{{ mysql_socket }}"
+    login_user: root
+    login_password: "{{ mysql_root_password }}"
+  loop: "{{ mysql_databases }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when:
+    - mysql_databases is defined
+    - mysql_server
+    - running_on_server
+  no_log: true
+
+- name: MySQL | create databases as a client connection
+  community.mysql.mysql_db:
+    name: "{{ item.name }}"
+    state: "{{ item.state | default('present') }}"
+    target: "{{ item.target | default(omit) }}"
+    encoding: "{{ item.encoding | default(omit) }}"
+    collation: "{{ item.collation | default(omit) }}"
+    login_unix_socket: "{{ mysql_socket }}"
+    login_host: "{{ mysql_host }}"
+    login_user: root
+    login_password: "{{ mysql_root_password }}"
+  delegate_to: "{{ mysql_host }}"
+  loop: "{{ mysql_databases }}"
+  when:
+    - mysql_databases is defined
+    - running_on_server
+  no_log: true
+
+- name: MySQL | create users on server
+  community.mysql.mysql_user:
+    name: "{{ item.name }}"
+    state: present
+    password: "{{ item.password }}"
+    priv: "{{ item.priv | default(omit) }}"  # least privilege access preferred
+    host: "{{ item.host | default(omit) }}"
+    host_all: "{{ item.host_all | default(omit) }}"
+    update_password: "{{ item.update_password | default(omit) }}"
+    login_host: "{{ mysql_host }}"
+    login_unix_socket: "{{ mysql_socket }}"
+    login_user: root
+    login_password: "{{ mysql_root_password }}"
+  loop: "{{ mysql_users }}"
+  when:
+    - mysql_users is defined
+    - mysql_server
+    - running_on_server
+  no_log: false
+
+- name: MySQL | create users as a client connection
+  community.mysql.mysql_user:
+    name: "{{ item.name }}"
+    state: present
+    password: "{{ item.password | default(omit) }}"
+    priv: "{{ item.priv | default(omit) }}"  # least privilege access preferred
+    host: "{{ item.host }}"
+    update_password: "{{ item.update_password }}"
+    login_host: "{{ mysql_host }}"
+    login_user: root
+    login_password: "{{ mysql_root_password }}"
+    login_unix_socket: "{{ mysql_socket }}"
+  delegate_to: "{{ mysql_host }}"
+  loop: "{{ mysql_users }}"
+  when:
+    - mysql_users is defined
+    - running_on_server
+  no_log: true

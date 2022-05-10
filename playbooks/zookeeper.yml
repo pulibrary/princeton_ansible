@@ -1,0 +1,27 @@
+---
+# by default this playbook runs in the staging environment
+# to run in production, pass '-e runtime_env=production'
+- name: build zookeeper boxes
+  hosts: zookeeper_{{ runtime_env | default('staging') }}
+  remote_user: pulsys
+  become: true
+  vars_files:
+    - ../site_vars.yml
+    - ../group_vars/solrcloud/solrcloud_{{ runtime_env | default('staging') }}.yml
+    - ../group_vars/solrcloud/vault.yml
+    - ../group_vars/zookeeper/zookeeper_{{ runtime_env | default('staging') }}.yml
+
+  roles:
+    - role: roles/openjdk
+    - role: roles/deploy_user
+    - role: roles/zookeeper
+    - role: roles/datadog
+      when: runtime_env == production
+
+  post_tasks:
+    - name: tell everyone on slack you ran an ansible playbook
+      when: runtime_env == production
+      community.general.slack:
+        token: "{{ vault_pul_slack_token }}"
+        msg: "Ansible ran `{{ ansible_play_name }}` on {{ inventory_hostname }}"
+        channel: #server-alerts

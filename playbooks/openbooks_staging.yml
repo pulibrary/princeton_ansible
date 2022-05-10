@@ -1,0 +1,16 @@
+---
+- hosts: openbooks-staging1.princeton.edu
+  remote_user: pulsys
+  become: true
+
+  vars_files:
+    - ../group_vars/openbooks/staging.yml
+    - ../group_vars/openbooks/vault.yml
+  roles:
+    - role: ../roles/omp
+  post_tasks:
+    - name: tell everyone on slack you ran an ansible playbook
+      slack:
+        token: "{{ vault_pul_slack_token }}"
+        msg: "{{ inventory_hostname }} completed"
+        channel: #server-alerts

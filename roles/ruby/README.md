@@ -1,4 +1,5 @@
 ## Ruby
+# Note. You are encouraged to use the `roles/ruby_s` role
 
 Installs Ruby release 2.4.3 and the development libraries of Ruby.
 

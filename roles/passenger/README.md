@@ -8,6 +8,14 @@ Installs Passenger (with Nginx) Ubuntu linux servers.
 
 None.
 
+## Using Ruby 3.x
+
+Define the following variables:
+
+```
+install_ruby_from_source: true
+ruby_version_override: "ruby-3.0.3"
+```
 ## Role Variables
 
 Available variables are listed below, along with default values (see `defaults/main.yml`):

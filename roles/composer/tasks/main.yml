@@ -1,19 +1,19 @@
 ---
-- name: create composer path
-  file:
+- name: composer | create composer path
+  ansible.builtin.file:
     path: "{{ composer_path }}"
     state: directory
     mode: 0755
 
-- name: get composer file
-  get_url:
+- name: composer | get composer file
+  ansible.builtin.get_url:
     url: "https://getcomposer.org/installer"
     dest: "{{ composer_path }}/composer-setup.php"
   register: composer_download
   ignore_errors: true
 
-- name: install composer
-  command: php composer-setup.php --quiet
+- name: composer | install composer
+  command: "php composer-setup.php --quiet"
   args:
     chdir: "{{ composer_path }}"
     creates: "/tmp/composer_installed"
@@ -22,17 +22,16 @@
   ignore_errors: true
   changed_when: false
 
-- name: copy composer
-  copy:
+- name: composer | copy composer
+  ansible.builtin.copy:
     src: local_files/composer/composer.phar
     dest: "{{ composer_path }}/composer.phar"
     mode: 0644
   when: composer_download is failed
   changed_when: false
 
-
-- name: create symbolic link of composer file
-  file:
+- name: composer | create symbolic link of composer file
+  ansible.builtin.file:
     src: "{{ composer_path }}/composer.phar"
     dest: "{{ composer_path }}/composer"
     state: link

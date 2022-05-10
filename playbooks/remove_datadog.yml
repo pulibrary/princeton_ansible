@@ -1,0 +1,35 @@
+---
+# To remove datadog from a group defined in our hosts file, pass '-e remove_datadog=group_name'
+# To remove datadog from a single host, pass '-e remove_datadog=hostname.princeton.edu,'
+# WITH TRAILING COMMA for a single host
+# currently the playbook does not check for, change, or remove /etc/nginx/conf.d/status.conf
+# it seems most hosts do not have this configured
+# see https://github.com/pulibrary/princeton_ansible/blob/4027126d0ef5b937f2abb3b078da13e27f86c2f3/roles/datadog/tasks/agent6.yml#L43
+- name: Remove datadog from a host or group
+  hosts: "{{ remove_datadog }}"
+  remote_user: pulsys
+  become: true
+  tasks:
+
+  - name: Stop datadog-agent
+    service:
+      name: datadog-agent
+      state: stopped
+      enabled: no
+
+  - name: Remove datadog agent6 directory
+    file:
+      path: /etc/datadog-agent/
+      state: absent
+
+  - name: Remove datadog agent5 directory
+    file:
+      path: /etc/dd-agent/
+      state: absent
+
+  post_tasks:
+  - name: tell everyone on slack you ran an ansible playbook
+    community.general.slack:
+      token: "{{ vault_pul_slack_token }}"
+      msg: "Ansible ran `{{ ansible_play_name }}` on {{ inventory_hostname }}"
+      channel: #server-alerts

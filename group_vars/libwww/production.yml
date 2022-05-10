@@ -1,0 +1,93 @@
+---
+discoveryutils_summon_authcode: '{{ summon_authcode_vault }}'
+discoveryutils_env: 'production'
+discoveryutils_base_url: 'https://library.princeton.edu'
+
+drupal_ssl_base_path: 'https://library.princeton.edu'
+
+apache_app_path: '/var/www/library_cap/current'
+
+### Uncomment to force the update of the settings file
+# force_settings: true
+
+### Uncomment this to force a dump file to be imported
+# drupal_dbimport_file: 'dump.sql'
+
+# the 30 is the length of the host name in quotes and is needed to be correct if you change this
+search_api_solr_host: '30:"lib-solr.princeton.edu"'
+
+# the 20 is the length of the path in the quotes and is needed to be correct if you change the path
+search_api_solr_path: '20:"/solr/libwww"'
+
+drupal_db_user: 'libwww-prod'
+drupal_db_password: "{{ libwww_db_password | default('change_this') }}"
+drupal_db_name: 'libwww-prod'
+drupal_redis_host: 'lib-redis.princeton.edu'
+drupal_redis_prefix: 'library-prod'
+
+files_mount_dir: 'production_files'
+
+db_host: 'mysql-db-prod1.princeton.edu'
+root_db_password: '{{ vault_xtradb_root_password }}'
+
+special_collections_drupal_base_path: 'https://library.princeton.edu/special-collections'
+special_collections_drupal_ssl_base_path: 'https://library.princeton.edu/special-collections'
+special_collections_drupal_db_name: 'special_collections_prod'
+special_collections_drupal_db_host: 'mysql-db-prod1.princeton.edu'
+bundler_version: '2.2.19'
+nodejs__upstream_release: 'node_11.x'
+
+mysql_server: false
+db_is_mysql: true
+
+datadog_api_key: "{{ vault_datadog_key }}"
+datadog_service_name: library
+datadog_environment: prod
+
+force_vhosts_update: true
+datadog_enabled: true
+datadog_config:
+  log_enabled: true
+  apm_enabled: true
+  process_enabled: true
+datadog_typed_checks:
+  - type: tls
+    configuration:
+      init_config:
+      instances:
+        - server: library.princeton.edu
+          port: 443
+  - type: process
+    configuration:
+      init_config:
+      instances:
+        -   name: library
+            service: library
+            search_string:
+              - apache2
+  - type: apache
+    configuration:
+      init_config:
+      instances:
+        -   apache_status_url: http://127.0.0.1/server-status?auto
+      logs:
+        - type: file
+          path: /var/log/apache2/other_vhosts_access.log
+          service: library
+          source: apache
+          sourcecategory: http_web_access
+          tags: "library, env:prod, role:libwww"
+        - type: file
+          path: /var/log/apache2/error.log
+          service: library
+          source: apache
+          sourcecategory: http_web_access
+          tags: "library, env:prod, role:libwww"
+        - type: file
+          path: /var/www/discoveryutils_cap/current/var/log/dev.log 
+          service: library
+          source: discoveryutils
+          sourcecategory: php
+          tags: "library, discoveryutils, env:prod, role:libwww"
+
+drupal_major_version: 7

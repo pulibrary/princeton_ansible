@@ -1,0 +1,16 @@
+---
+- name: Verify
+  hosts: all
+  vars:
+    - ruby_version: "ruby-2.7.0"
+  gather_facts: false
+  tasks:
+    - name: check "{{ ruby_version }}" was downloaded
+      ansible.builtin.stat:
+        path: "/opt/install/{{ ruby_version }}"
+      register: ruby_downloaded
+
+    - name: test for ruby {{ ruby_version }} download
+      assert:
+        that:
+          - ruby_downloaded.stat.exists

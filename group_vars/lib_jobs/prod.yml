@@ -3,7 +3,6 @@ passenger_app_env: production
 db_host: "{{ vault_postgres_host }}"
 db_clusteradmin_password: "{{ vault_postgres_admin_password }}"
 db_clusteradmin_user: "{{ vault_postgres_admin_user }}"
-bundler_version: "2.1.4"
 
 postgres_host: "{{ db_host }}"
 postgres_port: "5432"
@@ -29,9 +28,46 @@ app_oit_base_url: 'https://api.princeton.edu:443'
 app_sftp_username: '{{ vault_sftp_username }}'
 app_sftp_password: '{{ vault_sftp_password }}'
 app_sftp_host: '{{ vault_sftp_host }}'
-app_lib_jobs_staging_aspace_url: '{{ vault_lib_jobs_staging_aspace_url }}'
-app_lib_jobs_staging_aspace_user: '{{ vault_lib_jobs_staging_aspace_user }}'
-app_lib_jobs_staging_aspace_password: '{{ vault_lib_jobs_staging_aspace_password }}'
+app_lib_jobs_aspace_url: '{{ vault_lib_jobs_prod_aspace_url }}'
+app_lib_jobs_aspace_user: '{{ vault_lib_jobs_prod_aspace_user }}'
+app_lib_jobs_aspace_password: '{{ vault_lib_jobs_prod_aspace_password }}'
 peoplesoft_samba_directory: lbvchr-p
 onbase_samba_server: 172.19.70.50
 onbase_samba_directory: obprdrop/Scheduler/KeywordUpdate/LIB/Alma
+
+datadog_api_key: "{{ vault_datadog_key }}"
+datadog_config:
+  tags: "application:lib-jobs, environment:production, type:webserver"
+  apm_enabled: "true"
+  log_enabled: true
+  process_config:
+    enabled: "true"
+  apm_config:
+    analyzed_spans:
+      lib-jobs|rack.request: 1
+datadog_checks:
+  ruby:
+    init_config:
+    logs:
+      - type: file
+        path: /opt/lib-jobs/current/log/production.log
+        service: lib-jobs
+        source: ruby
+  nginx:
+    init_config:
+    logs:
+      - type: file
+        path: /var/log/nginx/access.log
+        service: lib-jobs
+        source: nginx
+        sourcecategory: http_web_access
+      - type: file
+        path: /var/log/nginx/error.log
+        service: lib-jobs
+        source: nginx
+        sourcecategory: http_web_access
+  tls:
+    init_config:
+    instances:
+      - server: lib-jobs.princeton.edu
+        port: 443
