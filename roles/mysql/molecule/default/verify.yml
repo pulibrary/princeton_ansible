@@ -1,0 +1,19 @@
+---
+- name: Verify
+  hosts: all
+  gather_facts: false
+  tasks:
+  - name: check mariadb package status
+    package:
+      name: "{{ item }}"
+      state: present
+    check_mode: true
+    register: pkg_status
+    loop:
+      - mariadb-server
+      - mysql-common
+
+  - name: test for ruby packages
+    assert:
+      that:
+        - not pkg_status.changed

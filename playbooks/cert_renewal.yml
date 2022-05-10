@@ -1,0 +1,42 @@
+---
+# automates step 1 of https://github.com/pulibrary/pul-the-hard-way/blob/main/services/create_ssl_certs.md
+# You must pass two variables and you can pass a third if you need it:
+# 1. Pass the first element of the FQDN as '-e host_name=value'
+# for example: '-e host_name=fun' would generate a cert for fun.princeton.edu
+# 2. Pass the path of the directory on your local machine the key and cert should end up in
+# with no trailing slash
+# for example: '-e cert_path=/home/foo/ssl_certs'
+# 3. If your cert needs one or more Subject Alt Names, pass a third variable for those
+# for example: "-e SAN_name='DNS:altname.princeton.edu,DNS:otheraltname.princeton.edu'"
+#
+# Full example command:
+# ansible-playbook playbooks/cert_renewal.yml -e host_name=new_site -e cert_path=/home/myuser/ssl_certs -e SAN_name='DNS:new_site1.princeton.edu'
+#
+# once you have the private key and CSR, follow the rest of the procedure documented on
+# https://github.com/pulibrary/pul-the-hard-way/blob/main/services/create_ssl_certs.md
+#
+- name: Generate a new cert and key
+  hosts: localhost
+  tasks:
+  - name: Generate a new private key
+    openssl_privatekey:
+      path: "{{ cert_path }}/{{ host_name }}_princeton_edu_priv.key"
+      size: 2048
+      type: RSA
+    register: new_key
+
+  - name: Generate CSR
+    community.crypto.openssl_csr:
+      path: "{{ cert_path }}/{{ host_name }}_princeton_edu.csr"
+      privatekey_path: "{{ new_key.filename }}"
+      common_name: "{{ host_name }}.princeton.edu"
+      country_name: US
+      state_or_province_name: "New Jersey"
+      locality_name: Princeton
+      email_address: lsupport@princeton.edu
+      organization_name: "The Trustees of Princeton University"
+      organizational_unit_name: OIT
+      subject_alt_name: "{{ SAN_name | default(omit) }}"
+
+# Do we need this bit of config?
+# default_bits = 2048

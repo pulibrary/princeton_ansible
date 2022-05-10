@@ -1,0 +1,157 @@
+---
+passenger_server_name: "catalog-alma.*"
+passenger_app_root: "/opt/orangelight/current/public"
+passenger_app_env: "production"
+passenger_extra_config: '{{ lookup("file", "roles/orangelight/templates/nginx_extra_config")  }}'
+rails_app_name: "orangelight"
+rails_app_directory: "orangelight"
+rails_app_symlinks: []
+install_mailcatcher: false
+rails_app_dependencies:
+  - libpq-dev
+  - pkg-config
+  - libtool
+  - autoconf
+bundler_version: "2.1.4"
+desired_nodejs_version: 'v16.14.2'
+postgresql_is_local: false
+postgres_host: "lib-postgres-prod3.princeton.edu"
+postgres_admin_user: "postgres"
+postgres_admin_password: '{{ vault_postgres_admin_password }}'
+postgres_version: 13
+postgres_port: "5432"
+pg_hba_contype: "host"
+pg_hba_postgresql_user: "all"
+pg_hba_postgresql_database: "all"
+pg_hba_method: "md5"
+pg_hba_source: "{{ ansible_host }}/32"
+ol_db_host: '{{ postgres_host }}'
+ol_db_name: '{{ vault_ol_db_name }}'
+ol_db_user: '{{ vault_ol_db_user }}'
+ol_db_password: '{{ vault_ol_db_password }}'
+ol_secret_key: "{{ vault_ol_alma_qa_secret_key }}"
+ol_graph_api_url: "{{ vault_ol_alma_qa_graph_api_url }}"
+ol_figgy_url: "{{ vault_ol_staging_figgy_url }}"
+ol_feedback_to: "{{ vault_ol_feedback_to }}"
+ol_feedback_cc: "{{ vault_ol_feedback_cc }}"
+ol_newrelic_key: ""
+ol_newrelic_app_name: ""
+ol_honeybadger_key: "{{ vault_ol_honeybadger_key }}"
+ol_rabbit_user: "{{ vault_figgy_rabbit_user }}"
+ol_rabbit_password: "{{ vault_figgy_rabbit_password }}"
+ol_rabbit_host: "figgy1.princeton.edu"
+ol_rabbit_server: "amqp://{{ ol_rabbit_user }}:{{ ol_rabbit_password }}@{{ ol_rabbit_host }}:5672"
+ol_read_only_mode: 'false'
+bd_auth_key: "{{ vault_bd_auth_key }}"
+bd_find_barcode: "{{ vault_bd_find_barcode }}"
+scsb_auth_key: "{{ vault_scsb_auth_key }}"
+rails_app_env: "production"
+application_db_name: "{{ ol_db_name }}"
+application_dbuser_name: "{{ ol_db_user }}"
+application_dbuser_password: "{{ ol_db_password }}"
+application_dbuser_role_attr_flags: "CREATEDB"
+ol_host_name: "catalog.princeton.edu"
+application_host_protocol: "https"
+ol_smtp_host: "lib-ponyexpr.princeton.edu"
+ol_smtp_port: "25"
+ol_alma_solr_url: http://lib-solr8-prod.princeton.edu:8983/solr/catalog-alma-production
+rails_app_vars:
+  - name: OL_SECRET_KEY_BASE
+    value: "{{ ol_secret_key }}"
+  - name: OL_DB
+    value: "{{ ol_db_name }}"
+  - name: OL_DB_USERNAME
+    value: "{{ ol_db_user }}"
+  - name: OL_DB_PASSWORD
+    value: "{{ ol_db_password }}"
+  - name: OL_DB_HOST
+    value: "{{ ol_db_host }}"
+  - name: OL_DB_PORT
+    value: "5432"
+  - name: OL_RABBIT_SERVER
+    value: "{{ ol_rabbit_server }}"
+  - name: OL_READ_ONLY_MODE
+    value: '{{ol_read_only_mode}}'
+  - name: SOLR_URL
+    value: "{{ ol_alma_solr_url }}"
+  - name: GRAPHQL_API_URL
+    value: "{{ ol_graph_api_url }}"
+  - name: FIGGY_URL
+    value: "{{ ol_figgy_url }}"
+  - name: OL_FEEDBACK_TO
+    value: "{{ ol_feedback_to }}"
+  - name: OL_FEEDBACK_CC
+    value: "{{ ol_feedback_cc }}"
+  - name: BD_AUTH_KEY
+    value: "{{ bd_auth_key }}"
+  - name: BD_FIND_BARCODE
+    value: "{{ bd_find_barcode }}"
+  - name: SCSB_AUTH_KEY
+    value: "{{ scsb_auth_key }}"
+  - name: HONEYBADGER_API_KEY
+    value: "{{ ol_honeybadger_key }}"
+  - name: APPLICATION_HOST
+    value: "{{ ol_host_name }}"
+  - name: APPLICATION_HOST_PROTOCOL
+    value: "{{ application_host_protocol }}"
+  - name: ALMA_REGION
+    value: "{{ vault_alma_region }}"
+  - name: ALMA_BIB_READ_WRITE
+    value: "{{ vault_alma_bib_read_write_key }}"
+  - name: ALMA_BIBS_READ_ONLY
+    value: "{{ vault_alma_bibs_read_only_key }}"
+  - name: ALMA_CONFIG_READ_ONLY
+    value: "{{ vault_alma_config_read_only_key }}"
+  - name: ALMA_USERS_READ_ONLY
+    value: "{{ vault_alma_users_read_only_key }}"
+  - name: voyager_ub_id
+    value: '{{ voyager_ub_id }}'
+  - name: SMTP_HOST
+    value: "{{ ol_smtp_host | default('localhost') }}"
+  - name: SMTP_PORT
+    value: "{{ ol_smtp_port | default('1025') }}"
+  - name: ILLIAD_API_KEY
+    value: '{{ vault_ol_illiad_api_key }}'
+  - name: ILLIAD_API_BASE_URL
+    value: '{{ vault_ol_illiad_api_base_url }}'
+  - name: CLANCY_API_KEY
+    value: '{{ vault_clancy_api_key_prod }}'
+  - name: CLANCY_BASE_URL
+    value: '{{ vault_clancy_api_base_url_prod }}'
+  - name: BIBDATA_BASE
+    value: 'https://bibdata.princeton.edu'
+sneakers_workers: EventHandler
+sneakers_worker_name: orangelight-sneakers
+ol_rails_solr_url: "{{ ol_alma_solr_url }}"
+voyager_ub_id: "{{ omit }}"
+datadog_api_key: "{{ vault_datadog_key }}"
+datadog_config:
+  tags: "application:orangelight, environment:alma_production, type:webserver"
+  apm_enabled: "true"
+  log_enabled: true
+  process_config:
+    enabled: "true"
+  apm_config:
+    analyzed_spans:
+      orangelight|rack.request: 1
+datadog_checks:
+  ruby:
+    init_config:
+    logs:
+      - type: file
+        path: /opt/orangelight/current/log/production.log
+        service: orangelight
+        source: ruby
+  nginx:
+    init_config:
+    logs:
+      - type: file
+        path: /var/log/nginx/access.log
+        service: orangelight
+        source: nginx
+        sourcecategory: http_web_access
+      - type: file
+        path: /var/log/nginx/error.log
+        service: orangelight
+        source: nginx
+        sourcecategory: http_web_access

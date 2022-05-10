@@ -1,0 +1,178 @@
+---
+## Note: Invoke this task with --tags clean to remove the database and config
+## file so you can start over with a fresh installation.
+
+- name: omp | install prerequisites
+  include: "install_prerequisites.yml"
+
+- name: omp | clean, if necessary
+  include: "clean.yml"
+
+- name: omp | determine if omp is installed already
+  include: "check_omp_installation.yml"
+  changed_when: false
+
+- name: omp | add {{ deploy_user }} to www-data
+  user:
+    name: "{{ deploy_user }}"
+    groups: www-data
+    append: true
+
+- name: omp | unarchive omp code
+  unarchive:
+    src: "https://pkp.sfu.ca/omp/download/omp-{{ omp_version }}.tar.gz"
+    dest: "/var/www"
+    remote_src: true
+    owner: deploy
+    group: www-data
+    creates: "{{ omp_home }}"
+  become: true
+
+# - name: omp | unarchive healthSciences theme code
+#   unarchive:
+#     src: "{{ healthsciences_theme_url }}"
+#     dest: "{{ omp_home }}/plugins/themes"
+#     remote_src: true
+#     owner: deploy
+#     group: www-data
+#     creates: "{{ omp_home }}/plugins/themes/healthSciences"
+#   become: true
+
+- name: omp | ensure cache directories are writable
+  ansible.builtin.file:
+    path: "{{ omp_home }}/{{ item }}"
+    state: directory
+    owner: "{{ deploy_user }}"
+    group: www-data
+    mode: 0775
+  with_items:
+    - cache
+    - cache/t_cache
+    - cache/t_config
+    - cache/t_compile
+    - cache/_db
+
+- name: omp | ensure public files directory is writeable
+  ansible.builtin.file:
+    path: "{{ omp_home }}/{{ item }}"
+    state: directory
+    owner: www-data
+    group: www-data
+    mode: 0775
+  with_items:
+    - public
+
+- name: omp | create a directory to store uploaded files
+  ansible.builtin.file:
+    path: "{{ omp_file_uploads }}"
+    state: directory
+    owner: "{{ deploy_user }}"
+    group: www-data
+    recurse: true
+    mode: 0775
+
+- name: omp | copy config file
+  command: "cp config.TEMPLATE.inc.php config.inc.php"
+  args:
+    chdir: "{{ omp_home }}"
+  become: true
+  become_user: "{{ deploy_user }}"
+  when: omp_is_installed is false
+  changed_when: false
+
+- name: omp | write expect script for OMP interactive installation
+  template:
+    src: "script.exp.j2"
+    dest: "{{ omp_home }}/script.exp"
+    owner: "{{ deploy_user }}"
+    group: www-data
+    mode: 0700
+  when:
+    - omp_is_installed is false
+    - running_on_server
+
+- name: omp | run expect script for OMP interactive installation
+  command: "/usr/bin/expect {{ omp_home }}/script.exp"
+  args:
+    chdir: "{{ omp_home }}"
+  become: true
+  become_user: "{{ deploy_user }}"
+  when:
+    - omp_is_installed is false
+    - running_on_server
+
+- name: omp | remove expect script
+  file:
+    path: "{{ omp_home }}/script.exp"
+    state: absent
+
+- name: omp | remove apache document root
+  file:
+    path: "{{ apache.docroot }}"
+    state: absent
+  changed_when: false
+
+- name: omp | install htaccess config for mod_rewrite
+  template:
+    src: htaccess
+    dest: "{{ omp_home }}/.htaccess"
+    owner: "{{ deploy_user }}"
+    group: www-data
+    mode: 0644
+  changed_when: false
+
+- name: omp | create omp local directory
+  file:
+    path: "/etc/apache2/ssl/{{ item }}"
+    state: directory
+    owner: "root"
+    group: "root"
+    mode: 0775
+  with_items:
+    - private
+    - certs
+  changed_when: false
+
+# Inventory hostname == openbooks-staging1.princeton.edu
+- name: omp | copy apache cert files
+  copy:
+    src: "files/certs/{{ item }}"
+    dest: "/etc/apache2/ssl/certs/"
+  changed_when: false
+  when: running_on_server
+  with_items:
+    - "{{ inventory_hostname }}_cert.cer"
+    - "{{ inventory_hostname }}_chained.pem"
+
+- name: omp | copy apache private files
+  copy:
+    src: "files/private/{{ item }}"
+    dest: "/etc/apache2/ssl/private/"
+  changed_when: false
+  when: running_on_server
+  with_items:
+    - "{{ inventory_hostname }}_priv.key"
+
+- name: omp | add OMP template
+  template:
+    src: "omp.conf.j2"
+    dest: "/etc/apache2/sites-available/omp.conf"
+    mode: 0644
+
+- name: omp | remove apache2 default
+  file:
+    path: "/etc/apache2/sites-enabled/000-default.conf"
+    state: absent
+  changed_when: false
+
+- name: omp | symbolic link to omp config
+  file:
+    src: "/etc/apache2/sites-available/omp.conf"
+    dest: "/etc/apache2/sites-enabled/omp.conf"
+    state: link
+  when: running_on_server
+  changed_when: false
+  notify: restart apache2
+
+- name: omp | automate backups
+  include: "automate_backups.yml"

@@ -1,14 +1,52 @@
 ---
 - name: PostgreSQL | create postgresql db users
-  postgresql_user:
+  community.postgresql.postgresql_user:
     name: '{{ application_dbuser_name }}'
-    port: '{{ postgres_port | default(omit) }}'
-    login_host: '{{ postgres_host | default(omit) }}'
-    login_user: '{{ postgres_admin_user | default(omit) }}'
-    login_password: '{{ postgres_admin_password | default(omit) }}'
+    port: '{{ postgres_port }}'
+    login_host: '{{ postgres_host }}'
+    login_user: '{{ postgres_admin_user }}'
+    login_password: '{{ postgres_admin_password }}'
     password: '{{ application_dbuser_password }}'
     encrypted: true
     role_attr_flags: '{{ application_dbuser_role_attr_flags }}'
     state: 'present'
-  when: running_on_server
+  when:
+    - running_on_server
+    - not postgresql_is_local
+  changed_when: false
+
+- name: PostgreSQL | create postgresql db server users
+  community.postgresql.postgresql_user:
+    name: "{{ item.name }}"
+    #    login_host: "{{ item.host }}"
+    password: "{{ item.password }}"
+    encrypted: true
+    priv: "{{ item.priv | default(omit) }}"  # least privilege is better
+    state: "present"
+    db: "{{ item.db }}"
+    role_attr_flags: "{{ item.role_attr_flags | default(omit) }}"  # see above
+  delegate_to: '{{ postgres_host }}'
+  when:
+    - running_on_server
+    - postgresql_is_local
+    - postgresql_users|length > 0
+  changed_when: false
+  become: true
+  become_user: "{{ postgres_admin_user }}"
+  loop: "{{ postgresql_users }}"
+  no_log: true
+
+- name: PostgreSQL | change postgresql database owner
+  community.postgresql.postgresql_db:
+    name: "{{ application_db_name }}"
+    port: "{{ postgres_port }}"
+    login_host: "{{ postgres_host }}"
+    login_user: "{{ postgres_admin_user }}"
+    login_password: "{{ postgres_admin_password }}"
+    encoding: "UTF-8"
+    state: "present"
+    owner: "{{ application_dbuser_name }}"
+  when:
+    - running_on_server
+    - not postgresql_is_local
   changed_when: false

@@ -2,8 +2,7 @@
 postgres_host: 'lib-postgres3.princeton.edu'
 postgres_version: 10
 postgresql_is_local: false
-nodejs__upstream_release: 'node_12.x'
-nodejs__upstream_key_id: '68576280'
+desired_nodejs_version: "v12.22.7"
 passenger_server_name: "figgy-staging2.princeton.edu"
 passenger_app_root: "/opt/figgy/current/public"
 passenger_app_env: "staging"
@@ -20,12 +19,11 @@ figgy_db_ro_password: '{{vault_figgy_db_ro_password}}'
 figgy_rabbit_user: '{{vault_figgy_staging_rabbit_user}}'
 figgy_rabbit_password: '{{vault_figgy_staging_rabbit_password}}'
 figgy_rabbit_server: 'amqp://{{figgy_rabbit_user}}:{{figgy_rabbit_password}}@{{figgy_staging_rabbit_host}}:5672'
+figgy_geoserver_user: '{{ vault_figgy_geoserver_user }}'
+figgy_geoserver_password: '{{ vault_figgy_geoserver_password }}'
 rabbitmq_user: '{{figgy_rabbit_user}}'
 rabbitmq_password: '{{figgy_rabbit_password}}'
 figgy_read_only_mode: 'false'
-figgy_svn_user: '{{vault_figgy_svn_user}}'
-figgy_svn_pass: '{{vault_figgy_svn_pass}}'
-figgy_svn_url: '{{vault_figgy_svn_url}}'
 rails_app_env: "staging"
 figgy_solr_name: figgy-staging
 solr_port: "8983"
@@ -88,16 +86,16 @@ rails_app_vars:
     value: '{{ vault_figgy_staging_google_client_secret }}'
   - name: GEOSERVER_DERIVATIVES_PATH
     value: '{{ vault_figgy_staging_geoserver_derivatives_path }}'
-  - name: GEOSERVER_URL
+  - name: GEOSERVER_BASE_URL
     value: 'https://geoserver.princeton.edu/geoserver'
+  - name: GEOSERVER_URL
+    value: 'https://geoserver.princeton.edu/geoserver/rest'
+  - name: GEOSERVER_USER
+    value: '{{ figgy_geoserver_user }}'
+  - name: GEOSERVER_PASSWORD
+    value: '{{ figgy_geoserver_password }}'
   - name: MEDIAINFO_PATH
     value: '/usr/bin/mediainfo'
-  - name: SVN_USER
-    value: '{{figgy_svn_user}}'
-  - name: SVN_PASS
-    value: '{{figgy_svn_pass}}'
-  - name: SVN_URL
-    value: '{{figgy_svn_url}}'
   - name: STORAGE_CREDENTIALS
     value: '/home/{{deploy_user}}/cloud_config/google_cloud_credentials.json'
   - name: STORAGE_PROJECT
@@ -148,9 +146,11 @@ rails_app_vars:
     value: "{{ vault_sidekiq_pro_key }}"
   - name: TILESERVER_URL
     value: 'https://map-tiles-staging.princeton.edu'
+  - name: PULFALIGHT_UNPUBLISHED_TOKEN
+    value: '{{ vault_pulfalight_unpublished_auth_token }}'
 sidekiq_worker_name: figgy-workers
-passenger_ruby: "/usr/bin/ruby2.6"
-ruby_version_override: "ruby2.6"
+passenger_ruby: "/usr/bin/ruby2.7"
+ruby_version_override: "ruby2.7"
 bundler_version: "2.2.16"
 passenger_extra_config: "{{ lookup('file', 'roles/figgy/templates/nginx_extra_config')  }}"
 simple_tiles_version: 0.6.0
