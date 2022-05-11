@@ -234,6 +234,18 @@ If a file is not decrypting with `git diff` you may need to add the file you're 
 3. `gem install lastpass-ansible`
 4. `source princeton_ansible_env.sh`
 
+### Troubleshooting lastpass
+* If you get the message `[WARNING]: Error in vault password file loading (default): Invalid vault password was provided from script`, it's possible you have vault passwords hanging around from previous projects, and they are overriding the lastpass password. If you no longer need those passwords, remove them. For example:
+
+```bash
+rm -rf ~/.vault_pass.txt
+rm -rf ~/.ansible-vaults
+```
+* If you get the message `ERROR! Decryption failed (no vault secrets were found that could decrypt)`, you may still need to source the environment for your shell.
+```bash
+source princeton_ansible_env.sh
+```
+
 ## Changing/Modifying Passwords
 
 In the event that there is a need to modify the vault password grep recursively to find the occurrence of `AES256` from the root of the repo. I am using the `grep` commands below, YMMV
