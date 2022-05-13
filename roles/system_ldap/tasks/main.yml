@@ -2,21 +2,21 @@
 # tasks file for system_ldap
 #
 - name: system_ldap | Install sssd
-  apt:
+  ansible.builtin.apt:
     name: "{{ item }}"
     state: "present"
   loop:
     - "{{ sssd_pkg_list }}"
 
 - name: system_ldap | Remove unwanted packages
-  package:
+  ansible.builtin.apt:
     name: "{{ item }}"
     state: "{{ sssd__unwanted_packages_state }}"
   loop:
     - "{{ sssd__unwanted_packages_list }}"
 
 - name: system_ldap | configure krb5
-  template:
+  ansible.builtin.template:
     src: krb5.conf.j2
     dest: "/etc/krb5.conf"
     owner: root
@@ -24,7 +24,7 @@
     mode: 0644
 
 - name: system_ldap | configure sudoers nsswitch.conf
-  lineinfile:
+  ansible.builtin.lineinfile:
     dest: /etc/nsswitch.conf
     state: present
     regexp: '^sudoers:'
@@ -34,7 +34,7 @@
     mode: 0644
 
 - name: system_ldap | configure sssd.conf
-  template:
+  ansible.builtin.template:
     src: "{{ sssd_main_conf_tpl }}"
     dest: "{{ sssd_main_conf_path }}"
     mode: 0600
@@ -48,7 +48,7 @@
     - restart logind
 
 - name: "system_ldap | configure conf.d/{{ sssd_domain }}.conf"
-  blockinfile:
+  ansible.builtin.blockinfile:
     state: present
     create: true
     mode: 0600
@@ -63,7 +63,7 @@
     - restart logind
 
 - name: system_ldap | Ensure home directories are created upon login with pam
-  lineinfile:
+  ansible.builtin.lineinfile:
     dest: /etc/pam.d/common-account
     regexp: 'pam_mkhomedir\.so'
     line: "session required                        pam_mkhomedir.so        umask=0022      skel=/etc/skel/ silent"
