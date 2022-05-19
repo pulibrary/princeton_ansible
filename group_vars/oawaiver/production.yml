@@ -90,3 +90,34 @@ rails_app_vars:
     value: "{{ app_smtp_host }}"
   - name: SMTP_PORT
     value: "{{ app_smtp_port }}"
+
+# Datadog
+
+datadog_api_key: "{{ vault_datadog_key }}"
+
+datadog_config:
+  log_enabled: true
+  apm_enabled: true
+  process_config:
+    enabled: true
+  apm_config:
+    analyzed_spans:
+      oawaiver|rack.request: 1
+datadog_checks:
+  tls:
+    init_config:
+    instances:
+      - server: oawaiver.princeton.edu
+        port: 443
+        tags:
+          - 'tls_service:oawaiver'
+  oawaiver_datadog_ruby_check:
+    init_config:
+    logs:
+      - type: file
+        path: /opt/oawaiver/current/log/production.log
+        service: oawaiver
+        source: ruby
+        sourcecategory: sourcecode
+        tags: "oawaiver, environment:production, role:oawaiver"
+
