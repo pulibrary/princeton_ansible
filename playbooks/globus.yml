@@ -7,20 +7,18 @@
 - name: build the Globus site
   hosts: localhost
   gather_facts: false
-  vars:
-    instance_type: "{{ aws_instance_size | default('t2.micro') }}"
-    image_id: "ami-0583c2ac0b1a3671b"
-    region: "us-east-1"
   vars_files:
     - ../group_vars/globus/{{ runtime_env | default('staging') }}.yml
+    - ../group_vars/globus/common.yml
+    - ../group_vars/globus/vault.yml
   tasks:
     - name: start an instance with a public IP address
       amazon.aws.ec2_instance:
         name: "pdc-globus-{{ runtime_env | default('staging') }}"
-        vpc_subnet_id: "subnet-053f6de62a939098a"
+        vpc_subnet_id: "{{ vpc_subnet_id }}"
         security_groups:
-          - "sg-0f9328c6f066ab558"
-          - "sg-0015266bf123c24cf"
+          - "{{ globus_ssh_security_group }}"
+          - "{{ globus_app_security_group }}"
         instance_type: "{{ instance_type }}"
         image_id: "{{ image_id }}"
         wait: true
@@ -30,6 +28,8 @@
           threads_per_core: "{{ aws_threads_count | default('1') }}"
         network:
           assign_public_ip: true
+        tags:
+          Name: PRDS
       register: ec2
 
     - name: Wait for SSH to come up
