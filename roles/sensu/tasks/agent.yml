@@ -1,0 +1,66 @@
+---
+  - name: Update apt cache (ensure we have package index)
+    apt:
+      update_cache: true
+    # Updating the APT cache does not change the system so we never report a
+    # change here (helps keep the playbook idempotent).
+    changed_when: false
+
+  - name: Install utility packages
+    apt:
+      name:
+        - gnupg
+        - debian-archive-keyring
+        - apt-transport-https
+      state: present
+
+  - name: ensure sensu directory exists
+    file:
+      state: directory
+      path: /etc/sensu
+    become: true
+
+  - name: Add the sensu user
+    user:
+      name: sensu
+      state: present
+
+# give up on direct install, fetch the script
+  - name: download sensu install script
+    get_url:
+      url: https://packagecloud.io/install/repositories/sensu/stable/script.deb.sh
+      dest: /etc/install_sensu_agent.sh
+      mode: '0770'
+
+  - name: execute sensu install script
+    shell: /etc/install_sensu_agent.sh
+    become: true
+
+  - name: install agent package
+    apt:
+      name: sensu-go-agent
+      state: present
+    become: true
+
+  # - name: Set owner of restart handler
+  #   set_fact:
+  #     manage_sensu_agent_service: true
+
+  - name: Install agent communication PKI
+    copy:
+      src: "{{ agent_trusted_ca_file }}"
+      dest: "{{ trusted_ca_file_path }}"
+      # Keep this in sync with what the backend service is running as from packager
+      owner: &sensu_user sensu
+      group: &sensu_group sensu
+      mode: "0644"
+    when: agent_trusted_ca_file is defined
+
+  - name: Configure sensu-agent
+    template:
+      src: agent.yml.j2
+      dest: /etc/sensu/agent.yml
+      owner: *sensu_user
+      group: *sensu_group
+      mode: '0600'
+    notify: Restart the sensu-agent
