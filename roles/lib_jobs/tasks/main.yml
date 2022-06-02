@@ -40,7 +40,7 @@
 - name: Check mount for peoplesoft shared files
   mount:
     path: '/mnt/dms-smbserve/peoplesoft'
-    src: '//10.6.49.226/{{ peoplesoft_samba_directory }}'  # Use IP, //dms-smbserve isn't routable.
+    src: '//{{ peoplesoft_samba_server }}/{{ peoplesoft_samba_directory }}'  # Use IP, //dms-smbserve isn't routable.
     fstype: cifs
     opts: 'defaults,uid={{ deploy_user_uid }},gid={{ deploy_user_uid }},credentials=/etc/peoplesoft.smb.credentials,file_mode=0777'
     state: present
@@ -51,7 +51,28 @@
 - name: Create mount for peoplesoft shared files
   mount:
     path: '/mnt/dms-smbserve/peoplesoft'
-    src: '//10.6.49.226/{{ peoplesoft_samba_directory }}'  # Use IP, //dms-smbserve isn't routable.
+    src: '//{{ peoplesoft_samba_server }}/{{ peoplesoft_samba_directory }}'  # Use IP, //dms-smbserve isn't routable.
+    fstype: cifs
+    opts: 'defaults,uid={{ deploy_user_uid }},gid={{ deploy_user_uid }},credentials=/etc/peoplesoft.smb.credentials,file_mode=0777'
+    state: mounted
+  when: running_on_server and mount_info.changed
+  become: true
+
+- name: Check mount for peoplesoft bursar shared files
+  mount:
+    path: '/mnt/dms-smbserve/bursar'
+    src: '//{{ peoplesoft_samba_server }}/{{ peoplesoft_bursar_samba_directory }}'  # Use IP, //dms-smbserve isn't routable.
+    fstype: cifs
+    opts: 'defaults,uid={{ deploy_user_uid }},gid={{ deploy_user_uid }},credentials=/etc/peoplesoft.smb.credentials,file_mode=0777'
+    state: present
+  register: mount_info
+  when: running_on_server
+  become: true
+
+- name: Create mount for peoplesoft bursar shared files
+  mount:
+    path: '/mnt/dms-smbserve/bursar'
+    src: '//{{ peoplesoft_samba_server }}/{{ peoplesoft_bursar_samba_directory }}'  # Use IP, //dms-smbserve isn't routable.
     fstype: cifs
     opts: 'defaults,uid={{ deploy_user_uid }},gid={{ deploy_user_uid }},credentials=/etc/peoplesoft.smb.credentials,file_mode=0777'
     state: mounted
@@ -93,6 +114,8 @@
     state: mounted
   when: running_on_server and mount_info.changed
   become: true
+
+# Aspace
 
 - name: Create aspace helpers directory
   file:
