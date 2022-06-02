@@ -1,17 +1,17 @@
 ---
 # Ansible expects you to have `~/.aws/credentials` configured.
-# The contents of the file will have `aws_access_key_id` and
-# `aws_secret_access_key`
+# you will need to create these on your own
+# the playbook itself will run as `{{ project_user }}` as created in the `pre_tasks` block
+# If the playbook creates a new `{{ project_user }}` with access keys and saves them in your
+# ~/.aws/ansible_key_list.txt if none exists. These variables will need to go inventory_hostname
+# `group_vars/globus/vault.yml` if this is the first time running
+#
 # by default this playbook runs in the staging environment
 # to run in production, pass '-e runtime_env=production'
-
+#
 # NOTE: You may need to run `pipenv sync` in your princeton_ansible shell
 # in order to install boto3 and other AWS required libraries.
-
-# Try running this command to see if your permissions are set up correctly:
-# aws ec2 describe-instances --query 'Reservations[*].Instances[?not_null(PublicIpAddress)]' | jq -r '.[][]|.PublicIpAddress+" "+(.Tags[]|select(.Key=="Name").Value)'
-
-# If you get an error saying "You are not authorized to perform this operation." then your permissions aren't right yet.
+#
 
 - name: build an ec2 instance
   hosts: localhost
@@ -20,58 +20,79 @@
     - ../group_vars/globus/{{ runtime_env | default('staging') }}.yml
     - ../group_vars/globus/common.yml
     - ../group_vars/globus/vault.yml
+  pre_tasks:
+    - block:
+        - name: check for "{{ project_user }}"
+          community.aws.iam_access_key_info:
+            user_name: "{{ project_user }}"
+          register: user_check
+
+        - name: create iam group
+          ansible.builtin.shell: 'aws iam create-group --group-name "{{ project_user }}"'
+          when:
+            - "'NoSuchEntity' in user_check.error.code"
+
+        - name: assign profile to iam_group
+          ansible.builtin.shell: 'aws iam attach-group-policy --group-name "{{ project_user }}" --policy-arn arn:aws:iam::aws:policy/PowerUserAccess'
+          when:
+            - "'NoSuchEntity' in user_check.error.code"
+
+        - name: create iam user who will create ec2
+          ansible.builtin.shell: 'aws iam create-user --user-name "{{ project_user }}"'
+          when:
+            - "'NoSuchEntity' in user_check.error.code"
+
+        - name: add user to group
+          ansible.builtin.shell: 'aws iam add-user-to-group --group-name "{{ project_user }}" --user-name "{{ project_user }}"'
+          when:
+            - "'NoSuchEntity' in user_check.error.code"
+
+        - name: create iam user keys
+          ansible.builtin.shell: 'aws iam create-access-key --user-name "{{ project_user }}" >> ~/.aws/ansible_key_list.txt'
+          when: "'NoSuchEntity' in user_check.error.code"
+
+        - name: create iam users login-profile
+          ansible.builtin.shell: 'aws iam create-login-profile --user-name "{{ project_user }}" --password "{{ project_user_password }}"'
+          when: "'NoSuchEntity' in user_check.error.code"
+
+        - name: list iam users key
+          ansible.builtin.shell: 'cat key_list.txt | grep "UserName\|AccessKeyId\|SecretAccessKey" | sed "s/,$//"'
+          register: list_key
+          when: "'NoSuchEntity' in user_check.error.code"
+      ignore_errors: true
   tasks:
-    - name: create iam user who will create ec2
-      community.aws.iam_user:
-        name: "{{ project_user }}"
-        password: "{{ project_user_password }}"
-        managed_policies:
-          - arn:aws:iam::aws:policy/PowerUserAccess
-        state: present
+    - name: start an instance with a public IP address
+      amazon.aws.ec2_instance:
+        aws_access_key: "{{ project_user_aws_access_key }}"
+        aws_secret_key: "{{ project_user_aws_secret_key }}"
+        name: "pdc-globus-{{ runtime_env | default('staging') }}"
+        vpc_subnet_id: "{{ vpc_subnet_id }}"
+        security_groups:
+          - "{{ globus_ssh_security_group }}"
+          - "{{ globus_app_security_group }}"
+        instance_type: "{{ instance_type }}"
+        image_id: "{{ image_id }}"
+        wait: true
+        region: "{{ region }}"
+        cpu_options:
+          core_count: "{{ aws_core_count | default('1') }}"
+          threads_per_core: "{{ aws_threads_count | default('1') }}"
+        network:
+          assign_public_ip: true
+        tags:
+          Name: PRDS
+      register: ec2
 
-    - name: create iam users key
-      community.aws.iam_access_key:
-        user_name: "{{ project_user }}"
-        state: present
+    - name: Wait for SSH to come up
+      delegate_to: "{{ item.public_dns_name }}"
+      wait_for_connection:
+        delay: 60
+        timeout: 320
+      loop: "{{ ec2.instances }}"
 
-    - name: Fetch Access keys for a iam user
-      community.aws.iam_access_key_info:
-        user_name: "{{ project_user }}"
-      register: user_key
-
-    - debug:
-        var: user_key.stdout_lines
-
-          #    - name: start an instance with a public IP address
-          #      amazon.aws.ec2_instance:
-          #        name: "pdc-globus-{{ runtime_env | default('staging') }}"
-          #        vpc_subnet_id: "{{ vpc_subnet_id }}"
-          #        security_groups:
-          #          - "{{ globus_ssh_security_group }}"
-          #          - "{{ globus_app_security_group }}"
-          #        instance_type: "{{ instance_type }}"
-          #        image_id: "{{ image_id }}"
-          #        wait: true
-          #        region: "{{ region }}"
-          #        cpu_options:
-          #          core_count: "{{ aws_core_count | default('1') }}"
-          #          threads_per_core: "{{ aws_threads_count | default('1') }}"
-          #        network:
-          #          assign_public_ip: true
-          #        tags:
-          #          Name: PRDS
-          #      register: ec2
-          #
-          #    - name: Wait for SSH to come up
-          #      delegate_to: "{{ item.public_dns_name }}"
-          #      wait_for_connection:
-          #        delay: 60
-          #        timeout: 320
-          #      loop: "{{ ec2.instances }}"
-          #
-          #  post_tasks:
-          #    - name: tell everyone on slack you ran an ansible playbook
-          #      community.general.slack:
-          #        token: "{{ vault_pul_slack_token }}"
-          #        msg: "Ansible ran `{{ ansible_play_name }}` on {{ inventory_hostname }}"
-          #        channel: #server-alerts
+  post_tasks:
+    - name: tell everyone on slack you ran an ansible playbook
+      community.general.slack:
+        token: "{{ vault_pul_slack_token }}"
+        msg: "Ansible ran `{{ ansible_play_name }}` on {{ inventory_hostname }}"
+        channel: #server-alerts
