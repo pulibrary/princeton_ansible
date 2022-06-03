@@ -1,7 +1,8 @@
 ---
-# Ansible expects you to have `~/.aws/credentials` configured.
+# this playbook will create a globus VM
+# Ansible expects you to have `~/.aws/credentials` configured
 # you will need to create these on your own
-# the playbook itself will run as `{{ project_user }}` as created in the `pre_tasks` block
+# the playbook will create a user `{{ project_user }}` as created in the `pre_tasks` block
 # If the playbook creates a new `{{ project_user }}` with access keys and saves them in your
 # ~/.aws/ansible_key_list.txt if none exists. These variables will need to go inventory_hostname
 # `group_vars/globus/vault.yml` if this is the first time running
@@ -13,7 +14,7 @@
 # in order to install boto3 and other AWS required libraries.
 #
 
-- name: build an ec2 instance
+- name: build a Globus ec2 instance
   hosts: localhost
   gather_facts: false
   vars_files:
@@ -61,6 +62,26 @@
           when: "'NoSuchEntity' in user_check.error.code"
       ignore_errors: true
   tasks:
+    - name: create globus security group
+      amazon.aws.ec2_group:
+        name: pul-acdc-globus-sg
+        aws_access_key: "{{ project_user_aws_access_key }}"
+        aws_secret_key: "{{ project_user_aws_secret_key }}"
+        description: prds-globus security group
+        vpc_id: "{{ vpc_id }}"
+        group_id: "{{ group_id }}"
+        rules:
+          - proto: tcp
+            ports:
+              - 80
+              - 443
+              - 50000 - 51000
+            cidr_ip: 0.0.0.0/0
+          - proto: tcp
+            from_port: 2811
+            to_port: 2811
+            cidr_ip: "{{ globus_cidr_range }}"
+
     - name: start an instance with a public IP address
       amazon.aws.ec2_instance:
         aws_access_key: "{{ project_user_aws_access_key }}"
@@ -80,7 +101,7 @@
         network:
           assign_public_ip: true
         tags:
-          Name: PRDS
+          Name: prds-globus
       register: ec2
 
     - name: Wait for SSH to come up
