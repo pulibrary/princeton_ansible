@@ -1,13 +1,13 @@
 ---
 - name: Install apt-transport-https
-  apt:
+  ansible.builtin.apt:
     name: apt-transport-https
     state: present
   when: not ansible_check_mode
 
 - name: Install ubuntu apt-key server
-  apt_key:
-    id: A2923DFF56EDA6E76E55E492D3A80E30382E94DE
+  ansible.builtin.apt_key:
+    id: 33EE313BAD9589B7
     keyserver: "{{ datadog_apt_backup_keyserver if use_apt_backup_keyserver else datadog_apt_keyserver }}"
     state: present
     # keyserver.ubuntu.com is a pool of server, we should retry if one of them is down
@@ -17,14 +17,14 @@
   when: datadog_apt_key_url_new is not defined
 
 - name: Install Datadog apt-key
-  apt_key:
-    id: A2923DFF56EDA6E76E55E492D3A80E30382E94DE
+  ansible.builtin.apt_key:
+    id: 33EE313BAD9589B7
     url: "{{ datadog_apt_key_url_new }}"
     state: present
   when: datadog_apt_key_url_new is defined
 
 - name: Ensure Datadog non-https repositories are deprecated
-  apt_repository:
+  ansible.builtin.apt_repository:
     repo: "{{ item }}"
     state: "absent"
     update_cache: true
@@ -34,21 +34,21 @@
   when: not ansible_check_mode
 
 - name: Ensure Datadog repository is up-to-date
-  apt_repository:
+  ansible.builtin.apt_repository:
     repo: "{{ datadog_apt_repo }}"
     state: "{% if datadog_agent5 %}absent{% else %}present{% endif %}"
     update_cache: true
   when: not ansible_check_mode
 
 - name: (agent5) Ensure Datadog repository is up-to-date
-  apt_repository:
+  ansible.builtin.apt_repository:
     repo: "{{ datadog_agent5_apt_repo }}"
     state: "{% if datadog_agent5 %}present{% else %}absent{% endif %}"
     update_cache: true
   when: not ansible_check_mode
 
 - name: Ensure pinned version of Datadog agent is installed
-  apt:
+  ansible.builtin.apt:
     name: "datadog-agent={{ datadog_agent_version }}"
     state: present
     force: "{{ datadog_agent_allow_downgrade }}"
@@ -57,7 +57,7 @@
   when: (datadog_agent_version | length != 0) and (not ansible_check_mode)
 
 - name: Ensure Datadog agent is installed
-  apt:
+  ansible.builtin.apt:
     name: datadog-agent
     state: latest  # noqa 403
     update_cache: true
