@@ -80,6 +80,38 @@
         state: directory
       delegate_to: "{{ dest_host }}"
 
+    - name: generate SSH key postgresql_sync_key
+      community.crypto.openssh_keypair:
+        path: "~/.ssh/postgresql_sync_key"
+        type: rsa
+        size: 4096
+        state: present
+        force: false
+      become: true
+      become_user: "{{ deploy_user }}"
+
+    - name: Fetch the postgresql_sync_key from the current database host
+      run_once: true
+      ansible.builtin.fetch:
+        src: "~/.ssh/postgresql_sync_key.pub"
+        dest: "/tmp/"
+        flat: true
+      become: true
+      become_user: "{{ deploy_user }}"
+
+    - name: push the postgresql_sync_key to {{ dest_host }}
+      ansible.builtin.copy:
+        src: /tmp/postgresql_sync_key.pub
+        dest: /tmp/
+      delegate_to: "{{ dest_host }}"
+
+    - name: install the key
+      ansible.posix.authorized_key:
+        user: "{{ deploy_user }}"
+        state: present
+        key: "{{ lookup('file', '/tmp/postgresql_sync_key.pub') }}"
+      delegate_to: "{{ dest_host }}"
+
     - name: transfer the databases
       ansible.builtin.command: /usr/bin/rsync -avz "{{ file_path }}/{{ now }}/{{ application_db_name }}.dump.gz" "{{ dest_host }}:{{ file_path }}/{{ now }}" -e "ssh -o StrictHostKeyChecking=no"
       become: true

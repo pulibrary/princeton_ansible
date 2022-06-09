@@ -1,0 +1,36 @@
+---
+# Ansible expects you to have `~/.aws/credentials` configured with an iam user
+# you will need to create these on your own
+# the playbook will create a group `{{ pul_group }}` if one does not exist
+#
+# your iam `{{ dev_user }}` will be given permissions assigned to the group
+#
+# pass the ansible variable for the group and the user as seen below:
+#
+# ansible-playbook -vv -e pul_group=rdss -e dev_user=bess playbooks/aws_group_access.yml
+#
+# NOTE: You may need to run `pipenv sync` in your princeton_ansible shell
+# in order to install boto3 and other AWS required libraries.
+#
+
+- name: create permissions for developers access
+  hosts: localhost
+  gather_facts: false
+  vars:
+    - pul_user: "{{ pul_group }}"
+    - dev_user: "{{ dev_user }}"
+  tasks:
+    - name: check for "{{ pul_group }}"
+      community.aws.iam_access_key_info:
+        user_name: "{{ pul_user }}"
+      register: user_check
+      ignore_errors: true
+
+    - name: Create a group with a managed policy using its ARN
+      community.aws.iam_group:
+        name: "{{ pul_group }}"
+        managed_policies:
+          - arn:aws:iam::aws:policy/AdministratorAccess
+        users:
+          - "{{ dev_user }}"
+        state: present

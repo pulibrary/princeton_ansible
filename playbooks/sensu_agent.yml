@@ -1,0 +1,62 @@
+---
+# installs the sensu-go agent on a monitored machine
+# you must pass the target host group
+# plus the environment and the app_name for the agent configuration
+# For example:
+# ansible-playbook playbooks/sensu_agent.yml -e group_name=pdc_describe_staging -e env=staging -e app_name=pdc_describe
+- name: install and configure Sensu-go agent
+  hosts: "{{ group_name }}"
+  remote_user: pulsys
+  become: true
+  vars:
+    build_backend: false
+    install_agent: true
+
+  roles:
+    - sensu
+
+  post_tasks:
+  - name: tell everyone on slack you ran an ansible playbook
+    community.general.slack:
+      token: "{{ vault_pul_slack_token }}"
+      msg: "Ansible ran `{{ ansible_play_name }}` on {{ inventory_hostname }}"
+      channel: #server-alerts
+
+# If we ever decide to move away from the script install, here are the install steps from the collection:
+#
+  # - name: Fetch the apt repository key
+  #   uri:
+  #     url: https://{{ packagecloud_auth }}packagecloud.io/sensu/{{ channel }}/gpgkey
+  #     force_basic_auth: true
+  #     return_content: true
+  #   register: apt_key_download
+    # Fetching resource into memory does not change the system at all, so we
+    # never report a change here (helps keep the playbook idempotent). And by the
+    # same line of reasoning, we are also safe to run in check mode (the uri
+    # module does not support check mode and would cause us grief if we skipped it).
+    # changed_when: false
+    # check_mode: false
+
+# successful scripted install creates /etc/apt/sources.list.d/sensu_stable.list
+# with this content:
+# deb [signed-by=/usr/share/keyrings/sensu_stable-archive-keyring.gpg] https://packagecloud.io/sensu/stable/ubuntu/ bionic main
+# deb-src [signed-by=/usr/share/keyrings/sensu_stable-archive-keyring.gpg] https://packagecloud.io/sensu/stable/ubuntu/ bionic main
+
+  # - name: install packages
+  #   apt:
+  #     name: "{{ 'apt' | sensu.sensu_go.package_name(item, version, build) }}"
+  #     state: "{{ (version == 'latest') | ternary('latest', 'present') }}"
+  #     # FIXME(@tadeboro): This is a temporary "fix" for
+  #     # https://github.com/ansible/ansible/issues/29451.
+  #     force: true
+  #   loop: "{{ components }}"
+
+  # - name: Set owner of restart handler
+  #   set_fact:
+  #     manage_sensu_agent_service: true
+
+#  - name: Configure the agent
+#    include_tasks: configure.yml
+
+#  - name: Load Linux locations
+#    include_vars: linux.yml
