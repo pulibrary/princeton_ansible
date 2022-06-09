@@ -1,0 +1,59 @@
+# {{ ansible_managed }}
+[sssd]
+config_file_version = 2
+services = nss, pam, autofs
+domains = {{ sssd_domain }}
+
+[domain/{{ sssd_domain }}]
+id_provider = ldap
+auth_provider = ldap
+chpass_provider = ldap
+#access_provider = ldap
+autofs_provider = ldap
+
+{# connection configuration #}
+ldap_schema = {{ sssd_schema }}
+ldap_uri = {{ sssd_uris | join(',') }}
+ldap_tls_cacertdir = /etc/ssl/certs
+ldap_id_use_start_tls = True
+ldap_tls_reqcert = never
+
+{# search configuration #}
+ldap_search_base = {{ sssd_search_base }}
+ldap_default_bind_dn = {{ sssd_bind_dn }}
+ldap_default_authtok_type = password
+#ldap_default_authtok = ... # See conf.d/{{ sssd_domain }}.conf
+cache_credentials = True
+entry_cache_timeout = 5400
+
+## Filter
+# LDAP
+#access_provider = ldap
+#ldap_access_order = filter
+#ldap_access_filter = (memberof=cn=groupeA,ou=Groupes,dc=domain,dc=tld)
+
+{# mapping/attribute configuration #}
+override_homedir = {{ sssd_home_path }}/%u
+{% if sssd_shell_override %}
+override_shell = {{ sssd_shell }}
+{% endif %}
+
+krb5_realm = #
+
+# Simple
+#access_provider = simple
+#simple_allow_groups = groupeA,ou=Groupes,dc=domain,dc=tld
+
+ldap_user_uuid = entryuuid
+ldap_group_uuid = entryuuid
+enumerate = False
+
+
+[nss]
+
+filter_groups = root
+filter_users = root,ldap,named,avahi,haldaemon,dbus,radiusd,news,nscd
+homedir_substring = /home
+
+[pam]
+reconnection_retries = 3
