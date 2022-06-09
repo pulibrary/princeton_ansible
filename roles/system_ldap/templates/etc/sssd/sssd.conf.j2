@@ -1,36 +1,33 @@
-# {{ ansible_managed }}
+# {{ ansible_managed | comment }}
 [sssd]
 config_file_version = 2
 services = nss, pam, autofs
-domains = {{ sssd_domain }}
+domains = "{{ sssd_domain }}"
 
 [domain/{{ sssd_domain }}]
 id_provider = ldap
 auth_provider = ldap
-chpass_provider = ldap
-#access_provider = ldap
-autofs_provider = ldap
+chpass_provider = krb5
+access_provider = ldap
 
 {# connection configuration #}
-ldap_schema = {{ sssd_schema }}
-ldap_uri = {{ sssd_uris | join(',') }}
-ldap_tls_cacertdir = /etc/ssl/certs
+ldap_schema = "{{ sssd_schema }}"
+ldap_uri = "{{ sssd_uris | join(',') }}"
+ldap_tls_cacertdir = /usr/local/share/ca-certificates
 ldap_id_use_start_tls = True
-ldap_tls_reqcert = never
+ldap_tls_reqcert = demand
 
 {# search configuration #}
-ldap_search_base = {{ sssd_search_base }}
-ldap_default_bind_dn = {{ sssd_bind_dn }}
-ldap_default_authtok_type = password
-#ldap_default_authtok = ... # See conf.d/{{ sssd_domain }}.conf
+ldap_search_base = "{{ sssd_search_base }}"
+ldap_default_bind_dn = "{{ sssd_bind_dn }}"
+ldap_default_authtok_type = "{{ sssd_bind_dn_password }}"
 cache_credentials = True
 entry_cache_timeout = 5400
 
 ## Filter
 # LDAP
-#access_provider = ldap
-#ldap_access_order = filter
-#ldap_access_filter = (memberof=cn=groupeA,ou=Groupes,dc=domain,dc=tld)
+access_provider = krb5
+ldap_access_order = expire
 
 {# mapping/attribute configuration #}
 override_homedir = {{ sssd_home_path }}/%u
@@ -38,11 +35,7 @@ override_homedir = {{ sssd_home_path }}/%u
 override_shell = {{ sssd_shell }}
 {% endif %}
 
-krb5_realm = #
-
-# Simple
-#access_provider = simple
-#simple_allow_groups = groupeA,ou=Groupes,dc=domain,dc=tld
+krb5_realm = "{{ sssd_domain }}"
 
 ldap_user_uuid = entryuuid
 ldap_group_uuid = entryuuid
