@@ -1,5 +1,8 @@
 ---
-- hosts: friends_of_pul_staging
+# by default this playbook runs in the staging environment
+# to run in production, pass '-e runtime_env=production'
+- name: build the friends of pul site
+  hosts: friends_of_pul_{{ runtime_env | default('staging') }}
   remote_user: pulsys
   become: true
   vars:
@@ -10,17 +13,19 @@
         - run a cap for friends_of_pul
         - where needed make sure server is greenlisted on [lib-ponyexpress](https://github.com/pulibrary/pul-the-hard-way/blob/master/services/smtp-mail-server.md)
   vars_files:
-    - ../group_vars/friends_of_pul/friends_of_pul_staging.yml
+    - ../group_vars/friends_of_pul/{{ runtime_env | default('staging') }}.yml
+    - ../group_vars/friends_of_pul/common.yml
     - ../group_vars/friends_of_pul/vault.yml
-    # need information to connect to solr staging cluster
   roles:
     - role: friends_of_pul
+    - role: datadog
+      when: runtime_env | default('staging') == "production"
 
   post_tasks:
     - name: tell everyone on slack you ran an ansible playbook
-      slack:
+      community.general.slack:
         token: "{{ vault_pul_slack_token }}"
-        msg: "{{ inventory_hostname }} completed"
+        msg: "Ansible ran `{{ ansible_play_name }}` on {{ inventory_hostname }}"
         channel: #server-alerts
 
     - name: post role reminders
