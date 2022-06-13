@@ -1,14 +1,14 @@
 ---
 # tasks file for roles/locator
 - name: locator | install mysql php driver & cif utils
-  apt:
+  ansible.builtin.apt:
     name: ["php7.4-mysql", "cifs-utils"]
     state: present
     update_cache: true
 
 # needed for capistrano to have access to this file
 - name: locator | Copy template into deploy user home directory for cap
-  template:
+  ansible.builtin.template:
     src: "db_config.php.j2"
     dest: "/home/{{ deploy_user }}/db_config.php"
     owner: "{{ deploy_user }}"
@@ -17,7 +17,7 @@
   notify: restart apache
 
 - name: locator | Change owner to lib/www so deploy has access
-  file:
+  ansible.builtin.file:
     path: "/var/www"
     state: directory
     owner: "{{ deploy_user }}"
@@ -25,20 +25,20 @@
     mode: 0755
 
 - name: locator | Create mount directories
-  file:
+  ansible.builtin.file:
     path: '/mnt/diglibdata/{{ locator_fileshare_mount }}'
     state: directory
     mode: 0755
 
 - name: locator |  Copy smb credentials
-  copy:
+  ansible.builtin.copy:
     src: "files/locator.smb.credentials"
     dest: "/etc/locator.smb.credentials"
     mode: 0644
   when: running_on_server
 
 - name: locator | Mount Drupal fileshare
-  mount:
+  ansible.builtin.mount:
     name: '/mnt/diglibdata/{{ locator_fileshare_mount }}'
     src: '//diglibdata1.princeton.edu/{{ locator_fileshare_mount }}'
     fstype: cifs
