@@ -5,7 +5,16 @@
   remote_user: pulsys
   become: true
   tasks:
-    - name: Update apt
+    - name: Add an apt key by id from a keyserver
+      ansible.builtin.apt_key:
+        keyserver: keyserver.ubuntu.com
+        id: "{{ recv_key | default(omit) }}"
+      when: recv_key is defined
+
+    - name: update release info
+      ansible.builtin.command: apt-get --allow-releaseinfo-change update
+
+    - name: Update apt certificates
       ansible.builtin.apt:
         name: ca-certificates
         update_cache: true
