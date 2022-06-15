@@ -1,7 +1,7 @@
 ---
 ## Create Mounts
 - name: Create mount directories
-  file:
+  ansible.builtin.file:
     path: '/mnt/{{ item }}'
     state: 'directory'
     mode: 0755
@@ -11,7 +11,7 @@
 
 # Scratch Credentials
 - name: Copy smb credentials
-  copy:
+  ansible.builtin.copy:
     src: "files/{{ item }}"
     dest: "/etc/{{ item }}"
     mode: 0644
@@ -21,7 +21,7 @@
     - bibdata_share.smb.credentials
 
 - name: Create mount to scratch space (used for bulk ingest and other bulk operations)
-  mount:
+  ansible.posix.mount:
     name: '/mnt/isilon/ingest_scratch'
     src: '//diglibdata1.princeton.edu/hydra/binaries/ingest_scratch/bibdata_scratch'
     fstype: cifs
@@ -30,7 +30,7 @@
   when: running_on_server
 
 - name: Create mount to bibdata share (isilon mount for file storage)
-  mount:
+  ansible.posix.mount:
     name: '/mnt/bibdata_share'
     src: '//diglibdata1.princeton.edu/bibdata'
     fstype: cifs
@@ -39,18 +39,18 @@
   when: running_on_server
 
 - name: Create data directory
-  file:
+  ansible.builtin.file:
     path: '{{ bibdata_data_dir | dirname }}'
     state: directory
-    recurse: yes
+    recurse: true
     owner: '{{ deploy_user }}'
     group: '{{ deploy_user }}'
 
 - name: Make sure the mount directory exists
-  file:
+  ansible.builtin.file:
     path: '/mnt/bibdata_share/{{ bibdata_mount_env }}'
     state: directory
-    recurse: no
+    recurse: false
     owner: '{{ deploy_user }}'
     group: '{{ deploy_user }}'
     mode: 0644
@@ -58,7 +58,7 @@
 
 ## Symlink to Mounts
 - name: Create symlinks
-  file:
+  ansible.builtin.file:
     src: '{{ item.src }}'
     dest: '{{ item.link }}'
     owner: '{{ deploy_user }}'
@@ -71,7 +71,7 @@
       link: '{{ bibdata_data_dir }}'
 
 - name: Create mount directory structure
-  file:
+  ansible.builtin.file:
     path: '/{{ item }}'
     state: 'directory'
     owner: '{{ deploy_user }}'
