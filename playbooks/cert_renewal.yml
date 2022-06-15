@@ -56,34 +56,25 @@
     servicenow.servicenow.snow_record:
       state: present
       table: requested_item
-      username: "{{ snow_username }}"
+      username: snowautomation
       password: "{{ vault_snow_password }}"
-      instance: "{{ snow_instance }}"
-      data:
+      instance: princeton
+    data:
 # not sure what standard (non-custom) fields we need here
 # these are two examples from a blog post
 #        severity: "{{ sn_severity }}"
 #        priority: "{{ sn_priority }}"
+        affected_user: snowautomation
+        item: "Request SSL Certificate"
         short_description: "Allow website creators to request SSL certificate."
-        csr: "{{ host_name_csr.text }}" # check the JSON here!
+        csr: "{{ host_name_csr.text }}"
+        # this field might be "Certificate Signing Request"
+        # check the JSON, too!
         is_san_cert: "{{ san_cert | default 'no' }}"
         web_software: "Apache2 and Nginx"
-# Ask OIT how they use this field.
-# I discovered that some library sites don't run on apache, but I have always put "apache2 and nginx" here
+        additional_comments: "This is for {{ host_name }}.princeton.edu. Please use "lsupport@princeton.edu" as the contact email. Thanks!"
     register: ssl_ritm
 
   - name: look at new snow_record
     debug:
       var: ssl_ritm.record
-
-# We could also just automate the cert renewal itself
-# either in addition to, or instead of, the ServiceNow task
-# something like this:
-  - name: Generate an OpenSSL certificate signed with PU's CA certificate
-    openssl_certificate:
-      path: /path/to/crt/princeton.edu.crt
-      csr_path: "{{ host_name_csr.text }}" # check the JSON here!
-      ownca_path: /path/to/ssl/crt/princeton.edu_CA.crt
-      ownca_privatekey_path: /path/to/ssl/private/princeton.edu_CA.pem
-      provider: ownca
-    register: renewed_cert
