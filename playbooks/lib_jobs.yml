@@ -1,0 +1,22 @@
+---
+# by default this playbook runs in the staging environment
+# to run in production, pass '-e runtime_env=production'
+- name: build the lib_jobs site
+  hosts: lib_jobs_{{ runtime_env | default('staging') }}
+  remote_user: pulsys
+  become: true
+  vars_files:
+    - ../group_vars/lib_jobs/vault.yml
+    - ../group_vars/lib_jobs/common.yml
+    - ../group_vars/lib_jobs/{{ runtime_env | default('staging') }}.yml
+  roles:
+    - role: roles/lib_jobs
+    - role: roles/datadog
+      when: runtime_env | default('staging') == "production"
+
+  post_tasks:
+    - name: tell everyone on slack you ran an ansible playbook
+      slack:
+        token: "{{ vault_pul_slack_token }}"
+        msg: "{{ inventory_hostname }} completed"
+        channel: #server-alerts
