@@ -13,8 +13,47 @@
 
 - name: bugzilla | download bugzilla
   ansible.builtin.unarchive:
-    src: "{{ mozilla_repo }}/webtools/bugzilla-{{ bugzilla_version }}/tar.gz"
+    src: "{{ mozilla_repo }}/webtools/bugzilla-{{ bugzilla_version }}.tar.gz"
     dest: "/var/www/"
     remote_src: true
 
-      # - name: bugzilla | rename file directory
+- name: bugzilla | symlink file directory
+  ansible.builtin.file:
+    src: "/var/www/bugzilla-{{ bugzilla_version }}"
+    dest: "/var/www/bugzilla"
+    state: link
+
+- name: bugzilla | install postgresql drivers
+  ansible.builtin.command: /usr/bin/perl install-module.pl DBD::Pg
+  args:
+    chdir: "/var/www/bugzilla/"
+
+- name: bugzilla | check bugzilla setup
+  ansible.builtin.command: ./checksetup.pl
+  args:
+    chdir: "/var/www/bugzilla/"
+  ignore_errors: true
+
+- name: bugzilla | install all perl modules
+  ansible.builtin.command: /usr/bin/perl install-module.pl --all
+  args:
+    chdir: "/var/www/bugzilla/"
+
+- name: bugzilla | set/update localconfig
+  ansible.builtin.lineinfile:
+    path: "/var/www/bugzilla/localconfig"
+    regexp: "{{ item.regexp }}"
+    line: "{{ item.line }}"
+  loop:
+    - {regexp: "^$db_driver", line: "$db_drive='Pg';"}
+    - {regexp: "^$db_host", line: "$db_host='{{ issuetracker_db_host }}';"}
+    - {regexp: "^$db_name", line: "$db_name='{{ issuetracker_db_name }}';"}
+    - {regexp: "^$db_user", line: "$db_user='{{ issuetracker_db_user }}';"}
+    - {regexp: "^$db_pass", line: "$db_pass='{{ issuetracker_db_password }}';"}
+    - {regexp: "^$webservergroup", line: "$webservergroup='www-data';"}
+
+- name: bugzilla | set/update htaccess
+  ansible.builtin.lineinfile:
+    path: "/var/www/bugzilla/.htaccess"
+    regexp: "^Options -"
+    line: "# Options - Indexes"
