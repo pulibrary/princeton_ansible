@@ -17,10 +17,16 @@
     dest: "/var/www/"
     remote_src: true
 
+- name: bugzilla | add plack app
+  ansible.builtin.copy:
+    src: plack_app
+    dest: "/var/www/bugzilla-{{ bugzilla_version }}/app.psgi"
+    mode: 0644
+
 - name: bugzilla | symlink file directory
   ansible.builtin.file:
     src: "/var/www/bugzilla-{{ bugzilla_version }}"
-    dest: "/var/www/bugzilla"
+    dest: "/var/www/html/bugzilla"
     state: link
 
 - name: bugzilla | install postgresql drivers
@@ -45,7 +51,7 @@
     regexp: "{{ item.regexp }}"
     line: "{{ item.line }}"
   loop:
-    - {regexp: "^$db_driver", line: "$db_drive='Pg';"}
+    - {regexp: "^$db_driver", line: "$db_driver='Pg';"}
     - {regexp: "^$db_host", line: "$db_host='{{ issuetracker_db_host }}';"}
     - {regexp: "^$db_name", line: "$db_name='{{ issuetracker_db_name }}';"}
     - {regexp: "^$db_user", line: "$db_user='{{ issuetracker_db_user }}';"}
@@ -57,3 +63,46 @@
     path: "/var/www/bugzilla/.htaccess"
     regexp: "^Options -"
     line: "# Options - Indexes"
+
+- name: bugzilla | install apache modules
+  community.general.apache2_module:
+    name: "{{ item }}"
+    state: present
+  notify: restart apache
+  loop:
+    - env
+    - proxy
+
+- name: bugzilla | startup starman
+  ansible.builtin.template:
+    src: starman.service
+    dest: "/etc/systemd/system/starman.service"
+    mode: 0644
+
+- name: bugzilla | keep starman running
+  ansible.builtin.service:
+    name: starman
+    enabled: true
+    state: started
+  when: running_on_server
+
+- name: bugzilla | add bugzilla template
+  ansible.builtin.template:
+    src: "bugzilla_conf.j2"
+    dest: "/etc/apache2/sites-available/bugzilla.conf"
+    mode: 0644
+
+- name: bugzilla | remove apache2 default
+  ansible.builtin.file:
+    path: "/etc/apache2/sites-enabled/000-default.conf"
+    state: absent
+  changed_when: false
+
+- name: bugzilla | symbolic link to bugzilla config
+  file:
+    src: "/etc/apache2/sites-available/bugzilla.conf"
+    dest: "/etc/apache2/sites-enabled/bugzilla.conf"
+    state: link
+  when: running_on_server
+  changed_when: false
+  notify: restart apache2
