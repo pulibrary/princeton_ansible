@@ -1,22 +1,17 @@
 ---
 # by default this playbook runs in the staging environment
-# to run in qa, pass '-e runtime_env=qa'
 # to run in production, pass '-e runtime_env=production'
-- name: Build bibdata infrastructure
-  hosts: bibdata_{{ runtime_env | default('staging') }}
+- name: build the locator site
+  hosts: locator_{{ runtime_env | default('staging') }}
   remote_user: pulsys
   become: true
   vars_files:
-    - ../site_vars.yml
-    - ../group_vars/bibdata/vault.yml
-    - ../group_vars/bibdata/{{ runtime_env | default('staging') }}.yml
+    - ../group_vars/locator/{{ runtime_env | default('staging') }}.yml
+    - ../group_vars/locator/common.yml
+    - ../group_vars/locator/vault.yml
   roles:
-    - role: roles/bibdata
-    - role: roles/bibdata_sqs_poller
-    - role: roles/sidekiq_worker
-      when: "'worker' in inventory_hostname"
-    - role: 'hr_share'
-    - role: roles/datadog
+    - role: locator
+    - role: datadog
       when: runtime_env | default('staging') == "production"
   post_tasks:
     - name: tell everyone on slack you ran an ansible playbook

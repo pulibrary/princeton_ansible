@@ -1,64 +1,58 @@
 ---
 ## Create Mounts
-- name: Create mount directories
-  file:
+- name: bibdata | Create mount directories
+  ansible.builtin.file:
     path: '/mnt/{{ item }}'
     state: 'directory'
     mode: 0755
-  with_items:
+  loop:
     - isilon
     - bibdata_share
 
 # Scratch Credentials
-- name: Copy smb credentials
-  copy:
+- name: bibdata | Copy smb credentials
+  ansible.builtin.copy:
     src: "files/{{ item }}"
     dest: "/etc/{{ item }}"
     mode: 0644
   when: running_on_server
-  with_items:
+  loop:
     - scratch.smb.credentials
     - bibdata_share.smb.credentials
 
-- name: Create mount to scratch space (used for bulk ingest and other bulk operations)
-  mount:
-    name: '/mnt/isilon/ingest_scratch'
-    src: '//diglibdata1.princeton.edu/hydra/binaries/ingest_scratch/bibdata_scratch'
+- name: bibdata | Create mount to scratch space and bibdata mount share
+  ansible.posix.mount:
+    name: '/mnt/{{ item.name }}'
+    src: '{{ item.src }}'
     fstype: cifs
     opts: 'credentials=/etc/scratch.smb.credentials,uid={{ deploy_user_uid }},gid=33'
     state: mounted
   when: running_on_server
+  loop:
+    - {name: isilon/ingest_scratch, src: "//diglibdata1.princeton.edu/hydra/binaries/ingest_scratch/bibdata_scratch"}
+    - {name: bibdata_share, src: "//diglibdata1.princeton.edu/bibdata"}
 
-- name: Create mount to bibdata share (isilon mount for file storage)
-  mount:
-    name: '/mnt/bibdata_share'
-    src: '//diglibdata1.princeton.edu/bibdata'
-    fstype: cifs
-    opts: 'credentials=/etc/bibdata_share.smb.credentials,uid={{ deploy_user_uid }},gid=33'
-    state: mounted
-  when: running_on_server
-
-- name: Create data directory
-  file:
+- name: bibdata | Create data directory
+  ansible.builtin.file:
     path: '{{ bibdata_data_dir | dirname }}'
     state: directory
-    recurse: yes
+    recurse: true
     owner: '{{ deploy_user }}'
     group: '{{ deploy_user }}'
 
-- name: Make sure the mount directory exists
-  file:
+- name: bibdata | Make sure the mount directory exists
+  ansible.builtin.file:
     path: '/mnt/bibdata_share/{{ bibdata_mount_env }}'
     state: directory
-    recurse: no
+    recurse: false
     owner: '{{ deploy_user }}'
     group: '{{ deploy_user }}'
     mode: 0644
   run_once: true
 
 ## Symlink to Mounts
-- name: Create symlinks
-  file:
+- name: bibdata | Create symlinks
+  ansible.builtin.file:
     src: '{{ item.src }}'
     dest: '{{ item.link }}'
     owner: '{{ deploy_user }}'
@@ -70,8 +64,8 @@
     - src: '/mnt/bibdata_share/{{ bibdata_mount_env }}'
       link: '{{ bibdata_data_dir }}'
 
-- name: Create mount directory structure
-  file:
+- name: bibdata | Create mount directory structure
+  ansible.builtin.file:
     path: '/{{ item }}'
     state: 'directory'
     owner: '{{ deploy_user }}'
