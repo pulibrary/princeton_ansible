@@ -79,3 +79,12 @@
     line: "{{ deploy_user }} ALL=(ALL) NOPASSWD: /usr/local/bin/bundle install"
     validate: "visudo -cf %s"
   when: cap_install_whenever
+
+- name: Tell git to consider the capistrano repo to be safe
+  community.general.git_config:
+    name: safe.directory
+    scope: file
+    file: ~/.gitconfig
+    value: "{{ capistrano_base_dir }}/{{ capistrano_directory }}/repo"
+  become: true
+  become_user: "{{ deploy_user }}"

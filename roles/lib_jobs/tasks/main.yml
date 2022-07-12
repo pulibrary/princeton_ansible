@@ -1,44 +1,45 @@
 ---
 # tasks file for roles/lib_jobs
 # needed for capistrano to have access
-- name: Install site configuration
-  template:
+- name: lib_jobs | Install site configuration
+  ansible.builtin.template:
     src: 'ruby_app_config'
     dest: '/home/{{ deploy_user }}/app_configs/{{ ruby_app_name }}'
     owner: '{{ deploy_user }}'
     group: '{{ deploy_user }}'
     mode: 0644
 
-- name: Create app directory structure
-  file:
+- name: lib_jobs | Create app directory structure
+  ansible.builtin.file:
     path: '/opt/{{ app_directory }}/shared/tmp'
     state: 'directory'
     owner: '{{ deploy_user }}'
     group: '{{ deploy_user }}'
     mode: 0755
 
-- name: Install dependencies
-  apt:
-    name: 'libmysqlclient-dev'
-    state: present
+- name: lib_jobs | rotate the logs for the cron job
+  ansible.builtin.template:
+    src: 'logrotate.d.lib_jobs.j2'
+    dest: '/etc/logrotate.d/lib_jobs_cron'
+    mode: 0644
 
 # PeopleSoft Mount
 
-- name: Create peoplesoft mount directories
-  file:
+- name: lib_jobs | Create peoplesoft mount directories
+  ansible.builtin.file:
     path: '/mnt/dms-smbserve'
     state: 'directory'
     mode: 0755
 
-- name: Copy peoplesoft smb credentials
-  copy:
+- name: lib_jobs | Copy peoplesoft smb credentials
+  ansible.builtin.copy:
     src: files/peoplesoft.smb.credentials
     dest: /etc/peoplesoft.smb.credentials
     mode: 0644
   when: running_on_server
 
-- name: Check mount for peoplesoft shared files
-  mount:
+- name: lib_jobs | Check mount for peoplesoft shared files
+  ansible.posix.mount:
     path: '/mnt/dms-smbserve/peoplesoft'
     src: '//{{ peoplesoft_samba_server }}/{{ peoplesoft_samba_directory }}'  # Use IP, //dms-smbserve isn't routable.
     fstype: cifs
@@ -48,8 +49,8 @@
   when: running_on_server
   become: true
 
-- name: Create mount for peoplesoft shared files
-  mount:
+- name: lib_jobs | Create mount for peoplesoft shared files
+  ansible.posix.mount:
     path: '/mnt/dms-smbserve/peoplesoft'
     src: '//{{ peoplesoft_samba_server }}/{{ peoplesoft_samba_directory }}'  # Use IP, //dms-smbserve isn't routable.
     fstype: cifs
@@ -58,8 +59,8 @@
   when: running_on_server and mount_info.changed
   become: true
 
-- name: Check mount for peoplesoft bursar shared files
-  mount:
+- name: lib_jobs | Check mount for peoplesoft bursar shared files
+  ansible.posix.mount:
     path: '/mnt/dms-smbserve/bursar'
     src: '//{{ peoplesoft_samba_server }}/{{ peoplesoft_bursar_samba_directory }}'  # Use IP, //dms-smbserve isn't routable.
     fstype: cifs
@@ -69,8 +70,8 @@
   when: running_on_server
   become: true
 
-- name: Create mount for peoplesoft bursar shared files
-  mount:
+- name: lib_jobs | Create mount for peoplesoft bursar shared files
+  ansible.posix.mount:
     path: '/mnt/dms-smbserve/bursar'
     src: '//{{ peoplesoft_samba_server }}/{{ peoplesoft_bursar_samba_directory }}'  # Use IP, //dms-smbserve isn't routable.
     fstype: cifs
@@ -81,21 +82,21 @@
 
 # Onbase Mount
 
-- name: Create onbase mount directories
-  file:
+- name: lib_jobs | Create onbase mount directories
+  ansible.builtin.file:
     path: '/mnt/oby14qa'
     state: 'directory'
     mode: 0755
 
-- name: Copy onbase smb credentials
-  copy:
+- name: lib_jobs | Copy onbase smb credentials
+  ansible.builtin.copy:
     src: files/onbase.smb.credentials
     dest: /etc/onbase.smb.credentials
     mode: 0644
   when: running_on_server
 
-- name: Check mount for onbase shared files
-  mount:
+- name: lib_jobs | Check mount for onbase shared files
+  ansible.posix.mount:
     path: '/mnt/oby14qa/onbase'
     src: '//{{ onbase_samba_server }}/{{ onbase_samba_directory }}'  # Use IP, //dms-smbserve isn't routable.
     fstype: cifs
@@ -105,8 +106,8 @@
   when: running_on_server
   become: true
 
-- name: Create mount for onbase shared files
-  mount:
+- name: lib_jobs | Create mount for onbase shared files
+  ansible.posix.mount:
     path: '/mnt/oby14qa/onbase'
     src: '//{{ onbase_samba_server }}/{{ onbase_samba_directory }}'  # Use IP, //dms-smbserve isn't routable.
     fstype: cifs
@@ -117,8 +118,8 @@
 
 # Aspace
 
-- name: Create aspace helpers directory
-  file:
+- name: lib_jobs | Create aspace helpers directory
+  ansible.builtin.file:
     path: '/opt/{{ aspace_directory }}'
     state: 'directory'
     owner: '{{ deploy_user }}'
