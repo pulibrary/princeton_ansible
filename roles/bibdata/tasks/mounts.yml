@@ -25,12 +25,12 @@
     name: '/mnt/{{ item.name }}'
     src: '{{ item.src }}'
     fstype: cifs
-    opts: 'credentials=/etc/scratch.smb.credentials,uid={{ deploy_user_uid }},gid=33'
+    opts: 'credentials=/etc/{{ item.credentials }}.smb.credentials,uid={{ deploy_user_uid }},gid=33'
     state: mounted
   when: running_on_server
   loop:
-    - {name: isilon/ingest_scratch, src: "//diglibdata1.princeton.edu/hydra/binaries/ingest_scratch/bibdata_scratch"}
-    - {name: bibdata_share, src: "//diglibdata1.princeton.edu/bibdata"}
+    - {name: isilon/ingest_scratch, src: "//diglibdata1.princeton.edu/hydra/binaries/ingest_scratch/bibdata_scratch", credentials: scratch}
+    - {name: bibdata_share, src: "//diglibdata1.princeton.edu/bibdata", credentials: bibdata_share}
 
 - name: bibdata | Create data directory
   ansible.builtin.file:
@@ -38,7 +38,7 @@
     state: directory
     recurse: true
     owner: '{{ deploy_user }}'
-    group: '{{ deploy_user }}'
+    group: 'www-data'
 
 - name: bibdata | Make sure the mount directory exists
   ansible.builtin.file:
@@ -46,8 +46,8 @@
     state: directory
     recurse: false
     owner: '{{ deploy_user }}'
-    group: '{{ deploy_user }}'
-    mode: 0644
+    group: 'www-data'
+    mode: 0755
   run_once: true
 
 ## Symlink to Mounts
@@ -56,7 +56,7 @@
     src: '{{ item.src }}'
     dest: '{{ item.link }}'
     owner: '{{ deploy_user }}'
-    group: '{{ deploy_user }}'
+    group: 'www-data'
     state: 'link'
     force: true
   when: running_on_server
@@ -69,7 +69,7 @@
     path: '/{{ item }}'
     state: 'directory'
     owner: '{{ deploy_user }}'
-    group: '{{ deploy_user }}'
+    group: 'www-data'
     mode: 0755
   when: running_on_server
   with_items:
