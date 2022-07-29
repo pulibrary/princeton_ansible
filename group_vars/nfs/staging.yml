@@ -1,9 +1,31 @@
 ---
+nfsserver_is_local: true
+bibdata_alma_staging1: "128.112.204.10/32"
+library_staging1: "128.112.203.46/32"
+library_staging2: "128.112.203.47/32"
+locator_staging1: "128.112.203.237/32"
+slavery_staging1: "128.112.202.236/32"
 nfsserver_exports:
-  - share: /mnt/library_shared_data
+  - share: "{{ drupal_fileshare_mount }}"
     hosts:
-      - name: "{{ }}"
+      - name: "{{ library_staging2 }}"
         options:
           - rw
           - sync
           - no_wdelay
+  - share: "{{ pas_fileshare_mount }}"
+    hosts:
+      - name: "{{ slavery_staging1 }}"
+        options:
+          - rw
+          - sync
+          - no_wdelay
+
+drupal_fileshare_mount: "/mnt/diglibdata/drupalweb"
+pas_fileshare_mount: "/mnt/diglibdata/pas"
+drupal_vms:
+  - bibdata_alma_staging1
+  - library_staging1
+  - library_staging2
+  - locator_staging1
+  - slavery_staging1

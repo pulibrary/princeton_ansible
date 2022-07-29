@@ -1,10 +1,30 @@
 ---
 # tasks file for nfsserver
+#
+# Create Mounts
+- name: nfsserver | Create mount directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: "directory"
+    mode: 0755
+    owner: nobody
+    group: nogroup
+  loop:
+    - "{{ drupal_fileshare_mount }}"
+    - "{{ pas_fileshare_mount }}"
+  when: nfsserver_is_local
 
 - name: nfsserver | install nfsserver packages
   ansible.builtin.apt:
     name: "{{ nfsserver_packages }}"
     state: present
+  when: nfsserver_is_local
+
+- name: nfsserver | install nfsclient packages
+  ansible.builtin.apt:
+    name: "{{ nfsclient_packages }}"
+    state: present
+  when: not nfsserver_is_local
 
 - name: nfsserver | configure exports
   ansible.builtin.template:
@@ -13,10 +33,12 @@
     mode: "0644"
   notify:
     - reload exports
+  when: nfsserver_is_local
 
 - name: nfsserver | start nfs server
   ansible.builtin.service:
     name: "{{ nfsserver_services }}"
     state: started
     enabled: true
+  when: nfsserver_is_local
   changed_when: false
