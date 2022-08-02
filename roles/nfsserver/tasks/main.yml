@@ -1,0 +1,22 @@
+---
+# tasks file for nfsserver
+
+- name: nfsserver | install nfsserver packages
+  ansible.builtin.apt:
+    name: "{{ nfsserver_packages }}"
+    state: present
+
+- name: nfsserver | configure exports
+  ansible.builtin.template:
+    src: exports.j2
+    dest: /etc/exports
+    mode: "0644"
+  notify:
+    - reload exports
+
+- name: nfsserver | start nfs server
+  ansible.builtin.service:
+    name: "{{ nfsserver_services }}"
+    state: started
+    enabled: true
+  changed_when: false

@@ -29,42 +29,6 @@ Princeton Ansible Playbooks
    step below, you may need to update pip within the shell; see
    https://stackoverflow.com/questions/65658570/pipenv-install-fails-on-cryptography-package-disabling-pep-517-processing-is-i/67095614#67095614
 
-### Ubuntu Bionic
-
- * `sudo add-apt-repository multiverse && sudo apt -y update`
- * `sudo apt -y install python-pip`
- * `sudo apt install apt-transport-https ca-certificates curl software-properties-common`
- * `curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add
-   -`
- * `sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu bionic stable"`
- * `sudo apt update`
- * `sudo apt install docker-ce`
-```bash
-curl https://pyenv.run | bash
-git clone https://github.com/rbenv/rbenv.git ~/.rbenv
-```
-
-Edit your `~/.bashrc` accordingly
-
-```bash
-pyenv install --list
-```
-From the resulting list select the version of python version that matches the
-version in the `Pipfile` in this repo
-
-```bash
-pip install --user pipenv
-```
-
-Add the docker group to your computer and add your user to this group with:
-
-```bash
-sudo groupadd docker
-sudo usermod -aG docker $USER
-```
-
-You will need to relaunch your shell.
-
 
 ## Setup your environment
 
@@ -302,3 +266,14 @@ update the file on lastpass so others can use
 
    1.  Create a PR and commit
    
+
+## Patching Dependabots
+
+  1. Make recommended changes from dependabot PR run `pipenv install -r
+     requirements.txt`
+
+  1. Check in changes to Pipfile.lock
+
+  1. Run the entire test suite locally
+
+  1. Re-run `pipenv lock -r > requirements.txt`
