@@ -15,6 +15,7 @@ Princeton Ansible Playbooks
     1. If using asdf, install the plugins as listed in .tool-versions
        ```
        asdf install
+       pip install pipenv
        ```
        **NOTE** You may encounter an error `include the header <string.h> or explicitly provide a declaration for 'memcmp'`.   Many thanks to folks here for solving this (https://github.com/openssl/openssl/issues/18720#issuecomment-1185940347). Instead run:
        ```
