@@ -24,7 +24,7 @@ Princeton Ansible Playbooks
     1. Otherwise:
        1. `brew install python`
        1. `brew install rbenv`
- 1. `brew install pipenv`
+       1. `brew install pipenv`
  1. If you have errors when running pipenv sync in the Setup your Environment
    step below, you may need to update pip within the shell; see
    https://stackoverflow.com/questions/65658570/pipenv-install-fails-on-cryptography-package-disabling-pep-517-processing-is-i/67095614#67095614
