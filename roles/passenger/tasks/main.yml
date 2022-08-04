@@ -28,12 +28,6 @@
   changed_when: false
   # TODO: This changed when should be removed when we upgrade to molecule 3
 
-# Nginx and passenger installation.
-- name: Phusion | Define nginx_passenger_packages
-  ansible.builtin.set_fact:
-    nginx_passenger_packages: "{{ __nginx_passenger_packages_16_04 }}"
-  when: ansible_distribution == 'Ubuntu' and ansible_distribution_major_version|int < 18
-
 - name: Phusion | Install Nginx and Passenger.
   ansible.builtin.apt:
     name: "{{ nginx_passenger_packages }}"
@@ -47,13 +41,14 @@
     mode: 0644
   notify: restart nginx
 
-- name: Phusion | Copy Passenger configuration into place.
-  ansible.builtin.template:
-    src: passenger.conf.j2
-    dest: /etc/nginx/passenger.conf
-    mode: 0644
-  notify: restart nginx
-  when: ansible_distribution == 'Ubuntu' and ansible_distribution_major_version|int < 18
+- name: Phusion | Insert/Update passenger-config reopen nginx rotate line
+  ansible.builtin.blockinfile:
+    path: "/etc/logrotate.d/nginx"
+    marker: "## ANSIBLE MANAGED BLOCK ###"
+    insertafter: "invoke-rc.d nginx rotate >/dev/null 2>&1"
+    block: |
+      passenger-config reopen-logs >/dev/null 2>&1 || true
+  changed_when: false
 
 - name: Phusion | Configure passenger virtual host.
   ansible.builtin.template:
