@@ -10,51 +10,24 @@ Princeton Ansible Playbooks
 
 ### MacOS
 
- * `brew install docker`
- * If using asdf, install the plugins as listed in .tool-versions
- * Otherwise:
-  * `brew install python`
-  * `brew install pipenv`
-  * `brew install rbenv`
- * If you have errors when running pipenv sync in the Setup your Environment
+ 1. `brew install docker`
+ 1. Install ruby and python
+    1. If using asdf, install the plugins as listed in .tool-versions
+       ```
+       asdf install
+       pip install pipenv
+       ```
+       **NOTE** You may encounter an error `include the header <string.h> or explicitly provide a declaration for 'memcmp'`.   Many thanks to folks here for solving this (https://github.com/openssl/openssl/issues/18720#issuecomment-1185940347). Instead run:
+       ```
+       optflags=-Wno-error=implicit-function-declaration ASDF_RUBY_BUILD_VERSION=v20220630 asdf install
+       ```
+    1. Otherwise:
+       1. `brew install python`
+       1. `brew install rbenv`
+       1. `brew install pipenv`
+ 1. If you have errors when running pipenv sync in the Setup your Environment
    step below, you may need to update pip within the shell; see
    https://stackoverflow.com/questions/65658570/pipenv-install-fails-on-cryptography-package-disabling-pep-517-processing-is-i/67095614#67095614
-
-### Ubuntu Bionic
-
- * `sudo add-apt-repository multiverse && sudo apt -y update`
- * `sudo apt -y install python-pip`
- * `sudo apt install apt-transport-https ca-certificates curl software-properties-common`
- * `curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add
-   -`
- * `sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu bionic stable"`
- * `sudo apt update`
- * `sudo apt install docker-ce`
-```bash
-curl https://pyenv.run | bash
-git clone https://github.com/rbenv/rbenv.git ~/.rbenv
-```
-
-Edit your `~/.bashrc` accordingly
-
-```bash
-pyenv install --list
-```
-From the resulting list select the version of python version that matches the
-version in the `Pipfile` in this repo
-
-```bash
-pip install --user pipenv
-```
-
-Add the docker group to your computer and add your user to this group with:
-
-```bash
-sudo groupadd docker
-sudo usermod -aG docker $USER
-```
-
-You will need to relaunch your shell.
 
 
 ## Setup your environment
@@ -293,3 +266,14 @@ update the file on lastpass so others can use
 
    1.  Create a PR and commit
    
+
+## Patching Dependabots
+
+  1. Make recommended changes from dependabot PR run `pipenv install -r
+     requirements.txt`
+
+  1. Check in changes to Pipfile.lock
+
+  1. Run the entire test suite locally
+
+  1. Re-run `pipenv lock -r > requirements.txt`

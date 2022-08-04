@@ -1,11 +1,11 @@
 ---
-- name: Install dependencies
-  apt:
+- name: shared_data | Install dependencies
+  ansible.builtin.apt:
     name: ["cifs-utils"]
     state: present
 
-- name: Copy smb credentials
-  copy:
+- name: shared_data | Copy smb credentials
+  ansible.builtin.copy:
     src: "files/{{ item }}"
     dest: "/etc/{{ item }}"
     mode: 0644
@@ -13,16 +13,16 @@
     - shared_data.smb.credentials
   when: running_on_server
 
-- name: Create mount directories
-  file:
+- name: shared_data | Create mount directories
+  ansible.builtin.file:
     path: "/mnt/{{ item }}"
     state: "directory"
     mode: 0755
   with_items:
     - shared_data
 
-- name: Mount shared_data share
-  mount:
+- name: shared_data | Mount shared_data share
+  ansible.posix.mount:
     name: "/mnt/shared_data"
     src: "//diglibdata1.princeton.edu/shared_data"
     fstype: cifs

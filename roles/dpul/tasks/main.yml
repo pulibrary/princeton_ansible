@@ -1,26 +1,23 @@
 ---
 ## Symlink to Mounts
 - name: dpul | create uploads directory
-  file:
+  ansible.builtin.file:
     path: '/mnt/shared_data/dpul_{{ rails_app_env }}/uploads'
     state: 'directory'
     mode: 0755
-  when: running_on_server
 
 - name: dpul | create shared public directory
-  file:
+  ansible.builtin.file:
     path: '/opt/{{ rails_app_directory }}/shared/public'
     state: 'directory'
     owner: '{{ deploy_user }}'
     group: '{{ deploy_user }}'
     mode: 0775
-  when: running_on_server
 
 - name: dpul | create uploads symlink as deploy user
-  become: true
-  become_user: '{{ deploy_user }}'
-  file:
+  ansible.builtin.file:
     src: '/mnt/shared_data/dpul_{{ rails_app_env }}/uploads'
     dest: '/opt/{{ rails_app_directory }}/shared/public/uploads'
     state: 'link'
-  when: running_on_server
+  become: true
+  become_user: '{{ deploy_user }}'
