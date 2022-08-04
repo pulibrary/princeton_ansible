@@ -1,17 +1,15 @@
 ---
 # by default this playbook runs in the staging environment
 # to run in production, pass '-e runtime_env=production'
-- name: installs mysql
-  hosts: mysql_{{ runtime_env | default('staging') }}
+- name: build the dpul website
+  hosts: dpul_{{ runtime_env | default('staging') }}
   remote_user: pulsys
   become: true
   vars_files:
-    - ../group_vars/mysql/{{ runtime_env | default('staging') }}.yml
-    - ../group_vars/mysql/vault.yml
+    - ../site_vars.yml
+    - ../group_vars/dpul/{{ runtime_env | default('staging') }}.yml
   roles:
-    - role: ../roles/mysql
-    - role: ../roles/datadog
-
+    - role: roles/dpul
   post_tasks:
     - name: tell everyone on slack you ran an ansible playbook
       community.general.slack:

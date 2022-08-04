@@ -3,6 +3,7 @@ postgres_host: 'lib-postgres-staging3.princeton.edu'
 
 passenger_server_name: "{{ inventory_hostname }}"
 passenger_app_env: "staging"
+passenger_extra_config: "client_max_body_size 0;"
 
 pdc_describe_db_name: 'pdc_describe_staging'
 
@@ -13,6 +14,9 @@ rails_app_env: "staging"
 
 pdc_describe_host_name: 'pdc-describe-staging.princeton.edu'
 pdc_describe_honeybadger_key: '{{vault_pdc_describe_honeybadger_key}}'
+
+pdc_describe_staging_aws_pre_curate_bucket: 'pdc-describe-staging-precuration'
+pdc_describe_staging_aws_post_curate_bucket: 'pdc-describe-staging-postcuration'
 
 # Note that this MUST stay in the environment-specific playbook.
 # Moving any of these to common.yml will not work.
@@ -43,9 +47,15 @@ rails_app_vars:
     value: '10.80021'
   - name: DATACITE_HOST
     value: 'api.test.datacite.org'
-  - name: AWS_ACCESS_KEY_ID
+  - name: AWS_S3_KEY_ID
     value: '{{ vault_pdc_describe_aws_access_key_id }}'
-  - name: AWS_SECRET_ACCESS_KEY
+  - name: AWS_S3_SECRET_KEY
     value: '{{ vault_pdc_describe_aws_secret_access_key }}'
-  - name: AWS_REGION
+  - name: AWS_S3_PRE_CURATE_BUCKET
+    value: '{{ pdc_describe_staging_aws_pre_curate_bucket }}'
+  - name: AWS_S3_PRE_CURATE_REGION
+    value: 'us-east-1'
+  - name: AWS_S3_POST_CURATE_BUCKET
+    value: '{{ pdc_describe_staging_aws_post_curate_bucket }}'
+  - name: AWS_S3_POST_CURATE_REGION
     value: 'us-east-1'
