@@ -1,10 +1,14 @@
 ---
-- hosts: cicognara_production
+# by default this playbook runs in the staging environment
+# to run in production, pass '-e runtime_env=production'
+- name: build the cicognara site
+  hosts: cicognara_{{ runtime_env | default('staging') }}
   remote_user: pulsys
   become: true
   vars_files:
     - ../site_vars.yml
-    - ../group_vars/cicognara_production.yml
+    - ../group_vars/cicognara/{{ runtime_env | default('staging') }}.yml
+    - ../group_vars/cicognara/vault.yml
   roles:
     - role: roles/redis
     - role: roles/ruby
@@ -12,15 +16,15 @@
     - role: roles/passenger
     - role: roles/postgresql
     - role: roles/openjdk
-    - {role: roles/solr, when: postgresql_is_local == true}
+    - role: roles/solrcloud
     - role: roles/blacklight_app
     - role: roles/sidekiq_worker
     - role: roles/datadog
-      when: postgresql_is_local is not defined or not postgresql_is_local
+      when: runtime_env | default('staging') == "production"
 
   post_tasks:
     - name: tell everyone on slack you ran an ansible playbook
       slack:
         token: "{{ vault_pul_slack_token }}"
-        msg: "{{ inventory_hostname }} completed"
+        msg: "Ansible ran `{{ ansible_play_name }}` on {{ inventory_hostname }}"
         channel: #server-alerts
