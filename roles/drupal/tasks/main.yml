@@ -102,15 +102,16 @@
     path: '/mnt/{{ item }}'
     state: 'directory'
     mode: 0755
-  with_items:
+  loop:
     - drupal_fileshare_mount
+    - drupal_nfsfileshare_mount
 
 - name: drupal | Copy smb credentials
   ansible.builtin.copy:
     src: 'files/{{ item }}'
     dest: '/etc/{{ item }}'
     mode: 0644
-  with_items:
+  loop:
     - drupalweb.smb.credentials
   when: running_on_server
 
@@ -127,8 +128,8 @@
 # add the nfs mount
 - name: drupal | Mount Drupal nfs fileshare
   ansible.posix.mount:
-    path: "/mnt/diglibdata/drupalweb"
-    src: "lib-fs-staging.princeton.edu/srv/diglibdata/drupalweb/staging_files"
+    path: "/mnt/diglibdata/drupalwebnfs"
+    src: "lib-fs-staging.princeton.edu:/srv/diglibdata/drupalweb/staging_files"
     fstype: nfs
     opts: rw,sync
     state: mounted
