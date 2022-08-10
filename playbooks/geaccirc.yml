@@ -1,9 +1,12 @@
 ---
-- hosts: geaccirc_prod
+# by default this playbook runs in the staging environment
+# to run in production, pass '-e runtime_env=prod'
+- name: build the geac app
+  hosts: geaccirc_{{ runtime_env | default('staging') }}
   remote_user: pulsys
   become: true
   vars_files:
-    - ../group_vars/geaccirc/geaccirc_prod.yml
+    - ../group_vars/geaccirc/{{ runtime_env | default('staging') }}.yml
     - ../group_vars/geaccirc/vault.yml
   roles:
     - role: datadog
@@ -14,8 +17,9 @@
       service:
         name: nginx
         state: restarted
+
     - name: tell everyone on slack you ran an ansible playbook
-      slack:
+      community.general.slack:
         token: "{{ vault_pul_slack_token }}"
-        msg: "{{ inventory_hostname }} completed"
+        msg: "Ansible ran `{{ ansible_play_name }}` on {{ inventory_hostname }}"
         channel: #server-alerts
