@@ -5,6 +5,16 @@
   hosts: all
   gather_facts: false
   tasks:
-  - name: Example assertion
+  - name: check nfsserver package status
+    ansible.builtin.package:
+      name: "{{ item }}"
+      state: present
+    check_mode: true
+    register: pkg_status
+    loop:
+      - nfs-kernel-server
+
+  - name: test for ruby packages
     ansible.builtin.assert:
-      that: true
+      that:
+        - not pkg_status.changed
