@@ -39,6 +39,8 @@ pipenv sync
 pipenv shell
 ```
 
+NOTE: The `bin/setup` is very important since it adds a [pre-commit hook](https://github.com/pulibrary/princeton_ansible/blob/main/.githooks/pre-commit) to your environment that will prevent you from accidentally checking in unencrypted vault files.
+
 ## Determine if everything is installed correctly
 
 Make sure docker is running before you run the following (from inside the `pipenv shell`) to test the installation:
@@ -253,7 +255,7 @@ update the file on lastpass so others can use
       pipenv update ansible
       ```
 
-      If this fails you may need to 
+      If this fails you may need to
       ```
       pipenv uninstall ansible
       pipenv install ansible
@@ -265,7 +267,7 @@ update the file on lastpass so others can use
       ```
 
    1.  Create a PR and commit
-   
+
 
 ## Patching Dependabots
 
