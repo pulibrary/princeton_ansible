@@ -5,6 +5,10 @@
   hosts: lib_jobs_{{ runtime_env | default('staging') }}
   remote_user: pulsys
   become: true
+  vars:
+  - post_install: |
+      Possible Things left to do:
+      - deploy lib_jobs and aspace_helpers
   vars_files:
     - ../group_vars/lib_jobs/vault.yml
     - ../group_vars/lib_jobs/common.yml
@@ -20,3 +24,7 @@
         token: "{{ vault_pul_slack_token }}"
         msg: "Ansible ran `{{ ansible_play_name }}` on {{ inventory_hostname }}"
         channel: #server-alerts
+
+    - name: post role reminders
+      debug:
+        msg: "{{ post_install.split('\n') }}"
