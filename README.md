@@ -206,7 +206,7 @@ If a file is not decrypting with `git diff` you may need to add the file you're 
   More information about lastpass-cli can be found here: https://lastpass.github.io/lastpass-cli/lpass.1.html
 1. `brew install lastpass-cli`
 2. `lpass login <email@email.com>`
-3. `gem install lastpass-ansible`
+3. `gem install lastpass-ansible` or `asdf exec gem install lastpass-ansible`
 4. `source princeton_ansible_env.sh`
 
 ### Troubleshooting lastpass
