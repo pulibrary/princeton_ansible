@@ -1,10 +1,12 @@
 ---
-- hosts: pulfalight_production
+# by default this playbook runs in the staging environment
+# to run in production, pass '-e runtime_env=production'
+- name: build the pulfalight website
+  hosts: pulfalight_{{ runtime_env | default('staging') }}
   remote_user: pulsys
   become: true
   vars_files:
-    - ../site_vars.yml
-    - ../group_vars/pulfalight/production.yml
+    - ../group_vars/pulfalight/{{ runtime_env | default('staging') }}.yml
     - ../group_vars/pulfalight/vault.yml
   roles:
     - role: roles/ruby
@@ -12,18 +14,21 @@
     - role: roles/openjdk
     - role: roles/pulfalight
     - role: roles/datadog
+      when: runtime_env | default('staging') == "production"
 
   post_tasks:
     - name: tell everyone on slack you ran an ansible playbook
-      slack:
+      community.general.slack:
         token: "{{ vault_pul_slack_token }}"
-        msg: "{{ inventory_hostname }} completed"
+        msg: "Ansible ran `{{ ansible_play_name }}` on {{ inventory_hostname }}"
         channel: #server-alerts
-- hosts: pulfalight_production_workers
+
+- name: build the pulfalight workers
+- hosts: pulfalight_{{ runtime_env | default('staging') }}_workers
   remote_user: pulsys
   become: true
   vars_files:
-    - ../site_vars.yml
+    - ../group_vars/pulfalight/{{ runtime_env | default('staging') }}.yml
     - ../group_vars/pulfalight/production.yml
     - ../group_vars/pulfalight/vault.yml
   roles:
@@ -33,9 +38,10 @@
     - role: roles/sidekiq_worker
     - role: roles/pulfalight
     - role: roles/datadog
+      when: runtime_env | default('staging') == "production"
   post_tasks:
     - name: tell everyone on slack you ran an ansible playbook
-      slack:
+      community.general.slack:
         token: "{{ vault_pul_slack_token }}"
-        msg: "{{ inventory_hostname }} completed"
+        msg: "Ansible ran `{{ ansible_play_name }}` on {{ inventory_hostname }}"
         channel: #server-alerts
