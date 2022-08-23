@@ -1,10 +1,10 @@
-# 1. Record architecture decisions
+# 1. Split inventory into per-project files
 
-Date: 2022-08-12
+Date: 2022-08-23
 
 ## Status
 
-Draft
+Accepted
 
 ## Context
 
@@ -14,7 +14,13 @@ We want to make project-specific inventory easy to manage and find for the vario
 
 ## Decision
 
-We will delete our flat hosts file and create an inventory directory. The directory will contain a file for each project with all necessary inventory groups (for example, figgy_production, figgy_workers, figgy_web_production, and so on). It will also contain sub-directories for other methods of grouping inventory.
+We will delete our flat hosts file and create an inventory directory. The directory will contain multiple sub-directories, including:
+
+1. The `all_projects` directory, containing a separate file for each project. Each file must include all necessary inventory groups (for example, figgy_production, figgy_workers, figgy_web_production, and so on). The files in this directory should match the sub-directories in the `group_vars` directory.
+1. The `by_environment` directory, containing a file for each environment (production, qa, staging). These files should contain only groups made up of child groups from the project-specific files.
+1. Other directories that allow different methods of grouping inventory (by web server type for example - nginx or apache).
+
+NOTE: The `all_projects` directory must be the first directory listed (in other words, alphabetically by linux/ASCII alphabetization it must come first), because Ansible loads inventory in ASCII order. You must have the child groups (from the files in `all_projects`) loaded before you can create the parent groups in `by_environment`.
 
 ## Consequences
 
@@ -22,3 +28,4 @@ We will delete our flat hosts file and create an inventory directory. The direct
 * A lot more inventory files.
 * Each VM will appear in multiple groups.
 * Existing groups will still work.
+* We can stop using the risky `hosts: all` in our playbooks.
