@@ -1,0 +1,55 @@
+---
+# tasks file for obsd_httpd
+- name: obsd_httpd | add tls private key
+  ansible.builtin.copy:
+    src: "files/private/lib-solr-mirror_princeton_edu_priv.key"
+    dest: "/etc/ssl/private/lib-solr-mirror_princeton_edu_priv.key"
+    owner: root
+    group: wheel
+    mode: 0644
+
+- name: obsd_httpd | add tls chained
+  ansible.builtin.copy:
+    src: "files/certs/lib-solr-mirror_princeton_edu_chained.pem"
+    dest: "/etc/ssl/lib-solr-mirror_princeton_edu_chained.pem"
+    owner: root
+    group: wheel
+    mode: 0644
+
+- name: obsd_httpd | enable httpd
+  ansible.builtin.service:
+    name: "httpd"
+    enabled: true
+    arguments: "{{ httpd_openbsd_flags }}"
+
+- name: obsd_httpd | Assert items in httpd_openbsd_log_directories has mandatory attributes
+  assert:
+    msg: items in httpd_openbsd_log_directories must have `path` and `state`attriutes defined, and `state` attribute must be either `present` or `absent`
+    that:
+      - "'path' in item"
+      - item.path | length > 0
+      - "'state' in item"
+      - (item.state == 'present') or (item.state == 'absent')
+  loop: "{{ httpd_openbsd_log_directories }}"
+
+- name: obsd_httpd | create or remove log directories
+  file:
+    path: "{{ item.path }}"
+    mode: "{{ item.mode | oct | default(omit) }}"
+    owner: "{{ item.owner | default(omit) }}"
+    group: "{{ item.group | default(omit) }}"
+    state: "{% if item.state == 'present' %}directory{% else %}{{ item.state }}{% endif %}"
+  loop: "{{ httpd_openbsd_log_directories }}"
+  notify: restart httpd_openbsd
+
+- name: obsd_httpd | Create httpd.conf
+  ansible.builtin.template:
+    src: httpd.conf.j2
+    dest: "{{ httpd_openbsd_conf_file }}"
+    validate: httpd -n -f %s
+  notify: restart httpd_openbsd
+
+- name: obsd_httpd | Start httpd_openbsd
+  ansible.builtin.service:
+    name: "{{ httpd_openbsd_service }}"
+    state: started
