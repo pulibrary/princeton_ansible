@@ -1,0 +1,38 @@
+---
+# tasks file for solrmirror
+- name: solrmirror | Update all packages on the system
+  community.general.openbsd_pkg:
+    name: '*'
+    state: latest
+  tags: never
+
+- name: solrmirror | add tls private key
+  ansible.builtin.copy:
+    src: "files/private/lib-solr-mirror_princeton_edu_priv.key"
+    dest: "/etc/ssl/private/lib-solr-mirror_princeton_edu_priv.key"
+    owner: root
+    group: wheel
+    mode: 0644
+
+- name: solrmirror | add tls chained
+  ansible.builtin.copy:
+    src: "files/certs/lib-solr-mirror_princeton_edu_chained.pem"
+    dest: "/etc/ssl/lib-solr-mirror_princeton_edu_chained.pem"
+    owner: root
+    group: wheel
+    mode: 0644
+
+- name: solrmirror | add daily cron
+  ansible.builtin.copy:
+    src: "files/daily.local.sh"
+    dest: "/etc/daily.local"
+    owner: root
+    group: wheel
+    mode: 0644
+
+- name: solrmirror | Create httpd.conf
+  ansible.builtin.template:
+    src: httpd.conf.j2
+    dest: "/etc/httpd.conf"
+    validate: httpd -n -f %s
+  notify: restart httpd_openbsd

@@ -1,0 +1,21 @@
+{{ ansible_managed | comment }}
+types {
+  include "/usr/share/misc/mime.types"
+}
+
+
+server "{{ obsd_server_name | default(default)}}" {
+	listen on egress port http
+	root "/htdocs/solrmirror"
+	directory auto index
+}
+
+server "{{ obsd_server_name | default(default)}}" {
+	listen on * tls port 443
+	tls {
+		certificate "/etc/ssl/lib-solr-mirror_princeton_edu_chained.pem"
+		key "/etc/ssl/private/lib-solr-mirror_princeton_edu_priv.key"
+	}
+	root "/htdocs/solrmirror"
+	directory auto index
+}
