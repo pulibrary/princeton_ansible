@@ -1,0 +1,19 @@
+---
+- name: Remove app_configs checking from apache servers
+  hosts: apache_servers
+  remote_user: pulsys
+  become: true
+  become_user: deploy
+  tasks:
+    - name: don't check for app_configs in .bashrc
+      ansible.builtin.lineinfile:
+        dest: "/home/deploy/.bashrc"
+        state: absent
+        regexp: '^for f in ~/app_configs/\*; do source \$f; done$'
+
+  post_tasks:
+  - name: tell everyone on slack you ran an ansible playbook
+    community.general.slack:
+      token: "{{ vault_pul_slack_token }}"
+      msg: "Ansible ran `{{ ansible_play_name }}` on {{ inventory_hostname }}"
+      channel: #server-alerts
