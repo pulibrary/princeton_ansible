@@ -1,0 +1,59 @@
+---
+# by default this playbook runs in the staging environment
+# to run in dev, pass '-e runtime_env=dev'
+# to run in production, pass '-e runtime_env=production'
+- name: update the google cloud OpenBSD servers
+  hosts: gcp_{{ runtime_env | default('staging') }}
+  remote_user: pulsys
+  become: true
+  become_method: doas
+  pre_tasks:
+    - name: test for python on new VM
+      ansible.builtin.raw: test -e /usr/bin/python
+      changed_when: false
+      failed_when: false
+      register: check_python
+
+    - name: Install Python  # this has to be raw in the event python is not installed
+      ansible.builtin.raw: "pkg_add python%3.9"
+      when: check_python.rc != 0
+
+  tasks:
+    - name: openbsd | Upgrade to latest snapshot
+      community.general.sysupgrade:
+        snapshot: true
+        installurl: https://cloudflare.cdn.openbsd.org/pub/OpenBSD
+      register: sysupgrade
+
+    - name: openbsd | Reboot to apply upgrade if needed
+      ansible.builtin.reboot:
+        msg: "Reboot initiated by Ansible because of sysupgrade updates."
+        connect_timeout: 5
+        reboot_timeout: 600
+        pre_reboot_delay: 0
+        post_reboot_delay: 15
+        test_command: whoami
+      when: sysupgrade.changed
+
+    - name: openbsd | Install a base set of software packages.
+      community.general.openbsd_pkg:
+        name:
+          - zsh
+          - curl
+          - git
+          - htop
+          - rsync--
+          - vim--no_x11-lua
+        state: present
+
+    - name: openbsd | update base set of software packages.
+      community.general.openbsd_pkg:
+        name: '*'
+        state: latest
+
+  post_tasks:
+    - name: tell everyone on slack you ran an ansible playbook
+      community.general.slack:
+        token: "{{ vault_pul_slack_token }}"
+        msg: "Ansible ran `{{ ansible_play_name }}` on {{ inventory_hostname }}"
+        channel: #server-alerts
