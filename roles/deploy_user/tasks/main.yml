@@ -18,22 +18,6 @@
     key: "{{ item.key }}"
   with_items: "{{ deploy_ssh_users }}"
 
-- name: deploy_user | create app_configs directory
-  ansible.builtin.file:
-    path: '/home/{{ deploy_user }}/app_configs'
-    state: 'directory'
-    owner: '{{ deploy_user }}'
-    group: '{{ deploy_user }}'
-    mode: '0744'
-
-- name: deploy_user | load app configs
-  ansible.builtin.lineinfile: >
-              dest="/home/{{ deploy_user }}/.bashrc"
-              state=present
-              regexp='^for f in ~/app_configs/\*; do source \$f; done$'
-              line="for f in ~/app_configs/*; do source $f; done"
-              insertbefore=BOF
-
 - name: deploy_user | allow "authorized_key" files
   ansible.builtin.lineinfile: >
               dest=/etc/ssh/sshd_config
