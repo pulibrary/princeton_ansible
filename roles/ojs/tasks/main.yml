@@ -178,3 +178,16 @@
 
 - name: ojs | automate backups
   include: "automate_backups.yml"
+
+- name: ojs | clone translation repository
+  ansible.builtin.git:
+    repo: 'https://github.com/pkp/pkp-lib.git'
+    dest: /opt/pkp-lib
+    version: main
+
+- name: ojs | copy translations to running server
+  ansible.builtin.shell: 'cp -v -u /opt/pkp-lib/locale/{{ item }}/* {{ ojs_home }}/lib/pkp/locale/{{ item }}'
+  register: cp_output
+  with_items:
+    - 'ja_JP'
+  changed_when: '"->" in cp_output["stdout"]'

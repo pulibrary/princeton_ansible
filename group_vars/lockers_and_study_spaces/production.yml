@@ -1,0 +1,69 @@
+---
+postgres_host: "lib-postgres-prod3.princeton.edu"
+postgres_version: 13
+postgres_admin_user: "postgres"
+pg_hba_contype: "host"
+pg_hba_postgresql_user: "all"
+pg_hba_postgresql_database: "all"
+pg_hba_method: "md5"
+pg_hba_source: "{{ ansible_host }}/32"
+postgres_is_local: false
+passenger_server_name: "lockers-and-study-spaces-prod1.princeton.edu"
+passenger_app_env: "production"
+postgres_admin_password: '{{ vault_postgres_admin_password }}'
+app_db_host: '{{ postgres_host }}'
+app_db_name: '{{ vault_lockers_and_study_spaces_prod_db_name }}'
+app_db_user: '{{ vault_lockers_and_study_spaces_prod_db_user }}'
+app_db_password: '{{ vault_lockers_and_study_spaces_prod_db_password }}'
+app_secret_key: '{{ vault_lockers_and_study_spaces_prod_secret_key }}'
+rails_app_env: "production"
+application_db_name: '{{ app_db_name }}'
+application_dbuser_name: '{{ app_db_user }}'
+application_dbuser_password: '{{ app_db_password }}'
+application_dbuser_role_attr_flags: 'CREATEDB'
+app_host_name: 'lockers_and_study_spaces.princeton.edu'
+application_host_protocol: 'https'
+running_on_server: true
+bundler_version: '2.2.27'
+desired_nodejs_version: "v12.22.7"
+lockers_honeybadger_key: '{{ vault_lockers_and_study_spaces_honeybadger_key }}'
+datadog_api_key: "{{ vault_datadog_key }}"
+
+datadog_config:
+  log_enabled: true
+  apm_enabled: true
+  process_config:
+    enabled: true
+  apm_config:
+    analyzed_spans:
+      lockers-and-study-spaces|rack.request: 1
+datadog_typed_checks:
+  - type: tls
+    configuration:
+      init_config:
+      instances:
+        - server: lockers-and-study-spaces.princeton.edu
+          port: 443
+  - type: process
+    configuration:
+      init_config:
+      instances:
+        -   name: lockers-and-study-spaces
+            service: lockers-and-study-spaces
+            search_string:
+              - nginx
+  - type: nginx
+    configuration:
+      init_config:
+      instances:
+        - nginx_status_url: http://localhost:81/nginx_status/
+      logs:
+        - type: file
+          path: /var/log/nginx/access.log
+          source: nginx
+        - type: file
+          path: /var/log/nginx/error.log
+          source: nginx
+        - type: file
+          path: /opt/lockers_and_study_spaces/current/log/production.log
+          source: rails
