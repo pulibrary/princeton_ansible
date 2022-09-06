@@ -13,8 +13,31 @@
   tags:
     - install_keys
 
+- name: Grant permissions for deploy user
+  ansible.builtin.file:
+    path: "{{ item.doc_root }}"
+    state: directory
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+    follow: false
+    recurse: true
+    mode: 0755
+  with_items: '{{ named_sites + sites }}'
+  changed_when: false
+  tags:
+  - install_sites
+
+- name: Make repos safe
+  ansible.builtin.command: git config --global --add safe.directory '{{ item.doc_root }}'
+  become: true
+  with_items: '{{ named_sites + sites }}'
+  changed_when: false
+  tags:
+    - install_sites
+
+
 - name: Install all git repos
-  git:
+  ansible.builtin.git:
     repo: '{{ item.git_repo }}'
     dest: '{{ item.doc_root }}'
     clone: true
@@ -25,6 +48,21 @@
   become: true
   notify: restart apache
   with_items: '{{ named_sites + sites }}'
+  changed_when: false
+  tags:
+    - install_sites
+
+- name: Grant permissions on deploy user
+  ansible.builtin.file:
+    path: "{{ item.doc_root }}"
+    state: directory
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+    follow: false
+    recurse: true
+    mode: 0775
+  with_items: '{{ named_sites + sites }}'
+  changed_when: false
   tags:
     - install_sites
 
