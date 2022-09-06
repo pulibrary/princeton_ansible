@@ -39,6 +39,8 @@ pipenv sync
 pipenv shell
 ```
 
+NOTE: The `bin/setup` is very important since it adds a [pre-commit hook](https://github.com/pulibrary/princeton_ansible/blob/main/.githooks/pre-commit) to your environment that will prevent you from accidentally checking in unencrypted vault files.
+
 ## Determine if everything is installed correctly
 
 Make sure docker is running before you run the following (from inside the `pipenv shell`) to test the installation:
@@ -52,7 +54,7 @@ molecule test
 # Developing
 
 ## Create a new role
-In all the steps below substitue your role name for `your_new_role`
+In all the steps below substitute your role name for `your_new_role`
 1. Initialize the role with molecule.
    Run the following command from the root of this repo:
 
@@ -92,6 +94,11 @@ In all the steps below substitue your role name for `your_new_role`
    ```
 1. Push your branch and verify that CI runs and passes on GitHub Actions.
 
+1. If the role is related to a new project, add group variables and inventory.
+   1. Add a `group_vars/your_new_project` directory and add files with the required variables. Usually this includes `common.yml` for variables that apply in all environments, `vault.yml` for secret values like passwords and keys, and one file per environment (generally at least `production.yml` and `staging.yml`).
+   1. Add an `inventory/all_projects/your_new_project` file and list all VMs and other resources. Group them by environment - see any of the existing files for examples.
+   1. Add your new groups to the relevant files in the `inventory/by_environment/` directory. For example, add `your_new_project_production` to `inventory/by_environment/production`. Try to keep the lists alphabetized.
+
 ## Generating Molecule Tests
 
 
@@ -108,7 +115,7 @@ molecule converge
 molecule verify
 ```
 
-If your are having issues with your tests passing and have run `molecule converge` you can connect to the running container by running
+If you are having issues with your tests passing and have run `molecule converge` you can connect to the running container by running
 ```
 molecule login
 ```
@@ -204,7 +211,7 @@ If a file is not decrypting with `git diff` you may need to add the file you're 
   More information about lastpass-cli can be found here: https://lastpass.github.io/lastpass-cli/lpass.1.html
 1. `brew install lastpass-cli`
 2. `lpass login <email@email.com>`
-3. `gem install lastpass-ansible`
+3. `gem install lastpass-ansible` or `asdf exec gem install lastpass-ansible`
 4. `source princeton_ansible_env.sh`
 
 ### Troubleshooting lastpass
@@ -253,7 +260,7 @@ update the file on lastpass so others can use
       pipenv update ansible
       ```
 
-      If this fails you may need to 
+      If this fails you may need to
       ```
       pipenv uninstall ansible
       pipenv install ansible
@@ -265,7 +272,7 @@ update the file on lastpass so others can use
       ```
 
    1.  Create a PR and commit
-   
+
 
 ## Patching Dependabots
 
