@@ -33,41 +33,24 @@
     group: root
     mode: 0644
 
-- name: system_ldap | configure sssd.conf
-  ansible.builtin.template:
-    src: "{{ sssd_main_conf_tpl }}"
-    dest: "{{ sssd_main_conf_path }}"
-    mode: 0600
-    owner: root
-    group: root
-    backup: true
-  when:
-    - running_on_server
-  notify:
-    - restart sssd
-    - restart logind
-
-- name: "system_ldap | configure conf.d/{{ sssd_domain }}.conf"
-  ansible.builtin.blockinfile:
-    state: present
-    create: true
-    mode: 0600
-    owner: root
-    group: root
-    insertbefore: BOF
-    dest: "/etc/sssd/conf.d/{{ sssd_domain }}.conf"
-  when:
-    - running_on_server
-  notify:
-    - restart sssd
-    - restart logind
-
 - name: system_ldap | Ensure home directories are created upon login with pam
   ansible.builtin.lineinfile:
     dest: /etc/pam.d/common-account
     regexp: 'pam_mkhomedir\.so'
     line: "session required                        pam_mkhomedir.so        umask=0022      skel=/etc/skel/ silent"
     state: present
+
+- name: system_ldap | change hostname to match AD 
+  ansible.builtin.command: hostnamectl set-hostname {{ host_ad_name | default(omit)}}
+  when:
+    - running_on_server
+
+- name: system_ldap | allow password authentication
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    state: present
+    regexp: '^PasswordAuthentication no'
+    line: 'PasswordAuthentication yes'
 
 - name: system_ldap | Flush handlers to be able to use SSSD authentication
   meta: flush_handlers
