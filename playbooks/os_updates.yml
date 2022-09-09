@@ -1,29 +1,23 @@
 ---
-- hosts: all
-  serial: 2
+# by default this playbook runs in the staging environment
+# to run in production, pass '-e runtime_env=production'
+- name: update the Operation System apt packages 
+  hosts: "{{ all_servers | default('staging') }}"
   remote_user: pulsys
+  serial: 2
   become: true
-  pre_tasks:
-
-    - name: test for python on new VM
-      ansible.builtin.raw: test -e /usr/bin/python
-      changed_when: false
-      failed_when: false
-      register: check_python
-
-    - name: Install Python  # this has to be raw in the event python is not installed
-      ansible.builtin.raw: apt -y update && apt install -y python-minimal python-pip
-      when: check_python.rc != 0
 
   tasks:
 
-    - name: Update apt
-      ansible.builtin.apt:
-        update_cache: true
-        force_apt_get: true
-        cache_valid_time: 3600
-
     - name: Upgrade all packages
       ansible.builtin.apt:
+        update_cache: true
         upgrade: dist
         force_apt_get: true
+
+  post_tasks:
+    - name: tell everyone on slack you ran an ansible playbook
+      community.general.slack:
+        token: "{{ vault_pul_slack_token }}"
+        msg: "Ansible ran `{{ ansible_play_name }}` on {{ inventory_hostname }}"
+        channel: #server-alerts
