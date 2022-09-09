@@ -39,15 +39,19 @@
   run_once: true
 
 - name: PostgreSQL | change postgresql database owner
-  community.postgresql.postgresql_db:
-    name: "{{ application_db_name }}"
+  community.postgresql.postgresql_owner:
+    db: "{{ application_db_name }}"
     port: "{{ postgres_port }}"
     login_host: "{{ postgres_host }}"
     login_user: "{{ postgres_admin_user }}"
     login_password: "{{ postgres_admin_password }}"
-    encoding: "UTF-8"
-    state: "present"
-    owner: "{{ application_dbuser_name }}"
+    new_owner: "{{ application_dbuser_name }}"
+    obj_type: "{{ item }}"
+  with_items:
+    - database
+    - table
+    - tablespace
+    - view
   when:
     - running_on_server
     - not postgresql_is_local
