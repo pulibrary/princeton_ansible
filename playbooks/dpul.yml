@@ -8,8 +8,12 @@
   vars_files:
     - ../site_vars.yml
     - ../group_vars/dpul/{{ runtime_env | default('staging') }}.yml
+    - ../group_vars/dpul/vault.yml
   roles:
     - role: roles/dpul
+    - role: roles/datadog
+      when: runtime_env | default('staging') == "production"
+      
   post_tasks:
     - name: tell everyone on slack you ran an ansible playbook
       community.general.slack:

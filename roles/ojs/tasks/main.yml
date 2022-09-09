@@ -178,3 +178,46 @@
 
 - name: ojs | automate backups
   include: "automate_backups.yml"
+
+- name: ojs | clone translation repository
+  ansible.builtin.git:
+    repo: 'https://github.com/pkp/pkp-lib.git'
+    dest: /opt/pkp-lib
+    version: main
+
+- name: ojs | copy translations to running server
+  ansible.builtin.shell: 'cp -v -u /opt/pkp-lib/locale/{{ item }}/* {{ ojs_home }}/lib/pkp/locale/{{ item }}'
+  register: cp_output
+  with_items:
+    - 'ja_JP'
+  changed_when: '"->" in cp_output["stdout"]'
+
+- name: ojs | clone PUL repository
+  ansible.builtin.git:
+    repo: 'https://github.com/pulibrary/openpublishing.git'
+    dest: /opt/openpublishing
+    version: main
+
+- name: ojs | copy translations to running server
+  ansible.builtin.shell: 'cp -r /opt/openpublishing/plugins/themes/healthSciences/locale/{{ item }} {{ ojs_home }}/plugins/themes/healthSciences/locale/{{ item }}'
+  register: cp_output
+  with_items:
+    - 'ja_JP'
+  changed_when: '"->" in cp_output["stdout"]'
+
+- name: ojs | adjust permissions on PUL repository files
+  ansible.builtin.file:
+    path: "{{ ojs_home }}/plugins/themes/healthSciences/locale/{{ item }}"
+    state: directory
+    owner: "{{ deploy_user }}"
+    group: www-data
+    mode: 0775
+  with_items:
+    - 'ja_JP'
+  changed_when: false
+
+- name: ojs | copy translations to running server
+  ansible.builtin.shell: 'chown -R {{ deploy_user }}:www-data {{ ojs_home }}/plugins/themes/healthSciences/locale/{{ item }}/*'
+  with_items:
+    - 'ja_JP'
+  changed_when: false

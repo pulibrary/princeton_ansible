@@ -4,6 +4,7 @@
     name: "{{ item }}"
     state: present
     update_cache: true
+  ignore_errors: true
   loop:
     - ca-certificates
     - apt-transport-https
@@ -18,6 +19,7 @@
     name: '{{ common_packages }}'
     state: present
     update_cache: true
+  ignore_errors: true
   changed_when: false
 
 - name: common | copy tmux.conf
@@ -54,3 +56,11 @@
   retries: 3
   delay: 60
   until: duf_repo is succeeded
+
+- name: common | install dust
+  ansible.builtin.apt:
+    deb: "{{ dust_url }}/v{{ dust_version }}/du-dust_{{ dust_version }}_amd64.deb"
+
+- name: common | install fdfind
+  ansible.builtin.apt:
+    deb: "{{ fd_find_url }}/v{{ fd_find_version }}/fd_{{ fd_find_version }}_amd64.deb"
