@@ -1,0 +1,89 @@
+- name: ojs | copy config file
+  command: "cp config.TEMPLATE.inc.php config.inc.php"
+  args:
+    chdir: "{{ ojs_home }}"
+  become: true
+  become_user: "{{ deploy_user }}"
+  when: ojs_is_installed is false
+  changed_when: false
+
+- name: ojs | write expect script for OJS interactive installation
+  template:
+    src: "script.exp.j2"
+    dest: "{{ ojs_home }}/script.exp"
+    owner: "{{ deploy_user }}"
+    group: www-data
+    mode: 0700
+
+- name: ojs | run expect script for OJS interactive installation
+  command: "/usr/bin/expect {{ ojs_home }}/script.exp"
+  args:
+    chdir: "{{ ojs_home }}"
+  become: true
+  become_user: "{{ deploy_user }}"
+
+- name: ojs | remove expect script
+  file:
+    path: "{{ ojs_home }}/script.exp"
+    state: absent
+
+- name: ojs | remove apache document root
+  file:
+    path: "{{ apache.docroot }}"
+    state: absent
+
+- name: ojs | install htaccess config for mod_rewrite
+  template:
+    src: htaccess
+    dest: "{{ ojs_home }}/.htaccess"
+    owner: "{{ deploy_user }}"
+    group: www-data
+    mode: 0644
+
+- name: ojs | create ojs local directory
+  file:
+    path: "/etc/apache2/ssl/{{ item }}"
+    state: directory
+    owner: "root"
+    group: "root"
+    mode: 0775
+  with_items:
+    - private
+    - certs
+
+- name: ojs | copy apache cert files
+  copy:
+    src: "files/certs/{{ item }}"
+    dest: "/etc/apache2/ssl/certs/"
+  changed_when: false
+  when: running_on_server
+  with_items:
+    - "{{ inventory_hostname }}_cert.cer"
+    - "{{ inventory_hostname }}_chained.pem"
+
+- name: ojs | copy apache private files
+  copy:
+    src: "files/private/{{ item }}"
+    dest: "/etc/apache2/ssl/private/"
+  when: running_on_server
+  with_items:
+    - "{{ inventory_hostname }}_priv.key"
+
+- name: ojs | add OJS template
+  template:
+    src: "ojs.conf.j2"
+    dest: "/etc/apache2/sites-available/ojs.conf"
+    mode: 0644
+
+- name: ojs | remove apache2 default
+  file:
+    path: "/etc/apache2/sites-enabled/000-default.conf"
+    state: absent
+
+- name: ojs | symbolic link to ojs config
+  file:
+    src: "/etc/apache2/sites-available/ojs.conf"
+    dest: "/etc/apache2/sites-enabled/ojs.conf"
+    state: link
+  when: running_on_server
+  notify: restart apache2
