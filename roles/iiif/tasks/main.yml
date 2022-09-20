@@ -1,0 +1,58 @@
+---
+# tasks file for iiif
+- name: iiif | create a working directory for serverless
+  ansible.builtin.file:
+    path: "{{ serverless_path }}"
+    state: directory
+    mode: 0755
+
+- name: iiif | install sam and awscli
+  ansible.builtin.package:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - awscli
+    - aws-sam-cli  # will this get the tap'ed repo
+
+- name: iiif | add clone repo
+  ansible.builtin.git:
+    repo: "https://github.com/samvera-labs/serverless-iiif.git"
+    dest: "{{ serverless_path }}/serverless-iiif"
+    force: true
+
+- name: iiif | create a serverless edge path
+  ansible.builtin.file:
+    path: "{{ serverless_path }}/serverless-iiif/src_edge"
+    state: directory
+    mode: 0755
+
+- name: iiif | add headers
+  ansible.builtin.copy:
+    src: "{{ item.name }}"
+    dest: "{{ serverless_path }}/serverless-iiif/src/{{ item.dest }}"
+    mode: 0644
+  loop:
+    - { name: 'helpers.js', dest: 'helpers.js' }
+    - { name: 'index.js', dest: 'index.js' }
+
+- name: iiif | add headers edge
+  ansible.builtin.copy:
+    src: "{{ item.name }}"
+    dest: "{{ serverless_path }}/serverless-iiif/{{ item.dest }}"
+    mode: 0644
+  loop:
+    - { name: 'edge_index.js', dest: 'index.js' }
+    - { name: 'package.json', dest: 'package.json'}
+
+- name: iiif | and template file
+  ansible.builtin.copy:
+    src: "{{ item.name }}"
+    dest: "{{ serverless_path }}/serverless-iiif/src_edge/{{ item.dest }}"
+    mode: 0644
+  loop:
+    - { name: 'template.yml', dest: 'template.yml' }
+
+- name: iiif | ensure existence of S3 bucket
+  amazon.aws.aws_s3:
+    bucket: "{{ }}"
+    mode: create
