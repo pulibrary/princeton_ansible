@@ -54,5 +54,21 @@
 
 - name: iiif | ensure existence of S3 bucket
   amazon.aws.aws_s3:
-    bucket: "{{ }}"
+    aws_access_key: "{{ project_user_aws_access_key }}"
+    aws_secret_key: "{{ project_user_aws_secret_key }}"
+    region: "{{ aws_region }}"
+    bucket: "{{ item }}"
     mode: create
+  loop:
+    - "pul-cloud-{{ runtime_env | default('staging') }}"
+    - "pul-image-{{ runtime_env | default('staging') }}"
+
+- name: iiif | deploy lambda
+  ansible.builtin.command: sam deploy --stack-name=pul-cloud-{{ runtime_env | default('staging') }} --s3-prefix=pul-cloud-{{ runtime_env | default('staging') }} --parameter-overrides='StageName={{ runtime_env | default('staging')}}', SourceBucket='pul-image-{{ runtime_env | default('staging') }}' CacheDomainName='pul-cloud-{{ runtime_env | default('staging') }}.princeton.edu' --s3-bucket=aws-sam-cli-managed-default-samclisourcebucket-1j1ve93v4jqs9 --region='{{ aws_region }}' --capabilities='CAPABILITY_IAM' --profile='iiifcloud'
+  environment: 
+    AWS_REGION: "{{ aws_region }}"
+    AWS_ACCESS_KEY_ID: "{{ project_user_aws_access_key }}"
+    AWS_SECRET_ACCESS_KEY: "{{ project_user_aws_secret_key }}"
+  args:
+    chdir: "{{ lambda_dir }}"
+  changed_when: false
