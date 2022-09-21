@@ -1,0 +1,54 @@
+---
+# tasks file for system_ldap
+#
+- name: system_ldap | Install sssd
+  ansible.builtin.apt:
+    name: "{{ item }}"
+    state: "present"
+  loop:
+    - "{{ sssd_pkg_list }}"
+
+- name: system_ldap | Remove unwanted packages
+  ansible.builtin.apt:
+    name: "{{ item }}"
+    state: "{{ sssd__unwanted_packages_state }}"
+  loop:
+    - "{{ sssd__unwanted_packages_list }}"
+
+- name: system_ldap | change hostname to match AD 
+  ansible.builtin.command: hostnamectl set-hostname {{ host_ad_name | default(omit)}}
+  when:
+    - running_on_server
+
+- name: system_ldap | allow password authentication
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    state: present
+    regexp: '^PasswordAuthentication no'
+    line: 'PasswordAuthentication yes'
+
+- name: system_ldap | allow users authentication
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    state: present
+    regexp: '^AllowUsers pulsys'
+    line: '# AllowUsers pulsys'
+  notify: restart sshd
+
+- name: system_ldap | configure pam to enable mkhomedir
+  ansible.builtin.command: realm permit "{{ ad_user }}"
+  become: true
+  when:
+    - running_on_server
+  ignore_errors: true
+
+- name: system_ldap | create alma directory
+  ansible.builtin.file:
+    path: /alma
+    state: directory
+    recurse: true
+    group: "department 41006 staff@pu.win.princeton.edu"
+    mode: 0775
+
+- name: system_ldap | Flush handlers to be able to use SSSD authentication
+  meta: flush_handlers
