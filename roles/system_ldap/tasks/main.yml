@@ -33,6 +33,7 @@
     state: present
     regexp: '^AllowUsers pulsys'
     line: '# AllowUsers pulsys'
+  notify: restart sshd
 
 - name: system_ldap | configure pam to enable mkhomedir
   ansible.builtin.command: realm permit "{{ ad_user }}"
@@ -40,6 +41,12 @@
   when:
     - running_on_server
   ignore_errors: true
+
+- name: system_ldap | create alma directory
+  ansible.builtin.file:
+    path: /alma
+    state: directory
+    mode: 0755
 
 - name: system_ldap | Flush handlers to be able to use SSSD authentication
   meta: flush_handlers
