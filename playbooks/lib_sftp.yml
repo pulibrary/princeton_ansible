@@ -1,0 +1,31 @@
+---
+# by default this playbook runs in the staging environment
+# to run in production, pass '-e runtime_env=production'
+- name: build the AD sftp
+  hosts: libsftp_{{ runtime_env | default('staging') }}
+  remote_user: pulsys
+  become: true
+  vars:
+    - force_settings: true
+    - drupal_git_repo: ''
+    - post_install: |
+        Look the README for additional steps to allow mkhome directory
+
+  vars_files:
+    - ../group_vars/sftp/vault.yml
+    - ../group_vars/sftp/common.yml
+    - ../group_vars/sftp/{{ runtime_env | default('staging') }}.yml
+  roles:
+    - role: ../roles/system_ldap
+    - role: ../roles/datadog
+      when: runtime_env | default('staging') == "production"
+
+  post_tasks:
+    - name: tell everyone on slack you ran an ansible playbook
+      community.general.slack:
+        token: "{{ vault_pul_slack_token }}"
+        msg: "Ansible ran `{{ ansible_play_name }}` on {{ inventory_hostname }}"
+        channel: #server-alerts
+    - name: post role reminders
+      debug:
+        msg: "{{ post_install.split('\n') }}"
