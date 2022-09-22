@@ -63,8 +63,8 @@
     - "pul-cloud-{{ runtime_env | default('staging') }}"
     - "pul-image-{{ runtime_env | default('staging') }}"
 
-- name: iiif | deploy lambda
-  ansible.builtin.command: sam deploy --stack-name=pul-cloud-{{ runtime_env | default('staging') }} --s3-prefix=pul-cloud-{{ runtime_env | default('staging') }} --parameter-overrides='StageName={{ runtime_env | default('staging')}}', SourceBucket='pul-image-{{ runtime_env | default('staging') }}' CacheDomainName='pul-cloud-{{ runtime_env | default('staging') }}.princeton.edu' --s3-bucket=aws-sam-cli-managed-default-samclisourcebucket-1j1ve93v4jqs9 --region='{{ aws_region }}' --capabilities='CAPABILITY_IAM' --profile='iiifcloud'
+- name: iiif | build container
+  ansible.builtin.command: sam build --use-container
   environment: 
     AWS_REGION: "{{ aws_region }}"
     AWS_ACCESS_KEY_ID: "{{ project_user_aws_access_key }}"
@@ -72,3 +72,14 @@
   args:
     chdir: "{{ lambda_dir }}"
   changed_when: false
+
+- name: iiif | deploy lambda
+  ansible.builtin.command: sam deploy --stack-name=pul-cloud-{{ runtime_env | default('staging') }} --s3-prefix=pul-cloud-{{ runtime_env | default('staging') }} --parameter-overrides=StageName={{ runtime_env | default('staging')}} SourceBucket=pul-image-{{ runtime_env | default('staging') }} CacheDomainName=pul-cloud-{{ runtime_env | default('staging') }}.princeton.edu --s3-bucket=aws-sam-cli-managed-default-samclisourcebucket-1j1ve93v4jqs9 --region={{ aws_region }} --capabilities=CAPABILITY_IAM CAPABILITY_AUTO_EXPAND --profile=iiifcloud --no-confirm-changeset
+  environment: 
+    AWS_REGION: "{{ aws_region }}"
+    AWS_ACCESS_KEY_ID: "{{ project_user_aws_access_key }}"
+    AWS_SECRET_ACCESS_KEY: "{{ project_user_aws_secret_key }}"
+  args:
+    chdir: "{{ lambda_dir }}"
+  changed_when: false
+  ignore_errors: true
