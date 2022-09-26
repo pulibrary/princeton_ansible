@@ -54,7 +54,7 @@ molecule test
 # Developing
 
 ## Create a new role
-In all the steps below substitue your role name for `your_new_role`
+In all the steps below substitute your role name for `your_new_role`
 1. Initialize the role with molecule.
    Run the following command from the root of this repo:
 
@@ -94,6 +94,11 @@ In all the steps below substitue your role name for `your_new_role`
    ```
 1. Push your branch and verify that CI runs and passes on GitHub Actions.
 
+1. If the role is related to a new project, add group variables and inventory.
+   1. Add a `group_vars/your_new_project` directory and add files with the required variables. Usually this includes `common.yml` for variables that apply in all environments, `vault.yml` for secret values like passwords and keys, and one file per environment (generally at least `production.yml` and `staging.yml`).
+   1. Add an `inventory/all_projects/your_new_project` file and list all VMs and other resources. Group them by environment - see any of the existing files for examples.
+   1. Add your new groups to the relevant files in the `inventory/by_environment/` directory. For example, add `your_new_project_production` to `inventory/by_environment/production`. Try to keep the lists alphabetized.
+
 ## Generating Molecule Tests
 
 
@@ -110,7 +115,7 @@ molecule converge
 molecule verify
 ```
 
-If your are having issues with your tests passing and have run `molecule converge` you can connect to the running container by running
+If you are having issues with your tests passing and have run `molecule converge` you can connect to the running container by running
 ```
 molecule login
 ```
