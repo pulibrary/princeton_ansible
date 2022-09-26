@@ -4,9 +4,11 @@
 - name: Verify
   hosts: all
   gather_facts: false
+  vars:
+    - php_version: 8.1
   tasks:
-  - name: test for presence libwww apache config
-    lineinfile:
+  - name: test for presence drupal9 apache config
+    ansible.builtin.lineinfile:
       path: "/etc/sudoers"
       line: "{{ item }}"
       state: present
@@ -21,7 +23,7 @@
     failed_when:
       - present is changed
   - name: test for presence allow list in settings.php
-    lineinfile:
+    ansible.builtin.lineinfile:
       path: "/home/deploy/settings.php"
       line: "{{ item }}"
       state: present
@@ -33,7 +35,7 @@
     failed_when:
       - present is changed
   - name: test for nginx conf file existence
-    stat:
+    ansible.builtin.stat:
       path: "{{ item }}"
     loop:
       - "/home/deploy/settings.php"
@@ -41,14 +43,14 @@
     failed_when:
       - not file.stat.exists
   - name: test for drupal packages
-    apt:
+    ansible.builtin.apt:
       name: "{{ item }}"
       state: present
     loop:
-      - "php7.4"
-      - "php7.4-gd"
+      - "php{{ php_version }}"
+      - "php{{ php_version }}-gd"
       - "postgresql-client"
-      - "php7.4-mbstring"
+      - "php{{ php_version }}-mbstring"
     check_mode: true
     register: present
     failed_when:

@@ -22,12 +22,13 @@
     state: absent
     name: php{{ php_eolversion }}
   notify: restart apache
+  register: eol_disabled
   when:
     - running_on_server
-  ignore_errors: true
 
 - name: php | enable php apache module
   apache2_module:
     state: present
     name: php{{ php_version }}
   notify: restart apache
+  when: eol_disabled is true
