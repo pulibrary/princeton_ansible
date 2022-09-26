@@ -17,11 +17,11 @@
 - name: php | install php
   apt:
     name: ["php{{ php_version }}", "php{{ php_version }}-dev", "php{{ php_version }}-curl", "php{{ php_version }}-zip"]
-    state: latest
+    state: present
     update_cache: true
   changed_when: false
   tags: ['skip_ansible_lint']
-  notify: restart apache
+  notify: restart {{ php_webserver }}
 
 - name: php | Install datadog trace php repository
   apt:
@@ -30,7 +30,7 @@
     update_cache: true
   when: datadog_enabled
 
-- include_tasks: configure.yml
+- include_tasks: configure-apache2.yml
   when: php_webserver == 'apache2'
 
 - include_tasks: configure-nginx.yml
