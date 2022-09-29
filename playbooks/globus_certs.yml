@@ -1,0 +1,25 @@
+# to run in production, pass '-e runtime_env=production'
+---
+- name: update globus certificates
+  hosts: pdc_{{ runtime_env | default('staging') }}
+  remote_user: pulsys
+  become: true
+  tasks:
+    - name: globus_certs | update apt repo
+      ansible.builtin.apt:
+        update_cache: true
+        upgrade: dist
+        force_apt_get: true
+
+    - name: globus_certs | update globus application only
+      ansible.builtin.command: apt-get install --only-upgrade ".*globus.*" -y
+
+    - name: globus_certs | upgrade globus certs
+      ansible.builtin.command: globus-connect-server endpoint upgrade
+
+  post_tasks:
+    - name: tell everyone on slack you ran an ansible playbook
+      community.general.slack:
+        token: "{{ vault_pul_slack_token }}"
+        msg: "Ansible ran `{{ ansible_play_name }}` on {{ inventory_hostname }}"
+        channel: #server-alerts
