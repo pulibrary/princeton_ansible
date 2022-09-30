@@ -1,21 +1,24 @@
 ---
 - name: Converge
   hosts: all
-  pre_tasks:
-  - name: install iproute
-    apt:
-      name: iproute2
-      state: present
-      update_cache: true
-  - name: rerun setup
-    setup:
-      gather_subset:
-        - network
   vars:
     - running_on_server: false
     - mysql_server: true
     - mysql_root_password: changethis
+  pre_tasks:
+    - name: update cache
+      apt:
+        update_cache: true
+        cache_valid_time: 600
   tasks:
-    - name: "Include roles/friends_of_pul"
-      include_role:
-        name: "friends_of_pul"
+  - name: install iproute
+    ansible.builtin.apt:
+      name: iproute2
+      state: present
+  - name: rerun setup
+    ansible.builtin.setup:
+      gather_subset:
+        - network
+  - name: "Include roles/friends_of_pul"
+    include_role:
+      name: "friends_of_pul"
