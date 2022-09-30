@@ -64,10 +64,30 @@
   become: true
   changed_when: false
 
-- name: ruby | update rubygems
-  ansible.builtin.command: gem update --system
-  become: true
-  changed_when: false
+- name: what version of bundler is on the VM?
+  shell: cd /opt/bibdata/current && bundler -v
+  register: installed_bundler
+
+- name: look at installed bundler
+  debug:
+    var: installed_bundler
+
+- name: uninstall wrong version of bundler
+  community.general.gem:
+    name: bundler
+    state: absent
+
+- name: what version of bundler is on the VM - second?
+  shell: cd /opt/bibdata/current && bundler -v
+  register: installed_bundler
+
+- name: look at installed bundler
+  debug:
+    var: installed_bundler
+
+- name: do we have a value?
+  debug:
+    var: bundler_version
 
 - name: ruby | install global bundler, specific version
   community.general.gem:
@@ -75,10 +95,15 @@
     version: "{{ bundler_version }}"
     user_install: false
   when: bundler_version is defined
-  changed_when: false
+#  changed_when: false
 
 - name: ruby | install global bundler, any version
   community.general.gem:
     name: bundler
     user_install: false
   when: bundler_version is undefined
+
+- name: ruby | update rubygems
+  ansible.builtin.command: gem update --system
+  become: true
+  #changed_when: false
