@@ -12,11 +12,24 @@
     home: "/home/{{ deploy_user }}"
     shell: "{{ deploy_user_shell }}"
 
-- name: deploy_user | add SSH keys
-  ansible.posix.authorized_key:
-    user: "{{ deploy_user }}"
-    key: "{{ item.key }}"
-  with_items: "{{ deploy_ssh_users }}"
+- name: get key content from github
+  shell: 'curl {{ item }}'
+  loop: "{{ deploy_user_github_keys }}"
+  register: deploy_user_keys_from_github
+
+- name: build authorized keys file
+  template:
+    src: authorized_keys.j2
+    dest: /home/{{ deploy_user }}/.ssh/authorized_keys
+    backup: true
+
+# - name: deploy_user | add SSH keys
+#   ansible.posix.authorized_key:
+#     user: "{{ deploy_user }}"
+#     key: "{{ item.key }}"
+#     state: present
+#     key_options: '# key(s) for {{ item.name}}\n'
+#   with_items: "{{ deploy_ssh_users }}"
 
 - name: deploy_user | allow "authorized_key" files
   ansible.builtin.lineinfile: >
