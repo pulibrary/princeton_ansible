@@ -1,14 +1,19 @@
 ---
 - name: Converge
   hosts: all
-  vars:
-    - running_on_server: false
   pre_tasks:
     - name: update cache
       apt:
         update_cache: true
         cache_valid_time: 600
+  vars:
+    - running_on_server: false
+    - deploy_user_github_keys:
+        - https://github.com/acozine.keys
+        - https://github.com/kayiwa.keys
+    - deploy_user_local_keys:
+        - { name: 'heaven', key: "{{ lookup('file', '../../../../keys/heaven.pub') }}" }
   tasks:
     - name: "deploy_user"
-      include_role:
+      ansible.builtin.include_role:
         name: "deploy_user"
