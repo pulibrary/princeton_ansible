@@ -16,41 +16,9 @@
 
 - name: iiif | add clone repo
   ansible.builtin.git:
-    repo: "https://github.com/samvera-labs/serverless-iiif.git"
+    repo: "https://github.com/pulibrary/serverless-iiif.git"
     dest: "{{ serverless_path }}/serverless-iiif"
     force: true
-
-- name: iiif | create a serverless edge path
-  ansible.builtin.file:
-    path: "{{ serverless_path }}/serverless-iiif/src_edge"
-    state: directory
-    mode: 0755
-
-- name: iiif | add headers
-  ansible.builtin.copy:
-    src: "{{ item.name }}"
-    dest: "{{ serverless_path }}/serverless-iiif/src/{{ item.dest }}"
-    mode: 0644
-  loop:
-    - { name: 'helpers.js', dest: 'helpers.js' }
-    - { name: 'index.js', dest: 'index.js' }
-
-- name: iiif | add headers edge
-  ansible.builtin.copy:
-    src: "{{ item.name }}"
-    dest: "{{ serverless_path }}/serverless-iiif/{{ item.dest }}"
-    mode: 0644
-  loop:
-    - { name: 'edge_index.js', dest: 'index.js' }
-    - { name: 'package.json', dest: 'package.json'}
-
-- name: iiif | and template file
-  ansible.builtin.copy:
-    src: "{{ item.name }}"
-    dest: "{{ serverless_path }}/serverless-iiif/src_edge/{{ item.dest }}"
-    mode: 0644
-  loop:
-    - { name: 'template.yml', dest: 'template.yml' }
 
 - name: iiif | ensure existence of S3 bucket
   amazon.aws.aws_s3:
@@ -60,8 +28,8 @@
     bucket: "{{ item }}"
     mode: create
   loop:
-    - "pul-cloud-{{ runtime_env | default('staging') }}"
-    - "pul-image-{{ runtime_env | default('staging') }}"
+    - "puliiif-{{ runtime_env | default('staging') }}"
+    - "puliiif-{{ runtime_env | default('staging') }}-cache"
 
 - name: iiif | build container
   ansible.builtin.command: sam build --use-container
@@ -74,7 +42,7 @@
   changed_when: false
 
 - name: iiif | deploy lambda
-  ansible.builtin.command: sam deploy --stack-name=pul-cloud-{{ runtime_env | default('staging') }} --s3-prefix=pul-cloud-{{ runtime_env | default('staging') }} --parameter-overrides=StageName={{ runtime_env | default('staging')}} SourceBucket=pul-image-{{ runtime_env | default('staging') }} CacheDomainName=pul-cloud-{{ runtime_env | default('staging') }}.princeton.edu --s3-bucket=aws-sam-cli-managed-default-samclisourcebucket-1j1ve93v4jqs9 --region={{ aws_region }} --capabilities=CAPABILITY_IAM CAPABILITY_AUTO_EXPAND --profile=iiifcloud --no-confirm-changeset
+  ansible.builtin.command: ans_deploy.sh "{{ runtime_env | default('staging') }}"
   environment: 
     AWS_REGION: "{{ aws_region }}"
     AWS_ACCESS_KEY_ID: "{{ project_user_aws_access_key }}"
