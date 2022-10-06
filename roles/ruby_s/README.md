@@ -14,7 +14,7 @@ if you need a different version of ruby use the example on
 
 e.g `desired_ruby_version: "3.0.0"` and `ruby_version_override: ruby-3.0.0`
 
-this is most reliably set in your `group_vars/<your_role>/vars.yml`
+this is most reliably set in your `group_vars/<your_role>/[common|main].yml`
 
 ### Upgrading from Ruby 2.x
 
