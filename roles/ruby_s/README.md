@@ -19,16 +19,17 @@ this is most reliably set in your `group_vars/<your_role>/vars.yml`
 ### Upgrading from Ruby 2.x
 
 If you are upgrading a system from a previous ansible build that used brightbox
-ruby packages (which is probably the case for anything at PUL using ruby 2.x): 
+ruby packages (which is probably the case for anything at PUL using ruby 2.x):
 
 * In `group_vars/<your project>/[common|main].yml`:
-  * If `passenger_ruby` is set, remove it. The default value is `/usr/local/bin/ruby` and that's what we want.
+  * If `passenger_ruby` is set, update it to `/usr/local/bin/ruby`. Current default setting in the passenger role is `/usr/bin/ruby` - eventually we should update that!
   * Update these values:
   ```
   # Use Ruby 3.0.3 and install from source
   install_ruby_from_source: true
   ruby_version_override: "ruby-3.0.3"
   bundler_version: "2.3.11"
+  passenger_ruby: "/usr/local/bin/ruby"
   ```
 * Make sure you update your project to use bundler 2.3.11 and re-generate Gemfile.lock
 
