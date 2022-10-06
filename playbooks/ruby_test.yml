@@ -8,17 +8,7 @@
       manager: apt
     register: all_packages
 
-  - name: create list of ruby packages
-    ansible.builtin.set_fact:
-      ruby_packages: "{{ all_packages.ansible_facts.packages | selectattr() }}"
-
-  - name: view package list
-    ansible.builtin.debug:
-      var: all_packages
-
-  # - name: ruby | remove apt-installed ruby
-  #   ansible.builtin.apt:
-  #     name: "{{ item }}"
-  #      state: absent
-  #     update_cache: true
-  #   with_items: what goes here?
+  - name: remove any package that begins with 'ruby'
+    ansible.builtin.apt:
+      name: "{{ ansible_facts.packages | list | select('match', '^ruby') }}"
+      state: absent
