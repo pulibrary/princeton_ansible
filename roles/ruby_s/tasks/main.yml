@@ -4,13 +4,13 @@
   register: installed_ruby
   changed_when: false
 
-- name: prints out the installed_ruby variables
+- name: prints out the installed_ruby variable
   ansible.builtin.debug:
-    msg: ruby version "{{ installed_ruby.stdout }}"
+    var: installed_ruby
 
 - include_tasks: cleanup.yml
   when:
-    - installed_ruby.stdout | length > 0 and installed_ruby.stdout != "{{ desired_ruby_version }}"
+    - installed_ruby.stdout | length > 0 and installed_ruby.stdout != desired_ruby_version
 
 - name: ruby |lookup download path and checksum from ruby-lang release index
   ansible.builtin.shell: curl https://cache.ruby-lang.org/pub/ruby/index.txt | grep {{ ruby_version }}.tar.gz
@@ -29,11 +29,7 @@
   ansible.builtin.set_fact:
     ruby_sha_256: "{{ ruby_values[3] }}"
 
-- name: ruby | setup install directory
-  ansible.builtin.set_fact:
-    install_path: "/opt/install"
-
-- name: ruby | ensure install directory exists
+- name: ruby | ensure install path exists
   ansible.builtin.file:
     path: "{{ install_path }}"
     state: directory
@@ -53,7 +49,8 @@
     copy: false
 
 - name: ruby | configure ruby
-  ansible.builtin.shell: cd {{ install_path }}/{{ ruby_version }} && ./configure --enable-shared creates={{ install_path }}/{{ ruby_version }}/Makefile
+  ansible.builtin.shell: cd {{ install_path }}/{{ ruby_version }} && ./configure --enable-shared
+  creates: "{{ install_path }}/{{ ruby_version }}/Makefile"
 
 - name: ruby | make ruby
   ansible.builtin.shell: cd {{ install_path }}/{{ ruby_version }} && make
