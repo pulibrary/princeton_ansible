@@ -12,6 +12,8 @@
     home: "/home/{{ deploy_user }}"
     shell: "{{ deploy_user_shell }}"
 
+# this task uses the '*.keys' GitHub URLs to access key contents
+# the contents are used in a template two tasks further down
 - name: deploy_user | get key content from github
   ansible.builtin.command: 'curl {{ item }}'
   loop: "{{ deploy_user_github_keys }}"
@@ -35,14 +37,6 @@
     owner: "{{ deploy_user }}"
     mode: '0600'
     backup: true
-
-# - name: deploy_user | add SSH keys
-#   ansible.posix.authorized_key:
-#     user: "{{ deploy_user }}"
-#     key: "{{ item.key }}"
-#     state: present
-#     key_options: '# key(s) for {{ item.name}}\n'
-#   with_items: "{{ deploy_ssh_users }}"
 
 - name: deploy_user | allow "authorized_key" files
   ansible.builtin.lineinfile: >
