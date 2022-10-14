@@ -1,5 +1,10 @@
 ---
 # tasks file for ealapps
+- name: ealapps | install ealapps dependencies
+  ansible.builtin.apt:
+    name: ["php{{ php_version}}-curl"]
+    state: present
+
 - name: ealapps | install github deploy keys
   ansible.builtin.template:
     src: "{{ item }}"
@@ -18,8 +23,10 @@
     update: true
     force: true
     version:
+    ssh_opts: "{{ ssh_opts | default(omit) }}"
   become: true
   notify: restart apache
+  when: running_on_server
   changed_when: false
 
 - name: ealapps | grant permissions on deploy user
@@ -39,7 +46,7 @@
   changed_when: false
 
 - name: ealapps | Add ealapp
-  template:
+  ansible.builtin.template:
     src: "apache2-site.conf.j2"
     dest: "/etc/apache2/sites-available/000-ealapp.conf"
     mode: 0644
