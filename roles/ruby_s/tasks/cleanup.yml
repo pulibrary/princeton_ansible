@@ -5,9 +5,14 @@
     state: absent
   changed_when: false
 
-- name: ruby | remove installed ruby
+ name: check for apt-installed rubies
+  ansible.builtin.package_facts:
+    manager: apt
+  register: all_packages
+
+- name: remove any package that begins with 'ruby'
   ansible.builtin.apt:
-    name: ["{{ ubuntu_ruby_version }}", "{{ ubuntu_ruby_version }}-dev", "ruby-switch"]
+    name: "{{ ansible_facts.packages | list | select('match', '^ruby') }}"
     state: absent
 
 - name: ruby | remove the Brightbox repository
