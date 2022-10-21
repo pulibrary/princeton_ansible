@@ -17,10 +17,14 @@
 - include_tasks: cleanup.yml
   when:
     - installed_ruby.stderr is not search("not found")
+    # installed_ruby.stdout contains something like
+    # 'ruby 2.7.0p243 (2018-12-21 revision . . . )'
+    # need a regex filter that pulls out '2.7.0'
     - installed_ruby.stdout != desired_ruby_version
 
 # install from source when ruby is not installed OR it's the wrong version
 - include_tasks: install_from_source.yml
   when:
+    # need that regex filter here for the same purpose
     - (installed_ruby.stderr is search("not found")) or (installed_ruby.stdout != desired_ruby_version)
 
