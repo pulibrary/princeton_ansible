@@ -21,9 +21,24 @@
     state: directory
     mode: 0644
 
-# need a task here that checks install_path for previously installed rubies
-# and another that cds into each previous directory and runs 'make uninstall'
-# to get rid of any ruby previously installed from source
+# the next two tasks find and uninstall previous ruby versions
+# installed from source, to allow upgrading/downgrading from one
+# ruby version installed from source to another
+- name: ruby | look for ruby installed from source
+  ansible.builtin.find:
+    paths: "{{ install_path }}"
+    file_type: directory
+    patterns: "^ruby."
+  register: source_rubies
+
+- name: what does this var look like?
+  ansible.builtin.debug:
+    var: source_rubies
+
+ - name: ruby | uninstall any ruby installed from source
+   ansible.builtin.shell: cd {{ install_path }}/{{ item }} && make uninstall
+   loop: "{{ source_rubies.files }}"
+   when: source_rubies.matched > 0
 
 - name: ruby | download ruby
   ansible.builtin.get_url:
