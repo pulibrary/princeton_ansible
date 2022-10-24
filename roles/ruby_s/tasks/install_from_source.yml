@@ -28,17 +28,18 @@
   ansible.builtin.find:
     paths: "{{ install_path }}"
     file_type: directory
-    patterns: "^ruby."
+    patterns: "^ruby"
+    use_regex: true
   register: source_rubies
 
 - name: what does this var look like?
   ansible.builtin.debug:
     var: source_rubies
 
- - name: ruby | uninstall any ruby installed from source
-   ansible.builtin.shell: cd {{ install_path }}/{{ item }} && make uninstall
-   loop: "{{ source_rubies.files }}"
-   when: source_rubies.matched > 0
+- name: ruby | uninstall any ruby installed from source
+  ansible.builtin.shell: cd {{ item.path }} && make uninstall
+  loop: "{{ source_rubies.files }}"
+  when: source_rubies.matched > 0
 
 - name: ruby | download ruby
   ansible.builtin.get_url:
