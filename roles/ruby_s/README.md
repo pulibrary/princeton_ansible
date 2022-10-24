@@ -1,6 +1,6 @@
 ## Ruby
 
-Builds Ruby from source
+Builds, upgrades, or downgrades Ruby from source, ensuring you have the correct version of Ruby.
 
 ### Requirements
 
@@ -8,18 +8,17 @@ None
 
 ### Role Variables
 
-if you need a different version of ruby use the example on
+Installs the value of `ruby_version_default` by default. If you need a different version of ruby, set `ruby_version_override` using the pattern `ruby-x.y.z`. 
 
-`defaults/main.yml`
+e.g `ruby_version_override: ruby-3.0.0`
 
-e.g `desired_ruby_version: "ruby-3.0.0"` and `ruby_version_override: ruby-3.0.0`
+This is most reliably set in your `group_vars/<your_role>/[common|main].yml`
 
-this is most reliably set in your `group_vars/<your_role>/[common|main].yml`
+### Upgrading from Ruby 2.x installed with apt
 
-### Upgrading from Ruby 2.x
-
-If you are upgrading a system from a previous ansible build that used brightbox
-ruby packages (which is probably the case for anything at PUL using ruby 2.x):
+If you are upgrading a system from a previous ansible build that used the `ruby` role
+to install ruby from the brightbox ruby packages (PPAs) using apt, which is probably
+the case for anything at PUL using ruby 2.x:
 
 * In `group_vars/<your project>/[common|main].yml`:
   * If `passenger_ruby` is set, update it to `/usr/local/bin/ruby`. Current default setting in the passenger role is `/usr/bin/ruby` - eventually we should update that!
