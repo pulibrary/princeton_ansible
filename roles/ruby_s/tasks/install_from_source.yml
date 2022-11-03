@@ -1,0 +1,76 @@
+---
+- name: ruby_s | lookup download path and checksum from ruby-lang release index
+  ansible.builtin.shell: curl https://cache.ruby-lang.org/pub/ruby/index.txt | grep {{ ruby_version }}.tar.gz
+  register: ruby_index_line
+
+- name: ruby_s | separate index entry values
+  ansible.builtin.set_fact:
+    ruby_values: "{{ ruby_index_line.stdout | regex_findall('(\\S+)') }}"
+
+- name: ruby_s | get ruby url
+  ansible.builtin.set_fact:
+    ruby_gzip_url: "{{ ruby_values[1] }}"
+
+- name: ruby_s | get ruby checksum
+  ansible.builtin.set_fact:
+    ruby_sha_256: "{{ ruby_values[3] }}"
+
+- name: ruby_s | ensure install path exists
+  ansible.builtin.file:
+    path: "{{ install_path }}"
+    state: directory
+    mode: 0644
+
+# the next two tasks find and uninstall previous ruby versions
+# installed from source, to allow upgrading/downgrading from one
+# ruby version installed from source to another
+- name: ruby_s | look for ruby installed from source
+  ansible.builtin.find:
+    paths: "{{ install_path }}"
+    file_type: directory
+    patterns: "^ruby"
+    use_regex: true
+  register: source_rubies
+
+- name: ruby_s | uninstall any ruby installed from source
+  ansible.builtin.shell: cd {{ item.path }} && make uninstall
+  loop: "{{ source_rubies.files }}"
+  when: source_rubies.matched > 0
+
+- name: ruby_s | download ruby
+  ansible.builtin.get_url:
+    url: "{{ ruby_gzip_url }}"
+    checksum: "sha256:{{ ruby_sha_256 }}"
+    dest: "{{ install_path }}/{{ ruby_version }}.tar.gz"
+
+- name: ruby_s | unzip ruby file
+  ansible.builtin.unarchive:
+    src: "{{ install_path }}/{{ ruby_version }}.tar.gz"
+    dest: "{{ install_path }}/"
+    creates: "{{ install_path }}/{{ ruby_version }}/compile.c"
+    copy: false
+
+- name: ruby_s | configure ruby
+  ansible.builtin.shell: cd {{ install_path }}/{{ ruby_version }} && ./configure --enable-shared
+
+- name: ruby_s | make ruby
+  ansible.builtin.shell: cd {{ install_path }}/{{ ruby_version }} && make
+
+- name: ruby_s | install ruby
+  ansible.builtin.shell: cd {{ install_path }}/{{ ruby_version }} && make install
+  become: true
+
+- name: ruby_s | uninstall wrong version of bundler
+  ansible.builtin.command: gem uninstall bundler
+
+- name: ruby_s | install global bundler, specific version
+  ansible.builtin.command: gem install bundler -v {{ bundler_version }}
+  when: bundler_version is defined
+
+- name: ruby_s | install global bundler, any version
+  ansible.builtin.command: gem install bundler
+  when: bundler_version is undefined
+
+- name: ruby_s | update rubygems
+  ansible.builtin.command: gem update --system
+  become: true
