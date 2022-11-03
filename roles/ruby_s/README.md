@@ -12,7 +12,7 @@ Installs the value of `ruby_version_default` by default. If you need a different
 
 e.g `ruby_version_override: ruby-3.0.0`
 
-This is most reliably set in your `group_vars/<your_role>/[common|main].yml`
+This is most reliably set in your `<your_role>/vars/main.yml`
 
 ### Upgrading from Ruby 2.x installed with apt
 
