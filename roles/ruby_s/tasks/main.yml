@@ -1,12 +1,12 @@
 ---
-- name: ruby | check existing ruby version
+- name: ruby_s | check existing ruby version
   ansible.builtin.shell: ruby -v | awk "{print $2}"
   register: installed_ruby
   changed_when: false
 
 # our test env does not have ruby installed
 # only run cleanup when ruby is installed AND it's the wrong version
-- name: ruby | remove wrong ruby versions with apt
+- name: ruby_s | remove wrong ruby versions with apt
   ansible.builtin.include_tasks: cleanup.yml
   when:
     - installed_ruby.stderr is not search("not found")
@@ -17,7 +17,7 @@
     - installed_ruby.stdout | regex_search('\d+\.\d+\.\d+') != ruby_version | regex_search('\d+\.\d+\.\d+')
 
 # install from source when ruby is not installed OR it's the wrong version
-- name: ruby | install, upgrade, or downgrade ruby from source
+- name: ruby_s | install, upgrade, or downgrade ruby from source
   ansible.builtin.include_tasks: install_from_source.yml
   when:
     - (installed_ruby.stderr is search("not found")) or (installed_ruby.stdout | regex_search('\d+\.\d+\.\d+') != ruby_version | regex_search('\d+\.\d+\.\d+'))
