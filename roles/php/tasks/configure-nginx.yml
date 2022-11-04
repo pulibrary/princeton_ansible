@@ -10,14 +10,13 @@
   register: phpcli
 
 - name: Run the tasks for the PHP CLI
-  include: php-cli.yml
+  include_tasks: php-cli.yml
   when: phpcli.stat.exists
 
 - name: install php
   apt:
     name: "php{{ php_version }}-fpm"
     state: present
-    update_cache: true
 
 - name: uninstall Apache
   apt:
@@ -30,6 +29,7 @@
     owner: nginx
     group: adm
   when: running_on_server
+  notify: restart nginx
 
 - name: make sure fpm runs as nginx
   lineinfile:

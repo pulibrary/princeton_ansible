@@ -17,26 +17,21 @@
 - name: php | install php
   apt:
     name: ["php{{ php_version }}", "php{{ php_version }}-dev", "php{{ php_version }}-curl", "php{{ php_version }}-zip"]
-    state: latest
-    update_cache: true
-  changed_when: false
+    state: present
   tags: ['skip_ansible_lint']
-  notify: restart apache
+  notify: restart {{ php_webserver }}
 
 - name: php | Install datadog trace php repository
   apt:
     deb: "https://github.com/DataDog/dd-trace-php/releases/download/{{ ddtrace_repo_version }}/datadog-php-tracer_{{ ddtrace_repo_version }}_amd64.deb"
     state: present
-    update_cache: true
   when: datadog_enabled
 
-- include: configure.yml
+- include_tasks: configure-apache2.yml
   when: php_webserver == 'apache2'
-  notify: restart apache
 
-- include: configure-nginx.yml
+- include_tasks: configure-nginx.yml
   when: php_webserver == 'nginx'
-  notify: restart nginx
 
 - name: php | uninstall eol php
   apt:

@@ -1,0 +1,33 @@
+---
+- name: php | Ensure that the PHP config. for Apache has been installed
+  stat:
+    path: /etc/php/{{ php_version }}/apache2/php.ini
+  register: modphp
+
+- name: php | Ensure that the PHP config for the CLI has been installed
+  stat:
+    path: /etc/php/{{ php_version }}/cli/php.ini
+  register: phpcli
+
+- name: php | Run the tasks for the PHP CLI
+  include_tasks: php-cli.yml
+  when: phpcli.stat.exists
+
+- name: php | Run the tasks for the Apache PHP module
+  include_tasks: mod-php.yml
+  when: modphp.stat.exists
+
+- name: php | disable php apache module
+  apache2_module:
+    state: absent
+    name: php{{ php_eolversion }}
+  notify: restart apache
+  when:
+    - running_on_server
+  ignore_errors: true
+
+- name: php | enable php apache module
+  apache2_module:
+    state: present
+    name: php{{ php_version }}
+  notify: restart {{ php_webserver }}

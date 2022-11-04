@@ -7,6 +7,11 @@
 #
 # By default, this playbook runs against the staging infrastructure
 # to backup from production, pass -e runtime_env=production
+#
+# If you want to use one runtime_env for postgres, and another for your app,
+# for example, if you are backing up a qa database that is hosted on a pg staging box,
+# you can pass -e runtime_env=staging -e app_runtime_env=qa
+#
 # since backups should come from a single server, not a group, be sure to pass a limit
 # For example: --limit lib-postgres-staging1.princeton.edu
 #
@@ -34,7 +39,7 @@
     - file_path: "/var/lib/migrate"
     - now: "{{ ansible_date_time.date }}"
   vars_files:
-    - ../group_vars/{{ project_name }}/{{ runtime_env | default('staging') }}.yml
+    - ../group_vars/{{ project_name }}/{{ app_runtime_env | default(runtime_env) | default('staging') }}.yml
     # - ../group_vars/{{ project_name }}/main.yml  # some roles have this
     - ../group_vars/{{ project_name }}/vault.yml
 
