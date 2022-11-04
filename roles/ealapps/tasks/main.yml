@@ -1,15 +1,4 @@
 ---
-# tasks file for ealapps
-- name: ealapps | install github deploy keys
-  ansible.builtin.template:
-    src: "{{ item }}"
-    dest: "/home/{{ deploy_user }}/.ssh/{{ item }}"
-    owner: "{{ deploy_user }}"
-    group: "{{ deploy_user }}"
-    mode: 0600
-  with_items: "{{ deploy_keys }}"
-  when: running_on_server
-
 - name: ealapps | clone git repo
   ansible.builtin.git:
     repo: "{{ eal_git_repo }}"
@@ -17,7 +6,7 @@
     clone: true
     update: true
     force: true
-    version:
+    version: main
     ssh_opts: "{{ ssh_opts | default(omit) }}"
   become: true
   notify: restart apache

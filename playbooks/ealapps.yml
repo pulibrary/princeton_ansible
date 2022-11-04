@@ -1,6 +1,7 @@
 ---
 # by default this playbook runs in the staging environment
 # to run in production, pass '-e runtime_env=production'
+
 - name: build the ealapps
   hosts: ealapps_{{ runtime_env | default('staging') }}
   remote_user: pulsys
@@ -8,6 +9,9 @@
   vars_files:
     - ../group_vars/ealapps/{{ runtime_env | default('staging') }}.yml
     - ../group_vars/ealapps/vault.yml
+  pre_tasks:
+    - set_fact:
+        deploy_id_rsa_private_key: "{{  lookup('file', '../roles/ealapps/files/id_rsa')  }}\n"
   roles:
     - role: roles/ealapps
 
