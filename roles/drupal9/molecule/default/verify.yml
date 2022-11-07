@@ -4,6 +4,9 @@
 - name: Verify
   hosts: all
   gather_facts: false
+  vars:
+    - php_version: "8.1"
+    - php_eolversion: "7.4"
   tasks:
   - name: test for presence libwww apache config
     lineinfile:
@@ -40,15 +43,24 @@
     register: file
     failed_when:
       - not file.stat.exists
+  - name: remove legacy php packages
+    ansible.builtin.apt:
+      name: "{{ item }}"
+      state: absent
+      autoremove: true
+    loop:
+      - "php{{ php_eolversion }}"
+      - "php{{ php_eolversion }}-gd"
+      - "php{{ php_eolversion }}-mbstring"
   - name: test for drupal packages
     apt:
       name: "{{ item }}"
       state: present
     loop:
-      - "php7.4"
-      - "php7.4-gd"
+      - "php{{ php_version }}"
       - "postgresql-client"
-      - "php7.4-mbstring"
+      - "php{{ php_version }}-gd"
+      - "php{{ php_version }}-mbstring"
     check_mode: true
     register: present
     failed_when:
