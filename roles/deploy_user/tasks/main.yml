@@ -12,11 +12,30 @@
     home: "/home/{{ deploy_user }}"
     shell: "{{ deploy_user_shell }}"
 
-- name: deploy_user | add SSH keys
-  ansible.posix.authorized_key:
-    user: "{{ deploy_user }}"
-    key: "{{ item.key }}"
-  with_items: "{{ deploy_ssh_users }}"
+# this task uses the '*.keys' GitHub URLs to access key contents
+# the contents are used in a template two tasks further down
+- name: deploy_user | get key content from github
+  ansible.builtin.command: 'curl {{ item }}'
+  loop: "{{ deploy_user_github_keys }}"
+  register: deploy_user_keys_from_github
+  changed_when: false
+
+- name: deploy_user | create the .ssh directory
+  ansible.builtin.file:
+    path: "/home/{{ deploy_user }}/.ssh/"
+    state: directory
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+    mode: 0700
+
+- name: deploy_user | build authorized keys file
+  ansible.builtin.template:
+    src: authorized_keys.j2
+    dest: /home/{{ deploy_user }}/.ssh/authorized_keys
+    group: "{{ deploy_user }}"
+    owner: "{{ deploy_user }}"
+    mode: '0600'
+    backup: true
 
 - name: deploy_user | allow "authorized_key" files
   ansible.builtin.lineinfile: >
@@ -37,14 +56,6 @@
   notify:
     - restart sshd
 
-- name: deploy_user | create the .ssh directory
-  ansible.builtin.file:
-    path: "/home/{{ deploy_user }}/.ssh/"
-    state: directory
-    owner: "{{ deploy_user }}"
-    group: "{{ deploy_user }}"
-    mode: 0700
-  when: not running_on_server
 
 - name: deploy_user | install deploy github key
   ansible.builtin.copy:
@@ -75,4 +86,4 @@
     label: "{{ deploy_user }}"
 
 - name: deploy_user | Run all handlers notified by the deploy_user role
-  meta: flush_handlers
+  ansible.builtin.meta: flush_handlers

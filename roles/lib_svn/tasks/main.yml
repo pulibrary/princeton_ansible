@@ -1,6 +1,6 @@
 ---
 - name: lib_svn | create svn home
-  file:
+  ansible.builtin.file:
     path: "{{ svn_home }}"
     state: directory
     owner: "{{ deploy_user }}"
@@ -8,7 +8,7 @@
     mode: 0755
 
 - name: lib_svn | create svn logs home
-  file:
+  ansible.builtin.file:
     path: "/var/log/svnserve"
     state: directory
     owner: "{{ deploy_user }}"
@@ -16,22 +16,22 @@
     mode: 0755
 
 - name: lib_svn | Check if repo exists in svn home
-  stat:
+  ansible.builtin.stat:
     path: "{{ lib_svn_repo_dir }}"
   register: repo_dir
 
 - name: lib_svn | create repo
-  command: svnadmin create "{{ lib_svn_repo_dir }}"
+  ansible.builtin.command: svnadmin create "{{ lib_svn_repo_dir }}"
   when: not repo_dir.stat.exists
 
 - name: lib_svn | modify file permissions
-  file:
+  ansible.builtin.file:
     path: "{{ lib_svn_repo_dir }}"
     owner: "{{ deploy_user }}"
     group: "www-data"
 
 - name: lib_svn | copy svn default file
-  copy:
+  ansible.builtin.copy:
     src: files/svnserve
     dest: /etc/default/svnserve
     owner: root
@@ -39,7 +39,7 @@
     mode: 0600
 
 - name: lib_svn | add svn systemd file
-  copy:
+  ansible.builtin.copy:
     src: files/svnserve.service
     dest: /etc/systemd/system/svnserve.service
     owner: root
@@ -48,18 +48,18 @@
   when: running_on_server
 
 - name: lib_svn | make systemd re-read itself
-  systemd:
+  ansible.builtin.systemd:
     daemon_reload: true
   when: running_on_server
 
 - name: lib_svn | copy svnserve config file
-  copy:
+  ansible.builtin.copy:
     src: files/svnserve.conf
     dest: "{{ lib_svn_repo_dir }}/conf"
     mode: 0644
 
 - name: lib_svn | copy svnserve credentials file
-  template:
+  ansible.builtin.template:
     src: passwd.j2
     dest: "{{ lib_svn_repo_dir }}/conf/passwd"
     mode: 0644
@@ -67,23 +67,26 @@
     - restart subversion
 
 - name: lib_svn | get LOC ead file
-  get_url:
+  ansible.builtin.get_url:
     url: https://www.loc.gov/ead/ead.xsd
     dest: "{{ lib_svn_repo_dir }}/ead.xsd"
+  when: running_on_server
 
 - name: lib_svn | point to local file
-  lineinfile:
+  ansible.builtin.lineinfile:
     dest: "{{ lib_svn_repo_dir }}/ead.xsd"
     regexp: 'schemaLocation="http://www.loc.gov/standards/xlink/xlink.xsd"/>'
     line: 'schemaLocation="xlink.xsd"/>'
+  when: running_on_server
 
 - name: lib_svn | get LOC xlink file
-  get_url:
+  ansible.builtin.get_url:
     url: https://www.loc.gov/standards/xlink/xlink.xsd
     dest: "{{ lib_svn_repo_dir }}/xlink.xsd"
+  when: running_on_server
 
 - name: lib_svn | setup pre-revprop-change hook to allow editing properties
-  template:
+  ansible.builtin.template:
     src: pre-revprop-change.j2
     dest: "{{ lib_svn_repo_dir }}/hooks/pre-revprop-change"
     mode: "u=rwx,g=rwx,o=rx"
@@ -91,7 +94,7 @@
     group: "www-data"
 
 - name: lib_svn | setup pre-commit hook for ead files
-  template:
+  ansible.builtin.template:
     src: ead_pre_commit.sh.j2
     dest: "{{ lib_svn_repo_dir }}/hooks/pre-commit"
     mode: "u=rwx,g=rwx,o=rx"
@@ -99,33 +102,33 @@
     group: "www-data"
 
 - name: lib_svn | rotate the logs
-  template:
+  ansible.builtin.template:
     src: svnserve.j2
     dest: '/etc/logrotate.d/svnserve'
     mode: 0644
 
 - name: lib_svn | install apache modules
-  apt:
+  ansible.builtin.apt:
     name: ["libapache2-mod-svn", "libsvn-dev", "apache2-utils", "python-passlib"]
     state: present
 
 - name: lib_svn | install xmllint
-  apt:
+  ansible.builtin.apt:
     name: ["libxml2-utils", "bash-completion"]
     state: present
 
 - name: lib_svn | enable svn module
-  apache2_module:
+  community.general.apache2_module:
     state: present
     name: dav
 
 - name: lib_svn | enable dav_svn module
-  apache2_module:
+  community.general.apache2_module:
     state: present
     name: dav_svn
 
 - name: lib_svn | create svn authentication
-  htpasswd:
+  community.general.htpasswd:
     path: "{{ item.path }}"
     name: "{{ item.name }}"
     password: "{{ item.secret }}"
@@ -135,16 +138,16 @@
   with_items: "{{ svn_credentials }}"
 
 - name: lib_svn | setup virtual host
-  template:
+  ansible.builtin.template:
     src: "svn_host.conf.j2"
     dest: "/etc/apache2/sites-available/svn_host.conf"
     mode: 0644
 
 - name: lib_svn | enable svn site
-  command: /usr/sbin/a2ensite svn_host.conf
+  ansible.builtin.command: /usr/sbin/a2ensite svn_host.conf
   changed_when: false
 
 - name: lib_svn | disable default site
-  command: /usr/sbin/a2dissite 000-default.conf
+  ansible.builtin.command: /usr/sbin/a2dissite 000-default.conf
   changed_when: false
   notify: reload apache

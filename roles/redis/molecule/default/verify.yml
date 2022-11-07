@@ -4,7 +4,7 @@
   gather_facts: false
   tasks:
   - name: check redis package status
-    package:
+    ansible.builtin.apt:
       name: "{{ item }}"
       state: present
     check_mode: true
@@ -15,12 +15,12 @@
       - python-redis
 
   - name: test for redis packages
-    assert:
+    ansible.builtin.assert:
       that:
         - not pkg_status.changed
 
   - name: redis listening on port 6379
-    command: netstat -tunlp | grep "0.0.0.0:6379 "
+    ansible.builtin.command: netstat -tunlp | grep "0.0.0.0:6379 "
     register: process
     changed_when: false
     failed_when:
