@@ -6,8 +6,13 @@
 
 - name: drupal | install mysql php driver
   ansible.builtin.apt:
-    name: ["libapache2-mod-php7.4", "php7.4-gd", "php7.4-mysql", "php7.4-xml"]
+    name: "{{ item }}"
     state: present
+  loop:
+    - "libapache2-mod-php{{ php_version }}"
+    - "php{{ php_version }}-gd"
+    - "php{{ php_version }}-mysql"
+    - "php{{ php_version }}-xml"
 
 - name: drupal | Check to see if settings.php home file exists.
   ansible.builtin.stat:
@@ -169,19 +174,17 @@
 #     state: build-dep
 #   when: not running_on_server
 
-- name: drupal | Install php7.4 requirements for drupal
+- name: drupal | Install php{{ php_version }} requirements for drupal
   ansible.builtin.apt:
-    name: ["php7.4-common", "php7.4-mbstring", "sendmail"]
+    name: "{{ item }}"
     state: present
+  loop:
+    - "php{{ php_version }}-common"
+    - "php{{ php_version }}-mbstring"
+    - "sendmail"
 
 - name: drupal | Install gulp globally
   community.general.npm:
     name: gulp-cli
     global: true
   become: true
-
-- name: drupal | enable apache php7.4 module
-  community.general.apache2_module:
-    state: present
-    name: php7.4
-  notify: restart apache
