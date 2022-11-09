@@ -2,19 +2,19 @@
 - name: Verify
   hosts: all
   gather_facts: false
+  vars:
+    - php_version: "8.1"
   tasks:
-  - name: check ruby package status
-    package:
-      name: "{{ item }}"
-      state: present
-    check_mode: true
-    register: pkg_status
-    loop:
-      - ruby-switch
-      - ruby2.6-dev
-      - ruby2.6
+    - name: check php curl status
+      ansible.builtin.package:
+        name: "{{ item }}"
+        state: present
+      check_mode: true
+      register: pkg_status
+      loop:
+        - php{{ php_version }}-curl
 
-  - name: test for ruby packages
-    assert:
-      that:
-        - not pkg_status.changed
+    - name: test for php_curl
+      assert:
+        that:
+          - not pkg_status.changed
