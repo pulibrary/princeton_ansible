@@ -1,0 +1,53 @@
+---
+# do we need to stop the tomcat server?
+# or is restarting afterwards enough?
+- name: stop tomcat server
+  service:
+    name: tomcat8
+    state: stopped
+
+- name: unarchive war file
+  unarchive:
+    src: "{{ geoserver_url }}/{{ geoserver_version }}/{{ geoserver_file }}"
+    dest: /var/lib/tomcat8/webapps
+    remote_src: true
+  notify:
+    - restart tomcat
+
+- name: Configure postgresql repository key
+  apt_key:
+    url: "{{ postgresql_apt_key_url }}"
+
+- name: Configure postgresql repository
+  apt_repository:
+    repo: "{{ postgresql_apt_repo }}"
+
+- name: add postgresql repository
+  apt_repository:
+    repo: 'deb http://apt.postgresql.org/pub/repos/apt/ {{ ansible_distribution_release }}-pgdg main'
+    state: present
+
+# are these versions going to change in future?
+- name: install postgis software
+  apt:
+    name: ["postgresql-10-postgis-2.4", "postgis", "postgresql-10-pgrouting"]
+    state: present
+  notify:
+    - restart postgresql
+
+- name: Create symlinks
+  file:
+    src: '{{ item.src }}'
+    dest: '{{ item.link }}'
+    owner: '{{ deploy_user }}'
+    group: '{{ deploy_user }}'
+    state: 'link'
+    force: true
+  with_items:
+    - src: '/srv/shares/plum_geo_data'
+      link: '/var/lib/tomcat8/webapps/geoserver/data/plum_geo_data'
+    - src: '/srv/shares/figgy_geo_data'
+      link: '/var/lib/tomcat8/webapps/geoserver/data/figgy_geo_data'
+    - src: '/mnt/libimages2/data/jp2s/plum_prod'
+      link: '/var/lib/tomcat8/webapps/geoserver/data/plum_prod'
+  when: running_on_server
