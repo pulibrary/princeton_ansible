@@ -7,15 +7,18 @@
 #
 - name: Install Rapid 7 agent
   hosts: "{{ runtime_env | default('staging') }}"
+  vars_files:
+    - ../group_vars/all/vault.yml
 
   tasks:
   - name: Copy Rapid 7 install script to box
     ansible.builtin.copy:
       src: ../bin/Rapid7_agent_installer.sh
-      dest: /opt/rapid7/Rapid7_agent_installer.sh
+      dest: /opt/rapid7/
       owner: pulsys
       group: pulsys
       mode: '0744'
+    become: true
 
   - name: Execute Rapid 7 install script
     ansible.builtin.shell: sudo rapid_7_agent_installer.sh install_start --token {{ vault_Rapid7_token }}
