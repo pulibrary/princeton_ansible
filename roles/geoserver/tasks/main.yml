@@ -1,11 +1,10 @@
 ---
-- name: download geoserver war file
-  ansible.builtin.get_url:
-    url: "{{ geoserver_url }}/{{ geoserver_version }}/{{ geoserver_file }}"
-    dest: /var/lib/tomcat8/webapps/{{ geoserver_file }}
+- name: check geoserver_version
+  ansible.builtin.stat:
+    path: /var/lib/tomcat8/webapps/{{ geoserver_file }}
   register: current_geoserver_file
 
 - name: install or upgrade geoserver if necessary
   ansible.builtin.include_tasks:
     file: upgrade_geoserver.yml
-  when: current_geoserver_file.changed
+  when: not current_geoserver_file.stat.exists
