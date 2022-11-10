@@ -1,7 +1,13 @@
 ---
-postgres_host: 'lib-postgres3.princeton.edu'
-postgres_version: 10
-postgresql_is_local: false
+postgres_host: "lib-postgres-staging3.princeton.edu"
+postgres_version: 13
+postgres_admin_user: "postgres"
+pg_hba_contype: "host"
+pg_hba_postgresql_user: "all"
+pg_hba_postgresql_database: "all"
+pg_hba_method: "md5"
+pg_hba_source: "{{ ansible_host }}/32"
+postgres_port: "5432"
 solr_version: "8.2.0"
 solr_cores:
   - "{{ pulfalight_solr_core }}"
@@ -9,8 +15,7 @@ solr_mirror: "https://archive.apache.org/dist"
 passenger_server_name: "pulfa3-staging1.princeton.edu"
 passenger_app_root: "/opt/pulfalight/current/public"
 passenger_app_env: "staging"
-passenger_ruby: "/usr/bin/ruby2.7"
-ruby_version_override: "ruby2.7"
+passenger_ruby: "/usr/local/bin/ruby"
 bundler_version: "2.3.18"
 desired_nodejs_version: "v16.15.0"
 rails_app_name: "pulfalight"
@@ -31,7 +36,7 @@ pulfalight_solr_core: 'pulfalight-staging'
 application_db_name: '{{pulfalight_db_name}}'
 application_dbuser_name: '{{pulfalight_db_user}}'
 application_dbuser_password: '{{pulfalight_db_password}}'
-application_dbuser_role_attr_flags: 'SUPERUSER'
+application_dbuser_role_attr_flags: 'CREATEDB'
 application_host: '{{passenger_server_name}}'
 application_host_protocol: 'https'
 application_port: '443'
@@ -73,6 +78,8 @@ rails_app_vars:
     value: '{{vault_pulfalight_unpublished_auth_token}}'
   - name: FIGGY_AUTH_TOKEN
     value: '{{vault_pulfalight_staging_figgy_auth_token}}'
+  - name: ADMIN_NETIDS
+    value: '"{{ sidekiq_netids | join(" ") }}"'
 sidekiq_worker_name: pulfalight-workers
 sidekiq_worker_threads: 3
 redis__server_default_configuration:

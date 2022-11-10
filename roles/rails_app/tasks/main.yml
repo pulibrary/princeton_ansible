@@ -6,8 +6,16 @@
   loop: '{{ rails_app_dependencies }}'
   changed_when: false
 
-- name: rails_app | Install site configuration
-  template:
+- name: rails_app | create app_configs directory
+  ansible.builtin.file:
+    path: '/home/{{ deploy_user }}/app_configs'
+    state: 'directory'
+    owner: '{{ deploy_user }}'
+    group: '{{ deploy_user }}'
+    mode: '0744'
+
+- name: rails_app | Install site configuration into app_configs
+  ansible.builtin.template:
     src: 'rails_app_config'
     dest: '/home/{{ deploy_user }}/app_configs/{{ rails_app_name }}'
     owner: '{{ deploy_user }}'
@@ -15,6 +23,15 @@
     mode: 0644
   tags:
     - site_config
+  notify: restart nginx
+
+- name: rails_app | load envvars from app_configs directory
+  ansible.builtin.lineinfile:
+    dest: "/home/{{ deploy_user }}/.bashrc"
+    state: present
+    regexp: '^for f in ~/app_configs/\*; do source \$f; done$'
+    line: "for f in ~/app_configs/*; do source $f; done"
+    insertbefore: BOF
 
 - name: rails_app | Create app directory structure
   file:

@@ -4,7 +4,6 @@
     name: "{{ item }}"
     state: present
     update_cache: true
-  ignore_errors: true
   loop:
     - ca-certificates
     - apt-transport-https
@@ -16,11 +15,11 @@
 
 - name: common | install building software and build essentials
   ansible.builtin.apt:
-    name: '{{ common_packages }}'
+    name: "{{ item }}"
     state: present
     update_cache: true
-  ignore_errors: true
   changed_when: false
+  with_items: "{{ common_packages }}"
 
 - name: common | copy tmux.conf
   ansible.builtin.template:
@@ -33,22 +32,6 @@
     name: '{{ configured_dependencies }}'
     state: present
 
-- name: common | add vector repository configuration
-  ansible.builtin.get_url:
-    url: https://repositories.timber.io/public/vector/cfg/setup/bash.deb.sh
-    dest: /tmp/bash.deb.sh
-  changed_when: false
-
-- name: common | add vector repository
-  ansible.builtin.command: bash /tmp/bash.deb.sh
-  become: true
-  changed_when: false
-
-- name: common | install vector
-  ansible.builtin.apt:
-    name: vector
-  when: running_on_server
-
 - name: common | install duf
   ansible.builtin.apt:
     deb: "{{ duf_url }}/v{{ duf_version }}/duf_{{ duf_version }}_linux_amd64.deb"
@@ -56,3 +39,15 @@
   retries: 3
   delay: 60
   until: duf_repo is succeeded
+
+- name: common | install dust
+  ansible.builtin.apt:
+    deb: "{{ dust_url }}/v{{ dust_version }}/du-dust_{{ dust_version }}_amd64.deb"
+
+- name: common | install fdfind
+  ansible.builtin.apt:
+    deb: "{{ fd_find_url }}/v{{ fd_find_version }}/fd_{{ fd_find_version }}_amd64.deb"
+
+- name: install vector, but not in testing
+  include_tasks: vector.yml
+  when: running_on_server

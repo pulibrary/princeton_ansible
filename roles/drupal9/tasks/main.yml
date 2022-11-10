@@ -1,5 +1,14 @@
 ---
 # tasks file for roles/drupal9
+- name: drupal9 | remove legacy php packages
+  ansible.builtin.apt:
+    name: "{{ item }}"
+    state: absent
+    autoremove: true
+  loop:
+    - "php{{ phpeol_version }}"
+    - "php{{ phpeol_version }}-gd"
+    - "php{{ phpeol_version }}-mbstring"
 
 - name: drupal9 | Install dependencies
   ansible.builtin.apt:
@@ -8,9 +17,8 @@
 
 - name: drupal9 | install postgres php driver
   ansible.builtin.apt:
-    name: ["php7.4-pgsql", "php7.4-xml"]
+    name: ["php{{ php_version }}-pgsql", "php{{ php_version }}-xml"]
     state: present
-    update_cache: true
 
 - name: drupal9 | Check to see if settings.php home file exists.
   ansible.builtin.stat:
@@ -88,19 +96,21 @@
     mode: 0644
   notify: Restart NGINX
 
-- name: drupal9 | install npm for git actions
-  ansible.builtin.apt:
-    name: ["nodejs", "nodejs-dev", "node-gyp", "libssl1.0-dev"]
-    state: build-dep
-    update_cache: true
-  changed_when: false
-  when: not running_on_server
+# If you install nodejs-dev with apt, it uninstalls php7.4-dev
+# So we cannot install both with apt
+# Commenting this task out, we will install node
+# using the NodeJS role
+#
+# - name: drupal9 | install npm for git actions
+#   ansible.builtin.apt:
+#     name: ["nodejs", "nodejs-dev", "node-gyp", "libssl1.0-dev"]
+#     state: build-dep
+#   when: not running_on_server
 
 - name: drupal9 | install php packages
   ansible.builtin.apt:
-    name: ["php{{ php_version }}-gd", "postgresql-client", "php7.4-mbstring"]
+    name: ["php{{ php_version }}-gd", "postgresql-client", "php{{ php_version }}-mbstring"]
     state: present
-    update_cache: true
 
 - name: drupal9 | Install gulp globally
   npm:

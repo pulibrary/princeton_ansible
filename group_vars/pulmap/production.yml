@@ -10,6 +10,23 @@ pg_hba_postgresql_database: "all"
 pg_hba_method: "md5"
 pg_hba_source: "{{ ansible_host }}/32"
 pulmap_db_host: '{{ postgres_host }}'
+passenger_app_root: "/opt/pulmap/current/public"
+passenger_app_env: "production"
+passenger_server_name: "pulmap.princeton.edu"
+passenger_ruby: "/usr/local/bin/ruby"
+bundler_version: "2.3.18"
+desired_nodejs_version: "v16.15.0"
+pulmap_solr_url: http://lib-solr8-prod.princeton.edu:8983/solr/pulmap
+rails_app_name: "pulmap"
+rails_app_directory: "pulmap"
+rails_app_env: "production"
+rails_app_dependencies:
+  - libpq-dev
+  - libsqlite3-dev
+  - libtool
+  - autoconf
+  - zlib1g-dev
+  - imagemagick
 pulmap_honeybadger_api_key: '{{ vault_pulmap_honeybadger_api_key }}'
 pulmap_princeton_geoserver_url: '{{ vault_pulmap_princeton_geoserver_url }}'
 pulmap_proxy_geoserver_url: '{{ vault_pulmap_proxy_geoserver_url }}'
@@ -20,10 +37,10 @@ application_db_name: '{{ vault_pulmap_db }}'
 application_dbuser_name: '{{ vault_pulmap_production_db_username }}'
 application_dbuser_password: '{{ vault_pulmap_production_db_password }}'
 application_dbuser_role_attr_flags: "CREATEDB"
-pulmap_rabbit_user: '{{vault_rabbit_production_user}}'
-pulmap_rabbit_password: '{{vault_rabbit_production_password}}'
+pulmap_rabbit_user: '{{ vault_rabbit_production_user }}'
+pulmap_rabbit_password: '{{ vault_rabbit_production_password }}'
 pulmap_rabbit_host: '{{ figgy_rabbit_host }}'
-pulmap_rabbit_server: 'amqp://{{pulmap_rabbit_user}}:{{pulmap_rabbit_password}}@{{pulmap_rabbit_host}}:5672'
+pulmap_rabbit_server: 'amqp://{{ pulmap_rabbit_user }}:{{ pulmap_rabbit_password }}@{{ pulmap_rabbit_host }}:5672'
 rails_app_vars:
   - name: PULMAP_SOLR_URL
     value: '{{ pulmap_solr_url }}'
@@ -42,7 +59,7 @@ rails_app_vars:
   - name: PULMAP_SECRET_KEY_BASE
     value: '{{ pulmap_secret_key_base }}'
   - name: PULMAP_ADMIN_NETIDS
-    value: '"{{ pulmap_admin_netids | join(" ") }}"'
+    value: '"{{ sidekiq_netids | join(" ") }}"'
   - name: PULMAP_REDIS_URL
     value: 'maps2.princeton.edu'
   - name: PULMAP_REDIS_DB
@@ -60,7 +77,7 @@ rails_app_vars:
   - name: GOOGLE_CLOUD_BUCKET
     value: 'pulmap-storage'
   - name: GOOGLE_CLOUD_CREDENTIALS
-    value: '/home/{{deploy_user}}/cloud_config/google_cloud_credentials.json'
+    value: '/home/{{ deploy_user }}/cloud_config/google_cloud_credentials.json'
   - name: GOOGLE_CLOUD_PROJECT
     value: 'pulibrary-figgy-storage-1'
 sneakers_workers: GeoblacklightEventHandler

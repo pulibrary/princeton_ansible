@@ -1,45 +1,42 @@
 ---
 - name: php | debug web server
-  debug:
+  ansible.builtin.debug:
     msg: PHP Web Server {{ php_webserver }}
 
 - name: "Install Required Ubuntu Dependencies"
-  apt:
+  ansible.builtin.apt:
     name:
       - apt-transport-https
       - dirmngr
 
 - name: php | Add ondrej sury repository
-  apt_repository:
+  ansible.builtin.apt_repository:
     repo: "ppa:ondrej/php"
-  when: ansible_distribution_release == "xenial" or php_version == '7.4'
+    update_cache: true
+    state: present
+  when: php_version == '8.1'
 
 - name: php | install php
-  apt:
+  ansible.builtin.apt:
     name: ["php{{ php_version }}", "php{{ php_version }}-dev", "php{{ php_version }}-curl", "php{{ php_version }}-zip"]
-    state: latest
-    update_cache: true
-  changed_when: false
+    state: present
   tags: ['skip_ansible_lint']
-  notify: restart apache
+  notify: restart {{ php_webserver }}
 
 - name: php | Install datadog trace php repository
-  apt:
+  ansible.builtin.apt:
     deb: "https://github.com/DataDog/dd-trace-php/releases/download/{{ ddtrace_repo_version }}/datadog-php-tracer_{{ ddtrace_repo_version }}_amd64.deb"
     state: present
-    update_cache: true
   when: datadog_enabled
 
-- include: configure.yml
+- include_tasks: configure-apache2.yml
   when: php_webserver == 'apache2'
-  notify: restart apache
 
-- include: configure-nginx.yml
+- include_tasks: configure-nginx.yml
   when: php_webserver == 'nginx'
-  notify: restart nginx
 
 - name: php | uninstall eol php
-  apt:
+  ansible.builtin.apt:
     name: ["php{{ php_eolversion }}", "php{{ php_eolversion }}-dev", "php{{ php_eolversion }}-curl", "php{{ php_eolversion }}-zip"]
     autoremove: true
     state: absent
