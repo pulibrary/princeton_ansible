@@ -7,6 +7,7 @@
     update: true
     force: true
     version: main
+    key_file: "/home/{{ deploy_user }}/.ssh/id_rsa"
     ssh_opts: "{{ ssh_opts | default(omit) }}"
   become: true
   notify: restart apache
@@ -23,6 +24,28 @@
     recurse: true
     mode: 0775
   changed_when: false
+
+- name: ealapps | add connection file
+  ansible.builtin.template:
+    src: connection_mysql.php.j2
+    dest: "{{ apache_doc_root }}/connections/connection_mysql.php"
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+    mode: '0644'
+  when: running_on_server
+
+- name: ealapps | install missing dependencies
+  ansible.builtin.command: composer install
+  args:
+    chdir: "{{ apache_doc_root }}/{{ item }}/"
+  loop:
+    - stafftools
+    - hishi
+    - newtitles
+    - oclcpinyin
+  when: running_on_server
+  become: true
+  become_user: "{{ deploy_user }}"
 
 - name: ealapp | Make repos git safe
   ansible.builtin.command: git config --global --add safe.directory "{{ apache_doc_root }}"
