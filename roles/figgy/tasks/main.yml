@@ -1,21 +1,21 @@
 ---
-- name: Create repository directory structure
-  file:
+- name: figgy | Create repository directory structure
+  ansible.builtin.file:
     path: '/opt/{{ item }}'
     state: 'directory'
     owner: '{{ deploy_user }}'
     group: '{{ deploy_user }}'
     mode: 0755
-  with_items:
+  loop:
     - 'repository'
 
 ## Create Mounts
-- name: Create mount directories
-  file:
+- name: figgy | Create mount directories
+  ansible.builtin.file:
     path: '/mnt/{{ item }}'
     state: 'directory'
     mode: 0755
-  with_items:
+  loop:
     - hydra_sources
     - figgy_binaries
     - figgy_images
@@ -28,13 +28,13 @@
     - 'illiad/ocr_scan'
     - 'illiad/cdl_scans'
 
-- name: Copy smb credentials
-  copy:
+- name: figgy | Copy smb credentials
+  ansible.builtin.copy:
     src: "files/{{ item }}"
     dest: "/etc/{{ item }}"
     mode: 0644
   when: running_on_server
-  with_items:
+  loop:
     - pudl.smb.credentials
     - archives.smb.credentials
     - archives_bd.smb.credentials
@@ -51,8 +51,8 @@
     - mudd.smb.credentials
     - microforms.smb.credentials
 
-- name: Create mount to plum binaries
-  mount:
+- name: figgy | Create mount to plum binaries
+  ansible.posix.mount:
     name: '/mnt/diglibdata/hydra_binaries'
     src: '//diglibdata1.princeton.edu/hydra/binaries'
     fstype: cifs
@@ -60,8 +60,8 @@
     state: mounted
   when: running_on_server
 
-- name: Create mount to pudl binaries (for migration)
-  mount:
+- name: figgy | Create mount to pudl binaries (for migration)
+  ansible.posix.mount:
     name: '/mnt/diglibdata/pudl'
     src: '//diglibdata1.princeton.edu/pudl'
     fstype: cifs
@@ -69,8 +69,8 @@
     state: mounted
   when: running_on_server
 
-- name: Create mount to scratch space (for bulk ingests)
-  mount:
+- name: figgy | Create mount to scratch space (for bulk ingests)
+  ansible.posix.mount:
     name: '/mnt/hydra_sources/ingest_scratch'
     src: '//diglibdata1.princeton.edu/hydra/binaries/ingest_scratch'
     fstype: cifs
@@ -78,117 +78,117 @@
     state: mounted
   when: running_on_server
 
-- name: Create cantaloupe images mount
-  when: running_on_server
-  mount:
+- name: figgy | Create cantaloupe images mount
+  ansible.posix.mount:
     name: '/mnt/{{ figgy_cantaloupe_images_mount }}/data'
     src: '//{{ figgy_cantaloupe_images_mount }}.princeton.edu/data'
     fstype: cifs
     opts: 'credentials=/etc/libimages2.smb.credentials,uid={{ deploy_user_uid }},gid={{ deploy_user_uid }}'
     state: mounted
+  when: running_on_server
 
-- name: Ensure figgy derivatives mount directory exists
-  file:
+- name: figgy | Ensure figgy derivatives mount directory exists
+  ansible.builtin.file:
     path: '{{ figgy_derivatives_mount }}'
     state: directory
     mode: 0755
 
-- name: Create diglibdata mounts (hydra sources)
-  when: running_on_server
-  mount:
+- name: figgy | Create diglibdata mounts (hydra sources)
+  ansible.posix.mount:
     name: /mnt/hydra_sources/{{ item }}
     src: //diglibdata1.princeton.edu/{{ item }}
     fstype: cifs
     opts: 'credentials=/etc/{{ item }}.smb.credentials,uid={{ deploy_user_uid }}'
     state: mounted
-  with_items:
+  when: running_on_server
+  loop:
     - pudl
     - archives
     - archives_bd
     - maplab
 
-- name: Create mount to studio (hydra sources)
-  when: running_on_server
-  mount:
+- name: figgy | Create mount to studio (hydra sources)
+  ansible.posix.mount:
     name: /mnt/hydra_sources/studio
     src: //libserv64.princeton.edu/studio
     fstype: cifs
     opts: 'credentials=/etc/studio.smb.credentials,uid={{ deploy_user_uid }}'
     state: absent
-
-- name: Create mount to studio (hydra sources)
   when: running_on_server
-  mount:
+
+- name: figgy | Create mount to studio (hydra sources)
+  ansible.posix.mount:
     name: /mnt/hydra_sources/studio_new
     src: //lib-dps-server.princeton.edu/studio
     fstype: cifs
     opts: 'credentials=/etc/studio.new.smb.credentials,uid={{ deploy_user_uid }}'
     state: mounted
-
-- name: Create lib-dps mounts
   when: running_on_server
-  mount:
+
+- name: figgy | Create lib-dps mounts
+  ansible.posix.mount:
     name: /mnt/hydra_sources/{{ item }}
     src: //lib-dps-server.princeton.edu/{{ item }}
     fstype: cifs
     opts: 'credentials=/etc/{{ item }}.smb.credentials,uid={{ deploy_user_uid }}'
     state: mounted
-  with_items:
+  when: running_on_server
+  loop:
     - marquand
     - mendel
     - mudd
     - microforms
 
-- name: Create mount to music reserves (hydra sources)
-  when: running_on_server
-  mount:
+- name: figgy | Create mount to music reserves (hydra sources)
+  ansible.posix.mount:
     name: /mnt/hydra_sources/music
     src: '//diglibdata1.princeton.edu/music'
     fstype: cifs
     opts: 'credentials=/etc/plum_mount.smb.credentials,uid={{ deploy_user_uid }},gid=33'
     state: mounted
-
-- name: Create mount to numismatics (hydra sources)
   when: running_on_server
-  mount:
+
+- name: figgy | Create mount to numismatics (hydra sources)
+  ansible.posix.mount:
     name: /mnt/hydra_sources/numismatics
     src: '//diglibdata1.princeton.edu/numismatics'
     fstype: cifs
     opts: 'credentials=/etc/numis.smb.credentials,uid={{ deploy_user_uid }},gid=33'
     state: mounted
-
-- name: Create geoserver derivatives mount
   when: running_on_server
-  mount:
+
+- name: figgy | Create geoserver derivatives mount
+  ansible.posix.mount:
     name: /mnt/geoserver/figgy_geo_data
     src: //geoserv1.princeton.edu/figgy_geo_data
     fstype: cifs
     opts: 'credentials=/etc/geoserver.smb.credentials,uid={{ deploy_user_uid }}'
     state: mounted
-
-- name: Create ILLiad mounts
   when: running_on_server
-  mount:
+
+- name: figgy | Create ILLiad mounts
+  ansible.posix.mount:
     name: /mnt/illiad/{{ item }}
     src: //lib-illsql.princeton.edu/{{ item }}
     fstype: cifs
     opts: 'credentials=/etc/illiad.smb.credentials,uid={{ deploy_user_uid }},gid=33'
     state: mounted
-  with_items:
+  when: running_on_server
+  loop:
     - images
     - ocr_scan
     - cdl_scans
 
 ## Symlink to Mounts
-- name: Create symlinks
-  file:
+- name: figgy | Create symlinks
+  ansible.builtin.file:
     src: '{{ item.src }}'
     dest: '{{ item.link }}'
     owner: '{{ deploy_user }}'
     group: '{{ deploy_user }}'
     state: 'link'
     force: true
-  with_items:
+  loop:
     - src: '/mnt/hydra_sources'
       link: '/opt/{{ rails_app_directory }}/shared/staged_files'
     - src: '{{ figgy_repository_mount }}'
@@ -200,55 +200,61 @@
     - src: '{{ figgy_stream_derivatives_mount }}'
       link: '/opt/repository/stream_derivatives'
 
-- name: add GDAL repository
-  apt_repository:
+- name: figgy | add GDAL repository
+  ansible.builtin.apt_repository:
     repo: "ppa:ubuntugis/ppa"
 
-- name: Install GDAL
-  apt:
-    name: ['libgdal-dev=2.4.2+dfsg-1~bionic0', 'gdal-bin=2.4.2+dfsg-1~bionic0']
+- name: figgy | Install GDAL
+  ansible.builtin.apt:
+    name: "{{ item }}"
     state: present
+  loop:
+    - "libgdal-dev=2.4.2+dfsg-1~bionic0"
+    - "gdal-bin=2.4.2+dfsg-1~bionic0"
 
-- name: Install cogeo-mosaic apt prerequisites
-  apt:
-    name: ['python3-setuptools', 'cython3']
+- name: figgy | Install cogeo-mosaic apt prerequisites
+  ansible.builtin.apt:
+    name: "{{ item }}"
     state: present
+  loop:
+    - "python3-setuptools"
+    - "cython3"
 
-- name: update pip3 for cogeo-mosaic
-  pip:
+- name: figgy | update pip3 for cogeo-mosaic
+  ansible.builtin.pip:
     name: pip>21,!=21.2
     executable: pip3
     state: present
 
-- name: remove cogeo-mosaic requests dependency to ensure the correct version
-  pip:
+- name: figgy | remove cogeo-mosaic requests dependency to ensure the correct version
+  ansible.builtin.pip:
     name: requests
     executable: pip3
     state: absent
   changed_when: "'molecule-idempotence-notest' not in ansible_skip_tags"
 
-- name: remove cogeo-mosaic urllib3 dependency to ensure the correct version
-  pip:
+- name: figgy | remove cogeo-mosaic urllib3 dependency to ensure the correct version
+  ansible.builtin.pip:
     name: urllib3
     executable: pip3
     state: absent
   changed_when: "'molecule-idempotence-notest' not in ansible_skip_tags"
 
-- name: Install cogeo-mosaic
-  pip:
+- name: figgy | Install cogeo-mosaic
+  ansible.builtin.pip:
     name: cogeo-mosaic
     executable: pip3
     extra_args: --pre
   changed_when: "'molecule-idempotence-notest' not in ansible_skip_tags"
 
-- name: Create cloud_config directory
-  file:
+- name: figgy | Create cloud_config directory
+  ansible.builtin.file:
     path: '/home/{{ deploy_user }}/cloud_config'
     state: 'directory'
     mode: 0755
 
-- name: Install Google Cloud Authorization
-  copy:
+- name: figgy | Install Google Cloud Authorization
+  ansible.builtin.copy:
     src: "files/{{ rails_app_env }}-google_cloud_credentials.json"
     dest: "/home/{{ deploy_user }}/cloud_config/google_cloud_credentials.json"
     mode: 0644
