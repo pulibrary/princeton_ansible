@@ -7,6 +7,7 @@
     mode: '0755'
   loop:
     - "{{ geoserver_root }}"
+    - "{{ solrmirror_root }}"
 
 - name: pulmirror | download geoserver files
   ansible.builtin.get_url:
@@ -37,3 +38,10 @@
     validate: httpd -n -f %s
   notify: restart obsd_httpd
 
+- name: pulrmirror | add daily cron
+  ansible.builtin.copy:
+    src: "files/daily.local.sh"
+    dest: "/etc/daily.local"
+    owner: root
+    group: wheel
+    mode: 0644
