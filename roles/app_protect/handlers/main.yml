@@ -1,0 +1,32 @@
+---
+# handlers file for app_protect
+- name: (Handler - NGINX App Protect) Systemd daemon-reload
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+- name: (Handler - NGINX App Protect) Restart NGINX
+  ansible.builtin.service:
+    name: nginx
+    state: restarted
+    enabled: true
+  when:
+    - nginx_app_protect_start | bool
+    - not ansible_check_mode | bool
+  listen: (Handler - NGINX App Protect) Run NGINX
+
+- name: (Handler - NGINX App Protect) Check NGINX
+  ansible.builtin.command: nginx -t
+  register: config_check
+  ignore_errors: true
+  changed_when: false
+  listen: (Handler - NGINX App Protect) Run NGINX
+
+- name: (Handler - NGINX App Protect) Print NGINX error if syntax check fails
+  ansible.builtin.debug:
+    var: config_check.stderr_lines
+  failed_when: config_check.rc != 0
+  when:
+    - config_check.stderr_lines is defined
+    - config_check.stderr_lines != []
+    - config_check.rc != 0
+  listen: (Handler - NGINX App Protect) Run NGINX
