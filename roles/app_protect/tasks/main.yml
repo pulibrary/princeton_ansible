@@ -3,7 +3,6 @@
 - name: app_protect | Check if OS is supported for NGINX App Protect WAF or DoS install
   ansible.builtin.include_tasks: "{{ role_path }}/tasks/common/prerequisites/validate-supported-os.yml"
   when: nginx_app_protect_waf_state != "absent"
-        or nginx_app_protect_dos_state != "absent"
 
 - name: app_protect | Fail if variables for 'nginx_app_protect_security_policy_file_enable' are not defined
   ansible.builtin.assert:
@@ -46,11 +45,6 @@
   ansible.builtin.include_tasks: "{{ role_path }}/tasks/waf/install-{{ ansible_os_family | lower }}.yml"
   when: nginx_app_protect_waf_enable | bool
   tags: nginx_app_protect_install_app_protect_waf
-
-- name: app_protect | "{{ nginx_app_protect_dos_setup | capitalize }} NGINX App Protect DoS"
-  ansible.builtin.include_tasks: "{{ role_path }}/tasks/dos/install-{{ ansible_os_family | lower }}.yml"
-  when: nginx_app_protect_dos_enable | bool
-  tags: nginx_app_protect_install_app_protect_dos
 
 - name: app_protect | Modify NGINX Plus service
   ansible.builtin.include_tasks: "{{ role_path }}/tasks/common/install/service-modification.yml"
