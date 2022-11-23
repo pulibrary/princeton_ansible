@@ -1,16 +1,56 @@
 ---
-- name: "Create SSL Directory"
-  file:
+- name: nginxplus | Create SSL Directory
+  ansible.builtin.file:
     path: /etc/ssl/nginx
     state: directory
     mode: 0755
 
-- name: "Copy NGINX Plus Certificate and License Key"
-  copy:
+- name: nginxplus | Copy NGINX Plus Certificate and License Key
+  ansible.builtin.copy:
     src: "{{ item }}"
     dest: /etc/ssl/nginx
     decrypt: true
     mode: 0644
-  with_items:
+  loop:
     - "{{ nginx_license.certificate }}"
     - "{{ nginx_license.key }}"
+
+- name: nginxplus | Set up NGINX Plus license
+  block:
+    - name: Create SSL directory
+      ansible.builtin.file:
+        path: /etc/ssl/nginx
+        state: directory
+        mode: 0755
+
+    - name: Copy NGINX Plus certificate and license key
+      ansible.builtin.copy:
+        src: "{{ item }}"
+        dest: /etc/ssl/nginx
+        decrypt: true
+        mode: 0444
+      loop:
+        - "{{ nginx_license['certificate'] }}"
+        - "{{ nginx_license['key'] }}"
+
+    - name: Install cryptography package
+      ansible.builtin.apt:
+        name: "{{ (ansible_python['version']['major'] == 3) | ternary('python3-cryptography', 'python2-cryptography') }}"
+
+    - name: Check that NGINX Plus certificate is valid
+      community.crypto.x509_certificate_info:
+        path: /etc/ssl/nginx/nginx-repo.crt
+      register: cert
+
+    - name: Check that NGINX Plus key is valid
+      community.crypto.openssl_privatekey_info:
+        path: /etc/ssl/nginx/nginx-repo.key
+      register: key
+
+    - name: Check that NGINX Plus license is valid
+      ansible.builtin.assert:
+        that:
+          - cert.expired == false
+          - cert.public_key == key.public_key
+        success_msg: Your NGINX Plus license is valid!
+        fail_msg: Something went wrong! Make sure your NGINX Plus license is valid!

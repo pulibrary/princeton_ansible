@@ -1,13 +1,37 @@
 ---
-- import_tasks: setup-license.yml
+- name: nginxplus | set up license
+  ansible.builtin.import_tasks: setup-license.yml
 
-- import_tasks: setup-debian.yml
+- name: nginxplus | set up ubuntu
+  ansible.builtin.import_tasks: setup-debian.yml
 
-- name: "Install: Install NGINX Plus"
-  apt:
-    name: nginx-plus
-    state: present
-  notify: Start NGINX
+- name: nginxplus | {{ nginx_license_status is defined | ternary('Remove', 'Configure') }} NGINX Plus license verification
+  ansible.builtin.blockinfile:
+    path: /etc/apt/apt.conf.d/90nginx
+    create: true
+    block: |
+      Acquire::https::{{ (nginx_repository | default(nginx_plus_default_repository_debian)) | regex_search('(?<=https://)[^/]*') }}::Verify-Peer "true";
+      Acquire::https::{{ (nginx_repository | default(nginx_plus_default_repository_debian)) | regex_search('(?<=https://)[^/]*') }}::Verify-Host "true";
+      Acquire::https::{{ (nginx_repository | default(nginx_plus_default_repository_debian)) | regex_search('(?<=https://)[^/]*') }}::SslCert     "/etc/ssl/nginx/nginx-repo.crt";
+      Acquire::https::{{ (nginx_repository | default(nginx_plus_default_repository_debian)) | regex_search('(?<=https://)[^/]*') }}::SslKey      "/etc/ssl/nginx/nginx-repo.key";
+    state: "{{ nginx_license_status | default((nginx_setup == 'uninstall') | ternary('absent', 'present')) }}"
+    mode: 0444
 
-- import_tasks: delete-license.yml
-  when: nginx_delete_license
+- name: nginxplus | {{ nginx_license_status is defined | ternary('Remove', 'Configure') }} NGINX Plus repository
+  ansible.builtin.apt_repository:
+    filename: nginx-plus
+    repo: "{{ nginx_plus_default_repository_debian }}"
+    update_cache: false
+    state: "{{ nginx_license_status | default((nginx_setup == 'uninstall') | ternary('absent', 'present')) }}"
+    mode: 0644
+  when: nginx_manage_repo | bool
+
+- name: nginxplus | {{ nginx_setup | capitalize }} NGINX Plus
+  ansible.builtin.apt:
+    name: nginx-plus{{ nginx_version | default('') }}
+    state: "{{ nginx_state }}"
+    update_cache: true
+    allow_downgrade: "{{ omit if ansible_version.full is version('2.12', '<') else true }}"
+  ignore_errors: "{{ ansible_check_mode }}"
+  when: nginx_license_status is not defined
+  notify: (Handler) Run NGINX
