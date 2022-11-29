@@ -48,19 +48,23 @@
     mode: '0640'
   when: running_on_server
 
-- name: video_reserves | Create certificate signing request (CSR) for self-signed certificate
-  community.crypto.openssl_csr_pipe:
-    privatekey_path: /etc/ssl/private/ssl-cert-snakeoil.key
-    common_name: lib-vr-staging.princeton.edu
-    organization_name: PUL
-  register: csr
+- name: video_reserves | copy apache cert files
+  copy:
+    src: "files/certs/{{ item }}"
+    dest: "/etc/apache2/ssl/certs/"
+  changed_when: false
+  when: running_on_server
+  with_items:
+    - "{{ inventory_hostname }}_cert.cer"
+    - "{{ inventory_hostname }}_chained.pem"
 
-- name: video_reserves | Create self-signed certificate from CSR
-  community.crypto.x509_certificate:
-    path: /etc/ssl/certs/ssl-cert-snakeoil.pem
-    csr_content: "{{ csr.csr }}"
-    privatekey_path: /etc/ssl/private/ssl-cert-snakeoil.key
-    provider: selfsigned
+- name: video_reserves | copy apache private files
+  copy:
+    src: "files/private/{{ item }}"
+    dest: "/etc/apache2/ssl/private/"
+  when: running_on_server
+  with_items:
+    - "{{ inventory_hostname }}_priv.key"
 
 - name: video_reserves | Add video_reserves
   ansible.builtin.template:
