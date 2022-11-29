@@ -34,15 +34,15 @@
     mode: '0644'
   when: running_on_server
 
+- name: ealapps | Install required php modules
+  ansible.builtin.apt:
+    name: ["php{{ php_version }}-gd", "php{{ php_version }}-ldap"]
+    state: present
+
 - name: ealapps | install missing dependencies
   ansible.builtin.command: composer install
   args:
-    chdir: "{{ apache_doc_root }}/{{ item }}/"
-  loop:
-    - stafftools
-    - hishi
-    - newtitles
-    - oclcpinyin
+    chdir: "{{ apache_doc_root }}"
   when: running_on_server
   become: true
   become_user: "{{ deploy_user }}"
