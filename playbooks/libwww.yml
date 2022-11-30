@@ -1,5 +1,8 @@
 ---
-- hosts: libwww_prod
+# by default this playbook runs in the staging environment
+# to run in production, pass '-e runtime_env=production'
+- name: build the Library website
+  hosts: libwww_{{ runtime_env | default('staging') }}
   remote_user: pulsys
   become: true
   vars:
@@ -7,15 +10,16 @@
     - drupal_git_repo: ''
     - post_install: |
         Possible Things left to do:
-        - run a cap for rbsc_drupal, pul_library_drupal, discoveryutils
+        - run a cap for pul_library_drupal, discoveryutils
         - where needed make sure server is greenlisted on [lib-ponyexpress](https://github.com/pulibrary/pul-the-hard-way/blob/master/services/smtp-mail-server.md)
   vars_files:
-    - ../group_vars/libwww/production.yml
+    - ../group_vars/libwww/{{ runtime_env | default('staging') }}.yml
     - ../group_vars/libwww/common.yml
     - ../group_vars/libwww/vault.yml
     # need information to connect to solr staging cluster
   roles:
     - role: datadog
+      when: runtime_env | default('staging') == "production"
     - role: libwww
   pre_tasks:
     - set_fact:
@@ -23,9 +27,9 @@
 
   post_tasks:
     - name: tell everyone on slack you ran an ansible playbook
-      slack:
+      community.general.slack:
         token: "{{ vault_pul_slack_token }}"
-        msg: "{{ inventory_hostname }} completed"
+        msg: "Ansible ran `{{ ansible_play_name }}` on {{ inventory_hostname }}"
         channel: #server-alerts
 
     - name: post role reminders
