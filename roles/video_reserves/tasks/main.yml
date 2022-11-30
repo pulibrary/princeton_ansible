@@ -1,20 +1,20 @@
 ---
-- name: video_reserves | clone git repo
-  ansible.builtin.git:
-    repo: "{{ video_reserves_git_repo }}"
-    dest: "{{ apache_doc_root }}"
-    clone: true
-    update: true
-    force: true
-    version: main
-    ssh_opts: "{{ ssh_opts | default(omit) }}"
-    key_file: "/home/{{ deploy_user }}/.ssh/id_rsa"
-  become: true
-  notify: restart apache
-  when: running_on_server
-  changed_when: false
+# - name: video_reserves | clone git repo
+#   ansible.builtin.git:
+#     repo: "{{ video_reserves_git_repo }}"
+#     dest: "{{ apache_doc_root }}"
+#     clone: true
+#     update: true
+#     force: true
+#     version: main
+#     ssh_opts: "{{ ssh_opts | default(omit) }}"
+#     key_file: "/home/{{ deploy_user }}/.ssh/id_rsa"
+#   become: true
+#   notify: restart apache
+#   when: running_on_server
+#   changed_when: false
 
-- name: video_reservess | grant permissions on deploy user
+- name: video_reserves | grant permissions on deploy user
   ansible.builtin.file:
     path: "{{ apache_doc_root }}"
     state: directory
@@ -30,10 +30,22 @@
   become: true
   changed_when: false
 
+- name: video_reserves | create directories for shared files
+  file:
+    path: '{{ capistrano_base_dir }}/{{ item }}'
+    state: 'directory'
+    owner: '{{ deploy_user }}'
+    group: '{{ deploy_user }}'
+    mode: 0755
+  changed_when: false
+  with_items:
+    - '{{ capistrano_directory }}/shared/hrc'
+    - '{{ capistrano_directory }}/shared/hrc/admin'
+
 - name: video_reserves | add htaccess restrictions
   ansible.builtin.template:
     src: htaccess.j2
-    dest: "{{ apache_doc_root }}/hrc/.htaccess"
+    dest: "{{ apache_doc_root }}/shared/hrc/.htaccess"
     owner: "{{ deploy_user }}"
     group: www-data
     mode: '0640'
@@ -42,7 +54,7 @@
 - name: video_reserves | add config restrictions
   ansible.builtin.template:
     src: config.tpl.j2
-    dest: "{{ apache_doc_root }}/hrc/admin/config.php"
+    dest: "{{ apache_doc_root }}/shared/hrc/admin/config.php"
     owner: "{{ deploy_user }}"
     group: www-data
     mode: '0640'
@@ -55,8 +67,8 @@
   changed_when: false
   when: running_on_server
   with_items:
-    - "{{ inventory_hostname }}.princeton.edu_cert.cer"
-    - "{{ inventory_hostname }}.princeton.edu_chained.pem"
+    - "{{ inventory_hostname }}_cert.cer"
+    - "{{ inventory_hostname }}_chained.pem"
 
 - name: video_reserves | copy apache private files
   copy:
