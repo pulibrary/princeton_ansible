@@ -1,18 +1,24 @@
 ---
-# - name: video_reserves | clone git repo
-#   ansible.builtin.git:
-#     repo: "{{ video_reserves_git_repo }}"
-#     dest: "{{ apache_doc_root }}"
-#     clone: true
-#     update: true
-#     force: true
-#     version: main
-#     ssh_opts: "{{ ssh_opts | default(omit) }}"
-#     key_file: "/home/{{ deploy_user }}/.ssh/id_rsa"
-#   become: true
-#   notify: restart apache
-#   when: running_on_server
-#   changed_when: false
+- name: video_reserves | install apache php modules
+  ansible.builtin.apt:
+    name: ["php{{ php_version }}-mysql"]
+    state: present
+
+# I'm not sure this is cloning to quite the right place yet - mk
+- name: video_reserves | clone git repo
+  ansible.builtin.git:
+    repo: "{{ video_reserves_git_repo }}"
+    dest: "{{ apache_doc_root }}"
+    clone: true
+    update: true
+    force: true
+    version: main
+    ssh_opts: "{{ ssh_opts | default(omit) }}"
+    key_file: "/home/{{ deploy_user }}/.ssh/id_rsa"
+  become: true
+  notify: restart apache
+  when: running_on_server
+  changed_when: false
 
 - name: video_reserves | grant permissions on deploy user
   ansible.builtin.file:
