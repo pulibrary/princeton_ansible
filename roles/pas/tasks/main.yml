@@ -1,9 +1,16 @@
 ---
 # tasks file for roles/pas
-- name: pas | Install php7.2 requirements for craft
+- name: pas | Install php{{ php_version }} requirements for craft
   ansible.builtin.apt:
-    name: ["php7.4-gd", "php7.4-json", "php7.4-mbstring", "php7.4-mysql", "php7.4-zip", "php7.4-intl", "php7.4-dom"]
+    name: "{{ item }}"
     state: present
+  loop:
+    - php{{ php_version }}-gd
+    - php{{ php_version }}-mbstring
+    - php{{ php_version }}-mysql
+    - php{{ php_version }}-zip
+    - php{{ php_version }}-intl
+    - php{{ php_version }}-dom
 
 - name: Install other packages
   ansible.builtin.apt:
@@ -71,12 +78,12 @@
 
 - name: pas | ensure memory limit is set in apache2 php.ini
   ansible.builtin.lineinfile:
-    dest: "/etc/php/7.4/apache2/php.ini"
+    dest: "/etc/php/{{ php_version }}/apache2/php.ini"
     regexp: "memory_limit ="
     line: "memory_limit = 256M"
 
 - name: pas | ensure execution time is set in apache2 php.ini
   ansible.builtin.lineinfile:
-    dest: "/etc/php/7.4/apache2/php.ini"
+    dest: "/etc/php/{{ php_version }}/apache2/php.ini"
     regexp: "max_execution_time ="
     line: "max_execution_time = 120"
