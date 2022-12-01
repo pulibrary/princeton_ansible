@@ -8,40 +8,8 @@
     - libapache2-mod-php{{ php_version }}
     - php{{ php_version }}-mysql
 
-# I'm not sure this is cloning to quite the right place yet - mk
-- name: video_reserves | clone git repo
-  ansible.builtin.git:
-    repo: "{{ video_reserves_git_repo }}"
-    dest: "{{ apache_doc_root }}"
-    clone: true
-    update: true
-    force: true
-    version: main
-    ssh_opts: "{{ ssh_opts | default(omit) }}"
-    key_file: "/home/{{ deploy_user }}/.ssh/id_rsa"
-  become: true
-  notify: restart apache
-  when: running_on_server
-  changed_when: false
-
-- name: video_reserves | grant permissions on deploy user
-  ansible.builtin.file:
-    path: "{{ apache_doc_root }}"
-    state: directory
-    owner: "{{ deploy_user }}"
-    group: "{{ deploy_user }}"
-    follow: false
-    recurse: true
-    mode: 0775
-  changed_when: false
-
-- name: video_reserves | Make repos git safe
-  ansible.builtin.command: git config --global --add safe.directory "{{ apache_doc_root }}"
-  become: true
-  changed_when: false
-
 - name: video_reserves | create directories for shared files
-  file:
+  ansible.builtin.file:
     path: '{{ capistrano_base_dir }}/{{ item }}'
     state: 'directory'
     owner: '{{ deploy_user }}'
