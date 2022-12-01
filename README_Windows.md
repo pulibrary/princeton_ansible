@@ -4,7 +4,8 @@
 ## Install Prerequisites
 
 ###  Windows Subsystem Linux
-
+1. Use [Ubuntu's documentation](https://ubuntu.com/wsl) to install Ubuntu on WSL (the steps are different depending on your Windows version)
+1. Open the Start menu and select Ubuntu
  1. Install [Docker for Ubuntu](https://docs.docker.com/engine/install/ubuntu/)
  1. Install ruby and python
     1. If using [asdf](https://asdf-vm.com/guide/getting-started.html), install the plugins as listed in [.tool-versions](./.tool-versions)
