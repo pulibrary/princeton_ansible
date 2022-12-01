@@ -10,9 +10,9 @@ Princeton Ansible Playbooks
 
 ### MacOS
 
- 1. `brew install docker`
+ 1. Install [Docker Desktop](https://docs.docker.com/desktop/install/mac-install/)
  1. Install ruby and python
-    1. If using asdf, install the plugins as listed in .tool-versions
+    1. If using [asdf], install the plugins as listed in .tool-versions
        ```
        asdf install
        pip install pipenv
@@ -29,6 +29,10 @@ Princeton Ansible Playbooks
    step below, you may need to update pip within the shell; see
    https://stackoverflow.com/questions/65658570/pipenv-install-fails-on-cryptography-package-disabling-pep-517-processing-is-i/67095614#67095614
 
+
+### Microsoft Windows/ Ubuntu
+
+ 1. Use the [WSL Document](./README_Windows.md)
 
 ## Setup your environment
 

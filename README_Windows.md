@@ -1,0 +1,47 @@
+
+# Setting up your Python Environment
+
+## Install Prerequisites
+
+###  Windows Subsystem Linux
+
+ 1. Install [Docker for Ubuntu](https://docs.docker.com/engine/install/ubuntu/)
+ 1. Install ruby and python
+    1. If using [asdf](https://asdf-vm.com/guide/getting-started.html), install the plugins as listed in [.tool-versions](./.tool-versions)
+       ```
+       asdf install
+       pip install pipenv
+       ```
+
+    1. Otherwise:
+    
+       1. Install Python with the following: 
+
+         `apt -y install python`
+
+       1. Install Ruby with the following:
+
+          ```zsh
+          cd
+          git clone https://github.com/rbenv/rbenv.git ~/.rbenv
+          echo 'export PATH="$HOME/.rbenv/bin:$PATH"' >> ~/.zshrc
+          echo 'eval "$(rbenv init -)"' >> ~/.zshrc
+          exec $SHELL
+
+          git clone https://github.com/rbenv/ruby-build.git ~/.rbenv/plugins/ruby-build
+          echo 'export PATH="$HOME/.rbenv/plugins/ruby-build/bin:$PATH"' >> ~/.zshrc
+          exec $SHELL
+
+          rbenv install 3.1.3
+          rbenv global 3.1.3
+
+          gem install bundler
+
+          rbenv rehash
+          ```
+       1. `pip install --upgrade pipenv`
+
+
+## Setup your environment 
+
+Follow the instructions in the [README](./README.md)
