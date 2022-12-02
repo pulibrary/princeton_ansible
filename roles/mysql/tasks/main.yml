@@ -39,7 +39,9 @@
   ansible.builtin.service:
     name: mysql
     state: restarted
-  when: install_app_key.changed
+  when:
+    - mysql_server
+    - install_app_key.changed
 
 - name: MySQL | mysql_root_password
   community.mysql.mysql_user:
@@ -49,7 +51,9 @@
     login_password: ""
     name: 'root'
     password: "{{ mysql_root_password }}"
-  when: install_app_key.changed
+  when:
+    - mysql_server
+    - install_app_key.changed
 
 - name: MySQL | remove unix_plugin
   ansible.builtin.command: mysql -u root --execute="UPDATE mysql.user SET plugin = '' WHERE user = 'root' AND host = 'localhost'; FLUSH PRIVILEGES;"
