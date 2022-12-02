@@ -1,86 +1,87 @@
 ---
-- name: Create capistrano directory structure
-  file:
+- name: capistrano | Create capistrano directory structure
+  ansible.builtin.file:
     path: '{{ capistrano_base_dir }}/{{ item }}'
     state: 'directory'
     owner: '{{ deploy_user }}'
     group: '{{ deploy_user }}'
     mode: 0755
   changed_when: false
-  with_items:
+  loop:
     - '{{ capistrano_directory }}'
     - '{{ capistrano_directory }}/shared'
     - '{{ capistrano_directory }}/shared/tmp'
 
-- name: Create symlinks
-  file:
-    src: '{{ item.src }}'
-    dest: '{{ item.link }}'
-    owner: '{{ deploy_user }}'
-    group: '{{ deploy_user }}'
-    state: 'link'
-  with_items: '{{ capistrano_shared_links }}'
+#   as best as we can determine this task is not used
+# - name: capistrano | Create symlinks
+#   ansible.builtin.file:
+#     src: '{{ item.src }}'
+#     dest: '{{ item.link }}'
+#     owner: '{{ deploy_user }}'
+#     group: '{{ deploy_user }}'
+#     state: 'link'
+#   loop: '{{ capistrano_shared_links }}'
 
-- name: Change owner so deploy has access
-  file:
+- name: capistrano | Change owner so deploy has access
+  ansible.builtin.file:
     path: "{{ capistrano_base_dir }}"
     state: directory
     owner: "{{ deploy_user }}"
     group: "{{ deploy_user }}"
     mode: 0755
 
-- name: Define WWW user sudoer group nginx
-  lineinfile:
+- name: capistrano |Define WWW user sudoer group web service
+  ansible.builtin.lineinfile:
     dest: "/etc/sudoers"
     state: "present"
     line: "Runas_Alias WWW = {{ capistrano_web_owner }}"
     validate: "visudo -cf %s"
 
-- name: Allow deploy user to run any command as nginx
-  lineinfile:
+- name: capistrano | Allow deploy user to run any command as web service
+  ansible.builtin.lineinfile:
     dest: "/etc/sudoers"
     state: "present"
     line: "{{ deploy_user }} ALL = (WWW) NOPASSWD: ALL"
     validate: "visudo -cf %s"
 
-- name: Allow deploy to restart, stop, start nginx
-  lineinfile:
+- name: capistrano | Allow deploy to restart, stop, start web service
+  ansible.builtin.lineinfile:
     dest: "/etc/sudoers"
     state: "present"
     line: "{{ deploy_user }} ALL=(ALL) NOPASSWD: /usr/sbin/service {{ capistrano_web_service }} *"
     validate: "visudo -cf %s"
 
 
-- name: Allow deploy user to change ownership of the library directory to nginx
-  lineinfile:
+- name: capistrano | Allow deploy user to change ownership of the library directory to web service
+  ansible.builtin.lineinfile:
     dest: "/etc/sudoers"
     state: "present"
     line: "{{ deploy_user }} ALL=(ALL) NOPASSWD: /bin/chown -R {{ capistrano_web_owner }} {{ capistrano_base_dir }}/{{ capistrano_directory }}*"
     validate: "visudo -cf %s"
 
-- name: Allow deploy user to change ownership of the caches
-  lineinfile:
+- name: capistrano | Allow deploy user to change ownership of the caches
+  ansible.builtin.lineinfile:
     dest: "/etc/sudoers"
     state: "present"
     line: "{{ deploy_user }} ALL=(ALL) NOPASSWD: /bin/chown -R {{ capistrano_web_owner }} /home/{{ deploy_user }}/*"
     validate: "visudo -cf %s"
 
-- name: Allow deploy user to change ownership of the library directory to deploy
-  lineinfile:
+- name: capistrano | Allow deploy user to change ownership of the library directory to deploy
+  ansible.builtin.lineinfile:
     dest: "/etc/sudoers"
     state: "present"
     line: "{{ deploy_user }} ALL=(ALL) NOPASSWD: /bin/chown -R deploy {{ capistrano_base_dir }}/{{ capistrano_directory }}*"
     validate: "visudo -cf %s"
 
-- name: Allow deploy user to bundle install as root to allow whenever to run on non rails machines
-  lineinfile:
+- name: capistrano | Allow deploy user to bundle install as root to allow whenever to run on non rails machines
+  ansible.builtin.lineinfile:
     dest: "/etc/sudoers"
     state: "present"
     line: "{{ deploy_user }} ALL=(ALL) NOPASSWD: /usr/local/bin/bundle install"
     validate: "visudo -cf %s"
   when: cap_install_whenever
 
-- name: Tell git to consider the capistrano repo to be safe
+- name: capistrano | Tell git to consider the capistrano repo to be safe
   community.general.git_config:
     name: safe.directory
     scope: file
