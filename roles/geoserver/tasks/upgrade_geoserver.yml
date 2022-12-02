@@ -1,8 +1,8 @@
 ---
-# - name: download geoserver war file
-#   ansible.builtin.get_url:
-#     url: "{{ geoserver_url }}/{{ geoserver_version }}/{{ geoserver_file }}"
-#     dest: /var/lib/tomcat8/webapps/{{ geoserver_file }}
+- name: download geoserver war file
+  ansible.builtin.get_url:
+    url: "{{ geoserver_url }}/{{ geoserver_version }}/{{ geoserver_zip }}"
+    dest: /opt/{{ geoserver_zip }}
 
 # do we need to stop the tomcat server?
 # or is restarting afterwards enough?
@@ -11,13 +11,9 @@
     name: tomcat8
     state: stopped
 
-# using this task, the zip file is not preserved, and we end up 
-# with unversioned files in /var/lib/tomcat8
-# need some way (download separately? touch a file?) to preserve the 
-# version so we can check it
 - name: unarchive war file
   unarchive:
-    src: "{{ geoserver_url }}/{{ geoserver_version }}/{{ geoserver_zip }}"
+    src: /opt/{{ geoserver_zip }}
     dest: /var/lib/tomcat8/webapps
     remote_src: true
   notify:
