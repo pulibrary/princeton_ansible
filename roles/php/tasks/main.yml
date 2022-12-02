@@ -3,13 +3,12 @@
   ansible.builtin.debug:
     msg: PHP Web Server {{ php_webserver }}
 
-- name: php | uninstall eol php
+- name: php | remove packages that begin with 'php{{ php_unwanted_version }}'
   ansible.builtin.apt:
-    name: ["php{{ php_eolversion }}", "php{{ php_eolversion }}-dev", "php{{ php_eolversion }}-curl", "php{{ php_eolversion }}-zip"]
-    autoremove: true
+    name: php{{ php_unwanted_version }}*
     state: absent
+    autoremove: true
   notify: restart apache
-  when: php_version != php_eolversion
 
 - name: php | install required Ubuntu dependencies
   ansible.builtin.apt:
