@@ -1,32 +1,33 @@
 ---
-# pass '-e project=figgy'
+# pass up to three vars, for example:
+# '-e project_name=orangelight'
+# '-e branch_name=my_branch'
 # to run in production, pass '-e runtime_env=production'
-- name: Deploy project code with ansistrano
+- name: Deploy code with Capistrano
   hosts: "{{ project_name }}_{{ runtime_env | default('staging') }}"
   remote_user: pulsys
   become: true
   vars:
-    ansistrano_deploy_from: "{{ project_code_dir }}"
-    ansistrano_deploy_to: "/var/www/{{ project_name }}"
-    ansistrano_version_dir: "releases"
-    ansistrano_shared_dir: "shared"
-    ansistrano_current_dir: "current"
-    ansistrano_current_via: "symlink"
-    ansistrano_keep_releases: 3
-    ansistrano_git_repo: git@github.com:USERNAME/REPO.git # Location of the git repo
-    ansistrano_git_branch: "{{ code_branch }}" # What version of the repository to check out. This can be the full 40-character SHA-1 hash, the literal string HEAD, a branch name, or a tag name
-    ansistrano_git_repo_tree: "" # If specified the subtree of the repository to deploy
-    ansistrano_git_identity_key_path: "" # If specified this file is copied over and used as the identity key for the git commands, path is relative to the playbook in which it is used
-    ansistrano_git_identity_key_remote_path: "" # If specified this file on the remote server is used as the identity key for the git commands, remote path is absolute
-    ansistrano_git_identity_key_shred: true # Shred identity key by default but can be overloaded to false if you encounter the following issue (https://github.com/ansistrano/deploy/issues/357)
-  roles:
-    - deploy
+    project_dir: /opt/deploy/{{ project_repo }}
+    github_key_path:
+  tasks:
+    - name: update code repo
+      ansible.builtin.git:
+        repo: https://github.com/pulibrary/{{ project_name }}.git
+        dest: "{{ project_dir}}"
+        single_branch: true
+        version: "{{ branch_name | default('main') }}"
+
+    - name: cap deploy
+      ansible.builtin.shell: cd {{ project_dir }} && branch={{ branch_name }} bundle exec cap {{ runtime_env }} deploy
+
+#    - name: update PR
+#      could use the GitHub API:
+#      https://docs.github.com/en/rest/issues/comments?apiVersion=2022-11-28#create-an-issue-comment 
+
   post_tasks:
-  # - name: update PR
-  #   github:
-# 
-  - name: tell everyone on slack you ran an ansible playbook
+  - name: let folks on slack know you deployed
     community.general.slack:
       token: "{{ vault_pul_slack_token }}"
-      msg: "Ansible deployed `{{ code_branch }}` of `{{ code_project }}` on {{ inventory_hostname }}"
+      msg: "Ansible deployed `{{ branch_name }}` of `{{ project_repo }}` on {{ inventory_hostname }}"
       channel: #server-alerts
