@@ -1,0 +1,32 @@
+---
+# pass '-e project=figgy'
+# to run in production, pass '-e runtime_env=production'
+- name: Deploy project code with ansistrano
+  hosts: "{{ project_name }}_{{ runtime_env | default('staging') }}"
+  remote_user: pulsys
+  become: true
+  vars:
+    ansistrano_deploy_from: "{{ project_code_dir }}"
+    ansistrano_deploy_to: "/var/www/{{ project_name }}"
+    ansistrano_version_dir: "releases"
+    ansistrano_shared_dir: "shared"
+    ansistrano_current_dir: "current"
+    ansistrano_current_via: "symlink"
+    ansistrano_keep_releases: 3
+    ansistrano_git_repo: git@github.com:USERNAME/REPO.git # Location of the git repo
+    ansistrano_git_branch: "{{ code_branch }}" # What version of the repository to check out. This can be the full 40-character SHA-1 hash, the literal string HEAD, a branch name, or a tag name
+    ansistrano_git_repo_tree: "" # If specified the subtree of the repository to deploy
+    ansistrano_git_identity_key_path: "" # If specified this file is copied over and used as the identity key for the git commands, path is relative to the playbook in which it is used
+    ansistrano_git_identity_key_remote_path: "" # If specified this file on the remote server is used as the identity key for the git commands, remote path is absolute
+    ansistrano_git_identity_key_shred: true # Shred identity key by default but can be overloaded to false if you encounter the following issue (https://github.com/ansistrano/deploy/issues/357)
+  roles:
+    - deploy
+  post_tasks:
+  # - name: update PR
+  #   github:
+# 
+  - name: tell everyone on slack you ran an ansible playbook
+    community.general.slack:
+      token: "{{ vault_pul_slack_token }}"
+      msg: "Ansible deployed `{{ code_branch }}` of `{{ code_project }}` on {{ inventory_hostname }}"
+      channel: #server-alerts
