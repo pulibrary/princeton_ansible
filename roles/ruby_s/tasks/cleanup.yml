@@ -4,17 +4,12 @@
     name: bundler
     state: absent
 
-- name: ruby_s | check for apt-installed rubies
-  ansible.builtin.package_facts:
-    manager: apt
-  register: all_packages
-
 - name: ruby_s | remove ruby-minitest package and accept prompt
   ansible.builtin.command: apt-get remove -y ruby-minitest
 
-- name: ruby_s | remove any package that begins with 'ruby'
+- name: ruby_s | remove packages that begin with 'ruby'
   ansible.builtin.apt:
-    name: "{{ ansible_facts.packages | list | select('match', '^ruby') }}"
+    name: ruby*
     state: absent
 
 - name: ruby_s | remove ruby ruby dependencies
