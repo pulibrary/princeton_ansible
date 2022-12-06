@@ -36,8 +36,15 @@
 
 - name: ealapps | Install required php modules
   ansible.builtin.apt:
-    name: ["php{{ php_version }}-gd", "php{{ php_version }}-intl", "php{{ php_version }}-ldap"]
+    name: "{{ item }}"
     state: present
+  notify: restart apache2
+  loop:
+    - php{{ php_version }}-gd
+    - php{{ php_version }}-intl
+    - php{{ php_version }}-ldap
+    - php{{ php_version }}-mbstring
+    - sendmail
 
 - name: ealapps | install missing dependencies
   ansible.builtin.command: composer install
