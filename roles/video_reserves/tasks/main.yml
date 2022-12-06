@@ -20,15 +20,6 @@
     - '{{ capistrano_directory }}/shared/hrc'
     - '{{ capistrano_directory }}/shared/hrc/admin'
 
-- name: video_reserves | add htaccess restrictions
-  ansible.builtin.template:
-    src: htaccess.j2
-    dest: "{{ apache_doc_root }}/shared/hrc/.htaccess"
-    owner: "{{ deploy_user }}"
-    group: www-data
-    mode: '0640'
-  when: running_on_server
-
 - name: video_reserves | add config restrictions
   ansible.builtin.template:
     src: config.tpl.j2
@@ -39,7 +30,7 @@
   when: running_on_server
 
 - name: video_reserves | copy apache cert files
-  copy:
+  ansible.builtin.copy:
     src: "files/certs/{{ item }}"
     dest: "/etc/apache2/ssl/certs/"
   changed_when: false
@@ -49,7 +40,7 @@
     - "{{ inventory_hostname }}_chained.pem"
 
 - name: video_reserves | copy apache private files
-  copy:
+  ansible.builtin.copy:
     src: "files/private/{{ item }}"
     dest: "/etc/apache2/ssl/private/"
   when: running_on_server
@@ -65,13 +56,13 @@
   become: true
 
 - name: video_reserves | enable apache2 sites
-  command: "a2ensite 000-video_reserves.conf"
+  ansible.builtin.command: "a2ensite 000-video_reserves.conf"
   become: true
   register: apache2_enabled
   changed_when: '"Enabling site" in apache2_enabled.stdout'
 
 - name: video_reserves | disable the default apache2 site
-  command: "a2dissite 000-default"
+  ansible.builtin.command: "a2dissite 000-default"
   become: true
   register: apache2_disable
   changed_when: '"disabled." in apache2_disable.stdout'
