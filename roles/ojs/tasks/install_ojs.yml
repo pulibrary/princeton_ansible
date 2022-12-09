@@ -15,6 +15,7 @@
     owner: "{{ deploy_user }}"
     group: www-data
     mode: 0700
+  changed_when: false
 
 - name: ojs | run expect script for OJS interactive installation
   command: "/usr/bin/expect {{ ojs_home }}/script.exp"
@@ -22,16 +23,19 @@
     chdir: "{{ ojs_home }}"
   become: true
   become_user: "{{ deploy_user }}"
+  changed_when: false
 
 - name: ojs | remove expect script
   file:
     path: "{{ ojs_home }}/script.exp"
     state: absent
+  changed_when: false
 
 - name: ojs | remove apache document root
   file:
     path: "{{ apache.docroot }}"
     state: absent
+  changed_when: false
 
 - name: ojs | install htaccess config for mod_rewrite
   template:

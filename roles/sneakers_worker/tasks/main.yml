@@ -1,20 +1,20 @@
 ---
-- name: Install startup script for sneakers workers
-  template:
+- name: sneakers_worker | Install startup script for sneakers workers
+  ansible.builtin.template:
     src: sneakers.service
     dest: "/etc/systemd/system/{{ sneakers_worker_name }}.service"
     mode: 0644
   notify: 'restart sneakers worker'
 
-- name: Keep workers running
-  service:
+- name: sneakers_worker | Keep workers running
+  ansible.builtin.service:
     name: "{{ sneakers_worker_name }}"
     enabled: true
     state: started
   when: running_on_server
 
-- name: Allow deploy user to restart workers
-  lineinfile:
+- name: sneakers_worker Allow deploy user to restart workers
+  ansible.builtin.lineinfile:
     dest: /etc/sudoers
     state: present
     line: '{{ deploy_user }} ALL=(ALL) NOPASSWD: /usr/sbin/service {{ sneakers_worker_name }} {{ item }}'

@@ -36,8 +36,15 @@
 
 - name: ealapps | Install required php modules
   ansible.builtin.apt:
-    name: ["php{{ php_version }}-gd", "php{{ php_version }}-intl", "php{{ php_version }}-ldap"]
+    name: "{{ item }}"
     state: present
+  notify: restart apache2
+  loop:
+    - php{{ php_version }}-gd
+    - php{{ php_version }}-intl
+    - php{{ php_version }}-ldap
+    - php{{ php_version }}-mbstring
+    - sendmail
 
 - name: ealapps | install missing dependencies
   ansible.builtin.command: composer install
@@ -71,3 +78,21 @@
   become: true
   register: apache2_disable
   changed_when: '"disabled." in apache2_disable.stdout'
+
+- name: ealapps | add hishi cron job
+  ansible.builtin.cron:
+    name: "generate hishi.json"
+    weekday: "1-5"
+    minute: "0"
+    hour: "1"
+    user: deploy
+    job: "php /var/www/ealapps/current/hishi/hishiDownload.php > /var/www/ealapps/shared/hishi/hishi.json 2> /dev/null"
+
+- name: ealapps | add newtitles cron job
+  ansible.builtin.cron:
+    name: "generate newtitles.cron.xml"
+    weekday: "1-5"
+    minute: "0"
+    hour: "1"
+    user: deploy
+    job: "php /var/www/ealapps/current/newtitles/newtitles.cron.php >  /var/www/ealapps/shared/newtitles/files/newtitles.cron.xml 2> /dev/null"
