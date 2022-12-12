@@ -1,26 +1,26 @@
 ---
 # tasks file for roles/mailcatcher
-- name: Install dependencies
-  apt:
+- name: mailcatcher | Install dependencies
+  ansible.builtin.apt:
     name: 'libsqlite3-dev'
     state: present
 
-- name: install global mail catcher
-  gem:
+- name: mailcatcher | install global mail catcher
+  community.general.gem:
     name: mailcatcher
     user_install: false
   when: install_mailcatcher
 
-- name: Install startup script for mailcatcher
-  template:
+- name: mailcatcher | Install startup script for mailcatcher
+  ansible.builtin.template:
     src: mailcatcher.service.j2
     dest: /lib/systemd/system/mailcatcher.service
     mode: 0644
   when: running_on_server and install_mailcatcher
   notify: restart mailcatcher
 
-- name: Keep mailcatcher running
-  service:
+- name: mailcatcher | Keep mailcatcher running
+  ansible.builtin.service:
     name: mailcatcher
     enabled: true
     state: started
