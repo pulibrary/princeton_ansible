@@ -5,24 +5,24 @@
 - name: nginxplus | set up ubuntu
   ansible.builtin.import_tasks: setup-debian.yml
 
-- name: nginxplus | {{ nginx_license_status is defined | ternary('Remove', 'Configure') }} NGINX Plus license verification
+- name: nginxplus |  NGINX Plus license verification
   ansible.builtin.blockinfile:
     path: /etc/apt/apt.conf.d/90nginx
     create: true
     block: |
-      Acquire::https::{{ (nginx_repository | default(nginx_plus_default_repository_debian)) | regex_search('(?<=https://)[^/]*') }}::Verify-Peer "true";
-      Acquire::https::{{ (nginx_repository | default(nginx_plus_default_repository_debian)) | regex_search('(?<=https://)[^/]*') }}::Verify-Host "true";
-      Acquire::https::{{ (nginx_repository | default(nginx_plus_default_repository_debian)) | regex_search('(?<=https://)[^/]*') }}::SslCert     "/etc/ssl/nginx/nginx-repo.crt";
-      Acquire::https::{{ (nginx_repository | default(nginx_plus_default_repository_debian)) | regex_search('(?<=https://)[^/]*') }}::SslKey      "/etc/ssl/nginx/nginx-repo.key";
-    state: "{{ nginx_license_status | default((nginx_setup == 'uninstall') | ternary('absent', 'present')) }}"
+      Acquire::https::pkgs.nginx.com::Verify-Peer "true";
+      Acquire::https::pkgs.nginx.com::Verify-Host "true";
+      Acquire::https::pkgs.nginx.com::SslCert     "/etc/ssl/nginx/nginx-repo.crt";
+      Acquire::https::pkgs.nginx.com::SslKey      "/etc/ssl/nginx/nginx-repo.key";
+    state: present
     mode: 0444
 
-- name: nginxplus | {{ nginx_license_status is defined | ternary('Remove', 'Configure') }} NGINX Plus repository
+- name: nginxplus | NGINX Plus repository
   ansible.builtin.apt_repository:
     filename: nginx-plus
-    repo: "{{ nginx_plus_default_repository_debian }}"
+    repo: deb {{ nginx_signed_statement }} https://pkgs.nginx.com/plus/ubuntu {{ ansible_distribution_release }} nginx-plus
     update_cache: false
-    state: "{{ nginx_license_status | default((nginx_setup == 'uninstall') | ternary('absent', 'present')) }}"
+    state: present
     mode: 0644
   when: nginx_manage_repo | bool
 
