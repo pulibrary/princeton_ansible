@@ -26,6 +26,15 @@
     - '{{ capistrano_directory }}/shared/hishi'
     - '{{ capistrano_directory }}/shared/newtitles/files'
 
+- name: ealapps | grant temp subdirectories different permissions
+  ansible.builtin.file:
+    path: '{{ capistrano_base_dir }}/{{ capistrano_directory }}/shared/EALJ/temp'
+    state: directory
+    owner: '{{ deploy_user }}'
+    group: '{{ deploy_user }}'
+    mode: 0666
+  changed_when: false
+
 - name: ealapps | add connection file
   ansible.builtin.template:
     src: connection_mysql.php.j2
@@ -76,7 +85,7 @@
   copy:
     content: ""
     dest: /var/www/ealapps/shared/hishi/hishi.json
-    force: no
+    force: false
     owner: deploy
     mode: 0644
 
@@ -84,7 +93,7 @@
   copy:
     content: ""
     dest: /var/www/ealapps/shared/newtitles/files/newtitles.cron.xml
-    force: no
+    force: false
     owner: deploy
     mode: 0644
 
