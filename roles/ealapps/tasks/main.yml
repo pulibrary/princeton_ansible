@@ -1,19 +1,4 @@
 ---
-- name: ealapps | clone git repo
-  ansible.builtin.git:
-    repo: "{{ eal_git_repo }}"
-    dest: "{{ apache_doc_root }}"
-    clone: true
-    update: true
-    force: true
-    version: main
-    key_file: "/home/{{ deploy_user }}/.ssh/id_rsa"
-    ssh_opts: "{{ ssh_opts | default(omit) }}"
-  become: true
-  notify: restart apache
-  when: running_on_server
-  changed_when: false
-
 - name: ealapps | grant permissions on deploy user
   ansible.builtin.file:
     path: "{{ apache_doc_root }}"
@@ -25,10 +10,35 @@
     mode: 0775
   changed_when: false
 
+- name: ealapps | create directories for shared files
+  ansible.builtin.file:
+    path: '{{ capistrano_base_dir }}/{{ item }}'
+    state: 'directory'
+    owner: '{{ deploy_user }}'
+    group: '{{ deploy_user }}'
+    mode: 0755
+  changed_when: false
+  loop:
+    - '{{ capistrano_directory }}/shared/EALJ'
+    - '{{ capistrano_directory }}/shared/EALJ/pdfs'
+    - '{{ capistrano_directory }}/shared/shadowfigures/images'
+    - '{{ capistrano_directory }}/shared/connections'
+    - '{{ capistrano_directory }}/shared/hishi'
+    - '{{ capistrano_directory }}/shared/newtitles/files'
+
+- name: ealapps | grant temp subdirectories different permissions
+  ansible.builtin.file:
+    path: '{{ capistrano_base_dir }}/{{ capistrano_directory }}/shared/EALJ/temp'
+    state: directory
+    owner: '{{ deploy_user }}'
+    group: '{{ deploy_user }}'
+    mode: 0777
+  changed_when: false
+
 - name: ealapps | add connection file
   ansible.builtin.template:
     src: connection_mysql.php.j2
-    dest: "{{ apache_doc_root }}/connections/connection_mysql.php"
+    dest: "{{ apache_doc_root }}/shared/connections/connection_mysql.php"
     owner: "{{ deploy_user }}"
     group: "{{ deploy_user }}"
     mode: '0644'
@@ -45,14 +55,6 @@
     - php{{ php_version }}-ldap
     - php{{ php_version }}-mbstring
     - sendmail
-
-- name: ealapps | install missing dependencies
-  ansible.builtin.command: composer install
-  args:
-    chdir: "{{ apache_doc_root }}"
-  when: running_on_server
-  become: true
-  become_user: "{{ deploy_user }}"
 
 - name: ealapp | Make repos git safe
   ansible.builtin.command: git config --global --add safe.directory "{{ apache_doc_root }}"
@@ -78,6 +80,22 @@
   become: true
   register: apache2_disable
   changed_when: '"disabled." in apache2_disable.stdout'
+
+- name: ealapps | create empty hishi file
+  copy:
+    content: ""
+    dest: /var/www/ealapps/shared/hishi/hishi.json
+    force: false
+    owner: deploy
+    mode: 0644
+
+- name: ealapps | create empty newtitles file
+  copy:
+    content: ""
+    dest: /var/www/ealapps/shared/newtitles/files/newtitles.cron.xml
+    force: false
+    owner: deploy
+    mode: 0644
 
 - name: ealapps | add hishi cron job
   ansible.builtin.cron:
