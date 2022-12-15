@@ -1,5 +1,5 @@
 ---
-- name: app_protect | {{ nginx_app_protect_license_status is defined | ternary('Remove', 'Configure') }} NGINX Plus license verification
+- name: app_protect |  NGINX Plus license verification
   ansible.builtin.blockinfile:
     path: /etc/apt/apt.conf.d/90nginx
     create: true
@@ -11,7 +11,7 @@
     state: "{{ nginx_app_protect_license_status | default((nginx_app_protect_waf_setup == 'uninstall') | ternary('absent', 'present')) }}"
     mode: 0444
 
-- name: app_protect |  {{ nginx_app_protect_license_status is defined | ternary('Remove', 'Configure') }} NGINX App Protect WAF license verification
+- name: app_protect |   NGINX App Protect WAF license verification
   ansible.builtin.blockinfile:
     path: /etc/apt/apt.conf.d/90app-protect
     create: true
@@ -23,7 +23,7 @@
     state: "{{ nginx_app_protect_license_status | default((nginx_app_protect_waf_setup == 'uninstall') | ternary('absent', 'present')) }}"
     mode: 0444
 
-- name: app_protect | {{ nginx_app_protect_license_status is defined | ternary('Remove', 'Configure') }} NGINX App Protect WAF security updates license verification
+- name: app_protect |  NGINX App Protect WAF security updates license verification
   ansible.builtin.blockinfile:
     path: /etc/apt/apt.conf.d/90app-protect-security-updates
     create: true
@@ -37,7 +37,7 @@
   when: nginx_app_protect_waf_install_signatures | bool
         or nginx_app_protect_waf_install_threat_campaigns | bool
 
-- name: app_protect | {{ nginx_app_protect_license_status is defined | ternary('Remove', 'Configure') }} NGINX Plus repository
+- name: app_protect |  NGINX Plus repository
   ansible.builtin.apt_repository:
     filename: nginx-plus
     repo: "{{ nginx_plus_repository | default(nginx_plus_default_repository_debian) }}"
@@ -46,7 +46,7 @@
     mode: 0644
   when: nginx_app_protect_waf_manage_repo | bool
 
-- name: app_protect | {{ nginx_app_protect_license_status is defined | ternary('Remove', 'Configure') }} NGINX App Protect WAF repository
+- name: app_protect |  NGINX App Protect WAF repository
   ansible.builtin.apt_repository:
     filename: nginx-app-protect
     repo: "{{ nginx_app_protect_waf_repository | default(nginx_app_protect_waf_default_repository_debian) }}"
@@ -55,7 +55,7 @@
     mode: 0644
   when: nginx_app_protect_waf_manage_repo | bool
 
-- name: app_protect | {{ nginx_app_protect_license_status is defined | ternary('Remove', 'Configure') }} NGINX App Protect WAF security updates repository
+- name: app_protect |  NGINX App Protect WAF security updates repository
   ansible.builtin.apt_repository:
     filename: app-protect-security-updates
     repo: "{{ nginx_app_protect_waf_security_updates_repository | default(nginx_app_protect_waf_security_updates_default_repository_debian) }}"
@@ -66,7 +66,7 @@
     - (nginx_app_protect_waf_install_signatures | bool) or (nginx_app_protect_waf_install_threat_campaigns | bool)
     - nginx_app_protect_waf_manage_repo | bool
 
-- name: app_protect | {{ nginx_app_protect_waf_setup | capitalize }} NGINX App Protect WAF
+- name: app_protect |  NGINX App Protect WAF
   ansible.builtin.apt:
     name: app-protect{{ (nginx_app_protect_waf_state == 'absent') | ternary(',app-protect-compiler,app-protect-engine,app-protect-plugin,nginx-plus-module-appprotect', '') }}
     state: "{{ nginx_app_protect_waf_state }}"
@@ -75,7 +75,7 @@
   when: nginx_app_protect_license_status is not defined
   notify: (Handler - NGINX App Protect) Run NGINX
 
-- name: app_protect | {{ nginx_app_protect_waf_setup | capitalize }} NGINX App Protect WAF signatures {{ nginx_app_protect_waf_signatures_version is defined | ternary(nginx_app_protect_waf_signatures_version, '') }}
+- name: app_protect |  NGINX App Protect WAF signatures 
   ansible.builtin.apt:
     name: app-protect-attack-signatures{{ nginx_app_protect_waf_signatures_version | default('') }}
     state: "{{ nginx_app_protect_waf_state }}"
@@ -87,7 +87,7 @@
     - nginx_app_protect_license_status is not defined
   notify: (Handler - NGINX App Protect) Run NGINX
 
-- name: app_protect | {{ nginx_app_protect_waf_setup | capitalize }} NGINX App Protect WAF threat campaigns {{ nginx_app_protect_waf_threat_campaigns_version is defined | ternary(nginx_app_protect_waf_threat_campaigns_version, '') }}
+- name: app_protect |  NGINX App Protect WAF threat campaigns 
   ansible.builtin.apt:
     name: app-protect-threat-campaigns{{ nginx_app_protect_waf_threat_campaigns_version | default('') }}
     state: "{{ nginx_app_protect_waf_state }}"
