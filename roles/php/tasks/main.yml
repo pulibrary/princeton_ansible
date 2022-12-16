@@ -3,14 +3,23 @@
   ansible.builtin.debug:
     msg: PHP Web Server {{ php_webserver }}
 
+# See https://github.com/ansible/ansible/issues/62262 for why this is required
+# Short version: There is a bug in the ansible.builtin.apt module where, when using wildcards, 
+# the 'absent' state fails if there are already no packages that match the wildcard.
+- name: php | check if unwanted php packages are installed
+  ansible.builtin.shell: dpkg -l | grep php{{ php_unwanted_version }}*
+  ignore_errors: yes
+  changed_when: false
+  no_log: true
+  register: php_unwanted_packages
+
 - name: php | remove packages that begin with 'php{{ php_unwanted_version }}'
   ansible.builtin.apt:
     name: php{{ php_unwanted_version }}*
     state: absent
     autoremove: true
-    fail_on_autoremove: false
   notify: restart apache
-  when: php_version != php_unwanted_version
+  when: php_version != php_unwanted_version and php_unwanted_packages.rc == 0
 
 - name: php | install required Ubuntu dependencies
   ansible.builtin.apt:
