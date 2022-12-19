@@ -4,13 +4,13 @@
 
 # needed for capistrano to have access to this file
 - name: libwww | Check to see if .env.local file exists.
-  stat:
+  ansible.builtin.stat:
     path: "/home/{{ deploy_user }}/.env.local"
   register: env_home_exists
 
 # needed for capistrano to have access to this file
 - name: libwww | Install .env.local in deploy user home directory for cap
-  template:
+  ansible.builtin.template:
     src: "env.local.j2"
     dest: "/home/{{ deploy_user }}/.env.local"
     owner: "{{ deploy_user }}"
@@ -19,7 +19,7 @@
   when: not env_home_exists.stat.exists or force_settings
 
 - name: libwww | Add apache rules for discovery utils
-  blockinfile:
+  ansible.builtin.blockinfile:
     path: "/etc/apache2/sites-available/000-default.conf"
     marker: "## {mark} ANSIBLE MANAGED BLOCK ##"
     insertafter: "</Directory>"
@@ -37,7 +37,7 @@
 # Drupal after this
 
 - name: libwww | Copy database dump
-  copy:
+  ansible.builtin.copy:
     src: 'files/{{ drupal_dbimport_file }}'
     dest: '/home/deploy/{{ drupal_dbimport_file }}'
     owner: '{{ deploy_user }}'
@@ -46,7 +46,7 @@
   when: (drupal_dbimport_file is defined) and (inventory_hostname ==  groups[group_names[0]][0])
 
 - name: libwww | Import database from local dump file
-  mysql_db:
+  community.mysql.mysql_db:
     state: 'import'
     name: '{{ drupal_db_name }}'
     login_host: '{{ db_host | default(omit) }}'
@@ -57,7 +57,7 @@
   when: (drupal_dbimport_file is defined) and (inventory_hostname ==  groups[group_names[0]][0])
 
 - name: libwww | Copy the staff script
-  copy:
+  ansible.builtin.copy:
     src: 'files/get_staff_updates.sh'
     dest: '/usr/bin/get_staff_updates.sh'
     owner: '{{ deploy_user }}'
@@ -65,33 +65,33 @@
     mode: 0777
 
 - name: libwww | ensure max file size is set in apache2 php.ini
-  lineinfile:
+  ansible.builtin.lineinfile:
     dest: "/etc/php/{{ php_version }}/apache2/php.ini"
     regexp: "upload_max_filesize ="
     line: "upload_max_filesize = 8M"
 
 - name: libwww | ensure memory limit is set in apache2 php.ini
-  lineinfile:
+  ansible.builtin.lineinfile:
     dest: "/etc/php/{{ php_version }}/apache2/php.ini"
     regexp: "memory_limit ="
     line: "memory_limit = 256M"
 
 - name: libwww | ensure MaxConnectionsPerChild is set for system use
-  lineinfile:
+  ansible.builtin.lineinfile:
     dest: "/etc/apache2/mods-available/mpm_prefork.conf"
     regexp: "\\s*MaxConnectionsPerChild\\s*0"
     line: "\tMaxConnectionsPerChild\t 1000"
   notify: restart apache
 
 - name: libwww | ensure MaxRequestWorkers is set for system use
-  lineinfile:
+  ansible.builtin.lineinfile:
     dest: "/etc/apache2/mods-available/mpm_prefork.conf"
     regexp: "\\s*MaxRequestWorkers\\s*150"
     line: "\tMaxRequestWorkers\t 388"
   notify: restart apache
 
 - name: libwww | Allow deploy user to reboot the machine
-  lineinfile:
+  ansible.builtin.lineinfile:
     dest: "/etc/sudoers"
     state: "present"
     line: "{{ deploy_user }} ALL=(ALL) NOPASSWD: /sbin/shutdown -r now"
