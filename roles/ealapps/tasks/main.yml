@@ -115,3 +115,10 @@
     hour: "1"
     user: deploy
     job: "php /var/www/ealapps/current/newtitles/newtitles.cron.php >  /var/www/ealapps/shared/newtitles/files/newtitles.cron.xml 2> /dev/null"
+
+- name: ealapps | enable mailcatcher in php.ini
+  ansible.builtin.lineinfile:
+    dest: "/etc/php/{{ php_version }}/apache2/php.ini"
+    regexp: ";?sendmail_path"
+    line: "sendmail_path = /usr/local/bin/catchmail"
+  when: runtime_env | default('staging') == "staging"
