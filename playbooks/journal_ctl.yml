@@ -1,0 +1,35 @@
+---
+# by default this playbook runs in the staging environment
+# to run in qa, pass '-e runtime_env=qa'
+# to run in production, pass '-e runtime_env=production'
+# and will need to be manually updated
+- name: modify journalctl logging
+  hosts: "{{ runtime_env | default('staging') }}"
+  remote_user: pulsys
+  serial: 2
+  remote_user: pulsys
+  become: true
+
+  tasks:
+    - name: update cap size to 100MB
+      ansible.builtin.lineinfile:
+        dest: /etc/systemd/journald.conf
+        line: "SystemMaxUse=100M"
+        regexp: "^#SystemMaxUse"
+        state: present
+
+    - name: update cap size of logs to 7
+      ansible.builtin.lineinfile:
+        dest: /etc/systemd/journald.conf
+        line: "SystemMaxFiles=7"
+        regexp: "^#SystemMaxFiles=100"
+        state: present
+
+    - name: apply new settings
+      ansible.builtin.command: journalctl --rotate
+
+    - name: tell everyone on slack you ran an ansible playbook
+      community.general.slack:
+        token: "{{ vault_pul_slack_token }}"
+        msg: "Ansible ran `{{ ansible_play_name }}` on {{ inventory_hostname }}"
+        channel: #server-alerts
