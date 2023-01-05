@@ -232,7 +232,7 @@ source princeton_ansible_env.sh
 
 ### Rekeying the vault
 
-1. Move the current ansible vault password to the old_vault_password in lastpass
+1. Open the `old_vault_password` server in lastpass.  Replace the old vault password with the current ansible vault password.  Add a note to include today's date.
 1. Run `pwgen -s 48` to create a new password.
 1. Run `ansible-vault rekey --ask-vault-password $(grep -Frl "\$ANSIBLE_VAULT;")`
 1. Enter the old vault password
