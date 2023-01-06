@@ -230,6 +230,16 @@ rm -rf ~/.ansible-vaults
 source princeton_ansible_env.sh
 ```
 
+### Rekeying the vault
+
+1. Open the `old_vault_password` server in lastpass.  Replace the old vault password with the current ansible vault password.  Add a note to include today's date.
+1. Run `pwgen -s 48` to create a new password.
+1. Run `ansible-vault rekey --ask-vault-password $(grep -Frl "\$ANSIBLE_VAULT;")`
+1. Enter the old vault password
+1. Enter the new vault password
+1. Run `ansible-vault edit --ask-vault-password` on one of the files you changed (providing the new password), to validate that everything is as it should be.
+1. Add the new vault password to the vault_password in lastpass.
+
 ## Changing/Modifying Passwords
 
 In the event that there is a need to modify the vault password grep recursively to find the occurrence of `AES256` from the root of the repo. I am using the `grep` commands below, YMMV
