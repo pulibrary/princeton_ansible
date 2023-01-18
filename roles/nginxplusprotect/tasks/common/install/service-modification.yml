@@ -1,0 +1,21 @@
+---
+- name: app_protect | Modify NGINX Plus service
+  when:
+    - running_on_server
+    - ansible_service_mgr == "systemd"
+    - nginx_app_protect_service_modify | bool
+  block:
+    - name: Create override for NGINX Plus service
+      ansible.builtin.file:
+        path: /etc/systemd/system/nginx.service.d
+        state: directory
+        mode: 0755
+
+    - name: Increase timeout for NGINX Plus service
+      ansible.builtin.template:
+        src: services/nginx.service.override.conf.j2
+        dest: /etc/systemd/system/nginx.service.d/override.conf
+        owner: root
+        group: root
+        mode: 0644
+      notify: (Handler - NGINX App Protect) Systemd daemon-reload
