@@ -5,12 +5,12 @@
 # to replace SSL certificates and keys, run with `-t SSL`
 
 - name: update loadbalancer configuration
-  hosts: nginxplus_production # default to staging when we get a staging environment going
+  hosts: nginxplus_{{ runtime_env | default('staging') }} # default to staging when we get a staging environment going
   remote_user: pulsys
   strategy: linear
   become: true
   vars_files:
-    - ../group_vars/nginxplus/main.yml
+    - ../group_vars/nginxplus/{{ runtime_env | default('staging') }}.yml
 
   pre_tasks:
   - name: stop playbook if you didn't use --limit
@@ -21,10 +21,12 @@
 
   # updates existing load balancer
   roles:
-    - role: ../roles/nginxplus
+    - role: ../roles/nginxplusprotect
+    - role: ../roles/datadog
+      when: runtime_env | default('staging') == "production"
 
 - name: restart nginx with updated loadbalancer configuration
-  hosts: nginxplus_production
+  hosts: nginxplus_{{ runtime_env | default('staging') }}
   remote_user: pulsys
   strategy: linear
   become: true

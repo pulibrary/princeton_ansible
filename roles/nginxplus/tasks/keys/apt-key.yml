@@ -1,14 +1,10 @@
 ---
-- name: "Install: NGINX Signing Key URL"
-  set_fact:
-    default_keysite: >-
-      {{ (ansible_distribution_release == "trusty")
-      | ternary("http://nginx.org/keys/nginx_signing.key", "https://nginx.org/keys/nginx_signing.key") }}
+- name: nginxplus | Set up NGINX signing key URL
+  ansible.builtin.set_fact:
+    keysite: "{{ nginx_signing_key | default(nginx_default_signing_key_pgp) }}"
 
-- name: "Install: Set NGINX Signing Key URL"
-  set_fact:
-    keysite: "{{ nginx_signing_key | default(default_keysite) }}"
-
-- name: "Install: Add APT NGINX Signing Key"
-  apt_key:
+- name: nginxplus | Add NGINX signing key
+  ansible.builtin.apt_key:
+    id: 573BFD6B3D8FBC641079A6ABABF5BD827BD9BF62
+    keyring: /usr/share/keyrings/nginx-archive-keyring.gpg
     url: "{{ keysite }}"
