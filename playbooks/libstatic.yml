@@ -1,0 +1,20 @@
+---
+# by default this playbook runs in the staging environment
+# to run in qa, pass '-e runtime_env=qa'
+# to run in production, pass '-e runtime_env=production'
+- name: Build libstatic infrastructure
+  hosts: libstatic_{{ runtime_env | default('staging') }}
+  remote_user: pulsys
+  become: true
+  roles:
+    - role: libstatic
+      when: runtime_env | default('staging') == "production"
+  pre_tasks:
+    - set_fact:
+        deploy_id_rsa_private_key: "{{  lookup('file', '../roles/libstatic/files/id_rsa')  }}\n"
+  post_tasks:
+    - name: tell everyone on slack you ran an ansible playbook
+      community.general.slack:
+        token: "{{ vault_pul_slack_token }}"
+        msg: "Ansible ran `{{ ansible_play_name }}` on {{ inventory_hostname }}"
+        channel: #server-alerts
