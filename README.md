@@ -240,27 +240,6 @@ source princeton_ansible_env.sh
 1. Run `ansible-vault edit --ask-vault-password` on one of the files you changed (providing the new password), to validate that everything is as it should be.
 1. Add the new vault password to the vault_password in lastpass.
 
-## Changing/Modifying Passwords
-
-In the event that there is a need to modify the vault password grep recursively to find the occurrence of `AES256` from the root of the repo. I am using the `grep` commands below, YMMV
-
-```bash
-grep -RI AES256 .
-```
-
-Rekey the password with the following
-
-```bash
-ansible-vault rekey /path/to/file/vault.yml
-ansible-vault rekey /path/to/file/smb.credentials
-ansible-vault rekey /path/to/file/id_rsa
-ansible-vault rekey /path/to/file/license.key
-ansible-vault rekey /path/to/file/webhost.conf
-ansible-vault rekey /path/to/file/webhost_priv.key
-```
-
-update the file on lastpass so others can use
-
 ## Upgrading Ansible version
 
    1. In a pipenv shell
