@@ -1,8 +1,8 @@
 ---
 # installation instructions taken from: https://lucene.apache.org/solr/guide/7_2/taking-solr-to-production.html#taking-solr-to-production
 
-- name: create solr dirs
-  file:
+- name: solrcloud | create solr dirs
+  ansible.builtin.file:
     path: '{{ item }}'
     state: directory
     owner: '{{ solr_user }}'
@@ -12,16 +12,16 @@
     - '{{ solr_log_dir }}'
     - '{{ solr_data_dir }}'
 
-- name: Check for solr service
-  command: service solr status
+- name: solrcloud | Check for solr service
+  ansible.builtin.command: service solr status
   ignore_errors: true
   changed_when: false
   register: service_solrcloud_status
   args:
     warn: false  # The service module doesn't appear to have a status state
 
-- name: Check for solr version
-  uri:
+- name: solrcloud | Check for solr version
+  ansible.builtin.uri:
     url: "http://localhost:{{ solr_port }}/solr/admin/info/system"
     return_content: true
   register: solrcloud_check
@@ -29,8 +29,8 @@
   ignore_errors: true
   when: service_solrcloud_status is success
 
-- name: Download SolrCloud binaries
-  get_url:
+- name: solrcloud | Download SolrCloud binaries
+  ansible.builtin.get_url:
     url: "{{ solr_cloud_url }}"
     dest: '/tmp/{{ solr_cloud_package }}'
     timeout: 300
@@ -45,15 +45,15 @@
   until: solr_downloaded is succeeded
   ignore_errors: true
 
-- name: copy local copy if download fails
-  copy:
+- name: solrcloud | copy local copy if download fails
+  ansible.builtin.copy:
     src: 'local_files/solr/{{ solr_cloud_package }}'
     dest: '/tmp/{{ solr_cloud_package }}'
     mode: 0644
   when: solr_downloaded is failed
 
-- name: Extract SolrCloud installation script
-  shell: "tar xzf /tmp/{{ solr_cloud_package }} {{ solr_cloud_build_name }}/bin/install_solr_service.sh --strip-components=2"
+- name: solrcloud | Extract SolrCloud installation script
+  ansible.builtin.shell: "tar xzf /tmp/{{ solr_cloud_package }} {{ solr_cloud_build_name }}/bin/install_solr_service.sh --strip-components=2"
   changed_when: false
   args:
     chdir: /tmp
@@ -64,8 +64,8 @@
         (solrcloud_check is failed or
         solr_config_xml not in solrcloud_check.content)
 
-- name: run SolrCloud installation script
-  shell: /tmp/install_solr_service.sh /tmp/{{ solr_cloud_package }} -f -u {{ solr_user }} -n
+- name: solrcloud | run SolrCloud installation script
+  ansible.builtin.shell: /tmp/install_solr_service.sh /tmp/{{ solr_cloud_package }} -f -u {{ solr_user }} -n
   changed_when: false
   when: |
       service_solrcloud_status.rc > 0 or
