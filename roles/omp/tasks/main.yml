@@ -3,23 +3,23 @@
 ## file so you can start over with a fresh installation.
 
 - name: omp | install prerequisites
-  include_tasks: "install_prerequisites.yml"
+  ansible.builtin.include_tasks: "install_prerequisites.yml"
 
 - name: omp | clean, if necessary
-  include_tasks: "clean.yml"
+  ansible.builtin.include_tasks: "clean.yml"
 
 - name: omp | determine if omp is installed already
-  include_tasks: "check_omp_installation.yml"
+  ansible.builtin.include_tasks: "check_omp_installation.yml"
   changed_when: false
 
 - name: omp | add {{ deploy_user }} to www-data
-  user:
+  ansible.builtin.user:
     name: "{{ deploy_user }}"
     groups: www-data
     append: true
 
 - name: omp | unarchive omp code
-  unarchive:
+  ansible.builtin.unarchive:
     src: "https://pkp.sfu.ca/omp/download/omp-{{ omp_version }}.tar.gz"
     dest: "/var/www"
     remote_src: true
@@ -72,7 +72,7 @@
     mode: 0775
 
 - name: omp | copy config file
-  command: "cp config.TEMPLATE.inc.php config.inc.php"
+  ansible.builtin.command: "cp config.TEMPLATE.inc.php config.inc.php"
   args:
     chdir: "{{ omp_home }}"
   become: true
@@ -81,7 +81,7 @@
   changed_when: false
 
 - name: omp | write expect script for OMP interactive installation
-  template:
+  ansible.builtin.template:
     src: "script.exp.j2"
     dest: "{{ omp_home }}/script.exp"
     owner: "{{ deploy_user }}"
@@ -92,7 +92,7 @@
     - running_on_server
 
 - name: omp | run expect script for OMP interactive installation
-  command: "/usr/bin/expect {{ omp_home }}/script.exp"
+  ansible.builtin.command: "/usr/bin/expect {{ omp_home }}/script.exp"
   args:
     chdir: "{{ omp_home }}"
   become: true
@@ -102,18 +102,18 @@
     - running_on_server
 
 - name: omp | remove expect script
-  file:
+  ansible.builtin.file:
     path: "{{ omp_home }}/script.exp"
     state: absent
 
 - name: omp | remove apache document root
-  file:
+  ansible.builtin.file:
     path: "{{ apache.docroot }}"
     state: absent
   changed_when: false
 
 - name: omp | install htaccess config for mod_rewrite
-  template:
+  ansible.builtin.template:
     src: htaccess
     dest: "{{ omp_home }}/.htaccess"
     owner: "{{ deploy_user }}"
@@ -122,7 +122,7 @@
   changed_when: false
 
 - name: omp | create omp local directory
-  file:
+  ansible.builtin.file:
     path: "/etc/apache2/ssl/{{ item }}"
     state: directory
     owner: "root"
@@ -135,7 +135,7 @@
 
 # Inventory hostname == openbooks-staging1.princeton.edu
 - name: omp | copy apache cert files
-  copy:
+  ansible.builtin.copy:
     src: "files/certs/{{ item }}"
     dest: "/etc/apache2/ssl/certs/"
   changed_when: false
@@ -145,7 +145,7 @@
     - "{{ inventory_hostname }}_chained.pem"
 
 - name: omp | copy apache private files
-  copy:
+  ansible.builtin.copy:
     src: "files/private/{{ item }}"
     dest: "/etc/apache2/ssl/private/"
   changed_when: false
@@ -154,19 +154,19 @@
     - "{{ inventory_hostname }}_priv.key"
 
 - name: omp | add OMP template
-  template:
+  ansible.builtin.template:
     src: "omp.conf.j2"
     dest: "/etc/apache2/sites-available/omp.conf"
     mode: 0644
 
 - name: omp | remove apache2 default
-  file:
+  ansible.builtin.file:
     path: "/etc/apache2/sites-enabled/000-default.conf"
     state: absent
   changed_when: false
 
 - name: omp | symbolic link to omp config
-  file:
+  ansible.builtin.file:
     src: "/etc/apache2/sites-available/omp.conf"
     dest: "/etc/apache2/sites-enabled/omp.conf"
     state: link
@@ -175,4 +175,4 @@
   notify: restart apache2
 
 - name: omp | automate backups
-  include_tasks: "automate_backups.yml"
+  ansible.builtin.include_tasks: "automate_backups.yml"

@@ -1,18 +1,21 @@
 ---
 # by default this playbook runs in the staging environment
+# to run in qa, pass '-e runtime_env=qa'
 # to run in production, pass '-e runtime_env=production'
-- name: build the princeton and slavery site
-  hosts: pas_{{ runtime_env | default('staging') }}
+- name: Build the cantaloupe project
+  hosts: cantaloupe_{{ runtime_env | default('staging') }}
   remote_user: pulsys
   become: true
   vars_files:
-    - ../group_vars/pas/{{ runtime_env | default('staging') }}.yml
-    - ../group_vars/pas/common.yml
-    - ../group_vars/pas/vault.yml
-  vars:
-    - pas_upload_path: 'pas/pas-production'
+    - ../site_vars.yml
+    - ../group_vars/cantaloupe/{{ runtime_env | default('staging') }}.yml
   roles:
-    - role: roles/pas
+    - role: roles/common
+    - role: roles/deploy_user
+    - role: roles/samba
+    - role: roles/passenger
+    - role: roles/kakadu
+    - role: roles/cantaloupe
     - role: roles/datadog
       when: runtime_env | default('staging') == "production"
   post_tasks:
