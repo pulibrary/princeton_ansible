@@ -1,13 +1,15 @@
 ---
 # by default this playbook runs in the staging environment
-# to run in qa, pass '-e runtime_env=qa'
 # to run in production, pass '-e runtime_env=production'
 - name: Build libstatic infrastructure
   hosts: libstatic_{{ runtime_env | default('staging') }}
   remote_user: pulsys
   become: true
+  vars_files:
+    - ../group_vars/libstatic/{{ runtime_env | default('staging') }}.yml
   roles:
     - role: libstatic
+    - role: datadog
       when: runtime_env | default('staging') == "production"
   pre_tasks:
     - set_fact:
