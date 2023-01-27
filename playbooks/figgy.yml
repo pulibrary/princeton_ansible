@@ -1,5 +1,6 @@
 ---
-- hosts: figgy_production_webservers
+- name: build figgy servers
+  hosts: figgy_{{ runtime_env | default('staging') }}_webservers
   remote_user: pulsys
   become: true
   strategy: free
@@ -15,19 +16,21 @@
   vars_files:
     - ../site_vars.yml
     - ../group_vars/figgy/vault.yml
-    - ../group_vars/figgy/production.yml
+    - ../group_vars/figgy/{{ runtime_env | default('staging') }}.yml
     - ../group_vars/figgy/production_webserver.yml
+      when: runtime_env | default('staging') == "production"
   roles:
     - role: roles/common
     - {role: roles/memcached, when: inventory_hostname == 'figgy1.princeton.edu'}
     - {role: roles/rabbitmq, when: inventory_hostname == 'figgy1.princeton.edu'}
     - role: roles/figgy
     - role: roles/datadog
+      when: runtime_env | default('staging') == "production"
   post_tasks:
     - name: tell everyone on slack you ran an ansible playbook
-      slack:
+      community.general.slack:
         token: "{{ vault_pul_slack_token }}"
-        msg: "{{ inventory_hostname }} completed"
+        msg: "Ansible ran `{{ ansible_play_name }}` on {{ inventory_hostname }}"
         channel: #server-alerts
     - ansible.builtin.debug:
         msg:
