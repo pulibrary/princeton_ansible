@@ -20,14 +20,23 @@
     # regex pulls out x.y.z to compare '2.7.0' to '3.1.0'
     - installed_ruby.stdout | regex_search('\d+\.\d+\.\d+') != ruby_version | regex_search('\d+\.\d+\.\d+')
 
-# This is not successfully uninstalling bundler
-# - name: ruby_s | uninstall all bundlers
-#   ansible.builtin.command: /usr/local/bin/gem uninstall bundler
+# install from source when ruby is not installed OR it's the wrong version
+- name: ruby_s | install, upgrade, or downgrade ruby from source
+  ansible.builtin.include_tasks: install_from_source.yml
+  when:
+    - (installed_ruby.stderr is search("not found")) or (installed_ruby.stdout | regex_search('\d+\.\d+\.\d+') != ruby_version | regex_search('\d+\.\d+\.\d+'))
+
 
 - name: ruby_s | install global bundler, specific version
   ansible.builtin.command: /usr/local/bin/gem install bundler -v {{ bundler_version }}
   when: bundler_version is defined
 
 - name: ruby_s | install global bundler, any version
-  ansible.builtin.command: gem install bundler
+  ansible.builtin.command: /usr/local/bin/gem install bundler
   when: bundler_version is undefined
+  changed_when: false
+
+- name: ruby_s | remove bundler versions
+  ansible.builtin.include_tasks: uninstall_bundler.yml
+  when:
+    - bundler_old_version is defined
