@@ -1,25 +1,33 @@
 ---
 - name: omp | install apache tls
-  apache2_module:
+  community.general.apache2_module:
     state: present
     name: ssl
 
 - name: omp | install apache php modules
-  apt:
-    name: ["libapache2-mod-php", "php{{ php_version }}-mbstring", "php{{ php_version }}-ldap"]
+  ansible.builtin.apt:
+    name: "{{ item }}"
     state: present
+  loop:
+    - libapache2-mod-php
+    - php{{ php_version }}-mbstring
+    - php{{ php_version }}-ldap
 
 - name: omp | install php xml libraries
-  apt:
-    name: ["php7.4-xml"]
+  ansible.builtin.apt:
+    name: ["php{{ php_version }}-xml"]
     state: present
 
 - name: omp | install php postgres drivers
-  apt:
+  ansible.builtin.apt:
     name: ["php{{ php_version }}-pgsql"]
     state: present
 
 - name: omp | install required python utils
-  apt:
-    name: ["expect", "python-pexpect", "python-psycopg2"]
+  ansible.builtin.apt:
+    name: "{{ item }}"
     state: present
+  loop:
+    - expect
+    - python-pexpect
+    - python-psycopg2
