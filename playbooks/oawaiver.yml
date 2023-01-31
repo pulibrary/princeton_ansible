@@ -1,6 +1,5 @@
 ---
 # by default this playbook runs in the staging environment
-# to run in qa, pass '-e runtime_env=qa'
 # to run in production, pass '-e runtime_env=production'
 - name: Build oawaiver infrastructure
   hosts: oawaiver_{{ runtime_env | default('staging') }}
@@ -11,6 +10,7 @@
     - ../group_vars/oawaiver/vault.yml
   roles:
     - role: roles/oawaiver
+    - role: roles/datadog
       when: runtime_env | default('staging') == "production"
   post_tasks:
     - name: restart nginx
