@@ -1,23 +1,6 @@
 ---
-- name: "Setup: Ensure HTML Directory Exists"
-  file:
-    path: "{{ item.value.html_file_location }}"
-    state: directory
-    mode: 0755
-  with_dict: "{{ nginx_html_demo_template }}"
-  when: nginx_html_demo_template_enable
-
-- name: "(Setup: All NGINX) Dynamically Generate HTML Files"
-  template:
-    src: "{{ item.value.template_file }}"
-    dest: "{{ item.value.html_file_location }}/{{ item.value.html_file_name }}"
-    mode: 0755
-    backup: true
-  with_dict: "{{ nginx_html_demo_template }}"
-  when: nginx_html_demo_template_enable
-
-- name: "Setup: Dynamically Generate NGINX Main Configuration File"
-  template:
+- name: nginxplus | Dynamically Generate NGINX Main Configuration File
+  ansible.builtin.template:
     src: "{{ nginx_main_template.template_file }}"
     dest: "{{ nginx_main_template.conf_file_location }}/{{ nginx_main_template.conf_file_name }}"
     mode: 0755
@@ -25,16 +8,16 @@
   when: nginx_main_template_enable
   notify: Reload NGINX
 
-- name: "Setup: Ensure NGINX HTTP Directory Exists"
-  file:
+- name: nginxplus | Ensure NGINX HTTP Directory Exists
+  ansible.builtin.file:
     path: "{{ item.value.conf_file_location }}"
     state: directory
     mode: 0755
   with_dict: "{{ nginx_http_template }}"
   when: nginx_http_template_enable
 
-- name: "Setup: Ensure NGINX Proxy Cache Directories Exists"
-  file:
+- name: nginxplus | Ensure NGINX Proxy Cache Directories Exists
+  ansible.builtin.file:
     path: "{{ item.1.path }}"
     state: directory
     mode: 0755
@@ -45,8 +28,8 @@
     - skip_missing: true
   when: nginx_http_template_enable
 
-- name: "Setup: Dynamically Generate NGINX HTTP Configuration Files"
-  template:
+- name: nginxplus | Dynamically Generate NGINX HTTP Configuration Files
+  ansible.builtin.template:
     src: "{{ item.value.template_file }}"
     dest: "{{ item.value.conf_file_location }}/{{ item.value.conf_file_name }}"
     mode: 0755
@@ -55,16 +38,16 @@
   when: nginx_http_template_enable
   notify: Reload NGINX
 
-- name: "Setup: Ensure NGINX Stream Directory Exists"
-  file:
+- name: nginxplus | Ensure NGINX Stream Directory Exists
+  ansible.builtin.file:
     path: "{{ item.value.conf_file_location }}"
     state: directory
     mode: 0755
   with_dict: "{{ nginx_stream_template }}"
   when: nginx_stream_template_enable
 
-- name: "Setup: Dynamically Generate NGINX Stream Configuration Files"
-  template:
+- name: nginxplus | Dynamically Generate NGINX Stream Configuration Files
+  ansible.builtin.template:
     src: "{{ item.value.template_file }}"
     dest: "{{ item.value.conf_file_location }}/{{ item.value.conf_file_name }}"
     mode: 0755
@@ -73,8 +56,8 @@
   when: nginx_stream_template_enable
   notify: Reload NGINX
 
-- name: "Setup: Dynamically Generate NGINX API Configuration File"
-  template:
+- name: nginxplus | Dynamically Generate NGINX API Configuration File
+  ansible.builtin.template:
     src: "{{ nginx_rest_api_src }}"
     dest: "{{ nginx_rest_api_location }}"
     mode: 0755

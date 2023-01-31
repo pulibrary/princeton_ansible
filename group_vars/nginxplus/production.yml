@@ -1,0 +1,27 @@
+---
+datadog_api_key: "{{vault_datadog_key}}"
+datadog_config:
+  tags: "{{nginxplus_tags}}"
+  apm_enabled: "true"
+  log_enabled: true
+  process_config:
+    enabled: "true"
+nginxplus_tags: "application:nginxplus, environment:production, type:adc"
+datadog_checks:
+  process:
+    nginx:
+      init_config:
+      instances:
+        - nginx_status_url: http://localhost/status.html
+          tags: "{{nginxplus_tags}}"
+    logs:
+      - type: file
+        path: /var/log/nginx/access.log
+        service: adc
+        source: adc
+        sourcecategory: http_web_access
+      - type: file
+        path: /var/log/nginx/error.log
+        service: adc
+        source: adc
+        sourcecategory: http_web_access
