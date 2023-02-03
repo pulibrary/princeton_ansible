@@ -1,17 +1,22 @@
 ---
 # by default this playbook runs in the staging environment
 # to run in production, pass '-e runtime_env=production'
-- name: build the openbooks website
-  hosts: lib_svn_{{ runtime_env | default('staging') }}
+- name: Build oawaiver infrastructure
+  hosts: oawaiver_{{ runtime_env | default('staging') }}
   remote_user: pulsys
   become: true
   vars_files:
-    - ../group_vars/openbooks/{{ runtime_env | default('staging') }}.yml
-    - ../group_vars/openbooks/vault.yml
+    - ../group_vars/oawaiver/{{ runtime_env | default('staging') }}.yml
+    - ../group_vars/oawaiver/vault.yml
   roles:
-    - role: ../roles/omp
-
+    - role: roles/oawaiver
+    - role: roles/datadog
+      when: runtime_env | default('staging') == "production"
   post_tasks:
+    - name: restart nginx
+      service:
+        name: nginx
+        state: restarted
     - name: tell everyone on slack you ran an ansible playbook
       community.general.slack:
         token: "{{ vault_pul_slack_token }}"

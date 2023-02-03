@@ -13,7 +13,7 @@
     - role: ../roles/deploy_user
     - role: ../roles/nginxplus
 
-- name: restart nginx and announce success
+- name: restart rebuilt nginx and announce success
   hosts: nginxplus_production # default to staging when we get a staging environment going
   remote_user: pulsys
   strategy: linear
@@ -28,8 +28,8 @@
 
   post_tasks:
     - name: tell everyone on slack you ran an ansible playbook
-      slack:
+      community.general.slack:
         token: "{{ vault_pul_slack_token }}"
-        msg: "{{ inventory_hostname }} completed"
+        msg: "Ansible ran `{{ ansible_play_name }}` on {{ inventory_hostname }}"
         channel: #server-alerts
       tag: always
