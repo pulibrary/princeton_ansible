@@ -1,0 +1,40 @@
+---
+- name: app_protect | Set up NGINX App Protect WAF/DoS license
+  block:
+    - name: app_protect | Create SSL directory
+      ansible.builtin.file:
+        path: /etc/ssl/nginx
+        state: directory
+        mode: 0755
+
+    - name: app_protect | Copy NGINX App Protect WAF/DoS certificate and license key
+      ansible.builtin.copy:
+        src: "{{ item }}"
+        dest: "/etc/ssl/nginx"
+        decrypt: true
+        mode: 0444
+      loop:
+        - "{{ nginx_app_protect_license.certificate }}"
+        - "{{ nginx_app_protect_license.key }}"
+
+    - name: app_protect | Install cryptography package
+      ansible.builtin.package:
+        name: "{{ (ansible_python.version.major == 3) | ternary('python3-cryptography', 'python2-cryptography') }}"
+
+    - name: app_protect | Check that NGINX App Protect WAF/DoS certificate is valid
+      community.crypto.x509_certificate_info:
+        path: /etc/ssl/nginx/nginx-repo.crt
+      register: cert
+
+    - name: app_protect | Check that NGINX App Protect WAF/DoS key is valid
+      community.crypto.openssl_privatekey_info:
+        path: /etc/ssl/nginx/nginx-repo.key
+      register: key
+
+    - name: app_protect | Check that NGINX App Protect WAF/DoS license is valid
+      ansible.builtin.assert:
+        that:
+          - cert.expired == false
+          - cert.public_key == key.public_key
+        success_msg: Your NGINX App Protect WAF/DoS license is valid!
+        fail_msg: Something went wrong! Make sure your NGINX App Protect WAF/DoS license is valid!
