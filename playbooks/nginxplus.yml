@@ -5,12 +5,13 @@
 # to replace SSL certificates and keys, run with `-t SSL`
 
 - name: update loadbalancer configuration
-  hosts: nginxplus_production # default to staging when we get a staging environment going
+  hosts: nginxplus_{{ runtime_env | default('staging') }}
   remote_user: pulsys
   strategy: linear
   become: true
   vars_files:
-    - ../group_vars/nginxplus/main.yml
+    - ../group_vars/nginxplus/common.yml
+    - ../group_vars/nginxplus/{{ runtime_env | default('staging') }}.yml
 
   pre_tasks:
   - name: stop playbook if you didn't use --limit
@@ -22,23 +23,25 @@
   # updates existing load balancer
   roles:
     - role: ../roles/nginxplus
+    - role: ../roles/datadog
+      when: runtime_env | default('staging') == "production"
 
 - name: restart nginx with updated loadbalancer configuration
-  hosts: nginxplus_production
+  hosts: nginxplus_{{ runtime_env | default('staging') }}
   remote_user: pulsys
   strategy: linear
   become: true
 
   tasks:
     - name: nginxplus | restart nginx for realsies
-      service:
+      ansible.builtin.service:
         name: nginx
         state: restarted
       tags: always
 
   post_tasks:
     - name: tell everyone on slack you ran an ansible playbook
-      slack:
+      community.general.slack:
         token: "{{ vault_pul_slack_token }}"
         msg: "Ansible ran `{{ ansible_play_name }}` on {{ inventory_hostname }}"
         channel: #server-alerts
