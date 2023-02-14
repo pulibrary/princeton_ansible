@@ -488,7 +488,7 @@ nginx_stream_template:
 Dependencies
 ------------
 
-None
+This role install `nginx-ha-keepalived`. On initial installation you will need to [configure both devices](https://docs.nginx.com/nginx/admin-guide/high-availability/ha-keepalived/) concurrently with the VRRP (protocol 2) provided virtual IP from OIT. 
 
 Example Playbook
 ----------------
