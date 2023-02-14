@@ -1,11 +1,12 @@
 ---
-# use the `--limit you-project-vm1.princeton.edu` flag to select the vm that needs updated certificates
-- name: update expired TLS certificates
+# use the `--limit your-project-vm1.princeton.edu` flag to select the vm that needs updated certificates
+# you will also need to provide `-e recv_key=<expired_id>`
+- name: update expired ubuntu key certificates
   hosts: all
   remote_user: pulsys
   become: true
   tasks:
-    - name: Add an apt key by id from a keyserver
+    - name: Add an expired key by id from a keyserver
       ansible.builtin.apt_key:
         keyserver: keyserver.ubuntu.com
         id: "{{ recv_key | default(omit) }}"
@@ -19,6 +20,10 @@
         name: ca-certificates
         update_cache: true
         force_apt_get: true
+
+    - name: Ubuntu | refresh all keys
+      ansible.builtin.command: /usr/bin/apt-key adv --refresh-keys --keyserver keyserver.ubuntu.com
+      become: true
 
   post_tasks:
     - name: tell everyone on slack you ran an ansible playbook
