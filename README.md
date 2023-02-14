@@ -66,6 +66,7 @@ In all the steps below substitute your role name for `your_new_role`
    export your_new_role=<fill in the role name here>
    cd roles
    molecule init role $your_new_role --driver-name docker
+   cd ..
    ```
 1. Set up to run from github actions `vi .github/workflows/molecule_tests.yml` add for your role at the end matrix of the roles
    ```
