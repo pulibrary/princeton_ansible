@@ -1,0 +1,43 @@
+---
+# pass up to three vars, for example:
+# '-e project_name=orangelight'
+# '-e branch_name=my_branch'
+# to run in production, pass '-e runtime_env=production'
+- name: Deploy code with Capistrano
+  hosts: app_deploy
+#  hosts: "{{ project_name }}_{{ runtime_env | default('staging') }}"
+  remote_user: pulsys
+#  become: true
+  vars:
+    project_dir: /Users/alicia/git_repos/{{ project_name }}
+#    project_dir: /opt/deploy/{{ project_repo }}
+#    github_key_path:
+  tasks:
+    - name: update code repo
+      ansible.builtin.git:
+        repo: https://github.com/pulibrary/{{ project_name }}.git
+        dest: "{{ project_dir}}"
+        single_branch: true
+        version: "{{ branch_name | default('main') }}"
+        clone: true
+        update: true
+        # force: true
+
+# can we handle ruby installs and bundle updates in the EE?
+    # - name: bundle install
+    #   ansible.builtin.git:
+    #     repo: https://github.com/pulibrary/{{ project_name }}.git
+
+    - name: cap deploy
+      ansible.builtin.shell: "cd {{ project_dir }} && branch={{ branch_name | default('main') }} bundle exec cap {{ runtime_env | default('staging') }} deploy"
+
+#    - name: update PR
+#      could use the GitHub API:
+#      https://docs.github.com/en/rest/issues/comments?apiVersion=2022-11-28#create-an-issue-comment 
+
+  post_tasks:
+  - name: let folks on slack know you deployed
+    community.general.slack:
+      token: "{{ vault_pul_slack_token }}"
+      msg: "Ansible deployed the `{{ branch_name | default('main') }}` branch of `{{ project_name }}` to the {{ runtime_env | default('staging') }} environment"
+      channel: #server-alerts
