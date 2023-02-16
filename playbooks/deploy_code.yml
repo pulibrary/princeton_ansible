@@ -1,27 +1,28 @@
 ---
-# pass up to three vars, for example:
-# '-e project_name=orangelight'
-# '-e branch_name=my_branch'
+# pass up to three vars, only one is required. For example:
+# '-e repo_name=orangelight' - NOTE: this is the name of the GitHub repo!
+# and optionally
+# to run on a selected branch, pass '-e branch_name=my_branch'
 # to run in production, pass '-e runtime_env=production'
 - name: Deploy code with Capistrano
   hosts: app_deploy
-#  hosts: "{{ project_name }}_{{ runtime_env | default('staging') }}"
   remote_user: pulsys
-#  become: true
+  become: true
   vars:
-    project_dir: /Users/alicia/git_repos/{{ project_name }}
-#    project_dir: /opt/deploy/{{ project_repo }}
+    project_dir: /tmp/{{ repo_name }}
 #    github_key_path:
   tasks:
     - name: update code repo
       ansible.builtin.git:
-        repo: https://github.com/pulibrary/{{ project_name }}.git
-        dest: "{{ project_dir}}"
+        repo: git@github.com:pulibrary/{{ repo_name }}.git
+        dest: "{{ project_dir }}"
         single_branch: true
         version: "{{ branch_name | default('main') }}"
         clone: true
         update: true
         # force: true
+      become: true
+      become_user: deploy
 
 # can we handle ruby installs and bundle updates in the EE?
     # - name: bundle install
@@ -29,7 +30,9 @@
     #     repo: https://github.com/pulibrary/{{ project_name }}.git
 
     - name: cap deploy
-      ansible.builtin.shell: "cd {{ project_dir }} && branch={{ branch_name | default('main') }} bundle exec cap {{ runtime_env | default('staging') }} deploy"
+      ansible.builtin.shell: "cd {{ project_dir }} && branch={{ branch_name | default('main') }} /opt/appdeploy/current/bin/cap {{ runtime_env | default('staging') }} deploy"
+      become: true
+      become_user: deploy
 
 #    - name: update PR
 #      could use the GitHub API:
