@@ -125,6 +125,11 @@ If you are having issues with your tests passing and have run `molecule converge
 ```
 molecule login
 ```
+## Troubleshooting a container step
+
+If you have a specific task that is not behaving, utilize the tests to run just that step.  This is especially useful for long running `molecule converge`
+
+You basically copy the failing task into the molecule/verify.yml and run verify over and over instead of needing to run the entire converge over and over.  This makes debugging much faster and joyful! 
 
 ## Troubleshooting a test run
 
