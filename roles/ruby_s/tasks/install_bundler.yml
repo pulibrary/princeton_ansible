@@ -8,22 +8,22 @@
   ansible.builtin.shell: gem env home
   register: bundler_home
   when:
-    - (bundler_uninstall.stdout is search("default gem"))
     - running_on_server
+    - (bundler_uninstall.stdout is search("default gem"))
 
 - name: ruby_s | remove installed bundler if default
   ansible.builtin.file:
     path: '{{ bundler_home.stdout }}/specifications/default/bundler-{{ installed_bundler.stdout }}.gemspec'
     state: absent
   when:
-    - (bundler_uninstall.stdout is search("default gem"))
     - running_on_server
+    - (bundler_uninstall.stdout is search("default gem"))
 
 - name: ruby_s | install global bundler, specific version
   ansible.builtin.command: gem install bundler -v {{ bundler_version }}
   when:
-    - bundler_version is defined
     - running_on_server
+    - bundler_version is defined
 
 - name: ruby_s | install global bundler, any version
   ansible.builtin.command: gem install bundler
