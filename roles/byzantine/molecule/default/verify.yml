@@ -63,8 +63,11 @@
     register: present
     failed_when:
       - present is changed
-  - name: test that cron jobs exist
+  - name: test for cron jobs
     command: crontab -l -u deploy
     register: cron_results
     failed_when:
-      - not "'10 * * * * sudo -u www-data drush -r /var/www/byzantine/current cron' in cron_results.stdout"
+  - name: assert cron jobs exists
+    assert:
+      that:
+        - "'10 * * * * sudo -u www-data drush -r /var/www/byzantine/current cron' in cron_results.stdout"
