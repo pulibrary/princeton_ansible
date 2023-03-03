@@ -1,0 +1,51 @@
+---
+postgres_host: "lib-postgres-prod3.princeton.edu"
+passenger_server_name: "tigerdata-prod.princeton.edu"
+passenger_app_env: "production"
+app_db_host: '{{ postgres_host }}'
+app_db_name: '{{ vault_tigerdata_prod_db_name }}'
+app_db_user: '{{ vault_tigerdata_prod_db_user }}'
+app_db_password: '{{ vault_tigerdata_prod_db_password }}'
+app_secret_key: '{{ vault_tigerdata_prod_secret_key }}'
+rails_app_env: "production"
+tigerdata_honeybadger_key: '{{ vault_honeybadger_key }}'
+datadog_api_key: "{{ vault_datadog_key }}"
+
+datadog_config:
+  log_enabled: true
+  apm_enabled: true
+  process_config:
+    enabled: true
+  apm_config:
+    analyzed_spans:
+      tigerdata|rack.request: 1
+datadog_typed_checks:
+  - type: tls
+    configuration:
+      init_config:
+      instances:
+        - server: tigerdata.princeton.edu
+          port: 443
+  - type: process
+    configuration:
+      init_config:
+      instances:
+        -   name: tigerdata
+            service: tigerdata
+            search_string:
+              - nginx
+  - type: nginx
+    configuration:
+      init_config:
+      instances:
+        - nginx_status_url: http://localhost:81/nginx_status/
+      logs:
+        - type: file
+          path: /var/log/nginx/access.log
+          source: nginx
+        - type: file
+          path: /var/log/nginx/error.log
+          source: nginx
+        - type: file
+          path: /opt/tigerdata/current/log/production.log
+          source: rails
