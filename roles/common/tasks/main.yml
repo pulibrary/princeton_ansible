@@ -6,7 +6,14 @@
   loop:
     - ca-certificates
     - apt-transport-https
+
+- name: common | install snapd
+  ansible.builtin.apt:
+    name: "{{ item }}"
+    state: present
+  loop:
     - snapd
+  when: running_on_server
 
 - name: common | Install procs
   community.general.snap:
@@ -23,6 +30,7 @@
   ansible.builtin.apt:
     name: "{{ item }}"
     state: present
+    update_cache: true
   with_items: "{{ common_packages }}"
 
 - name: common | copy tmux.conf
