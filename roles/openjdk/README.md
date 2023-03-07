@@ -32,8 +32,7 @@ java_version: 8
 Dependencies
 ------------
 
-
-This role depends on `common`
+This role depends on `common`.
 
 Example Playbook
 ----------------
