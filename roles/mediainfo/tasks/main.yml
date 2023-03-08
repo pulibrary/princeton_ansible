@@ -1,12 +1,21 @@
 ---
 # tasks file for mediainfo
-- name: medianinfo | Install mediaserver repository
-  ansible.builtin.apt:
-    deb: "https://mediaarea.net/repo/deb/repo-mediaarea_{{ mediaarea_repo_version }}_all.deb"
+
+- name: medianinfo | install mediaserver repository
+  ansible.builtin.apt_repository:
+    repo: "deb https://mediaarea.net/repo/deb/ubuntu {{ ansible_distribution_release }} main"
     state: present
+    filename: mediaarea
+  when: running_on_server
+
+- name: mediainfo | Install mediainfo keys
+  ansible.builtin.apt:
+    deb: "https://mediaarea.net/repo/deb/repo-mediaarea_1.0-21_all.deb"
   when: running_on_server
 
 - name: mediainfo | Install mediainfo
   ansible.builtin.apt:
     name: mediainfo
     state: present
+    update_cache: true
+  when: running_on_server
