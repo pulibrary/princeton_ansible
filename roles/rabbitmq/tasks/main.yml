@@ -14,49 +14,48 @@
 
 - name: rabbitmq | ensure software-properties-common is installed
   ansible.builtin.apt:
-    name: ['software-properties-common', 'apt-transport-https']
+    name: "{{ item }}"
     state: present
+  loop:
+    - apt-transport-https
+    - gnupg
+    - software-properties-common
 
-- name: rabbitmq | import rabbitmq key
-  ansible.builtin.get_url:
-    url: "https://keys.openpgp.org/vks/v1/by-fingerprint/0A9AF2115F4687BD29803A206B73A36E6026DFCA"
-    dest: /usr/share/keyrings/com.rabbitmq.team.gpg
-    mode: '0644'
-    force: true
+- name: rabbitmq | import packagecloud
+  block:
+    - name: rabbitmq | import packagecloud key
+      ansible.builtin.get_url:
+        url: "https://packagecloud.io/rabbitmq/rabbitmq-server/gpgkey"
+        dest: /usr/share/keyrings/io.packagecloud.rabbitmq.gpg
+        mode: '0644'
+        force: true
 
-- name: rabbitmq | import launchpad key
-  ansible.builtin.get_url:
-    url: "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0xf77f1eda57ebb1cc"
-    dest: /usr/share/keyrings/net.launchpad.ppa.rabbitmq.erlang.gpg
-    mode: '0644'
-    force: true
+    - name: rabbitmq | add rabbitmq packagecloud repository
+      ansible.builtin.apt_repository:
+        repo: "{{ item }}"
+        state: present
+        filename: rabbitmq-packagecloud
+      loop:
+        - 'deb [signed-by=/usr/share/keyrings/io.packagecloud.rabbitmq.gpg] https://packagecloud.io/rabbitmq/rabbitmq-server/ubuntu/ jammy main'
+        - 'deb-src [signed-by=/usr/share/keyrings/io.packagecloud.rabbitmq.gpg] https://packagecloud.io/rabbitmq/rabbitmq-server/ubuntu/ jammy main'
 
-- name: rabbitmq | import cloudsmith key
-  ansible.builtin.get_url:
-    url: "https://packagecloud.io/rabbitmq/rabbitmq-server/gpgkey"
-    dest: /usr/share/keyrings/io.packagecloud.rabbitmq.gpg
-    mode: '0644'
-    force: true
+- name: rabbitmq | import cloudsmith
+  block:
+    - name: rabbitmq | import cloudsmith key
+      ansible.builtin.get_url:
+        url: "https://dl.cloudsmith.io/public/rabbitmq/rabbitmq-erlang/gpg.E495BB49CC4BBE5B.key"
+        dest: /usr/share/keyrings/io.cloudsmith.rabbitmq.E495BB49CC4BBE5B.gpg
+        mode: '0644'
+        force: true
 
-- name: rabbitmq | add rabbitmq repository
-  ansible.builtin.apt_repository:
-    repo: 'deb [signed-by=/usr/share/keyrings/com.rabbitmq.team.gpg] http://ppa.launchpad.net/rabbitmq/rabbitmq-erlang/ubuntu {{ ansible_distribution_release }} main'
-    state: present
-
-- name: rabbitmq | add rabbitmq launchpad src repository
-  ansible.builtin.apt_repository:
-    repo: 'deb-src [signed-by=/usr/share/keyrings/net.launchpad.ppa.rabbitmq.erlang.gpg] http://ppa.launchpad.net/rabbitmq/rabbitmq-erlang/ubuntu {{ ansible_distribution_release }} main'
-    state: present
-
-- name: rabbitmq | add rabbitmq cloudsmith
-  ansible.builtin.apt_repository:
-    repo: 'deb [signed-by=/usr/share/keyrings/io.packagecloud.rabbitmq.gpg] https://packagecloud.io/rabbitmq/rabbitmq-server/ubuntu/ {{ ansible_distribution_release }} main'
-    state: present
-
-- name: rabbitmq | add rabbitmq cloudsmith src
-  ansible.builtin.apt_repository:
-    repo: 'deb-src [signed-by=/usr/share/keyrings/io.packagecloud.rabbitmq.gpg] https://packagecloud.io/rabbitmq/rabbitmq-server/ubuntu/ {{ ansible_distribution_release }} main'
-    state: present
+    - name: rabbitmq | add rabbitmq cloudsmith
+      ansible.builtin.apt_repository:
+        repo: "{{ item }}"
+        state: present
+        filename: rabbitmq-cloudsmith
+      loop:
+        - 'deb [signed-by=/usr/share/keyrings/io.cloudsmith.rabbitmq.E495BB49CC4BBE5B.gpg] https://dl.cloudsmith.io/public/rabbitmq/rabbitmq-erlang/deb/ubuntu jammy main'
+        - 'deb-src [signed-by=/usr/share/keyrings/io.cloudsmith.rabbitmq.E495BB49CC4BBE5B.gpg] https://dl.cloudsmith.io/public/rabbitmq/rabbitmq-erlang/deb/ubuntu jammy main'
 
 - name: rabbitmq | install package
   ansible.builtin.apt:
