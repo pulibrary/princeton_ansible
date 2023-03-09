@@ -30,7 +30,7 @@
     #     repo: https://github.com/pulibrary/{{ project_name }}.git
 
     - name: cap deploy
-      ansible.builtin.shell: "cd {{ project_dir }} && branch={{ branch_name | default('main') }} /opt/appdeploy/current/bin/cap {{ runtime_env | default('staging') }} deploy"
+      ansible.builtin.shell: "cd {{ project_dir }} && BRANCH={{ branch_name | default('main') }} /opt/appdeploy/current/bin/cap {{ runtime_env | default('staging') }} deploy"
       become: true
       become_user: deploy
 
@@ -42,5 +42,5 @@
   - name: let folks on slack know you deployed
     community.general.slack:
       token: "{{ vault_pul_slack_token }}"
-      msg: "Ansible deployed the `{{ branch_name | default('main') }}` branch of `{{ project_name }}` to the {{ runtime_env | default('staging') }} environment"
+      msg: "Ansible deployed the `{{ branch_name | default('main') }}` branch of `{{ repo_name }}` to the {{ runtime_env | default('staging') }} environment"
       channel: #server-alerts
