@@ -26,6 +26,12 @@
   when:
     - (installed_ruby.stderr is search("not found")) or (installed_ruby.stdout | regex_search('\d+\.\d+\.\d+') != ruby_version | regex_search('\d+\.\d+\.\d+'))
 
+- name: ruby_s | install, upgrade, or downgrade ruby from source jammy jellyfish
+  ansible.builtin.include_tasks: install_jammy_from_source.yml
+  when:
+    - (installed_ruby.stderr is search("not found")) or (installed_ruby.stdout | regex_search('\d+\.\d+\.\d+') != ruby_version | regex_search('\d+\.\d+\.\d+'))
+    - ansible_distribution_release  == "jammy"
+
 - name: ruby_s | check existing bundler version
   ansible.builtin.shell: bundler -v | awk '{split($0,a," "); print a[3]}'
   register: installed_bundler
