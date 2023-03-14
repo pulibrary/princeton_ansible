@@ -4,6 +4,14 @@
   register: bundler_uninstall
   when: running_on_server
 
+- name: what does bundler_uninstall look like?
+  debug:
+    var: bundler_uninstall
+
+- name: what version of bundler do we want?
+  debug:
+    var: bundler_version
+
 - name: ruby_s | get gem home
   ansible.builtin.shell: gem env home
   register: bundler_home
@@ -24,6 +32,19 @@
   when:
     - running_on_server
     - bundler_version is defined
+  register: new_bundler
+
+- name: what happened in the install bundler task?
+  debug:
+    var: new_bundler
+
+- name: and what version of bundler do we have now?
+  shell: "bundler --version"
+  register: fresh_bundler
+
+- name: what fresh bundler is this?
+  debug:
+    var: fresh_bundler
 
 - name: ruby_s | install global bundler, any version
   ansible.builtin.command: gem install bundler
