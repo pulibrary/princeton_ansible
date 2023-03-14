@@ -1,24 +1,23 @@
 ---
-# the next 7 tasks download and install openssl 1.1.1 which
-# ruby 2.7.5 cannot use openssl 3 because it does not know of its existence
+# these tasks download and install openssl 1.1.1
+# instead of openssl 3, which
+# ruby 2.7.5 cannot use
 #
-- name: ruby_s | install openssl 1
-  block:
   - name: ruby_s | download openssl 1
     ansible.builtin.get_url:
       url: "{{ openssl_gzip_url }}/{{ openssl_version }}.tar.gz"
       dest: "{{ install_path }}/{{ openssl_version }}.tar.gz"
+
   - name: ruby_s | unzip openssl 1 file
     ansible.builtin.unarchive:
       src: "{{ install_path }}/{{ openssl_version }}.tar.gz"
       dest: "{{ install_path }}/"
       creates: "{{ install_path }}/{{ openssl_version }}"
       remote_src: true
+
   - name: ruby_s | configure openssl 1
     ansible.builtin.shell: cd {{ install_path }}/{{ openssl_version }} && ./config
+
   - name: ruby_s | make openssl 1
     ansible.builtin.shell: cd {{ install_path }}/{{ openssl_version }} && make && make test
-  - name: ruby_s | set openssl 1 for ruby build
-    ansible.builtin.shell: export LD_LIBRARY_PATH={{ install_path }}/{{ openssl_version }}:$LD_LIBRARY_PATH
-  become: true
 
