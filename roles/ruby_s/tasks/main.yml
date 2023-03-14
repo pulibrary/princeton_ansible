@@ -1,39 +1,46 @@
 ---
-- name: ruby_s | check existing ruby version
-  ansible.builtin.shell: ruby -v | awk "{print $2}"
-  register: installed_ruby
+# on Jammy Jellyfish, if ruby is absent, `ruby -v` returns
+# `ruby not found` but sends nothing to stderr
+# the return code is `127`
+- name: ruby_s | is ruby installed?
+  ansible.builtin.shell: ruby -v
+  register: ruby_status
+  failed_when: "ruby_status.rc not in [0,127]"
   changed_when: false
 
 - name: ruby_s | output existing ruby version
   ansible.builtin.debug:
-    msg: Installed ruby {{ installed_ruby.stdout }} Desired ruby {{ ruby_version }}
+    msg: Installed ruby {{ ruby_status.stdout }} Desired ruby {{ ruby_version }}
+  when: ruby_status.rc == 0
 
-# our test env does not have ruby installed
-# only run cleanup when ruby is installed AND it's the wrong version
-- name: ruby_s | remove wrong ruby versions with apt
-  ansible.builtin.include_tasks: cleanup.yml
-  when:
-    - installed_ruby.stderr is not search("not found")
+# by default there's no ruby installed on Jammy
+# do we still need to do this for other versions???
+# if so TODO - get the correct conditions to use here
+# - name: ruby_s | remove wrong ruby versions with apt
+#   ansible.builtin.include_tasks: cleanup.yml
+#   when:
     # installed_ruby.stdout contains something like
     # 'ruby 2.7.0p243 (2018-12-21 revision . . . )'
     # ruby_version contains something like 'ruby-3.1.0'
     # regex pulls out x.y.z to compare '2.7.0' to '3.1.0'
-    - installed_ruby.stdout | regex_search('\d+\.\d+\.\d+') != ruby_version | regex_search('\d+\.\d+\.\d+')
+    # - installed_ruby.stdout | regex_search('\d+\.\d+\.\d+') != ruby_version | regex_search('\d+\.\d+\.\d+')
 
 # Ubuntu Jammy (22.04) uses openssl 3 by default
 # Ruby 2.x needs openssl 1
 - name: ruby_s | install openssl from source for jammy jellyfish
   ansible.builtin.include_tasks: install_jammy_from_source.yml
   when:
-    - (installed_ruby.stderr is search("not found")) or (installed_ruby.stdout | regex_search('\d+\.\d+\.\d+') != ruby_version | regex_search('\d+\.\d+\.\d+'))
-    - (ansible_facts['distribution'] == "Ubuntu" and ansible_facts['distribution_major_version'] == "22")
-    - ruby_version == "2.7.5"
+    - ruby_status.rc != "0"
+    - ruby_version == "ruby-2.7.5"
+    - ansible_facts['distribution'] == "Ubuntu"
+    - ansible_facts['distribution_major_version'] == "22"
 
-# install from source when ruby is not installed OR it's the wrong version
+# install from source when ruby is not installed
+# or when the wrong version of ruby is installed
 - name: ruby_s | install, upgrade, or downgrade ruby from source
   ansible.builtin.include_tasks: install_from_source.yml
   when:
-    - (installed_ruby.stderr is search("not found")) or (installed_ruby.stdout | regex_search('\d+\.\d+\.\d+') != ruby_version | regex_search('\d+\.\d+\.\d+'))
+    - (ruby_status.rc != "0" or (installed_ruby.stdout | regex_search('\d+\.\d+\.\d+') != ruby_version | regex_search('\d+\.\d+\.\d+'))
 
 - name: ruby_s | check existing bundler version
   ansible.builtin.shell: bundler -v | awk '{split($0,a," "); print a[3]}'
