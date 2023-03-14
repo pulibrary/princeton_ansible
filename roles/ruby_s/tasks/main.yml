@@ -20,18 +20,20 @@
     # regex pulls out x.y.z to compare '2.7.0' to '3.1.0'
     - installed_ruby.stdout | regex_search('\d+\.\d+\.\d+') != ruby_version | regex_search('\d+\.\d+\.\d+')
 
-# install from source when ruby is not installed OR it's the wrong version
-- name: ruby_s | install, upgrade, or downgrade ruby from source
-  ansible.builtin.include_tasks: install_from_source.yml
-  when:
-    - (installed_ruby.stderr is search("not found")) or (installed_ruby.stdout | regex_search('\d+\.\d+\.\d+') != ruby_version | regex_search('\d+\.\d+\.\d+'))
-
-- name: ruby_s | install, upgrade, or downgrade ruby from source jammy jellyfish
+# Ubuntu Jammy (22.04) uses openssl 3 by default
+# Ruby 2.x needs openssl 1
+- name: ruby_s | install openssl from source for jammy jellyfish
   ansible.builtin.include_tasks: install_jammy_from_source.yml
   when:
     - (installed_ruby.stderr is search("not found")) or (installed_ruby.stdout | regex_search('\d+\.\d+\.\d+') != ruby_version | regex_search('\d+\.\d+\.\d+'))
     - ansible_distribution_release  == "jammy"
     - ruby_version == "2.7.5"
+
+# install from source when ruby is not installed OR it's the wrong version
+- name: ruby_s | install, upgrade, or downgrade ruby from source
+  ansible.builtin.include_tasks: install_from_source.yml
+  when:
+    - (installed_ruby.stderr is search("not found")) or (installed_ruby.stdout | regex_search('\d+\.\d+\.\d+') != ruby_version | regex_search('\d+\.\d+\.\d+'))
 
 - name: ruby_s | check existing bundler version
   ansible.builtin.shell: bundler -v | awk '{split($0,a," "); print a[3]}'
