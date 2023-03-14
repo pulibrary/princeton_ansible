@@ -2,16 +2,18 @@
 - name: ruby_s | check for openssl 1 on jammy jellyfish
   ansible.builtin.shell: echo $LD_LIBRARY_PATH
   when:
-    - (ansible_facts['distribution'] == "Ubuntu" and ansible_facts['distribution_major_version'] == "22")
-    - ruby_version == "2.7.5"
+    - ansible_facts['distribution'] == "Ubuntu"
+    - ansible_facts['distribution_major_version'] == "22"
+    - ruby_version == "ruby-2.7.5"
   register: openssl_in_use
 
 - name: do we have the right openssl version?
   debug:
     var: openssl_in_use
   when:
-    - (ansible_facts['distribution'] == "Ubuntu" and ansible_facts['distribution_major_version'] == "22")
-    - ruby_version == "2.7.5"
+    - ansible_facts['distribution'] == "Ubuntu"
+    - ansible_facts['distribution_major_version'] == "22"
+    - ruby_version == "ruby-2.7.5"
 
 - name: ruby_s | lookup download path and checksum from ruby-lang release index
   ansible.builtin.shell: curl https://cache.ruby-lang.org/pub/ruby/index.txt | grep {{ ruby_version }}.tar.gz
@@ -28,12 +30,6 @@
 - name: ruby_s | get ruby checksum
   ansible.builtin.set_fact:
     ruby_sha_256: "{{ ruby_values[3] }}"
-
-- name: ruby_s | ensure install path exists
-  ansible.builtin.file:
-    path: "{{ install_path }}"
-    state: directory
-    mode: 0644
 
 # the next two tasks find and uninstall previous ruby versions
 # installed from source, to allow upgrading/downgrading from one

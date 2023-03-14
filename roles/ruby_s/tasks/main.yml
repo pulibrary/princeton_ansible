@@ -24,6 +24,14 @@
     # ruby_version contains something like 'ruby-3.1.0'
     # regex pulls out x.y.z to compare '2.7.0' to '3.1.0'
     # - installed_ruby.stdout | regex_search('\d+\.\d+\.\d+') != ruby_version | regex_search('\d+\.\d+\.\d+')
+- name: ruby_s | ensure install path exists
+  ansible.builtin.file:
+    path: "{{ install_path }}"
+    state: directory
+    owner: pulsys
+    group: pulsys
+    mode: 0644
+  become: true
 
 # Ubuntu Jammy (22.04) uses openssl 3 by default
 # Ruby 2.x needs openssl 1
@@ -36,11 +44,12 @@
     - ansible_facts['distribution_major_version'] == "22"
 
 # install from source when ruby is not installed
-# or when the wrong version of ruby is installed
 - name: ruby_s | install, upgrade, or downgrade ruby from source
   ansible.builtin.include_tasks: install_from_source.yml
   when:
-    - (ruby_status.rc != "0" or (installed_ruby.stdout | regex_search('\d+\.\d+\.\d+') != ruby_version | regex_search('\d+\.\d+\.\d+'))
+    - ruby_status.rc != 0
+    # how to handle the case when ruby is installed, but it's the wrong version?
+    # installed_ruby.stdout | regex_search('\d+\.\d+\.\d+') != ruby_version | regex_search('\d+\.\d+\.\d+'))
 
 - name: ruby_s | check existing bundler version
   ansible.builtin.shell: bundler -v | awk '{split($0,a," "); print a[3]}'
