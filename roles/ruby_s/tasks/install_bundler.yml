@@ -27,22 +27,6 @@
     - running_on_server
     - (bundler_uninstall.stdout is search("default gem"))
 
-- name: ruby_s | symlink openssl for ruby2.x on Jammy
-  ansible.builtin.file:
-    src: "{{ install_path }}/{{ openssl_version }}/libssl.so.1.1"
-    dest: /usr/bin/openssl
-    state: link
-    owner: root
-    group: root
-    mode: "755"
-    force: true
-  become: true
-  when:
-    - bundler_version is defined
-    - ruby_version == "ruby-2.7.5"
-    - ansible_facts['distribution'] == "Ubuntu"
-    - ansible_facts['distribution_major_version'] == "22"
-
 - name: ruby_s | install global bundler, specific version
   ansible.builtin.command: gem install bundler -v {{ bundler_version }}
   register: new_bundler
