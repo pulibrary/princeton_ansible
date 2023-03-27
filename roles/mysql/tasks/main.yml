@@ -1,19 +1,38 @@
 ---
 # tasks file for mysql
 #
+- name: MySQL | ensure keyrings directory exist
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: "0755"
+
 - name: MySQL | Install MariaDB key
-  ansible.builtin.apt_key:
+  ansible.builtin.get_url:
     url: https://mariadb.org/mariadb_release_signing_key.asc
-    state: present
+    dest: /etc/apt/keyrings/mariadb-keyring.asc
+    mode: "0644"
+    owner: root
+    group: root
   register: install_app_key
 
-- name: MySQL | Install MariaDB repository
-  ansible.builtin.apt_repository:
-    repo: "deb [arch=amd64] https://mirrors.accretive-networks.net/mariadb/repo/10.3/ubuntu {{ ansible_distribution_release }} main"
-    state: present
-    validate_certs: false
-  when: install_app_key.changed
+- name: MySQL | dearmor MariaDB repository key
+  ansible.builtin.command: >
+    gpg --dearmor
+    -o /etc/apt/keyrings/mariadb-keyring.gpg
+    /etc/apt/keyrings/mariadb-keyring.asc
+  when: install_app_key is changed
+  changed_when: false
 
+- name: MySQL | mariadb repository sourcelist entry
+  ansible.builtin.copy:
+    dest: /etc/apt/sources.list.d/mariadb.list
+    content: |
+      deb [signed-by=/etc/apt/keyrings/mariadb-keyring.gpg] {{ mariadb_repo }}/{{ mariadb_repo_version }}/ubuntu {{ ansible_distribution_release }} main
+    owner: root
+    group: root
+    mode: "0644"
+  when: install_app_key.changed
 
 - name: MySQL | Install database client packages
   ansible.builtin.apt:
@@ -37,9 +56,10 @@
 
 - name: MySQL | Restart MySQL
   ansible.builtin.service:
-    name: mysql
+    name: "{{ mysql_name }}"
     state: restarted
   when:
+    - running_on_server
     - mysql_server
     - install_app_key.changed
 
@@ -52,6 +72,7 @@
     name: 'root'
     password: "{{ mysql_root_password }}"
   when:
+    - running_on_server
     - mysql_server
     - install_app_key.changed
 
@@ -73,6 +94,7 @@
   loop_control:
     label: "{{ item.option }}"
   when:
+    - running_on_server
     - mysql_server
   notify:
     - restart mysql server
@@ -85,6 +107,7 @@
     value: "{{ mysql_socket }}"
     mode: "0644"
   when:
+    - running_on_server
     - mysql_server
 
 - name: MySQL | start and enable mysql
@@ -93,6 +116,7 @@
     state: started
     enabled: true
   when:
+    - running_on_server
     - mysql_server
 
 - name: MySQL | add root my.cnf
@@ -101,6 +125,7 @@
     dest: /root/.my.cnf
     mode: "0640"
   when:
+    - running_on_server
     - mysql_server
 
 - name: MySQL | add "{{ deploy_user }}" my.cnf
@@ -110,6 +135,7 @@
     owner: "{{ deploy_user }}"
     mode: 0600
   when:
+    - running_on_server
     - not mysql_server
 
 - name: MySQL | create wildcard user
