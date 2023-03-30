@@ -3,9 +3,15 @@
 
 - name: towerdeploy | install capistrano
   ansible.builtin.command: gem install capistrano --version "{{ cap_version }}"
+  register: gemoutput
+  changed_when: gemoutput.rc != 0
+  failed_when: gemoutput.rc !=0
 
 - name: towerdeploy | install capistrano dependencies
   ansible.builtin.command: gem install "{{ item }}" airbrussh
+  register: capgemoutput
+  changed_when: capgemoutput.rc != 0
+  failed_when: capgemoutput.rc !=0
   loop:
     - airbrussh
     - sshkit
@@ -19,4 +25,4 @@
     - capistrano-rails
     - capistrano-rails-console
     - capistrano-yarn
-    - whenever  
+    - whenever

@@ -2,19 +2,15 @@
 - name: Verify
   hosts: all
   gather_facts: false
+  vars:
+  - cap_version: "3.17.2"
   tasks:
-  - name: check ruby package status
-    package:
-      name: "{{ item }}"
-      state: present
-    check_mode: true
-    register: pkg_status
-    loop:
-      - ruby-switch
-      - ruby2.6-dev
-      - ruby2.6
+  - name: check capistrano status
+    ansible.builtin.command: cap --version
+    changed_when: false
+    register: cap_status
 
-  - name: test for ruby packages
+  - name: test for cap version
     assert:
       that:
-        - not pkg_status.changed
+        - "'{{ cap_version }}' in cap_status.stdout"
