@@ -57,7 +57,7 @@ Example Playbook
 To allow a new user to log in run
 
 ```zsh
-ansible-playbook -v playbooks/lib_sftp.yml -e ad_user=netid@pu.win.princeton.edu
+ansible-playbook -v playbooks/lib_sftp.yml -e ad_user=netid@pu.win.princeton.edu -t add_sftp_user
 ```
 
 License
