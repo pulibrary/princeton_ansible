@@ -8,17 +8,19 @@ Requirements
 
 One will need access to [OIT AD Machine Registration Tool](https://tools.princeton.edu/Dept/) This allows you to register a new name for AD
 
-When the playbook is run the first time add the following manual steps.
+When the playbook is run the first time, it will fail until you add the following manual steps.
 
 ```zsh
 sudo realm discover pu.win.princeton.edu
-sudo realm join -U doas-libsftp pu.win.princeton.edu  
+sudo realm join -U doas-libsftp pu.win.princeton.edu
 ```
 
-The password for the step above can be found by:
+The password for the step above can be found by looking in the LastPass Vault:
 
 ```zsh
 lpass ls | grep doas-libsftp
+lpass show <results_from_above> --password | pbcopy
+
 ```
 
 Enable mkhomedir with the steps below:
@@ -52,14 +54,11 @@ Dependencies
 Example Playbook
 ----------------
 
-To allow a new user to log in run 
+To allow a new user to log in run
 
 ```zsh
-
+ansible-playbook -v playbooks/lib_sftp.yml -e ad_user=netid@pu.win.princeton.edu -t add_sftp_user
 ```
-    - hosts: servers
-      roles:
-         - { role: username.rolename, x: 42 }
 
 License
 -------
