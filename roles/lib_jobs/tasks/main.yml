@@ -79,3 +79,15 @@
     owner: '{{ deploy_user }}'
     group: '{{ deploy_user }}'
     mode: 0755
+
+# Open Marc Records
+
+- name: lib_jobs | Create open marc records directory
+  ansible.posix.mount:
+    src: "nfs_server_{{ runtime_env  | default('staging') }}:/var/nfs/open_marc_records"
+    path: "/mnt/nfs/open_marc_records"
+    state: mounted
+    fstype: nfs
+    opts: rw,sync,hard
+  when: running_on_server
+  become: true
