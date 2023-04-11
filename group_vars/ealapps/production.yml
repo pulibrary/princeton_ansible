@@ -22,3 +22,37 @@ mysql_users:
     host: "%"
     password: "{{ vault_ealapps_prod_user_password }}"
     priv: "ealapps_prod_db.*:ALL"
+
+datadog_api_key: "{{ vault_datadog_key }}"
+datadog_service_name: eal-apps
+datadog_environment: prod
+
+force_vhosts_update: true
+datadog_enabled: true
+datadog_config:
+  log_enabled: true
+  apm_enabled: true
+  process_enabled: true
+datadog_typed_checks:
+  - type: process
+    configuration:
+      init_config:
+      instances:
+        - name: eal-apps
+          service: eal-apps
+          search_string:
+            - apache2
+  - type: apache
+    configuration:
+      init_config:
+      instances:
+        - apache_status_url: http://127.0.0.1/server-status?auto
+      logs:
+        - type: file
+          path: /var/log/apache2/other_vhosts_access.log
+          service: eal-apps
+          source: apache
+          sourcecategory: http_web_access
+          tags: "eal-apps, env:prod, role:eal-apps"
+        - type: file
+          path: /var/log/apache2/error.log
