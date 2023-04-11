@@ -1,0 +1,21 @@
+---
+# to run in production, pass '-e runtime_env=production'
+- name: deploy an application deployment environment
+  hosts: towerdeploy
+  remote_user: pulsys
+  become: true
+  vars_files:
+    - ../group_vars/towerdeploy/production.yml
+    - ../group_vars/towerdeploy/vault.yml
+
+  roles:
+    - role: roles/deploy_user
+    - role: roles/towerdeploy
+
+  post_tasks:
+    - name: tell everyone on slack you ran an ansible playbook
+      community.general.slack:
+        token: "{{ vault_pul_slack_token }}"
+        msg: "Ansible ran `{{ ansible_play_name }}` on {{ inventory_hostname }}"
+        channel: #server-alerts
+      when: not ansible_check_mode
