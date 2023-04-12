@@ -1,59 +1,67 @@
 ---
-- name: detect vips commands
+- name: vips | detect vips commands
   ansible.builtin.command: vips -l
   register: vips_list
   changed_when: false
   ignore_errors: true
 
-- name: delete old vips package
+- name: vips | delete old vips package
   ansible.builtin.file:
     path: "/opt/vips"
     state: "absent"
   when: vips_list.failed or not "pdfload" in vips_list.stdout
 
-- name: delete old vips binary
+- name: vips | delete old vips binary
   file:
     path: "/usr/local/bin/vips"
     state: "absent"
   when: vips_list.failed or not "pdfload" in vips_list.stdout
 
-- name: Install VIPS dependencies
+- name: vips | Install VIPS dependencies
   ansible.builtin.apt:
-    name:
-      - build-essential
-      - pkg-config
-      - libglib2.0-dev
-      - libexpat1-dev
-      - libtiff5-dev
-      - libjpeg-turbo8-dev
-      - libgsf-1-dev
-      - libexif-dev
-      - fftw3
-      - liblcms2-dev
-      - liblcms2-2
-      - libpng-dev
-      - libpoppler-glib-dev
+    name: "{{ item }}"
     state: present
+  loop:
+    - build-essential
+    - fftw3
+    - imagemagick
+    - libexif-dev
+    - libexpat-dev
+    - libexpat1-dev
+    - libgif-dev
+    - libglib2.0-dev
+    - libgsf-1-dev
+    - libjpeg-turbo8-dev
+    - liblcms2-2
+    - liblcms2-dev
+    - liborc-0.4-dev
+    - libpng-dev
+    - libpoppler-glib-dev
+    - librsvg2-dev
+    - libtiff5-dev
+    - libwebp-dev
+    - ninja-build
+    - pkg-config
 
-- name: Create VIPS package directory
+- name: vips | Create VIPS package directory
   ansible.builtin.file:
     path: "/opt/vips"
     state: "directory"
     mode: 0755
 
-- name: Download and untar VIPS
+- name: vips | Download and untar VIPS
   ansible.builtin.unarchive:
     remote_src: true
     src: "{{ vips_download_url }}"
     dest: "/opt/vips"
     creates: "/opt/vips/vips-{{ vips_version }}"
 
-- name: Compile VIPS
+- name: vips | Compile VIPS
   ansible.builtin.shell: cd /opt/vips/vips-{{ vips_version }} && ./configure && make && make install
   args:
     creates: /usr/local/bin/vips
 
-- name: Setup ldconfig for vips
+- name: vips | Setup ldconfig for vips
   ansible.builtin.template:
     src: 'ldconfig.vips.conf'
     dest: '/etc/ld.so.conf.d/vips.conf'
