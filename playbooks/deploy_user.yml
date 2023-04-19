@@ -1,19 +1,15 @@
 ---
-# If you run the full deploy_user role
-# no-one can deploy until the playbook stops!
-# So only run the full playbook:
-#  - during a maintenance window on all hosts, or
-#  - with `serial: 2` uncommented, or
-#  - on one box at a time using a limit flag, for example:
-#    `ansible-playbook playbooks/deploy_user.yml --limit slavery-prod1.princeton.edu`
+# by default this playbook runs in the staging environment
+# to run in production, pass '-e runtime_env=production'
 #
-# To update keys only (much quicker and less disruptive)
-# run with the update_keys tag:
+# the full playbook adds the deploy user and sets up its environment,
+# typically on a new VM
+#
+# To update keys on existing machines, run with the update_keys tag:
 #  `ansible-playbook playbooks/deploy_user.yml --tags update_keys`
 #
 - name: Add deploy user
-  hosts: all
-  # serial: 2
+  hosts: "{{ runtime_env | default('staging') }}"
   remote_user: pulsys
   become: true
   roles:
