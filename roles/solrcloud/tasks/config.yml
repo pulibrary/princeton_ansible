@@ -16,11 +16,28 @@
 
 - name: solrcloud | Configure SolrCloud init script
   ansible.builtin.template:
+    src: 'jammy_solr.in.sh.j2'
+    dest: '/etc/default/solr.in.sh'
+    mode: 0644
+    owner: '{{ solr_user }}'
+    group: '{{ solr_group }}'
+    force: true
+  changed_when: false
+  when:
+    - "'{{ ansible_distribution_release }}' == 'jammy'"
+  notify: restart SolrCloud
+
+- name: solrcloud | Configure SolrCloud init script
+  ansible.builtin.template:
     src: 'solr.in.sh.j2'
     dest: '/etc/default/solr.in.sh'
+    owner: '{{ solr_user }}'
+    group: '{{ solr_group }}'
     mode: 0644
     force: true
   changed_when: false
+  when:
+    - "'{{ ansible_distribution_release }}' == 'bionic'"
   notify: restart SolrCloud
 
 - name: solrcloud | Configure high ulimit value for Solr
@@ -35,6 +52,8 @@
   ansible.builtin.template:
     src: 'solr.xml.j2'
     dest: '{{ solr_data_dir }}/solr.xml'
+    owner: '{{ solr_user }}'
+    group: '{{ solr_group }}'
     mode: 0644
     force: true
   notify: restart SolrCloud
@@ -43,6 +62,8 @@
   ansible.builtin.template:
     src: 'log4j.properties.j2'
     dest: '/solr/log4j.properties'
+    owner: '{{ solr_user }}'
+    group: '{{ solr_group }}'
     mode: 0644
     force: true
   notify: restart SolrCloud
@@ -51,6 +72,8 @@
   ansible.builtin.template:
     src: 'log4j2.xml.j2'
     dest: '/solr/log4j2.xml'
+    owner: '{{ solr_user }}'
+    group: '{{ solr_group }}'
     mode: 0644
     force: true
   notify: restart SolrCloud
@@ -58,9 +81,23 @@
 - name: solrcloud | Copy orangelight plugin jar files
   ansible.builtin.copy:
     src: files/{{ item }}
+    dest: "{{ jammy_jardirectory }}/{{ item }}"
+    mode: 0644
+  when:
+    - "'{{ ansible_distribution_release }}' == 'jammy'"
+  loop:
+    - CJKFoldingFilter.jar
+    - lucene-umich-solr-filters-6.0.0-SNAPSHOT.jar
+  notify: restart SolrCloud
+
+- name: solrcloud | Copy orangelight plugin jar files
+  ansible.builtin.copy:
+    src: files/{{ item }}
     dest: "{{ jardirectory }}/{{ item }}"
     mode: 0644
-  with_items:
+  when:
+    - "'{{ ansible_distribution_release }}' == 'bionic'"
+  loop:
     - CJKFoldingFilter.jar
     - lucene-umich-solr-filters-6.0.0-SNAPSHOT.jar
   notify: restart SolrCloud
@@ -70,6 +107,6 @@
     src: files/{{ item }}
     dest: "{{ webapp_jardirectory }}/{{ item }}"
     mode: 0644
-  with_items:
+  loop:
     - jts-core-1.15.1.jar
   notify: restart SolrCloud
