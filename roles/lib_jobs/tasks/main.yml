@@ -82,12 +82,34 @@
 
 # Open Marc Records
 
-- name: lib_jobs | Create open marc records directory
+- name: lib_jobs | Create open marc records directory production
   ansible.posix.mount:
-    src: "nfs_server_{{ runtime_env  | default('staging') }}:/var/nfs/open_marc_records"
+    src: "{{ nfs_server_production }}:/var/nfs/open_marc_records"
     path: "/mnt/nfs/open_marc_records"
     state: mounted
     fstype: nfs
     opts: rw,sync,hard
-  when: running_on_server
+  when:
+    - running_on_server
+    - "'production' in inventory_hostname"
   become: true
+
+- name: lib_jobs | Create open marc records directory staging
+  ansible.posix.mount:
+    src: "{{ nfs_server_staging }}:/var/nfs/open_marc_records"
+    path: "/mnt/nfs/open_marc_records"
+    state: mounted
+    fstype: nfs
+    opts: rw,sync,hard
+  when:
+    - running_on_server
+    - "'staging' in inventory_hostname"
+  become: true
+
+- name: lib_jobs | Create symlink to open records
+  ansible.builtin.file:
+    src: '/mnt/nfs/open_marc_records'
+    dest: "{{ shared_directory }}/{{ open_marc_records_directory }}"
+    state: 'link'
+    force: true
+  when: running_on_server

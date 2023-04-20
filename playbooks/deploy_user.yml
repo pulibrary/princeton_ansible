@@ -1,10 +1,19 @@
 ---
-# Only run this playbook on all hosts in a maintenance window, because no one can deploy while the playbook is running.
-# If you are running it outside the maintenance window please run it on one box at a time using a limit flag.
-# For example: `ansible-playbook playbooks/deploy_user.yml --limit slavery-prod1.princeton.edu`
+# If you run the full deploy_user role
+# no-one can deploy until the playbook stops!
+# So only run the full playbook:
+#  - during a maintenance window on all hosts, or
+#  - with `serial: 2` uncommented, or
+#  - on one box at a time using a limit flag, for example:
+#    `ansible-playbook playbooks/deploy_user.yml --limit slavery-prod1.princeton.edu`
+#
+# To update keys only (much quicker and less disruptive)
+# run with the update_keys tag:
+#  `ansible-playbook playbooks/deploy_user.yml --tags update_keys`
+#
 - name: Add deploy user
   hosts: all
-  serial: 2
+  # serial: 2
   remote_user: pulsys
   become: true
   roles:
@@ -14,4 +23,4 @@
     community.general.slack:
       token: "{{ vault_pul_slack_token }}"
       msg: "Ansible ran `{{ ansible_play_name }}` on {{ inventory_hostname }}"
-      channel: #server-alerts
+      channel: "{{ slack_alerts_channel }}"

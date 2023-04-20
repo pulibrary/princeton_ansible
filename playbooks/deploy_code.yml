@@ -11,6 +11,13 @@
   vars:
     project_dir: /tmp/{{ repo_name }}
 #    github_key_path:
+  pre_tasks:
+  - name: let folks on slack know a deploy has begun
+    community.general.slack:
+      token: "{{ vault_pul_slack_token }}"
+      msg: "Tower has started a deploy of the `{{ branch_name | default('main') }}` branch of `{{ repo_name }}` to the {{ runtime_env | default('staging') }} environment."
+      channel: "{{ slack_alerts_channel }}"
+
   tasks:
     - name: update code repo
       ansible.builtin.git:
@@ -39,4 +46,4 @@
     community.general.slack:
       token: "{{ vault_pul_slack_token }}"
       msg: "Ansible deployed the `{{ branch_name | default('main') }}` branch of `{{ repo_name }}` to the {{ runtime_env | default('staging') }} environment"
-      channel: #server-alerts
+      channel: "{{ slack_alerts_channel }}"
