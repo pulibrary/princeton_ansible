@@ -1,5 +1,9 @@
 ---
-- hosts: figgy_staging
+# by default this playbook runs in the staging environment
+# to run in production, pass '-e runtime_env=production'
+# to run in qa, pass '-e runtime_env=qa'
+- name: build the figgy site
+  hosts: figgy_{{ runtime_env | default('staging') }}
   remote_user: pulsys
   become: true
   pre_tasks:
@@ -14,7 +18,7 @@
   vars_files:
     - ../site_vars.yml
     - ../group_vars/figgy/vault.yml
-    - ../group_vars/figgy/staging.yml
+    - ../group_vars/figgy/{{ runtime_env | default('staging') }}.yml
   roles:
     - role: roles/memcached
     - role: roles/rabbitmq
@@ -22,6 +26,35 @@
     - role: roles/figgy
     - role: roles/figgy_pubsub_worker
     - role: roles/figgy_filewatcher_worker
+
+- hosts: figgy_staging_workers
+  remote_user: pulsys
+  become: true
+  strategy: free
+  pre_tasks:
+    - name: remove mediainfo installation
+      apt:
+        name: mediainfo
+        state: absent
+    - name: remove mediainfo deb repo
+      apt:
+        name: repo-mediaarea
+        state: absent
+  vars_files:
+    - ../site_vars.yml
+    - ../group_vars/figgy/vault.yml
+    - ../group_vars/figgy/{{ runtime_env | default('staging') }}.yml
+    - ../group_vars/figgy/{{ runtime_env | default('staging') }}_workers.yml
+  roles:
+    - role: roles/common
+    - role: roles/postgres
+    - role: roles/sidekiq_worker
+    - role: roles/figgy
+    - {role: roles/figgy_filewatcher_worker, when: inventory_hostname == 'lib-proc-staging1.princeton.edu' }
+    - role: roles/figgy_pubsub_worker
+    - role: roles/datadog
+      when: runtime_env | default('staging') == "production"
+
   post_tasks:
     - name: tell everyone on slack you ran an ansible playbook
       community.general.slack:
