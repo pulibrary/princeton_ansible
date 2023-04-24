@@ -40,6 +40,37 @@
     owner: "{{ deploy_user }}"
     mode: 0755
 
+- name: Ezproxy | install snapd
+  ansible.builtin.apt:
+    name: snapd
+    state: present
+    update_cache: true
+
+- name: Ezproxy | install snap core
+  community.general.snap:
+    name: core
+  when: running_on_server
+
+- name: Ezproxy | install snap certbot
+  community.general.snap:
+    name: certbot
+    classic: true
+  when: running_on_server
+
+- name: Ezproxy | create certbot link
+  ansible.builtin.file:
+    src: "/snap/bin/certbot"
+    dest: "/usr/bin/certbot"
+    state: link
+    group: root
+    owner: root
+  when: running_on_server
+
+- name: update acme certificates for {{ domain_name }}
+  ansible.builtin.command: /usr/bin/certbot certonly --standalone --non-interactive --agree-tos --email lsupport@princeton.edu --server https://acme.sectigo.com/v2/InCommonRSAOV --eab-kid {{ vault_acme_eab_kid }} --eab-hmac-key {{ vault_acme_eab_hmac_key }} --domain {{ domain_name }}.princeton.edu --cert-name {{ domain_name }}
+  notify: restart ezproxy
+  when: running_on_server
+
 - name: Ezproxy | move certificate files
   ansible.builtin.copy:
     src: "{{ item.src }}"
