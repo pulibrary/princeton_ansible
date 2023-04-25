@@ -6,7 +6,9 @@
 
   vars_files:
     - ../group_vars/all/vars.yml
+    # some groups have more folks who need acces
     - ../group_vars/cdh/common.yml
+    - ../group_vars/ealapps/common.yml
 
   tasks:
   # to remove someone's keys from our servers:
@@ -22,6 +24,12 @@
       ansible.builtin.command: 'curl {{ item }}'
       loop: "{{ cdh_github_keys }}"
       register: cdh_keys_from_github
+      run_once: true
+
+    - name: get other staff keys from github
+      ansible.builtin.command: 'curl {{ item }}'
+      loop: "{{ extra_pulsys_github_keys }}"
+      register: extra_keys_from_github
       run_once: true
 
     - name: build authorized keys file
