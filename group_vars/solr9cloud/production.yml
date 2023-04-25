@@ -1,6 +1,7 @@
 ---
 java_version: 17
 install_ruby_from_source: true
+install_zookeeper_from_source: true
 desired_ruby_version: "3.1.0"
 ruby_version_override: "ruby-3.1.0"
 bundler_version: "2.3.18"
@@ -17,6 +18,13 @@ solr_znode: solr9
 solr_zookeeper_hosts_string_default: localhost:{{ solr_zookeeper_client_port }}
 solr_zookeeper_hosts_string_multi: '{{ lib_zk4_host_name }}:{{ solr_zookeeper_client_port }},{{ lib_zk5_host_name }}:{{ solr_zookeeper_client_port }},{{ lib_zk6_host_name }}:{{ solr_zookeeper_client_port }}'
 solr_zookeeper_hosts_string: '{{ solr_zookeeper_hosts_string_default if lib_zk4_host_name == "localhost" else solr_zookeeper_hosts_string_multi }}'
+zookeeper_env.{{ items }}:
+  - key: ZOO_LOG_DIR
+    value: "{{ zookeeper_log_dir }}"
+  - key: ZOO_LOG4J_PROP
+    value: "INFO,ROLLINGFILE"
+  - key: SERVER_JVMFLAGS
+    value: "-Xms2048m -Xmx2048m -verbose:gc -XX:+PrintGCDetails -Xlog:gc:$ZOO_LOG_DIR/zookeeper_gc.log"
 zookeeper_hosts_dict:
   - host: '{{ lib_zk5_host_name }}'  # The leader in the Zookeeper ensemble
     id: 1
