@@ -1,0 +1,34 @@
+---
+- name: Update pulsys user keys
+  hosts: "{{ runtime_env | default('staging') }}"
+  remote_user: pulsys
+  become: true
+
+  vars_files:
+    - ../group_vars/all/vars.yml
+    - ../group_vars/cdh/common.yml
+
+  tasks:
+  # to remove someone's keys from our servers:
+  # remove their keys from the `pulsys_ssh_users` variable
+  # then run this playbook again
+    - name: get library staff keys from github
+      ansible.builtin.command: 'curl {{ item }}'
+      loop: "{{ pulsys_user_github_keys }}"
+      register: pulsys_user_keys_from_github
+      run_once: true
+
+    - name: get CDH staff keys from github
+      ansible.builtin.command: 'curl {{ item }}'
+      loop: "{{ cdh_github_keys }}"
+      register: cdh_keys_from_github
+      run_once: true
+
+    - name: build authorized keys file
+      ansible.builtin.template:
+        src: ../roles/common/templates/pulsys_keys.j2
+        dest: /home/pulsys/.ssh/authorized_keys
+        group: pulsys
+        owner: pulsys
+        mode: '0600'
+        backup: true
