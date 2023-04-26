@@ -28,6 +28,8 @@
     path: "{{ install_path }}"
     state: directory
     mode: 0644
+    owner: '{{ zookeeper_user }}'
+    group: '{{ zookeeper_group }}'
 
 - name: Zookeeper_src | download zookeeper
   ansible.builtin.get_url:
@@ -40,6 +42,15 @@
     dest: "{{ install_path }}/"
     creates: "{{ install_path }}/apache-zookeeper-{{ zookeeper_version }}-bin"
     copy: false
+
+- name: Zookeeper_src | grant permissions for zookeeper install directory
+  ansible.builtin.file:
+    name: "{{ install_path }}/apache-zookeeper-{{ zookeeper_version }}-bin"
+    state: directory
+    mode: "0755"
+    recurse: true
+    owner: '{{ zookeeper_user }}'
+    group: '{{ zookeeper_group }}'
 
 - name: Zookeeper_src | create zookeeper link
   ansible.builtin.file:
