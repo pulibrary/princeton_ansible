@@ -23,6 +23,7 @@
   become: true
   become_user: "{{ deploy_user }}"
   changed_when: false
+  ignore_errors: true  # when run a second time it will error out
   when:
     - running_on_server
 
@@ -69,18 +70,6 @@
 - name: update acme certificates for {{ domain_name }}
   ansible.builtin.command: /usr/bin/certbot certonly --standalone --non-interactive --agree-tos --email lsupport@princeton.edu --server https://acme.sectigo.com/v2/InCommonRSAOV --eab-kid {{ vault_acme_eab_kid }} --eab-hmac-key {{ vault_acme_eab_hmac_key }} --domain {{ domain_name }}.princeton.edu --cert-name {{ domain_name }}
   notify: restart ezproxy
-  when: running_on_server
-
-- name: Ezproxy | move certificate files
-  ansible.builtin.copy:
-    src: "{{ item.src }}"
-    dest: "{{ item.dest }}"
-    owner: "{{ deploy_user }}"
-    group: "{{ deploy_user }}"
-    recurse: true
-  loop:
-    - {src: "files/tls/certs/*", dest: "/var/local/ezproxy/tls/"}
-    - {src: "files/tls/priv/*", dest: "/var/local/ezproxy/tls/"}
   when: running_on_server
 
 - name: Ezproxy | Creates a log directory for ezproxy
