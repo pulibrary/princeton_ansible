@@ -17,6 +17,15 @@
   ansible.builtin.apt:
     name: ["lib32ncurses5", "lib32z1"]
     state: present
+  when:
+    - "'{{ ansible_distribution_release }}' == 'bionic'"
+
+- name: Ezproxy | install dependencies for 64bit
+  ansible.builtin.apt:
+    name: ["lib32ncurses6", "lib32z1"]
+    state: present
+  when:
+    - "'{{ ansible_distribution_release }}' == 'jammy'"
 
 - name: Ezproxy | install missing file replacements
   ansible.builtin.command: /var/local/ezproxy/ezproxy -m
@@ -187,15 +196,36 @@
     group: root
     mode: a+x
   changed_when: false
+  when:
+    - "'{{ ansible_distribution_release }}' == 'bionic'"
+    - running_on_server
+
+- name: Ezproxy | copy a systemd service
+  ansible.builtin.template:
+    src: "ezproxy.service.j2"
+    dest: /var/local/ezproxy/ezproxy.service
+    owner: root
+    group: root
+    mode: a+x
+  changed_when: false
+  when:
+    - "'{{ ansible_distribution_release }}' == 'jammy'"
+    - running_on_server
+  notify: reload ezproxy
+
+- name: Ezproxy | symbolic link
+  ansible.builtin.file:
+    src: /var/local/ezproxy/ezproxy.service
+    dest: /lib/systemd/system/ezproxy.service
+    owner: root
+    group: root
+    state: link
+  when:
+    - "'{{ ansible_distribution_release }}' == 'jammy'"
+    - running_on_server
 
 - name: Ezproxy | start ezproxy
   ansible.builtin.service:
     name: ezproxy
     state: started
-  when: running_on_server
-
-- name: Ezproxy | enable ezproxy
-  ansible.builtin.service:
-    name: ezproxy
-    enabled: true
   when: running_on_server
