@@ -2,19 +2,19 @@
 # by default this playbook runs in the staging environment
 # to run in production, pass '-e runtime_env=production'
 - name: build zookeeper boxes
-  hosts: zookeepersolr9_{{ runtime_env | default('staging') }}
+  hosts: zookeeper_{{ runtime_env | default('staging') }}
   remote_user: pulsys
   become: true
   vars_files:
     - ../site_vars.yml
-    - ../group_vars/solr9cloud/{{ runtime_env | default('staging') }}.yml
-    - ../group_vars/solr9cloud/vault.yml
-    - ../group_vars/zookeeper/{{ runtime_env | default('staging') }}.yml
+    - ../group_vars/solrcloud/solrcloud_{{ runtime_env | default('staging') }}.yml
+    - ../group_vars/solrcloud/vault.yml
+    - ../group_vars/zookeeper/zookeeper_{{ runtime_env | default('staging') }}.yml
 
   roles:
     - role: roles/openjdk
     - role: roles/deploy_user
-    - role: roles/zookeeper_src
+    - role: roles/zookeeper
     - role: roles/datadog
       when: runtime_env | default('staging') == "production"
 

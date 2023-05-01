@@ -1,0 +1,59 @@
+---
+- name: Zookeeper_src | create zookeeper group
+  ansible.builtin.group:
+    name: zookeeper
+    state: present
+
+- name: Zookeeper_src | create zookeeper user
+  ansible.builtin.user:
+    name: zookeeper
+    state: present
+    shell: /usr/bin/sh
+    group: zookeeper
+
+- name: Zookeeper_src | Create directories for zookeeper
+  ansible.builtin.file:
+    name: "{{ item }}"
+    state: directory
+    mode: "0755"
+    recurse: true
+    owner: '{{ zookeeper_user }}'
+    group: '{{ zookeeper_group }}'
+  loop:
+    - "/var/lib/zookeeper"
+    - "/var/log/zookeeper"
+
+- name: Zookeeper_src | ensure install path exists
+  ansible.builtin.file:
+    path: "{{ install_path }}"
+    state: directory
+    mode: 0644
+    owner: '{{ zookeeper_user }}'
+    group: '{{ zookeeper_group }}'
+
+- name: Zookeeper_src | download zookeeper
+  ansible.builtin.get_url:
+    url: "{{ zookeeper_url }}"
+    dest: "{{ install_path }}/apache-zookeeper-{{ zookeeper_version }}.bin.tar.gz"
+
+- name: Zookeeper_src | unarchive zookeeper file
+  ansible.builtin.unarchive:
+    src: "{{ install_path }}/apache-zookeeper-{{ zookeeper_version }}.bin.tar.gz"
+    dest: "{{ install_path }}/"
+    creates: "{{ install_path }}/apache-zookeeper-{{ zookeeper_version }}-bin"
+    copy: false
+
+- name: Zookeeper_src | grant permissions for zookeeper install directory
+  ansible.builtin.file:
+    name: "{{ install_path }}/apache-zookeeper-{{ zookeeper_version }}-bin"
+    state: directory
+    mode: "0755"
+    recurse: true
+    owner: '{{ zookeeper_user }}'
+    group: '{{ zookeeper_group }}'
+
+- name: Zookeeper_src | create zookeeper link
+  ansible.builtin.file:
+    src: "{{ install_path }}/apache-zookeeper-{{ zookeeper_version }}-bin"
+    dest: "{{ install_path }}/zookeeper"
+    state: link
