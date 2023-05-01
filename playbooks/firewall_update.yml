@@ -5,7 +5,9 @@
 - name: View records on the Palo Alto firewall
   hosts: localhost
   vars:
-    # TODO: 'provider' definition should go here eventually
+    panos_provider:
+      ip_address: "{{ secret_ip_address }}"
+      api_key: "{{ palo_alto_api_key }}"
   tasks:
   - name: Install required library for pan-os API call
     ansible.builtin.pip:
@@ -15,9 +17,7 @@
 
   - name: Find all address objects
     paloaltonetworks.panos.panos_object_facts:
-      provider:
-        ip_address: "{{ secret_ip_address }}"
-        api_key: "{{ palo_alto_api_key }}"
+      provider: "{{ panos_provider }}"
       name_regex: '.*2019.*'
       object_type: 'address'
     register: address_stuff
@@ -28,9 +28,7 @@
 
   - name: Get a list of all security rules
     paloaltonetworks.panos.panos_security_rule_facts:
-      provider:
-        ip_address: "{{ secret_ip_address }}"
-        api_key: "{{ palo_alto_api_key }}"
+      provider: "{{ panos_provider }}"
     register: sec_rules
     
   - name: show rules stuff
