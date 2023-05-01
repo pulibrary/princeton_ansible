@@ -17,12 +17,23 @@
   ansible.builtin.apt:
     name: ["lib32ncurses5", "lib32z1"]
     state: present
+  when:
+    - "'{{ ansible_distribution_release }}' == 'bionic'"
+
+- name: Ezproxy | install dependencies for 64bit
+  ansible.builtin.apt:
+    name: ["lib32ncurses6", "lib32z1"]
+    state: present
+  when:
+    - "'{{ ansible_distribution_release }}' == 'jammy'"
 
 - name: Ezproxy | install missing file replacements
   ansible.builtin.command: /var/local/ezproxy/ezproxy -m
   become: true
   become_user: "{{ deploy_user }}"
+  register: proxy_results
   changed_when: false
+  failed_when: "proxy_results.rc != 1"
   when:
     - running_on_server
 
@@ -67,20 +78,8 @@
   when: running_on_server
 
 - name: update acme certificates for {{ domain_name }}
-  ansible.builtin.command: /usr/bin/certbot certonly --standalone --non-interactive --agree-tos --email lsupport@princeton.edu --server https://acme.sectigo.com/v2/InCommonRSAOV --eab-kid {{ vault_acme_eab_kid }} --eab-hmac-key {{ vault_acme_eab_hmac_key }} --domain {{ domain_name }}.princeton.edu --cert-name {{ domain_name }}
+  ansible.builtin.command: /usr/bin/certbot certonly --standalone --non-interactive --agree-tos --email lsupport@princeton.edu --server https://acme.sectigo.com/v2/InCommonRSAOV --eab-kid {{ vault_acme_eab_kid }} --eab-hmac-key {{ vault_acme_eab_hmac_key }} --domain {{ domain_name }}.princeton.edu --cert-name {{ domain_place_name }}
   notify: restart ezproxy
-  when: running_on_server
-
-- name: Ezproxy | move certificate files
-  ansible.builtin.copy:
-    src: "{{ item.src }}"
-    dest: "{{ item.dest }}"
-    owner: "{{ deploy_user }}"
-    group: "{{ deploy_user }}"
-    recurse: true
-  loop:
-    - {src: "files/tls/certs/*", dest: "/var/local/ezproxy/tls/"}
-    - {src: "files/tls/priv/*", dest: "/var/local/ezproxy/tls/"}
   when: running_on_server
 
 - name: Ezproxy | Creates a log directory for ezproxy
@@ -198,15 +197,44 @@
     group: root
     mode: a+x
   changed_when: false
+  when:
+    - "'{{ ansible_distribution_release }}' == 'bionic'"
+    - running_on_server
+
+- name: Ezproxy | add shib config user
+  ansible.builtin.template:
+    src: "shibuser.txt.j2"
+    dest: /var/local/ezproxy/shibuser.txt
+    mode: 0644
+    owner: root
+    group: root
+
+- name: Ezproxy | copy a systemd service
+  ansible.builtin.template:
+    src: "ezproxy.service.j2"
+    dest: /var/local/ezproxy/ezproxy.service
+    owner: root
+    group: root
+    mode: a+x
+  changed_when: false
+  when:
+    - "'{{ ansible_distribution_release }}' == 'jammy'"
+    - running_on_server
+  notify: reload ezproxy
+
+- name: Ezproxy | symbolic link
+  ansible.builtin.file:
+    src: /var/local/ezproxy/ezproxy.service
+    dest: /lib/systemd/system/ezproxy.service
+    owner: root
+    group: root
+    state: link
+  when:
+    - "'{{ ansible_distribution_release }}' == 'jammy'"
+    - running_on_server
 
 - name: Ezproxy | start ezproxy
   ansible.builtin.service:
     name: ezproxy
     state: started
-  when: running_on_server
-
-- name: Ezproxy | enable ezproxy
-  ansible.builtin.service:
-    name: ezproxy
-    enabled: true
   when: running_on_server
