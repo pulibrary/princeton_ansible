@@ -1,16 +1,20 @@
 ---
 # tasks file for obsd_httpd
-- name: obsd_httpd | enable httpd
-  ansible.builtin.service:
-    name: "httpd"
-    enabled: true
-    arguments: "{{ httpd_openbsd_flags }}"
+- name: obsd_httpd | install nginx
+  community.general.openbsd_pkg:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - nginx
+    - nginx-headers-more
+    - nginx-lua
+    - nginx-image_filter
 
-- name: obsd_httpd | create or remove log directories
-  ansible.builtin.file:
-    path: "{{ item.path }}"
-    mode: "{{ item.mode }}"
-    owner: "{{ item.owner }}"
-    group: "{{ item.group }}"
-    state: "{% if item.state == 'present' %}directory{% else %}{{ item.state }}{% endif %}"
-  loop: "{{ httpd_openbsd_log_directories }}"
+- name: obsd_httpd | copy config files
+  ansible.builtin.copy:
+    src: files/{{ runtime | default('staging') }}_env.conf
+    dest: /etc/nginx/nginx.conf
+    mode: "0644"
+    group: wheel
+    owner: root
+  notify: restart nginx
