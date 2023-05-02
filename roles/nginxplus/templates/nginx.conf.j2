@@ -54,7 +54,18 @@ http {
                       '$status $body_bytes_sent "$http_referer" '
                       '"$http_user_agent" "$http_x_forwarded_for"';
 
-    access_log  /var/log/nginx/access.log  main;
+    # access_log  /var/log/nginx/access.log  main;
+    access_log /var/log/access.log combined if=$abnormal;
+    access_log /var/log/access_local_normal.log combined if=$normal;
+
+    map $status $normal {
+        ~^2  1;
+        default 0;
+    }
+    map $status $abnormal {
+        ~^2  0;
+        default 1;
+    }
 
     sendfile        on;
     #tcp_nopush     on;
