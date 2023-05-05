@@ -1,8 +1,47 @@
 ---
+# servers
+lib_jobs_staging1: "128.112.203.209"
+library_staging1: "128.112.203.46"
+library_staging2: "128.112.203.47"
+lib_sc_staging1: "128.112.200.75"
+lib_sc_staging2: "128.112.203.117"
+# mounts
+drupal7_fileshare_mount: "/var/nfs/drupal7"
+open_marc_records_mount: "/var/nfs/open_marc_records"
 nfsserver_exports:
-  - share: /var/nfs/open_marc_records
+  - share: "{{ drupal7_fileshare_mount }}"
     hosts:
-      - name: "128.112.203.209"
+      - name: "{{ library_staging1 }}"
+        options:
+          - rw
+          - sync
+          - no_subtree_check
+          - no_root_squash
+          - no_wdelay
+      - name: "{{ library_staging2 }}"
+        options:
+          - rw
+          - sync
+          - no_subtree_check
+          - no_root_squash
+          - no_wdelay
+      - name: "{{ lib_sc_staging1 }}"
+        options:
+          - rw
+          - sync
+          - no_subtree_check
+          - no_root_squash
+          - no_wdelay
+      - name: "{{ lib_sc_staging2 }}"
+        options:
+          - rw
+          - sync
+          - no_subtree_check
+          - no_root_squash
+          - no_wdelay
+  - share: "{{ open_marc_records_mount }}"
+    hosts:
+      - name: "{{ lib_jobs_staging1 }}"
         options:
           - rw
           - sync
