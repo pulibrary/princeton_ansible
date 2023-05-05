@@ -54,16 +54,17 @@ http {
                       '$status $body_bytes_sent "$http_referer" '
                       '"$http_user_agent" "$http_x_forwarded_for"';
 
+    # to log everything to the access log, replace lines ** to ** with the single line below
     # access_log  /var/log/nginx/access.log  main;
+    # defining #loggable here omits any 200 (OK) or 300 (redirected) series https status codes
     map $status $loggable {
         ~^[23]  0;
         default 1;
     }
     
-    access_log /var/log/access.log combined if=$loggable;
+    access_log /var/log/nginx/access.log combined if=$loggable;
 
 
-    access_log  /var/log/nginx/access.log  main;
     #  use intermediate Mozilla SSL configurator
     ssl_protocols TLSv1.2 TLSv1.3;
     ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384;
