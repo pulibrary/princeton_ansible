@@ -25,18 +25,23 @@
       loop: "{{ library_github_keys }}"
       register: library_keys_from_github
       run_once: true
+      when: library_github_keys is defined
+      # we are using 'library_github_keys: []'
+      # not sure if this counts as "defined" or not
 
     - name: get CDH staff keys from github
       ansible.builtin.command: 'curl {{ item }}'
       loop: "{{ cdh_github_keys }}"
       register: cdh_keys_from_github
       run_once: true
+      when: cdh_github_keys is defined
 
     - name: get extra keys (contractors, etc.) from github
       ansible.builtin.command: 'curl {{ item }}'
       loop: "{{ extra_github_keys }}"
       register: extra_keys_from_github
       run_once: true
+      when: extra_github_keys is defined
 
     - name: build authorized keys file
       ansible.builtin.template:
