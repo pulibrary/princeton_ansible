@@ -1,10 +1,15 @@
 ---
-# Only run this playbook on all hosts in a maintenance window, because no one can deploy while the playbook is running.
-# If you are running it outside the maintenance window please run it on one box at a time using a limit flag.
-# For example: `ansible-playbook playbooks/deploy_user.yml --limit slavery-prod1.princeton.edu`
+# by default this playbook runs in the staging environment
+# to run in production, pass '-e runtime_env=production'
+#
+# the full playbook adds the deploy user and sets up its environment,
+# typically on a new VM
+#
+# To update keys on existing machines, run with the update_keys tag:
+#  `ansible-playbook playbooks/deploy_user.yml --tags update_keys`
+#
 - name: Add deploy user
-  hosts: all
-  serial: 2
+  hosts: "{{ runtime_env | default('staging') }}"
   remote_user: pulsys
   become: true
   roles:
@@ -14,4 +19,4 @@
     community.general.slack:
       token: "{{ vault_pul_slack_token }}"
       msg: "Ansible ran `{{ ansible_play_name }}` on {{ inventory_hostname }}"
-      channel: #server-alerts
+      channel: "{{ slack_alerts_channel }}"

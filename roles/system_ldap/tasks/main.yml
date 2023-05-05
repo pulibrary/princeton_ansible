@@ -44,7 +44,7 @@
     - running_on_server
   ignore_errors: true
 
-- name: system_ldap | create alma directory
+- name: system_ldap | create alma directory drop
   ansible.builtin.file:
     path: /alma
     state: directory
@@ -52,12 +52,21 @@
     owner: "{{ almasftp_user }}"
     group: "department 41006 staff@pu.win.princeton.edu"
     mode: 0775
-
+    
 - name: system_ldap | grant {{ deploy_user }} access to alma directory
   ansible.builtin.user:
     name: "{{ deploy_user }}"
     groups: "department 41006 staff@pu.win.princeton.edu"
     append: true
+    
+- name: system_ldap | create aspace directory drop
+  ansible.builtin.file:
+    path: /alma/aspace
+    state: directory
+    recurse: true
+    owner: "{{ aspaceftp_user }}"
+    group: "department 41006 staff@pu.win.princeton.edu"
+    mode: 0775
 
 - name: system_ldap | Flush handlers to be able to use SSSD authentication
   meta: flush_handlers
