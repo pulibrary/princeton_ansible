@@ -12,12 +12,18 @@
 
   tasks:
   # to remove someone's keys from our servers:
-  # remove their keys from the `pulsys_ssh_users` variable
+  # remove their keys from the `***_user_github_keys` variable
   # then run this playbook again
+    - name: get operations staff keys from github
+      ansible.builtin.command: 'curl {{ item }}'
+      loop: "{{ ops_github_keys }}"
+      register: ops_keys_from_github
+      run_once: true
+
     - name: get library staff keys from github
       ansible.builtin.command: 'curl {{ item }}'
-      loop: "{{ pulsys_user_github_keys }}"
-      register: pulsys_user_keys_from_github
+      loop: "{{ library_github_keys }}"
+      register: library_keys_from_github
       run_once: true
 
     - name: get CDH staff keys from github
@@ -26,9 +32,9 @@
       register: cdh_keys_from_github
       run_once: true
 
-    - name: get other staff keys from github
+    - name: get extra keys (contractors, etc.) from github
       ansible.builtin.command: 'curl {{ item }}'
-      loop: "{{ extra_pulsys_github_keys }}"
+      loop: "{{ extra_github_keys }}"
       register: extra_keys_from_github
       run_once: true
 
