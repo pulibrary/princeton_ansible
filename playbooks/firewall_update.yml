@@ -15,9 +15,15 @@
         - pan-python
         - pan-os-python
 
-  - name: Get IP for this VM
-    debug:
-      msg: "{{ hostvars[inventory_hostname]['ansible_env'].SSH_CONNECTION.split(' ')[2] }}"
+  - name: Get IP for VM we're curious about
+    ansible.builtin.shell:
+      cmd: nslookup {{ VM_host_name }}
+    register: ip_in_question
+
+  - name: show IP
+    ansible.builtin.debug:
+      var: ip_in_question
+
   - name: Find all address objects
     paloaltonetworks.panos.panos_object_facts:
       provider: "{{ panos_provider }}"
