@@ -6,7 +6,7 @@
 
   vars_files:
     - ../group_vars/all/vars.yml
-    # some groups have more folks who need acces
+    # some groups have more folks who need access
     - ../group_vars/cdh/common.yml
     - ../group_vars/ealapps/common.yml
 
@@ -25,23 +25,20 @@
       loop: "{{ library_github_keys }}"
       register: library_keys_from_github
       run_once: true
-      when: library_github_keys is defined
-      # we are using 'library_github_keys: []'
-      # not sure if this counts as "defined" or not
+      # To Do: omit library keys from CDH machines
+      # not sure how to do this
 
     - name: get CDH staff keys from github
       ansible.builtin.command: 'curl {{ item }}'
       loop: "{{ cdh_github_keys }}"
       register: cdh_keys_from_github
-      run_once: true
-      when: cdh_github_keys is defined
+      when: "'cdh' in inventory_hostname"
 
-    - name: get extra keys (contractors, etc.) from github
+    - name: get eal keys from github
       ansible.builtin.command: 'curl {{ item }}'
-      loop: "{{ extra_github_keys }}"
-      register: extra_keys_from_github
-      run_once: true
-      when: extra_github_keys is defined
+      loop: "{{ eal_github_keys }}"
+      register: eal_keys_from_github
+      when: "'eal' in inventory_hostname"
 
     - name: build authorized keys file
       ansible.builtin.template:
