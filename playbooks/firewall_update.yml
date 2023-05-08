@@ -34,6 +34,18 @@
   - name: show rules stuff
     ansible.builtin.debug:
       var: sec_rules
+
+  - name: Get the definitions for the rules
+    paloaltonetworks.panos.panos_security_rule_facts:
+    provider: '{{ provider }}'
+      rule_name: "{{ item }}"
+    loop: sec_rules.rule_names
+    register: rule_defs
+
+  - name: show rule defs
+    ansible.builtin.debug:
+      var: rule_defs
+
 # Future work - create tasks to make changes:
   # - name: Generate a new Palo Alto rule set
   #   paloaltonetworks.panos.panos_security_rule:
