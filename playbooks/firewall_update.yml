@@ -15,6 +15,9 @@
         - pan-python
         - pan-os-python
 
+  - name: Get IP for this VM
+    debug:
+      msg: "{{ hostvars[inventory_hostname]['ansible_env'].SSH_CONNECTION.split(' ')[2] }}"
   - name: Find all address objects
     paloaltonetworks.panos.panos_object_facts:
       provider: "{{ panos_provider }}"
@@ -36,8 +39,9 @@
       var: sec_rules
 
   - name: Get the definitions for the rules
-    paloaltonetworks.panos.panos_security_rule_facts:
+    paloaltonetworks.panos.panos_security_rule:
       provider: "{{ panos_provider }}"
+      state: gathered
       rule_name: "{{ item }}"
     loop:
       - LibLab_OutboundImplicitAllow
