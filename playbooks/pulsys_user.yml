@@ -6,9 +6,6 @@
 
   vars_files:
     - ../group_vars/all/vars.yml
-    # some groups have more folks who need access
-    - ../group_vars/cdh/common.yml
-    - ../group_vars/ealapps/common.yml
 
   tasks:
   # to remove someone's keys from our servers:
@@ -25,8 +22,11 @@
       loop: "{{ library_github_keys }}"
       register: library_keys_from_github
       run_once: true
-      # To Do: omit library keys from CDH machines
-      # not sure how to do this
+
+    - name: omit library keys from CDH boxes
+      ansible.builtin.set_fact:
+        library_keys_from_github: []
+      when: "'cdh' in inventory_hostname"
 
     - name: get CDH staff keys from github
       ansible.builtin.command: 'curl {{ item }}'
