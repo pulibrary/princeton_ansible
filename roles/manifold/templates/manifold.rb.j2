@@ -1,0 +1,164 @@
+{{ ansible_managed | comment }}
+## Manifold configuration settings
+##! This file is generated during initial installation and **is not** modified
+##! during upgrades.
+
+
+## Manifold URL
+##! URL on which Manifold will be reachable.
+##! For more details on configuring external_url see:
+external_url '{{ inventory_hostname }}'
+
+##! **Configuration settings below are optional.**
+##! **The values currently assigned are only examples and ARE NOT the default
+##!   values.**
+
+
+################################################################################
+################################################################################
+##                Configuration Settings for Manifold                         ##
+################################################################################
+################################################################################
+
+################################################################################
+## settings.yml configuration
+################################################################################
+
+### Trusted proxies
+###! Customize if you have Manifold behind a reverse proxy which is running on a
+###! different machine.
+###! **Add the IP address for your reverse proxy to the list, otherwise users
+###!   will appear signed in from that address.**
+manifold_api['trusted_proxies'] = [lib-adc.princeton.edu,lib-adc1.princeton.edu,lib-adc2.princeton.edu]
+
+###! **We do not recommend changing these directories.**
+# manifold_api['dir'] = "/var/opt/manifold/manifold-rails"
+# manifold_api['log_directory'] = "/var/log/manifold/manifold-rails"
+
+### Manifold application settings
+# manifold_api['uploads_directory'] = "/var/opt/manifold/manifold-rails/uploads"
+# manifold_api['rate_limit_requests_per_period'] = 10
+# manifold_api['rate_limit_period'] = 60
+
+#### Enable or disable automatic database migrations
+# manifold_api['auto_migrate'] = true
+
+#### Add custom environment to Manifold API
+# manifold_api['env'] = {
+#   FOO => "bar"
+# }
+
+### Manifold database settings
+manifold_api['db_database'] = "{{ manifold_db_name }}"
+manifold_api['db_username'] = "{{ manifold_db_user }}"
+manifold_api['db_password'] = "{{ manifold_db_password }}"
+manifold_api['db_host'] = "{{ postgres_db_host }}"  
+manifold_api['db_port'] = 5432
+
+### Manifold Redis settings
+###! Connect to your own Redis instance
+
+#### Redis TCP connection
+# manifold_api['redis_host'] = "127.0.0.1"
+# manifold_api['redis_port'] = 6379
+# manifold_api['redis_password'] = nil
+# manifold_api['redis_database'] = 0
+
+#### Redis local UNIX socket (will be disabled if TCP method is used)
+# manifold_api['redis_socket'] = "/var/opt/manifold/redis/redis.socket"
+
+################################################################################
+## Manifold User Settings
+################################################################################
+
+user['username'] = "{{ deploy_user }}"
+user['group'] = "{{ deploy_user }}"
+
+##! The shell for the main user
+# user['shell'] = "/bin/sh"
+
+##! The home directory for the main user
+# user['home'] = "/var/opt/manifold"
+user['home'] = "{{ deploy_user_home }}"
+
+################################################################################
+## Manifold Sidekiq
+################################################################################
+
+# sidekiq['log_directory'] = "/var/log/manifold/sidekiq"
+# sidekiq['shutdown_timeout'] = 4
+# sidekiq['concurrency'] = 25
+
+################################################################################
+## Manifold Redis
+##! **Can be disabled if you are using your own Redis instance.**
+################################################################################
+
+# redis['enable'] = true
+# redis['username'] = "manifold-redis"
+# redis['maxclients'] = "10000"
+# redis['tcp_timeout'] = "60"
+# redis['tcp_keepalive'] = "300"
+# redis['uid'] = nil
+# redis['gid'] = nil
+
+### Redis TCP support (will disable UNIX socket transport)
+# redis['bind'] = '0.0.0.0' # or specify an IP to bind to a single one
+# redis['port'] = 6379
+# redis['password'] = 'redis-password-goes-here'
+
+################################################################################
+## Manifold Web server
+################################################################################
+
+##! When bundled nginx is disabled we need to add the external webserver user to
+##! the Manifold webserver group.
+# web_server['external_users'] = []
+# web_server['username'] = 'manifold-www'
+# web_server['group'] = 'manifold-www'
+# web_server['uid'] = nil
+# web_server['gid'] = nil
+# web_server['shell'] = '/bin/false'
+# web_server['home'] = '/var/opt/manifold/nginx'
+
+################################################################################
+## Manifold Logging
+################################################################################
+
+# logging['svlogd_size'] = 200 * 1024 * 1024 # rotate after 200 MB of log data
+# logging['svlogd_num'] = 30 # keep 30 rotated log files
+# logging['svlogd_timeout'] = 24 * 60 * 60 # rotate after 24 hours
+# logging['svlogd_filter'] = "gzip" # compress logs with gzip
+# logging['svlogd_udp'] = nil # transmit log messages via UDP
+# logging['svlogd_prefix'] = nil # custom prefix for log messages
+# logging['logrotate_frequency'] = "daily" # rotate logs daily
+# logging['logrotate_size'] = nil # do not rotate by size by default
+# logging['logrotate_rotate'] = 30 # keep 30 rotated logs
+# logging['logrotate_compress'] = "compress" # see 'man logrotate'
+# logging['logrotate_method'] = "copytruncate" # see 'man logrotate'
+# logging['logrotate_postrotate'] = nil # no postrotate command by default
+# logging['logrotate_dateformat'] = nil # use date extensions for rotated files rather than numbers e.g. a value of "-%Y-%m-%d" would give rotated files like production.log-2016-03-09.gz
+
+################################################################################
+## Logrotate
+##! You can disable built in logrotate feature.
+################################################################################
+
+# logrotate['enable'] = true
+
+################################################################################
+## Users and groups accounts
+##! Disable management of users and groups accounts.
+##! **Set only if creating accounts manually**
+################################################################################
+
+# manage_accounts['enable'] = false
+
+################################################################################
+## Storage directories
+##! Disable managing storage directories
+################################################################################
+
+##! **Set only if the select directories are created manually**
+# manage_storage_directories['enable'] = false
+# manage_storage_directories['manage_etc'] = false
