@@ -1,6 +1,6 @@
 ---
 - name: Update pulsys keys on lib & CDH boxes
-  hosts: "{{ runtime_env | default('staging') }}!cdh_shared_{{ runtime_env | default('staging') }}"
+  hosts: "{{ runtime_env | default('staging') }}:!cdh_shared_{{ runtime_env | default('staging') }}"
   remote_user: pulsys
   become: true
 
@@ -78,6 +78,10 @@
       loop: "{{ cdh_github_keys }}"
       register: cdh_keys_from_github
       run_once: true
+
+    - name: set EAL keys to null
+      ansible.builtin.set_fact:
+        eal_keys_from_github.: []
 
     - name: rebuild shared authorized keys file
       ansible.builtin.template:
