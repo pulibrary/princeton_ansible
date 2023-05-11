@@ -79,9 +79,11 @@
       register: cdh_keys_from_github
       run_once: true
 
-    - name: set EAL keys to null
-      ansible.builtin.set_fact:
-        eal_keys_from_github.: []
+    - name: get eal keys from github
+      ansible.builtin.command: 'curl {{ item }}'
+      loop: "{{ eal_github_keys }}"
+      register: eal_keys_from_github
+      when: "'eal' in inventory_hostname"
 
     - name: rebuild shared authorized keys file
       ansible.builtin.template:
