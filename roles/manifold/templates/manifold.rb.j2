@@ -1,4 +1,5 @@
 {{ ansible_managed | comment }}
+
 ## Manifold configuration settings
 ##! This file is generated during initial installation and **is not** modified
 ##! during upgrades.
@@ -7,7 +8,7 @@
 ## Manifold URL
 ##! URL on which Manifold will be reachable.
 ##! For more details on configuring external_url see:
-external_url '{{ inventory_hostname }}'
+external_url 'http://{{ inventory_hostname }}'
 
 ##! **Configuration settings below are optional.**
 ##! **The values currently assigned are only examples and ARE NOT the default
@@ -32,6 +33,7 @@ external_url '{{ inventory_hostname }}'
 manifold_api['trusted_proxies'] = [lib-adc.princeton.edu,lib-adc1.princeton.edu,lib-adc2.princeton.edu]
 
 ###! **We do not recommend changing these directories.**
+# these may need to be turned into variables when we get there
 # manifold_api['dir'] = "/var/opt/manifold/manifold-rails"
 # manifold_api['log_directory'] = "/var/log/manifold/manifold-rails"
 
@@ -113,13 +115,14 @@ user['home'] = "{{ deploy_user_home }}"
 
 ##! When bundled nginx is disabled we need to add the external webserver user to
 ##! the Manifold webserver group.
-# web_server['external_users'] = []
-# web_server['username'] = 'manifold-www'
-# web_server['group'] = 'manifold-www'
+web_server['external_users'] = [www-data, {{ deploy_user }}]
+web_server['username'] = 'manifold-www'
+web_server['group'] = 'manifold-www'
 # web_server['uid'] = nil
 # web_server['gid'] = nil
 # web_server['shell'] = '/bin/false'
 # web_server['home'] = '/var/opt/manifold/nginx'
+web_server['home'] = '{{ manifold_www_home }}'
 
 ################################################################################
 ## Manifold Logging
