@@ -3,18 +3,11 @@
   hosts: all
   gather_facts: false
   tasks:
-  - name: check ruby package status
-    package:
-      name: "{{ item }}"
-      state: present
-    check_mode: true
-    register: pkg_status
+  - name: test for manifold binary existence
+    ansible.builtin.stat:
+      path: "{{ item }}"
     loop:
-      - ruby-switch
-      - ruby2.6-dev
-      - ruby2.6
-
-  - name: test for ruby packages
-    assert:
-      that:
-        - not pkg_status.changed
+      - "/usr/bin/manifold-ctl"
+    register: manifold_file
+    failed_when:
+      - not manifold_file.stat.exists
