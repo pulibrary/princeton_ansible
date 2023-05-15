@@ -18,6 +18,38 @@ pdc_describe_production_aws_pre_curate_bucket: 'pdc-describe-prod-precuration'
 pdc_describe_production_aws_post_curate_bucket: 'pdc-describe-prod-postcuration'
 pdc_describe_production_aws_dspace_bucket: 'prds-dataspace'
 
+datadog_api_key: "{{ vault_datadog_key }}"
+datadog_config:
+  tags: "application:pdc-describe, environment:production, type:webserver"
+  apm_enabled: "true"
+  log_enabled: true
+  process_config:
+    enabled: "true"
+  apm_config:
+    analyzed_spans:
+      pdc-describe|rack.request: 1
+datadog_checks:
+  ruby:
+    init_config:
+    logs:
+      - type: file
+        path: /opt/pdc_describe/current/log/staging.log
+        service: pdc-describe
+        source: ruby
+  nginx:
+    init_config:
+    logs:
+      - type: file
+        path: /var/log/nginx/access.log
+        service: pdc-describe
+        source: nginx
+        sourcecategory: http_web_access
+      - type: file
+        path: /var/log/nginx/error.log
+        service: pdc-describe
+        source: nginx
+        sourcecategory: http_web_access
+
 # Note that this MUST stay in the environment-specific playbook.
 # Moving any of these to common.yml will not work.
 rails_app_vars:
