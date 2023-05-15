@@ -15,7 +15,7 @@
 
 - name: Grant permissions for deploy user
   ansible.builtin.file:
-    path: "{{ item.doc_root }}"
+    path: "{{ item.repo_root }}"
     state: directory
     owner: "{{ deploy_user }}"
     group: "{{ deploy_user }}"
@@ -28,7 +28,7 @@
   - install_sites
 
 - name: Make repos safe
-  ansible.builtin.command: git config --global --add safe.directory '{{ item.doc_root }}'
+  ansible.builtin.command: git config --global --add safe.directory '{{ item.repo_root }}'
   become: true
   with_items: '{{ named_sites + sites }}'
   changed_when: false
@@ -39,7 +39,7 @@
 - name: Install all git repos
   ansible.builtin.git:
     repo: '{{ item.git_repo }}'
-    dest: '{{ item.doc_root }}'
+    dest: '{{ item.repo_root }}'
     clone: true
     update: true
     force: true
@@ -54,7 +54,7 @@
 
 - name: Grant permissions on deploy user
   ansible.builtin.file:
-    path: "{{ item.doc_root }}"
+    path: "{{ item.repo_root }}"
     state: directory
     owner: "{{ deploy_user }}"
     group: "{{ deploy_user }}"
