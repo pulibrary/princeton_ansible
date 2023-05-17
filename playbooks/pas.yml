@@ -9,10 +9,13 @@
     - ../group_vars/pas/{{ runtime_env | default('staging') }}.yml
     - ../group_vars/pas/common.yml
     - ../group_vars/pas/vault.yml
+    - ../group_vars/nfsserver/common.yml
   vars:
     - pas_upload_path: 'pas/pas-production'
   roles:
+    - role: nfsserver
     - role: roles/pas
+    - role: roles/mailcatcher
     - role: roles/datadog
       when: runtime_env | default('staging') == "production"
   post_tasks:
@@ -20,4 +23,4 @@
       community.general.slack:
         token: "{{ vault_pul_slack_token }}"
         msg: "Ansible ran `{{ ansible_play_name }}` on {{ inventory_hostname }}"
-        channel: #server-alerts
+        channel: "{{ slack_alerts_channel }}"

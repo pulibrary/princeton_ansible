@@ -1,5 +1,29 @@
 ---
 # tasks file for roles/special_collections
+#  create nfs mounts
+- name: special-collection | Create drupal7 directory production
+  ansible.posix.mount:
+    src: "{{ nfs_server_production }}:/var/nfs/drupal7"
+    path: "/mnt/nfs/drupal7"
+    state: mounted
+    fstype: nfs
+    opts: rw,sync,hard
+  when:
+    - running_on_server
+    - "'production' in inventory_hostname"
+  become: true
+
+- name: special-collections | Create drupal7 directory staging
+  ansible.posix.mount:
+    src: "{{ nfs_server_staging }}:/var/nfs/drupal7"
+    path: "/mnt/nfs/drupal7"
+    state: mounted
+    fstype: nfs
+    opts: rw,sync,hard
+  when:
+    - running_on_server
+    - "'staging' in inventory_hostname"
+  become: true
 
 # needed for capistrano to have access to this file
 - name: special-collections | Check to see if .env.local file exists.

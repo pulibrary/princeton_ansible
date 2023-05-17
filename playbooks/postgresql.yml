@@ -1,0 +1,33 @@
+---
+# by default this playbook runs in the staging environment
+# to run in qa, pass '-e runtime_env=qa'
+# to run in production, pass '-e runtime_env=production'
+- name: Build the postgresql project
+  hosts: postgresql_{{ runtime_env | default('staging') }}
+  remote_user: pulsys
+  become: true
+  vars_files:
+    - ../group_vars/postgresql/{{ runtime_env | default('staging') }}.yml
+    - ../host_vars/lib-postgres-staging3.princeton.edu.yml
+    - ../host_vars/lib-postgres-staging2.princeton.edu.yml
+    - ../group_vars/postgresql/vault.yml
+  roles:
+    - role: ../roles/postgresql
+    - role: roles/datadog
+      when: runtime_env | default('staging') == "production"
+
+  post_tasks:
+    - name: Replace node identifier on "{{ leader_db_host }}"
+      ansible.builtin.lineinfile:
+        path: /etc/repmgr.conf
+        regexp: "node_id=2"
+        line: "node_id=1"
+        owner: root
+        group: root
+        mode: '0644'
+      delegate_to: "{{ leader_db_host }}"
+    - name: tell everyone on slack you ran an ansible playbook
+      community.general.slack:
+        token: "{{ vault_pul_slack_token }}"
+        msg: "Ansible ran `{{ ansible_play_name }}` on {{ inventory_hostname }}"
+        channel: "{{ slack_alerts_channel }}"

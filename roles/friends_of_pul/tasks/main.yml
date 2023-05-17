@@ -1,3 +1,25 @@
 ---
 # tasks file for roles/friends_of_pul
+- name: friends_of_pul | Create  drupal7 directory production
+  ansible.posix.mount:
+    src: "{{ nfs_server_production }}:/var/nfs/drupal7"
+    path: "/mnt/nfs/drupal7"
+    state: mounted
+    fstype: nfs
+    opts: rw,sync,hard
+  when:
+    - running_on_server
+    - "'production' in inventory_hostname"
+  become: true
 
+- name: friends_of_pul | Create drupal7 directory staging
+  ansible.posix.mount:
+    src: "{{ nfs_server_staging }}:/var/nfs/drupal7"
+    path: "/mnt/nfs/drupal7"
+    state: mounted
+    fstype: nfs
+    opts: rw,sync,hard
+  when:
+    - running_on_server
+    - "'staging' in inventory_hostname"
+  become: true

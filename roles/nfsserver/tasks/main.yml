@@ -1,10 +1,37 @@
 ---
 # tasks file for nfsserver
+#
+- name: nfsserver | create shares
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    recurse: true
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+    mode: "0755"
+  loop:
+    - "{{ drupal7_fileshare_mount }}"
+    - "{{ pas_fileshare_mount }}"
+    - "{{ open_marc_records_mount }}"
+
+- name: nfsserver | make idmapping work
+  ansible.builtin.copy:
+    content: "options nfsd nfs4_disable_idmapping=N"
+    dest: "/etc/modprobe.d/nfsd.conf"
+    mode: "0644"
+  when: running_on_server
 
 - name: nfsserver | install nfsserver packages
   ansible.builtin.apt:
     name: "{{ nfsserver_packages }}"
     state: present
+  when: nfsserver_is_local
+
+- name: nfsserver | install nfsclient packages
+  ansible.builtin.apt:
+    name: "{{ nfsclient_packages }}"
+    state: present
+  when: not nfsserver_is_local
 
 - name: nfsserver | configure exports
   ansible.builtin.template:
@@ -13,10 +40,12 @@
     mode: "0644"
   notify:
     - reload exports
+  when: nfsserver_is_local
 
 - name: nfsserver | start nfs server
   ansible.builtin.service:
     name: "{{ nfsserver_services }}"
     state: started
     enabled: true
+  when: nfsserver_is_local
   changed_when: false

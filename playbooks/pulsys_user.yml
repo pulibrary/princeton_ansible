@@ -1,0 +1,95 @@
+---
+- name: Update pulsys keys on lib & CDH boxes
+  hosts: "{{ runtime_env | default('staging') }}:!cdh_shared_{{ runtime_env | default('staging') }}"
+  remote_user: pulsys
+  become: true
+
+  vars_files:
+    - ../group_vars/all/vars.yml
+
+  tasks:
+  # to remove someone's keys from our servers:
+  # remove their keys from the `***_user_github_keys` variable
+  # then run this playbook again
+    - name: get operations staff keys from github
+      ansible.builtin.command: 'curl {{ item }}'
+      loop: "{{ ops_github_keys }}"
+      register: ops_keys_from_github
+      run_once: true
+
+    - name: get library staff keys from github
+      ansible.builtin.command: 'curl {{ item }}'
+      loop: "{{ library_github_keys }}"
+      register: library_keys_from_github
+      run_once: true
+
+    - name: omit library keys from CDH boxes
+      ansible.builtin.set_fact:
+        library_keys_from_github: []
+      when: "'cdh' in inventory_hostname"
+
+    - name: get CDH staff keys from github
+      ansible.builtin.command: 'curl {{ item }}'
+      loop: "{{ cdh_github_keys }}"
+      register: cdh_keys_from_github
+      when: "'cdh' in inventory_hostname"
+
+    - name: get eal keys from github
+      ansible.builtin.command: 'curl {{ item }}'
+      loop: "{{ eal_github_keys }}"
+      register: eal_keys_from_github
+      when: "'eal' in inventory_hostname"
+
+    - name: build authorized keys file
+      ansible.builtin.template:
+        src: ../roles/common/templates/pulsys_keys.j2
+        dest: /home/pulsys/.ssh/authorized_keys
+        group: pulsys
+        owner: pulsys
+        mode: '0600'
+        backup: true
+
+- name: Update pulsys user keys on shared boxes
+  hosts: cdh_shared_{{ runtime_env | default('staging') }}
+  remote_user: pulsys
+  become: true
+
+  vars_files:
+    - ../group_vars/all/vars.yml
+
+  tasks:
+  # to remove someone's keys from our servers:
+  # remove their keys from the `***_user_github_keys` variable
+  # then run this playbook again
+    - name: get operations staff keys from github
+      ansible.builtin.command: 'curl {{ item }}'
+      loop: "{{ ops_github_keys }}"
+      register: ops_keys_from_github
+      run_once: true
+
+    - name: get library staff keys from github
+      ansible.builtin.command: 'curl {{ item }}'
+      loop: "{{ library_github_keys }}"
+      register: library_keys_from_github
+      run_once: true
+
+    - name: get CDH staff keys from github
+      ansible.builtin.command: 'curl {{ item }}'
+      loop: "{{ cdh_github_keys }}"
+      register: cdh_keys_from_github
+      run_once: true
+
+    - name: get eal keys from github
+      ansible.builtin.command: 'curl {{ item }}'
+      loop: "{{ eal_github_keys }}"
+      register: eal_keys_from_github
+      when: "'eal' in inventory_hostname"
+
+    - name: rebuild shared authorized keys file
+      ansible.builtin.template:
+        src: ../roles/common/templates/pulsys_keys.j2
+        dest: /home/pulsys/.ssh/authorized_keys
+        group: pulsys
+        owner: pulsys
+        mode: '0600'
+        backup: true

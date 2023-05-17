@@ -8,11 +8,13 @@
   vars_files:
     - ../group_vars/recap/{{ runtime_env | default('staging') }}.yml
     - ../group_vars/recap/common.yml
+    - ../group_vars/nfsserver/common.yml
     - ../group_vars/recap/vault.yml
   vars:
     - force_settings: true
     - drupal_git_repo: ''
   roles:
+    - role: nfsserver
     - role: datadog
       when: runtime_env | default('staging') == "production"
     - role: recap_www
@@ -21,4 +23,4 @@
       community.general.slack:
         token: "{{ vault_pul_slack_token }}"
         msg: "Ansible ran `{{ ansible_play_name }}` on {{ inventory_hostname }}"
-        channel: #server-alerts
+        channel: "{{ slack_alerts_channel }}"
