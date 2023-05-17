@@ -1,0 +1,32 @@
+{{ ansible_managed | comment }}
+## ops staff keys go on all machines
+# Keys for Operations Staff
+{% for item in ops_keys_from_github.results %}
+# Keys for {{ item.item | regex_search("[^\/]*(?=.keys)") }}
+{{ item.stdout }}
+{% endfor %}
+## library staff keys go on all machines except CDH
+## the playbook sets this var to null ([]) for CDH machines
+{% if library_keys_from_github != [] %}
+# Keys for Library Staff
+{% for item in library_keys_from_github.results %}
+# Keys for {{ item.item | regex_search("[^\/]*(?=.keys)") }}
+{{ item.stdout }}
+{% endfor %}
+{% endif %}
+## CDH staff keys go only on CDH machines
+{% if cdh_keys_from_github.changed %}
+# Keys for CDH Staff
+{% for item in cdh_keys_from_github.results %}
+# Keys for {{ item.item | regex_search("[^\/]*(?=.keys)") }}
+{{ item.stdout }}
+{% endfor %}
+{% endif %}
+## EAL keys go only on EAL machines
+{% if eal_keys_from_github.changed %}
+# EAL Keys
+{% for item in eal_keys_from_github.results %}
+# Keys for {{ item.item | regex_search("[^\/]*(?=.keys)") }}
+{{ item.stdout }}
+{% endfor %}
+{% endif %}

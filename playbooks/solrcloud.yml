@@ -1,23 +1,25 @@
 ---
 # by default this playbook runs in the staging environment
+# to run in qa, pass '-e runtime_env=qa'
 # to run in production, pass '-e runtime_env=production'
-- name: build the princeton and slavery site
-  hosts: pas_{{ runtime_env | default('staging') }}
+# --skip-tags mnt
+# add the above command line option to run this playbook
+# no shared backup is configured
+- name: Build the solrcloud project
+  hosts: solrcloud_{{ runtime_env | default('staging') }}
   remote_user: pulsys
   become: true
   vars_files:
-    - ../group_vars/pas/{{ runtime_env | default('staging') }}.yml
-    - ../group_vars/pas/common.yml
-    - ../group_vars/pas/vault.yml
-    - ../group_vars/nfsserver/common.yml
-  vars:
-    - pas_upload_path: 'pas/pas-production'
+    - ../site_vars.yml
+    - ../group_vars/solrcloud/solrcloud_staging.yml
+    - ../group_vars/solrcloud/vault.yml
   roles:
-    - role: nfsserver
-    - role: roles/pas
-    - role: roles/mailcatcher
+    - role: roles/openjdk
+    - role: roles/ruby
+    - role: roles/deploy_user
+    - role: roles/solrcloud
     - role: roles/datadog
-      when: runtime_env | default('staging') == "production"
+
   post_tasks:
     - name: tell everyone on slack you ran an ansible playbook
       community.general.slack:
