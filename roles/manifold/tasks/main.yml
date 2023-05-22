@@ -1,5 +1,19 @@
 ---
 # tasks file for manifold
+- name: Manifold | Allow deploy user run manifold-api
+  ansible.builtin.lineinfile:
+    dest: "/etc/sudoers"
+    state: "present"
+    line: "{{ deploy_user }} ALL=(ALL) NOPASSWD: /usr/bin/manifold-api"
+    validate: "visudo -cf %s"
+
+- name: Manifold | Allow deploy user run manifold-ctl
+  ansible.builtin.lineinfile:
+    dest: "/etc/sudoers"
+    state: "present"
+    line: "{{ deploy_user }} ALL=(ALL) NOPASSWD: /usr/bin/manifold-ctl"
+    validate: "visudo -cf %s"
+
 - name: Manifold | download manifold installer
   ansible.builtin.get_url:
     url: "{{ manifold_download_url }}/{{ ubuntu_version }}/{{ manifold_version }}_amd64.deb"
@@ -13,6 +27,14 @@
 - name: Manifold | install manifold package
   ansible.builtin.apt:
     deb: /tmp/{{ manifold_version }}_amd64.deb
+
+- name: Manifold | grant recursive permission
+  ansible.builtin.file:
+    path: /opt/manifold
+    state: directory
+    recurse: true
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
 
 - name: Manifold | add template config
   ansible.builtin.template:
