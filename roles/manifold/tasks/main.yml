@@ -21,3 +21,16 @@
     owner: "{{ deploy_user }}"
     group: "{{ deploy_user }}"
     mode: '0600'
+  notify: restart manifold
+
+- name: Manifold | reconfigure manifold
+  ansible.builtin.command:
+    cmd: /usr/bin/manifold-ctl reconfigure --accept-license
+  changed_when: false
+
+- name: Manifold | initialize user
+  ansible.builtin.command:
+    cmd: /usr/bin/manifold-api manifold:user:create:admin["{{ user_email }}","{{ user_password }}","{{ user_firstname }}","{{ user_lastname }}"]
+  become: true
+  become_user: "{{ deploy_user }}"
+  changed_when: false
