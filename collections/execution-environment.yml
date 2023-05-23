@@ -1,0 +1,82 @@
+---
+# this file is a container-file generator
+# once the container file (def) is done, ansible-builder creates 
+# a container file, and optionally also builds an image
+# based on the container file
+# you can set builder to NOT actually build the image if you 
+# want to use, say, Quay.io's builder services (or other)
+#
+# code is at https://github.com/ansible/ansible-builder
+#
+# current docs at ansible-builder.readthedocs.io
+# 
+# you should be able to use the simpler EE definition
+# with builder 3, insntead of creating and committing 
+# yoru containerfile as an intermediate step
+#
+#
+# must declare a builder schema version
+version: 3
+# msut define base iumage
+images:
+  base_image:
+    name: quay.io/centos/centos:stream9
+    # typical container ref is host/namespace/container:tag
+    # registry.fedoraproject.org/
+    # can also use podman or docker shortcuts, but the full def is more portable/reliable
+    # builder will warn if you don't install ansible
+dependencies:
+  # don't have to specify the python if python is included in the base image
+  python_interpreter: 
+    # requires the python we will call when we need to use python
+    python_path: /usr/bin/python3.11
+    # the default is /usr/bin/python3
+    # some base images have no python installed
+    # python will be installed with the package manager you define
+    # default is DNF
+    # package_system is only for python
+    package_system: python3.11
+  ansible_core:
+    package_pip: ansible<=7
+    # accepts standard pip syntax for defining versions
+  ansible_runner:
+    package_pip: ansible-runner
+  # at this stage we have a vanilla container - it will build
+  # but there are no collections or other dependencies included
+  galaxy: requirements.yml # if defining in a separate requirements.yml, it must be in the same directory as the execution-environment.yml file or in a child directory on tne sa me path, not a random external path
+  # default behavior is to pull the collections in this list
+  # and run through their dependencies and install those
+  # as well
+  # currently you cannot turn this behavior off - comign soon!
+  # you can embed your entire file as a string:
+  # galaxy: |
+      # with the pipe above, you can just copy your 
+      #  requirements.yml with all your comments etc. there
+      # This file tells Ansible Tower which collections to
+      # load on the execution environment at runtime
+      #collections:
+      # Copied from https://github.com/ansible-community/ansible-build-data/blob/main/5/ansible-5.4.0.deps
+      #  - name: ansible.netcommon
+      #    version: 2.5.1
+      #  - name: ansible.posix
+      #    version: 1.3.0
+  # or you can put the yaml inside the yaml like This
+  # galaxy:
+  #   collections:
+  #     - name: ansible.netcommon
+  #       version: 2.5.1
+  #     - name: ansible.posix
+  #       version: 1.3.0
+  python: # can pass a file here or a list - file must be in the dir or path below ./
+    # accepts the normal pip syntax for defining versions
+    - pan-python
+    - pan-os-python
+  system:
+    # uses a standard bindep format
+    # can be os flavor-agnostic (use apt, etc.)
+    - python3-dnf
+additional_build_steps:
+  # items in the list of append_base steps are expressed
+  # as containerfile directives
+  append_base:
+    - RUN dnf install git -y
