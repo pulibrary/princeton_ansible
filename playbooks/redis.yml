@@ -7,9 +7,12 @@
   become: true
   vars_files:
     - ../group_vars/redis/common.yml
+    - ../group_vars/redis/{{ runtime_env | default('staging') }}.yml
     - ../group_vars/redis/vault.yml
   roles:
     - role: roles/redis
+    - role: roles/datadog
+      when: runtime_env | default('staging') == "production"
 
   post_tasks:
     - name: tell everyone on slack you ran an ansible playbook
