@@ -1,5 +1,4 @@
 # NOTE
-# If you are backing up `bibdata` please be sure to notify the @dacs team to turn off scheduling of publishing jobs in alma
 # You must use command-line "extra variables" with this playbook to define:
 # - the project_name you intend to backup
 # - the host where the current database lives, with --limit 
@@ -38,7 +37,7 @@
     - deploy_user: "pulsys"
     - file_path: "/mnt/diglibdata1/postgreslog/migrate"
     - dest_file_path: "/var/lib/migrate"
-    - now: "{{ ansible_date_time.date }}"
+    - backup_time: "{{ ansible_date_time.date }}"
   vars_files:
     - ../group_vars/{{ project_name }}/{{ app_runtime_env | default(runtime_env) | default('staging') }}.yml
     # - ../group_vars/{{ project_name }}/main.yml  # some roles have this
@@ -47,7 +46,7 @@
   tasks:
     - name: Create a backup directory
       file:
-        path: "/mnt/diglibdata1/postgreslog/migrate/{{ now }}/"
+        path: "/mnt/diglibdata1/postgreslog/migrate/{{ backup_time }}/"
         mode: 0777
         owner: "{{ deploy_user }}"
         state: directory
@@ -56,7 +55,7 @@
       postgresql_db:
         state: dump
         name: "{{ application_db_name }}"
-        target: "{{ file_path }}/{{ now }}/{{ application_db_name }}.dump.sql"
+        target: "{{ file_path }}/{{ backup_time }}/{{ application_db_name }}.dump.sql"
       become: true
       become_user: postgres
       # async allows for long-running tasks
@@ -66,21 +65,21 @@
 
     - name: gzip dumped database
       community.general.archive:
-        path: "/mnt/diglibdata1/postgresqlog/{{ now }}/{{ application_db_name }}.dump.sql"
-        dest: "{{ dest_file_path }}/{{ now }}/{{ application_db_name }}.dump.gz"
+        path: "/mnt/diglibdata1/postgresqlog/{{ backup_time }}/{{ application_db_name }}.dump.sql"
+        dest: "{{ dest_file_path }}/{{ backup_time }}/{{ application_db_name }}.dump.gz"
         format: gz
         force_archive: true
 
     - name: file permissions
       ansible.builtin.file:
-        path: "{{ file_path }}/{{ now }}/{{ application_db_name }}.dump.gz"
+        path: "{{ file_path }}/{{ backup_time }}/{{ application_db_name }}.dump.gz"
         owner: "{{ deploy_user }}"
         group: "{{ deploy_user }}"
         mode: 0644
 
     - name: create /var/lib/migrate on dest_host
       file:
-        path: "/var/lib/migrate/{{ now }}/"
+        path: "/var/lib/migrate/{{ backup_time }}/"
         mode: 0777
         owner: "{{ deploy_user }}"
         state: directory
@@ -119,14 +118,14 @@
       delegate_to: "{{ dest_host }}"
 
     - name: transfer the databases
-      ansible.builtin.command: /usr/bin/rsync -avz "{{ file_path }}/{{ now }}/{{ application_db_name }}.dump.gz" "{{ dest_host }}:{{ dest_file_path }}/{{ now }}" -e "ssh -o StrictHostKeyChecking=no"
+      ansible.builtin.command: /usr/bin/rsync -avz "{{ file_path }}/{{ backup_time }}/{{ application_db_name }}.dump.gz" "{{ dest_host }}:{{ dest_file_path }}/{{ backup_time }}" -e "ssh -o StrictHostKeyChecking=no"
       become: true
       become_user: "{{ deploy_user }}"
 
     - name: unzip dumped database on dest_host
       ansible.builtin.unarchive:
-        src: "/var/lib/migrate/{{ now }}/{{ application_db_name }}.dump.gz"
-        dest: "/var/lib/migrate/{{ now }}/"
+        src: "/var/lib/migrate/{{ backup_time }}/{{ application_db_name }}.dump.gz"
+        dest: "/var/lib/migrate/{{ backup_time }}/"
         remote_src: true
         owner: postgres
         group: postgres
@@ -176,7 +175,7 @@
         login_user: '{{ postgres_admin_user | default(omit) }}'
         login_password: '{{ postgres_admin_password | default(omit) }}'
         owner: '{{ application_dbuser_name }}'
-        target: "{{ dest_file_path }}/{{ now }}/{{ application_db_name }}.dump.sql"
+        target: "{{ dest_file_path }}/{{ backup_time }}/{{ application_db_name }}.dump.sql"
         state: 'restore'
       become: true
       become_user: postgres
