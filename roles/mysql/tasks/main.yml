@@ -9,7 +9,7 @@
 
 - name: MySQL | Install MariaDB repository
   ansible.builtin.apt_repository:
-    repo: "deb [arch=amd64] https://mirrors.accretive-networks.net/mariadb/repo/10.3/ubuntu {{ ansible_distribution_release }} main"
+    repo: "deb [arch=amd64] https://mirrors.accretive-networks.net/mariadb/repo/10.6/ubuntu {{ ansible_distribution_release }} main"
     state: present
     validate_certs: false
   when: install_app_key.changed
@@ -40,6 +40,7 @@
     name: mysql
     state: restarted
   when:
+    - running_on_server
     - mysql_server
     - install_app_key.changed
 
@@ -52,6 +53,7 @@
     name: 'root'
     password: "{{ mysql_root_password }}"
   when:
+    - running_on_server
     - mysql_server
     - install_app_key.changed
 
@@ -93,6 +95,7 @@
     state: started
     enabled: true
   when:
+    - running_on_server
     - mysql_server
 
 - name: MySQL | add root my.cnf
@@ -101,6 +104,7 @@
     dest: /root/.my.cnf
     mode: "0640"
   when:
+    - running_on_server
     - mysql_server
 
 - name: MySQL | add "{{ deploy_user }}" my.cnf
@@ -127,6 +131,7 @@
     - ::1
     - localhost
   when:
+    - running_on_server
     - mysql_server
     - running_on_server
 
@@ -140,6 +145,7 @@
     - "{{ ansible_hostname }}"
     - 127.0.0.1
   when:
+    - running_on_server
     - mysql_server
     - running_on_server
 
@@ -148,6 +154,7 @@
     name: test
     state: absent
   when:
+    - running_on_server
     - mysql_server
     - running_on_server
   notify:
@@ -168,6 +175,7 @@
   loop_control:
     label: "{{ item.name }}"
   when:
+    - running_on_server
     - mysql_databases is defined
     - mysql_server
     - running_on_server
@@ -187,6 +195,7 @@
   delegate_to: "{{ mysql_host }}"
   loop: "{{ mysql_databases }}"
   when:
+    - running_on_server
     - mysql_databases is defined
     - running_on_server
   no_log: true
@@ -206,6 +215,7 @@
     login_password: "{{ mysql_root_password }}"
   loop: "{{ mysql_users }}"
   when:
+    - running_on_server
     - mysql_users is defined
     - mysql_server
     - running_on_server
