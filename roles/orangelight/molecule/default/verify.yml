@@ -5,13 +5,9 @@
   hosts: all
   gather_facts: false
   tasks:
-  - name: check ruby package status
-    package:
-      name: "{{ item }}"
-      state: present
-    check_mode: true
-    register: pkg_status
-    loop:
-      - ruby-switch
-      - ruby2.7-dev
-      - ruby2.7
+  - name: test for ruby_binary
+    ansible.builtin.stat:
+      path: "/usr/local/bin/ruby"
+    register: ruby_binary
+    failed_when:
+      - not ruby_binary.stat.exists
