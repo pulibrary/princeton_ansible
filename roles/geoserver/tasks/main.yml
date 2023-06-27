@@ -1,29 +1,33 @@
 ---
 - name: geoserver | stop tomcat server
-  service:
+  ansible.builtin.service:
     name: tomcat9
     state: stopped
+  when:
+    - running_on_server
   changed_when: false
 
 - name: unarchive war file
-  unarchive:
+  ansible.builtin.unarchive:
     src: "{{ geoserver_url }}/{{ geoserver_version }}/{{ geoserver_file }}"
-    dest: /var/lib/tomcat8/webapps
+    dest: /var/lib/tomcat9/webapps
     remote_src: true
+  when:
+    - running_on_server
   notify:
     - restart tomcat
   changed_when: false
 
 - name: Configure postgresql repository key
-  apt_key:
+  ansible.builtin.apt_key:
     url: "{{ postgresql_apt_key_url }}"
 
 - name: Configure postgresql repository
-  apt_repository:
+  ansible.builtin.apt_repository:
     repo: "{{ postgresql_apt_repo }}"
 
 - name: add postgresql repository
-  apt_repository:
+  ansible.builtin.apt_repository:
     repo: 'deb http://apt.postgresql.org/pub/repos/apt/ {{ ansible_distribution_release }}-pgdg main'
     state: present
 
@@ -35,7 +39,7 @@
     - restart postgresql
 
 - name: Create symlinks
-  file:
+  ansible.builtin.file:
     src: '{{ item.src }}'
     dest: '{{ item.link }}'
     owner: '{{ deploy_user }}'
@@ -44,10 +48,11 @@
     force: true
   with_items:
     - src: '/srv/shares/plum_geo_data'
-      link: '/var/lib/tomcat8/webapps/geoserver/data/plum_geo_data'
+      link: '/var/lib/tomcat9/webapps/geoserver/data/plum_geo_data'
     - src: '/srv/shares/figgy_geo_data'
-      link: '/var/lib/tomcat8/webapps/geoserver/data/figgy_geo_data'
+      link: '/var/lib/tomcat9/webapps/geoserver/data/figgy_geo_data'
     - src: '/mnt/libimages2/data/jp2s/plum_prod'
-      link: '/var/lib/tomcat8/webapps/geoserver/data/plum_prod'
-  when: running_on_server
+      link: '/var/lib/tomcat9/webapps/geoserver/data/plum_prod'
+  when:
+    - running_on_server
   changed_when: false
