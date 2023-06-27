@@ -7,7 +7,7 @@
     - running_on_server
   changed_when: false
 
-- name: unarchive war file
+- name: geoserver | unarchive war file
   ansible.builtin.unarchive:
     src: "{{ geoserver_url }}/{{ geoserver_version }}/{{ geoserver_file }}"
     dest: /var/lib/tomcat9/webapps
@@ -18,27 +18,31 @@
     - restart tomcat
   changed_when: false
 
-- name: Configure postgresql repository key
+- name: geoserver | Configure postgresql repository key
   ansible.builtin.apt_key:
     url: "{{ postgresql_apt_key_url }}"
 
-- name: Configure postgresql repository
+- name: geoserver | Configure postgresql repository
   ansible.builtin.apt_repository:
     repo: "{{ postgresql_apt_repo }}"
 
-- name: add postgresql repository
+- name: geoserver | add postgresql repository
   ansible.builtin.apt_repository:
     repo: 'deb http://apt.postgresql.org/pub/repos/apt/ {{ ansible_distribution_release }}-pgdg main'
     state: present
 
-- name: install postgis software
+- name: geoserver | install postgis software
   ansible.builtin.apt:
-    name: ["postgresql-14-postgis-3", "postgis", "postgresql-14-pgrouting"]
+    name: "{{ item }}"
     state: present
+  loop:
+    - "postgresql-14-postgis-3"
+    - "postgis"
+    - "postgresql-14-pgrouting"
   notify:
     - restart postgresql
 
-- name: Create symlinks
+- name: geoserver | Create symlinks
   ansible.builtin.file:
     src: '{{ item.src }}'
     dest: '{{ item.link }}'
