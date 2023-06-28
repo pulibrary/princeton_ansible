@@ -1,11 +1,11 @@
 ---
 # tasks file for roles/simple_annotation
 - name: Simple annotation | install apache2 modules
-  apache2_module:
+  community.general.apache2_module:
     name: "{{ item }}"
     state: present
   notify: restart apache
-  with_items:
+  loop:
     - proxy
     - proxy_http
     - proxy_balancer
@@ -13,29 +13,29 @@
     - remoteip
 
 - name: Simple annotation | install dependencies
-  apt:
+  ansible.builtin.apt:
     name:
       - libapache2-mod-auth-cas
 
 - name: Simple annotation | install dependencies
-  apt:
+  ansible.builtin.apt:
     name:
       - maven
     state: present
   when: running_on_server
 
 - name: Simple annotation | add our location based config
-  template:
+  ansible.builtin.template:
     src: "apache2-site.conf.j2"
     dest: "/etc/apache2/sites-available/000-default.conf"
     mode: 0644
   changed_when: false
   notify: restart apache
   become: true
-  with_items: "{{ named_sites }}"
+  loop: "{{ named_sites }}"
 
 - name: Simple annotation | Add apache rules for cas
-  blockinfile:
+  ansible.builtin.blockinfile:
     path: "/etc/apache2/sites-available/000-default.conf"
     marker: "## {mark} ANSIBLE MANAGED BLOCK ##"
     insertafter: "</VirtualHost>"
@@ -47,20 +47,20 @@
   notify: restart apache
 
 - name: Simple annotation | create package directory
-  file:
+  ansible.builtin.file:
     path: "/opt/simple_annotation"
     state: "directory"
     mode: 0755
 
 - name: Simple annotation | Download and untar
-  unarchive:
+  ansible.builtin.unarchive:
     remote_src: true
     src: "{{ simple_annotation_download_url }}"
     dest: "/opt/simple_annotation"
     creates: "/opt/simple_annotation/SimpleAnnotationServer-server-{{ simple_annotation_tag }}"
 
 - name: Simple annotation | Start jetty
-  shell: nohup mvn jetty:run > simple_annotation.out 2>&1 &
+  ansible.builtin.shell: nohup mvn jetty:run > simple_annotation.out 2>&1 &
   args:
     chdir: /opt/simple_annotation/SimpleAnnotationServer-{{ simple_annotation_tag }}
   changed_when: false
