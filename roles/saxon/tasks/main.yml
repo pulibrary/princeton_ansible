@@ -1,21 +1,27 @@
 ---
 # tasks file for roles/saxon
-- name: extract saxon file
-  unarchive:
+- name: saxon | extract saxon file
+  ansible.builtin.unarchive:
     src: "https://sourceforge.net/projects/saxon/files/Saxon-HE/{{ saxon_major }}/{{ saxon_version }}.zip/download"
     dest: "/usr/share/java"
     remote_src: true
+  when:
+    - running_on_server
 
-- name: copy xslt query
-  copy:
+- name: saxon | copy xslt query
+  ansible.builtin.copy:
     src: "saxon9he-xquery.sh"
     dest: "/usr/local/bin/saxon9he-xquery"
     mode: u=rwx,g=rx,o=rx
+  when:
+    - running_on_server
   changed_when: false
 
-- name: copy xslt transform
-  copy:
+- name: saxon | copy xslt transform
+  ansible.builtin.copy:
     src: "saxon9he-xslt.sh"
     dest: "/usr/local/bin/saxon9he-xslt"
     mode: u=rwx,g=rx,o=rx
+  when:
+    - running_on_server
   changed_when: false
