@@ -51,7 +51,6 @@ Make sure docker is running before you run the following (from inside the `pipen
 
 ```bash
 cd roles/common
-pip3 install 'molecule-plugins[docker]'
 molecule test
 ```
 
@@ -64,7 +63,7 @@ In all the steps below substitute your role name for `your_new_role`
    Run the following command from the root of this repo:
 
    ```bash
-   export your_new_role=<fill in the role name here>
+   export your_new_role=pulibrary.role_name
    cd roles
    molecule init role $your_new_role
    cd ..
