@@ -22,6 +22,10 @@ Role Variables
 - `datadog_agent_version` - The pinned version of the Agent to install (optional, but highly recommended)
   Examples: `1:6.0.0-1` on apt-based platforms, `6.0.0-1` on yum-based platforms
 - `datadog_checks` - YAML configuration for agent checks to drop into `/etc/dd-agent/conf.d`.
+- `datadog_typed_checks` - YAML configuration that go in their own
+subdirectory within `/etc/dd-agent/conf.d`.  For example, a
+`datadog_typed_checks` with a type of `nginx` will be placed
+into a file called `/etc/dd-agent/conf.d/nginx.d/conf.yaml`.
 - `datadog_config` - Settings to place in the `/etc/dd-agent/datadog.conf` INI file that go under the `[Main]` section.
 - `datadog_config_ex` - Extra INI sections to go in `/etc/dd-agent/datadog.conf` (optional).
 - `datadog_apt_repo` - Override default Datadog `apt` repository
@@ -76,16 +80,6 @@ Example Playbooks
       trace.concentrator:
         extra_aggregators: version
     datadog_checks:
-      process:
-        init_config:
-        instances:
-          - name: ssh
-            search_string: ['ssh', 'sshd' ]
-          - name: syslog
-            search_string: ['rsyslog' ]
-            cpu_check_interval: 0.2
-            exact_match: true
-            ignore_denied_access: true
       ssh_check:
         init_config:
         instances:
@@ -96,27 +90,39 @@ Example Playbooks
             sftp_check: True
             private_key_file:
             add_missing_keys: True
-      nginx:
-        init_config:
-        instances:
-          - nginx_status_url: http://example.com/nginx_status/
-            tags:
-              - instance:foo
-          - nginx_status_url: http://example2.com:1234/nginx_status/
-            tags:
-              - instance:bar
-        #Log collection is available on agent 6
-        logs:
-          - type: file
-            path: /var/log/access.log
-            service: myapp
-            source: nginx
-            sourcecategory: http_web_access
-          - type: file
-            path: /var/log/error.log
-            service: nginx
-            source: nginx
-            sourcecategory: http_web_access
+    # These typed checks will gather the information
+    # needed for the nginx dashboard in datadog.
+    datadog_typed_checks:
+      - type: process
+        configuration:
+          init_config:
+          instances:
+            - name: myapplicationname
+              service: myapplicationname
+              search_string:
+                - nginx
+            - name: ssh
+              search_string: ['ssh', 'sshd' ]
+            - name: syslog
+              search_string: ['rsyslog' ]
+              cpu_check_interval: 0.2
+              exact_match: true
+              ignore_denied_access: true
+      - type: nginx
+        configuration:
+          init_config:
+          instances:
+            - nginx_status_url: http://localhost:80/nginx_status/
+          logs:
+            - type: file
+              path: /var/log/nginx/access.log
+              source: nginx
+            - type: file
+              path: /var/log/nginx/error.log
+              source: nginx
+            - type: file
+              path: /opt/myrailsapp/current/log/production.log
+              source: rails
 ```
 
 ```yml
