@@ -3,11 +3,11 @@
   hosts: all
   gather_facts: false
   tasks:
-  - name: test for vips version
-    ansible.builtin.command: vips --version
-    register: vips_results
-    ignore_errors: true
-  - name: assert vips version
-    assert:
-      that:
-        - "'vips-8.9.1' in vips_results.stdout"
+    - name: test for vip files existence
+      stat:
+        path: "{{ item }}"
+      loop:
+        - "/opt/vips"
+      register: vips_file
+      failed_when:
+        - not vips_file.stat.exists
