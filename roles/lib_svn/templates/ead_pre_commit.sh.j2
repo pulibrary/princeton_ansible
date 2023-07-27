@@ -1,10 +1,8 @@
-#!/bin/bash
+#!/bin/sh
+# {{ ansible_managed }}
 
 REPOS="$1"
 TXN="$2"
-AWK=/usr/bin/awk
-XMLLINT=/usr/bin/xmllint
-EADSCHEMA='{{ lib_svn_repo_dir }}/ead.xsd'
 
 # Make sure that the log message contains some text.
 SVNLOOK=/usr/bin/svnlook
@@ -14,10 +12,10 @@ $SVNLOOK log -t "$TXN" "$REPOS" | \
 # Exit on all errors.
 set -e
 
-for FILE in $($SVNLOOK changed $REPOS -t $TXN | $AWK -F '   ' '{IGNORECASE = 1; if (($1 ~ /^A|U/) && ($2 ~ /\.(EAD.xml)$/)) print $2};')
-do
-    $XMLLINT -schema $EADSCHEMA <($SVNLOOK cat -t $TXN $REPOS $FILE)
-done
+# Check that the author of this commit has the rights to perform
+# the commit on the files and directories being modified.
+"$REPOS"/hooks/commit-access-control.pl "$REPOS" $TXN \
+  "$REPOS"/hooks/commit-access-control.cfg
 
 # All checks passed, so allow the commit.
 exit 0
