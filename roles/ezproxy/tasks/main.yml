@@ -7,13 +7,20 @@
     owner: "{{ deploy_user }}"
     mode: 0755
 
-- name: Ezproxy | copy ezproxy binary and shibboleth idp file
+- name: Ezproxy | copy ezproxy binary
   ansible.builtin.copy:
     src: "{{ item }}"
     dest: "/var/local/ezproxy/ezproxy"
     mode: 0755
   loop:
     - "files/ezproxy.bin"
+
+- name: Ezproxy | copy idp_file and allow file
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "/var/local/ezproxy"
+    mode: 0755
+  loop:
     - "files/idp_princeton.xml"
     - "files/princeton_allow.txt"
 
@@ -30,6 +37,17 @@
     state: present
   when:
     - "'{{ ansible_distribution_release }}' == 'jammy'"
+
+- name: Ezproxy | copy ezproxy config.txt
+  ansible.builtin.template:
+    src: "config.txt.j2"
+    dest: "/var/local/ezproxy/config.txt"
+    owner: root
+    group: root
+    mode: "0644"
+  changed_when: false
+  when:
+    - running_on_server
 
 - name: Ezproxy | install missing file replacements
   ansible.builtin.command: /var/local/ezproxy/ezproxy -m
@@ -187,14 +205,6 @@
   when:
     - running_on_server
 
-- name: Ezproxy | assign hostname
-  ansible.builtin.template:
-    src: "hostname.txt.j2"
-    dest: "/var/local/ezproxy/hostname.txt"
-    owner: "{{ deploy_user }}"
-    group: "{{ deploy_user }}"
-    mode: 0644
-
 - name: Ezproxy | install ezproxy startup script (requires root)
   ansible.builtin.command: /var/local/ezproxy/ezproxy -si
   become: true
@@ -222,16 +232,6 @@
     owner: root
     group: root
 
-- name: Ezproxy | copy ezproxy config.txt
-  ansible.builtin.template:
-    src: "config.txt.j2"
-    dest: "/var/local/ezproxy/config.txt"
-    owner: root
-    group: root
-    mode: "0644"
-  changed_when: false
-  when:
-    - running_on_server
 
 - name: Ezproxy | copy a systemd service
   ansible.builtin.template:
