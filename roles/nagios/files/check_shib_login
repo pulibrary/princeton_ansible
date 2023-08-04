@@ -1,0 +1,128 @@
+#!/bin/bash
+
+# This script is used make a full roundtrip test to SimpleSAMLphp based SSO
+# Exit statuses indicate problem and are suitable for usage in Nagios.
+# originally copied from 
+# https://gist.githubusercontent.com/borgand/6714584/raw/6c6ad24f65ef1ea76083e961c984def0ce8d296c/auth_test.sh
+
+SCRIPTNAME=$(basename $0)
+
+if [[ $1 == '-h' || $1 == '--help' ]]; then
+  cat <<EOF
+USAGE: $SCRIPTNAME [URL] [test-string] [username] [password]
+
+Default values:
+  URL         - https://example.com/authtest
+  test-string - SUCCESS
+  username    - test
+  password    - test
+
+Exit statuses (Nagios Plugin API):
+
+  0  - OK
+  1  - Warning (long overall time)
+  2  - Critical (could not finish AUTH)
+  3  - Unknown (process could not finish correctly)
+EOF
+fi
+
+# The url to be tested
+TESTSITE=${1:-https://example.com/authtest}
+
+# A string that is supposed to exist on after successful authentication
+TESTSTRING=${2:-SUCCESS}
+
+USERNAME=${3:-test}
+PASSWORD=${4:-test}
+
+# How long is normal for total roundtrip (seconds)
+WARNINGTIME=10
+
+COOKIEJAR=$(mktemp /tmp/${SCRIPTNAME}.XXXXXX) || exit 3
+
+starttime=$(date +"%s")
+
+STATUS=0
+
+# REQUEST #1: fetch URL for authentication page
+HTML=$(curl -L -sS -c ${COOKIEJAR} -w 'LAST_URL:%{url_effective}' ${TESTSITE}) || STATUS=2
+# Parse HTML to get the URL where to POST login (written out by curl itself above)
+AUTHURL=$(echo $HTML | sed -e 's/.*LAST_URL:\(.*\)$/\1/')
+AUTHSTATE=$(echo ${HTML} | sed -e 's/.*hidden[^>]*AuthState[^>]*value=[\"'\'']\([^\"'\'']*\)[\"'\''].*/\1/')
+
+# We should be redirected
+if [[ $AUTHURL == $TESTSITE ]]; then
+  MSG=${MSG:-"No redirect detected."}
+  STATUS=2
+fi
+
+# FIRST nested IF statement
+if [[ $STATUS -eq 0 ]]; then
+  # REQUEST #2: log in
+  HTML=$(curl -L -sS -c ${COOKIEJAR} -b ${COOKIEJAR} -w 'LAST_URL:%{url_effective}' \
+    -d "username=$USERNAME" -d "password=$PASSWORD" --data-urlencode "AuthState=${AUTHSTATE}" ${AUTHURL}) || STATUS=2
+
+  # verify that login was successful (i.e no login form on page)
+  # echo $HTML | grep -q 'ut-ldap-form'
+  # use equivalent for Emory Shib page
+  echo $HTML | grep -q 'Network ID'
+  if [[ $? -eq 0 ]]; then
+    STATUS=2
+  fi
+
+  # Continue to step #3
+  #SECOND nested IF statement
+  if [[ $STATUS -eq 0 ]]; then
+    # We do not support JS, so parse HTML for SAML endpoint and response
+    SAMLENDPOINT=$(echo ${HTML} | sed -e 's/.*form[^>]*method[^>]*action=[\"'\'']\([^\"'\'']*\)[\"'\''].*/\1/')
+    SAMLRESPONSE=$(echo ${HTML} | sed -e 's/.*hidden[^>]*SAMLResponse[^>]*value=[\"'\'']\([^\"'\'']*\)[\"'\''].*/\1/')
+    RELAYSTATE=$(echo ${HTML} | sed -e 's/.*hidden[^>]*RelayState[^>]*value=[\"'\'']\([^\"'\'']*\)[\"'\''].*/\1/')
+
+    # REQUEST #3: post the SAMLResponse
+    HTML=$(curl -L -sS -c ${COOKIEJAR} -b ${COOKIEJAR} -w 'LAST_URL:%{url_effective}' \
+      --data-urlencode "SAMLResponse=${SAMLRESPONSE}" --data-urlencode "RelayState=${RELAYSTATE}" ${SAMLENDPOINT}) || STATUS=2
+
+    # THIRD nested IF statement
+    if [[ $STATUS -eq 0 ]]; then
+      # Verify success
+      echo $HTML | grep -q "$TESTSTRING"
+      if [[ ! $? -eq 0 ]];
+      then 
+        STATUS=2
+        MSG=${MSG:-"Final HTML validation failed."}
+      fi
+
+    else
+      MSG=${MSG:-"POSTing SAMLResponse failed"}
+    fi
+    #END of THIRD nested IF statement
+
+  else
+    MSG=${MSG:-"Login failed"}
+  fi 
+  # END of SECOND nested IF statement
+
+else
+  MSG=${MSG:-"Initial request failed"}
+fi
+# END of FIRST nested IF statement
+
+# Clean up
+# rm -f ${COOKIEJAR}
+
+# Calculate time difference
+endtime=$( date +"%s" )
+totaltime=$(($endtime-$starttime))
+timestat="($totaltime s)"
+
+# If not already set, assume OK
+MSG=${MSG:-'OK'}
+
+# If OK, but time > 10 s, set to WARNING
+if [[ $STATUS -eq 0 && $totaltime -gt $WARNINGTIME ]]; then
+  STATUS=1
+fi
+
+echo $MSG $timestat
+exit $STATUS
+

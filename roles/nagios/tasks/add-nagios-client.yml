@@ -1,0 +1,93 @@
+---
+  - name: install packages for nrpe
+    sudo: yes
+    apt: name={{ item}} state=present
+    with_items:
+      - libssl-dev
+      - xinetd
+      - build-essential
+
+  - name: create nagios group
+    sudo: yes
+    group: name=nagios
+
+  - name: create nagios user
+    sudo: yes
+    user: name=nagios group=nagios shell=/bin/bash createhome=yes state=present
+
+# centos only
+#    - name: export LDflags
+#      sudo: yes
+#      shell: export LDFLAGS=-ldl
+
+# not necessary on Ubuntu 16?
+#    - name: symlink ssl library
+#      sudo: yes
+#      file: src=/lib/x86_64-linux-gnu/libssl.so.1.0.0 dest=/usr/lib/libssl.so state=link
+
+# old version of nagios plugins was 2.0, so nagios-plugins-2.0.tar.gz
+
+  - name: download plugins
+    sudo: yes
+    get_url: url=http://www.nagios-plugins.org/download/nagios-plugins-{{ nagios_plugins_version }}.tar.gz dest=/opt/install/nagios-plugins-{{ nagios_plugins_version }}.tar.gz
+
+  - name: untar plugins
+    sudo: yes
+    unarchive: src=/opt/install/nagios-plugins-{{ nagios_plugins_version }}.tar.gz dest=/opt/install/ owner=ubuntu group=ubuntu copy=no
+
+  - name: configure plugins
+    shell: cd /opt/install/nagios-plugins-{{ nagios_plugins_version }} && ./configure --with-nagios-user=nagios --with-nagios-group=nagios
+
+  - name: make plugins
+    shell: cd /opt/install/nagios-plugins-{{ nagios_plugins_version }} && make 
+
+  - name: install plugins
+    sudo: yes
+    shell: cd /opt/install/nagios-plugins-{{ nagios_plugins_version }} && make install
+
+  - name: download nrpe
+    sudo: yes
+    get_url: url=http://sourceforge.net/projects/nagios/files/nrpe-4.x/nrpe-{{ nrpe_version }}/nrpe-{{ nrpe_version }}.tar.gz dest=/opt/install/nrpe-{{ nrpe_version }}.tar.gz
+
+  - name: untar nrpe
+    sudo: yes
+    unarchive: src=/opt/install/nrpe-{{ nrpe_version }}.tar.gz dest=/opt/install/ owner=nagios group=nagios copy=no
+
+  - name: configure nrpe
+    sudo: yes
+    shell: cd /opt/install/nrpe-{{ nrpe_version }} && ./configure
+
+  - name: make nrpe
+    sudo: yes
+    shell: cd /opt/install/nrpe-{{ nrpe_version }} && make {{ item }}
+    with_items:
+      - all
+      - install-plugin
+      - install-daemon
+      - install-config
+      - install-inetd
+
+  - name: chown /usr/local/nagios
+    sudo: yes
+    file: path=/usr/local/nagios group=nagios owner=nagios recurse=yes state=directory
+
+  - name: add nagios config to xinetd
+    sudo: yes
+    copy: src=./nrpe_xinetd_config dest=/etc/xinetd.d/nrpe group=root owner=root
+
+  - name: add nrpe checks
+    sudo: yes
+    copy: src=./nrpe_commands_config group=nagios owner=nagios dest=/usr/local/nagios/etc/nrpe.cfg
+
+  - name: restart xinetd
+    sudo: yes
+    service: name=xinetd state=restarted
+
+  - name: try nrpe
+    shell: /usr/local/nagios/libexec/check_http www.google.com
+    register: google_check
+
+  - name: check nrpe output
+    assert:
+      that:
+        - "'HTTP OK' in google_check.stdout"

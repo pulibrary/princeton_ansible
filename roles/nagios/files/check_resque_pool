@@ -1,0 +1,26 @@
+#!/bin/bash
+
+ROOT=/opt/goldenseal
+PIDFILE=$ROOT/shared/tmp/pids/resque-pool.pid
+# the current symlink's last 14 digits point to the current release
+CURRENT=$(ls -l $ROOT | grep -o -e "20[0-9]\{12\}$")
+# the resque-pool-master process should be working from the same release
+RESQUE=$(ps aux | grep [r]esque-pool-master | grep -o $CURRENT)
+
+function iscurrent {
+  if [ "$CURRENT" == "$RESQUE" ]; then
+	echo "resque-pool is current"
+	exit 0
+  else
+	echo "WARNING - resque-pool is stale, please restart"
+	exit 1
+  fi
+}
+
+if [ -f $PIDFILE ]; then
+  iscurrent
+else
+  echo "CRITICAL - resque-pool is not running"
+  exit 2
+fi
+

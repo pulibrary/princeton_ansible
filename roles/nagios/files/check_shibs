@@ -1,0 +1,14 @@
+#checks for shibboleth services
+# basic check for SP metadata
+command[check_shib_SP]=/usr/local/nagios/libexec/check_http -H 127.0.0.1 -S -p 443 -u /Shibboleth.sso/Metadata
+# for our test shib service, we can hit the IDP status page and checking for the metadata definition for our SP 
+command[check_shib]=/usr/local/nagios/libexec/check_http -H 52.6.252.94 -S -p 8443 -u https://shibboleth.curationexperts.com/idp/status -s EmorySandboxMetadata
+# we can't get access to Emory Shib's status page, so we're checking the IDP metadata page and checking for the text "entityID"
+# note that the actual text is:
+# entityID="https://login.emory.edu/idp/shibboleth" 
+# but nagios doesn't parse the quotation marks well, so none of these checks worked:
+# -s entityID="https://login.emory.edu/idp/shibboleth"
+# -s "entityID="https://login.emory.edu/idp/shibboleth""
+# -s entityID=https://login.emory.edu/idp/shibboleth 
+command[check_emory_shib]=/usr/local/nagios/libexec/check_http -H login.emory.edu -S -p 443 -u /idp/shibboleth -s entityID
+
