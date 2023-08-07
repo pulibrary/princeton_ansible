@@ -9,9 +9,22 @@
 
 - name: Ezproxy | copy ezproxy binary
   ansible.builtin.copy:
-    src: "files/ezproxy.bin"
+    src: "{{ item }}"
     dest: "/var/local/ezproxy/ezproxy"
     mode: 0755
+  loop:
+    - "files/ezproxy.bin"
+
+- name: Ezproxy | copy idp_file and allow file
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "/var/local/ezproxy"
+    mode: 0755
+  loop:
+    - "files/idp_princeton.xml"
+    - "files/princeton_allow.txt"
+  when:
+    - running_on_server
 
 - name: Ezproxy | install dependencies for 64bit
   ansible.builtin.apt:
@@ -26,6 +39,17 @@
     state: present
   when:
     - "'{{ ansible_distribution_release }}' == 'jammy'"
+
+- name: Ezproxy | copy ezproxy config.txt
+  ansible.builtin.template:
+    src: "config.txt.j2"
+    dest: "/var/local/ezproxy/config.txt"
+    owner: root
+    group: root
+    mode: "0644"
+  changed_when: false
+  when:
+    - running_on_server
 
 - name: Ezproxy | install missing file replacements
   ansible.builtin.command: /var/local/ezproxy/ezproxy -m
@@ -132,30 +156,6 @@
     group: "{{ deploy_user }}"
   become: true
 
-- name: Ezproxy | make repo safe
-  ansible.builtin.command: git config --global --add safe.directory /var/local/ezproxy/EZProxy_IP_Blacklist
-  become: true
-  changed_when: false
-
-- name: Ezproxy | Clone EZproxy blacklist (sic) repo
-  ansible.builtin.git:
-    repo: "https://github.com/prbutler/EZProxy_IP_Blacklist.git"
-    version: 'master'
-    dest: "/var/local/ezproxy/EZProxy_IP_Blacklist"
-    clone: true
-    update: true
-    force: true
-  become: true
-
-- name: Ezproxy | Assigns deny list repo to ezproxy user
-  ansible.builtin.file:
-    path: "/var/local/ezproxy/EZProxy_IP_Blacklist"
-    state: directory
-    mode: 0755
-    owner: "{{ deploy_user }}"
-    group: "{{ deploy_user }}"
-  become: true
-
 - name: Ezproxy | add geoip ppa
   ansible.builtin.apt_repository:
     repo: "ppa:maxmind/ppa"
@@ -182,14 +182,6 @@
     job: "/usr/bin/geoipupdate"
   when:
     - running_on_server
-
-- name: Ezproxy | assign hostname
-  ansible.builtin.template:
-    src: "hostname.txt.j2"
-    dest: "/var/local/ezproxy/hostname.txt"
-    owner: "{{ deploy_user }}"
-    group: "{{ deploy_user }}"
-    mode: 0644
 
 - name: Ezproxy | install ezproxy startup script (requires root)
   ansible.builtin.command: /var/local/ezproxy/ezproxy -si
@@ -218,16 +210,6 @@
     owner: root
     group: root
 
-- name: Ezproxy | copy ezproxy config.txt
-  ansible.builtin.copy:
-    src: "files/config.txt"
-    dest: "/var/local/ezproxy/config.txt"
-    owner: root
-    group: root
-    mode: "0644"
-  changed_when: false
-  when:
-    - running_on_server
 
 - name: Ezproxy | copy a systemd service
   ansible.builtin.template:
