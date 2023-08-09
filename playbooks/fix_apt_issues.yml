@@ -1,11 +1,20 @@
 ---
 # use the `--limit your-project-vm1.princeton.edu` flag to select the vm that needs updated certificates
-# you will also need to provide `-e recv_key=<expired_id>`
-- name: update expired ubuntu key certificates
+# to update an expired key, pass `-e recv_key=<expired_id>`
+# to remove a repo from sources.list, pass `-e useless_apt_repo='<repo_details>'`
+# for example, `-e uselss_apt_repo='deb https://oss-binaries.phusionpassenger.com/apt/passenger bionic main'`
+
+- name: fix apt update issues
   hosts: all
   remote_user: pulsys
   become: true
   tasks:
+    - name: Remove a repository from sources list
+      ansible.builtin.apt_repository:
+        repo: "{{ useless_apt_repo | default(omit) }}"
+        state: absent
+      when: useless_apt_repo is defined
+
     - name: Add an expired key by id from a keyserver
       ansible.builtin.apt_key:
         keyserver: keyserver.ubuntu.com
