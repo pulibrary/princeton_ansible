@@ -1,6 +1,6 @@
 ---
-- name: detect vips commands
-  ansible.builtin.command: vips -l
+- name: detect vips version
+  ansible.builtin.command: vips -v
   register: vips_list
   changed_when: false
   ignore_errors: true
@@ -11,7 +11,7 @@
     state: "absent"
   when:
     - running_on_server
-    - vips_list.failed or not "pdfload" in vips_list.stdout
+    - vips_list.failed or not "{{ vips_version }}" in vips_list.stdout
 
 - name: delete old vips binary
   file:
@@ -19,7 +19,7 @@
     state: "absent"
   when:
     - running_on_server
-    - vips_list.failed or not "pdfload" in vips_list.stdout
+    - vips_list.failed or not "{{ vips_version }}" in vips_list.stdout
 
 - name: Install VIPS dependencies
   ansible.builtin.apt:
