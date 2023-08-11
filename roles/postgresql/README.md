@@ -11,7 +11,8 @@ none
 Role Variables
 --------------
 
-### Connection information to the database server: 
+### Server-side variables
+These vars provide connection information to the database server. By convention we store these values in `/group_vars/postgresql/<env>.yml`. 
 ```ini
   postgresadmin: "postgres"
   db_clusteradmin_user: "postgres"
