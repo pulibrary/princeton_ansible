@@ -20,11 +20,6 @@ These vars provide connection information to the database server. By convention 
   postgres_admin_password: '{{ vault_postgres_admin_password }}'
   postgres_port: 5432
   postgres_admin_user: "{{ postgresadmin }}"
-  pg_hba_contype: "host"
-  pg_hba_method: "md5"
-  pg_hba_postgresql_database: "all"
-  pg_hba_postgresql_user: "all"
-  pg_hba_source: "{{ ansible_host }}/32"
   postgresql_is_local: true  # rarely true unless one is testing creating a new db server
   postgres_version: 15  # on server side this will install the postgresql server version
 ```
@@ -32,6 +27,11 @@ These vars provide connection information to the database server. By convention 
 ### Client-side variables
 These vars provide connection information for the database you want to create or connect to. By convention, we store these values in files like `/group_vars/<project-name>/<env>.yml`.
 ```ini
+  pg_hba_contype: "host"
+  pg_hba_method: "md5"
+  pg_hba_postgresql_database: "all"
+  pg_hba_postgresql_user: "all"
+  pg_hba_source: "{{ ansible_host }}/32"
   ol_db_host: '{{ postgres_host }}'
   ol_db_name: "{{ vault_ol_staging_db_name }}"
   ol_db_user: "{{ vault_ol_staging_db_user}}"
