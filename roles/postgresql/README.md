@@ -28,7 +28,8 @@ Role Variables
   postgres_version: 15  # on server side this will install the postgresql server version
 ```
 
-### Connection information for the database you want to create or connect to
+### Client-side variables
+These vars provide connection information for the database you want to create or connect to. By convention, we store these values in files like `/group_vars/<project-name>/<env>.yml`.
 ```ini
   ol_db_host: '{{ postgres_host }}'
   ol_db_name: "{{ vault_ol_staging_db_name }}"
