@@ -1,0 +1,35 @@
+- name: PostgreSQL | add replication postgresql configuration
+  template:
+    src: replication.conf.j2
+    dest: "{{ postgresql_conf_directory }}/conf.d/replication.conf"
+    mode: 0644
+  when:
+    - running_on_server
+  notify: restart postgresql
+
+- name: PostgreSQL | create replication db server user
+  community.postgresql.postgresql_user:
+    name: "replication"
+    password: "{{ postgresql_replication_password }}"
+    encrypted: true
+    priv: "REPLICATION"
+    state: "present"
+  when:
+    - running_on_server
+    - postgresql_is_local
+  changed_when: false
+  become: true
+  become_user: "{{ postgres_admin_user }}"
+  no_log: true
+  run_once: true
+
+
+- name: PostgreSQL | ensure replication access to cluster
+  ansible.builtin.lineinfile:
+    path: '/etc/postgresql/{{ postgres_version }}/main/pg_hba.conf'
+    line: 'host  {{ item }}      replication {{ lookup("dig", item) }}/32       md5'
+  loop:
+    - "{{ postgresql_cluster_hosts }}"
+  when:
+    - running_on_server
+    - postgresql_is_local
