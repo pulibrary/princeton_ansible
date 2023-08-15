@@ -1,0 +1,21 @@
+{{ ansible_managed | comment }}
+# https://wiki.postgresql.org/wiki/Streaming_Replication
+# To prevent the primary server from removing the WAL segments required for
+# the standby server before shipping them, set the minimum number of segments
+# retained in the pg_xlog directory. At least wal_keep_segments should be
+# larger than the number of segments generated between the beginning of
+# online-backup and the startup of streaming replication. If you enable WAL
+# archiving to an archive directory accessible from the standby, this may
+# not be necessary.
+wal_keep_segments = 600
+max_wal_senders = 10
+max_replication_slots = 10
+wal_level = 'replica'
+# Enable WAL archiving on the primary to an archive directory accessible from
+# the standby. If wal_keep_segments is a high enough number to retain the WAL
+# segments required for the standby server, this is not necessary.
+# Disabled because we can keep up.
+archive_mode = off
+{% if postgresql_replication_leader_host != false %}
+  primary_conninfo = 'host={{ lookup("dig", postgresql_replication_leader) }} port=5432 user=replication password={{ postgresql_replication_password }} options=''-c wal_sender_timeout=5000'''
+{% endif %}
