@@ -1,22 +1,14 @@
-- name: PostgreSQL | add replication postgresql configuration
-  template:
-    src: replication.conf.j2
-    dest: "{{ postgresql_conf_directory }}/conf.d/replication.conf"
-    mode: 0644
-  when:
-    - running_on_server
-  notify: restart postgresql
-
 - name: PostgreSQL | create replication db server user
   community.postgresql.postgresql_user:
     name: "replication"
     password: "{{ postgresql_replication_password }}"
     encrypted: true
-    priv: "REPLICATION"
     state: "present"
+    role_attr_flags: "REPLICATION"
   when:
     - running_on_server
     - postgresql_is_local
+    - postgresql_leader == true
   changed_when: false
   become: true
   become_user: "{{ postgres_admin_user }}"
@@ -27,9 +19,66 @@
 - name: PostgreSQL | ensure replication access to cluster
   ansible.builtin.lineinfile:
     path: '/etc/postgresql/{{ postgres_version }}/main/pg_hba.conf'
-    line: 'host  {{ item }}      replication {{ lookup("dig", item) }}/32       md5'
-  loop:
-    - "{{ postgresql_cluster_hosts }}"
+    line: 'host  replication      replication {{ lookup("dig", item) }}/32       md5'
+  loop: "{{ postgresql_cluster_hosts }}"
+  register: hba_changed
   when:
     - running_on_server
     - postgresql_is_local
+  notify: restart postgresql
+
+- name: PostgreSQL | restart leader postgres server
+  ansible.builtin.service:
+    name: postgresql
+    state: restarted
+  when:
+    - postgresql_cluster_member == true
+    - postgresql_leader == true
+    - hba_changed.changed
+
+- name: PostgreSQL | Check if Standby Initialized
+  ansible.builtin.stat:
+    path: '/var/lib/postgresql/{{ postgres_version }}/main/standby.signal'
+  register: standby_file
+  when:
+    - postgresql_cluster_member == true
+    - postgresql_leader == false
+
+- name: PostgreSQL | stop standby postgres server for initialization
+  ansible.builtin.service:
+    name: postgresql
+    state: stopped
+  when:
+    - postgresql_cluster_member == true
+    - postgresql_leader == false
+    - not standby_file.stat.exists
+
+- debug: var=standby_file
+- name: PostgreSQL | standby pg_basebackup from leader
+  shell: 'rm -rf /var/lib/postgresql/{{ postgres_version }}/main && /usr/bin/pg_basebackup -Xs -d "hostaddr={{ lookup("dig", postgresql_replication_leader) }} port=5432 user=replication password={{ postgresql_replication_password }}" -D /var/lib/postgresql/{{ postgres_version }}/main -v -Fp'
+  become: true
+  become_user: "{{ postgres_admin_user }}"
+  no_log: true
+  when:
+    - postgresql_cluster_member == true
+    - postgresql_leader == false
+    - not standby_file.stat.exists
+
+- name: PostgreSQL | Initialize Standby Mode
+  file:
+    path: '/var/lib/postgresql/{{ postgres_version }}/main/standby.signal'
+    state: touch
+  become: true
+  become_user: "{{ postgres_admin_user }}"
+  when:
+    - postgresql_cluster_member == true
+    - postgresql_leader == false
+    - not standby_file.stat.exists
+
+- name: PostgreSQL | restart standby postgres server
+  ansible.builtin.service:
+    name: postgresql
+    state: started
+  when:
+    - postgresql_cluster_member == true
+    - postgresql_leader == false
