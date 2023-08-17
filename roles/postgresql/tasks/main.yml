@@ -116,7 +116,13 @@
     - reload local postgres
 
 - include_tasks: pg_hba.yml
-- include_tasks: warm_standby.yml
-  when: postgresql_cluster_member == true
+- include_tasks: warm_standby_leader.yml
+  when:
+    - postgresql_cluster != false
+    - inventory_hostname == postgresql_cluster.leader
+- include_tasks: warm_standby_follower.yml
+  when:
+    - postgresql_cluster != false
+    - inventory_hostname in postgresql_cluster.followers
 - include_tasks: create_db.yml
 - include_tasks: create_users.yml
