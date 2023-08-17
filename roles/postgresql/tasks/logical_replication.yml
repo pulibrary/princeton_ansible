@@ -1,0 +1,99 @@
+---
+# Don't dump schema for anything that's created already.
+- name: PostgreSQL | Logical Replication | Check for databases existing
+  become: true
+  become_user: "{{ postgres_admin_user }}"
+  community.postgresql.postgresql_info:
+    filter: databases*
+  register: database_status
+
+- name: PostgreSQL | Logical Replication | Check if schemas restored
+  ansible.builtin.stat:
+    path: '~/.restored-{{ item.name }}'
+  become: true
+  become_user: "{{ postgres_admin_user }}"
+  register: schemas_restored
+  loop: "{{ postgresql_logical_replication.databases }}"
+  no_log: true
+
+- name: PostgreSQL | Logical Replication | Define variable that stores schemas needing migrated
+  set_fact:
+    missing_databases: "{{ (schemas_restored) | json_query('results[?stat.exists==`false`].item') }}"
+
+# Dump schemas to a file. Don't dump roles - we'll use our own owner.
+- name: PostgreSQL | Logical Replication | Dump schemas for the databases being replicated
+  shell: 'pg_dump --schema-only -d {{ item.name }} -h {{ postgresql_logical_replication.source }} -U {{postgres_admin_user }} -f /tmp/{{ item.name }}-schema.sql --no-owner'
+  become: true
+  become_user: "{{ postgres_admin_user }}"
+  # no_log: true
+  loop: "{{ missing_databases }}"
+
+# Create roles we need
+- name: PostgreSQL | Logical Replication | create db roles
+  community.postgresql.postgresql_user:
+    name: "{{ item.owner }}"
+    password: "{{ item.owner_password }}"
+    encrypted: true
+    priv: "{{ item.priv | default(omit) }}"  # least privilege is better
+    state: "present"
+    role_attr_flags: "{{ item.role_attr_flags | default(omit) }}"  # see above
+  changed_when: false
+  become: true
+  become_user: "{{ postgres_admin_user }}"
+  loop: "{{ postgresql_logical_replication.databases + postgresql_logical_replication.extra_roles }}"
+  no_log: true
+
+- name: PostgreSQL | Logical Replication | Create databases to dump into
+  community.postgresql.postgresql_db:
+    name: "{{ item.name }}"
+    encoding: 'UTF-8'
+    state: "present"
+    login_user: "{{ postgres_admin_user }}"
+    owner: "{{ item.owner | default(postgres_admin_user) }}"
+  changed_when: false
+  become: true
+  become_user: "{{ postgres_admin_user }}"
+  loop: "{{ postgresql_logical_replication.databases }}"
+  no_log: true
+
+# The schemas have to exist already to do logical replication
+- name: PostgreSQL | Logical Replication | Restore schema
+  community.postgresql.postgresql_script:
+    db: "{{ item.name }}"
+    path: "/tmp/{{ item.name }}-schema.sql"
+    login_user: "{{ postgres_admin_user }}"
+    encoding: 'UTF-8'
+  loop: "{{ missing_databases }}"
+  become: true
+  become_user: "{{ postgres_admin_user }}"
+  register: schema_result
+  no_log: true
+
+# Leave a file behind we can delete if we want to re-synchronize the schema.
+- name: PostgreSQL | Logical Replication | Mark schema migrated
+  file:
+    path: '~/.restored-{{ item.name }}'
+    state: touch
+  become: true
+  become_user: "{{ postgres_admin_user }}"
+  loop: "{{ missing_databases }}"
+  no_log: true
+
+# Now that the schema's created, create the subscription.
+- name: PostgreSQL | Logical Replication | Create subscription
+  community.postgresql.postgresql_subscription:
+    db: "{{ item.name }}"
+    name: "{{ item.subscription.name }}"
+    state: present
+    publications: "{{ item.subscription.publication }}"
+    connparams:
+      host: "{{ postgresql_logical_replication.source }}"
+      port: 5432
+      user: "{{ item.subscription.user }}"
+      password: "{{ item.subscription.password }}"
+      dbname: "{{ item.name }}"
+  loop: "{{ missing_databases }}"
+  become: true
+  become_user: "{{ postgres_admin_user }}"
+  loop: "{{ postgresql_logical_replication.databases }}"
+  no_log: true
