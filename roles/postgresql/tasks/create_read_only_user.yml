@@ -1,0 +1,34 @@
+---
+  - name: PostgreSQL | install postgresql client packages
+    ansible.builtin.apt:
+      name: '{{ item }}'
+      state: present
+    loop:
+      - libpq-dev
+      - python3-psycopg2
+      - postgresql-client-{{ postgres_version }}
+
+  - name: create read-only postgresql db user
+    community.postgresql.postgresql_user:
+      login_host: '{{ postgres_host }}'
+      login_port: '{{ postgres_port | default(omit) }}'
+      login_user: '{{ postgres_admin_user }}'
+      login_password: '{{ postgres_admin_password }}'
+      name: '{{ application_dbuser_ro_name }}'
+      password: '{{ application_dbuser_ro_password }}'
+      encrypted: true
+      state: 'present'
+
+  - name: grant read privileges for read-only user
+    community.postgresql.postgresql_privs:
+      login_host: '{{ postgres_host }}'
+      login_port: '{{ postgres_port | default(omit) }}'
+      login_user: '{{ postgres_admin_user }}'
+      login_password: '{{ postgres_admin_password }}'
+      database: '{{ application_db_name }}'
+      state: present
+      privs: SELECT
+      type: table
+      objs: ALL_IN_SCHEMA
+      roles: '{{ application_dbuser_ro_name }}'
+      grant_option: true
