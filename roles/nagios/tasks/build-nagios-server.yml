@@ -5,22 +5,22 @@
 
     - name: update apt cache
       become: true
-      package:
+      ansible.builtin.apt:
         update_cache: true
 
     - name: install aptitude
       become: true
-      package:
+      ansible.builtin.apt:
         name: aptitude
         state: present
 
     - name: upgrade apt packages
       become: true
-      package: upgrade=full
+      ansible.builtin.apt: upgrade=full
 
     - name: install packages for nagios
       become: true
-      package:
+      ansible.builtin.apt:
         name: "{{ item }}"
         state: present
       with_items:
@@ -31,7 +31,7 @@
         - libc6-dev
         - libssl-dev
         - openssl
-        - python-passlib
+        # we do this later? - python-passlib
         - unzip
 
     - name: install nrpe and nagios plugins
@@ -71,7 +71,7 @@
 
     - name: install python-passlib
       become: true
-      package:
+      ansible.builtin.apt:
         name: python-passlib
         state: present
 
@@ -109,13 +109,13 @@
 
     - name: enable nagios service
       become: true
-      service:
+      ansible.builtin.service:
         name: nagios
         enabled: true
 
     - name: restart apache and nagios
       become: true
-      service:
+      ansible.builtin.service:
         name: "{{ item }}"
         state: restarted
       with_items:
