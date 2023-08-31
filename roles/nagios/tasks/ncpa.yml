@@ -1,0 +1,110 @@
+---
+  - name: install libraries
+    become: true
+    apt: name={{ item}} state=present
+    with_items:
+      - libssl-dev
+      - xinetd
+      - build-essential
+
+  - name: create nagios group
+    become: true
+    group: name=nagios
+
+  - name: create nagios user
+    become: true
+    user:
+      name: nagios
+      group: nagios
+      shell: /bin/bash
+      createhome: yes
+      state: present
+
+  - name: create working directory
+    become: true
+    file:
+      name: /opt/install
+      state: directory
+      group: nagios
+      owner: nagios
+      mode: 0755
+
+# centos only
+#    - name: export LDflags
+#      become: true
+#      shell: export LDFLAGS=-ldl
+
+# not necessary on Ubuntu 16?
+#    - name: symlink ssl library
+#      become: true
+#      file: src=/lib/x86_64-linux-gnu/libssl.so.1.0.0 dest=/usr/lib/libssl.so state=link
+
+# old version of nagios plugins was 2.0, so nagios-plugins-2.0.tar.gz
+
+  - name: download plugins
+    become: true
+    get_url: url=http://www.nagios-plugins.org/download/nagios-plugins-{{ nagios_plugins_version }}.tar.gz dest=/opt/install/nagios-plugins-{{ nagios_plugins_version }}.tar.gz
+
+  - name: untar plugins
+    become: true
+    unarchive: src=/opt/install/nagios-plugins-{{ nagios_plugins_version }}.tar.gz dest=/opt/install/ owner=pulsys group=pulsys copy=no
+
+  - name: configure plugins
+    shell: cd /opt/install/nagios-plugins-{{ nagios_plugins_version }} && ./configure --with-nagios-user=nagios --with-nagios-group=nagios
+
+  - name: make plugins
+    shell: cd /opt/install/nagios-plugins-{{ nagios_plugins_version }} && make 
+
+  - name: install plugins
+    become: true
+    shell: cd /opt/install/nagios-plugins-{{ nagios_plugins_version }} && make install
+
+# old version of nrpe was 2.15, so nrpe-2.x and nrpe-2.15.tar.gz
+
+  - name: add deb for ncpa
+    become: true
+    ansible.builtin.apt_repository:
+      repo: deb https://repo.nagios.com/deb/jammy /
+      state: present
+      filename: nagios
+
+  - name: add the apt key for ncpa
+    ansible.builtin.apt_key:
+      url: https://repo.nagios.com/GPG-KEY-NAGIOS-V2
+      state: present
+
+  - name: update apt cache
+    become: true
+    ansible.builtin.apt:
+      update_cache: true
+
+    - name: install ncpa
+      become: true
+      ansible.builtin.apt:
+        name: ncpa
+        state: present
+
+  - name: chown /usr/local/nagios
+    become: true
+    file: path=/usr/local/nagios group=nagios owner=nagios recurse=yes state=directory
+
+  - name: add nagios config to xinetd
+    become: true
+    copy: src=nrpe_xinetd_config dest=/etc/xinetd.d/nrpe group=root owner=root
+
+  - name: add nrpe checks
+    become: true
+    copy: src=nrpe_commands_config group=nagios owner=nagios dest=/usr/local/nagios/etc/nrpe.cfg
+
+  - name: restart xinetd
+    become: true
+    service: name=xinetd state=restarted
+
+  - name: try nrpe
+    shell: /usr/local/nagios/libexec/check_http www.google.com
+    register: google_check
+
+  - name: check nrpe output
+    assert:
+      that:
+        - "'HTTP OK' in google_check.stdout"
