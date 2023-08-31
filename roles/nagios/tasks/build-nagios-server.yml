@@ -4,20 +4,25 @@
 # might need to sudo apt-get -y install python-simplejson
 
     - name: update apt cache
-      become: yes
-      package: update_cache=yes
+      become: true
+      package:
+        update_cache: true
 
     - name: install aptitude
-      become: yes
-      package: name=aptitude state=installed
+      become: true
+      package:
+        name: aptitude
+        state: present
 
     - name: upgrade apt packages
-      become: yes
+      become: true
       package: upgrade=full
 
     - name: install packages for nagios
-      become: yes
-      package: name={{ item }} state=installed
+      become: true
+      package:
+        name: "{{ item }}"
+        state: present
       with_items:
         - apache2
         - build-essential
@@ -33,11 +38,11 @@
       include: new-nagios-nrpe.yml
 
     - name: create nagcmd group
-      become: yes
+      become: true
       group: name=nagcmd state=present
 
     - name: add nagios and apache users to nagcmd group
-      become: yes
+      become: true
       user: name={{ item }} groups=nagcmd state=present
       with_items:
         - nagios
@@ -54,7 +59,7 @@
 
     - name: make and install nagios core
     # this is NOT idempotent
-      become: yes
+      become: true
       shell: cd {{ install_path }}/nagios-{{ nagios_core_version }} && make {{ item }}
       with_items:
         - all
@@ -65,11 +70,13 @@
         - install-webconf
 
     - name: install python-passlib
-      become: yes
-      package: name=python-passlib state=installed
+      become: true
+      package:
+        name: python-passlib
+        state: present
 
     - name: set admin password
-      become: yes
+      become: true
       htpasswd:
         path: /usr/local/nagios/etc/htpasswd.users
         name: nagiosadmin
@@ -78,14 +85,14 @@
         state: present
 
     - name: disable mpm_event module
-      become: yes
+      become: true
       apache2_module:
         state: absent
         name: mpm_event
         # ignore_configcheck: True
 
     - name: enable correct apache modules
-      become: yes
+      become: true
       apache2_module:
         state: present
         name: "{{ item }}"
@@ -95,16 +102,22 @@
         - cgi
 
     - name: install nagios service definition
-      become: yes
-      copy: src=new-nagios-service dest=/etc/systemd/system/nagios.service
+      become: true
+      copy:
+        src: new-nagios-service
+        dest: /etc/systemd/system/nagios.service
 
     - name: enable nagios service
-      become: yes
-      service: name=nagios enabled=yes
+      become: true
+      service:
+        name: nagios
+        enabled: true
 
     - name: restart apache and nagios
-      become: yes
-      service: name="{{ item }}" state=restarted
+      become: true
+      service:
+        name: "{{ item }}"
+        state: restarted
       with_items:
           - nagios
           - apache2
