@@ -1,2 +1,32 @@
 ---
 # tasks file for restic
+- name: Install Restic Software
+  ansible.builtin.apt:
+    name: restic
+    state: present
+
+- name: Create restic directory if it does not exist
+  ansible.builtin.file:
+    path: "{{ restic_home }}"
+    state: directory
+    mode: o-rwx
+
+- name: Add restic credentials
+  ansible.builtin.template:
+    src: restic.pwd.j2
+    dest: "{{ restic_user_home }}/.restic.pwd"
+    owner: "{{ restic_user }}"
+    group: "{{ restic_user }}"
+    mode: o-r
+
+- name: Add restic environment
+  ansible.builtin.template:
+    src: env.restic.j2
+    dest: "{{ restic_user_home }}/.env.restic"
+    owner: "{{ restic_user }}"
+    group: "{{ restic_user }}"
+    mode: o-rwx
+
+- name: Source Restic environment
+  ansible.builtin.shell: "source ~/.env.restic"
+  changed_when: false
