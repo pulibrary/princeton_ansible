@@ -9,7 +9,9 @@
   ansible.builtin.file:
     path: "{{ restic_home }}"
     state: directory
-    mode: o-rwx
+    owner: "{{ restic_user }}"
+    group: "{{ restic_user }}"
+    mode: o+rwx
 
 - name: Add restic credentials
   ansible.builtin.template:
@@ -17,7 +19,7 @@
     dest: "{{ restic_user_home }}/.restic.pwd"
     owner: "{{ restic_user }}"
     group: "{{ restic_user }}"
-    mode: o-r
+    mode: o+r
 
 - name: Add restic environment
   ansible.builtin.template:
@@ -25,16 +27,19 @@
     dest: "{{ restic_user_home }}/.env.restic"
     owner: "{{ restic_user }}"
     group: "{{ restic_user }}"
-    mode: o-rwx
+    mode: o+rwx
+
+- name: Add restic in the bashrc files
+  ansible.builtin.lineinfile:
+    path: "{{ restic_user_home }}/.bashrc"
+    line: '. {{ restic_user_home }}/.env.restic'
+    owner: "{{ restic_user }}"
+    group: "{{ restic_user }}"
+    create: true
+    mode: o+rw
 
 - name: Source Restic environment
-  ansible.builtin.shell: "source ~/.env.restic"
-  changed_when: false
-  when:
-    - running_on_server
-
-- name: Initialize restic repositories
-  ansible.builtin.command: restic init
+  ansible.builtin.shell: . {{ restic_user_home }}/.bashrc
   become:
   become_user: "{{ restic_user }}"
   changed_when: false
@@ -64,9 +69,9 @@
     owner: "{{ restic_user }}"
     group: "{{ restic_user }}"
     mode: a+x
-    when:
-      - running_on_server
-      - inventory_hostname in groups['mysql_production']
+  when:
+    - running_on_server
+    - inventory_hostname in groups['mysql_production']
 
 - name: Copy maria backup scripts
   ansible.builtin.copy:
@@ -75,9 +80,9 @@
     owner: "{{ restic_user }}"
     group: "{{ restic_user }}"
     mode: a+x
-    when:
-      - running_on_server
-      - inventory_hostname in groups['mysql_production']
+  when:
+    - running_on_server
+    - inventory_hostname in groups['mysql_production']
 
 - name: Copy full pg backup scripts
   ansible.builtin.copy:
@@ -86,9 +91,9 @@
     owner: "{{ restic_user }}"
     group: "{{ restic_user }}"
     mode: a+x
-    when:
-      - running_on_server
-      - inventory_hostname in groups['postgresql_production']
+  when:
+    - running_on_server
+    - inventory_hostname in groups['postgresql_production']
 
 - name: Copy pg backup scripts
   ansible.builtin.copy:
@@ -97,9 +102,9 @@
     owner: "{{ restic_user }}"
     group: "{{ restic_user }}"
     mode: a+x
-    when:
-      - running_on_server
-      - inventory_hostname in groups['postgresql_production']
+  when:
+    - running_on_server
+    - inventory_hostname in groups['postgresql_production']
 
 - name: Ensure a maria backup job that runs at 5 exists"
   ansible.builtin.cron:
@@ -107,9 +112,9 @@
     minute: "0"
     hour: "6"
     job: "{{ restic_home }}/full_maria_backup.sh"
-    when:
-      - running_on_server
-      - inventory_hostname in groups['mysql_production']
+  when:
+    - running_on_server
+    - inventory_hostname in groups['mysql_production']
 
 - name: Ensure a pg backup job that runs at 5 exists"
   ansible.builtin.cron:
@@ -117,6 +122,15 @@
     minute: "0"
     hour: "5"
     job: "{{ restic_home }}/full_pg_backup.sh"
-    when:
-      - running_on_server
-      - inventory_hostname in groups['postgresql_production']
+  when:
+    - running_on_server
+    - inventory_hostname in groups['postgresql_production']
+
+- name: Initialize restic repositories
+  ansible.builtin.command: restic init
+  become:
+  become_user: "{{ restic_user }}"
+  changed_when: false
+  when:
+    - running_on_server
+
