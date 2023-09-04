@@ -30,3 +30,75 @@
 - name: Source Restic environment
   ansible.builtin.shell: "source ~/.env.restic"
   changed_when: false
+  when:
+    - running_on_server
+
+- name: Initialize restic repositories
+  ansible.builtin.command: restic init
+  become:
+  become_user: "{{ restic_user }}"
+  changed_when: false
+  when:
+    - running_on_server
+
+- name: Copy common backup scripts
+  ansible.builtin.copy:
+    src: files/common.sh
+    dest: "{{ restic_home }}/common.sh"
+    owner: "{{ restic_user }}"
+    group: "{{ restic_user }}"
+    mode: a+x
+
+- name: Copy prune backup scripts
+  ansible.builtin.copy:
+    src: files/prune.sh
+    dest: "{{ restic_home }}/prune.sh"
+    owner: "{{ restic_user }}"
+    group: "{{ restic_user }}"
+    mode: a+x
+
+- name: Copy full maria backup scripts
+  ansible.builtin.copy:
+    src: files/full_maria_backup.sh
+    dest: "{{ restic_home }}/full_maria_backup.sh"
+    owner: "{{ restic_user }}"
+    group: "{{ restic_user }}"
+    mode: a+x
+
+- name: Copy pg backup scripts
+  ansible.builtin.copy:
+    src: files/maria_backup.sh
+    dest: "{{ restic_home }}/pg_backup.sh"
+    owner: "{{ restic_user }}"
+    group: "{{ restic_user }}"
+    mode: a+x
+
+- name: Copy full pg backup scripts
+  ansible.builtin.copy:
+    src: files/full_pg_backup.sh
+    dest: "{{ restic_home }}/full_pg_backup.sh"
+    owner: "{{ restic_user }}"
+    group: "{{ restic_user }}"
+    mode: a+x
+
+- name: Copy maria backup scripts
+  ansible.builtin.copy:
+    src: files/maria_backup.sh
+    dest: "{{ restic_home }}/maria_backup.sh"
+    owner: "{{ restic_user }}"
+    group: "{{ restic_user }}"
+    mode: a+x
+
+- name: Ensure a maria backup job that runs at 5 exists"
+  ansible.builtin.cron:
+    name: "backup jobs"
+    minute: "0"
+    hour: "5"
+    job: "{{ restic_home }}/full_maria_backup.sh"
+
+- name: Ensure a pg backup job that runs at 5 exists"
+  ansible.builtin.cron:
+    name: "backup jobs"
+    minute: "0"
+    hour: "5"
+    job: "{{ restic_home }}/full_pg_backup.sh"
