@@ -6,4 +6,4 @@ cd $(dirname $0)
 
 ./pg_backup.sh
 
-./purge.sh --really
+./prune.sh --really

@@ -6,4 +6,4 @@ cd $(dirname $0)
 
 ./mysql_backup.sh
 
-./purge.sh --really
+./prune.sh --really
