@@ -64,22 +64,9 @@
     owner: "{{ restic_user }}"
     group: "{{ restic_user }}"
     mode: a+x
-
-- name: Copy pg backup scripts
-  ansible.builtin.copy:
-    src: files/maria_backup.sh
-    dest: "{{ restic_home }}/pg_backup.sh"
-    owner: "{{ restic_user }}"
-    group: "{{ restic_user }}"
-    mode: a+x
-
-- name: Copy full pg backup scripts
-  ansible.builtin.copy:
-    src: files/full_pg_backup.sh
-    dest: "{{ restic_home }}/full_pg_backup.sh"
-    owner: "{{ restic_user }}"
-    group: "{{ restic_user }}"
-    mode: a+x
+    when:
+      - running_on_server
+      - inventory_hostname in groups['mysql_production']
 
 - name: Copy maria backup scripts
   ansible.builtin.copy:
@@ -88,13 +75,41 @@
     owner: "{{ restic_user }}"
     group: "{{ restic_user }}"
     mode: a+x
+    when:
+      - running_on_server
+      - inventory_hostname in groups['mysql_production']
+
+- name: Copy full pg backup scripts
+  ansible.builtin.copy:
+    src: files/full_pg_backup.sh
+    dest: "{{ restic_home }}/full_pg_backup.sh"
+    owner: "{{ restic_user }}"
+    group: "{{ restic_user }}"
+    mode: a+x
+    when:
+      - running_on_server
+      - inventory_hostname in groups['postgresql_production']
+
+- name: Copy pg backup scripts
+  ansible.builtin.copy:
+    src: files/pg_backup.sh
+    dest: "{{ restic_home }}/pg_backup.sh"
+    owner: "{{ restic_user }}"
+    group: "{{ restic_user }}"
+    mode: a+x
+    when:
+      - running_on_server
+      - inventory_hostname in groups['postgresql_production']
 
 - name: Ensure a maria backup job that runs at 5 exists"
   ansible.builtin.cron:
     name: "backup jobs"
     minute: "0"
-    hour: "5"
+    hour: "6"
     job: "{{ restic_home }}/full_maria_backup.sh"
+    when:
+      - running_on_server
+      - inventory_hostname in groups['mysql_production']
 
 - name: Ensure a pg backup job that runs at 5 exists"
   ansible.builtin.cron:
@@ -102,3 +117,6 @@
     minute: "0"
     hour: "5"
     job: "{{ restic_home }}/full_pg_backup.sh"
+    when:
+      - running_on_server
+      - inventory_hostname in groups['postgresql_production']
