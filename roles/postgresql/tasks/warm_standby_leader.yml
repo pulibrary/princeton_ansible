@@ -1,0 +1,47 @@
+# This file enables warm standby. There are four variables involved:
+# postgresql_cluster_member [true/false], default: false: Activates this file.
+# postgresql_leader [true/false], default: true: If the box is the leader
+# postgresql_replication_leader [hostname]: Which host is the leader of the
+#   cluster the host is a member of
+# postgresql_cluster_hosts [Array[hostname]]: List of hosts which are a member
+#   of the cluster this host is part of.
+#
+# Replication documentation: https://www.postgresql.org/docs/current/runtime-config-replication.html
+# Streaming replication documentation: https://www.postgresql.org/docs/current/warm-standby.html#STREAMING-REPLICATION
+
+# The leader needs a user with no permissions to any DB, but with the
+# replication role. It can't query anything, but can ship write-ahead logs.
+# This user is used in primary_conninfo in `replication.conf` for
+# followers.
+- name: PostgreSQL - Leader | create replication db server user
+  community.postgresql.postgresql_user:
+    name: "replication"
+    password: "{{ postgresql_replication_password }}"
+    encrypted: true
+    state: "present"
+    role_attr_flags: "REPLICATION"
+  changed_when: false
+  become: true
+  become_user: "{{ postgres_admin_user }}"
+  no_log: true
+  run_once: true
+
+
+# Leaders & Followers need to have the entire cluster in pg_hba to allow them to
+# talk to one another and allow followers to be promoted at any time.
+- name: PostgreSQL - Leader | ensure replication access to cluster
+  ansible.builtin.lineinfile:
+    path: '/etc/postgresql/{{ postgres_version }}/main/pg_hba.conf'
+    line: 'host  replication      replication {{ lookup("dig", item) }}/32       md5'
+  loop: "{{ [postgresql_cluster.leader] + postgresql_cluster.followers }}"
+  register: hba_changed
+  notify: restart postgresql
+
+# Restart the leader postgres server to ensure pg_hba applies.
+- name: PostgreSQL - Leader | restart leader postgres server
+  ansible.builtin.service:
+    name: postgresql
+    state: restarted
+  when:
+    - postgresql_leader == true
+    - hba_changed.changed

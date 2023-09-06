@@ -3,8 +3,16 @@
 postgresql_is_local: true
 # postgresql_is_local: "{{ 'true' if project_db_host | search( 'localhost|127\\.0\\.0\\.1|^/') else 'false' }}"
 application_dbuser_role_attr_flags: ''
-buffer_memory: '{{ quarter_system_memory | default("128MB") }}'
-cache_size: '{{ two_third_system_memory | default("4GB") }}'
+# https://wiki.postgresql.org/wiki/Tuning_Your_PostgreSQL_Server
+# 1/4 memory to Shared Buffers
+buffer_memory: '{{ ([(ansible_memtotal_mb*0.25)|int|abs, 128]|max) | default(128) }}MB'
+# A little less than 3/4 of memory to effective_cache_size
+cache_size: '{{ ([(ansible_memtotal_mb*0.6)|int|abs, 4000]|max) | default(4000) }}MB'
+# https://www.enterprisedb.com/postgres-tutorials/how-tune-postgresql-memory
+# 25% of ram dedicated to work if all connections(400) maxed, or 4 MB each.
+work_mem: '{{ ([((ansible_memtotal_mb*0.25/400)|int|abs), 4]|max) }}MB'
+# 5% of ram dedicated to maintenance work
+maintenance_work_mem: '{{ ([(ansible_memtotal_mb*0.05)|int|abs, 64]|max)}}MB'
 min_wal: '{{ one_gig | default("80MB") }}'
 max_wal: '{{ two_gig | default("1GB") }}'
 # APT settings
@@ -18,6 +26,12 @@ apt_cache_timeout: 86400
 application_dbuser_name: "pguser"
 application_dbuser_password: "changethis"
 application_db_name: "dbname"
+postgresql_cluster_member: false
+postgresql_leader: true
+postgresql_replication_leader: false
+postgresql_replication_password: "{{ vault_postgresql_replication_password }}"
+postgresql_cluster_hosts:
+postgresql_cluster: false
 
 postgres_packages:
   - postgresql-{{ postgres_version }}
