@@ -3,27 +3,26 @@
 running_on_server: true
 
 # Apache Solr
-oawaiver_solr_core: "oawaiver-production"
+oawaiver_solr_core: "oawaiver-staging"
 solr_cores:
   - "{{ oawaiver_solr_core }}"
 solr_mirror: "https://pulmirror.princeton.edu/mirror/solr/dist"
 
 # PostgreSQL
-postgres_host: "lib-postgres-prod3.princeton.edu"
+postgres_host: "lib-postgres-staging3.princeton.edu"
 postgresql_is_local: false
 postgres_admin_password: "{{ vault_postgres_admin_password }}"
 postgres_port: "{{ app_db_port }}"
 postgres_admin_user: "postgres"
+postgres_version: 13
 pg_hba_postgresql_user: "all"
 pg_hba_postgresql_database: "all"
 pg_hba_method: "md5"
 pg_hba_source: "{{ ansible_host }}/32"
-postgres_version: 13
-
 ## These are used by the postgresql Role
-application_db_name: "{{ vault_oawaiver_prod_db_name }}"
-application_dbuser_name: "{{ vault_oawaiver_prod_db_user }}"
-application_dbuser_password: "{{ vault_oawaiver_prod_db_password }}"
+application_db_name: "{{ vault_oawaiver_staging_db_name }}"
+application_dbuser_name: "{{ vault_oawaiver_staging_db_user }}"
+application_dbuser_password: "{{ vault_oawaiver_staging_db_password }}"
 application_dbuser_role_attr_flags: 'CREATEDB'
 
 # Use Ruby 3.0.3 and install from source
@@ -40,26 +39,26 @@ application_host_protocol: "https"
 
 # mod_passenger
 passenger_ruby: "/usr/local/bin/ruby"
-passenger_server_name: "oawaiver-prod1.princeton.edu"
-passenger_app_env: "production"
+passenger_server_name: "oawaiver-staging1.princeton.edu"
+passenger_app_env: "staging"
 
 # Rails
-rails_app_env: "production"
+rails_app_env: "staging"
 
 ## PostgreSQL
 app_db_host: "{{ postgres_host }}"
 app_db_port: 5432
-app_db_name: "{{ vault_oawaiver_prod_db_name }}"
-app_db_user: "{{ vault_oawaiver_prod_db_user }}"
-app_db_password: "{{ vault_oawaiver_prod_db_password }}"
+app_db_name: "{{ vault_oawaiver_staging_db_name }}"
+app_db_user: "{{ vault_oawaiver_staging_db_user }}"
+app_db_password: "{{ vault_oawaiver_staging_db_password }}"
 
 ## Apache Solr
-app_solr_host: 'lib-solr-prod4.princeton.edu'
+app_solr_host: 'lib-solr-staging4.princeton.edu'
 app_solr_port: 8983
 app_solr_path: "/solr/{{ oawaiver_solr_core }}"
 
-app_secret_key: "{{ vault_oawaiver_prod_secret_key }}"
-app_host_name: "oawaiver.princeton.edu"
+app_secret_key: "{{ vault_oawaiver_staging_secret_key }}"
+app_host_name: "oawaiver-staging.princeton.edu"
 
 app_smtp_host: "lib-ponyexpr.princeton.edu"
 app_smtp_port: 25
@@ -87,40 +86,3 @@ rails_app_vars:
     value: "{{ app_host_name }}"
   - name: APPLICATION_HOST_PROTOCOL
     value: "{{ application_host_protocol }}"
-  - name: SMTP_HOST
-    value: "{{ app_smtp_host }}"
-  - name: SMTP_PORT
-    value: "{{ app_smtp_port }}"
-
-# Datadog
-
-datadog_api_key: "{{ vault_datadog_key }}"
-
-datadog_config:
-  log_enabled: true
-  apm_enabled: false
-  process_config:
-    enabled: true
-  apm_config:
-    analyzed_spans:
-      oawaiver|rack.request: 1
-    filter_tags:
-      reject: ["http.useragent:nginx/1.23.4 (health check)", "operation:heartbeat", "operation:job_fetch", "operation:scheduled_push", "operation:scheduled_poller_wait"]
-datadog_checks:
-  tls:
-    init_config:
-    instances:
-      - server: oawaiver.princeton.edu
-        port: 443
-        tags:
-          - 'tls_service:oawaiver'
-  oawaiver_datadog_ruby_check:
-    init_config:
-    logs:
-      - type: file
-        path: /opt/oawaiver/current/log/production.log
-        service: oawaiver
-        source: ruby
-        sourcecategory: sourcecode
-        tags: "oawaiver, environment:production, role:oawaiver"
-
