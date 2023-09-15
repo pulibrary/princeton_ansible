@@ -87,25 +87,33 @@
 
   - name: chown /usr/local/nagios
     become: true
-    file: path=/usr/local/nagios group=nagios owner=nagios recurse=yes state=directory
+    file:
+      path: /usr/local/nagios
+      group: nagios
+      owner: nagios
+      recurse: yes
+      state: directory
 
-  - name: add nagios config to xinetd
-    become: true
-    copy: src=nrpe_xinetd_config dest=/etc/xinetd.d/nrpe group=root owner=root
-
-  - name: add nrpe checks
-    become: true
-    copy: src=nrpe_commands_config group=nagios owner=nagios dest=/usr/local/nagios/etc/nrpe.cfg
-
-  - name: restart xinetd
-    become: true
-    service: name=xinetd state=restarted
-
-  - name: try nrpe
-    shell: /usr/local/nagios/libexec/check_http www.google.com
-    register: google_check
-
-  - name: check nrpe output
-    assert:
-      that:
-        - "'HTTP OK' in google_check.stdout"
+  # works up to this point
+  # from here it needs to be converted from nrpe to ncpa
+  #
+  # - name: add nagios config to xinetd
+  #   become: true
+  #   copy: src=nrpe_xinetd_config dest=/etc/xinetd.d/nrpe group=root owner=root
+  # 
+  # - name: add nrpe checks
+  #   become: true
+  #   copy: src=nrpe_commands_config group=nagios owner=nagios dest=/usr/local/nagios/etc/nrpe.cfg
+  # 
+  # - name: restart xinetd
+  #   become: true
+  #   service: name=xinetd state=restarted
+  # 
+  # - name: try nrpe
+  #   shell: /usr/local/nagios/libexec/check_http www.google.com
+  #   register: google_check
+  # 
+  # - name: check nrpe output
+  #   assert:
+  #     that:
+  #       - "'HTTP OK' in google_check.stdout"
