@@ -34,10 +34,11 @@
         # we do this later? - python-passlib
         - unzip
 
-    - name: create nagcmd group
-      become: true
-      group: name=nagcmd state=present
-
+    # this is done by the install-groups-users command
+    # - name: create nagios group
+    #   become: true
+    #   group: name=nagcmd state=present
+    # 
     - name: set perms on /opt
       become: true
       file:
@@ -45,13 +46,6 @@
         state: directory
         owner: pulsys
         group: pulsys
-
-    - name: add nagios and apache users to nagcmd group
-      become: true
-      user: name={{ item }} groups=nagcmd state=present
-      with_items:
-        - nagios
-        - www-data
 
     - name: download nagios source
       get_url: url=http://downloads.sourceforge.net/project/nagios/nagios-4.x/nagios-{{ nagios_core_version }}/nagios-{{ nagios_core_version }}.tar.gz dest={{ install_path }}/nagios-{{ nagios_core_version }}.tar.gz
@@ -68,17 +62,20 @@
       shell: cd {{ install_path }}/nagios-{{ nagios_core_version }} && make {{ item }}
       with_items:
         - all
+        - install-groups-users
         - install
-        - install-init
-        - install-config
+        - install-daemoninit
         - install-commandmode
+        - install-config
+        # - install-init
         - install-webconf
 
-    - name: install python-passlib
+    - name: add nagios and apache users to nagios group
       become: true
-      ansible.builtin.apt:
-        name: python-passlib
-        state: present
+      user: name={{ item }} groups=nagios state=present
+      with_items:
+        - nagios
+        - www-data
 
     - name: set admin password
       become: true
@@ -89,11 +86,11 @@
         crypt_scheme: des_crypt
         state: present
 
-    - name: disable mpm_event module
-      become: true
-      apache2_module:
-        state: absent
-        name: mpm_event
+    # - name: disable mpm_event module
+    #   become: true
+    #   apache2_module:
+    #     state: absent
+    #     name: mpm_event
         # ignore_configcheck: True
 
     - name: enable correct apache modules
@@ -102,22 +99,24 @@
         state: present
         name: "{{ item }}"
       with_items:
-        - mpm_prefork
-        - php7.0
+        # - mpm_prefork
+        # - php7.0
+        - rewrite
         - cgi
 
-    - name: install nagios service definition
-      become: true
-      copy:
-        src: new-nagios-service
-        dest: /etc/systemd/system/nagios.service
-
-    - name: enable nagios service
-      become: true
-      ansible.builtin.service:
-        name: nagios
-        enabled: true
-
+    # setting up the service is done by the 'install-daemoninit' step
+    # - name: install nagios service definition
+    #   become: true
+    #   copy:
+    #     src: new-nagios-service
+    #     dest: /etc/systemd/system/nagios.service
+    # 
+    # - name: enable nagios service
+    #   become: true
+    #   ansible.builtin.service:
+    #     name: nagios
+    #     enabled: true
+    # 
     - name: restart apache and nagios
       become: true
       ansible.builtin.service:
