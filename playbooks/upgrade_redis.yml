@@ -1,0 +1,34 @@
+# Required to pass a host group '-e host_group=pdc_describe_staging'
+- name: upgrade the redis instance on the host group
+  hosts: '{{ host_group }}'
+  remote_user: pulsys
+  become: true
+  vars_files:
+    - ../site_vars.yml
+  vars:
+    redis_packages:
+      - python3-redis
+      - redis-server
+      - redis-tools
+
+
+  tasks:
+    - name: add the redis repository
+      ansible.builtin.apt_repository:
+        repo: ppa:redislabs/redis
+        state: present
+    - name: Update the repository cache and update package "nginx" to latest version using default release squeeze-backport
+      ansible.builtin.apt:
+        name: "{{ redis_packages }}"
+        state: latest
+        install_recommends: no
+        dpkg_options: 'force-confold,force-confdef'
+
+  post_tasks:
+    - name: tell everyone on slack you ran an ansible playbook
+      community.general.slack:
+        token: "{{ vault_pul_slack_token }}"
+        msg: "Ansible ran `{{ ansible_play_name }}` on {{ inventory_hostname }}"
+        channel: "{{ slack_alerts_channel }}"
+      when: not ansible_check_mode
+
