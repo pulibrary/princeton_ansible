@@ -2,6 +2,9 @@
 proxy_cache_path /data/nginx/{{ item.name }}/NGINX_cache/ keys_zone={{ item.name }}cache:10m;
 
 upstream {{ item.name }} {
+  {% if item.lbtechnique is defined %}
+    {{ item.lbtechnique }};
+  {% endif %}
     zone {{ item.name }} {{ item.zone_size | default("64k") }};
     {% for name in item.servers %}
       server {{ name }}.princeton.edu resolve;
