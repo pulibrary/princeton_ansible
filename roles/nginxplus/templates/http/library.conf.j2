@@ -1,4 +1,6 @@
-# Ansible managed 
+# Ansible managed
+# local changes will be overwritten with each playbook run
+#
 proxy_cache_path /data/nginx/{{ item.name }}/NGINX_cache/ keys_zone={{ item.name }}cache:10m;
 
 upstream {{ item.name }} {
@@ -40,6 +42,10 @@ server {
   # for production/public sites, set "visibility: public"
   {% if item.visibility == public %}
     location {{ item.location }} {
+    {% if item.app_protect == on %}
+        app_protect_enable on;
+        app_protect_security_log_enable on;
+    {% endif %}
         proxy_pass http://{{ item.name }};
         proxy_set_header X-Forwarded-Host $host;
         proxy_set_header X-Real-IP $remote_addr;
@@ -59,12 +65,17 @@ server {
         health_check interval=10 fails=3 passes=2;
         # allow princeton network
         include /etc/nginx/conf.d/templates/restrict.conf;
+        {% if item.added_restrictions is defined %}
+        {% for name in item.added_restrictions %}
+          include /etc/nginx/conf.d/templates/{{ name }};
+        {% endfor %}
+        {% endif %}
         # block non-princeton traffic
         deny all;
     }
   {% endif %}
 
     # template config for errors
-    include {{ error_handling_template | default("/etc/nginx/conf.d/templates/errors.conf") }}
+    include /etc/nginx/conf.d/templates/{{ error_handling_template | default("errors.conf") }}
 
 }
