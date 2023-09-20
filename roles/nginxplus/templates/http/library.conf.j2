@@ -33,8 +33,9 @@ server {
     ssl_prefer_server_ciphers  on;
     client_max_body_size       0;
 
-  # production/public sites are configured here
-  {% if item.public_site is defined %}
+  # defaults to private/VPN-only
+  # for production/public sites, set "visibility: public"
+  {% if item.visibility == public %}
     location {{ item.location }} {
         proxy_pass http://{{ item.name }};
         proxy_set_header X-Forwarded-Host $host;
@@ -45,10 +46,7 @@ server {
         # TODO add a URI for the health check if needed
         health_check interval=10 fails=3 passes=2;
     }
-  {% endif %}
-
-  # sites behind the VPN, including staging and pre-production, are configured here
-  {% if item.public_site is not defined %}
+  {% else %}
     location {{ item.location }} {
         proxy_pass http://{{ item.name }};
         proxy_set_header X-Forwarded-Host $host;
@@ -62,7 +60,6 @@ server {
         deny all;
     }
   {% endif %}
-
 
     # template config for errors
     include {{ error_handling_template | default("/etc/nginx/conf.d/templates/errors.conf") }}
