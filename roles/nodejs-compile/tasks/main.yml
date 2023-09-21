@@ -1,0 +1,114 @@
+---
+- name: nodejs-compile | get node version
+  shell: node -v 2>&1 || true
+  register: nodejs_installed_version
+  ignore_errors: True
+
+- name: nodejs-compile | test node version
+  ansible.builtin.assert:
+    that: nodejs_installed_version.stdout is version(desired_nodejs_version, '>=')
+    fail_msg: "nodejs {{ desired_nodejs_version }} not installed"
+    success_msg: "nodejs {{ desired_nodejs_version }} is installed"
+  register: nodejs_installed
+  ignore_errors: True
+
+- name: nodejs-compile | uninstall any apt installed node
+  ansible.builtin.apt:
+    name: ["nodejs"]
+    state: absent
+  changed_when: false
+  when: nodejs_installed is failed
+
+- name: nodejs | remove node symbolic links
+  ansible.builtin.file:
+    dest: "{{ item.dest }}"
+    state: absent
+  loop:
+    - {dest: "/usr/local/bin/node"}
+    - {dest: "/usr/local/bin/npm"}
+  changed_when: false
+  when: nodejs_installed is failed
+
+- name: nodejs-compile | add toolchain ppa
+  ansible.builtin.apt_repository:
+    repo: "ppa:ubuntu-toolchain-r/test"
+    state: present
+  when: nodejs_installed is failed
+
+- name: nodejs-compile | install gcc-11 and g++-11
+  ansible.builtin.apt:
+    name: "{{ item.name }}"
+    state: present
+  loop:
+    - {name: "gcc-11"}
+    - {name: "g++-11"}
+  changed_when: false
+  when: nodejs_installed is failed
+
+- name: nodejs-compile | select gcc-11 and g+11 as alternatives
+  community.general.alternatives:
+    name: "{{ item.name }}"
+    path: "{{ item.path }}"
+    link: "{{ item.link }}"
+  loop:
+    - {name: "gcc", path: "/usr/bin/gcc-11", link: "/usr/bin/gcc"}
+    - {name: "g++", path: "/usr/bin/g++-11", link: "/usr/bin/g++"}
+  when: nodejs_installed is failed
+
+- name: nodejs-compile | create temporary build directory
+  ansible.builtin.tempfile:
+    state: directory
+    suffix: build
+  register: build
+  when: nodejs_installed is failed
+
+- name: nodejs-compile | download node
+  ansible.builtin.unarchive:
+    src: "http://nodejs.org/dist/{{ desired_nodejs_version }}/node-{{ desired_nodejs_version }}.tar.gz"
+    dest: "{{ build.path }}"
+    remote_src: true
+  when: nodejs_installed is failed
+
+- name: nodejs-compile | configure, build and install node
+  shell: ./configure && make && make install chdir={{ build.path }}/node-{{desired_nodejs_version}}
+  when: nodejs_installed is failed
+
+- name: Remove the temp directory
+  ansible.builtin.file:
+    path: "{{ build.path }}"
+    state: absent
+  when: nodejs_installed is failed
+
+- name: nodejs-compile | get yarn key from yarnpkg
+  ansible.builtin.apt_key:
+    url: https://dl.yarnpkg.com/debian/pubkey.gpg
+    state: present
+  register: yarn_pkg_registered
+
+- name: nodejs-compile | get yarn keys from other sources
+  ansible.builtin.apt_key:
+    id: "{{ nodejs__yarn_upstream_key_id }}"
+    keyserver: "{{ item }}"
+    state: present
+  when: yarn_pkg_registered is failed
+  register: yarn_key_registered
+  loop:
+    - "hkp://pool.sks-keyservers.net"
+    - "pgp.mit.edu"
+    - "keyserver.pgp.com"
+  failed_when:
+    - yarn_key_registered == 0
+
+- name: nodejs-compile | Add upstream Yarn APT repository
+  ansible.builtin.apt_repository:
+    repo: "{{ nodejs__yarn_upstream_repository }}"
+    state: present
+  tags:
+    - nodejs-compile
+
+- name: nodejs | | Install yarn packages
+  ansible.builtin.apt:
+    name: ["yarn"]
+    state: present
+  tags:
+    - nodejs-compile
