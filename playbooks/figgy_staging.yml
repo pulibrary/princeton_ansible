@@ -1,5 +1,6 @@
 ---
-- hosts: figgy_staging
+- name: build or update figgy staging system
+  hosts: figgy_staging
   remote_user: pulsys
   become: true
   pre_tasks:
@@ -7,10 +8,12 @@
       apt:
         name: mediainfo
         state: absent
+      tags: mediainfo
     - name: remove mediainfo deb repo
       apt:
         name: repo-mediaarea
         state: absent
+      tags: mediainfo
   vars_files:
     - ../site_vars.yml
     - ../group_vars/figgy/vault.yml
@@ -26,5 +29,5 @@
     - name: tell everyone on slack you ran an ansible playbook
       slack:
         token: "{{ vault_pul_slack_token }}"
-        msg: "{{ inventory_hostname }} completed"
+        msg: "Ansible ran `{{ ansible_play_name }}` on {{ inventory_hostname }}"
         channel: "{{ slack_alerts_channel }}"
