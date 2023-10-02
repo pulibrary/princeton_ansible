@@ -22,13 +22,13 @@
     mode: 0755
   when: nginx_template_upload_enable
 
-- name: Setup | Upload NGINX HTTP Configuration Files
+- name: Setup | Upload NGINX HTTP Static Config Files
   copy:
     src: "{{ item }}"
-    dest: "{{ nginx_http_upload_dest }}"
+    dest: "{{ nginx_http_upload_dest }}static/"
     mode: 0755
-    state: directory
-  loop: "{{ nginx_http_upload_src }}"
+    backup: true
+  with_fileglob: "{{ nginx_http_upload_src }}"
   notify: Reload NGINX
   when: nginx_http_upload_enable
   tags: update_conf
