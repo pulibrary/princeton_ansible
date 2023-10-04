@@ -96,31 +96,28 @@ effective_cache_size = {{ cache_size }}
 
 # - Where to Log -
 
-log_destination = 'jsonlog' # Valid values are combinations of
-
-# This is used when logging to stderr:
-logging_collector = on  # Enable capturing of stderr, jsonlog,
+logging_collector = on   # Enable capturing of stderr, jsonlog,
 					# and csvlog into log files. Required
 					# to be on for csvlogs and jsonlogs.
 					# (change requires restart)
+log_destination = 'jsonlog'
 
 # These are only used if logging_collector is on:
-log_directory = 'pg_log' # directory where log files are written,
-					# can be absolute or relative to PGDATA
-log_filename = 'postgresql-%Y-%m-%d_%H%M%S.log' # log file name pattern,
-					# can include strftime() escapes
-#log_file_mode = 0600			# creation mode for log files,
-					# begin with 0 to use octal notation
-#log_rotation_age = 1d			# Automatic rotation of logfiles will
-					# happen after that time.  0 disables.
-log_rotation_age = 1d # Automatic rotation of logfiles will
-log_rotation_size = 1GB # Automatic rotation of logfiles will
+log_directory = 'pg_log' # relative to PGDATA (/var/lib/postgresql/15/main/pg_log/)
+log_filename = 'pg.log'  # can include strftime() escapes, but daily rotation is enough
+log_statement = 'all'
+log_file_mode = 0644     # allow Datadog to read log files
+log_rotation_age = 1d		 # Automatic daily logfile rotation. 0 disables.
+log_rotation_size = 1GB  # Automatic rotation of large logfiles.
 log_checkpoints = on
 log_connections = on
 log_disconnections = on
-log_line_prefix = '%m [%p] %q%u@%d ' # special values:
-log_lock_waits = on # log lock waits deadlock_timeout
-log_temp_files = 0 # log temporary files equal or larger
+
+# prefix recommended for Datadog:
+log_line_prefix= '%m [%p] %d %a %u %h %c '
+# log_line_prefix = '%m [%p] %q%u@%d '
+log_lock_waits = on      # log lock waits deadlock_timeout
+log_temp_files = 0       # log temporary files equal or larger
 log_timezone = 'localtime'
 
 #------------------------------------------------------------------------------
