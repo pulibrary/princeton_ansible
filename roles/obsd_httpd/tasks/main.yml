@@ -18,3 +18,50 @@
     group: wheel
     owner: root
   notify: restart nginx
+
+- name: create default directory
+  ansible.builtin.file:
+    path: "/var/local/www/default"
+    state: directory
+    owner: nginx
+    group: nginx
+    mode: 0755
+  when: running_on_server
+
+- name: add pul svg file
+  ansible.builtin.copy:
+    src: files/pul-logo-new.svg
+    dest: "/var/local/www/default/pul-logo-new.svg"
+    owner: nginx
+    group: nginx
+    mode: 0644
+  when: running_on_server
+
+- name: add custom error page for default site
+  ansible.builtin.copy:
+    src: files/error.html
+    dest: "/var/local/www/default/error.html"
+    owner: nginx
+    group: nginx
+    mode: 0644
+  when: running_on_server
+
+- name: obsd_httpd | copy config file for IP restrictions
+  ansible.builtin.copy:
+    src: files/conf/restrict.conf
+    dest: /etc/nginx/restrict.conf
+    mode: "0644"
+    group: wheel
+    owner: root
+  notify: restart nginx
+
+- name: obsd_httpd | copy config file for error responses
+  ansible.builtin.copy:
+    src: files/conf/errors.conf
+    dest: /etc/nginx/errors.conf
+    mode: "0644"
+    group: wheel
+    owner: root
+  notify: restart nginx
+
+
