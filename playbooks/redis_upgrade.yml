@@ -1,0 +1,27 @@
+#
+- name: Upgrade redis
+  hosts: "{{ runtime_env | default('staging') }}"
+  remote_user: pulsys
+  become: true
+
+  tasks:
+  - name: Redis | configure redis ppa
+    ansible.builtin.apt_repository:
+      repo: ppa:redislabs/redis
+
+  - name: Update apt repos
+    ansible.builtin.apt:
+      update_cache: true
+
+  - name: Redis install the upgraded version
+    ansible.builtin.apt:
+      name: redis-server
+      state: present
+      only_upgrade: true
+
+  - name: Redis | Upgrade redis packages
+    ansible.builtin.apt:
+      update_cache: true
+      upgrade: dist
+      force_apt_get: true
+
