@@ -22,19 +22,23 @@
     mode: 0755
   when: nginx_template_upload_enable
 
-- name: Setup | Upload NGINX HTTP Static Config Files
+- name: Setup | Upload NGINX HTTP Static Site Config Files
   copy:
     src: "{{ item }}"
-    dest: "{{ nginx_http_upload_dest }}static/"
+    # test path:
+    dest: "/tmp/static/"
+    # dest: "{{ nginx_http_upload_dest }}static/"
     mode: 0755
     backup: true
   with_fileglob: "{{ nginx_http_upload_src }}"
   notify: Reload NGINX
   when: nginx_http_upload_enable
-  tags: update_conf
+  tags: test_conf
+  # tags: update_conf
 
 - name: Setup | Ensure cache directories exist
   file:
+    # test path:
     path: /tmp/nginx/{{ item.short_name }}/NGINX_cache
     # path: /data/nginx/{{ item.short_name }}/NGINX_cache
     state: directory
@@ -54,14 +58,14 @@
   when: nginx_template_upload_enable
   tags: update_conf
 
-- name: Setup | Upload NGINX templated configuration files
+- name: Setup | Upload NGINX HTTP Templated Site Config Files
   template:
     src: http/library.conf.j2
     dest: /tmp/{{ item.name }}.conf
     # dest: /etc/nginx/conf.d/{{ item.name }}.conf
     mode: 0755
     backup: true
-  when: nginx_template_upload_enable
+  when: nginx_http_upload_enable
   loop: "{{ sites }}"
   tags: test_conf
 
