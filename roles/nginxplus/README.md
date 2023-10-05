@@ -159,7 +159,7 @@ nginx_main_upload_dest: /etc/nginx/
 # Upload HTTP NGINX configuration files.
 nginx_http_upload_enable: false
 nginx_http_upload_src: conf/http/*.conf
-nginx_http_upload_dest: /etc/nginx/conf.d/
+nginx_http_upload_dest: /etc/nginx/conf.d
 # Upload Stream NGINX configuration files.
 nginx_stream_upload_enable: false
 nginx_stream_upload_src: conf/stream/*.conf
