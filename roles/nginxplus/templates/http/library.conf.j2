@@ -50,8 +50,11 @@ server {
         proxy_cache {{ item.short_name }}cache;
         proxy_intercept_errors on;
         # TODO don't do a health check if there's only one server
-        # TODO add a URI for the health check if needed
-        health_check interval=10 fails=3 passes=2;
+        {% if item.health_check_URI is defined %}
+          health_check interval=10 fails=3 passes=2 uri={{ health_check_URI }};
+          {% else %}
+          health_check interval=10 fails=3 passes=2;
+        {% endif %}
     }
   {% else %}
     location {{ item.location }} {
