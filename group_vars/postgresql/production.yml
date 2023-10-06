@@ -33,15 +33,20 @@ datadog_typed_checks:
     configuration:
       init_config:
       instances:
-        - dbm: true
-          host: localhost
+        - host: localhost
+          dbm: true
           port: 5432
           username: datadog
           password: "{{ vault_datadog_db_password }}"
       logs:
         - type: file
-          path: /var/lib/postgresql/{{ postgres_version }}/main/pg_log/*.csv
+          path: /var/lib/postgresql/{{ postgres_version }}/main/pg_log/pg.json
           service: database
           source: postgresql
           sourcecategory: postgresql_logs
           tags: "postgresql, env:prod, role:postgresql"
+          log_processing_rules:
+            - type: exclude_at_match
+              name: exclude_log_level_LOG
+              pattern: \"error_severity\":\"LOG\"
+
