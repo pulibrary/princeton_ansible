@@ -19,6 +19,13 @@
     when: ansible_limit is not defined
     run_once: true
 
+  - name: tell slack the playbook is starting
+    slack:
+      token: "{{ vault_pul_slack_token }}"
+      msg: "Ansible is now running `{{ ansible_play_name }}` with the `{{ ansible_run_tags }}` tag on {{ inventory_hostname }}"
+      channel: "{{ slack_alerts_channel }}"
+    tags: always
+
   # updates existing load balancer
   roles:
     - role: ../roles/nginxplus
