@@ -1,0 +1,18 @@
+---
+
+- name: test slack connection to infrastructure
+  hosts: localhost # default to staging when we get a staging environment going
+  remote_user: pulsys
+  strategy: linear
+  become: true
+  vars:
+    - slack_alerts_channel: '#infrastructure'
+
+  tasks:
+  - name: test slack connection to infrastructure
+    slack:
+      token: "{{ vault_pul_slack_token }}"
+      msg: "Ansible is now running `{{ ansible_play_name }}` - Houston, do we have a problem?"
+      channel: "{{ slack_alerts_channel }}"
+    tags: always
+
