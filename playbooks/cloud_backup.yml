@@ -1,0 +1,23 @@
+
+---
+- name: Backup environments
+  hosts: postgresql_{{ runtime_env | default('staging') }}
+  remote_user: pulsys
+  become: true
+  vars:
+    - deploy_user: "pulsys"
+  tasks:
+    - name: Install restic software
+      ansible.builtin.apt:
+        name: restic
+        state: present
+
+    - name: Create backup bucket
+      google.cloud.gcp_storage_bucket:
+        name: ansible-storage-module
+        project: pul-gcdc
+        auth_kind: serviceaccount
+        service_account_file: "/tmp/auth.pem"
+        state: present
+
+

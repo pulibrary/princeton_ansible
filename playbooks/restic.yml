@@ -1,0 +1,58 @@
+---
+# You must use command-line "extra variables" with this playbook to define:
+# - the project_name you intend to backup
+#
+- name: Set up cloud backup for "{{ inventory_hostname }}"
+  hosts: mysql_production
+  remote_user: pulsys
+  become: true
+  vars_files:
+    - ../group_vars/{{ project_name }}/production.yml
+    - ../group_vars/{{ project_name }}/vault.yml
+
+  roles:
+    - role: roles/restic
+
+  post_tasks:
+    - name: tell everyone on slack you ran an ansible playbook
+      community.general.slack:
+        token: "{{ vault_pul_slack_token }}"
+        msg: "Ansible ran `{{ ansible_play_name }}` on {{ inventory_hostname }}"
+        channel: "{{ slack_alerts_channel }}"
+
+
+- name: Set up cloud backup for "{{ inventory_hostname }}"
+  hosts: postgresql_production
+  remote_user: pulsys
+  become: true
+  vars_files:
+    - ../group_vars/{{ project_name }}/production.yml
+    - ../group_vars/{{ project_name }}/vault.yml
+
+  roles:
+    - role: roles/restic
+
+  post_tasks:
+    - name: tell everyone on slack you ran an ansible playbook
+      community.general.slack:
+        token: "{{ vault_pul_slack_token }}"
+        msg: "Ansible ran `{{ ansible_play_name }}` on {{ inventory_hostname }}"
+        channel: "{{ slack_alerts_channel }}"
+
+- name: Set up cloud backup for "{{ inventory_hostname }}"
+  hosts: figgy_production_cluster
+  remote_user: pulsys
+  become: true
+  vars_files:
+    - ../group_vars/{{ project_name }}/production.yml
+    - ../group_vars/{{ project_name }}/vault.yml
+
+  roles:
+    - role: roles/restic
+
+  post_tasks:
+    - name: tell everyone on slack you ran an ansible playbook
+      community.general.slack:
+        token: "{{ vault_pul_slack_token }}"
+        msg: "Ansible ran `{{ ansible_play_name }}` on {{ inventory_hostname }}"
+        channel: "{{ slack_alerts_channel }}"
