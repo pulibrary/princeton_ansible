@@ -3,6 +3,18 @@
 #
 proxy_cache_path /data/nginx/{{ item.short_name }}/NGINX_cache/ keys_zone={{ item.short_name }}cache:10m;
 
+{% if item.rate_limit is defined %}
+  include /etc/nginx/conf.d/templates/rate-limit-allow-list.conf;
+
+  map $limit $external_traffic {
+      0 "";
+      1 $binary_remote_addr;
+  }
+
+  # zone: 10mb can hold 160K IP addresses in memory
+  limit_req_zone $external_traffic zone={{ item.name }}-ratelimit:{{ item.rate_limit_mb }}m rate={{ item.rate_limit_per_sec }}r/s;
+{% endif %}
+
 upstream {{ item.short_name }} {
   {% if item.lbtechnique is defined %}
     {{ item.lbtechnique }};
@@ -40,21 +52,24 @@ server {
 
   {% if item.visibility == "public" %}
     location {{ item.location }} {
-    {% if item.app_protect == "enabled" %}
+      {% if item.app_protect == "enabled" %}
         app_protect_enable on;
         app_protect_security_log_enable on;
-    {% endif %}
+      {% endif %}
         proxy_pass http://{{ item.short_name }};
         proxy_set_header X-Forwarded-Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_cache {{ item.short_name }}cache;
         proxy_intercept_errors on;
         # TODO don't do a health check if there's only one server
-        {% if item.health_check_URI is defined %}
-          health_check interval=10 fails=3 passes=2 uri={{ item.health_check_URI }};
-          {% else %}
-          health_check interval=10 fails=3 passes=2;
-        {% endif %}
+      {% if item.health_check_URI is defined %}
+        health_check interval=10 fails=3 passes=2 uri={{ item.health_check_URI }};
+      {% else %}
+        health_check interval=10 fails=3 passes=2;
+      {% endif %}
+      {% if item.rate_limit is defined %}
+        limit_req zone={{ item.name }}-ratelimit burst={{ item.rate_limit_burst_rate }} nodelay;
+      {% endif %}
     }
   {% else %}
     location {{ item.location }} {
@@ -66,11 +81,11 @@ server {
         health_check interval=10 fails=3 passes=2;
         # allow princeton network
         include /etc/nginx/conf.d/templates/restrict.conf;
-        {% if item.added_restrictions is defined %}
-        {% for name in item.added_restrictions %}
-          include /etc/nginx/conf.d/templates/{{ name }};
-        {% endfor %}
-        {% endif %}
+      {% if item.added_restrictions is defined %}
+      {% for name in item.added_restrictions %}
+        include /etc/nginx/conf.d/templates/{{ name }};
+      {% endfor %}
+      {% endif %}
         # block non-princeton traffic
         deny all;
     }
