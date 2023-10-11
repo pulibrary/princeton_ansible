@@ -14,11 +14,12 @@
     when: ansible_limit is not defined
     run_once: true
 
-  - name: tell slack the playbook is starting
-    slack:
-      token: "{{ vault_pul_slack_token }}"
+  - name: tell infrastructure and ansible-alerts the playbook is starting
+    community.general.slack:
+      token: "{{ vault_tower_slack_token }}"
       msg: "Ansible is now running `{{ ansible_play_name }}` with the `{{ ansible_run_tags }}` tag on {{ inventory_hostname }}"
-      channel: "{{ slack_alerts_channel }}"
+      channel: {{ item }}
+    loop: "{{ slack_alerts_channel }}"
     tags: always
 
 # rebuilds the load balancer from scratch
@@ -45,5 +46,6 @@
       community.general.slack:
         token: "{{ vault_pul_slack_token }}"
         msg: "Ansible ran `{{ ansible_play_name }}` on {{ inventory_hostname }}"
-        channel: "{{ slack_alerts_channel }}"
+        channel: {{ item }}
+      loop: "{{ slack_alerts_channel }}"
       tags: always
