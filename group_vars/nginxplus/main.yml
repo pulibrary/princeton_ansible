@@ -5,8 +5,15 @@ slack_alerts_channel:
   - '#infrastructure'
   - '#ansible-alerts'
 nginx_type: plus
+nginx_delete_license: false
+# enable rest API
 nginx_rest_api_enable: true
 nginx_rest_api_write: true
+nginx_rest_api_src: api.conf.j2
+nginx_rest_api_location: /etc/nginx/conf.d/api.conf
+nginx_rest_api_port: 8080
+nginx_rest_api_dashboard: true
+# modules to install
 nginx_modules:
   waf: true
   geoip: true
@@ -15,18 +22,12 @@ nginx_modules:
   image_filter: true
   rtmp: true
   xslt: true
-nginx_status_enable: false
-nginx_status_port: 8080
-nginx_rest_api_src: api.conf.j2
-nginx_rest_api_location: /etc/nginx/conf.d/api.conf
-nginx_rest_api_port: 8080
-nginx_rest_api_dashboard: true
-nginx_delete_license: false
-# manage the hash table that stores server names for fast lookup
-# increase the size first, when that stops working, increase the number of hash buckets in the table
+# the hash table stores server names for fast lookup
+# see PR 3578 on princeton_ansible
+# increase the size first
+# when that stops working, increase the hash buckets
 nginx_server_names_hash_bucket_size: 64
 nginx_server_names_hash_max_size: 1024
-
 # Upload HTTP NGINX static configuration files.
 nginx_http_upload_enable: true
 nginx_http_upload_src: conf/http/static/*.conf
@@ -45,6 +46,7 @@ nginx_ssl_key_upload_dest: /etc/nginx/conf.d/ssl/private/
 nginx_template_upload_enable: true
 nginx_template_upload_src: conf/http/templates/*.conf
 nginx_template_upload_dest: /etc/nginx/conf.d/templates/
+# configure datadog log collection
 datadog_api_key: "{{vault_datadog_key}}"
 datadog_config:
   tags: "{{nginxplus_tags}}"
