@@ -22,6 +22,9 @@ sites:
     ## most sites have app_protect disabled
     ## set app_protect: enabled to enable it
     # app_protect: enabled 
+    ## client_max_body_size defines the upper limit on request sizes
+    ## default is 0 (don't check), if you change this, you must include the unit of measurement
+    # client_max_body_size: 8m
     ## error handling templates live in /etc/nginx/conf.d/templates/
     ## the default template for handling errors is errors.conf
     # error_handling_template: cdh-errors.conf
@@ -49,6 +52,8 @@ sites:
     short_name: allsearch-api
     location: "/"
     visibility: public
+    lbtechnique: least_conn
+    client_max_body_size 512k
     app_protect: disabled
     rate_limit: enabled
     rate_limit_mb: 10
@@ -60,7 +65,10 @@ sites:
     short_name: allsearch-api-staging
     location: "/"
     visibility: private
-    app_protect: disabled
+    lbtechnique: least_conn
+    client_max_body_size: 512k
+    app_protect: enabled
+
   # - name: annotations-prod
   #   servers:
   #     - annotations-prod1
