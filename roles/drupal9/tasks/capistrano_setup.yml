@@ -24,13 +24,40 @@
     line: "{{ deploy_user }} ALL = (WWW) NOPASSWD: ALL"
     validate: "visudo -cf %s"
 
-- name: drupal9 | Allow deploy to restart, stop, start nginx
+- name: drupal9 | Allow deploy to restart, stop, start nginx (service)
   ansible.builtin.lineinfile:
     dest: "/etc/sudoers"
     state: "present"
     line: "{{ deploy_user }} ALL=(ALL) NOPASSWD: /usr/sbin/service nginx *"
     validate: "visudo -cf %s"
 
+- name: drupal9 | Allow deploy to restart nginx (systemctl)
+  ansible.builtin.lineinfile:
+    dest: "/etc/sudoers"
+    state: "present"
+    line: "{{ deploy_user }} ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart nginx"
+    validate: "visudo -cf %s"
+
+- name: drupal9 | Allow deploy to stop nginx (systemctl)
+  ansible.builtin.lineinfile:
+    dest: "/etc/sudoers"
+    state: "present"
+    line: "{{ deploy_user }} ALL=(ALL) NOPASSWD: /usr/bin/systemctl stop nginx"
+    validate: "visudo -cf %s"
+
+- name: drupal9 | Allow deploy to start nginx (systemctl)
+  ansible.builtin.lineinfile:
+    dest: "/etc/sudoers"
+    state: "present"
+    line: "{{ deploy_user }} ALL=(ALL) NOPASSWD: /usr/bin/systemctl start nginx"
+    validate: "visudo -cf %s"
+
+- name: drupal9 | Allow deploy to status nginx (systemctl)
+  ansible.builtin.lineinfile:
+    dest: "/etc/sudoers"
+    state: "present"
+    line: "{{ deploy_user }} ALL=(ALL) NOPASSWD: /usr/bin/systemctl status nginx"
+    validate: "visudo -cf %s"
 
 - name: drupal9 | Allow deploy user to change ownership of the library directory to nginx
   ansible.builtin.lineinfile:

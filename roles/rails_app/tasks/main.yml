@@ -56,11 +56,39 @@
     force: true
   with_items: '{{ rails_app_symlinks }}'
 
-- name: rails_app | Allow deploy to restart, stop, start nginx
+- name: rails_app | Allow deploy to restart, stop, start nginx (service)
   lineinfile:
     dest: "/etc/sudoers"
     state: "present"
     line: "{{ deploy_user }} ALL=(ALL) NOPASSWD: /usr/sbin/service nginx *"
+    validate: "visudo -cf %s"
+
+- name: rails_app | Allow deploy to restart nginx (systemctl)
+  lineinfile:
+    dest: "/etc/sudoers"
+    state: "present"
+    line: "{{ deploy_user }} ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart nginx"
+    validate: "visudo -cf %s"
+
+- name: rails_app | Allow deploy to stop nginx (systemctl)
+  lineinfile:
+    dest: "/etc/sudoers"
+    state: "present"
+    line: "{{ deploy_user }} ALL=(ALL) NOPASSWD: /usr/bin/systemctl stop nginx"
+    validate: "visudo -cf %s"
+
+- name: rails_app | Allow deploy to start nginx (systemctl)
+  lineinfile:
+    dest: "/etc/sudoers"
+    state: "present"
+    line: "{{ deploy_user }} ALL=(ALL) NOPASSWD: /usr/bin/systemctl start nginx"
+    validate: "visudo -cf %s"
+
+- name: rails_app | Allow deploy to status nginx (systemctl)
+  lineinfile:
+    dest: "/etc/sudoers"
+    state: "present"
+    line: "{{ deploy_user }} ALL=(ALL) NOPASSWD: /usr/bin/systemctl status nginx"
     validate: "visudo -cf %s"
 
 - name: rails_app | rotate the logs for the rails applications
