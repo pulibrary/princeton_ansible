@@ -32,14 +32,19 @@
       register: yum_update_status
       when: ansible_os_family == "RedHat"
 
-    - name: RedHat | remove unneeded packages
+    - name: RedHat | clear local repository
       ansible.builtin.yum:
-        autoremove: true
+        clean: true
       when: ansible_os_family == "RedHat"
 
     - name: Ubuntu | remove dependencies that are no longer required
       ansible.builtin.apt:
         autoremove: true
+      when: ansible_os_family == "Debian"
+
+    - name: Ubuntu | remove local dependencies that are no longer required
+      ansible.builtin.apt:
+        autoclean: true
       when: ansible_os_family == "Debian"
 
     - name: Ubuntu | Check if reboot required
