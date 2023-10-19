@@ -60,6 +60,7 @@ server {
         proxy_set_header X-Forwarded-Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_cache {{ item.short_name }}cache;
+        # handle errors using errors.conf
         proxy_intercept_errors on;
         # TODO don't do a health check if there's only one server
       {% if item.health_check_URI is defined %}
@@ -73,6 +74,10 @@ server {
     }
   {% else %}
     location {{ item.location }} {
+      {% if item.app_protect == "enabled" %}
+        app_protect_enable on;
+        app_protect_security_log_enable on;
+      {% endif %}        
         proxy_pass http://{{ item.short_name }};
         proxy_set_header X-Forwarded-Host $host;
         proxy_set_header X-Real-IP $remote_addr;
