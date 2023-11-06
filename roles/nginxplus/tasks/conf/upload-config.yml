@@ -15,7 +15,7 @@
     mode: 0755
   when: nginx_http_upload_enable
 
-- name: Setup | Ensure NGINX template Directory Exists
+- name: Setup | Ensure NGINX partial config "template" Directory Exists
   ansible.builtin.file:
     path: "{{ nginx_template_upload_dest }}"
     state: directory
@@ -40,7 +40,6 @@
     mode: 0755
   notify: Reload NGINX
   loop: "{{ sites }}"
-  tags: template_test
 
 - name: Setup | Upload NGINX partial config "template" files
   ansible.builtin.copy:
@@ -53,16 +52,23 @@
   when: nginx_template_upload_enable
   tags: update_conf
 
-- name: Setup | Upload NGINX HTTP Templated Site Config Files
+- name: Setup | Ensure NGINX HTTP Dynamic Site Config Directory Exists
+  ansible.builtin.file:
+    path: "{{ nginx_http_dynamic_config_dest }}"
+    state: directory
+    mode: 0755
+  when: nginx_template_upload_enable
+
+- name: Setup | Upload NGINX HTTP Dynamic Site Config Files
   ansible.builtin.template:
     src: http/library.conf.j2
-    dest: /tmp/{{ item.name }}.conf
+    dest: "{{ nginx_http_dynamic_config_dest }}/{{ item.name }}.conf"
+    # dest: /tmp/{{ item.name }}.conf
     # dest: /etc/nginx/conf.d/{{ item.name }}.conf
     mode: 0755
     backup: true
   when: nginx_http_upload_enable
   loop: "{{ sites }}"
-  tags: template_test
 
 - name: Setup | Ensure NGINX HTML Directory Exists
   ansible.builtin.file:
