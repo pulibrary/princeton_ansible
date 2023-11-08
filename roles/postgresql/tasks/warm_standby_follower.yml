@@ -47,6 +47,8 @@
 # pg_basebackup so their files are the same.
 - name: PostgreSQL - Follower | standby pg_basebackup from leader
   shell: 'rm -rf /var/lib/postgresql/{{ postgres_version }}/main && /usr/bin/pg_basebackup -Xs -d "hostaddr={{ lookup("dig", postgresql_cluster.leader) }} port=5432 user=replication password={{ postgresql_replication_password }}" -D /var/lib/postgresql/{{ postgres_version }}/main -v -Fp'
+  async: 1800
+  poll: 60
   become: true
   become_user: "{{ postgres_admin_user }}"
   no_log: true
