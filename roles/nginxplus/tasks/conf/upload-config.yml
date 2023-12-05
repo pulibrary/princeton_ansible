@@ -85,7 +85,8 @@
 - name: list our site names
   ansible.builtin.debug:
     var: "{{ item.name }}"
-  loop: sites
+  loop: "{{ sites }}"
+  register: alt_list
   tags: test_template
 
 - name: Get list of all files
@@ -99,6 +100,10 @@
 - name: what is in all files?
   ansible.builtin.debug:
     var: all_files
+  tags: test_template
+
+- name: Find files on server that do not exist in sites
+  set_fact: files_diff="{{ all_files | difference(alt_list) }}"
   tags: test_template
 
 - name: Find files on server that do not exist in sites
