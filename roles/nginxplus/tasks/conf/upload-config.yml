@@ -58,6 +58,8 @@
     state: directory
     mode: 0755
   when: nginx_template_upload_enable
+  tags: test_template
+
 
 - name: Setup | Upload NGINX HTTP Dynamic Site Config Files
   ansible.builtin.template:
@@ -69,7 +71,37 @@
     backup: true
   when: nginx_http_upload_enable
   loop: "{{ sites }}"
-  tags: update_conf
+  tags:
+    - update_conf
+    - test_template
+  register: sites_loop
+
+- name: what is in sites list?
+  ansible.builtin.debug:
+    var: sites_loop
+  tags: test_template
+
+- name: Get list of all files
+  ansible.builtin.find:
+    paths: "{{ nginx_http_dynamic_config_dest }}/"
+    recurse: false
+    file_type: file
+  register: all_files
+  tags: test_template
+
+- name: what is in all files?
+  ansible.builtin.debug:
+    var: all_files
+  tags: test_template
+
+- name: Find files on server that do not exist in sites
+  set_fact: files_diff="{{ all_files | difference(sites_loop) }}"
+  tags: test_template
+
+- name: what is in files diff?
+  ansible.builtin.debug:
+    var: files_diff
+  tags: test_template
 
 - name: Setup | Ensure NGINX HTML Directory Exists
   ansible.builtin.file:
