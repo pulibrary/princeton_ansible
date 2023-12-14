@@ -1,0 +1,30 @@
+# Required: pass a host group '-e host_group=pdc_describe_staging'
+- name: upgrade the gcc on the host group to prepare for node 18
+  hosts: '{{ host_group }}'
+  remote_user: pulsys
+  become: true
+  vars_files:
+    - ../site_vars.yml
+  vars:
+    gcc_packages:
+      - gcc-11
+      - g++-11
+
+  tasks:
+    - name: add the gcc repository
+      ansible.builtin.apt_repository:
+        repo: ppa:ubuntu-toolchain-r/test
+        state: present
+    - name: Update the repository cache and update packages
+      ansible.builtin.apt:
+        name: "{{ gcc_packages }}"
+        state: latest
+        update_cache: true
+
+  post_tasks:
+    - name: tell everyone on slack you ran an ansible playbook
+      community.general.slack:
+        token: "{{ vault_pul_slack_token }}"
+        msg: "Ansible ran `{{ ansible_play_name }}` on {{ inventory_hostname }}"
+        channel: "{{ slack_alerts_channel }}"
+      when: not ansible_check_mode
