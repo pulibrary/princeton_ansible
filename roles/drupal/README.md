@@ -26,7 +26,7 @@ drupal_account_pass: "{{ vault_drupal_admin_pass | default('change_this') }}"
 drush_path: "~/.composer"
 mysql_root_home: /root
 mysql_root_username: "root"
-mysql_root_password: "{{ vault_maria_mysql_root_password | default('change_this') }}"
+mysql_root_password: "{{ vault_mysql_root_password | default('change_this') }}"
 systems_user: "{{ deploy_user }}"
 
 drupal_db:

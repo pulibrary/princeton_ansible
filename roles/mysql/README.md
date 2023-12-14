@@ -18,7 +18,7 @@ mysql_server: false
 
 mysql_host: "some.remotedb.edu"
 
-mysql_root_password: "{{ vault_maria_mysql_root_password }}"
+mysql_root_password: "{{ vault_mysql_root_password }}"
 mysql_databases:
   - name: "some_database"
     encoding: utf8mb4
