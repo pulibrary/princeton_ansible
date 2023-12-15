@@ -1,0 +1,39 @@
+---
+# File: main.yml - Handlers for Consul
+
+- name: Restart consul
+  import_tasks: restart_consul.yml
+
+- name: Start consul
+  import_tasks: start_consul.yml
+
+- name: Reload consul configuration
+  import_tasks: reload_consul_conf.yml
+
+- name: Restart dnsmasq
+  service:
+    name: dnsmasq
+    enabled: true
+    state: restarted
+    # Needed to force SysV service manager on Docker for Molecule tests
+    use: "{{ ansible_service_mgr }}"
+  become: true
+  listen: 'restart dnsmasq'
+
+- name: Restart rsyslog
+  import_tasks: restart_rsyslog.yml
+
+- name: Restart syslog-ng
+  import_tasks: restart_syslogng.yml
+
+- name: Restart syslog-ng
+  import_tasks: restart_syslogng.yml
+
+- name: Start snapshot
+  import_tasks: start_snapshot.yml
+
+- name: Systemctl daemon-reload
+  systemd:
+    daemon_reload: true
+  become: true
+  listen: 'systemctl daemon-reload'
