@@ -1,0 +1,69 @@
+---
+scenario:
+  name: default
+driver:
+  name: docker
+lint: |
+  set -e
+  yamllint .
+  ansible-lint
+platforms:
+  - name: nomadserver1
+    image: "pulibrary/puldocker-${MOLECULE_DISTRO:-ubuntu1804}-ansible:latest"
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    networks:
+      - name: "nomad"
+    network_mode: "nomad"
+    privileged: true
+    pre_build_image: true
+    groups:
+      - nomad_cluster
+    capabilities:
+      - SYS_ADMIN
+    published_ports:
+      - 127.0.0.1:8500:8500
+      - 127.0.0.1:4646:4646
+  - name: nomadserver2
+    image: "pulibrary/puldocker-${MOLECULE_DISTRO:-ubuntu1804}-ansible:latest"
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    networks:
+      - name: "nomad"
+    network_mode: "nomad"
+    privileged: true
+    pre_build_image: true
+    groups:
+      - nomad_cluster
+  - name: nomadclient1
+    image: "pulibrary/puldocker-${MOLECULE_DISTRO:-ubuntu1804}-ansible:latest"
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    networks:
+      - name: "nomad"
+    network_mode: "nomad"
+    privileged: true
+    pre_build_image: true
+    groups:
+      - nomad_cluster
+provisioner:
+  name: ansible
+  log: true
+  playbooks:
+    prepare: prepare.yml
+  inventory:
+    group_vars:
+      nomad_cluster:
+        pulibrary_nomad_group_name: 'nomad_cluster'
+        pulibrary_nomad_client_address: '0.0.0.0'
+    host_vars:
+      nomadserver1:
+        pulibrary_nomad_role: 'leader'
+        pulibrary_nomad_client_address: '0.0.0.0'
+      nomadclient1: 
+        pulibrary_nomad_role: 'both'
+verifier:
+  name: ansible
