@@ -1,0 +1,42 @@
+---
+# tasks file for pulibrary-nomad-node
+- name: 'nomad-node | Install docker'
+  ansible.builtin.include_role:
+    name: 'ansible-role-docker'
+  vars:
+    docker_daemon_options:
+      iptables: false
+- name: 'nomad-node | Install Podman'
+  ansible.builtin.apt:
+    name: "podman"
+    state: present
+    update_cache: true
+- name: 'nomad-node | Keep Podman Up'
+  ansible.builtin.service:
+    name: "podman"
+    state: "started"
+    enabled: true
+- name: 'nomad-node | Install consul'
+  ansible.builtin.include_role:
+    name: 'ansible-consul'
+  vars:
+    consul_group_name: '{{ pulibrary_nomad_group_name }}'
+    consul_node_role: "{{ 'bootstrap' if pulibrary_nomad_role == 'leader' else 'server' if pulibrary_nomad_role == 'server' else 'client' }}"
+    consul_autopilot_enable: true
+    consul_dnsmasq_enable: true
+    consul_client_address: '{{ pulibrary_nomad_client_address }}'
+    # consul_acl_policy: true
+    # consul_acl_enable: true
+- name: 'nomad-node | Install nomad'
+  ansible.builtin.include_role:
+    name: 'ansible-nomad'
+  vars:
+    nomad_bind_address: '{{ pulibrary_nomad_client_address }}'
+    nomad_cni_enable: true
+    nomad_docker_enable: true
+    nomad_use_consul: true
+    nomad_docker_enable: yes
+    nomad_docker_dmsetup: no
+    nomad_podman_enable: true
+    nomad_node_role: "{{ 'server' if pulibrary_nomad_role == 'leader' else pulibrary_nomad_role }}"
+    nomad_group_name: '{{ pulibrary_nomad_group_name }}'
