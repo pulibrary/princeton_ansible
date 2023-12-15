@@ -1,0 +1,38 @@
+---
+- name: Daemon reload systemd in case the binaries upgraded
+  systemd:
+    daemon_reload: true
+  become: true
+  when: ansible_service_mgr == "systemd"
+  listen: 'reload systemd daemon'
+
+- name: Restart consul on Unix
+  service:
+    name: consul
+    state: restarted
+    # Needed to force SysV service manager on Docker for Molecule tests
+    use: "{{ ansible_service_mgr }}"
+  when:
+    - ansible_os_family != "Darwin"
+    - ansible_os_family != "Windows"
+  listen: 'restart consul'
+
+- name: Restart consul on Mac
+  include_tasks: "{{ role_path }}/handlers/restart_consul_mac.yml"
+  when: ansible_os_family == "Darwin"
+  listen: 'restart consul'
+
+- name: Restart consul on Windows
+  win_service:
+    name: consul
+    state: restarted
+  # Some tasks with `become: true` end up calling this task. Unfortunately, the `become`
+  # property is evaluated before the `when` condition and this results in an Ansible
+  # error.
+  become: false
+  when: ansible_os_family == "Windows"
+  register: windows_service_started
+  retries: 3
+  delay: 1
+  until: windows_service_started is succeeded
+  listen: 'restart consul'
