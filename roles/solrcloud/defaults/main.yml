@@ -25,23 +25,30 @@ solr_jmx_port: 1099
 solr_host: '{{ inventory_hostname }}'
 
 # garbage collection settings
-solr_gc_tune: " \
--XX:+UseG1GC \
--XX:+ParallelRefProcEnabled \
--XX:G1HeapRegionSize=8m \
--XX:MaxGCPauseMillis=200 \
--XX:+UseLargePages \
--XX:+AggressiveOpts \
-"
-gc_log_settings: " \
--verbose:gc \
+solr_gc_tune: "-XX:NewRatio=3 \
+-XX:SurvivorRatio=4 \
+-XX:TargetSurvivorRatio=90 \
+-XX:MaxTenuringThreshold=8 \
+-XX:+UseConcMarkSweepGC \
+-XX:+UseParNewGC \
+-XX:ConcGCThreads=4 \
+-XX:ParallelGCThreads=4 \
+-XX:+CMSScavengeBeforeRemark \
+-XX:PretenureSizeThreshold=64m \
+-XX:+UseCMSInitiatingOccupancyOnly \
+-XX:CMSInitiatingOccupancyFraction=50 \
+-XX:CMSMaxAbortablePrecleanTime=6000 \
+-XX:+CMSParallelRemarkEnabled \
+-XX:+ParallelRefProcEnabled"
+
+# Enable verbose GC logging
+gc_log_settings: "-verbose:gc \
 -XX:+PrintHeapAtGC \
 -XX:+PrintGCDetails \
 -XX:+PrintGCDateStamps \
 -XX:+PrintGCTimeStamps \
 -XX:+PrintTenuringDistribution \
--XX:+PrintGCApplicationStoppedTime\
-"
+-XX:+PrintGCApplicationStoppedTime"
 
 solr_stack_size: 256k
 solr_heap: "{{ solr_heap_setting | default('20g') }}"
