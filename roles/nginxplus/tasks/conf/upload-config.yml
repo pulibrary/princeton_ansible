@@ -60,7 +60,6 @@
   when: nginx_template_upload_enable
   tags: test_template
 
-
 - name: Setup | Upload NGINX HTTP Dynamic Site Config Files
   ansible.builtin.template:
     src: http/library.conf.j2
@@ -76,31 +75,7 @@
     - test_template
   register: sites_loop
 
-# - name: what is in sites loop?
-#  ansible.builtin.debug:
-#    var: sites_loop
-#  tags: test_template
-
-# - name: what is in our original var dict?
-#   ansible.builtin.debug:
-#     var: sites
-#   tags: test_template
-
-# try solution from https://www.aaronrombaut.com/how-to-get-values-from-an-ansible-dictionary/
-# - name: try to get a list of sites_loop filenames
-#   ansible.builtin.debug:
-#     var: item.dest
-#   loop: "{{ sites_loop.results }}"
-#   tags: test_template
-
-# - name: list our site names
-#   ansible.builtin.debug:
-#     var: "{{ item.name }}"
-#   loop: "{{ sites }}"
-#   register: alt_list
-#   tags: test_template
-
-- name: Get list of all files
+- name: Setup | list files in dynamic config dir
   ansible.builtin.find:
     paths: "{{ nginx_http_dynamic_config_dest }}/"
     recurse: false
@@ -108,29 +83,36 @@
   register: all_files
   tags: test_template
 
-- name: make our comparison vars
+- name: Setup | set facts for removing old config files
   set_fact:
-    all_file_paths: "{{ all_files.files|map(attribute='path') }}"
-    all_sites_dests: "{{ sites_loop.results|map(attribute='dest') }}"
+    files_on_server: "{{ all_files.files|map(attribute='path') }}"
+    sites_we_want: "{{ sites_loop.results|map(attribute='dest') }}"
   tags: test_template
 
-- name: view file paths
+- name: Debug - view files on server
   ansible.builtin.debug:
-    var: all_file_paths
+    var: files_on_server
   tags: test_template
 
-- name: view sites dests
+- name: Debug - view sites we want
   ansible.builtin.debug:
-    var: all_sites_dests
+    var: sites_we_want
   tags: test_template
 
-- name: Find files on server that do not exist in sites
-  set_fact: files_diff="{{ all_file_paths | difference(all_sites_dests) }}"
+- name: Find obsolete files (files on server not in sites we want)
+  set_fact: obsolete_files="{{ all_file_paths | difference(all_sites_dests) }}"
   tags: test_template
 
-- name: what is in files diff?
+- name: Debug - view obsolete files
   ansible.builtin.debug:
-    var: files_diff
+    var: obsolete_files
+  tags: test_template
+
+- name: Delete obsolete files
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop: "{{ obsolete_files }}"
   tags: test_template
 
 - name: Setup | Ensure NGINX HTML Directory Exists
