@@ -31,7 +31,51 @@
   with_fileglob: "{{ nginx_http_upload_src }}"
   notify: Reload NGINX
   when: nginx_http_upload_enable
+  register: uploaded_static_files
   tags: update_conf
+
+# identify and remove obsolete static files
+- name: Setup | list files in static config dir
+  ansible.builtin.find:
+    paths: "{{ nginx_http_upload_dest }}/"
+    recurse: false
+    file_type: file
+  register: all_static_files
+  tags: test_template
+
+- name: Setup | set facts for removing obsolete static config files
+  set_fact:
+    static_files_on_server: "{{ all_static_files.files|map(attribute='path') }}"
+    static_files_we_want: "{{ uploaded_static_files.results|map(attribute='dest') }}"
+  tags: test_template
+
+- name: Debug - view static files on server
+  ansible.builtin.debug:
+    var: static_files_on_server
+  tags: test_template
+
+- name: Debug - view static files we want
+  ansible.builtin.debug:
+    var: static_files_we_want
+  tags: test_template
+
+- name: Find obsolete static files
+  # ITEMS IN static_files_on_server NOT IN static_files_we_want
+  set_fact: obsolete_static_files="{{ static_files_on_server | difference(static_files_we_want) }}"
+  tags: test_template
+
+- name: Debug - view obsolete static files
+  ansible.builtin.debug:
+    var: obsolete_static_files
+  tags: test_template
+
+# when we're confident this works:
+# - name: Delete obsolete static files
+#   ansible.builtin.file:
+#     path: "{{ item }}"
+#     state: absent
+#   loop: "{{ obsolete_static_files }}"
+#   tags: test_template
 
 - name: Setup | Ensure cache directories exist
   ansible.builtin.file:
@@ -83,7 +127,7 @@
   register: all_files
   tags: test_template
 
-- name: Setup | set facts for removing old config files
+- name: Setup | set facts for removing obsolete dynamic config files
   set_fact:
     files_on_server: "{{ all_files.files|map(attribute='path') }}"
     sites_we_want: "{{ sites_loop.results|map(attribute='dest') }}"
@@ -99,16 +143,17 @@
     var: sites_we_want
   tags: test_template
 
-- name: Find obsolete files (files on server not in sites we want)
+- name: Find obsolete dynamic config files
+  # ITEMS in files on server NOT in sites we want
   set_fact: obsolete_files="{{ files_on_server | difference(sites_we_want) }}"
   tags: test_template
 
-- name: Debug - view obsolete files
+- name: Debug - view obsolete dynamic config files
   ansible.builtin.debug:
     var: obsolete_files
   tags: test_template
 
-- name: Delete obsolete files
+- name: Delete obsolete dynamic config files
   ansible.builtin.file:
     path: "{{ item }}"
     state: absent
