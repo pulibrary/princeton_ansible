@@ -76,24 +76,29 @@
     - test_template
   register: sites_loop
 
-- name: what is in sites loop?
-  ansible.builtin.debug:
-    var: sites_loop
-  tags: test_template
+# - name: what is in sites loop?
+#  ansible.builtin.debug:
+#    var: sites_loop
+#  tags: test_template
+
+# - name: what is in our original var dict?
+#   ansible.builtin.debug:
+#     var: sites
+#   tags: test_template
 
 # try solution from https://www.aaronrombaut.com/how-to-get-values-from-an-ansible-dictionary/
-- name: try to get a list of sites_loop filenames
-  ansible.builtin.debug:
-    var: item.dest
-  loop: "{{ sites_loop.results }}"
-  tags: test_template
+# - name: try to get a list of sites_loop filenames
+#   ansible.builtin.debug:
+#     var: item.dest
+#   loop: "{{ sites_loop.results }}"
+#   tags: test_template
 
-- name: list our site names
-  ansible.builtin.debug:
-    var: "{{ item.name }}"
-  loop: "{{ sites }}"
-  register: alt_list
-  tags: test_template
+# - name: list our site names
+#   ansible.builtin.debug:
+#     var: "{{ item.name }}"
+#   loop: "{{ sites }}"
+#   register: alt_list
+#   tags: test_template
 
 - name: Get list of all files
   ansible.builtin.find:
@@ -103,17 +108,24 @@
   register: all_files
   tags: test_template
 
-- name: what is in all files?
+- name: make our comparison vars
+  set_fact:
+    all_file_paths: "{{ all_files.files|map(attribute='path') }}"
+    all_sites_dests: "{{ sites_loop.results|map(attribute='dest') }}"
+  tags: test_template
+
+- name: view file paths
   ansible.builtin.debug:
-    var: all_files
+    var: all_file_paths
+  tags: test_template
+
+- name: view sites dests
+  ansible.builtin.debug:
+    var: all_sites_dests
   tags: test_template
 
 - name: Find files on server that do not exist in sites
-  set_fact: files_diff="{{ all_files | difference(alt_list) }}"
-  tags: test_template
-
-- name: Find files on server that do not exist in sites
-  set_fact: files_diff="{{ all_files | difference(sites_loop) }}"
+  set_fact: files_diff="{{ all_file_paths | difference(all_sites_dests) }}"
   tags: test_template
 
 - name: what is in files diff?
