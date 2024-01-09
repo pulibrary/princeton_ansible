@@ -26,6 +26,9 @@
   when:
     - (installed_ruby.stderr is search("not found")) or (installed_ruby.stdout | regex_search('\d+\.\d+\.\d+') != ruby_version | regex_search('\d+\.\d+\.\d+'))
 
+- name: ruby_s | install global bundler version preferred by source ruby
+  ansible.builtin.command: gem install bundler
+
 - name: ruby_s | check existing bundler version
   ansible.builtin.shell: bundler -v | awk '{split($0,a," "); print a[3]}'
   register: installed_bundler
@@ -33,10 +36,4 @@
 
 - name: ruby_s | output existing bundler version
   ansible.builtin.debug:
-    msg: Installed bundler {{ installed_bundler.stdout }} Desired bundler {{ bundler_version | default('not set') }}
-
-# install from bundler when bundler version is not installed OR it's the wrong version
-- name: ruby_s | install, upgrade, or downgrade bundler
-  ansible.builtin.include_tasks: install_bundler.yml
-  when:
-    - (installed_bundler.stderr is search("not found")) or ((bundler_version is defined) and (installed_bundler.stdout | regex_search('\d+\.\d+\.\d+') != bundler_version | regex_search('\d+\.\d+\.\d+')))
+    msg: Installed bundler {{ installed_bundler.stdout }}
