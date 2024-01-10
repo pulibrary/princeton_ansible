@@ -1,10 +1,18 @@
 ---
+postgres_host: "lib-postgres-prod1.princeton.edu"
+postgres_version: 15
+postgres_admin_user: "postgres"
+rails_app_site_config_services:
+  - nginx
+  - "{{ sidekiq_worker_name }}"
+  - pulmap-sneakers
 passenger_app_root: "/opt/pulmap/current/public"
 passenger_app_env: "production"
 passenger_server_name: "pulmap.princeton.edu"
 passenger_ruby: "/usr/local/bin/ruby"
 bundler_version: "2.3.18"
-desired_nodejs_version: "v16.15.0"
+nodejs_release_url: "https://github.com/pulibrary/nodejs-binaries/releases/download/"
+desired_nodejs_version: "v18.18.0"
 pulmap_rabbit_user: '{{vault_rabbit_production_user}}'
 pulmap_rabbit_password: '{{vault_rabbit_production_password}}'
 pulmap_rabbit_host: '{{ figgy_rabbit_host }}'
@@ -20,7 +28,7 @@ rails_app_dependencies:
   - autoconf
   - zlib1g-dev
   - imagemagick
-pulmap_db_host: lib-postgres-prod3.princeton.edu
+pulmap_db_host: lib-postgres-prod1.princeton.edu
 pulmap_honeybadger_api_key: '{{ vault_pulmap_honeybadger_api_key }}'
 pulmap_princeton_geoserver_url: '{{ vault_pulmap_princeton_geoserver_url }}'
 pulmap_proxy_geoserver_url: '{{ vault_pulmap_proxy_geoserver_url }}'
@@ -37,6 +45,7 @@ pg_hba_postgresql_database: "all"
 pg_hba_postgresql_user: "all"
 pg_hba_source: "{{ ansible_host }}/32"
 postgresql_is_local: false
+redis_bind_interface: '0.0.0.0'
 rails_app_vars:
   - name: PULMAP_SOLR_URL
     value: '{{ pulmap_solr_url }}'
@@ -76,6 +85,8 @@ rails_app_vars:
     value: '/home/{{deploy_user}}/cloud_config/google_cloud_credentials.json'
   - name: GOOGLE_CLOUD_PROJECT
     value: 'pulibrary-figgy-storage-1'
+  - name: NODE_OPTIONS
+    value: '--openssl-legacy-provider'
 sneakers_workers: GeoblacklightEventHandler
 sneakers_worker_name: pulmap-sneakers
 datadog_api_key: "{{ vault_datadog_key }}"
@@ -88,6 +99,8 @@ datadog_config:
   apm_config:
     analyzed_spans:
       pulmap|rack.request: 1
+    filter_tags:
+      reject: ["http.useragent:nginx/1.23.4 (health check)", "operation:heartbeat", "operation:job_fetch", "operation:scheduled_push", "operation:scheduled_poller_wait"]
 datadog_checks:
   ruby:
     init_config:

@@ -4,65 +4,13 @@
 # to run in production, pass '-e runtime_env=production'
 # remember that the loadbalancing machines are not included
 # and will need to be manually updated
-- name: update the Operating System packages 
+- name: update the Operating System packages
   hosts: "{{ runtime_env | default('staging') }}"
   remote_user: pulsys
-  serial: 3
+  serial: "{{ concurrent_vms | default('5') }}"
   become: true
 
-  pre_tasks:
-    - name: test for python on new VM
-      ansible.builtin.raw: test -e /usr/bin/python
-      changed_when: false
-      failed_when: false
-      register: check_python
-      when: ansible_os_family == "OpenBSD"
-
-    - name: Install Python  # this has to be raw in the event python is not installed
-      ansible.builtin.raw: "pkg_add python%3.9"
-      when:
-        - ansible_os_family == "OpenBSD"
-        - check_python.rc != 0
-
   tasks:
-
-    - name: openbsd | Upgrade to latest snapshot
-      community.general.sysupgrade:
-        snapshot: true
-        installurl: https://cloudflare.cdn.openbsd.org/pub/OpenBSD
-      register: sysupgrade
-      when: ansible_os_family == "OpenBSD"
-
-    - name: openbsd | Reboot to apply upgrade if needed
-      ansible.builtin.reboot:
-        msg: "Reboot initiated by Ansible because of sysupgrade updates."
-        connect_timeout: 5
-        reboot_timeout: 600
-        pre_reboot_delay: 0
-        post_reboot_delay: 15
-        test_command: whoami
-      when: 
-        - ansible_os_family == "OpenBSD"
-        - sysupgrade.changed
-
-    - name: openbsd | Install a base set of software packages.
-      community.general.openbsd_pkg:
-        name:
-          - zsh
-          - curl
-          - git
-          - htop
-          - rsync--
-          - vim--no_x11-lua
-        state: present
-      when: ansible_os_family == "OpenBSD"
-
-    - name: openbsd | update base set of software packages.
-      community.general.openbsd_pkg:
-        name: '*'
-        state: latest
-      when: ansible_os_family == "OpenBSD"
-
     - name: Ubuntu | refresh keys
       ansible.builtin.command: /usr/bin/apt-key adv --refresh-keys --keyserver keyserver.ubuntu.com
       become: true
@@ -84,10 +32,25 @@
       register: yum_update_status
       when: ansible_os_family == "RedHat"
 
-    - name: RedHat | remove unneeded packages
+    - name: RedHat | clear local repository
       ansible.builtin.yum:
-        autoremove: true
+        clean: true
       when: ansible_os_family == "RedHat"
+
+    - name: Ubuntu | remove dependencies that are no longer required
+      ansible.builtin.apt:
+        autoremove: true
+      when: ansible_os_family == "Debian"
+
+    - name: Ubuntu | remove local dependencies that are no longer required
+      ansible.builtin.apt:
+        autoclean: true
+      when: ansible_os_family == "Debian"
+
+    ## - name: Ubuntu | clear out the local repository of retrieved package files 
+    ## apt:
+    ## clean: true
+    ## when: ansible_os_family == "Debian"
 
     - name: Ubuntu | Check if reboot required
       ansible.builtin.stat:

@@ -1,6 +1,17 @@
 ---
 # tasks file for roles/researchdata
 
+- name:  add pg_trgm extension for drupal 10 postgres compatibility
+  community.postgresql.postgresql_ext:
+    name: pg_trgm
+    db: "{{ drupal_db_name }}"
+    state: present
+    cascade: true
+    login_host: "{{ drupal_db_host }}"
+    login_user: postgres
+    login_password: "{{ db_clusteradmin_password }}"
+  when: running_on_server
+
 - name: install the cron for running drush cron
   cron:
     name: "run drush cron"

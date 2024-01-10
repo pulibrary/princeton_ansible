@@ -1,0 +1,71 @@
+# This file enables warm standby on Postgresql 15. There are four variables involved:
+# postgresql_cluster_member [true/false], default: false: Activates this file.
+# postgresql_leader [true/false], default: true: If the box is the leader
+# postgresql_replication_leader [hostname]: Which host is the leader of the
+#   cluster the host is a member of
+# postgresql_cluster_hosts [Array[hostname]]: List of hosts which are a member
+#   of the cluster this host is part of.
+#
+# Replication documentation: https://www.postgresql.org/docs/current/runtime-config-replication.html
+# Streaming replication documentation: https://www.postgresql.org/docs/current/warm-standby.html#STREAMING-REPLICATION
+
+# Leaders & Followers need to have the entire cluster in pg_hba to allow them to
+# talk to one another and allow followers to be promoted at any time.
+- name: PostgreSQL - Follower | ensure replication access to cluster
+  ansible.builtin.lineinfile:
+    path: '/etc/postgresql/{{ postgres_version }}/main/pg_hba.conf'
+    line: 'host  replication      replication {{ lookup("dig", item) }}/32       md5'
+  loop: "{{ [postgresql_cluster.leader] + postgresql_cluster.followers }}"
+  register: hba_changed
+  notify: restart postgresql
+
+# Standby mode is triggered by a "standby.signal" file in the postgres
+# directory. THIS HAS TO EXIST THE FIRST TIME THE SERVER STARTS. If a postgres
+# server starts up the first time without the `standby.signal` file it won't be
+# a valid standby.
+# This checks to see if a standby file exists for the followers - if it doesn't,
+# then it means we need to delete its postgres data directory (wiping the entire
+# server) and reinitialize it via pg_basebackup.
+- name: PostgreSQL - Follower | Check if Standby Initialized
+  ansible.builtin.stat:
+    path: '/var/lib/postgresql/{{ postgres_version }}/main/standby.signal'
+  register: standby_file
+
+# Turn off follower postgres' if we need to initialize them - we're about to
+# wipe & reset them.
+- name: PostgreSQL - Follower | stop standby postgres server for initialization
+  ansible.builtin.service:
+    name: postgresql
+    state: stopped
+  when:
+    - not standby_file.stat.exists
+
+# Wipe the postgres data directory on followers and initialize via
+# pg_basebackup. This creates a DIRECT COPY of the data directory from the
+# leader and ensures that the files are exactly the same. You can NOT install
+# postgres and just "make it" a follower, it has to be initialized via
+# pg_basebackup so their files are the same.
+- name: PostgreSQL - Follower | standby pg_basebackup from leader
+  shell: 'rm -rf /var/lib/postgresql/{{ postgres_version }}/main && /usr/bin/pg_basebackup -Xs -d "hostaddr={{ lookup("dig", postgresql_cluster.leader) }} port=5432 user=replication password={{ postgresql_replication_password }}" -D /var/lib/postgresql/{{ postgres_version }}/main -v -Fp'
+  become: true
+  become_user: "{{ postgres_admin_user }}"
+  no_log: true
+  when:
+    - not standby_file.stat.exists
+
+# Create the "standby.signal" file we check earlier, telling followers to start
+# up in standby mode. This has to happen before postgres starts back up.
+- name: PostgreSQL - Follower | Initialize Standby Mode
+  file:
+    path: '/var/lib/postgresql/{{ postgres_version }}/main/standby.signal'
+    state: touch
+  become: true
+  become_user: "{{ postgres_admin_user }}"
+  when:
+    - not standby_file.stat.exists
+
+# Start the standbys - they're now a warm standby!
+- name: PostgreSQL - Follower | restart standby postgres server
+  ansible.builtin.service:
+    name: postgresql
+    state: started

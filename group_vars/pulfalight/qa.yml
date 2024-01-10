@@ -1,0 +1,93 @@
+---
+postgres_host: "lib-postgres-staging1.princeton.edu"
+postgres_version: 15
+postgres_admin_user: "postgres"
+rails_app_site_config_services:
+  - nginx
+  - "{{ sidekiq_worker_name }}"
+pg_hba_contype: "host"
+pg_hba_postgresql_user: "all"
+pg_hba_postgresql_database: "all"
+pg_hba_method: "md5"
+pg_hba_source: "{{ ansible_host }}/32"
+postgres_port: "5432"
+solr_cores:
+  - "{{ pulfalight_solr_core }}"
+solr_mirror: "https://pulmirror.princeton.edu/mirror/solr/dist"
+passenger_server_name: "pulfalight-qa-web-1.princeton.edu"
+passenger_app_root: "/opt/pulfalight/current/public"
+passenger_app_env: "qa"
+passenger_ruby: "/usr/local/bin/ruby"
+bundler_version: "2.4.22"
+passenger_extra_http_config:
+  - "passenger_preload_bundler on;"
+nodejs_release_url: "https://github.com/pulibrary/nodejs-binaries/releases/download/"
+desired_nodejs_version: "v18.18.0"
+rails_app_name: "pulfalight"
+rails_app_directory: "pulfalight"
+rails_app_symlinks: []
+rails_app_dependencies:
+  - libpq-dev
+  - libopenjp2-7-dev
+  - libmagickwand-dev
+  - pkg-config
+  - redis-tools
+pulfalight_db_name: 'pulfalight_qa'
+pulfalight_db_user: '{{vault_pulfalight_qa_db_user}}'
+pulfalight_db_password: '{{vault_pulfalight_qa_db_password}}'
+rails_app_env: "qa"
+pulfalight_host_name: 'findingaids-qa.princeton.edu'
+pulfalight_honeybadger_key: '{{vault_pulfalight_honeybadger_key}}'
+pulfalight_solr_core: 'pulfalight-qa'
+application_db_name: '{{pulfalight_db_name}}'
+application_dbuser_name: '{{pulfalight_db_user}}'
+application_dbuser_password: '{{pulfalight_db_password}}'
+application_dbuser_role_attr_flags: 'CREATEDB'
+application_host: '{{passenger_server_name}}'
+application_host_protocol: 'https'
+application_port: '443'
+project_db_host: '{{postgres_host}}'
+subversion_pulfa_repo: '{{vault_subversion_pulfa_repo}}'
+subversion_pulfa_dir_path: '/var/opt/pulfa'
+subversion_pulfa_username: '{{vault_subversion_pulfa_username}}'
+subversion_pulfa_password: '{{vault_subversion_pulfa_password}}'
+# note we're not using FIGGY_AUTH_TOKEN in qa; there's no figgy it should talk to
+central_redis_host: 'lib-redis-prod1.princeton.edu'
+central_redis_db: '4'
+rails_app_vars:
+  - name: PULFALIGHT_SECRET_KEY_BASE
+    value: '{{vault_pulfalight_qa_secret_key}}'
+  - name: PULFALIGHT_DB
+    value: '{{pulfalight_db_name}}'
+  - name: PULFALIGHT_DB_USERNAME
+    value: '{{pulfalight_db_user}}'
+  - name: PULFALIGHT_DB_PASSWORD
+    value: '{{pulfalight_db_password}}'
+  - name: PULFALIGHT_DB_HOST
+    value: '{{postgres_host}}'
+  - name: APPLICATION_HOST
+    value: '{{pulfalight_host_name}}'
+  - name: APPLICATION_HOST_PROTOCOL
+    value: '{{application_host_protocol}}'
+  - name: APPLICATION_PORT
+    value: '{{application_port}}'
+  - name: SOLR_URL
+    value: "http://lib-solr8-staging.princeton.edu:8983/solr/{{ pulfalight_solr_core }}"
+  - name: HONEYBADGER_API_KEY
+    value: '{{pulfalight_honeybadger_key}}'
+  - name: ASPACE_USER
+    value: '{{vault_pulfalight_aspace_qa_user}}'
+  - name: ASPACE_PASSWORD
+    value: '{{vault_pulfalight_aspace_qa_password}}'
+  - name: PULFALIGHT_REDIS_URL
+    value: '{{central_redis_host}}'
+  - name: PULFALIGHT_REDIS_DB
+    value: '{{central_redis_db}}'
+  - name: UNPUBLISHED_AUTH_TOKEN
+    value: '{{vault_pulfalight_unpublished_auth_token}}'
+  - name: ADMIN_NETIDS
+    value: '"{{ sidekiq_netids | join(" ") }}"'
+  - name: NODE_OPTIONS
+    value: '--openssl-legacy-provider'
+sidekiq_worker_name: pulfalight-workers
+sidekiq_worker_threads: 3

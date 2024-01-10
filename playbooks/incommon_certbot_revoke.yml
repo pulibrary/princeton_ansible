@@ -1,0 +1,35 @@
+---
+# you MUST run this playbook on a single host with '--limit' for example `ansible-playbook -v -e domain_name=orcid-prod --limit lib-adc2.princeton.edu playbooks/incommon_certbot_revoke.yml`
+# This playbook will need to be run on both load balancers sequentially
+- name: revoke incommon acme for {{ domain_name }}
+  hosts: nginxplus_production # default to staging when we get a staging environment going
+  remote_user: pulsys
+  become: true
+
+  pre_tasks:
+  - name: stop playbook if you didn't use --limit
+    ansible.builtin.fail:
+      msg: "you must use -l or --limit"
+    when: ansible_limit is not defined
+    run_once: true
+  vars_files:
+    - ../group_vars/all/vault.yml
+
+  tasks:
+    - name: install certbot software
+      ansible.builtin.apt:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - certbot
+
+    - name: revoke acme certificates for {{ domain_name }}
+      ansible.builtin.command: /usr/bin/certbot revoke --standalone --non-interactive --agree-tos --email lsupport@princeton.edu --server https://acme.sectigo.com/v2/InCommonRSAOV --eab-kid {{ vault_acme_eab_kid }} --eab-hmac-key {{ vault_acme_eab_hmac_key }} --domain {{ domain_name }}.princeton.edu --cert-path /etc/letsencrypt/live/{{ domain_name }}/cert.pem
+      become_user: root
+      become: true
+
+    - name: tell everyone on slack you ran an ansible playbook
+      community.general.slack:
+        token: "{{ vault_pul_slack_token }}"
+        msg: "Ansible ran `{{ ansible_play_name }}` on {{ inventory_hostname }}"
+        channel: "{{ slack_alerts_channel }}"

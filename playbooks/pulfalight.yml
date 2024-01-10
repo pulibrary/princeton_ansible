@@ -1,6 +1,7 @@
 ---
 # by default this playbook runs in the staging environment
 # to run in production, pass '-e runtime_env=production'
+# to run in qa, pass '-e runtime_env=qa'
 - name: build the pulfalight web application
   hosts: pulfalight_{{ runtime_env | default('staging') }}
   remote_user: pulsys
@@ -10,7 +11,7 @@
     - ../group_vars/pulfalight/{{ runtime_env | default('staging') }}.yml
     - ../group_vars/pulfalight/vault.yml
   roles:
-    - role: roles/postgresql
+    - { role: 'roles/postgresql', tags: 'postgresql' }
     - role: roles/openjdk
     - role: roles/pulfalight
     - role: roles/datadog
@@ -24,15 +25,14 @@
         channel: "{{ slack_alerts_channel }}"
 
 - name: build the pulfalight workers
-  hosts: pulfalight_{{ runtime_env | default('production') }}_workers
+  hosts: pulfalight_{{ runtime_env | default('staging') }}_workers
   remote_user: pulsys
   become: true
   vars_files:
-    - ../group_vars/pulfalight/{{ runtime_env | default('production') }}.yml
-    - ../group_vars/pulfalight/production.yml
+    - ../group_vars/pulfalight/{{ runtime_env | default('staging') }}.yml
     - ../group_vars/pulfalight/vault.yml
   roles:
-    - role: roles/postgresql
+    - { role: 'roles/postgresql', tags: 'postgresql' }
     - role: roles/openjdk
     - role: roles/sidekiq_worker
     - role: roles/pulfalight

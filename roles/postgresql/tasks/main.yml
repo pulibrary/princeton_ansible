@@ -66,17 +66,36 @@
   when: postgresql_is_local
   notify: restart local postgres
 
+- name: PostgreSQL | rotate the logs for postgresql
+  template:
+    src: 'logrotate.d.postgresql.j2'
+    dest: '/etc/logrotate.d/postgresql'
+    mode: 0644
+
+- name: PostgreSQL | add replication postgresql configuration
+  template:
+    src: replication.conf.j2
+    dest: "/etc/postgresql/{{ postgres_version }}/main/conf.d/replication.conf"
+    mode: 0644
+  when:
+    - running_on_server
+    - postgresql_cluster_member == true
+  notify: restart postgresql
+
 - name: PostgreSQL | ensure postgres starts on boot
   ansible.builtin.service:
     name: postgresql
     enabled: true
-  when: postgresql_is_local
+  when:
+    - postgresql_is_local
 
-- name: PostgreSQL | restart postgres server
+- name: PostgreSQL | restart leader postgres server
   ansible.builtin.service:
     name: postgresql
     state: started
-  when: postgresql_is_local
+  when:
+    - postgresql_is_local
+    - postgresql_leader == true
 
 - name: PostgreSQL | ensure pgpass
   ansible.builtin.template:
@@ -94,20 +113,6 @@
     insertafter: "# Put your actual configuration here"
     block: |
       # localhost
-      local all postgres peer
-      host replication replicant 127.0.0.1/32 md5
-      host all all {{ leader_db_ip }}/32 md5
-      host all all {{ standby_db_ip }}/32 md5
-      # PostgreSQL leader IP address
-      host replication replicant {{ leader_db_ip }}/32 md5
-      host replicant replicant {{ leader_db_ip }}/32 md5
-      # PostgreSQL standy IP address
-      host replication replicant {{ standby_db_ip }}/32 md5
-      host replicant replicant {{ standby_db_ip }}/32 md5
-      # repmgr
-      local replicant replicant trust
-      host replication replicant 127.0.0.1/32 trust
-
   when:
     - postgres_host is not none
     - postgresql_is_local
@@ -117,6 +122,20 @@
     - reload local postgres
 
 - include_tasks: pg_hba.yml
+- include_tasks: warm_standby_leader.yml
+  when:
+    - postgresql_cluster != false
+    - inventory_hostname == postgresql_cluster.leader
+- include_tasks: warm_standby_follower.yml
+  when:
+    - postgresql_cluster != false
+    - inventory_hostname in postgresql_cluster.followers
+- include_tasks: logical_replication.yml
+  when:
+    - postgresql_cluster != false
+    - inventory_hostname == postgresql_cluster.leader
+    - postgresql_logical_replication != false
 - include_tasks: create_db.yml
 - include_tasks: create_users.yml
-- include_tasks: repmgr.yml
+- include_tasks: create_read_only_user.yml
+  when: application_dbuser_ro_name is defined

@@ -1,25 +1,33 @@
 ---
 - name: ojs | install apache tls
-  apache2_module:
+  community.general.apache2_module:
     state: present
     name: ssl
 
 - name: ojs | install apache php modules
-  apt:
-    name: ["libapache2-mod-php", "php{{ php_version }}-mbstring", "php{{ php_version }}-ldap"]
+  ansible.builtin.apt:
+    name: "{{ item }}"
     state: present
+  loop:
+    - "libapache2-mod-php"
+    - "php{{ php_version }}-mbstring"
+    - "php{{ php_version }}-ldap"
 
 - name: ojs | install php xml libraries
-  apt:
+  ansible.builtin.apt:
     name: ["php{{ php_version }}-xml"]
     state: present
 
 - name: ojs | install php postgres drivers
-  apt:
+  ansible.builtin.apt:
     name: ["php{{ php_version }}-pgsql"]
     state: present
 
 - name: ojs | install required python utils
-  apt:
-    name: ["expect", "python-pexpect", "python-psycopg2"]
+  ansible.builtin.apt:
+    name: "{{ item }}"
     state: present
+  loop:
+    - "expect"
+    - "python3-pexpect"
+    - "python3-psycopg2"

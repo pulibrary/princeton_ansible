@@ -1,0 +1,46 @@
+---
+- name: detect tippecanoe version
+  ansible.builtin.command: tippecanoe -v
+  register: tippecanoe_list
+  changed_when: false
+  ignore_errors: true
+
+- name: delete old tippecanoe package
+  ansible.builtin.file:
+    path: "/opt/tippecanoe"
+    state: "absent"
+  when:
+    - running_on_server
+    - tippecanoe_list.failed or not "{{ tippecanoe_version }}" in tippecanoe_list.stdout
+
+- name: Install dependencies
+  ansible.builtin.apt:
+    name:
+      - build-essential
+      - libsqlite3-dev
+      - zlib1g-dev
+    state: present
+  when:
+    - running_on_server
+
+- name: Create package directory
+  ansible.builtin.file:
+    path: "/opt/tippecanoe"
+    state: "directory"
+    mode: 0755
+
+- name: Download and untar tippecanoe
+  ansible.builtin.unarchive:
+    remote_src: true
+    src: "{{ tippecanoe_download_url }}"
+    dest: "/opt/tippecanoe"
+    creates: "/opt/tippecanoe/tippecanoe-{{ tippecanoe_version }}"
+  when:
+    - running_on_server
+
+- name: Compile tippecanoe
+  ansible.builtin.shell: cd /opt/tippecanoe/tippecanoe-{{ tippecanoe_version }} && make -j && make install
+  args:
+    creates: /usr/local/bin/tippecanoe
+  when:
+    - running_on_server

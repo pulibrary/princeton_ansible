@@ -1,7 +1,10 @@
 ---
-timezone: "America/New_York"
-postgres_host: "lib-postgres-prod3.princeton.edu"
-postgres_version: 13
+# as all environments get upgraded, we can put
+# the nodejs vars here
+desired_nodejs_version: v18.17.0
+nfs_server: "128.112.204.89"
+postgres_host: "lib-postgres-prod1.princeton.edu"
+postgres_version: 15
 pg_hba_contype: "host"
 pg_hba_postgresql_user: "all"
 pg_hba_postgresql_database: "all"
@@ -25,8 +28,16 @@ rails_app_vars:
     value: "{{ vault_alma_region }}"
   - name: ALMA_READ_ONLY_APIKEY
     value: "{{ vault_alma_read_only_apikey }}"
-#  - name: SCSB_FILE_DIR
-#    value: '{{scsb_file_dir}}'
+  - name: ALMA_API_LIMIT
+    value: "{{ alma_api_limit }}"
+  - name: ALMA_SRU_URL
+    value: https://princeton.alma.exlibrisgroup.com/view/sru/01PRI_INST
+  - name: AWS_REGION
+    value: "us-east-1"
+  - name: AWS_ACCESS_KEY_ID
+    value: "{{ vault_bibdata_aws_access_key }}"
+  - name: AWS_SECRET_ACCESS_KEY
+    value: "{{ vault_bibdata_aws_secret_access_key }}"
   - name: SCSB_AUTH_KEY
     value: '{{vault_scsb_auth_key}}'
   - name: SCSB_SERVER
@@ -69,10 +80,6 @@ rails_app_vars:
     value: '/mnt/dms-smbserve/bi-library-hr/prod'
   - name: SCSB_S3_USER_NAME
     value: '{{ scsb_s3_user_name }}'
-  - name: SCSB_S3_ACCESS_KEY
-    value: '{{ vault_scsb_s3_access_key_local }}'
-  - name: SCSB_S3_SECRET_ACCESS_KEY
-    value: '{{ vault_scsb_s3_secret_access_key_local }}'
   - name: SCSB_S3_BUCKET_NAME
     value: 'alma-recap-production'
   - name: SCSB_S3_PARTNER_ACCESS_KEY
@@ -96,15 +103,9 @@ rails_app_vars:
   - name: SFTP_PASSWORD
     value: "{{ vault_sftp_password }}"
   - name: SFTP_HOST
-    value: "{{ vault_sftp_host }}"
+    value: 'lib-sftp-prod1.princeton.edu'
   - name: SFTP_ALMA_BASE_PATH
     value: "/alma/publishing"
-  - name: AWS_REGION
-    value: "us-east-1"
-  - name: AWS_ACCESS_KEY_ID
-    value: "{{ vault_scsb_s3_access_key_local }}"
-  - name: AWS_SECRET_ACCESS_KEY
-    value: "{{ vault_scsb_s3_secret_access_key_local }}"
   - name: SQS_QUEUE_URL
     value: "{{ vault_production_sqs_queue_url }}"
   - name: BIBDATA_REDIS_URL
@@ -119,6 +120,7 @@ rails_app_vars:
     value: "/data/bibdata_files/partner_update_scratch"
 sidekiq_worker_name: bibdata-workers
 sidekiq_worker_threads: 2
+timezone: "America/New_York"
 bibdata_samba_source_host: 'bibdata-alma-worker1.princeton.edu'
 samba_shares_root: /data
 samba_status: client
@@ -148,31 +150,38 @@ datadog_config:
   apm_config:
     analyzed_spans:
       bibdata|rack.request: 1
+    filter_tags:
+      reject: ["http.useragent:nginx/1.23.4 (health check)", "operation:heartbeat", "operation:job_fetch", "operation:scheduled_push", "operation:scheduled_poller_wait"]
+    ignore_resources: ["sidekiq.heartbeat", "sidekiq.job_fetch", "sidekiq.scheduled_push"]
+datadog_typed_checks:
+  - type: process
+    configuration:
+      init_config:
+      instances:
+        - name: bibdata
+          service: bibdata
+          search_string:
+            - nginx
+  - type: nginx
+    configuration:
+      init_config:
+      instances:
+        - nginx_status_url: http://localhost:80/nginx_status/
+      logs:
+        - type: file
+          path: /var/log/nginx/access.log
+          source: nginx
+        - type: file
+          path: /var/log/nginx/error.log
+          source: nginx
+        - type: file
+          path: /opt/bibdata/current/log/production.log
+          source: rails
+        - type: file
+          path: /opt/bibdata/current/log/traject-error.log
+          service: traject
+          source: ruby
 datadog_checks:
-  ruby:
-    init_config:
-    logs:
-      - type: file
-        path: /opt/bibdata/current/log/production.log
-        service: bibdata
-        source: ruby
-      - type: file
-        path: /opt/bibdata/current/log/traject-error.log
-        service: traject
-        source: ruby
-  nginx:
-    init_config:
-    logs:
-      - type: file
-        path: /var/log/nginx/access.log
-        service: bibdata
-        source: nginx
-        sourcecategory: http_web_access
-      - type: file
-        path: /var/log/nginx/error.log
-        service: bibdata
-        source: nginx
-        sourcecategory: http_web_access
   tls:
     init_config:
     instances:

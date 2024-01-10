@@ -3,7 +3,7 @@ alma_read_write_key: "{{ vault_alma_read_write_key }}"
 install_mailcatcher: true
 mailcatcher_user: "pulsys"
 mailcatcher_group: "pulsys"
-mailcatcher_install_location: "/var/lib/gems/2.7.0/gems/mailcatcher-0.8.1/bin/mailcatcher"
+mailcatcher_install_location: "/var/lib/gems/3.1.0/gems/mailcatcher-0.8.1/bin/mailcatcher"
 ol_bibdata_base: 'https://bibdata-qa.princeton.edu'
 ol_clancy_api_key: "{{ vault_clancy_api_key }}"
 ol_clancy_base_url: '{{ vault_clancy_api_base_url }}'
@@ -16,17 +16,19 @@ ol_rabbit_host: "figgy-staging2.princeton.edu"
 ol_rabbit_password: "{{ vault_rabbit_staging_password }}"
 ol_rabbit_user: "{{ vault_rabbit_staging_user }}"
 ol_read_only_mode: 'false'
+central_redis_host: 'lib-redis-prod1.princeton.edu'
+central_redis_db: '8'
 ol_secret_key: "{{ vault_ol_alma_qa_secret_key }}"
-ol_solr_url: http://lib-solr8-staging.princeton.edu:8983/solr/catalog-qa
-passenger_app_env: "alma_qa"
+ol_solr_url: http://lib-solr8-prod.princeton.edu:8983/solr/catalog-alma-production-rebuild
+passenger_app_env: "qa"
 passenger_server_name: "catalog-qa.*"
 postgres_admin_user: "postgres"
-postgres_host: "lib-postgres-staging3.princeton.edu"
-rails_app_env: "alma_qa"
+postgres_host: "lib-postgres-staging1.princeton.edu"
+rails_app_env: "qa"
 scsb_auth_key: "{{ vault_scsb_auth_key }}"
 datadog_api_key: "{{ vault_datadog_key }}"
 datadog_config:
-  tags: "application:orangelight, environment:alma_qa, type:webserver"
+  tags: "application:orangelight, environment:qa, type:webserver"
   apm_enabled: "true"
   log_enabled: true
   process_config:
@@ -34,12 +36,14 @@ datadog_config:
   apm_config:
     analyzed_spans:
       orangelight|rack.request: 1
+    filter_tags:
+      reject: ["http.useragent:nginx/1.23.4 (health check)", "operation:heartbeat", "operation:job_fetch", "operation:scheduled_push", "operation:scheduled_poller_wait"]
 datadog_checks:
   ruby:
     init_config:
     logs:
       - type: file
-        path: /opt/orangelight/current/log/alma_qa.log
+        path: /opt/orangelight/current/log/qa.log
         service: orangelight
         source: ruby
   nginx:

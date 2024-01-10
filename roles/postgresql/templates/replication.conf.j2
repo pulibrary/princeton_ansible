@@ -1,7 +1,9 @@
 {{ ansible_managed | comment }}
-# https://repmgr.org/docs/current/quickstart-postgresql-configuration.html
+# https://wiki.postgresql.org/wiki/Streaming_Replication
 max_wal_senders = 10
 max_replication_slots = 10
-wal_level = 'hot_standby'
-hot_standby = on
-archive_mode = on
+wal_level = 'replica'
+archive_mode = off
+{% if postgresql_replication_leader != false %}
+  primary_conninfo = 'host={{ lookup("dig", postgresql_replication_leader) }} port=5432 user=replication password={{ postgresql_replication_password }} options=''-c wal_sender_timeout=5000'''
+{% endif %}

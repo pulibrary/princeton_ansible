@@ -12,11 +12,33 @@
     project_dir: /tmp/{{ repo_name }}
 #    github_key_path:
   pre_tasks:
+  - name: tell git hub you are planning to deploy
+    ansible.builtin.uri:
+      url: "https://api.github.com/repos/pulibrary/{{ repo_name }}/deployments"
+      method: POST
+      body: '{"ref":"{{ branch_name | default("main") }}","description":"Deploy request from Ansible", "auto_merge": false, "environment": "{{ runtime_env }}", "required_contexts": [] }'
+      body_format: json
+      headers:
+        Authorization: "Bearer {{ vault_tower_github_token }}"
+        Accept: "application/vnd.github+json-H"
+        Content-Type: "application/x-www-form-urlencoded"
+      follow_redirects: true
+      status_code: 201,202
+    register: git_result
+  - name: debug
+    ansible.builtin.debug:
+      msg: 'Told git we were starting {{ git_result.json.id }}'
   - name: let folks on slack know a deploy has begun
     community.general.slack:
       token: "{{ vault_tower_slack_token }}"
-      msg: "Ansible has started a deploy of the `{{ branch_name | default('main') }}` branch of `{{ repo_name }}` to the {{ runtime_env | default('staging') }} environment. If you don't see a 'success' message, check the #ansible-alerts channel for failure details."
+      msg: "{{ tower_user_first_name | default('Ansible') }} has started a deploy of the `{{ branch_name | default('main') }}` branch of `{{ repo_name }}` to the {{ runtime_env | default('staging') }} environment. If you don't see a 'success' message, check the #ansible-alerts channel for failure details."
       channel: "{{ slack_alerts_channel }}"
+  - name: let folks on slack know where to find the log
+    community.general.slack:
+      token: "{{ vault_tower_slack_token }}"
+      msg: "Job progress can be found: https://ansible-tower.princeton.edu/#/jobs/playbook/{{ tower_job_id }}/output"
+      channel: "{{ slack_alerts_channel }}"
+    when: tower_job_id is defined
 
   tasks:
     - name: update code repo
@@ -25,7 +47,7 @@
         dest: "{{ project_dir }}"
         # single_branch: true
         # refspec: "{{ branch_name | default('main') }}"
-        # version: "{{ branch_name | default('main') }}"
+        version: "{{ branch_name | default('main') }}"
         clone: true
         update: true
         # force: true
@@ -47,3 +69,17 @@
       token: "{{ vault_tower_slack_token }}"
       msg: "Ansible has successfully deployed the `{{ branch_name | default('main') }}` branch of `{{ repo_name }}` to the {{ runtime_env | default('staging') }} environment"
       channel: "{{ slack_alerts_channel }}"
+  - name: tell github you finished deploying
+    ansible.builtin.uri:
+      url: "https://api.github.com/repos/pulibrary/{{ repo_name }}/deployments/{{ git_result.json.id }}/statuses"
+      method: POST
+      body: "{\"environment\":\"{{ runtime_env | default('staging') }}\",\"state\":\"success\",\"log_url\":\"https://ansible-tower.princeton.edu/#/jobs/playbook/{{ tower_job_id | default('') }}/output\",\"description\":\"Deployment finished successfully.\"}"
+      body_format: json
+      headers:
+        Accept: application/vnd.github+json
+        Authorization: 'Bearer {{ vault_tower_github_token }}'
+        X-GitHub-Api-Version: '2022-11-28'
+        Content-Type: application/x-www-form-urlencoded
+      follow_redirects: safe
+      status_code: 201,202
+    

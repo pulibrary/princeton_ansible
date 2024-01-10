@@ -1,6 +1,7 @@
 ---
-postgres_host: 'lib-postgres-staging3.princeton.edu'
+postgres_host: 'lib-postgres-staging1.princeton.edu'
 
+postgres_version: 15
 passenger_server_name: "{{ inventory_hostname }}"
 passenger_app_env: "staging"
 passenger_extra_config: "client_max_body_size 0;"
@@ -17,12 +18,54 @@ pdc_describe_honeybadger_key: '{{vault_pdc_describe_honeybadger_key}}'
 
 pdc_describe_staging_aws_pre_curate_bucket: 'pdc-describe-staging-precuration'
 pdc_describe_staging_aws_post_curate_bucket: 'pdc-describe-staging-postcuration'
+pdc_describe_staging_aws_preservation_bucket: 'pdc-describe-staging-preservation'
 pdc_describe_production_aws_dspace_bucket: 'prds-dataspace'
 
 install_mailcatcher: true
 mailcatcher_user: "pulsys"
 mailcatcher_group: "pulsys"
 mailcatcher_install_location: "/usr/local/lib/ruby/gems/3.1.0/gems/mailcatcher-0.8.2/bin/mailcatcher"
+
+datadog_api_key: "{{ vault_datadog_key }}"
+datadog_config:
+  tags: "application:pdc-describe, env:staging, type:webserver"
+  apm_enabled: "true"
+  logs_enabled: "true"
+  dd_hostname: "{{ inventory_hostname }}"
+  process_config:
+    enabled: "true"
+  apm_config:
+    analyzed_spans:
+      pdc-describe|rack.request: 1
+    filter_tags:
+      reject: ["http.useragent:nginx/1.23.4 (health check)", "http.url:/telemetry/proxy/api/v2/apmtelemetry","operation:heartbeat", "operation:job_fetch", "operation:scheduled_push", "operation:scheduled_poller_wait"]
+datadog_typed_checks:
+  - type: process
+    configuration:
+      init_config:
+      instances:
+        -   name: pdc-describe
+            service: pdc-describe
+            search_string:
+              - nginx
+  - type: nginx
+    configuration:
+      init_config:
+      instances:
+        - nginx_status_url: http://localhost:80/nginx_status/
+      logs:
+        - type: file
+          path: /var/log/nginx/access.log
+          source: nginx
+          service: pdc-describe
+        - type: file
+          path: /var/log/nginx/error.log
+          source: nginx
+          service: pdc-describe
+        - type: file
+          path: /opt/pdc_describe/current/log/staging.log
+          source: rails
+          service: pdc-describe
 
 # Note that this MUST stay in the environment-specific playbook.
 # Moving any of these to common.yml will not work.
@@ -65,6 +108,10 @@ rails_app_vars:
     value: '{{ pdc_describe_staging_aws_post_curate_bucket }}'
   - name: AWS_S3_POST_CURATE_REGION
     value: 'us-east-1'
+  - name: AWS_S3_PRESERVATION_BUCKET
+    value: '{{ pdc_describe_staging_aws_preservation_bucket }}'
+  - name: AWS_S3_PRESERVATION_REGION
+    value: 'us-west-1'
   - name: AWS_S3_DSPACE_BUCKET
     value: '{{ pdc_describe_production_aws_dspace_bucket }}'
   - name: AWS_S3_DSPACE_REGION

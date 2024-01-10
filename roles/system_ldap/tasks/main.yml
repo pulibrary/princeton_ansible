@@ -46,21 +46,52 @@
 
 - name: system_ldap | create alma directory drop
   ansible.builtin.file:
-    path: /alma
+    path: "{{ item }}"
     state: directory
     recurse: true
     owner: "{{ almasftp_user }}"
-    group: "department 41006 staff@pu.win.princeton.edu"
+    group: "domain users@pu.win.princeton.edu"
     mode: 0775
-
+  loop:
+    - "/alma/bursar"
+    - "/alma/datasync_processing"
+    - "/alma/fund_adjustment"
+    - "/alma/invoice_status"
+    - "/alma/invoices"
+    - "/alma/people"
+    - "/alma/pod"
+    - "/alma/publishing"
+    - "/alma/recap"
+    - "/alma/scsb_renewals"
+    
+- name: system_ldap | grant {{ deploy_user }} access to alma directory
+  ansible.builtin.user:
+    name: "{{ deploy_user }}"
+    group: "domain users@pu.win.princeton.edu"
+    append: true
+    
 - name: system_ldap | create aspace directory drop
   ansible.builtin.file:
     path: /alma/aspace
     state: directory
     recurse: true
     owner: "{{ aspaceftp_user }}"
-    group: "department 41006 staff@pu.win.princeton.edu"
+    group: "domain users@pu.win.princeton.edu"
     mode: 0775
+
+- name: system_ldap | create local group for alma
+  ansible.builtin.group:
+    name: "domain users@pu.win.princeton.edu"
+    state: present
+    gid: 1687000513
+
+- name: system_ldap | create local user for alma
+  ansible.builtin.user:
+    name: almasftp
+    uid: 1621151009
+    shell: /usr/bin/bash
+    group: "domain users@pu.win.princeton.edu"
+    password: "{{ almasftp_user_password }}"
 
 - name: system_ldap | Flush handlers to be able to use SSSD authentication
   meta: flush_handlers

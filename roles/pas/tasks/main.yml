@@ -1,5 +1,29 @@
 ---
 # tasks file for roles/pas
+- name: pas | Create  pas directory production
+  ansible.posix.mount:
+    src: "{{ nfs_server_production }}:/var/nfs/pas"
+    path: "/mnt/nfs/pas"
+    state: mounted
+    fstype: nfs
+    opts: rw,sync,hard
+  when:
+    - running_on_server
+    - "'production' in inventory_hostname"
+  become: true
+
+- name: pas | Create pas directory staging
+  ansible.posix.mount:
+    src: "{{ nfs_server_staging }}:/var/nfs/pas"
+    path: "/mnt/nfs/pas"
+    state: mounted
+    fstype: nfs
+    opts: rw,sync,hard
+  when:
+    - running_on_server
+    - "'staging' in inventory_hostname"
+  become: true
+
 - name: pas | Install php{{ php_version }} requirements for craft
   ansible.builtin.apt:
     name: "{{ item }}"
@@ -79,7 +103,7 @@
 - name: update .env
   ansible.builtin.template:
     src: 'templates/env-craft{{ craft_version }}.j2'
-    dest: '/home/{{ deploy_user }}/.env'
+    dest: "{{ capistrano_base_dir }}/{{capistrano_directory}}/shared/.env"
     owner: 'deploy'
     group: 'deploy'
     mode: 0644

@@ -4,6 +4,8 @@
   ansible.builtin.apt:
     name: "{{ java_openjdk_package }}"
     state: present
+  when:
+    - running_on_server
 
 - name: openjdk | find JAVA_HOME
   ansible.builtin.shell: set -o pipefail ; readlink -f /usr/bin/java | sed 's%/bin/java%%'
@@ -11,6 +13,8 @@
     executable: /bin/bash
   changed_when: false
   register: java_home
+  when:
+    - running_on_server
 
 - name: openjdk | set JAVA_HOME in /etc/environment
   ansible.builtin.lineinfile:
@@ -19,3 +23,5 @@
     line: 'JAVA_HOME="{{ java_home.stdout }}"'
     create: true
     mode: 0644
+  when:
+    - running_on_server

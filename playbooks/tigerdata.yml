@@ -1,6 +1,7 @@
 ---
 # by default this playbook runs in the staging environment
 # to run in production, pass '-e runtime_env=production'
+# to run in qa, pass '-e runtime_env=qa'
 - name: build the tigerdata site
   hosts: tigerdata_{{ runtime_env | default('staging') }}
   remote_user: pulsys
@@ -10,6 +11,7 @@
     - ../group_vars/tigerdata/common.yml
     - ../group_vars/tigerdata/{{ runtime_env | default('staging') }}.yml
   roles:
+    - role: roles/mailcatcher
     - role: rails_app
     - role: datadog
       when: runtime_env | default('staging') == "production"

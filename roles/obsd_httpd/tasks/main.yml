@@ -1,16 +1,67 @@
 ---
 # tasks file for obsd_httpd
-- name: obsd_httpd | enable httpd
-  ansible.builtin.service:
-    name: "httpd"
-    enabled: true
-    arguments: "{{ httpd_openbsd_flags }}"
+- name: obsd_httpd | install nginx
+  community.general.openbsd_pkg:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - nginx
+    - nginx-headers-more
+    - nginx-lua
+    - nginx-image_filter
 
-- name: obsd_httpd | create or remove log directories
+- name: obsd_httpd | copy config files
+  ansible.builtin.copy:
+    src: files/{{ runtime | default('staging') }}_env.conf
+    dest: /etc/nginx/nginx.conf
+    mode: "0644"
+    group: wheel
+    owner: root
+  notify: restart nginx
+
+- name: create default directory
   ansible.builtin.file:
-    path: "{{ item.path }}"
-    mode: "{{ item.mode }}"
-    owner: "{{ item.owner }}"
-    group: "{{ item.group }}"
-    state: "{% if item.state == 'present' %}directory{% else %}{{ item.state }}{% endif %}"
-  loop: "{{ httpd_openbsd_log_directories }}"
+    path: "/var/local/www/default"
+    state: directory
+    owner: nginx
+    group: nginx
+    mode: 0755
+  when: running_on_server
+
+- name: add pul svg file
+  ansible.builtin.copy:
+    src: files/pul-logo-new.svg
+    dest: "/var/local/www/default/pul-logo-new.svg"
+    owner: nginx
+    group: nginx
+    mode: 0644
+  when: running_on_server
+
+- name: add custom error page for default site
+  ansible.builtin.copy:
+    src: files/error.html
+    dest: "/var/local/www/default/error.html"
+    owner: nginx
+    group: nginx
+    mode: 0644
+  when: running_on_server
+
+- name: obsd_httpd | copy config file for IP restrictions
+  ansible.builtin.copy:
+    src: files/conf/restrict.conf
+    dest: /etc/nginx/restrict.conf
+    mode: "0644"
+    group: wheel
+    owner: root
+  notify: restart nginx
+
+- name: obsd_httpd | copy config file for error responses
+  ansible.builtin.copy:
+    src: files/conf/errors.conf
+    dest: /etc/nginx/errors.conf
+    mode: "0644"
+    group: wheel
+    owner: root
+  notify: restart nginx
+
+

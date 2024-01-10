@@ -1,20 +1,20 @@
 ---
 # tasks file for roles/hr_share
 - name: Create mount directories
-  file:
+  ansible.builtin.file:
     path: '/mnt/dms-smbserve'
     state: 'directory'
     mode: 0755
 
 - name: Copy smb credentials
-  copy:
+  ansible.builtin.copy:
     src: files/hr_share.smb.credentials
     dest: /etc/hr_share.smb.credentials
     mode: 0644
   when: running_on_server
 
 - name: Check mount for hr shared files
-  mount:
+  ansible.posix.mount:
     path: '/mnt/dms-smbserve/bi-library-hr'
     src: '//10.6.49.226/bi-library-hr'  # Use IP, //dms-smbserve isn't routable.
     fstype: cifs
@@ -25,7 +25,7 @@
   become: true
 
 - name: Create mount for hr shared files
-  mount:
+  ansible.posix.mount:
     path: '/mnt/dms-smbserve/bi-library-hr'
     src: '//10.6.49.226/bi-library-hr'  # Use IP, //dms-smbserve isn't routable.
     fstype: cifs

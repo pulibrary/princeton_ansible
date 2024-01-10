@@ -3,8 +3,16 @@
 postgresql_is_local: true
 # postgresql_is_local: "{{ 'true' if project_db_host | search( 'localhost|127\\.0\\.0\\.1|^/') else 'false' }}"
 application_dbuser_role_attr_flags: ''
-buffer_memory: '{{ quarter_system_memory | default("128MB") }}'
-cache_size: '{{ two_third_system_memory | default("4GB") }}'
+# https://wiki.postgresql.org/wiki/Tuning_Your_PostgreSQL_Server
+# 1/4 memory to Shared Buffers
+buffer_memory: '{{ ([(ansible_memtotal_mb*0.25)|int|abs, 128]|max) | default(128) }}MB'
+# A little less than 3/4 of memory to effective_cache_size
+cache_size: '{{ ([(ansible_memtotal_mb*0.6)|int|abs, 4000]|max) | default(4000) }}MB'
+# https://www.enterprisedb.com/postgres-tutorials/how-tune-postgresql-memory
+# 25% of ram dedicated to work if all connections(400) maxed, or 4 MB each.
+work_mem: '{{ ([((ansible_memtotal_mb*0.25/400)|int|abs), 4]|max) }}MB'
+# 5% of ram dedicated to maintenance work
+maintenance_work_mem: '{{ ([(ansible_memtotal_mb*0.05)|int|abs, 64]|max)}}MB'
 min_wal: '{{ one_gig | default("80MB") }}'
 max_wal: '{{ two_gig | default("1GB") }}'
 # APT settings
@@ -13,15 +21,23 @@ postgres_apt_key_url: "https://www.postgresql.org/media/keys/ACCC4CF8.asc"
 postgres_apt_repository: 'deb http://apt.postgresql.org/pub/repos/apt/ {{ansible_distribution_release}}-pgdg main {{postgres_version}}'
 # Pin-Priority of PGDG repository
 postgres_apt_pin_priority: 500
-postgres_version: 13
+postgres_version: 15
 apt_cache_timeout: 86400
 application_dbuser_name: "pguser"
 application_dbuser_password: "changethis"
 application_db_name: "dbname"
+# Warm Standby Variables
+postgresql_cluster_member: false
+postgresql_leader: true
+postgresql_replication_leader: false
+postgresql_replication_password: "{{ vault_postgresql_replication_password }}"
+postgresql_cluster_hosts:
+postgresql_cluster: false
+# Logical replication (used for upgrading between psql versions)
+postgresql_logical_replication: false
 
 postgres_packages:
   - postgresql-{{ postgres_version }}
-  - postgresql-{{ postgres_version }}-repmgr
   - postgresql-client-{{ postgres_version }}
   - postgresql-contrib-{{ postgres_version }}
 
@@ -35,9 +51,6 @@ postgres_database_owner: "postgres"
 postgres_cluster_name: "main"
 postgres_conf_directory: "/etc/postgresql/{{ postgres_version }}/{{ postgres_cluster_name }}"
 
-replication_user: []
-replication_database: []
-replication_user_password: "changethis"
 db_clusteradmin_password: "changethis"
 postgres_admin_password: "change"
 sudoers_dir: "/etc/sudoers.d"
@@ -62,11 +75,10 @@ postgres_database_extensions: []
 
 postgres_ext_postgis_version: "3"
 postgres_ext_postgis_deps:
-  - postgresql-{{ postgres_version }}-pgrouting
+  - postgresql-{{ postgres_version }}-pgrouting-scripts
   - postgresql-{{ postgres_version }}-postgis-{{ postgres_ext_postgis_version }}
   - postgresql-{{ postgres_version }}-postgis-{{ postgres_ext_postgis_version }}-scripts
 
-postgres_bin_directory: /usr/bin
 postgres_data_directory: "/var/lib/postgresql/{{ postgres_version }}/{{ postgres_cluster_name }}"
 
 # HBA Connections
@@ -77,8 +89,3 @@ pg_hba_postgresql_database: "all"
 # and the user can still create a database
 pg_hba_method: "md5"
 pg_hba_source: "host"
-repmgr_config: "/etc/repmgr.conf"
-repmgr_init_log: "/etc/repmgr_init.log"
-node_identifier: "{{ omit }}" # we can leave replication nodes blank
-postgres_leader: "{{ omit }}" # see above
-postgres_standby: "{{ omit }}" # see above

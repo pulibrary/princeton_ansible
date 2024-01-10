@@ -1,0 +1,28 @@
+---
+# tasks file for roles/loadtest
+- name: loadtest | get JMeter archive
+  ansible.builtin.get_url:
+    url: https://dlcdn.apache.org//jmeter/binaries/apache-jmeter-5.5.tgz
+    dest: /tmp/apache-jmeter-5.5.tgz
+
+- name: loadtest | unarchive JMeter
+  ansible.builtin.unarchive:
+    src: /tmp/apache-jmeter-5.5.tgz
+    dest: /opt
+    remote_src: true
+
+- name: loadtest | add bash_profile
+  ansible.builtin.blockinfile:
+    path: "/home/{{ deploy_user }}/.bashrc"
+    marker: "# {mark} ANSIBLE MANAGED BLOCK"
+    block: |
+      export JMETER_HOME=/opt/apache-jmeter-5.5
+      export PATH=$JMETER_HOME/bin:$PATH
+    insertbefore: "# If not running interactively, don't do anything"
+  when: running_on_server
+
+- name: loadtest | update JMeter configuration
+  ansible.builtin.lineinfile: >
+              dest=/opt/apache-jmeter-5.5/bin/user.properties
+              state=present
+              line="resultcollector.action_if_file_exists=DELETE"

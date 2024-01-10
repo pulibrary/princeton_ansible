@@ -3,10 +3,10 @@
 ## file so you can start over with a fresh installation.
 
 - name: ojs | install prerequisites
-  include_tasks: "install_prerequisites.yml"
+  ansible.builtin.include_tasks: "install_prerequisites.yml"
 
 - name: ojs | clean, if necessary
-  include_tasks: "clean.yml"
+  ansible.builtin.include_tasks: "clean.yml"
 
 - name: ojs | add {{ deploy_user }} to www-data
   user:
@@ -15,7 +15,7 @@
     append: true
 
 - name: ojs | unarchive ojs code
-  unarchive:
+  ansible.builtin.unarchive:
     src: "https://pkp.sfu.ca/ojs/download/ojs-{{ ojs_version }}.tar.gz"
     dest: "/var/www"
     remote_src: true
@@ -25,7 +25,7 @@
   become: true
 
 - name: ojs | unarchive healthSciences theme code
-  unarchive:
+  ansible.builtin.unarchive:
     src: "{{ healthsciences_theme_url }}"
     dest: "{{ ojs_home }}/plugins/themes"
     remote_src: true
@@ -41,7 +41,7 @@
     owner: "{{ deploy_user }}"
     group: www-data
     mode: 0775
-  with_items:
+  loop:
     - cache
     - cache/t_cache
     - cache/t_config
@@ -73,18 +73,18 @@
   changed_when: false
 
 - name: ojs | determine if ojs is installed already
-  include_tasks: "check_ojs_installation.yml"
+  ansible.builtin.include_tasks: "check_ojs_installation.yml"
 
 - name: ojs | install ojs
-  include_tasks: "install_ojs.yml"
+  ansible.builtin.include_tasks: "install_ojs.yml"
   when:
     - ojs_is_installed is false
 
 - name: ojs | enable PHP file uploads
-  include_tasks: "enable_php_uploads.yml"
+  ansible.builtin.include_tasks: "enable_php_uploads.yml"
 
 - name: ojs | automate backups
-  include_tasks: "automate_backups.yml"
+  ansible.builtin.include_tasks: "automate_backups.yml"
 
 - name: ojs | clone translation repository
   ansible.builtin.git:
@@ -95,7 +95,7 @@
 - name: ojs | copy translations to running server
   ansible.builtin.shell: 'cp -v -u /opt/pkp-lib/locale/{{ item }}/* {{ ojs_home }}/lib/pkp/locale/{{ item }}'
   register: cp_output
-  with_items:
+  loop:
     - 'ja_JP'
   changed_when: '"->" in cp_output["stdout"]'
 
@@ -108,7 +108,7 @@
 - name: ojs | copy translations to running server
   ansible.builtin.shell: 'cp -r /opt/openpublishing/plugins/themes/healthSciences/locale/{{ item }} {{ ojs_home }}/plugins/themes/healthSciences/locale/{{ item }}'
   register: cp_output
-  with_items:
+  loop:
     - 'ja_JP'
   changed_when: '"->" in cp_output["stdout"]'
 
@@ -119,5 +119,5 @@
     owner: www-data
     group: www-data
     mode: 0775
-  with_items:
+  loop:
     - 'ja_JP'

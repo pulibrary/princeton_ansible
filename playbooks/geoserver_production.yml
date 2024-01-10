@@ -1,10 +1,14 @@
 ---
-- hosts: geoserver
+# when running this playbook make sure you use the 
+# `-e deploy_user_id=1002` flag
+- name: build or update geoserver system
+  hosts: geoserver
   remote_user: pulsys
   become: true
   vars_files:
     - ../site_vars.yml
-    - ../group_vars/geoserver.yml
+    - ../group_vars/geoserver/production.yml
+    - ../group_vars/geoserver/vault.yml
   roles:
     - role: roles/tomcat8
     - role: roles/deploy_user
@@ -16,5 +20,5 @@
     - name: tell everyone on slack you ran an ansible playbook
       slack:
         token: "{{ vault_pul_slack_token }}"
-        msg: "{{ inventory_hostname }} completed"
+        msg: "Ansible ran `{{ ansible_play_name }}` on {{ inventory_hostname }}"
         channel: "{{ slack_alerts_channel }}"

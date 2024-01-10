@@ -1,0 +1,57 @@
+---
+- name: Zookeeper_src | Create myid directory
+  ansible.builtin.file:
+    path: "{{ zookeeper_data_dir }}/{{ item.id }}"
+    state: directory
+    mode: "0755"
+    owner: '{{ zookeeper_user }}'
+    group: '{{ zookeeper_group }}'
+  loop:
+    - {name: '{{ lib_zk5_host_name }}', id: '1'}
+    - {name: '{{ lib_zk4_host_name }}', id: '2'}
+    - {name: '{{ lib_zk6_host_name }}', id: '3'}
+
+- name: Zookeeper_src | Overwrite myid file.
+  ansible.builtin.template:
+    src: 'myid.j2'
+    dest: '{{ zookeeper_data_dir }}/{{ item.id }}/myid'
+    mode: 0644
+    force: '{{ zookeeper_force_myid }}'
+    owner: '{{ zookeeper_user }}'
+    group: '{{ zookeeper_group }}'
+  loop:
+    - {name: '{{ lib_zk5_host_name }}', id: '1'}
+    - {name: '{{ lib_zk4_host_name }}', id: '2'}
+    - {name: '{{ lib_zk6_host_name }}', id: '3'}
+  notify:
+    - Restart zookeeper
+
+- name: Zookeeper_src | Overwrite application default config file
+  ansible.builtin.template:
+    src: 'zoo.cfg.j2'
+    dest: '{{ zookeeper_conf_dir }}/zoo.cfg'
+    mode: "0644"
+    owner: '{{ zookeeper_user }}'
+    group: '{{ zookeeper_group }}'
+  notify:
+    - Restart zookeeper
+
+- name: Zookeeper_src | Configure zookeeper-env.sh
+  ansible.builtin.template:
+    src: 'zookeeper-env.sh.j2'
+    dest: '{{ zookeeper_conf_dir }}/zookeeper-env.sh'
+    mode: "0644"
+    owner: '{{ zookeeper_user }}'
+    group: '{{ zookeeper_group }}'
+  notify:
+    - Restart zookeeper
+
+- name: Zookeeper | Update the log4j
+  ansible.builtin.template:
+    src: 'log4j.properties.j2'
+    dest: '{{ zookeeper_conf_dir }}/log4j.properties'
+    owner: '{{ zookeeper_user }}'
+    group: '{{ zookeeper_group }}'
+    mode: "0644"
+  notify:
+    - Restart zookeeper

@@ -1,21 +1,23 @@
 ---
-- name: install application packages
-  apt:
+- name: Zookeeper | install application packages
+  ansible.builtin.apt:
     name: ["zookeeper", "zookeeperd"]
     state: present
 
-- name: start zookeeper service
-  service:
+- name: Zookeeper | start zookeeper service
+  ansible.builtin.service:
     name: zookeeper
     state: started
   changed_when: false
-  when: not running_on_server
+  when:
+    - not running_on_server
 
-- name: create systemd service
-  template:
+- name: Zookeeper | create systemd service
+  ansible.builtin.template:
     src: 'zookeeper.service.j2'
     dest: '/lib/systemd/system/zookeeper.service'
     mode: 0644
   notify:
     - Restart zookeeper
-  when: running_on_server
+  when:
+    - running_on_server

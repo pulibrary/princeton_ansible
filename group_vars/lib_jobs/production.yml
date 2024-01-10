@@ -7,12 +7,18 @@ onbase_samba_directory: obprdrop/Scheduler/KeywordUpdate/LIB/Alma
 onbase_samba_server: 172.19.70.50
 peoplesoft_bursar_output_dir: /mnt/dms-smbserve/bursar/prod
 peoplesoft_samba_directory: lbvchr-p
+# Alma
+alma_bib_norm_error_recipients:  '{{ vault_alma_bib_norm_prod_error_recipients }}'
+alma_config_api_key: '{{ vault_alma_prod_config_api_key }}'
+alma_bib_api_key: '{{ vault_alma_prod_bib_api_key }}'
 # OIT
 app_oit_base_url: 'https://api.princeton.edu:443'
 app_oit_client_key: '{{ vault_oit_prod_client_key }}'
 app_oit_client_secret: '{{ vault_oit_prod_client_secret }}'
+# lib-sftp
+app_sftp_host: 'lib-sftp-prod1.princeton.edu'
 # Database / Postgres
-postgres_host: "lib-postgres-prod3.princeton.edu"
+postgres_host: "lib-postgres-prod1.princeton.edu"
 app_db_name: 'lib_jobs_prod'
 app_db_password: '{{ vault_lib_jobs_prod_db_password }}'
 app_db_user: 'lib_jobs'
@@ -24,7 +30,7 @@ db_clusteradmin_password: "{{ vault_postgres_admin_password }}"
 db_clusteradmin_user: "{{ vault_postgres_admin_user }}"
 postgres_admin_password: "{{ db_clusteradmin_password }}"
 postgres_port: "5432"
-postgres_version: 13
+postgres_version: 15
 pg_hba_contype: "host"
 pg_hba_method: "md5"
 pg_hba_postgresql_database: "all"
@@ -40,6 +46,8 @@ peoplesoft_bursar_no_report_recipients: '{{ vault_lib_jobs_prod_peoplesoft_bursa
 peoplesoft_bursar_recipients: '{{ vault_lib_jobs_prod_peoplesoft_bursar_recipients }}'
 transaction_error_feed_recipients: '{{ vault_lib_jobs_prod_transaction_error_feed_recipients }}'
 voucher_feed_recipients: '{{ vault_lib_jobs_prod_voucher_feed_recipients }}'
+# SVN
+svn_host: 'lib-svn-prod1.princeton.edu'
 # Datadog
 datadog_api_key: "{{ vault_datadog_key }}"
 datadog_config:
@@ -51,12 +59,22 @@ datadog_config:
   apm_config:
     analyzed_spans:
       lib-jobs|rack.request: 1
+    filter_tags:
+      reject: ["http.useragent:nginx/1.23.4 (health check)", "operation:heartbeat", "operation:job_fetch", "operation:scheduled_push", "operation:scheduled_poller_wait"]
 datadog_checks:
   ruby:
     init_config:
     logs:
       - type: file
         path: /opt/lib-jobs/current/log/production.log
+        service: lib-jobs
+        source: ruby
+      - type: file
+        path: /opt/aspace_helpers/current/reports/aspace2alma/log_out.txt
+        service: lib-jobs
+        source: ruby
+      - type: file
+        path: /opt/aspace_helpers/current/reports/aspace2alma/log_err.txt
         service: lib-jobs
         source: ruby
   nginx:
@@ -81,4 +99,4 @@ datadog_checks:
 app_lib_jobs_aspace_url: 'https://aspace.princeton.edu/staff/api'
 app_lib_jobs_aspace_staging_url: ''
 # SCSB S3
-scsb_s3_bucket_name: 'alma-recap-production'
+scsb_s3_bucket_name: 'scsb-prod'

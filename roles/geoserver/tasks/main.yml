@@ -1,12 +1,12 @@
 ---
-- name: stop tomcat server
-  service:
+- name: geoserver | stop tomcat server
+  ansible.builtin.service:
     name: tomcat8
     state: stopped
   changed_when: false
 
-- name: unarchive war file
-  unarchive:
+- name: geoserver | unarchive war file
+  ansible.builtin.unarchive:
     src: "{{ geoserver_url }}/{{ geoserver_version }}/{{ geoserver_file }}"
     dest: /var/lib/tomcat8/webapps
     remote_src: true
@@ -14,35 +14,35 @@
     - restart tomcat
   changed_when: false
 
-- name: Configure postgresql repository key
-  apt_key:
-    url: "{{ postgresql_apt_key_url }}"
+# - name: geoserver | Configure postgresql repository key
+  # ansible.builtin.apt_key:
+    # url: "{{ postgresql_apt_key_url }}"
 
-- name: Configure postgresql repository
-  apt_repository:
-    repo: "{{ postgresql_apt_repo }}"
+# - name: geoserver | Configure postgresql repository
+  # ansible.builtin.apt_repository:
+    # repo: "{{ postgresql_apt_repo }}"
 
-- name: add postgresql repository
-  apt_repository:
-    repo: 'deb http://apt.postgresql.org/pub/repos/apt/ {{ ansible_distribution_release }}-pgdg main'
-    state: present
+# - name: geoserver | add postgresql repository
+  # apt_repository:
+    # repo: 'deb http://apt.postgresql.org/pub/repos/apt/ {{ ansible_distribution_release }}-pgdg main'
+    # state: present
 
-- name: install postgis software
-  apt:
-    name: ["postgresql-10-postgis-2.4", "postgis", "postgresql-10-pgrouting"]
-    state: present
-  notify:
-    - restart postgresql
+# - name: geoserver | install postgis software
+  # ansible.builtin.apt:
+    # name: ["postgresql-10-postgis-2.4", "postgis", "postgresql-10-pgrouting"]
+    # state: present
+  # notify:
+    # - restart postgresql
 
-- name: Create symlinks
-  file:
+- name: geoserver | Create symlinks
+  ansible.builtin.file:
     src: '{{ item.src }}'
     dest: '{{ item.link }}'
     owner: '{{ deploy_user }}'
     group: '{{ deploy_user }}'
     state: 'link'
     force: true
-  with_items:
+  loop:
     - src: '/srv/shares/plum_geo_data'
       link: '/var/lib/tomcat8/webapps/geoserver/data/plum_geo_data'
     - src: '/srv/shares/figgy_geo_data'

@@ -13,6 +13,8 @@ ol_rabbit_host: "figgy1.princeton.edu"
 ol_rabbit_password: "{{ vault_rabbit_production_password }}"
 ol_rabbit_user: "{{ vault_rabbit_production_user }}"
 ol_read_only_mode: 'false'
+central_redis_host: 'lib-redis-prod1.princeton.edu'
+central_redis_db: '7'
 ol_secret_key: "{{ vault_ol_secret_key }}"
 ol_smtp_host: "lib-ponyexpr.princeton.edu"
 ol_smtp_port: "25"
@@ -21,7 +23,7 @@ passenger_app_env: "production"
 passenger_server_name: "catalog-alma.*"
 postgres_admin_password: '{{ vault_postgres_admin_password }}'
 postgres_admin_user: "postgres"
-postgres_host: "lib-postgres-prod3.princeton.edu"
+postgres_host: "lib-postgres-prod1.princeton.edu"
 postgres_port: "5432"
 rails_app_env: "production"
 scsb_auth_key: "{{ vault_scsb_auth_key }}"
@@ -35,24 +37,32 @@ datadog_config:
   apm_config:
     analyzed_spans:
       orangelight|rack.request: 1
-datadog_checks:
-  ruby:
-    init_config:
-    logs:
-      - type: file
-        path: /opt/orangelight/current/log/production.log
-        service: orangelight
-        source: ruby
-  nginx:
-    init_config:
-    logs:
-      - type: file
-        path: /var/log/nginx/access.log
-        service: orangelight
-        source: nginx
-        sourcecategory: http_web_access
-      - type: file
-        path: /var/log/nginx/error.log
-        service: orangelight
-        source: nginx
-        sourcecategory: http_web_access
+    filter_tags:
+      reject: ["http.useragent:nginx/1.23.4 (health check)", "operation:heartbeat", "operation:job_fetch", "operation:scheduled_push", "operation:scheduled_poller_wait"]
+datadog_typed_checks:
+  - type: process
+    configuration:
+      init_config:
+      instances:
+        - name: orangelight
+          service: orangelight
+          search_string:
+            - nginx
+  - type: nginx
+    configuration:
+      init_config:
+      instances:
+        - nginx_status_url: http://localhost:80/nginx_status/
+      logs:
+        - type: file
+          path: /var/log/nginx/access.log
+          source: nginx
+          service: orangelight
+        - type: file
+          path: /var/log/nginx/error.log
+          source: nginx
+          service: orangelight
+        - type: file
+          path: /opt/orangelight/current/log/production.log
+          source: rails
+          service: orangelight

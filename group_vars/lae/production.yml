@@ -1,7 +1,10 @@
 ---
-postgres_host: "lib-postgres-prod3.princeton.edu"
-postgres_version: 13
+postgres_host: "lib-postgres-prod1.princeton.edu"
+postgres_version: 15
 postgres_admin_user: "postgres"
+rails_app_site_config_services:
+  - nginx
+  - "{{ sneakers_worker_name }}"
 pg_hba_contype: "host"
 pg_hba_postgresql_user: "all"
 pg_hba_postgresql_database: "all"
@@ -12,7 +15,8 @@ passenger_app_root: "/opt/lae-blacklight/current/public"
 passenger_app_env: "production"
 passenger_ruby: "/usr/local/bin/ruby"
 bundler_version: "2.3.18"
-desired_nodejs_version: "v16.15.0"
+nodejs_release_url: "https://github.com/pulibrary/nodejs-binaries/releases/download/"
+desired_nodejs_version: "v18.18.0"
 postgresql_is_local: false
 rails_app_name: "lae-blacklight"
 rails_app_directory: "lae-blacklight"
@@ -68,6 +72,8 @@ rails_app_vars:
     value: 'http://lib-solr8-prod.princeton.edu:8983/solr/lae-prod'
   - name: HONEYBADGER_API_KEY
     value: '{{ lae_honeybadger_key }}'
+  - name: NODE_OPTIONS
+    value: '--openssl-legacy-provider'
 sneakers_workers: PlumEventHandler
 sneakers_worker_name: lae-sneakers
 
@@ -81,6 +87,8 @@ datadog_config:
   apm_config:
     analyzed_spans:
       approvals|rack.request: 1
+    filter_tags:
+      reject: ["http.useragent:nginx/1.23.4 (health check)", "operation:heartbeat", "operation:job_fetch", "operation:scheduled_push", "operation:scheduled_poller_wait"]
 datadog_checks:
   tls:
     init_config:

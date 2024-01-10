@@ -1,6 +1,7 @@
 ---
-postgres_host: 'lib-postgres-prod3.princeton.edu'
+postgres_host: 'lib-postgres-prod1.princeton.edu'
 
+postgres_version: 15
 passenger_server_name: "pdc-discovery-prod1.princeton.edu"
 passenger_app_env: "production"
 
@@ -10,10 +11,50 @@ pdc_discovery_db_user: '{{vault_pdc_discovery_production_db_user}}'
 pdc_discovery_db_password: '{{vault_pdc_discovery_production_db_password}}'
 rails_app_env: "production"
 
-pdc_discovery_host_name: 'pdc-discovery-prod.princeton.edu'
+pdc_discovery_host_name: 'datacommons.princeton.edu'
 pdc_discovery_honeybadger_key: '{{vault_pdc_discovery_honeybadger_key}}'
 
 solr_url: "http://lib-solr8-prod.princeton.edu:8983/solr/pdc-discovery-production"
+
+datadog_api_key: "{{ vault_datadog_key }}"
+datadog_config:
+  tags: "application:pdc-discovery, env:production, type:webserver"
+  apm_enabled: "true"
+  log_enabled: true
+  process_config:
+    enabled: "true"
+  apm_config:
+    analyzed_spans:
+      pdc-discovery|rack.request: 1
+    filter_tags:
+      reject: ["http.useragent:nginx/1.23.4 (health check)", "http.url:/telemetry/proxy/api/v2/apmtelemetry","operation:heartbeat", "operation:job_fetch", "operation:scheduled_push", "operation:scheduled_poller_wait"]
+datadog_typed_checks:
+  - type: process
+    configuration:
+      init_config:
+      instances:
+        -   name: pdc-discovery
+            service: pdc-discovery
+            search_string:
+              - nginx
+  - type: nginx
+    configuration:
+      init_config:
+      instances:
+        - nginx_status_url: http://localhost:80/nginx_status/
+      logs:
+        - type: file
+          path: /var/log/nginx/access.log
+          source: nginx
+          service: pdc-discovery
+        - type: file
+          path: /var/log/nginx/error.log
+          source: nginx
+          service: pdc-discovery
+        - type: file
+          path: /opt/pdc_discovery/current/log/production.log
+          source: rails
+          service: pdc-discovery
 
 # Note that this MUST stay in the environment-specific playbook.
 # Moving any of these to common.yml will not work.

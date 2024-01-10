@@ -24,14 +24,15 @@ solr_jmx_enabled: 'true'
 solr_jmx_port: 1099
 solr_host: '{{ inventory_hostname }}'
 
-# JVM
+# garbage collection settings
 solr_gc_tune: "-XX:NewRatio=3 \
 -XX:SurvivorRatio=4 \
 -XX:TargetSurvivorRatio=90 \
 -XX:MaxTenuringThreshold=8 \
 -XX:+UseConcMarkSweepGC \
 -XX:+UseParNewGC \
--XX:ConcGCThreads=4 -XX:ParallelGCThreads=4 \
+-XX:ConcGCThreads=4 \
+-XX:ParallelGCThreads=4 \
 -XX:+CMSScavengeBeforeRemark \
 -XX:PretenureSizeThreshold=64m \
 -XX:+UseCMSInitiatingOccupancyOnly \
@@ -40,8 +41,20 @@ solr_gc_tune: "-XX:NewRatio=3 \
 -XX:+CMSParallelRemarkEnabled \
 -XX:+ParallelRefProcEnabled"
 
+# Enable verbose GC logging
+gc_log_settings: "-verbose:gc \
+-XX:+PrintHeapAtGC \
+-XX:+PrintGCDetails \
+-XX:+PrintGCDateStamps \
+-XX:+PrintGCTimeStamps \
+-XX:+PrintTenuringDistribution \
+-XX:+PrintGCApplicationStoppedTime"
+
 solr_stack_size: 256k
-solr_heap: "{{ solr_heap_setting | default('72g') }}"
+solr_heap: "{{ solr_heap_setting | default('20g') }}"
+# Consider configuring the min and max separately:
+# solr_java_memory: '-Xms16g -Xmx20g'
+# ^^^ would require changes to both scripts in the templates dir
 solr_jetty_threads_min: 10
 solr_jetty_threads_max: 10000
 solr_jetty_threads_idle_timeout: 30000

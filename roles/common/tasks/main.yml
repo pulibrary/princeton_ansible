@@ -1,4 +1,10 @@
 ---
+- name: common | Confirm that hostname matches inventory
+  ansible.builtin.hostname:
+    name: "{{ inventory_hostname }}"
+  when:
+    "ansible_hostname not in inventory_hostname"
+  tags: "update_hostname"
 - name: common | Add apt HTTPS capabilities.
   ansible.builtin.apt:
     name: "{{ item }}"
@@ -20,11 +26,6 @@
     name:
       - procs
   when: running_on_server
-
-- name: common | get yarn key
-  ansible.builtin.apt_key:
-    url: https://dl.yarnpkg.com/debian/pubkey.gpg
-    state: present
 
 - name: common | install building software and build essentials
   ansible.builtin.apt:
@@ -51,6 +52,7 @@
   retries: 3
   delay: 60
   until: duf_repo is succeeded
+  when: running_on_server
 
 - name: common | install dust
   ansible.builtin.apt:

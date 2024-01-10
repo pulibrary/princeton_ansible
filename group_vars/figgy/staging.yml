@@ -1,12 +1,19 @@
 ---
+sidekiq_worker_name: figgy-workers
+rails_app_site_config_services:
+  - nginx
+  - "{{ sidekiq_worker_name }}"
+  - figgy-pubsub-worker
 passenger_ruby: "/usr/local/bin/ruby"
 install_ruby_from_source: true
 ruby_version_override: "ruby-3.1.3"
 bundler_version: "2.3.18"
-postgres_host: 'lib-postgres3.princeton.edu'
-postgres_version: 10
+postgres_host: 'figgy-db-staging1.princeton.edu'
+postgres_version: 15
 postgresql_is_local: false
-desired_nodejs_version: "v16.15.0"
+postgres_admin_user: '{{vault_postgres_staging_admin_user}}'
+nodejs_release_url: "https://github.com/pulibrary/nodejs-binaries/releases/download/"
+desired_nodejs_version: "v18.18.0"
 passenger_server_name: "figgy-staging2.princeton.edu"
 passenger_app_root: "/opt/figgy/current/public"
 passenger_app_env: "staging"
@@ -138,8 +145,14 @@ rails_app_vars:
     value: 'https://map-tiles-staging.princeton.edu'
   - name: PULFALIGHT_UNPUBLISHED_TOKEN
     value: '{{ vault_pulfalight_unpublished_auth_token }}'
-sidekiq_worker_name: figgy-workers
+  - name: OPEN_GEODATA_URL
+    value: 'https://geodata-staging.lib.princeton.edu'
+  - name: RESTRICTED_GEODATA_URL
+    value: 'https://geodata-restricted-staging.lib.princeton.edu'
+  - name: NODE_OPTIONS
+    value: '--openssl-legacy-provider'
 passenger_extra_config: "{{ lookup('file', 'roles/figgy/templates/nginx_extra_config')  }}"
+redis_bind_interface: '0.0.0.0'
 redis__server_default_configuration:
   syslog-enabled: "{{ redis__server_syslog | bool }}"
   syslog-ident: "{{ redis__server_syslog_ident }}"

@@ -23,6 +23,20 @@
     dest: '/etc/logrotate.d/lib_jobs_cron'
     mode: 0644
 
+# SVN
+- name: Install subversion client
+  ansible.builtin.apt:
+    name: subversion
+    state: present
+
+- name: lib_jobs | checkout the EADs subversion repository
+  ansible.builtin.subversion:
+    repo: 'svn://{{ svn_host }}/libsvn/trunk/eads'
+    dest: '/opt/{{ app_directory }}/shared/subversion_eads'
+    update: no
+  when: running_on_server
+  become_user: '{{ deploy_user }}'
+
 # PeopleSoft Mount
 - name: lib_jobs | Copy peoplesoft smb credentials
   ansible.builtin.copy:
@@ -80,7 +94,11 @@
     group: '{{ deploy_user }}'
     mode: 0755
 
-# Open Marc Records
+    # Open Marc Records
+- name: lib_jobs | install nfs-client
+  ansible.builtin.apt:
+    name: nfs-common
+    state: present
 
 - name: lib_jobs | Create open marc records directory production
   ansible.posix.mount:

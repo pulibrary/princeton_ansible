@@ -1,0 +1,27 @@
+---
+# By default this runs on all staging machines. To run on other machines, pass the group on which you want to install the agent at the command line
+# Example:
+# ansible-playbook -e runtime_env=qa playbooks/prompt.yml
+#
+#
+- name: Install new prompt
+  hosts: "{{ runtime_env | default('staging') }}"
+  remote_user: pulsys
+  serial: 3
+  become: true
+
+  tasks:
+  - name: Add new prompt
+    ansible.builtin.lineinfile:
+      path: /home/pulsys/.zshrc
+      line: "export PROMPT='%F{111}%m:%F{2}%~ $%f '"
+      create: yes
+    become: true
+    become_user: pulsys
+
+  - name: source new file
+    ansible.builtin.shell: source /home/pulsys/.zshrc
+    args:
+      executable: /bin/bash
+    become: true
+    become_user: pulsys

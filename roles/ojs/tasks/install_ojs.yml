@@ -1,6 +1,6 @@
 ---
 - name: ojs | copy config file
-  command: "cp config.TEMPLATE.inc.php config.inc.php"
+  ansible.builtin.command: "cp config.TEMPLATE.inc.php config.inc.php"
   args:
     chdir: "{{ ojs_home }}"
   become: true
@@ -9,7 +9,7 @@
   changed_when: false
 
 - name: ojs | write expect script for OJS interactive installation
-  template:
+  ansible.builtin.template:
     src: "script.exp.j2"
     dest: "{{ ojs_home }}/script.exp"
     owner: "{{ deploy_user }}"
@@ -18,7 +18,7 @@
   changed_when: false
 
 - name: ojs | run expect script for OJS interactive installation
-  command: "/usr/bin/expect {{ ojs_home }}/script.exp"
+  ansible.builtin.command: "/usr/bin/expect {{ ojs_home }}/script.exp"
   args:
     chdir: "{{ ojs_home }}"
   become: true
@@ -26,19 +26,19 @@
   changed_when: false
 
 - name: ojs | remove expect script
-  file:
+  ansible.builtin.file:
     path: "{{ ojs_home }}/script.exp"
     state: absent
   changed_when: false
 
 - name: ojs | remove apache document root
-  file:
+  ansible.builtin.file:
     path: "{{ apache.docroot }}"
     state: absent
   changed_when: false
 
 - name: ojs | install htaccess config for mod_rewrite
-  template:
+  ansible.builtin.template:
     src: htaccess
     dest: "{{ ojs_home }}/.htaccess"
     owner: "{{ deploy_user }}"
@@ -46,18 +46,18 @@
     mode: 0644
 
 - name: ojs | create ojs local directory
-  file:
+  ansible.builtin.file:
     path: "/etc/apache2/ssl/{{ item }}"
     state: directory
     owner: "root"
     group: "root"
     mode: 0775
-  with_items:
+  loop:
     - private
     - certs
 
 - name: ojs | copy apache cert files
-  copy:
+  ansible.builtin.copy:
     src: "files/certs/{{ item }}"
     dest: "/etc/apache2/ssl/certs/"
   changed_when: false
@@ -67,26 +67,26 @@
     - "{{ inventory_hostname }}_chained.pem"
 
 - name: ojs | copy apache private files
-  copy:
+  ansible.builtin.copy:
     src: "files/private/{{ item }}"
     dest: "/etc/apache2/ssl/private/"
   when: running_on_server
-  with_items:
+  loop:
     - "{{ inventory_hostname }}_priv.key"
 
 - name: ojs | add OJS template
-  template:
+  ansible.builtin.template:
     src: "ojs.conf.j2"
     dest: "/etc/apache2/sites-available/ojs.conf"
     mode: 0644
 
 - name: ojs | remove apache2 default
-  file:
+  ansible.builtin.file:
     path: "/etc/apache2/sites-enabled/000-default.conf"
     state: absent
 
 - name: ojs | symbolic link to ojs config
-  file:
+  ansible.builtin.file:
     src: "/etc/apache2/sites-available/ojs.conf"
     dest: "/etc/apache2/sites-enabled/ojs.conf"
     state: link

@@ -1,0 +1,42 @@
+---
+# use the `--limit your-project-vm1.princeton.edu` flag to select the vm that needs updated certificates
+# to update an expired key, pass `-e recv_key=<expired_id>`
+# to remove a repo from sources.list, pass `-e useless_apt_repo='<repo_details>'`
+# for example, `-e uselss_apt_repo='deb https://oss-binaries.phusionpassenger.com/apt/passenger bionic main'`
+
+- name: fix apt update issues
+  hosts: all
+  remote_user: pulsys
+  become: true
+  tasks:
+    - name: Remove a repository from sources list
+      ansible.builtin.apt_repository:
+        repo: "{{ useless_apt_repo | default(omit) }}"
+        state: absent
+      when: useless_apt_repo is defined
+
+    - name: Add an expired key by id from a keyserver
+      ansible.builtin.apt_key:
+        keyserver: keyserver.ubuntu.com
+        id: "{{ recv_key | default(omit) }}"
+      when: recv_key is defined
+
+    - name: update release info
+      ansible.builtin.command: apt-get --allow-releaseinfo-change update
+
+    - name: Update apt certificates
+      ansible.builtin.apt:
+        name: ca-certificates
+        update_cache: true
+        force_apt_get: true
+
+    - name: Ubuntu | refresh all keys
+      ansible.builtin.command: /usr/bin/apt-key adv --refresh-keys --keyserver keyserver.ubuntu.com
+      become: true
+
+  post_tasks:
+    - name: tell everyone on slack you ran an ansible playbook
+      community.general.slack:
+        token: "{{ vault_pul_slack_token }}"
+        msg: "Ansible ran `{{ ansible_play_name }}` on {{ inventory_hostname }}"
+        channel: "{{ slack_alerts_channel }}"

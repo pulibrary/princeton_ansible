@@ -1,13 +1,27 @@
 ---
 recap_base_url: 'recap-staging.princeton.edu'
 
-drupal_db_user: 'recap-staging'
+drupal_db_user: 'recap_staging'
 drupal_db_password: "{{ recap_db_password }}"
 drupal_db_name: 'recap_staging'
 drupal_db_port: '3306'
 drupal_docroot: '/var/www/recap_cap'
 apache_app_path: '{{ drupal_docroot }}/current'
 
-db_host: 'mysql-db-dev1.princeton.edu'
+db_host: 'mysql-db-staging1.princeton.edu'
 
+mysql_host: "mysql-db-staging1.princeton.edu"
+mysql_root_password: "{{ vault_mysql_root_password }}"
+mysql_databases:
+  - name: "{{ drupal_db_name }}"
+    encoding: utf8mb4
+    collation: utf8mb4_general_ci
+mysql_users:
+  - name: "{{ drupal_db_user }}"
+    host: "{{ ansible_default_ipv4.address }}"
+    password: "{{ drupal_password }}"
+    priv: "{{ drupal_db_name }}.*:ALL"
+    update_password: on_create
+
+nfs_server_local: false
 drupal_major_version: 9
