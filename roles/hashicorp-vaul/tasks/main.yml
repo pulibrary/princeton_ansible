@@ -1,0 +1,417 @@
+---
+- name: Include asserts
+  include_tasks: asserts.yml
+
+- name: Add Vault group
+  become: true
+  group:
+    name: "{{ vault_group }}"
+    state: present
+  when: vault_manage_group | bool
+
+- name: Add Vault user
+  become: true
+  user:
+    name: "{{ vault_user }}"
+    comment: "Vault user"
+    group: "{{ vault_group }}"
+    groups: "{{ vault_groups }}"
+    system: true
+  when: vault_manage_user | bool
+
+- name: Include OS-specific variables
+  include_vars: "{{ lookup('first_found', params) }}"
+  vars:
+    params:
+      files:
+        - "{{ ansible_os_family }}{{ ansible_distribution_major_version }}.yml"
+        - "{{ ansible_os_family }}.yml"
+      paths:
+        - vars
+
+- name: Check Vault installation
+  shell: command -v vault  # noqa command-instead-of-shell  # command is a shell builtin
+  environment:
+    PATH: "{{ vault_bin_path }}:{{ ansible_env.PATH }}"
+  register: vault_installation
+  changed_when: false
+  ignore_errors: true
+  check_mode: false
+
+- name: Get installed Vault version
+  shell: |
+    set -o pipefail
+    {{ vault_installation.stdout }} -version | cut -d' ' -f2 | tr -d 'v'
+  args:
+    executable: /bin/bash
+  when: not vault_installation is failed
+  changed_when: false
+  check_mode: false
+  register: installed_vault_version
+
+- name: Compute if installation is required
+  set_fact:
+    installation_required: "{{ vault_installation is failed or installed_vault_version.stdout != vault_version }}"
+
+- name: Install OS packages and Vault Enterprise via control host
+  include_tasks: install_enterprise.yml
+  when:
+    - vault_enterprise | bool
+    - not vault_install_remotely | bool
+    - not vault_install_remote_repo | bool
+    - installation_required | bool
+
+- name: Install OS packages and Vault via control host
+  include_tasks: install.yml
+  when:
+    - not vault_enterprise | bool
+    - not vault_install_remotely | bool
+    - not vault_install_hashi_repo | bool
+    - installation_required | bool
+
+- name: Install Vault via HashiCorp repository
+  include_tasks: install_hashi_repo.yml
+  when:
+    - not vault_enterprise | bool
+    - not vault_install_remotely | bool
+    - vault_install_hashi_repo | bool
+    - installation_required | bool
+
+- name: Install OS packages and Vault via remote hosts
+  include_tasks: install_remote.yml
+  when:
+    - not vault_enterprise | bool
+    - vault_install_remotely | bool
+    - not vault_install_hashi_repo | bool
+    - installation_required | bool
+
+- name: Check Vault mlock capability
+  become: true
+  command: "setcap cap_ipc_lock=+ep {{ vault_bin_path }}/vault"
+  changed_when: false  # read-only task
+  ignore_errors: true
+  register: vault_mlock_capability
+
+- name: Enable non root mlock capability
+  become: true
+  command: "setcap cap_ipc_lock=+ep {{ vault_bin_path }}/vault"
+  register: output
+  changed_when: output.rc != 0
+  when: vault_mlock_capability is failed
+
+- name: Create directories
+  become: true
+  file:
+    dest: "{{ item.path }}"
+    state: directory
+    owner: "{{ vault_user }}"
+    group: "{{ vault_group }}"
+    mode: "{{ item.mode }}"
+  with_items:
+    - path: "{{ vault_config_path }}"
+      mode: "{{ vault_harden_file_perms | ternary('0550', '0750') }}"
+    - path: "{{ vault_plugin_path }}"
+      mode: "{{ vault_harden_file_perms | ternary('0550', '0750') }}"
+    - path: "{{ vault_data_path }}"
+      mode: "0750"
+    - path: "{{ vault_log_path }}"
+      mode: "0750"
+    - path: "{{ vault_run_path }}"
+      mode: "0750"
+
+- name: Enable logrotate for vault
+  become: true
+  template:
+    src: "{{ vault_logrotate_template }}"
+    dest: /etc/logrotate.d/vault
+    owner: root
+    group: root
+    mode: 0644
+  when: vault_enable_logrotate | bool
+
+- name: TLS configuration
+  include_tasks: ../tasks/tls.yml
+  when: vault_tls_disable == 0
+
+- name: Backend storage TLS configuration
+  include_tasks: ../tasks/backend_tls.yml
+  when: vault_tls_gossip == 1
+
+- name: "Get content of GCP Credentials from file"
+  set_fact:
+    vault_gkms_credentials_content: "{{ lookup('file', vault_gkms_credentials_src_file) }}"
+  when:
+    - vault_gkms | bool
+    - vault_gkms_credentials_src_file | length > 0
+
+- name: "Copy over GCP Credentials for Auto Unseal"  # noqa template-instead-of-copy  # https://github.com/ansible/ansible-lint/issues/2501
+  copy:
+    content: "{{ vault_gkms_credentials_content }}"
+    dest: "{{ vault_gkms_credentials }}"
+    owner: "{{ vault_user }}"
+    group: "{{ vault_group }}"
+    mode: "0600"
+  when:
+    - vault_gkms | bool
+    - vault_gkms_credentials_content | length > 0 or
+      vault_gkms_copy_sa | bool
+
+- name: "Copy GCP Credentials for gcs backend"
+  copy:
+    src: "{{ vault_gcs_credentials_src_file }}"
+    dest: "{{ vault_gcs_credentials_dst_file }}"
+    owner: "{{ vault_user }}"
+    group: "{{ vault_group }}"
+    mode: "0600"
+  when:
+    - vault_backend == "gcs"
+    - vault_gcs_copy_sa | bool
+
+- name: Vault main configuration
+  become: true
+  template:
+    src: "{{ vault_main_configuration_template }}"
+    dest: "{{ vault_main_config }}"
+    owner: "{{ vault_user }}"
+    group: "{{ vault_group }}"
+    mode: "0400"
+    backup: "{{ vault_backup_config | default('false') | bool | lower }}"
+  notify:
+    - Restart vault
+    - Reload vault
+
+- name: Vault transit seal configuration
+  become: true
+  template:
+    src: "{{ vault_transit_backend }}"
+    dest: "{{ vault_transit_config }}"
+    owner: "{{ vault_user }}"
+    group: "{{ vault_group }}"
+    mode: "0400"
+    backup: "{{ vault_backup_config | default('false') | bool | lower }}"
+  when: vault_transit | bool
+  notify: Restart vault
+
+- name: Vault awskms seal configuration
+  become: true
+  template:
+    src: "{{ vault_awskms_backend }}"
+    dest: "{{ vault_awskms_config }}"
+    owner: "{{ vault_user }}"
+    group: "{{ vault_group }}"
+    mode: "0400"
+    backup: "{{ vault_backup_config | default('false') | bool | lower }}"
+  when: vault_awskms | bool
+  notify: Restart vault
+
+- name: Vault azurekeyvault seal configuration
+  become: true
+  template:
+    src: "{{ vault_azurekeyvault_backend }}"
+    dest: "{{ vault_azurekeyvault_config }}"
+    owner: "{{ vault_user }}"
+    group: "{{ vault_group }}"
+    mode: "0400"
+    backup: "{{ vault_backup_config | default('false') | bool | lower }}"
+  when: vault_azurekeyvault | bool
+  notify: Restart vault
+
+- name: Upload Vault license file to vault_license_path
+  become: true
+  copy:
+    src: "{{ vault_license_file }}"
+    dest: "{{ vault_license_path }}"
+    owner: "{{ vault_user }}"
+    group: "{{ vault_group }}"
+    mode: "0644"
+  when:
+    - vault_configure_enterprise_license | bool
+    - vault_license_file | length > 0
+
+- name: "Set Exec output to log path when enabled log"
+  set_fact:
+    vault_exec_output: ">> {{ vault_log_path }}/vault.log 2>&1"
+  when: vault_enable_log
+
+- name: BSD init script
+  template:
+    src: "{{ vault_bsdinit_template }}"
+    dest: /etc/rc.d/vault
+    owner: root
+    group: wheel
+    mode: "0755"
+  when: ansible_os_family == "FreeBSD"
+
+- name: SYSV init script
+  template:
+    src: "{{ vault_sysvinit_template }}"
+    dest: /etc/init.d/vault
+    owner: root
+    group: root
+    mode: "0755"
+  when:
+    - not ansible_service_mgr == "systemd"
+    - not ansible_os_family == "Debian"
+    - not ansible_os_family == "FreeBSD"
+    - not ansible_os_family == "Solaris"
+
+- name: Debian init script
+  template:
+    src: "{{ vault_debian_init_template }}"
+    dest: /etc/init.d/vault
+    owner: root
+    group: root
+    mode: "0755"
+  when:
+    - not ansible_service_mgr == "systemd"
+    - ansible_os_family == "Debian"
+    - not ansible_os_family == "FreeBSD"
+    - not ansible_os_family == "Solaris"
+
+- name: Extract systemd version
+  shell: |
+    set -o pipefail
+    systemctl --version systemd | head -n 1 | cut -d' ' -f2
+  args:
+    executable: /bin/bash
+  changed_when: false
+  check_mode: false
+  register: systemd_version
+  when:
+    - ansible_service_mgr == "systemd"
+    - not ansible_os_family == "FreeBSD"
+    - not ansible_os_family == "Solaris"
+  tags: skip_ansible_lint
+
+- name: Systemd unit
+  become: true
+  template:
+    src: "{{ vault_systemd_template }}"
+    dest: "{{ vault_systemd_unit_path }}/{{ vault_systemd_service_name }}.service"
+    force: true
+    owner: root
+    group: root
+    mode: "0644"
+  register: systemd_unit
+  when:
+    - ansible_service_mgr == "systemd"
+    - not ansible_os_family == "FreeBSD"
+    - not ansible_os_family == "Solaris"
+    - systemd_version is defined
+
+- name: Reload systemd
+  become: true
+  systemd:
+    daemon-reload: true
+  notify: Restart Vault
+  when:
+    - ansible_service_mgr == "systemd"
+    - not ansible_os_family == "FreeBSD"
+    - not ansible_os_family == "Solaris"
+    - systemd_version is defined
+    - systemd_unit is changed
+
+- name: Start Vault
+  become: true
+  service:
+    name: '{{ vault_systemd_service_name }}'
+    state: started
+    enabled: true
+  register: start_vault
+
+- name: Pause to let Vault startup correctly
+  pause:
+    seconds: "{{ vault_start_pause_seconds }}"
+  when:
+    - start_vault is changed   # noqa no-handler
+    - vault_start_pause_seconds | int > 0
+
+- name: Restart Vault if needed
+  meta: flush_handlers
+
+- name: Compute TLS friendly vault_addr
+  set_fact:
+    vault_addr: "{{ (vault_address == '0.0.0.0') | ternary('127.0.0.1', vault_address) }}"
+
+- name: Insert http(s) export in dotfile
+  become: true
+  lineinfile:
+    path: "{{ vault_home }}/{{ vault_dotfile }}"
+    regexp: "^export VAULT_ADDR="
+    line: "export VAULT_ADDR='{{ vault_tls_disable | ternary('http', 'https') }}://{{ vault_addr }}:{{ vault_port }}'"
+    owner: "{{ vault_user }}"
+    group: "{{ vault_group }}"
+    create: true
+    mode: 0600
+  when:
+    - not vault_dotfile_disable
+    - ansible_os_family != 'Windows'
+
+- name: Insert CA cert export in dotfile
+  become: true
+  lineinfile:
+    path: "{{ vault_home }}/{{ vault_dotfile }}"
+    regexp: "^export VAULT_CACERT="
+    line: "export VAULT_CACERT={{ vault_tls_certs_path }}/{{ vault_tls_ca_file }}"
+    owner: "{{ vault_user }}"
+    group: "{{ vault_group }}"
+    create: true
+    mode: 0600
+  when:
+    - not vault_dotfile_disable
+    - not vault_tls_disable | bool
+    - ansible_os_family != 'Windows'
+
+# This should succeed regardless of seal state
+- name: Vault API reachable?
+  # Attempt to help with long lines > 160 issues
+  vars:
+    vault_addr_protocol: "{{ vault_tls_disable | ternary('http', 'https') }}"
+  environment:
+    no_proxy: "{{ vault_api_addr | urlsplit('hostname') }}"
+  uri:
+    validate_certs: "{{ validate_certs_during_api_reachable_check | bool }}"
+    url: "{{ vault_api_addr }}/v1/sys/health"
+    method: GET
+    # 200 if initialized, unsealed, and active
+    # 429 if unsealed and standby
+    # 472 if data recovery mode replication secondary and active
+    # 473 if performance standby
+    # 501 if not initialized
+    # 503 if sealed
+    # See: https://www.vaultproject.io/api/system/health.html
+    status_code: 200, 429, 472, 473, 501, 503
+    body_format: json
+  register: check_result
+  retries: 6
+  until: check_result is succeeded
+  delay: 10
+  changed_when: false
+  tags:
+    - check_vault
+  when:
+    - not vault_disable_api_health_check | bool
+
+- name: Install/configure vault plugins
+  include_tasks: "plugins/{{ _index_plugin }}.yml"
+  loop: "{{ ('molecule-notest' not in ansible_skip_tags) | ternary(vault_plugins_enable,
+         lookup('fileglob', 'tasks/plugins/*.yml', wantlist=true) | map('basename') | map('splitext') | map('first')) }}"
+  loop_control:
+    loop_var: _index_plugin
+  args:
+    apply:
+      environment:
+        VAULT_ADDR: "{{ lookup('env', 'VAULT_ADDR') |
+                     default(vault_tls_disable | ternary('http', 'https') ~ '://' ~ vault_addr ~ ':' ~ vault_port, true) }}"
+        VAULT_CACERT: "{{ lookup('env', 'VAULT_CACERT') |
+                       default(vault_tls_config_path ~ '/' ~ vault_tls_ca_file if not (vault_tls_disable) else '', true) }}"
+        VAULT_TOKEN: "{{ lookup('env', 'VAULT_TOKEN') | default(lookup('file', '~/.vault-token', errors='ignore'), true) }}"
+  when: vault_plugin_install | bool
+
+- name: Vault status
+  debug:
+    msg: "Vault is {{ vault_http_status[check_result.status | string] }}"
+  tags:
+    - check_vault
+  when:
+    - not vault_disable_api_health_check | bool
