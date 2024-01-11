@@ -1,0 +1,53 @@
+#!/bin/sh
+# {{ ansible_managed }}
+#
+# PROVIDE: vault
+# REQUIRE: LOGIN
+# KEYWORD: shutdown
+
+# shellcheck disable=SC1091,2034,2154
+. /etc/rc.subr
+
+name="vault"
+rcvar=$(set_rcvar)
+
+
+load_rc_config $name
+: "${vault_enable="NO"}"
+: "${vault_users="vault"}"
+
+restart_cmd=vault_restart
+start_cmd=vault_start
+stop_cmd=vault_stop
+
+vault_start() {
+    echo "Starting ${name}."
+    {% if vault_http_proxy -%}
+    export HTTP_PROXY={{ vault_http_proxy }}
+    {% endif -%}
+    {% if vault_https_proxy -%}
+    export HTTPS_PROXY={{ vault_https_proxy }}
+    {% endif -%}
+    {% if vault_no_proxy -%}
+    export NO_PROXY={{ vault_no_proxy }}
+    {% endif -%}
+    for user in ${vault_users}; do
+        mkdir /var/run/vault
+        chown -R "{{ vault_user }}:{{ vault_group }}" /var/run/vault/
+        su -m "${user}" -c "{{ vault_bin_path }}/vault server -config={{ vault_config_path if vault_use_config_path else vault_main_config }} {% if vault_log_level is defined %}-log-level={{ vault_log_level | lower }}{% endif %} {{ vault_exec_output }} &"
+    done
+}
+
+vault_stop() {
+    echo "Stopping $name."
+    pids=$(pgrep vault)
+    pkill vault
+    wait_for_pids "${pids}"
+}
+
+vault_restart() {
+    vault_stop
+    vault_start
+}
+
+run_rc_command "$1"
