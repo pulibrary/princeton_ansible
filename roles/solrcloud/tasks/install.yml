@@ -35,11 +35,8 @@
     dest: '/tmp/{{ solr_cloud_package }}'
     timeout: 300
   register: solr_downloaded
-  when: |
-      service_solrcloud_status.rc > 0 or
-      service_solrcloud_status is success and
-        (solrcloud_check is failed or
-        solr_config_xml not in solrcloud_check.content)
+  when:
+    service_solrcloud_status is failed
   retries: 3
   delay: 10
   until: solr_downloaded is succeeded
@@ -57,18 +54,11 @@
   changed_when: false
   args:
     chdir: /tmp
-    warn: false
   when: |
-      service_solrcloud_status.rc > 0 or
-      service_solrcloud_status is success and
-        (solrcloud_check is failed or
-        solr_config_xml not in solrcloud_check.content)
+    service_solrcloud_status is failed
 
 - name: solrcloud | run SolrCloud installation script
   ansible.builtin.shell: /tmp/install_solr_service.sh /tmp/{{ solr_cloud_package }} -f -u {{ solr_user }} -n
   changed_when: false
   when: |
-      service_solrcloud_status.rc > 0 or
-      service_solrcloud_status is success and
-        (solrcloud_check is failed or
-        solr_config_xml not in solrcloud_check.content)
+    service_solrcloud_status is failed
