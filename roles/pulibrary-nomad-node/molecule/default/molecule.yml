@@ -8,6 +8,44 @@ lint: |
   yamllint .
   ansible-lint
 platforms:
+  - name: nomadserver2
+    image: "geerlingguy/docker-ubuntu2204-ansible"
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    networks:
+      - name: "nomad"
+    capabilities:
+      - SYS_ADMIN
+      - SYS_RAWIO
+    network_mode: "nomad"
+    dns_servers:
+      - 127.0.0.1
+      - 8.8.8.8
+    privileged: true
+    pre_build_image: true
+    groups:
+      - nomad_cluster
+  - name: nomadclient1
+    image: "geerlingguy/docker-ubuntu2204-ansible"
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    networks:
+      - name: "nomad"
+    capabilities:
+      - SYS_ADMIN
+      - SYS_RAWIO
+    devices:
+      - "/dev/mem:/dev/mem"
+    network_mode: "nomad"
+    dns_servers:
+      - 127.0.0.1
+      - 8.8.8.8
+    privileged: true
+    pre_build_image: true
+    groups:
+      - nomad_cluster
   - name: nomadserver1
     image: "geerlingguy/docker-ubuntu2204-ansible"
     command: ""
@@ -25,39 +63,11 @@ platforms:
       - nomad_cluster
     capabilities:
       - SYS_ADMIN
+      - SYS_RAWIO
     published_ports:
       - 127.0.0.1:8500:8500
       - 127.0.0.1:4646:4646
-  - name: nomadserver2
-    image: "geerlingguy/docker-ubuntu2204-ansible"
-    command: ""
-    volumes:
-      - /sys/fs/cgroup:/sys/fs/cgroup:ro
-    networks:
-      - name: "nomad"
-    network_mode: "nomad"
-    dns_servers:
-      - 127.0.0.1
-      - 8.8.8.8
-    privileged: true
-    pre_build_image: true
-    groups:
-      - nomad_cluster
-  - name: nomadclient1
-    image: "geerlingguy/docker-ubuntu2204-ansible"
-    command: ""
-    volumes:
-      - /sys/fs/cgroup:/sys/fs/cgroup:ro
-    networks:
-      - name: "nomad"
-    network_mode: "nomad"
-    dns_servers:
-      - 127.0.0.1
-      - 8.8.8.8
-    privileged: true
-    pre_build_image: true
-    groups:
-      - nomad_cluster
+      - 127.0.0.1:8200:8200
 provisioner:
   name: ansible
   log: true
@@ -68,10 +78,38 @@ provisioner:
       nomad_cluster:
         pulibrary_nomad_group_name: 'nomad_cluster'
         pulibrary_nomad_client_address: '0.0.0.0'
+        # Consul
+        consul_version: '1.17.1'
+        consul_group_name: '{{ pulibrary_nomad_group_name }}'
+        consul_node_role: "{{ 'bootstrap' if pulibrary_nomad_role == 'leader' else 'server' if pulibrary_nomad_role == 'server' else 'client' }}"
+        consul_autopilot_enable: true
+        consul_dnsmasq_enable: true
+        consul_client_address: '{{ pulibrary_nomad_client_address }}'
+        # consul_acl_policy: true
+        consul_acl_enable: true
+        consul_acl_master_token: "b2d1d38b-731d-49d0-932f-7171ec3beb2c"
+        # Nomad
+        nomad_version: 1.7.1
+        nomad_bind_address: '{{ pulibrary_nomad_client_address }}'
+        nomad_cni_enable: true
+        nomad_docker_enable: true
+        nomad_use_consul: true
+        nomad_docker_enable: yes
+        nomad_docker_dmsetup: no
+        nomad_podman_enable: true
+        nomad_node_role: "{{ 'server' if pulibrary_nomad_role == 'leader' else pulibrary_nomad_role }}"
+        nomad_group_name: '{{ pulibrary_nomad_group_name }}'
+        nomad_consul_tags: []
+        nomad_raft_protocol: 3
+        nomad_cpu_total_compute: '{{ pulibrary_nomad_cpu_total_compute }}'
+        # nomad_acl_enabled: true
+        nomad_consul_token: "b2d1d38b-731d-49d0-932f-7171ec3beb2c"
+        # nomad_consul_token: "{{ pulibrary_provisioning_token }}"
+        pulibrary_provisioning_token: "904c8247-82a1-429c-9682-30547919fd81"
     host_vars:
       nomadserver1:
         pulibrary_nomad_role: 'leader'
       nomadclient1: 
-        pulibrary_nomad_role: 'both'
+      pulibrary_nomad_role: 'both'
 verifier:
   name: ansible
