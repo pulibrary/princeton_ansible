@@ -20,26 +20,14 @@
   args:
     warn: false  # The service module doesn't appear to have a status state
 
-- name: solrcloud | Check for solr version
-  ansible.builtin.uri:
-    url: "http://localhost:{{ solr_port }}/solr/admin/info/system"
-    return_content: true
-  register: solrcloud_check
-  changed_when: false
-  ignore_errors: true
-  when: service_solrcloud_status is success
-
 - name: solrcloud | Download SolrCloud binaries
   ansible.builtin.get_url:
     url: "{{ solr_cloud_url }}"
     dest: '/tmp/{{ solr_cloud_package }}'
     timeout: 300
   register: solr_downloaded
-  when: |
-      service_solrcloud_status.rc > 0 or
-      service_solrcloud_status is success and
-        (solrcloud_check is failed or
-        solr_config_xml not in solrcloud_check.content)
+  when:
+    service_solrcloud_status is failed
   retries: 3
   delay: 10
   until: solr_downloaded is succeeded
@@ -57,18 +45,11 @@
   changed_when: false
   args:
     chdir: /tmp
-    warn: false
   when: |
-      service_solrcloud_status.rc > 0 or
-      service_solrcloud_status is success and
-        (solrcloud_check is failed or
-        solr_config_xml not in solrcloud_check.content)
+    service_solrcloud_status is failed
 
 - name: solrcloud | run SolrCloud installation script
   ansible.builtin.shell: /tmp/install_solr_service.sh /tmp/{{ solr_cloud_package }} -f -u {{ solr_user }} -n
   changed_when: false
   when: |
-      service_solrcloud_status.rc > 0 or
-      service_solrcloud_status is success and
-        (solrcloud_check is failed or
-        solr_config_xml not in solrcloud_check.content)
+    service_solrcloud_status is failed

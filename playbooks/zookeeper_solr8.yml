@@ -7,8 +7,7 @@
   become: true
   vars_files:
     - ../site_vars.yml
-    - ../group_vars/solrcloud/solrcloud_{{ runtime_env | default('staging') }}.yml
-    - ../group_vars/solrcloud/vault.yml
+    - ../group_vars/solr8cloud/{{ runtime_env | default('staging') }}.yml
     - ../group_vars/zookeeper/zookeeper_{{ runtime_env | default('staging') }}.yml
 
   roles:
@@ -20,7 +19,6 @@
 
   post_tasks:
     - name: tell everyone on slack you ran an ansible playbook
-      when: runtime_env | default('staging') == "production"
       community.general.slack:
         token: "{{ vault_pul_slack_token }}"
         msg: "Ansible ran `{{ ansible_play_name }}` on {{ inventory_hostname }}"
