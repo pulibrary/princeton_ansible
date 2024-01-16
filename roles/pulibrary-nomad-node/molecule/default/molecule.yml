@@ -8,33 +8,17 @@ lint: |
   yamllint .
   ansible-lint
 platforms:
-  - name: nomadserver1
-    image: "geerlingguy/docker-ubuntu2204-ansible"
-    command: ""
-    volumes:
-      - /sys/fs/cgroup:/sys/fs/cgroup:ro
-    networks:
-      - name: "nomad"
-    network_mode: "nomad"
-    dns_servers:
-      - 127.0.0.1
-      - 8.8.8.8
-    privileged: true
-    pre_build_image: true
-    groups:
-      - nomad_cluster
-    capabilities:
-      - SYS_ADMIN
-    published_ports:
-      - 127.0.0.1:8500:8500
-      - 127.0.0.1:4646:4646
   - name: nomadserver2
     image: "geerlingguy/docker-ubuntu2204-ansible"
     command: ""
+    cgroupns_mode: host
     volumes:
-      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
     networks:
       - name: "nomad"
+    capabilities:
+      - SYS_ADMIN
+      - SYS_RAWIO
     network_mode: "nomad"
     dns_servers:
       - 127.0.0.1
@@ -46,8 +30,34 @@ platforms:
   - name: nomadclient1
     image: "geerlingguy/docker-ubuntu2204-ansible"
     command: ""
+    cgroupns_mode: host
     volumes:
-      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    networks:
+      - name: "nomad"
+    capabilities:
+      - SYS_ADMIN
+      - SYS_RAWIO
+    devices:
+      - "/dev/mem:/dev/mem"
+    network_mode: "nomad"
+    dns_servers:
+      - 127.0.0.1
+      - 8.8.8.8
+    privileged: true
+    pre_build_image: true
+    groups:
+      - nomad_cluster
+      - nomad_client
+    published_ports:
+      - 127.0.0.1:9000:9000
+      - 127.0.0.1:20000-20010:20000-20010
+  - name: nomadserver1
+    image: "geerlingguy/docker-ubuntu2204-ansible"
+    command: ""
+    cgroupns_mode: host
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
     networks:
       - name: "nomad"
     network_mode: "nomad"
@@ -58,20 +68,21 @@ platforms:
     pre_build_image: true
     groups:
       - nomad_cluster
+      - nomad_leader
+    capabilities:
+      - SYS_ADMIN
+      - SYS_RAWIO
+    published_ports:
+      - 127.0.0.1:8500:8500
+      - 127.0.0.1:4646:4646
+      - 127.0.0.1:8200:8200
 provisioner:
   name: ansible
   log: true
   playbooks:
     prepare: prepare.yml
   inventory:
-    group_vars:
-      nomad_cluster:
-        pulibrary_nomad_group_name: 'nomad_cluster'
-        pulibrary_nomad_client_address: '0.0.0.0'
-    host_vars:
-      nomadserver1:
-        pulibrary_nomad_role: 'leader'
-      nomadclient1: 
-        pulibrary_nomad_role: 'both'
+    links:
+      group_vars: './group_vars/'
 verifier:
   name: ansible

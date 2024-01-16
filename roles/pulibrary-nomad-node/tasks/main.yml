@@ -1,11 +1,5 @@
 ---
 # tasks file for pulibrary-nomad-node
-- name: 'nomad-node | Install docker'
-  ansible.builtin.include_role:
-    name: 'ansible-role-docker'
-  vars:
-    docker_daemon_options:
-      iptables: false
 - name: 'nomad-node | Install Podman'
   ansible.builtin.apt:
     name: "podman"
@@ -19,24 +13,114 @@
 - name: 'nomad-node | Install consul'
   ansible.builtin.include_role:
     name: 'ansible-consul'
-  vars:
-    consul_group_name: '{{ pulibrary_nomad_group_name }}'
-    consul_node_role: "{{ 'bootstrap' if pulibrary_nomad_role == 'leader' else 'server' if pulibrary_nomad_role == 'server' else 'client' }}"
-    consul_autopilot_enable: true
-    consul_dnsmasq_enable: true
-    consul_client_address: '{{ pulibrary_nomad_client_address }}'
-    # consul_acl_policy: true
-    # consul_acl_enable: true
+    public: true
+
+- name: 'nomad-node | Create Nomad Policy to reference'
+  ansible.builtin.template:
+    src: nomad-node-policy.hcl.j2
+    dest: "/etc/consul/nomad-node-policy.hcl"
+    owner: "{{ consul_user }}"
+    group: "{{ consul_group }}"
+  when:
+    - pulibrary_nomad_role == 'leader'
+
+- name: 'nomad-node | Register existing policies'
+  ansible.builtin.shell:
+    cmd: "consul acl policy list -format json"
+  environment:
+    CONSUL_HTTP_TOKEN: '{{ consul_acl_master_token }}'
+  register: policies
+
+- name: 'nomad-node | Store existing_consul_policies'
+  set_fact:
+    existing_consul_policies: "{{ policies.stdout | from_json | map(attribute='Name') }}"
+
+- name: 'nomad-node | Register existing tokens'
+  ansible.builtin.shell:
+    cmd: "consul acl token list -format json"
+  environment:
+    CONSUL_HTTP_TOKEN: '{{ consul_acl_master_token }}'
+  register: tokens
+
+- name: 'nomad-node | Store existing_consul_tokens'
+  set_fact:
+    existing_consul_tokens: "{{ tokens.stdout | from_json | map(attribute='SecretID') }}"
+
+- name: 'nomad-node | Store existing node identities'
+  set_fact:
+    existing_node_names: "{{ tokens.stdout | from_json | community.general.json_query('[*].NodeIdentities[].NodeName') }}"
+
+- name: 'nomad-node | Generate Consul ACL Agent Token'
+  ansible.builtin.shell:
+    cmd: "consul acl token create -node-identity '{{ inventory_hostname }}:dc1' -format json"
+  when:
+    - "inventory_hostname not in existing_node_names"
+  environment:
+    CONSUL_HTTP_TOKEN: '{{ consul_acl_master_token }}'
+  register: created_agent_token
+
+- name: 'nomad-node | Register  Consul ACL Agent Token'
+  ansible.builtin.shell:
+    cmd: "consul acl set-agent-token agent {{ created_agent_token.stdout | from_json | community.general.json_query('SecretID')}}"
+  environment:
+    CONSUL_HTTP_TOKEN: '{{ consul_acl_master_token }}'
+  when:
+    - "inventory_hostname not in existing_node_names"
+    - created_agent_token
+
+- name: 'nomad-node | Install Nomad Consul Policy'
+  ansible.builtin.shell:
+    cmd: "consul acl policy create -name 'nomad-agents' -description 'Policy for Nomad agents' -rules '@/etc/consul/nomad-node-policy.hcl'"
+  environment:
+    CONSUL_HTTP_TOKEN: '{{ consul_acl_master_token }}'
+  when:
+    - pulibrary_nomad_role == 'leader'
+    - "'nomad-agents' not in existing_consul_policies"
+
+- name: 'nomad-node | Create nomad ACL token'
+  ansible.builtin.shell:
+    cmd: "consul acl token create -policy-name 'nomad-agents' -secret '{{ pulibrary_provisioning_token }}'"
+  environment:
+    CONSUL_HTTP_TOKEN: '{{ consul_acl_master_token }}'
+  when:
+    - pulibrary_nomad_role == 'leader'
+    - "pulibrary_provisioning_token not in existing_consul_tokens"
+
+- name: 'nomad-node | Create DNS ACL token'
+  ansible.builtin.shell:
+    cmd: "consul acl token create -templated-policy 'builtin/dns' -secret '{{ consul_dns_token }}'"
+  environment:
+    CONSUL_HTTP_TOKEN: '{{ consul_acl_master_token }}'
+  when:
+    - pulibrary_nomad_role == 'leader'
+    - "consul_dns_token not in existing_consul_tokens"
+
+- name: 'nomad-node | Assign DNS ACL token'
+  ansible.builtin.shell:
+    cmd: "consul acl set-agent-token dns '{{ consul_dns_token }}'"
+  environment:
+    CONSUL_HTTP_TOKEN: '{{ consul_acl_master_token }}'
+
 - name: 'nomad-node | Install nomad'
   ansible.builtin.include_role:
     name: 'ansible-nomad'
-  vars:
-    nomad_bind_address: '{{ pulibrary_nomad_client_address }}'
-    nomad_cni_enable: true
-    nomad_docker_enable: true
-    nomad_use_consul: true
-    nomad_docker_enable: yes
-    nomad_docker_dmsetup: no
-    nomad_podman_enable: true
-    nomad_node_role: "{{ 'server' if pulibrary_nomad_role == 'leader' else pulibrary_nomad_role }}"
-    nomad_group_name: '{{ pulibrary_nomad_group_name }}'
+
+- name: start nomad
+  service: name=nomad state=started
+
+
+- name: Check Nomad HTTP API (via TCP socket)
+  wait_for:
+    delay: 15
+    port: "4646"
+    host: "localhost"
+
+- name: 'nomad-node | Create github container registry variables'
+  ansible.builtin.shell:
+    cmd: "nomad var put -force nomad/jobs GITHUB_CONTAINER_REGISTRY_USERNAME=pulbot GITHUB_CONTAINER_REGISTRY_PASSWORD={{ vault_github_container_registry_token }}"
+  when:
+    - pulibrary_nomad_role == 'leader'
+  register: variablestatus
+  until: "variablestatus is not failed"
+  retries: 10
+  delay: 2
