@@ -14,6 +14,7 @@
   ansible.builtin.include_role:
     name: 'ansible-consul'
     public: true
+
 - name: 'nomad-node | Create Nomad Policy to reference'
   ansible.builtin.template:
     src: nomad-node-policy.hcl.j2
@@ -44,9 +45,28 @@
 - name: 'nomad-node | Store existing_consul_tokens'
   set_fact:
     existing_consul_tokens: "{{ tokens.stdout | from_json | map(attribute='SecretID') }}"
-- name: debug fact
-  debug:
-    msg: "{{ existing_consul_tokens }}"
+
+- name: 'nomad-node | Store existing node identities'
+  set_fact:
+    existing_node_names: "{{ tokens.stdout | from_json | community.general.json_query('[*].NodeIdentities[].NodeName') }}"
+
+- name: 'nomad-node | Generate Consul ACL Agent Token'
+  ansible.builtin.shell:
+    cmd: "consul acl token create -node-identity '{{ inventory_hostname }}:dc1' -format json"
+  when:
+    - "inventory_hostname not in existing_node_names"
+  environment:
+    CONSUL_HTTP_TOKEN: '{{ consul_acl_master_token }}'
+  register: created_agent_token
+
+- name: 'nomad-node | Register  Consul ACL Agent Token'
+  ansible.builtin.shell:
+    cmd: "consul acl set-agent-token agent {{ created_agent_token.stdout | from_json | community.general.json_query('SecretID')}}"
+  environment:
+    CONSUL_HTTP_TOKEN: '{{ consul_acl_master_token }}'
+  when:
+    - "inventory_hostname not in existing_node_names"
+    - created_agent_token
 
 - name: 'nomad-node | Install Nomad Consul Policy'
   ansible.builtin.shell:
@@ -84,3 +104,23 @@
 - name: 'nomad-node | Install nomad'
   ansible.builtin.include_role:
     name: 'ansible-nomad'
+
+- name: start nomad
+  service: name=nomad state=started
+
+
+- name: Check Nomad HTTP API (via TCP socket)
+  wait_for:
+    delay: 15
+    port: "4646"
+    host: "localhost"
+
+- name: 'nomad-node | Create github container registry variables'
+  ansible.builtin.shell:
+    cmd: "nomad var put -force nomad/jobs GITHUB_CONTAINER_REGISTRY_USERNAME=pulbot GITHUB_CONTAINER_REGISTRY_PASSWORD={{ vault_github_container_registry_token }}"
+  when:
+    - pulibrary_nomad_role == 'leader'
+  register: variablestatus
+  until: "variablestatus is not failed"
+  retries: 10
+  delay: 2

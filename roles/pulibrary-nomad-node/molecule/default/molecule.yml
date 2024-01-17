@@ -11,8 +11,9 @@ platforms:
   - name: nomadserver2
     image: "geerlingguy/docker-ubuntu2204-ansible"
     command: ""
+    cgroupns_mode: host
     volumes:
-      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
     networks:
       - name: "nomad"
     capabilities:
@@ -29,8 +30,9 @@ platforms:
   - name: nomadclient1
     image: "geerlingguy/docker-ubuntu2204-ansible"
     command: ""
+    cgroupns_mode: host
     volumes:
-      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
     networks:
       - name: "nomad"
     capabilities:
@@ -46,11 +48,16 @@ platforms:
     pre_build_image: true
     groups:
       - nomad_cluster
+      - nomad_client
+    published_ports:
+      - 127.0.0.1:9000:9000
+      - 127.0.0.1:20000-20010:20000-20010
   - name: nomadserver1
     image: "geerlingguy/docker-ubuntu2204-ansible"
     command: ""
+    cgroupns_mode: host
     volumes:
-      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
     networks:
       - name: "nomad"
     network_mode: "nomad"
@@ -61,6 +68,7 @@ platforms:
     pre_build_image: true
     groups:
       - nomad_cluster
+      - nomad_leader
     capabilities:
       - SYS_ADMIN
       - SYS_RAWIO
@@ -74,44 +82,7 @@ provisioner:
   playbooks:
     prepare: prepare.yml
   inventory:
-    group_vars:
-      nomad_cluster:
-        pulibrary_nomad_group_name: 'nomad_cluster'
-        pulibrary_nomad_client_address: '0.0.0.0'
-        # Consul
-        consul_version: '1.17.1'
-        consul_group_name: '{{ pulibrary_nomad_group_name }}'
-        consul_node_role: "{{ 'bootstrap' if pulibrary_nomad_role == 'leader' else 'server' if pulibrary_nomad_role == 'server' else 'client' }}"
-        consul_autopilot_enable: true
-        consul_dnsmasq_enable: true
-        consul_client_address: '{{ pulibrary_nomad_client_address }}'
-        # consul_acl_policy: true
-        consul_acl_enable: true
-        consul_acl_master_token: "b2d1d38b-731d-49d0-932f-7171ec3beb2c"
-        consul_acl_default_policy: deny
-        consul_dns_token: "0e33a9ad-11d8-4139-9830-21a3d967ad9b"
-        # Nomad
-        nomad_version: 1.7.1
-        nomad_bind_address: '{{ pulibrary_nomad_client_address }}'
-        nomad_cni_enable: true
-        nomad_docker_enable: true
-        nomad_use_consul: true
-        nomad_docker_enable: yes
-        nomad_docker_dmsetup: no
-        nomad_podman_enable: true
-        nomad_node_role: "{{ 'server' if pulibrary_nomad_role == 'leader' else pulibrary_nomad_role }}"
-        nomad_group_name: '{{ pulibrary_nomad_group_name }}'
-        nomad_consul_tags: []
-        nomad_raft_protocol: 3
-        nomad_cpu_total_compute: '{{ pulibrary_nomad_cpu_total_compute }}'
-        # nomad_acl_enabled: true
-        # nomad_consul_token: "b2d1d38b-731d-49d0-932f-7171ec3beb2c"
-        pulibrary_provisioning_token: "904c8247-82a1-429c-9682-30547919fd81"
-        nomad_consul_token: "{{ pulibrary_provisioning_token }}"
-    host_vars:
-      nomadserver1:
-        pulibrary_nomad_role: 'leader'
-      nomadclient1: 
-        pulibrary_nomad_role: 'both'
+    links:
+      group_vars: './group_vars/'
 verifier:
   name: ansible
