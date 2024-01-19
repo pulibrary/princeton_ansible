@@ -21,5 +21,5 @@ Example Playbook
 
     - hosts: servers
       roles:
-         - { role: roles/tomcat8 }
+         - { role: roles/tomcat9 }
 
