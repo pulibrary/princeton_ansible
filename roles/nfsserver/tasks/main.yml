@@ -10,10 +10,33 @@
     group: "{{ deploy_user }}"
     mode: "0755"
   loop:
-    - "{{ cdh_fileshare_mount }}"
+    - "{{ bibdata_fileshare_mount }}"
     - "{{ drupal7_fileshare_mount }}"
     - "{{ pas_fileshare_mount }}"
     - "{{ open_marc_records_mount }}"
+
+- name: nfsserver | add conan group
+
+  ansible.builtin.group:
+    name: "conan"
+
+- name: deploy_user | create system user
+  ansible.builtin.user:
+    name: "conan"
+    group: "conan"
+    home: "/home/conan"
+    shell: "/usr/bin/bash"
+
+- name: nfsserver | create cdh shares
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    recurse: true
+    owner: "conan"
+    group: "conan"
+    mode: "0755"
+  loop:
+    - "{{ cdh_fileshare_mount }}"
 
 - name: nfsserver | make idmapping work
   ansible.builtin.copy:

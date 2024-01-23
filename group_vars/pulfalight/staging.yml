@@ -14,12 +14,15 @@ postgres_port: "5432"
 solr_cores:
   - "{{ pulfalight_solr_core }}"
 solr_mirror: "https://pulmirror.princeton.edu/mirror/solr/dist"
-passenger_server_name: "pulfa3-staging1.princeton.edu"
+ruby_version: "ruby-3.1.2"
+passenger_server_name: "findingaids-staging1.princeton.edu"
 passenger_app_root: "/opt/pulfalight/current/public"
 passenger_app_env: "staging"
 passenger_ruby: "/usr/local/bin/ruby"
-bundler_version: "2.3.18"
-desired_nodejs_version: "v16.15.0"
+passenger_extra_http_config:
+  - "passenger_preload_bundler on;"
+nodejs_release_url: "https://github.com/pulibrary/nodejs-binaries/releases/download/"
+desired_nodejs_version: "v18.18.0"
 rails_app_name: "pulfalight"
 rails_app_directory: "pulfalight"
 rails_app_symlinks: []
@@ -33,7 +36,7 @@ pulfalight_db_name: 'pulfalight_staging'
 pulfalight_db_user: '{{vault_pulfalight_staging_db_user}}'
 pulfalight_db_password: '{{vault_pulfalight_staging_db_password}}'
 rails_app_env: "staging"
-pulfalight_host_name: 'pulfalight-staging.princeton.edu'
+pulfalight_host_name: 'findingaids-staging.princeton.edu'
 pulfalight_honeybadger_key: '{{vault_pulfalight_honeybadger_key}}'
 pulfalight_solr_core: 'pulfalight-staging'
 application_db_name: '{{pulfalight_db_name}}'
@@ -48,6 +51,8 @@ subversion_pulfa_repo: '{{vault_subversion_pulfa_repo}}'
 subversion_pulfa_dir_path: '/var/opt/pulfa'
 subversion_pulfa_username: '{{vault_subversion_pulfa_username}}'
 subversion_pulfa_password: '{{vault_subversion_pulfa_password}}'
+central_redis_host: 'lib-redis-staging1.princeton.edu'
+central_redis_db: '4'
 rails_app_vars:
   - name: PULFALIGHT_SECRET_KEY_BASE
     value: '{{vault_pulfalight_staging_secret_key}}'
@@ -66,7 +71,7 @@ rails_app_vars:
   - name: APPLICATION_PORT
     value: '{{application_port}}'
   - name: SOLR_URL
-    value: "http://lib-solr8-staging.princeton.edu:8983/solr/{{ pulfalight_solr_core }}"
+    value: "http://lib-solr8d-staging.princeton.edu:8983/solr/{{ pulfalight_solr_core }}"
   - name: HONEYBADGER_API_KEY
     value: '{{pulfalight_honeybadger_key}}'
   - name: ASPACE_USER
@@ -74,14 +79,16 @@ rails_app_vars:
   - name: ASPACE_PASSWORD
     value: '{{vault_pulfalight_aspace_staging_password}}'
   - name: PULFALIGHT_REDIS_URL
-    value: 'lib-redis.princeton.edu'
+    value: '{{central_redis_host}}'
   - name: PULFALIGHT_REDIS_DB
-    value: '3'
+    value: '{{central_redis_db}}'
   - name: UNPUBLISHED_AUTH_TOKEN
     value: '{{vault_pulfalight_unpublished_auth_token}}'
   - name: FIGGY_AUTH_TOKEN
     value: '{{vault_pulfalight_staging_figgy_auth_token}}'
   - name: ADMIN_NETIDS
     value: '"{{ sidekiq_netids | join(" ") }}"'
+  - name: NODE_OPTIONS
+    value: '--openssl-legacy-provider'
 sidekiq_worker_name: pulfalight-workers
 sidekiq_worker_threads: 3

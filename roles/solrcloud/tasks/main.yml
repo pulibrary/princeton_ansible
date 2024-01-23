@@ -1,4 +1,39 @@
 ---
+- name: solrcloud | Install dependencies
+  ansible.builtin.apt:
+    name: ["cifs-utils"]
+    state: present
+
+- name: solrcloud | create mounts
+  ansible.builtin.file:
+    path: "/mnt/{{ item }}"
+    state: "directory"
+    mode: 0755
+  loop:
+    - solr_backup
+
+- name: solrcloud | Copy smb credentials
+  ansible.builtin.copy:
+    src: "files/{{ item }}"
+    dest: "/etc/{{ item }}"
+    mode: 0644
+  when:
+    - running_on_server
+  loop:
+    - solr.smb.credentials
+
+- name: solrcloud | Create mount to diglibdata shares
+  mount:
+    path: "/mnt/{{ item.path }}"
+    src: "//diglibdata1.princeton.edu/{{ item.src }}"
+    fstype: cifs
+    opts: "credentials=/etc/{{ item.opts }}.smb.credentials"
+    state: mounted
+  when:
+    - running_on_server
+  loop:
+    - {path: "solr_backup", src: "solrbackup", opts: "solr"}
+
 - name: solrcloud | update host file
   ansible.builtin.lineinfile:
     dest: /etc/hosts

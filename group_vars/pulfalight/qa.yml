@@ -18,8 +18,11 @@ passenger_server_name: "pulfalight-qa-web-1.princeton.edu"
 passenger_app_root: "/opt/pulfalight/current/public"
 passenger_app_env: "qa"
 passenger_ruby: "/usr/local/bin/ruby"
-bundler_version: "2.3.18"
-desired_nodejs_version: "v16.15.0"
+bundler_version: "2.4.22"
+passenger_extra_http_config:
+  - "passenger_preload_bundler on;"
+nodejs_release_url: "https://github.com/pulibrary/nodejs-binaries/releases/download/"
+desired_nodejs_version: "v18.18.0"
 rails_app_name: "pulfalight"
 rails_app_directory: "pulfalight"
 rails_app_symlinks: []
@@ -49,6 +52,8 @@ subversion_pulfa_dir_path: '/var/opt/pulfa'
 subversion_pulfa_username: '{{vault_subversion_pulfa_username}}'
 subversion_pulfa_password: '{{vault_subversion_pulfa_password}}'
 # note we're not using FIGGY_AUTH_TOKEN in qa; there's no figgy it should talk to
+central_redis_host: 'lib-redis-prod1.princeton.edu'
+central_redis_db: '4'
 rails_app_vars:
   - name: PULFALIGHT_SECRET_KEY_BASE
     value: '{{vault_pulfalight_qa_secret_key}}'
@@ -75,12 +80,14 @@ rails_app_vars:
   - name: ASPACE_PASSWORD
     value: '{{vault_pulfalight_aspace_qa_password}}'
   - name: PULFALIGHT_REDIS_URL
-    value: 'lib-redis-prod1.princeton.edu'
+    value: '{{central_redis_host}}'
   - name: PULFALIGHT_REDIS_DB
-    value: '4'
+    value: '{{central_redis_db}}'
   - name: UNPUBLISHED_AUTH_TOKEN
     value: '{{vault_pulfalight_unpublished_auth_token}}'
   - name: ADMIN_NETIDS
     value: '"{{ sidekiq_netids | join(" ") }}"'
+  - name: NODE_OPTIONS
+    value: '--openssl-legacy-provider'
 sidekiq_worker_name: pulfalight-workers
 sidekiq_worker_threads: 3
