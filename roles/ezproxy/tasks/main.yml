@@ -28,17 +28,8 @@
 
 - name: Ezproxy | install dependencies for 64bit
   ansible.builtin.apt:
-    name: ["lib32ncurses5", "lib32z1"]
-    state: present
-  when:
-    - "'{{ ansible_distribution_release }}' == 'bionic'"
-
-- name: Ezproxy | install dependencies for 64bit
-  ansible.builtin.apt:
     name: ["lib32ncurses6", "lib32z1"]
     state: present
-  when:
-    - "'{{ ansible_distribution_release }}' == 'jammy'"
 
 - name: Ezproxy | copy ezproxy config.txt
   ansible.builtin.template:
@@ -190,17 +181,6 @@
   changed_when: false
   when: running_on_server
 
-- name: Ezproxy | copy ezproxy init.d
-  ansible.builtin.copy:
-    src: "files/ezproxy"
-    dest: /etc/init.d/ezproxy
-    owner: root
-    group: root
-    mode: a+x
-  changed_when: false
-  when:
-    - "'{{ ansible_distribution_release }}' == 'bionic'"
-    - running_on_server
 
 - name: Ezproxy | add shib config user
   ansible.builtin.template:
@@ -220,7 +200,6 @@
     mode: a+x
   changed_when: false
   when:
-    - "'{{ ansible_distribution_release }}' == 'jammy'"
     - running_on_server
   notify: reload ezproxy
 
@@ -232,7 +211,6 @@
     group: root
     state: link
   when:
-    - "'{{ ansible_distribution_release }}' == 'jammy'"
     - running_on_server
 
 - name: Ezproxy | start ezproxy

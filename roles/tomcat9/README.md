@@ -1,7 +1,7 @@
 Role Name
 =========
 
-This role installs Apache Tomcat8
+This role installs Apache Tomcat9
 
 Role Variables
 --------------
@@ -21,5 +21,5 @@ Example Playbook
 
     - hosts: servers
       roles:
-         - { role: roles/tomcat8 }
+         - { role: roles/tomcat9 }
 
