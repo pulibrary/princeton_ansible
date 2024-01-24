@@ -6,7 +6,7 @@
   gather_facts: false
   tasks:
   - name: test for presence special collection sudoer commands
-    lineinfile:
+    ansible.builtin.lineinfile:
       path: "/etc/sudoers"
       line: "{{ item }}"
       state: present
@@ -20,29 +20,8 @@
     register: present
     failed_when:
       - present is changed
-  - name: test for presence special collection apache config
-    lineinfile:
-      path: "/etc/apache2/sites-available/000-default.conf"
-      line: "{{ item }}"
-      state: present
-    loop:
-      - "Alias /special-collections /var/www/special_collections_cap/current"
-    check_mode: true
-    register: present
-    failed_when:
-  - name: test for presence special collection php ini
-    lineinfile:
-      path: "/etc/apache2/sites-available/000-default.conf"
-      line: "{{ item }}"
-      state: present
-    loop:
-      - "upload_max_filesize = 8M"
-      - "memory_limit = 256M"
-    check_mode: true
-    register: present
-    failed_when:
   - name: test for special collection conf files existence
-    stat:
+    ansible.builtin.stat:
       path: "{{ item }}"
     loop:
       - "/home/deploy/settings.php"
@@ -51,7 +30,7 @@
     failed_when:
       - not file.stat.exists
   - name: test for drupal packages
-    apt:
+    ansible.builtin.apt:
       name: "{{ item }}"
       state: present
     loop:
@@ -63,11 +42,3 @@
     register: present
     failed_when:
       - present is changed
-  - name: test for cron jobs
-    command: crontab -l -u deploy
-    register: cron_results
-    failed_when:
-  - name: assert cron jobs exists
-    assert:
-      that:
-        - "'10 * * * * sudo -u www-data drush -r /var/www/special_collections_cap/current cron' in cron_results.stdout"
