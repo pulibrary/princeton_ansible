@@ -1,6 +1,19 @@
 ---
 - name: nginxplus | make sure nginx configs are valid
+  # ignoring errors so we can provide a custom message if validation fails
   command: /usr/sbin/nginx -t
   changed_when: false
+  ignore_errors: true
   become: true
   tags: always
+  register: validate_config_msg
+
+- name: display full failure message
+  ansible.builtin.debug:
+    var: validate_config_msg
+  when: validate_config_msg.rc != 0 or 'test failed' in validate_config_msg.stderr
+
+- name: fail with message if nginx -t errors out
+  ansible.builtin.fail:
+    msg: "Nginx config update failed. Time to get a human involved, please restore from /tmp/nginx_backup."
+  when: validate_config_msg.rc != 0 or 'test failed' in validate_config_msg.stderr
