@@ -141,10 +141,10 @@ volumes, and images:
 ```
 cd to the role in question
 % molecule destroy
-% docker ps -qaf ancestor=pulibrary/puldocker-ubuntu1804-ansible:latest | xargs docker stop
-% docker ps -qaf ancestor=pulibrary/puldocker-ubuntu1804-ansible:latest | xargs docker rm
+% docker ps -qaf ancestor=quay.io/pulibrary/jammy-ansible:latest | xargs docker stop
+% docker ps -qaf ancestor=quay.io/pulibrary/jammy-ansible:latest | xargs docker rm
 % docker volume ls -qf dangling=true | xargs docker volume rm
-% docker rmi pulibrary/puldocker-ubuntu1804-ansible
+% docker rmi quay.io/pulibrary/jammy-ansible
 % molecule converage
 ```
 
