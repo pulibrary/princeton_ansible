@@ -78,13 +78,13 @@
     var: obsolete_static_files
   tags: test_template
 
-# when we're confident this works:
-# - name: Delete obsolete static files
-#   ansible.builtin.file:
-#     path: "{{ item }}"
-#     state: absent
-#   loop: "{{ obsolete_static_files }}"
-#   tags: test_template
+- name: Delete obsolete static files
+  # will remove static files as we migrate sites to dynamic config
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop: "{{ obsolete_static_files }}"
+  tags: test_template
 
 - name: Setup | Ensure cache directories exist
   ansible.builtin.file:
@@ -117,55 +117,53 @@
   ansible.builtin.template:
     src: http/library.conf.j2
     dest: "{{ nginx_http_dynamic_config_dest }}/{{ item.name }}.conf"
-    # dest: /tmp/{{ item.name }}.conf
-    # dest: /etc/nginx/conf.d/{{ item.name }}.conf
     mode: 0755
   when: nginx_http_upload_enable
   loop: "{{ sites }}"
   tags:
     - update_conf
     - test_template
-  register: sites_loop
+  register: uploaded_dynamic_files
 
 - name: Setup | list files in dynamic config dir
   ansible.builtin.find:
     paths: "{{ nginx_http_dynamic_config_dest }}/"
     recurse: false
     file_type: file
-  register: all_files
+  register: all_dynamic_files
   tags: test_template
 
 - name: Setup | set facts for removing obsolete dynamic config files
   set_fact:
-    files_on_server: "{{ all_files.files|map(attribute='path') }}"
-    sites_we_want: "{{ sites_loop.results|map(attribute='dest') }}"
+    dynamic_files_on_server: "{{ all_dynamic_files.files|map(attribute='path') }}"
+    dynamic_files_we_want: "{{ uploaded_dynamic_files.results|map(attribute='dest') }}"
   tags: test_template
 
 - name: Debug - view files on server
   ansible.builtin.debug:
-    var: files_on_server
+    var: dynamic_files_on_server
   tags: test_template
 
 - name: Debug - view sites we want
   ansible.builtin.debug:
-    var: sites_we_want
+    var: dynamic_files_we_want
   tags: test_template
 
 - name: Find obsolete dynamic config files
   # ITEMS in files on server NOT in sites we want
-  set_fact: obsolete_files="{{ files_on_server | difference(sites_we_want) }}"
+  set_fact: obsolete_dynamic_files="{{ dynamic_files_on_server | difference(dynamic_files_we_want) }}"
   tags: test_template
 
 - name: Debug - view obsolete dynamic config files
   ansible.builtin.debug:
-    var: obsolete_files
+    var: obsolete_dynamic_files
   tags: test_template
 
 - name: Delete obsolete dynamic config files
   ansible.builtin.file:
     path: "{{ item }}"
     state: absent
-  loop: "{{ obsolete_files }}"
+  loop: "{{ obsolete_dynamic_files }}"
   tags: test_template
 
 - name: Setup | Ensure NGINX HTML Directory Exists
