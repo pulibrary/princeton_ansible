@@ -28,7 +28,8 @@
     dest: "{{ config_backup_dir }}"
     mode: 0755
     remote_src: true
-  tags: test_template
+  tags:
+    - update_conf
 
 - name: Setup | Upload NGINX HTTP Static Site Config Files
   ansible.builtin.copy:
@@ -41,7 +42,6 @@
   register: uploaded_static_files
   tags:
     - update_conf
-    - test_template
 
 # identify and remove obsolete static files
 - name: Setup | list files in static config dir
@@ -50,33 +50,39 @@
     recurse: false
     file_type: file
   register: all_static_files
-  tags: test_template
+  tags:
+    - update_conf
 
 - name: Setup | set facts for removing obsolete static config files
   set_fact:
     static_files_on_server: "{{ all_static_files.files|map(attribute='path') }}"
     static_files_we_want: "{{ uploaded_static_files.results|map(attribute='dest') }}"
-  tags: test_template
+  tags:
+    - update_conf
 
 - name: Debug - view static files on server
   ansible.builtin.debug:
     var: static_files_on_server
-  tags: test_template
+  tags:
+    - update_conf
 
 - name: Debug - view static files we want
   ansible.builtin.debug:
     var: static_files_we_want
-  tags: test_template
+  tags:
+    - update_conf
 
 - name: Find obsolete static files
   # ITEMS IN static_files_on_server NOT IN static_files_we_want
   set_fact: obsolete_static_files="{{ static_files_on_server | difference(static_files_we_want) }}"
-  tags: test_template
+  tags:
+    - update_conf
 
 - name: Debug - view obsolete static files
   ansible.builtin.debug:
     var: obsolete_static_files
-  tags: test_template
+  tags:
+    - update_conf
 
 - name: Delete obsolete static files
   # will remove static files as we migrate sites to dynamic config
@@ -84,7 +90,8 @@
     path: "{{ item }}"
     state: absent
   loop: "{{ obsolete_static_files }}"
-  tags: test_template
+  tags:
+    - update_conf
 
 - name: Setup | Ensure cache directories exist
   ansible.builtin.file:
@@ -103,7 +110,8 @@
   with_fileglob: "{{ nginx_template_upload_src }}"
   notify: Reload NGINX
   when: nginx_template_upload_enable
-  tags: update_conf
+  tags:
+    - update_conf
 
 - name: Setup | Ensure NGINX HTTP Dynamic Site Config Directory Exists
   ansible.builtin.file:
@@ -111,7 +119,8 @@
     state: directory
     mode: 0755
   when: nginx_template_upload_enable
-  tags: test_template
+  tags:
+    - update_conf
 
 - name: Setup | Upload NGINX HTTP Dynamic Site Config Files
   ansible.builtin.template:
@@ -122,7 +131,6 @@
   loop: "{{ sites }}"
   tags:
     - update_conf
-    - test_template
   register: uploaded_dynamic_files
 
 - name: Setup | list files in dynamic config dir
@@ -131,40 +139,47 @@
     recurse: false
     file_type: file
   register: all_dynamic_files
-  tags: test_template
+  tags:
+    - update_conf
 
 - name: Setup | set facts for removing obsolete dynamic config files
   set_fact:
     dynamic_files_on_server: "{{ all_dynamic_files.files|map(attribute='path') }}"
     dynamic_files_we_want: "{{ uploaded_dynamic_files.results|map(attribute='dest') }}"
-  tags: test_template
+  tags:
+    - update_conf
 
 - name: Debug - view files on server
   ansible.builtin.debug:
     var: dynamic_files_on_server
-  tags: test_template
+  tags:
+    - update_conf
 
 - name: Debug - view sites we want
   ansible.builtin.debug:
     var: dynamic_files_we_want
-  tags: test_template
+  tags:
+    - update_conf
 
 - name: Find obsolete dynamic config files
   # ITEMS in files on server NOT in sites we want
   set_fact: obsolete_dynamic_files="{{ dynamic_files_on_server | difference(dynamic_files_we_want) }}"
-  tags: test_template
+  tags:
+    - update_conf
 
 - name: Debug - view obsolete dynamic config files
   ansible.builtin.debug:
     var: obsolete_dynamic_files
-  tags: test_template
+  tags:
+    - update_conf
 
 - name: Delete obsolete dynamic config files
   ansible.builtin.file:
     path: "{{ item }}"
     state: absent
   loop: "{{ obsolete_dynamic_files }}"
-  tags: test_template
+  tags:
+    - update_conf
 
 - name: Setup | Ensure NGINX HTML Directory Exists
   ansible.builtin.file:
@@ -172,7 +187,8 @@
     state: directory
     mode: 0755
   when: nginx_html_upload_enable
-  tags: update_conf
+  tags:
+    - update_conf
 
 - name: Setup | Upload NGINX HTML Files
   ansible.builtin.copy:
@@ -183,7 +199,8 @@
   with_fileglob: "{{ nginx_html_upload_src }}"
   notify: Reload NGINX
   when: nginx_html_upload_enable
-  tags: update_conf
+  tags:
+    - update_conf
 
 - name: Setup | Ensure SSL Certificate Directory Exists
   ansible.builtin.file:
