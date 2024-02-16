@@ -18,10 +18,19 @@
     - running_on_server
     - ansible_distribution == "CentOS"
 
-- name: PostgreSQL | add postgresql repository
+- name: PostgreSQL | add postgresql repository for latest ubuntu
   ansible.builtin.apt_repository:
     repo: 'deb http://apt.postgresql.org/pub/repos/apt/ {{ ansible_distribution_release }}-pgdg main'
     state: present
+  when:
+    - ansible_distribution_release != "bionic"
+
+- name: PostgreSQL | add postgresql repository for Bionic
+  ansible.builtin.apt_repository:
+    repo: 'deb https://apt-archive.postgresql.org/pub/repos/apt/ {{ ansible_distribution_release }}-pgdg main'
+    state: present
+  when:
+    - ansible_distribution_release == "bionic"
 
 - name: PostgreSQL | install postgresql server packages
   ansible.builtin.apt:
