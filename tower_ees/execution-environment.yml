@@ -1,5 +1,6 @@
 ---
 # EE definition for general PUL automation
+# to build an EE, run `ansible-builder build`
 
 # builder schema version
 version: 3
@@ -9,26 +10,18 @@ images:
   base_image:
     name: registry.redhat.io/ansible-automation-platform-24/ee-supported-rhel8:1.0.0-543
     # name: registry.redhat.io/ansible-automation-platform-24/ee-supported-rhel9
-    # name: registry.redhat.io/ansible-automation-platform/ee-minimal-rhel9:2.15.8-2
-    #  name: python:3.11.1-slim-bullseye
-    #  name: quay.io/centos/centos:stream9
-    #  name: quay.io/pulibrary/jammy-ansible:latest
-    #  name: phusion/baseimage:jammy-1.0.1
 
 dependencies:
-  # version of ansible-core
   ansible_core:
     package_pip: ansible-core==2.15.7
   ansible_runner:
     package_pip: ansible-runner
-  # collections to install from galaxy
-  # includes all collections used in the prancible repo
-  # versions taken from the Ansible 8 inclusion list:
-  # https://github.com/ansible-community/ansible-build-data/blob/main/8/ansible-8.7.0.yaml
   python_interpreter:
-    # python_path: "/usr/local/bin/python"
     python_path: "/usr/bin/python3"
   galaxy:
+    # includes all collections used in the prancible repo
+    # versions taken from the Ansible 8 inclusion list:
+    # https://github.com/ansible-community/ansible-build-data/blob/main/8/ansible-8.7.0.yaml
     collections:
       - name: ansible.netcommon
         version: 5.3.0
@@ -52,8 +45,8 @@ dependencies:
         version: 1.3.0
       - name: vmware.vmware_rest
         version: 2.3.1
-# not in Ansible 9 package
-# latest versions from Galaxy as of Feb. 2024
+    # these collections are not in Ansible package
+    # latest versions from Galaxy as of Feb. 2024
       - name: servicenow.servicenow
         version: 1.0.6
       - name: paloaltonetworks.panos
@@ -63,6 +56,7 @@ dependencies:
   python:
     - six
     - psutil
+
   # system packages, stuff you install with 'apt/yum/dnf install'
   # ansible-builder writes this list into the 'context/bindep.txt' file
   system:
@@ -70,20 +64,14 @@ dependencies:
     - python3-dnf
     - python3-pip
 options:
+  # default path is /usr/bin/dnf, which does not exist on the base image
   package_manager_path: /usr/bin/microdnf
+
+# if you need to run more commands on the EE, use this section:
 # additional_build_steps:
   # items in the list of append_base steps are expressed
   # as containerfile directives
   # prepend_base:
     # - RUN /usr/bin/apt-get update
-    # - RUN /usr/bin/apt-get install language-pack-en-base -y
-    # - RUN export LC_ALL="en_US.UTF-8" && export LC_CTYPE="en_US.UTF-8" && sudo dpkg-reconfigure locales
-    # - RUN /usr/bin/dnf install python3.11 -y
-    # - RUN /usr/bin/apt-get install python3-setuptools python3-pip python3-venv python3.11-venv -y
-    # - RUN /usr/bin/apt-get install ensurepip -y
-    # - RUN /usr/bin/dnf install python3.11-pip -y
-    # - RUN /usr/bin/python3.11 -m pip install --upgrade pip
-    # - RUN /usr/bin/python3 -m install ensurepip -y
   # append_base:
     # - RUN /usr/bin/python3 -m pip install --upgrade pip
-    # - RUN apt-get install locales -y
