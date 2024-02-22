@@ -1,5 +1,20 @@
 ---
 # tasks file for roles/friends_of_pul
+
+- name: friends_of_pul | enable id_mapping
+  ansible.builtin.lineinfile:
+    path: /etc/default/nfs-common
+    regexp: '^NEED_IDMAPD='
+    line: NEED_IDMAPD=yes
+  notify: restart idmapd
+
+- name: friends_of_pul | add fqdn for idmapping
+  ansible.builtin.lineinfile:
+    path: /etc/idmapd.conf
+    insertbefore: '# Domain = localdomain'
+    line: "Domain = {{ nfs_host_server }}"
+    state: present
+
 - name: friends_of_pul | Create  drupal7 directory production
   ansible.posix.mount:
     src: "{{ nfs_server_production }}:/var/nfs/drupal7"
