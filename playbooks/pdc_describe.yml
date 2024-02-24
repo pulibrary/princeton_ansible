@@ -23,6 +23,53 @@
     - role: roles/sidekiq_worker
     - role: roles/datadog
 
+  tasks:
+    - name: install nfs-common
+      ansible.builtin.apt:
+        name: "nfs-common"
+        state: present
+        update_cache: true
+      when: runtime_env == "production"
+
+    - name:  add fqdn for idmapping
+      ansible.builtin.lineinfile:
+        path: /etc/idmapd.conf
+        insertbefore: '# Domain = localdomain'
+        line: "Domain = {{ nfs_host_server }}"
+        state: present
+      when: runtime_env == "production"
+
+    - name:  enable id_mapping
+      ansible.builtin.lineinfile:
+        path: /etc/default/nfs-common
+        regexp: '^NEED_IDMAPD='
+        line: NEED_IDMAPD=yes
+      notify: restart idmapd
+      when: runtime_env == "production"
+
+    - name:  add fqdn for idmapping
+      ansible.builtin.lineinfile:
+        path: /etc/idmapd.conf
+        insertbefore: '# Domain = localdomain'
+        line: "Domain = {{ nfs_host_server }}"
+        state: present
+      when: runtime_env == "production"
+
+    - name: Ensure the presence of nfs mount
+      ansible.posix.mount:
+        src: "{{ nfs_server }}:/var/nfs/tigerdata"
+        path: "/mnt/nfs/tigerdata"
+        state: mounted
+        fstype: nfs
+        opts: rw,sync,hard
+      become: true
+      when: runtime_env  == "production"
+
+  handlers:
+    - name: restart idmapd
+      ansible.builtin.service:
+        name: idmapd
+        state: restarted
   post_tasks:
     - name: tell everyone on slack you ran an ansible playbook
       community.general.slack:
