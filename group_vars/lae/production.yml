@@ -78,26 +78,34 @@ sneakers_workers: PlumEventHandler
 sneakers_worker_name: lae-sneakers
 
 datadog_api_key: "{{ vault_datadog_key }}"
-
 datadog_config:
+  tags: "application:lae, environment:production, type:webserver"
   log_enabled: true
   apm_enabled: true
   process_config:
     enabled: true
   apm_config:
     analyzed_spans:
-      approvals|rack.request: 1
+      lae|rack.request: 1
     filter_tags:
       reject: ["http.useragent:nginx/1.23.4 (health check)", "operation:heartbeat", "operation:job_fetch", "operation:scheduled_push", "operation:scheduled_poller_wait"]
 datadog_checks:
-  tls:
+  nginx:
     init_config:
-    instances:
-      - server: lae.princeton.edu
-        port: 443
-        tags:
-          - 'tls_service:lae'
-  approval_datadog_ruby_check:
+    logs:
+      - type: file
+        path: /var/log/nginx/access.log
+        service: lae
+        source: nginx
+        sourcecategory: http_web_access
+        tags: "lae, environment:production, role:lae"
+      - type: file
+        path: /var/log/nginx/error.log
+        service: lae
+        source: nginx
+        sourcecategory: http_web_access
+        tags: "lae, environment:production, role:lae"
+  lae_datadog_ruby_check:
     init_config:
     logs:
       - type: file
