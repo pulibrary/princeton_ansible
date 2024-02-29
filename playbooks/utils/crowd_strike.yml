@@ -1,0 +1,47 @@
+---
+#  This playbook will install crowdstrike 
+# you will need to [download the binary from OIT](https://princeton.service-now.com/service?id=kb_article&table=kb_knowledge&sys_id=ebafa5d6db60ff0044dee525ca961902) and place it on your `local_files` directory
+#     
+- name: install falcon-sensor on a host
+  hosts: staging:qa:production
+  remote_user: pulsys
+  become: true
+  vars_files:
+    - ../../group_vars/crowdstrike/vault.yml
+    - ../../group_vars/crowdstrike/vars.yml
+    - ../../group_vars/all/vars.yml
+    - ../../group_vars/all/vault.yml
+
+  tasks:
+    - name: copy falcon deb file to host tmp directory
+      ansible.builtin.copy:
+        src: "../../local_files/falcon-sensor_5.27.0-9104_amd64.deb"
+        dest: "/tmp/falcon-sensor_5.27.0-9104_amd64.deb"
+        owner: pulsys
+        group: pulsys
+        mode: "0644"
+
+    - name: install crowdstrike
+      ansible.builtin.apt:
+        deb: "/tmp/falcon-sensor_5.27.0-9104_amd64.deb"
+
+    - name: launch crowdstrike
+      command: /opt/CrowdStrike/falconctl -s --cid={{ princeton_cid }}
+      become: true
+
+    - name: start falcon-sensor
+      ansible.builtin.systemd_service:
+        name: "falcon-sensor"
+        state: started
+
+    - name: start and enable crowdstrike
+      ansible.builtin.systemd_service:
+        name: "falcon-sensor"
+        enabled: true
+        state: restarted
+        
+
+  post_tasks:
+    - name: send information to slack
+      ansible.builtin.include_tasks:
+        file: slack_tasks_end_of_playbook.yml
