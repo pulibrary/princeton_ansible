@@ -15,19 +15,27 @@
     - ../group_vars/nginxplus/main.yml
 
   pre_tasks:
-  - name: stop playbook if you didn't use --limit
-    fail:
-      msg: "you must use -l or --limit"
-    when: ansible_limit is not defined
-    run_once: true
+    - name: prepare to update loadbalancer config
+      block:
+      - name: find the git branch
+        local_action: ansible.builtin.command git rev-parse --abbrev-ref HEAD
+        run_once: true
+        register: git_branch
 
-  - name: tell infrastructure and ansible-alerts the playbook is starting
-    community.general.slack:
-      token: "{{ vault_tower_slack_token }}"
-      msg: "Ansible is now running `{{ ansible_play_name }}` with the `{{ ansible_run_tags }}` tag on {{ inventory_hostname }}"
-      channel: "{{ item }}"
-    loop: "{{ slack_alerts_channel }}"
-    tags: always
+      - name: stop playbook if you didn't use --limit
+        fail:
+          msg: "you must use -l or --limit"
+        when: ansible_limit is not defined
+        run_once: true
+
+      - name: tell infrastructure and ansible-alerts the playbook is starting
+        community.general.slack:
+          token: "{{ vault_tower_slack_token }}"
+          msg: "Ansible is now running `{{ ansible_play_name }}` from the `{{ git_branch.stdout }}` branch with the `{{ ansible_run_tags }}` tag on {{ inventory_hostname }}"
+          channel: "{{ item }}"
+        loop: "{{ slack_alerts_channel }}"
+      tags: always
+      become: false
 
   # updates existing load balancer
   roles:
