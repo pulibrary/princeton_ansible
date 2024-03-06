@@ -1,0 +1,81 @@
+---
+# EE definition for deploying code
+# to build this EE, run:
+# `ansible-builder build -f deploy-ee.yml`
+
+# builder schema version
+version: 3
+
+images:
+  # build a new image based on this image
+  base_image:
+    name: registry.redhat.io/ansible-automation-platform-24/ee-supported-rhel8:1.0.0-543
+
+dependencies:
+  ansible_core:
+    package_pip: ansible-core==2.15.7
+  ansible_runner:
+    package_pip: ansible-runner
+  python_interpreter:
+    python_path: "/usr/bin/python3"
+  galaxy:
+    # includes all collections used in the prancible repo
+    # versions taken from the Ansible 8 inclusion list:
+    # https://github.com/ansible-community/ansible-build-data/blob/main/8/ansible-8.7.0.yaml
+    collections:
+      - name: ansible.posix
+        version: 1.5.4
+      - name: ansible.utils
+        version: 2.12.0
+      - name: community.crypto
+        version: 2.16.1
+      - name: community.dns
+        version: 2.6.4
+      - name: community.general
+        version: 7.5.2
+
+  # python packages, stuff you install with 'pip install'
+  python:
+    - six
+    - psutil
+
+  # system packages, stuff you install with 'apt/yum/dnf install'
+  # ansible-builder writes this list into the 'context/bindep.txt' file
+  system:
+    # - "@ruby:3.1"
+    # - rubygems
+    - bzip2
+    - curl
+    - gcc
+    - gdbm-devel
+    - git
+    - libffi-devel
+    - ncurses-devel
+    - openssl-devel
+    - python3-dnf
+    - python3-pip
+    # - readline-devel
+    - wget
+    - zlib-devel
+options:
+  # default path is /usr/bin/dnf, which does not exist on the base image
+  package_manager_path: /usr/bin/microdnf
+
+# if you need to run more commands on the EE, use this section:
+additional_build_steps:
+  # items in the list of append_base steps are expressed
+  # as containerfile directives
+  # prepend_base:
+    # - RUN /usr/bin/apt-get update
+  append_final:
+    # install ruby with rbenv
+    - RUN wget -q https://github.com/rbenv/rbenv-installer/raw/master/bin/rbenv-installer -O- | bash
+    - RUN ~/.rbenv/bin/rbenv install 3.1.0
+    - RUN $HOME/.rbenv/bin/rbenv global 3.1.0
+    # install capistrano
+    - RUN ruby -v
+    - RUN gem install bundler
+    - RUN gem install capistrano
+    # install cap dependencies
+    
+# - RUN /usr/bin/python3 -m pip install --upgrade pip
