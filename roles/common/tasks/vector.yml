@@ -1,14 +1,20 @@
 ---
-- name: common | add vector repository configuration
-  ansible.builtin.get_url:
-    url: https://repositories.timber.io/public/vector/cfg/setup/bash.deb.sh
-    dest: /tmp/bash.deb.sh
+- name: common | Install Vector Datadog Keys
+  ansible.builtin.apt_key:
+    url: "{{ item }}"
+    state: present
+    keyring: "/usr/share/keyrings/datadog-archive-keyring.gpg"
+  loop:
+    - "https://keys.datadoghq.com/DATADOG_APT_KEY_CURRENT.public"
+    - "https://keys.datadoghq.com/DATADOG_APT_KEY_F14F620E.public"
+    - "https://keys.datadoghq.com/DATADOG_APT_KEY_C0962C7D.public"
 
-- name: common | add vector repository
-  ansible.builtin.command: bash /tmp/bash.deb.sh
-  become: true
-  changed_when: false
+- name: common | Install Vector Datadog Repo
+  ansible.builtin.apt_repository:
+    repo: "deb [signed-by=/usr/share/keyrings/datadog-archive-keyring.gpg] https://apt.vector.dev/ stable vector-0"
+    filename: "vector"
 
 - name: common | install vector
   ansible.builtin.apt:
     name: vector
+    update_cache: true
