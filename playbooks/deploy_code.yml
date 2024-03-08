@@ -5,9 +5,10 @@
 # to deploy a selected branch, pass '-e branch_name=my_branch'
 # to deploy to production, pass '-e runtime_env=production'
 - name: Deploy code with Capistrano
-  hosts: towerdeploy
-  remote_user: pulsys
-  become: true
+  # hosts: towerdeploy
+  hosts: localhost
+  # remote_user: pulsys
+  # become: true
   vars:
     project_dir: /tmp/{{ repo_name }}
 #    github_key_path:
@@ -51,13 +52,9 @@
         clone: true
         update: true
         # force: true
-      become: true
-      become_user: deploy
 
     - name: cap deploy
       ansible.builtin.shell: "cd {{ project_dir }} && BRANCH={{ branch_name | default('main') }} /usr/local/bin/cap {{ runtime_env | default('staging') }} deploy"
-      become: true
-      become_user: deploy
 
 #    - name: update PR
 #      could use the GitHub API:
@@ -82,4 +79,4 @@
         Content-Type: application/x-www-form-urlencoded
       follow_redirects: safe
       status_code: 201,202
-    
+
