@@ -12,6 +12,22 @@
     - ../group_vars/all/vault.yml
 
   tasks:
+  - name: Check if the service is running
+    ansible.builtin.service_facts:
+
+  - name: Print service facts
+    ansible.builtin.debug:
+      var: ansible_facts.services
+
+  - name: Print ir_agents.service name
+    ansible.builtin.debug:
+      var: ansible_facts.services['ir_agent.service'].name
+
+  - name: Print ir_agent status name
+    ansible.builtin.debug:
+      var: ansible_facts.services['ir_agent.service'].status
+
+
   - name: Copy Rapid7 install script to box
     ansible.builtin.copy:
       src: ../bin/Rapid7_agent_installer.sh
@@ -20,12 +36,14 @@
       group: pulsys
       mode: '0744'
     become: true
-
-  - name: Check if Rapid7 is installed
-    ansible.builtin.stat:
-      path: /opt/rapid7/ir_agent
-    register: rapid7_status
+    when: not ansible_facts.services['ir_agent.service'].name == "ir_agent.service"
 
   - name: Execute Rapid7 install script
     ansible.builtin.shell: sudo /opt/rapid7/Rapid7_agent_installer.sh install_start --token {{ vault_Rapid7_token }} --attributes="library"
-    when: rapid7_status.stat.exists == false
+    when: not ansible_facts.services['ir_agent.service'].name == "ir_agent.service"
+
+  - name: Restart or start rapid7
+    ansible.builtin.service:
+      name: ir_agent
+      state: restarted
+    when: ansible_facts.services['ir_agent.service'].state != "running"
