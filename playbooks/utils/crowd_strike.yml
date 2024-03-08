@@ -1,7 +1,7 @@
 ---
-#  This playbook will install crowdstrike 
+#  This playbook will install crowdstrike
 # you will need to [download the binary from OIT](https://princeton.service-now.com/service?id=kb_article&table=kb_knowledge&sys_id=ebafa5d6db60ff0044dee525ca961902) and place it on your `local_files` directory
-#     
+#
 - name: install falcon-sensor on a host
   hosts: staging:qa:production
   remote_user: pulsys
@@ -14,33 +14,47 @@
     - ../../group_vars/all/vault.yml
 
   tasks:
-    - name: copy falcon deb file to host tmp directory
-      ansible.builtin.copy:
-        src: "../../local_files/falcon-sensor_7.05.0-16004_amd64.deb"
-        dest: "/tmp/falcon-sensor_7.05.0-16004_amd64.deb"
-        owner: pulsys
-        group: pulsys
-        mode: "0644"
+  - name: Check if the service is running
+    ansible.builtin.service_facts:
 
-    - name: install crowdstrike
-      ansible.builtin.apt:
-        deb: "/tmp/falcon-sensor_7.05.0-16004_amd64.deb"
+  - name: Print service facts
+    ansible.builtin.debug:
+      var: ansible_facts.services
 
-    - name: launch crowdstrike
-      command: /opt/CrowdStrike/falconctl -s --cid={{ princeton_cid }}
-      become: true
+  - name: Print falcon-sensor.service name
+    ansible.builtin.debug:
+      var: ansible_facts.services['falcon-sensor.service'].name
 
-    - name: start falcon-sensor
-      ansible.builtin.systemd_service:
-        name: "falcon-sensor"
-        state: started
+  - name: Print falcon-sensor status name
+    ansible.builtin.debug:
+      var: ansible_facts.services['falcon-sensor.service'].status
 
-    - name: start and enable crowdstrike
-      ansible.builtin.systemd_service:
-        name: "falcon-sensor"
-        enabled: true
-        state: restarted
-        
+  - name: copy falcon deb file to host tmp directory
+    ansible.builtin.copy:
+      src: "../../local_files/falcon-sensor_7.05.0-16004_amd64.deb"
+      dest: "/tmp/falcon-sensor_7.05.0-16004_amd64.deb"
+      owner: pulsys
+      group: pulsys
+      mode: "0644"
+    when: not ansible_facts.services['falcon-sensor.service'].name == "falcon-sensor.service"
+
+  - name: install crowdstrike
+    ansible.builtin.apt:
+      deb: "/tmp/falcon-sensor_7.05.0-16004_amd64.deb"
+    when: not ansible_facts.services['falcon-sensor.service'].name == "falcon-sensor.service"
+
+  - name: launch crowdstrike
+    command: /opt/CrowdStrike/falconctl -s --cid={{ princeton_cid }}
+    become: true
+    when: not ansible_facts.services['falcon-sensor.service'].name == "falcon-sensor.service"
+
+  - name: start and enable crowdstrike
+    ansible.builtin.systemd_service:
+      name: "falcon-sensor"
+      enabled: true
+      state: restarted
+    when: ansible_facts.services['ir_agent.service'].state != "running"
+
 
   post_tasks:
     - name: send information to slack
