@@ -4,6 +4,8 @@
   ansible.builtin.apt:
     name: postfix
     state: absent
+  when:
+    - sendmail_is_local
 
 - name: Sendmail | install sendmail
   ansible.builtin.apt:
@@ -14,12 +16,16 @@
     - sendmail
     - mailutils
     - sendmail-bin
+  when:
+    - sendmail_is_local
 
 - name: Sendmail | create authfile directory
   ansible.builtin.file:
     path: /etc/mail/authinfo
     state: directory
     mode: 0700
+  when:
+    - sendmail_is_local
 
 - name: Sendmail | configure sendmail authinfo
   ansible.builtin.template:
@@ -27,6 +33,18 @@
     dest: "/etc/mail/authinfo/pul_sendmail_auth"
     owner: root
     group: root
+  when:
+    - sendmail_is_local
+
+- name: Sendmail | create hashed authfile
+  ansible.builtin.shell: makemap hash {{ pul_auth }} < {{ pul_auth }}
+  become: true
+  become_user: root
+  args:
+    chdir: /etc/mail/authinfo
+    creates: /etc/mail/authinfo/pul_sendmail_auth.db
+  when:
+    - sendmail_is_local
 
 - name: Sendmail | configure sendmail
   ansible.builtin.template:
@@ -36,8 +54,27 @@
     group: root
     mode: 0644
     backup: true
-  notify: reconfigure sendmail
+  notify: Reconfigure sendmail
+  when:
+    - sendmail_is_local
 
-- name: Sendmail | Regenerate sendmail
-  community.general.make:
-    chdir: /etc/mail
+- name: Sendmail | add connection
+  ansible.builtin.lineinfile:
+    path: "/etc/mail/access"
+    line: "{{ ansible_default_ipv4.address }}  RELAY"
+  delegate_to: '{{ sendmail_relay_host }}'
+  register: remote_sendmail_configured
+  when:
+    - sendmail_host is not none
+    - not sendmail_is_local
+    - running_on_server
+
+- name: Sendmail | reload sendmail
+  ansible.builtin.service:
+    name: sendmail
+    state: reloaded
+  when:
+    - running_on_server
+    - not sendmail_is_local
+  delegate_to: '{{ sendmail_relay_host }}'
+  
