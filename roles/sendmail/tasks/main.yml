@@ -1,0 +1,43 @@
+---
+# tasks file for roles/sendmail
+- name: Sendmail | remove postfix
+  ansible.builtin.apt:
+    name: postfix
+    state: absent
+
+- name: Sendmail | install sendmail
+  ansible.builtin.apt:
+    name: "{{ item }}"
+    state: present
+    update_cache: true
+  loop:
+    - sendmail
+    - mailutils
+    - sendmail-bin
+
+- name: Sendmail | create authfile directory
+  ansible.builtin.file:
+    path: /etc/mail/authinfo
+    state: directory
+    mode: 0700
+
+- name: Sendmail | configure sendmail authinfo
+  ansible.builtin.template:
+    src: pul_sendmail_auth.j2
+    dest: "/etc/mail/authinfo/pul_sendmail_auth"
+    owner: root
+    group: root
+
+- name: Sendmail | configure sendmail
+  ansible.builtin.template:
+    src: sendmail.mc.j2
+    dest: "/etc/mail/sendmail.mc"
+    owner: root
+    group: root
+    mode: 0644
+    backup: true
+  notify: reconfigure sendmail
+
+- name: Sendmail | Regenerate sendmail
+  community.general.make:
+    chdir: /etc/mail
