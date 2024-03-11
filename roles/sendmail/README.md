@@ -13,6 +13,7 @@ Role Variables
 The role will be used as part of another role. It will take the ip address of the inventory endpoint and add it to the allow list
 
 add `sendmail_is_local: false` to you `group_vars/<your_project>`
+add the value for `smtp_relay_host` to your `group_vars/<your_project>`
 
 Dependencies
 ------------
