@@ -7,6 +7,9 @@
   when:
     - sendmail_is_local
 
+- name: Sendmail | configure client
+  include_tasks: client.yml
+  
 - name: Sendmail | install sendmail
   ansible.builtin.apt:
     name: "{{ item }}"
@@ -19,10 +22,21 @@
   when:
     - sendmail_is_local
 
+- name: Sendmail | set permissions
+  ansible.builtin.file:
+    path: /etc/mail
+    state: directory
+    recurse: true
+    mode: 0711
+  when:
+    - sendmail_is_local
+
+
 - name: Sendmail | create authfile directory
   ansible.builtin.file:
     path: /etc/mail/authinfo
     state: directory
+    recurse: true
     mode: 0700
   when:
     - sendmail_is_local
@@ -68,13 +82,12 @@
     - sendmail_host is not none
     - not sendmail_is_local
     - running_on_server
+  notify: Reconfigure sendmail access
 
 - name: Sendmail | reload sendmail
   ansible.builtin.service:
     name: sendmail
-    state: reloaded
+    state: restarted
   when:
     - running_on_server
-    - not sendmail_is_local
-  delegate_to: '{{ sendmail_relay_host }}'
-  
+    - sendmail_is_local
