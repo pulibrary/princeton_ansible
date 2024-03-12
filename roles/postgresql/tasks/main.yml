@@ -75,6 +75,17 @@
   when: postgresql_is_local
   notify: restart local postgres
 
+- name: PostgreSQL | install pg_stats file
+  ansible.builtin.template:
+    src: 'statistics_conf.j2'
+    dest: '/etc/postgresql/{{ postgres_version }}/main/conf.d/statistics.conf'
+    group: postgres
+    owner: postgres
+    mode: 0644
+  register: configure_postgres
+  when: postgresql_is_local
+  notify: restart local postgres
+
 - name: PostgreSQL | rotate the logs for postgresql
   template:
     src: 'logrotate.d.postgresql.j2'
@@ -113,6 +124,7 @@
   when:
     - postgresql_is_local
     - postgresql_leader == true
+    - running_on_server
 
 - name: PostgreSQL | ensure pgpass
   ansible.builtin.template:
