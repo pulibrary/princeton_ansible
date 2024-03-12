@@ -36,24 +36,32 @@
       owner: pulsys
       group: pulsys
       mode: "0644"
-    when: not ansible_facts.services['falcon-sensor.service'].name == "falcon-sensor.service"
+    when:
+      - not ansible_facts.services['falcon-sensor.service'].name == "falcon-sensor.service"
+      - x is not defined
 
   - name: install crowdstrike
     ansible.builtin.apt:
       deb: "/tmp/falcon-sensor_7.05.0-16004_amd64.deb"
-    when: not ansible_facts.services['falcon-sensor.service'].name == "falcon-sensor.service"
+    when:
+      - not ansible_facts.services['falcon-sensor.service'].name == "falcon-sensor.service"
+      - x is not defined
 
   - name: launch crowdstrike
     command: /opt/CrowdStrike/falconctl -s --cid={{ princeton_cid }}
     become: true
-    when: not ansible_facts.services['falcon-sensor.service'].name == "falcon-sensor.service"
+    when:
+      - not ansible_facts.services['falcon-sensor.service'].name == "falcon-sensor.service"
+      - x is not defined
 
   - name: start and enable crowdstrike
     ansible.builtin.systemd_service:
       name: "falcon-sensor"
       enabled: true
       state: restarted
-    when: ansible_facts.services['ir_agent.service'].state != "running"
+    when:
+      - not ansible_facts.services['falcon-sensor.service'].name == "falcon-sensor.service"
+      - x is not defined
 
 
   post_tasks:
