@@ -72,18 +72,6 @@
   when:
     - sendmail_is_local
 
-- name: Sendmail | add connection
-  ansible.builtin.lineinfile:
-    path: "/etc/mail/access"
-    line: "{{ ansible_default_ipv4.address }}  RELAY"
-  delegate_to: '{{ sendmail_relay_host }}'
-  register: remote_sendmail_configured
-  when:
-    - sendmail_host is not none
-    - not sendmail_is_local
-    - running_on_server
-  notify: Reconfigure sendmail access
-
 - name: Sendmail | reload sendmail
   ansible.builtin.service:
     name: sendmail
