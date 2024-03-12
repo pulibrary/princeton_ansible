@@ -1,0 +1,95 @@
+---
+#  This playbook will install OIT recommended security tools Rapid7 and Crowdstrike
+#
+- name: install OIT Security Tools on a host
+  hosts: staging:qa:production
+  remote_user: pulsys
+  serial: "{{ concurrent_vms | default('5') }}"
+  become: true
+  vars_files:
+    - ../../group_vars/crowdstrike/vault.yml
+    - ../../group_vars/crowdstrike/vars.yml
+    - ../../group_vars/all/vars.yml
+    - ../../group_vars/all/vault.yml
+
+  tasks:
+  - name: Check if the service is running
+    ansible.builtin.service_facts:
+
+  - name: Print service facts
+    ansible.builtin.debug:
+      var: ansible_facts.services
+
+  - name: Print falcon-sensor.service name
+    ansible.builtin.debug:
+      var: ansible_facts.services['falcon-sensor.service'].name
+
+  - name: Print falcon-sensor status name
+    ansible.builtin.debug:
+      var: ansible_facts.services['falcon-sensor.service'].status
+  - name: Download the Falcon deb file
+    ansible.builtin.get_url:
+      url: "https://isoshare.cpaneldev.princeton.edu/isoShares/Agents/Falcon/Latest/linux/Ubuntu/14_16_18_20_22/falcon-sensor_7.05.0-16004_amd64.deb"
+      dest: "/tmp/falcon-sensor_7.05.0-16004_amd64.deb"
+      owner: pulsys
+      group: pulsys
+      mode: "0644"
+    when: "ansible_facts.services['falcon-sensor.service'] is not defined"
+
+  - name: install crowdstrike
+    ansible.builtin.apt:
+      deb: "/tmp/falcon-sensor_7.05.0-16004_amd64.deb"
+    when: "ansible_facts.services['falcon-sensor.service'] is not defined"
+
+  - name: launch crowdstrike
+    command: /opt/CrowdStrike/falconctl -s --cid={{ princeton_cid }}
+    become: true
+    when: "ansible_facts.services['falcon-sensor.service'] is not defined"
+
+  - name: start and enable crowdstrike
+    ansible.builtin.systemd_service:
+      name: "falcon-sensor"
+      enabled: true
+      state: started
+    when: "ansible_facts.services['falcon-sensor.service'] is not defined"
+
+
+  - name: Check if the service is running
+    ansible.builtin.service_facts:
+
+  - name: Print service facts
+    ansible.builtin.debug:
+      var: ansible_facts.services
+
+  - name: Print ir_agents.service name
+    ansible.builtin.debug:
+      var: ansible_facts.services['ir_agent.service'].name
+
+  - name: Print ir_agent status name
+    ansible.builtin.debug:
+      var: ansible_facts.services['ir_agent.service'].status
+
+  - name: Copy Rapid7 install script to box
+    ansible.builtin.copy:
+      src: ../../bin/Rapid7_agent_installer.sh
+      dest: /opt/rapid7/
+      owner: pulsys
+      group: pulsys
+      mode: '0744'
+    become: true
+    when: "ansible_facts.services['ir_agent.service'] is not defined"
+
+  - name: Execute Rapid7 install script
+    ansible.builtin.shell: sudo /opt/rapid7/Rapid7_agent_installer.sh install_start --token {{ vault_Rapid7_token }} --attributes="library"
+    when: "ansible_facts.services['ir_agent.service'] is not defined"
+
+  - name: Restart or start rapid7
+    ansible.builtin.service:
+      name: ir_agent
+      state: started
+    when: "ansible_facts.services['ir_agent.service'] is not defined"
+
+  post_tasks:
+    - name: send information to slack
+      ansible.builtin.include_tasks:
+        file: slack_tasks_end_of_playbook.yml
