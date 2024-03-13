@@ -13,21 +13,8 @@
     - ../../group_vars/all/vault.yml
 
   tasks:
-  - name: Check if the service is running
-    ansible.builtin.service_facts:
 
-  - name: Print service facts
-    ansible.builtin.debug:
-      var: ansible_facts.services
-
-  - name: Print falcon-sensor.service name
-    ansible.builtin.debug:
-      var: ansible_facts.services['falcon-sensor.service'].name
-
-  - name: Print falcon-sensor status name
-    ansible.builtin.debug:
-      var: ansible_facts.services['falcon-sensor.service'].status
-  - name: Download the Falcon deb file
+  - name: Download the Falcon sensor deb file
     ansible.builtin.get_url:
       url: "https://isoshare.cpaneldev.princeton.edu/isoShares/Agents/Falcon/Latest/linux/Ubuntu/14_16_18_20_22/falcon-sensor_7.05.0-16004_amd64.deb"
       dest: "/tmp/falcon-sensor_7.05.0-16004_amd64.deb"
@@ -36,38 +23,22 @@
       mode: "0644"
     when: "ansible_facts.services['falcon-sensor.service'] is not defined"
 
-  - name: install crowdstrike
+  - name: install crowdstrike falcon sensor agent
     ansible.builtin.apt:
       deb: "/tmp/falcon-sensor_7.05.0-16004_amd64.deb"
     when: "ansible_facts.services['falcon-sensor.service'] is not defined"
 
-  - name: launch crowdstrike
+  - name: launch crowdstrike falcon agent
     command: /opt/CrowdStrike/falconctl -s --cid={{ princeton_cid }}
     become: true
     when: "ansible_facts.services['falcon-sensor.service'] is not defined"
 
-  - name: start and enable crowdstrike
+  - name: start and enable crowdstrike falcon agent
     ansible.builtin.systemd_service:
       name: "falcon-sensor"
       enabled: true
       state: started
     when: "ansible_facts.services['falcon-sensor.service'] is not defined"
-
-
-  - name: Check if the service is running
-    ansible.builtin.service_facts:
-
-  - name: Print service facts
-    ansible.builtin.debug:
-      var: ansible_facts.services
-
-  - name: Print ir_agents.service name
-    ansible.builtin.debug:
-      var: ansible_facts.services['ir_agent.service'].name
-
-  - name: Print ir_agent status name
-    ansible.builtin.debug:
-      var: ansible_facts.services['ir_agent.service'].status
 
   - name: Copy Rapid7 install script to box
     ansible.builtin.copy:
