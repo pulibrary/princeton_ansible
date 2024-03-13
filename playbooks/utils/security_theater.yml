@@ -15,6 +15,9 @@
 
   tasks:
 
+  - name: Populate service facts
+    ansible.builtin.service_facts:
+
   - name: Download the Falcon sensor deb file
     ansible.builtin.get_url:
       url: "https://isoshare.cpaneldev.princeton.edu/isoShares/Agents/Falcon/Latest/linux/Ubuntu/14_16_18_20_22/falcon-sensor_7.05.0-16004_amd64.deb"
@@ -32,7 +35,7 @@
   - name: launch crowdstrike falcon agent
     command: /opt/CrowdStrike/falconctl -s --cid={{ princeton_cid }}
     become: true
-    when: "ansible_facts.services['falcon-sensor.service'] is not defined"
+    when: "not 'falcon-sensor.service' in services"
 
   - name: start and enable crowdstrike falcon agent
     ansible.builtin.systemd_service:
