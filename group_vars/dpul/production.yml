@@ -167,6 +167,36 @@ datadog_checks:
         service: dpul
         source: nginx
         sourcecategory: http_web_access
+  http_check:
+    init_config:
+    instances:
+      - name: Solr Health
+        url: 'http://localhost/health.json'
+        content_match: '{"name":"SolrStatus","message":"","status":"OK"}'
+        include_content: true
+        http_response_status_code: '\d\d\d'
+        tags:
+          - 'http_service:dpul'
+          - 'http_service_type:health'
+          - 'http_service_check:solr'
+      - name: Database Health
+        url: 'http://localhost/health.json'
+        content_match: '{"name":"Database","message":"","status":"OK"}'
+        include_content: true
+        http_response_status_code: '\d\d\d'
+        tags:
+          - 'http_service:dpul'
+          - 'http_service_type:health'
+          - 'http_service_check:postgres'
+      - name: Redis Health
+        url: 'http://localhost/health.json'
+        content_match: '{"name":"Redis","message":"","status":"OK"}'
+        include_content: true
+        http_response_status_code: '\d\d\d'
+        tags:
+          - 'http_service:dpul'
+          - 'http_service_type:health'
+          - 'http_service_check:redis'
 redis_bind_interface: '0.0.0.0'
 redis__server_default_configuration:
   syslog-enabled: "{{ redis__server_syslog | bool }}"

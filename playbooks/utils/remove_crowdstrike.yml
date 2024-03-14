@@ -1,0 +1,31 @@
+---
+#  This playbook will uninstall crowdstrike 
+#     
+- name: remove falcon on a host
+  hosts: staging:qa:production
+  remote_user: pulsys
+  become: true
+
+  tasks:
+
+    - name: uninstall crowdstrike
+      ansible.builtin.apt:
+        name: falcon-sensor
+        state: absent
+
+    - name: wipe out directory for crowdstrike
+      ansible.builtin.file:
+        path: "/opt/CrowdStrike"
+        state: absent
+
+    - name: remove crowdstrike deb file
+      ansible.builtin.file:
+        path: "/tmp/falcon-sensor_5.27.0-9104_amd64.deb"
+        state: absent
+
+        
+
+  # post_tasks:
+    # - name: send information to slack
+      # ansible.builtin.include_tasks:
+        # file: slack_tasks_end_of_playbook.yml
