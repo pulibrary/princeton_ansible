@@ -170,12 +170,30 @@ datadog_checks:
   http_check:
     init_config:
     instances:
-      - name: DPUL Health
+      - name: Solr Health
         url: 'http://localhost/health.json'
+        content_match: '{"name":"SolrStatus","message":"","status":"OK"}'
         include_content: true
         tags:
           - 'http_service:dpul'
           - 'http_service_type:health'
+          - 'http_service_check:solr'
+      - name: Database Health
+        url: 'http://localhost/health.json'
+        content_match: '{"name":"Database","message":"","status":"OK"}'
+        include_content: true
+        tags:
+          - 'http_service:dpul'
+          - 'http_service_type:health'
+          - 'http_service_check:postgres'
+      - name: Redis Health
+        url: 'http://localhost/health.json'
+        content_match: '{"name":"Redis","message":"","status":"OK"}'
+        include_content: true
+        tags:
+          - 'http_service:dpul'
+          - 'http_service_type:health'
+          - 'http_service_check:redis'
 redis_bind_interface: '0.0.0.0'
 redis__server_default_configuration:
   syslog-enabled: "{{ redis__server_syslog | bool }}"
