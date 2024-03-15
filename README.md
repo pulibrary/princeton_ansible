@@ -21,6 +21,8 @@ Princeton Ansible Playbooks
        ```
        optflags=-Wno-error=implicit-function-declaration ASDF_RUBY_BUILD_VERSION=v20220630 asdf install
        ```
+
+       **NOTE** You may need to run `asdf plugin-add python`
     1. Otherwise:
        1. `brew install python`
        1. `brew install rbenv`
