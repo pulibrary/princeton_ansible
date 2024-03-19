@@ -13,13 +13,12 @@ pg_hba_postgresql_user: "all"
 pg_hba_postgresql_database: "all"
 pg_hba_method: "md5"
 pg_hba_source: "{{ ansible_host }}/32"
-passenger_server_name: "dpul1.princeton.edu"
+passenger_server_name: "dpul.princeton.edu"
 passenger_app_root: "/opt/dpul/current/public"
 passenger_app_env: "production"
 install_ruby_from_source: true
 ruby_version_override: "ruby-3.1.3"
 passenger_ruby: "/usr/local/bin/ruby"
-bundler_version: "2.3.18"
 nodejs_release_url: "https://github.com/pulibrary/nodejs-binaries/releases/download/"
 desired_nodejs_version: "v18.18.0"
 rails_app_name: "dpul"
@@ -81,7 +80,7 @@ rails_app_vars:
   - name: POMEGRANATE_COLLECTIONS_URL
     value: 'https://figgy.princeton.edu/iiif/collections'
   - name: POMEGRANATE_REDIS_URL
-    value: 'dpul1.princeton.edu'
+    value: 'dpul-prod1.princeton.edu'
   - name: POMEGRANATE_REDIS_DB
     value: '2'
   - name: POMEGRANATE_MANIFEST_AUTH_TOKEN
@@ -168,6 +167,36 @@ datadog_checks:
         service: dpul
         source: nginx
         sourcecategory: http_web_access
+  http_check:
+    init_config:
+    instances:
+      - name: Solr Health
+        url: 'http://localhost/health.json'
+        content_match: '{"name":"SolrStatus","message":"","status":"OK"}'
+        include_content: true
+        http_response_status_code: '\d\d\d'
+        tags:
+          - 'http_service:dpul'
+          - 'http_service_type:health'
+          - 'http_service_check:solr'
+      - name: Database Health
+        url: 'http://localhost/health.json'
+        content_match: '{"name":"Database","message":"","status":"OK"}'
+        include_content: true
+        http_response_status_code: '\d\d\d'
+        tags:
+          - 'http_service:dpul'
+          - 'http_service_type:health'
+          - 'http_service_check:postgres'
+      - name: Redis Health
+        url: 'http://localhost/health.json'
+        content_match: '{"name":"Redis","message":"","status":"OK"}'
+        include_content: true
+        http_response_status_code: '\d\d\d'
+        tags:
+          - 'http_service:dpul'
+          - 'http_service_type:health'
+          - 'http_service_check:redis'
 redis_bind_interface: '0.0.0.0'
 redis__server_default_configuration:
   syslog-enabled: "{{ redis__server_syslog | bool }}"

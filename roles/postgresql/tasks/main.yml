@@ -18,10 +18,19 @@
     - running_on_server
     - ansible_distribution == "CentOS"
 
-- name: PostgreSQL | add postgresql repository
+- name: PostgreSQL | add postgresql repository for latest ubuntu
   ansible.builtin.apt_repository:
     repo: 'deb http://apt.postgresql.org/pub/repos/apt/ {{ ansible_distribution_release }}-pgdg main'
     state: present
+  when:
+    - ansible_distribution_release != "bionic"
+
+- name: PostgreSQL | add postgresql repository for Bionic
+  ansible.builtin.apt_repository:
+    repo: 'deb https://apt-archive.postgresql.org/pub/repos/apt/ {{ ansible_distribution_release }}-pgdg main'
+    state: present
+  when:
+    - ansible_distribution_release == "bionic"
 
 - name: PostgreSQL | install postgresql server packages
   ansible.builtin.apt:
@@ -59,6 +68,17 @@
   ansible.builtin.template:
     src: 'postgresql.conf.j2'
     dest: '/etc/postgresql/{{ postgres_version }}/main/postgresql.conf'
+    group: postgres
+    owner: postgres
+    mode: 0644
+  register: configure_postgres
+  when: postgresql_is_local
+  notify: restart local postgres
+
+- name: PostgreSQL | install pg_stats file
+  ansible.builtin.template:
+    src: 'statistics_conf.j2'
+    dest: '/etc/postgresql/{{ postgres_version }}/main/conf.d/statistics.conf'
     group: postgres
     owner: postgres
     mode: 0644
@@ -104,6 +124,7 @@
   when:
     - postgresql_is_local
     - postgresql_leader == true
+    - running_on_server
 
 - name: PostgreSQL | ensure pgpass
   ansible.builtin.template:

@@ -1,0 +1,31 @@
+---
+#  This playbook will enable the redis running on the server indicated by `--limit` to start on reboot
+#     for example running this playbook `--limit tigerdata-staging1.princeton.edu -e slack_alerts_channel=ansible-alerts`
+#     will enable redis on reboot on tigerdata-staging1 and notify the ansible alerts channel
+- name: Run the command to enable redis on a host
+  hosts: staging:qa:production
+  remote_user: pulsys
+  become: true
+  vars_files:
+    - ../../group_vars/all/vault.yml
+    - ../../group_vars/all/vars.yml
+
+  pre_tasks:
+    - name: stop playbook if you didn't use --limit
+      fail:
+        msg: "you must use -l or --limit"
+      when: ansible_limit is not defined
+      run_once: true
+
+
+  tasks:
+    - name: enable redis
+      ansible.builtin.service:
+        name: "redis-server"
+        enabled: true
+        state: restarted
+
+  post_tasks:
+    - name: send information to slack
+      ansible.builtin.include_tasks:
+        file: slack_tasks_end_of_playbook.yml

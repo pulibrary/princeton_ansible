@@ -10,7 +10,6 @@ passenger_app_root: "/opt/pulmap/current/public"
 passenger_app_env: "production"
 passenger_server_name: "pulmap.princeton.edu"
 passenger_ruby: "/usr/local/bin/ruby"
-bundler_version: "2.3.18"
 nodejs_release_url: "https://github.com/pulibrary/nodejs-binaries/releases/download/"
 desired_nodejs_version: "v18.18.0"
 pulmap_rabbit_user: '{{vault_rabbit_production_user}}'
@@ -66,7 +65,7 @@ rails_app_vars:
   - name: PULMAP_ADMIN_NETIDS
     value: '"{{ sidekiq_netids | join(" ") }}"'
   - name: PULMAP_REDIS_URL
-    value: 'maps2.princeton.edu'
+    value: 'maps-prod2.princeton.edu'
   - name: PULMAP_REDIS_DB
     value: '0'
   - name: PRINCETON_GEOSERVER_URL
@@ -114,3 +113,33 @@ datadog_checks:
     instances:
       - server: maps.princeton.edu
         port: 443
+  http_check:
+    init_config:
+    instances:
+      - name: Solr Health
+        url: 'http://localhost/health.json'
+        content_match: '{"name":"SolrStatus","message":"","status":"OK"}'
+        include_content: true
+        http_response_status_code: '\d\d\d'
+        tags:
+          - 'http_service:pulmap'
+          - 'http_service_type:health'
+          - 'http_service_check:solr'
+      - name: Database Health
+        url: 'http://localhost/health.json'
+        content_match: '{"name":"Database","message":"","status":"OK"}'
+        include_content: true
+        http_response_status_code: '\d\d\d'
+        tags:
+          - 'http_service:pulmap'
+          - 'http_service_type:health'
+          - 'http_service_check:postgres'
+      - name: Redis Health
+        url: 'http://localhost/health.json'
+        content_match: '{"name":"Redis","message":"","status":"OK"}'
+        include_content: true
+        http_response_status_code: '\d\d\d'
+        tags:
+          - 'http_service:pulmap'
+          - 'http_service_type:health'
+          - 'http_service_check:redis'

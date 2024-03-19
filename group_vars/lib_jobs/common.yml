@@ -12,13 +12,14 @@ application_db_name: '{{ app_db_name }}'
 application_dbuser_name: '{{ app_db_user }}'
 application_dbuser_password: '{{ app_db_password }}'
 application_host_protocol: 'https'
-bundler_version: "2.3.26"
-desired_nodejs_version: v18.17.0
+desired_nodejs_version: v18.19.1
 postgresql_is_local: false
 open_marc_records_directory: 'open_marc_records'
 # Use Ruby 3.1.2 and install from source
 install_ruby_from_source: true
 passenger_ruby: /usr/local/bin/ruby
+passenger_extra_http_config:
+  - "passenger_preload_bundler on;"
 ruby_version_default: "ruby-3.1.2"
 ruby_version_override: "ruby-3.1.2"
 ubuntu_ruby_version_default: "ruby-3.1.2"
@@ -43,6 +44,22 @@ rails_app_vars:
     value: 'https://api-na.hosted.exlibrisgroup.com'
   - name: ALMA_BIB_API_KEY
     value: '{{ alma_bib_api_key }}'
+  - name: ALMA_RECAP_OUTPUT_DIR
+    value: '{{alma_recap_output_dir}}'
+  - name: ALMA_BURSAR_INPUT_DIR
+    value: '/alma/bursar'
+  - name: ALMA_RENEW_INPUT_DIR
+    value: '/alma/scsb_renewals'
+  - name: ALMA_POD_OUTPUT_DIR
+    value: '/alma/pod'
+  - name: ALMA_INVOICE_STATUS_LOCAL_DIR
+    value: '/tmp'
+  - name: ALMA_INVOICE_STATUS_OUTPUT_FTP
+    value: '/alma/invoice_status'
+  - name: ALMA_FUND_ADJUSTMENT_OUTPUT_FTP
+    value: '/alma/fund_adjustment'
+  - name: ALMA_PERSON_FEED_OUTPUT_FTP
+    value: '/alma/people'
   - name: APP_DB
     value: '{{ app_db_name }}'
   - name: APP_DB_HOST
@@ -71,6 +88,12 @@ rails_app_vars:
     value: '{{ finance_database_user | default("user") }}'
   - name: FINANCE_DATABASE_PASS
     value: '{{ finance_database_pass | default("pass") }}'
+  - name: GOBI_SFTP_USER
+    value: '{{ vault_gobi_sftp_user }}'
+  - name: GOBI_SFTP_PASSWORD
+    value: '{{ vault_gobi_sftp_password }}'
+  - name: GOBI_ACCOUNT_CODE
+    value: '{{ vault_gobi_account_code }}'
   - name: HONEYBADGER_API_KEY
     value: '{{ lib_jobs_honeybadger_key }}'
   - name: HONEYBADGER_ENV
@@ -120,7 +143,7 @@ rails_app_vars:
   - name: SCSB_S3_PARTNER_BUCKET_NAME
     value: 'scsb-prod'
   - name: SCSB_S3_UPDATES
-    value: 'data-feed/submitcollections/PUL/cgd_protection'
+    value: 'data-feed/submitcollections/PUL/cgd_protection/RegularUpdates'
     # alphabetical list resumes
   - name: POD_ACCESS_TOKEN
     value: '{{ pod_access_token | default("token") }}'

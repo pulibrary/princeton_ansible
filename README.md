@@ -21,6 +21,8 @@ Princeton Ansible Playbooks
        ```
        optflags=-Wno-error=implicit-function-declaration ASDF_RUBY_BUILD_VERSION=v20220630 asdf install
        ```
+
+       **NOTE** You may need to run `asdf plugin-add python`
     1. Otherwise:
        1. `brew install python`
        1. `brew install rbenv`
@@ -141,10 +143,10 @@ volumes, and images:
 ```
 cd to the role in question
 % molecule destroy
-% docker ps -qaf ancestor=pulibrary/puldocker-ubuntu1804-ansible:latest | xargs docker stop
-% docker ps -qaf ancestor=pulibrary/puldocker-ubuntu1804-ansible:latest | xargs docker rm
+% docker ps -qaf ancestor=quay.io/pulibrary/jammy-ansible:latest | xargs docker stop
+% docker ps -qaf ancestor=quay.io/pulibrary/jammy-ansible:latest | xargs docker rm
 % docker volume ls -qf dangling=true | xargs docker volume rm
-% docker rmi pulibrary/puldocker-ubuntu1804-ansible
+% docker rmi quay.io/pulibrary/jammy-ansible
 % molecule converage
 ```
 
