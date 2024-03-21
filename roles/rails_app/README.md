@@ -15,6 +15,11 @@ install_ruby_from_source: true
 ruby_version_override: "ruby-3.0.3"
 ```
 
+## Updating just the vars
+
+To update the rails app env vars in your application but nothing else, run your
+playbook with --tags=site_config
+
 ## Role Variables
 
 Available variables are listed below, along with default values (see `defaults/main.yml`):
