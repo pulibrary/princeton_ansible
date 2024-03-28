@@ -1,2 +1,178 @@
 ---
-# vars file for roles/nginxplus
+# the 'sites' dictionary is used by the library.conf.j2 template
+sites:
+  # - name: example-prod
+    ## 'servers' is a list of VMs that serve this site
+    # servers:
+    #   - example-prod1
+    #   - example-prod2
+    ## short_name is used for cookies for sticky learning
+    # short_name: example
+    ## zone_size is the amount of memory for the cache zone
+    ## default is 64
+    # zone_size: 128
+    ## location defines the URL for the nginx location directive
+    # location: "/"
+    ## the template defaults to restricted configuration (VPN-only)
+    ## set 'visibility: public' to create a site that is visible to the world
+    # visibility: public
+    ## default load balancing technique is round-robin
+    ## see https://www.nginx.com/blog/choosing-nginx-plus-load-balancing-techniques/ for options
+    # lbtechnique: least_time
+    ## most sites have app_protect disabled
+    ## set app_protect: enabled to enable it
+    # app_protect: enabled 
+    ## client_max_body_size defines the upper limit on request sizes
+    ## default is 0 (don't check), if you change this, you must include the unit of measurement
+    # client_max_body_size: 8m
+    ## proxy timeouts default to 60 seconds
+    ## to increase or decrease these values, set:
+    # proxy_connect_timeout: 2h
+    # proxy_send_timeout: 2h
+    # proxy_read_timeout: 2h
+    ## error handling templates live in /etc/nginx/conf.d/templates/
+    ## the default template for handling errors is errors.conf
+    # error_handling_template: cdh-errors.conf
+    ## the load balancers do health checks at the root of the site
+    ## set health_check_URI to define a different health URI
+    # health_check_URI: /solr
+  # - name: abid-prod
+  #   servers:
+  #     - abid-prod1
+  #     - abid-prod2
+  #   short_name: abid
+  #   location: "/"
+  #   visibility: public
+  #   app_protect: disabled
+  - name: abid-staging
+    servers:
+      - abid-staging1
+    short_name: abid-staging
+    location: "/"
+    visibility: private
+    app_protect: enabled
+  - name: allsearch-api-prod
+    servers:
+      - allsearch-api-prod1
+      - allsearch-api-prod2
+    short_name: allsearch-api
+    location: "/"
+    visibility: public
+    lbtechnique: least_conn
+    client_max_body_size: 512k
+    app_protect: disabled
+    rate_limit: enabled
+    rate_limit_mb: 10
+    rate_limit_per_sec: 10
+    rate_limit_burst_rate: 20
+    # error_handling_template: changeme
+  - name: allsearch-api-staging
+    servers:
+      - allsearch-api-staging1
+    short_name: allsearch-api-staging
+    location: "/"
+    visibility: private
+    lbtechnique: least_conn
+    client_max_body_size: 512k
+    app_protect: enabled
+    # error_handling_template: changeme
+
+  # - name: annotations-prod
+  #   servers:
+  #     - annotations-prod1
+  #     - annotations-prod2
+  #   short_name: annotations
+  #   location: "/"
+  #   visibility: public
+  #   lbtechnique: least_conn
+  #   app_protect: disabled
+  # - name: annotations-staging
+  #   servers:
+  #     - annotations-staging1
+  #   short_name: annotations-staging
+  #   location: "/"
+  #   visibility: private
+  #   lbtechnique: least_conn
+  #   app_protect: disabled
+  # - name: ansible-tower
+  #   servers:
+  #     - ansible-tower1
+  #   short_name: ansible-tower
+  #   location: "/"
+  #   visibility: public
+  #   app_protect: disabled
+  # - name: approvals-prod
+  #   servers:
+  #     - lib-approvals-prod1
+  #     - lib-approvals-prod2
+  #   short_name: approvals
+  #   location: "/"
+  #   visibility: public
+  #   app_protect: disabled
+  # - name: approvals-staging
+  #   servers:
+  #     - lib-approvals-staging1
+  #     - lib-approvals-staging2
+  #   short_name: approvals-staging
+  #   location: "/"
+  #   visibility: private
+  #   app_protect: disabled
+  # - name: bibdata-prod
+  #   servers:
+  #     - bibdata-alma1
+  #     - bibdata-alma2
+  #   short_name: bibdata
+  #   location: "/"
+  #   visibility: public
+  #   app_protect: disabled
+  #   proxy_connect_timeout: 2h
+  #   proxy_send_timeout: 2h
+  #   proxy_read_timeout: 2h
+  # - name: bibdata-qa
+  #   servers:
+  #     # - bibdata-qa1
+  #     - bibdata-qa2
+  #   short_name: bibdata-qa
+  #   location: "/"
+  #   visibility: private
+  #   added_restrictions: htc_restrict.conf
+  #   app_protect: disabled
+  #   proxy_connect_timeout: 2h
+  #   proxy_send_timeout: 2h
+  #   proxy_read_timeout: 2h
+  - name: bibdata-staging
+    servers:
+      # - bibdata-alma-staging1
+      - bibdata-alma-staging2
+    short_name: bibdata-staging
+    location: "/"
+    visibility: private
+    added_restrictions: 
+      - "htc_restrict.conf"
+    app_protect: enabled
+    proxy_connect_timeout: 2h
+    proxy_send_timeout: 2h
+    proxy_read_timeout: 2h
+  # - name: byzantine-tsp-prod
+  #   servers:
+  #     - byzantine-tsp-prod
+  #   short_name: byzantine-tsp
+  #   location: "/"
+  #   visibility: public
+  #   app_protect: disabled
+  # - name: byzantine-tsp-staging
+  #   servers:
+  #     - byzantine-tsp-staging1
+  #   short_name: byzantine-tsp-staging
+  #   location: "/"
+  #   visibility: public
+  #   app_protect: disabled
+  # - name: catalog-qa
+  #   servers:
+  #     # - catalog-qa1
+  #     - catalog-qa2
+  #   short_name: catalogqa
+  #   location: "/"
+  #   visibility: public
+  #   app_protect: disabled
+  #   health_check_URI: "/catalog/1234567"
