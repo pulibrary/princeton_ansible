@@ -16,10 +16,6 @@
       ansible.builtin.import_role:
         name: checkmk.general.server
 
-    - name: Run checkmk agent role.
-      ansible.builtin.import_role:
-        name: checkmk.general.agent
-
     - name: "Pause."
       ansible.builtin.pause:
         prompt: |
@@ -35,71 +31,73 @@
     - ../group_vars/checkmk/vault.yml
   tasks:
 
-            - name: Activate changes on checkmk site - Showcase no changes.
-              checkmk.general.activation:
-                server_url: "{{ server_url }}"
-                site: "{{ site }}"
-                automation_user: "{{ automation_user }}"
-                automation_secret: "{{ automation_secret }}"
-                force_foreign_changes: true
-                sites:
-                  - "{{ site }}"
-              delegate_to: localhost
-              run_once: true
+    - name: Activate changes on checkmk site - Showcase no changes.
+      checkmk.general.activation:
+        server_url: "{{ server_url }}"
+        site: "{{ site }}"
+        automation_user: "{{ automation_user }}"
+        automation_secret: "{{ automation_secret }}"
+        force_foreign_changes: true
+        sites:
+          - "{{ site }}"
+      delegate_to: localhost
+      become: true
+      become_user: pulmonitor
+      run_once: true
 
-            - name: Create team folders. # these values will be informed by other group
-              checkmk.general.folder:
-                server_url: "{{ server_url }}"
-                site: "{{ site }}"
-                automation_user: "{{ automation_user }}"
-                automation_secret: "{{ automation_secret }}"
-                path: "{{ item.path }}"
-                title: "{{ item.title }}"
-                state: "present"
-              delegate_to: localhost
-              run_once: true
-              loop: "{{ checkmk_folders }}"
+    - name: Create team folders. # these values will be informed by other group
+      checkmk.general.folder:
+        server_url: "{{ server_url }}"
+        site: "{{ site }}"
+        automation_user: "{{ automation_user }}"
+        automation_secret: "{{ automation_secret }}"
+        path: "{{ item.path }}"
+        title: "{{ item.title }}"
+        state: "present"
+      delegate_to: localhost
+      run_once: true
+      loop: "{{ checkmk_folders }}"
 
-            - name: Create a checkmk host.
-              checkmk.general.host:
-                server_url: "{{ server_url }}"
-                site: "{{ site }}"
-                automation_user: "{{ automation_user }}"
-                automation_secret: "{{ automation_secret }}"
-                host_name: "{{ inventory_hostname }}"
-                folder: "{{ checkmk_folder_path }}"
-                attributes:
-                  site: "{{ site }}"
-                  ipaddress: 127.0.0.1
-                state: "present"
-              delegate_to: localhost
+    - name: Create a checkmk host.
+      checkmk.general.host:
+        server_url: "{{ server_url }}"
+        site: "{{ site }}"
+        automation_user: "{{ automation_user }}"
+        automation_secret: "{{ automation_secret }}"
+        host_name: "{{ inventory_hostname }}"
+        folder: "{{ checkmk_folder_path }}"
+        attributes:
+          site: "{{ site }}"
+          ipaddress: 127.0.0.1
+        state: "present"
+      delegate_to: localhost
 
-            - name: Discover services on host.
-              checkmk.general.discovery:
-                server_url: "{{ server_url }}"
-                site: "{{ site }}"
-                automation_user: "{{ automation_user }}"
-                automation_secret: "{{ automation_secret }}"
-                host_name: "{{ inventory_hostname }}"
-                state: "fix_all"
-              delegate_to: localhost
+    - name: Discover services on host.
+      checkmk.general.discovery:
+        server_url: "{{ server_url }}"
+        site: "{{ site }}"
+        automation_user: "{{ automation_user }}"
+        automation_secret: "{{ automation_secret }}"
+        host_name: "{{ inventory_hostname }}"
+        state: "fix_all"
+      delegate_to: localhost
 
-            - name: Activate changes on site - Showcase creation of hosts and folders. # checkmk doesn't automatically accept changes
-              checkmk.general.activation:
-                server_url: "{{ server_url }}"
-                site: "{{ site }}"
-                automation_user: "{{ automation_user }}"
-                automation_secret: "{{ automation_secret }}"
-                force_foreign_changes: true
-                sites:
-                  - "{{ site }}"
-              delegate_to: localhost
-              run_once: true
+    - name: Activate changes on site - Showcase creation of hosts and folders. # checkmk doesn't automatically accept changes
+      checkmk.general.activation:
+        server_url: "{{ server_url }}"
+        site: "{{ site }}"
+        automation_user: "{{ automation_user }}"
+        automation_secret: "{{ automation_secret }}"
+        force_foreign_changes: true
+        sites:
+          - "{{ site }}"
+      delegate_to: localhost
+      run_once: true
 
-            - name: "Pause."
-              ansible.builtin.pause:
-                prompt: |
-                  "Press <Enter> to continue."
+    - name: "Pause."
+      ansible.builtin.pause:
+        prompt: |
+          "Press <Enter> to continue."
 
 
 
