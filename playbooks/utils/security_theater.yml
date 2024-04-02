@@ -67,16 +67,16 @@
       - "ansible_facts.services['besclient.service'] is not defined"
       - ansible_os_family == "Debian"
 
-    #  - name: Download the Falcon sensor Yum file
-    #    ansible.builtin.get_url:
-    #      url: https://isoshare.cpaneldev.princeton.edu/isoShares/Agents/Falcon/Latest/linux/RHEL/9-IBMzLinux/falcon-sensor-7.05.0-16004.el9.s390x.rpm
-    #      dest: "/tmp/falcon-sensor_7.05.0-16004.el9.s390x.rpm"
-    #      owner: pulsys
-    #      group: pulsys
-    #      mode: "0644"
-    #    when:
-    #      - ansible_os_family == "RedHat"
-    #      - "ansible_facts.services['falcon-sensor.service'] is not defined"
+  - name: Download the Falcon sensor Yum file
+    ansible.builtin.get_url:
+      url: https://isoshare.cpaneldev.princeton.edu/isoShares/Agents/Falcon/Latest/linux/RHEL/Oracle/9/falcon-sensor-7.05.0-16004.el9.x86_64.rpm
+      dest: "/tmp/falcon-sensor_7.05.0-16004.el9.x86_64.rpm"
+      owner: pulsys
+      group: pulsys
+      mode: "0644"
+    when:
+      - ansible_os_family == "RedHat"
+      - "ansible_facts.services['falcon-sensor.service'] is not defined"
 
   - name: install crowdstrike falcon sensor agent (Ubuntu)
     ansible.builtin.apt:
@@ -85,13 +85,11 @@
       - "'falcon-sensor' not in ansible_facts.packages"
       - ansible_os_family == "Debian"
 
-    #  - name: install crowdstrike falcon sensor agent (RedHat)
-    #    ansible.builtin.yum:
-    #      name: "/tmp/falcon-sensor_7.05.0-16004.el9.s390x.rpm"
-    #      state: present
-    #    when:
-    #      - ansible_os_family == "RedHat"
-    #      - "ansible_facts.services['falcon-sensor.service'] is not defined"
+  - name: install crowdstrike falcon sensor agent (RedHat)
+    ansible.builtin.shell: yum install falcon-sensor_7.05.0-16004.el9.x86_64.rpm -y
+    when:
+      - ansible_os_family == "RedHat"
+      - "ansible_facts.services['falcon-sensor.service'] is not defined"
 
   - name: launch crowdstrike falcon agent
     command: /opt/CrowdStrike/falconctl -s --cid={{ princeton_cid }}
