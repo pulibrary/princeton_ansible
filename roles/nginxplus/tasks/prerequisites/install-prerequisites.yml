@@ -11,9 +11,35 @@
     state: enabled
     policy: allow
 
-- name: make sure jail.d dir is empty (get rid of jail.d/defaults-debian.conf)
+# Note: the following IP address is "reserved for special use",
+# we expect to never receive any traffic from it, so it is safe
+# to block indefinitely as an example
+- name: add an intial ufw rule that blocks a sample ip
+  community.general.ufw:
+    rule: reject
+    from_ip: "192.0.2.0"
 
-- name: add fail2ban jail definition
+- name: identify unwanted configuration files that we should delete
+  ansible.builtin.find:
+    paths: /etc/fail2ban/jail.d
+    file_type: file
+    excludes: 
+      - "nginx-limit-req.conf"
+  register: unwanted_fail2ban_files
+
+- name: Delete unwanted configuration files
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: absent
+  with_items: "{{ unwanted_fail2ban_files['files'] }}"
+
+- name: Add nginx-limit-req fail2ban configuration
+  ansible.builtin.copy:
+    src: "fail2ban/nginx-limit-req.conf"
+    dest: "/etc/fail2ban/jail.d/nginx-limit-req.conf"
+    owner: root
+    group: root
+    mode: 0644
 
 - name: restart and enable fail2ban
   ansible.builtin.service:
