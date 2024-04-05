@@ -12,12 +12,31 @@
     - ../group_vars/bibdata/vault.yml
     - ../group_vars/bibdata/{{ runtime_env | default('staging') }}.yml
   roles:
+    # re-add when removed from: ruby_s, deploy_user, rails_app, and samba
+    # - role: common
     - role: deploy_user
-    - { role: roles/sidekiq_worker, when: "'worker' in inventory_hostname" }
-    - role: roles/bibdata
-    - role: roles/bibdata_sqs_poller
-    - role: 'hr_share'
-    - role: roles/datadog
+    - role: redis
+    # re-add when removed from passenger
+    # - role: ruby_s
+    # re-add when removed from rails_app
+    # - role: bind9
+    # re-add when removed from rails_app
+    # - role: passenger
+    # re-add when removed from rails_app
+    # - role: postgresql
+    # re-add when removed from rails_app
+    # - role: nodejs
+    # Must be before the rails_app & passenger roles so that nginx restarts on all boxes
+    - role: sidekiq_worker
+      when: "'worker' in inventory_hostname"
+    - role: rails_app
+    - role: timezone
+    - role: bibdata
+    - role: bibdata_sqs_poller
+    # re-add when removed from hr_share
+    # - role: samba
+    - role: hr_share
+    - role: datadog
       when: runtime_env | default('staging') == "production"
   post_tasks:
     - name: tell everyone on slack you ran an ansible playbook
