@@ -16,6 +16,19 @@
       ansible.builtin.import_role:
         name: checkmk.general.server
 
+    - name: create a user
+      checkmk.general.user:
+        server_url: "{{ server_url }}"
+        site: "{{ site }}"
+        automation_user: "{{ automation_user }}"
+        automation_secret: "{{ automation_secret }}"
+        name: troubleshooting
+        auth_type: "password"
+        password: "{{ vault_checkmk_pass }}"
+        roles:
+          - "admin"
+      run_once: true
+
     - name: "Pause."
       ansible.builtin.pause:
         prompt: |
@@ -42,7 +55,7 @@
           - "{{ site }}"
       delegate_to: localhost
       become: true
-      become_user: pulmonitor
+      become_user: troubleshooting
       run_once: true
 
     - name: Create team folders. # these values will be informed by other group
@@ -55,6 +68,8 @@
         title: "{{ item.title }}"
         state: "present"
       delegate_to: localhost
+      become: true
+      become_user: troubleshooting
       run_once: true
       loop: "{{ checkmk_folders }}"
 
