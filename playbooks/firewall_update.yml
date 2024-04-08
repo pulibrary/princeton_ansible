@@ -56,21 +56,21 @@
     #     name_regex: ".*2019.*"
     #     object_type: "address"
 
+    - name: Hardcode a known IP address for testing
+      ansible.builtin.set_fact:
+        test_ip:
+          - "192.168.1.100"
+
     - name: find address stuff with panos_object
       paloaltonetworks.panos.panos_object:
         provider: "{{ panos_provider }}"
         state: gathered
-        gathered_filter: "*"
+        gathered_filter: "ip-netmask contains {{ test_ip }}"
       register: address_stuff
 
     - name: show address stuff
       ansible.builtin.debug:
         var: address_stuff
-
-    - name: Hardcode a known IP address for testing
-      ansible.builtin.set_fact:
-        test_ip:
-          - "192.168.1.100"
 
     - name: Get a list of all security rules
       paloaltonetworks.panos.panos_security_rule:
