@@ -12,93 +12,98 @@
       # api_key: "{{ palo_alto_api_key }}"
       api_key: "{{ provider_API_key }}"
   tasks:
-  - name: Install required library for pan-os API call
-    ansible.builtin.pip:
-      name:
-        - pan-python
-        - pan-os-python
+    - name: Install required library for pan-os API call
+      ansible.builtin.pip:
+        name:
+          - pan-python
+          - pan-os-python
 
-  - name: show interpreter
-    ansible.builtin.debug:
-      var: ansible_python_interpreter
+    - name: show interpreter
+      ansible.builtin.debug:
+        var: ansible_python_interpreter
 
-  - name: install python3 dnf
-    ansible.builtin.dnf:
-      name: python3-dnf
-      state: present
-    become: true
+    - name: install python3 dnf
+      ansible.builtin.dnf:
+        name: python3-dnf
+        state: present
+      become: true
 
-  - name: install bind-utils
-    ansible.builtin.dnf:
-      name: bind-utils
-      state: present
-    become: true
+    - name: install bind-utils
+      ansible.builtin.dnf:
+        name: bind-utils
+        state: present
+      become: true
 
-  - name: Get IP from dig
-    ansible.builtin.shell:
-      cmd: dig {{ VM_host_name }}
-      # target_ip: "{{ lookup('dig', 'fs-d12345.efs.ap-southeast-2.amazonaws.com', '@10.75.0.2') }}"
-    register: ip_in_question
+    - name: Get IP from 'host' command
+      ansible.builtin.shell:
+        cmd: host {{ VM_host_name }}
+        # target_ip: "{{ lookup('dig', 'fs-d12345.efs.ap-southeast-2.amazonaws.com', '@10.75.0.2') }}"
+      register: ip_in_question
 
-  # - name: Use lookup to get IPs
-  #   ansible.builtin.shell:
-  #     cmd: dig {{ VM_host_name }}
-  #     # target_ip: "{{ lookup('dig', 'fs-d12345.efs.ap-southeast-2.amazonaws.com', '@10.75.0.2') }}"
-  #   register: ip_in_question
+    # - name: Use lookup to get IPs
+    #   ansible.builtin.shell:
+    #     cmd: dig {{ VM_host_name }}
+    #     # target_ip: "{{ lookup('dig', 'fs-d12345.efs.ap-southeast-2.amazonaws.com', '@10.75.0.2') }}"
+    #   register: ip_in_question
 
-  - name: show IP
-    ansible.builtin.debug:
-      var: ip_in_question
+    - name: show IP
+      ansible.builtin.debug:
+        var: ip_in_question
 
-  - name: Find all address objects
-    paloaltonetworks.panos.panos_object_facts:
-      provider: "{{ panos_provider }}"
-      name_regex: '.*2019.*'
-      object_type: 'address'
-    register: address_stuff
+    # - name: Find all address objects
+    #   paloaltonetworks.panos.panos_object_facts:
+    #     provider: "{{ panos_provider }}"
+    #     name_regex: ".*2019.*"
+    #     object_type: "address"
 
-  - name: show address stuff
-    ansible.builtin.debug:
-      var: address_stuff
+    - name: find address stuff with panos_object
+      paloaltonetworks.panos.panos_object:
+        provider: "{{ panos_provider }}"
+        state: gathered
+        gathered_filter: "*"
+      register: address_stuff
 
-  - name: Hardcode a known IP address for testing
-    ansible.builtin.set_fact:
-      test_ip:
-        - "192.168.1.100"
+    - name: show address stuff
+      ansible.builtin.debug:
+        var: address_stuff
 
-  - name: Get a list of all security rules
-    paloaltonetworks.panos.panos_security_rule:
-      provider: "{{ panos_provider }}"
-      destination_ip: "{{ test_ip }}"
-      state: "gathered"
-      gathered_filter: '*'
-    register: sec_rules
-    
-  - name: show rules stuff
-    ansible.builtin.debug:
-      var: sec_rules
+    - name: Hardcode a known IP address for testing
+      ansible.builtin.set_fact:
+        test_ip:
+          - "192.168.1.100"
 
-  - name: Get the definitions for the rules
-    paloaltonetworks.panos.panos_security_rule:
-      provider: "{{ panos_provider }}"
-      state: gathered
-      rule_name: "{{ item }}"
-    loop:
-      - LibLab_OutboundImplicitAllow
-      - LibLab_Lib-LabWin2019_Rule1
-      - LibLab_ImplicitDeny
-      # sec_rules.rule_names???
-    register: rule_defs
+    - name: Get a list of all security rules
+      paloaltonetworks.panos.panos_security_rule:
+        provider: "{{ panos_provider }}"
+        destination_ip: "{{ test_ip }}"
+        state: "gathered"
+        gathered_filter: "*"
+      register: sec_rules
 
-  - name: show rule defs
-    ansible.builtin.debug:
-      var: rule_defs
+    - name: show rules stuff
+      ansible.builtin.debug:
+        var: sec_rules
 
+    - name: Get the definitions for the rules
+      paloaltonetworks.panos.panos_security_rule:
+        provider: "{{ panos_provider }}"
+        state: gathered
+        rule_name: "{{ item }}"
+      loop:
+        - LibLab_OutboundImplicitAllow
+        - LibLab_Lib-LabWin2019_Rule1
+        - LibLab_ImplicitDeny
+        # sec_rules.rule_names???
+      register: rule_defs
+
+    - name: show rule defs
+      ansible.builtin.debug:
+        var: rule_defs
 # Future work - create tasks to make changes:
-  # - name: Generate a new Palo Alto rule set
-  #   paloaltonetworks.panos.panos_security_rule:
-  # - name: Commit new firewall rules
-  #   paloaltonetworks.panos.panos_commit_firewall:
+# - name: Generate a new Palo Alto rule set
+#   paloaltonetworks.panos.panos_security_rule:
+# - name: Commit new firewall rules
+#   paloaltonetworks.panos.panos_commit_firewall:
 
 # other relevant docs:
 # main collection page: https://paloaltonetworks.github.io/pan-os-ansible/
