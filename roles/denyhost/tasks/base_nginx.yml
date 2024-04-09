@@ -1,0 +1,31 @@
+---
+# tasks file for roles/denyhost
+- name: Install nginx
+  community.general.openbsd_pkg:
+    name: nginx
+    state: present
+
+- name: Deploy base nginx
+  ansible.builtin.template:
+    src: nginx.j2
+    dest: /etc/nginx/nginx.conf
+    owner: root
+    group: wheel
+    mode: "0644"
+    backup: false
+  notify:
+    - Restart nginx
+
+- name: Create base nginx directories
+  ansible.builtin.file:
+    path: /etc/nginx/conf.d
+    owner: root
+    group: wheel
+    mode: "0755"
+    state: directory
+
+- name: Ensure nginx is enabled
+  ansible.builtin.service:
+    name: nginx
+    state: started
+    enabled: true

@@ -1,0 +1,47 @@
+---
+# tasks file for roles/denyhost
+- name: Install basic nginx
+  ansible.builtin.include_tasks: base_nginx.yml
+
+- name: Deploy acme-client.conf
+  ansible.builtin.template:
+    src: acme_client.j2
+    dest: /etc/acme-client.conf
+    owner: root
+    group: wheel
+    mode: "0644"
+    backup: false
+
+- name: Register ACME name
+  ansible.builtin.shell: /usr/sbin/acme-client -v denylist.pulcloud.io
+  changed_when: false
+  ignore_errors: true
+
+- name: Download and refresh certs
+  ansible.builtin.cron:
+    name: "Download current certs"
+    hour: "0"
+    job: "/usr/sbin/acme-client denylist.pulcloud.io && rcctl reload nginx && logger 'Updated ssl certs'"
+    user: root
+
+- name: Deploy full nginx
+  ansible.builtin.template:
+    src: default.j2
+    dest: /etc/nginx/conf.d/default.conf
+    owner: root
+    group: wheel
+    mode: "0644"
+    backup: false
+  notify:
+    - Restart nginx
+
+- name: Copy drop.txt file
+  ansible.builtin.copy:
+    src: files/drop.txt
+    dest: /var/www/htdocs/drop.txt
+    owner: root
+    group: daemon
+    mode: "0644"
+    backup: true
+  notify:
+    - Reload nginx

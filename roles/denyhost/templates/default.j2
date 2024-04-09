@@ -1,0 +1,49 @@
+{{ ansible_managed | comment }}
+
+error_log  logs/denylist.error.log;
+error_log  logs/denylist.error.log  notice;
+error_log  logs/denylist.error.log  info;
+#error_log  syslog:server=unix:/dev/log,severity=notice;
+
+    server {
+        listen       80;
+        listen       [::]:80;
+        server_name  denylist.pulcloud.io;
+        root         /var/www/htdocs;
+
+        access_log  logs/denylist.access.log  main;
+
+        # redirect to https server
+        return 301 https://denylist.pulcloud.io$request_uri;
+        #
+
+    }
+
+
+    # HTTPS server
+    #
+    server {
+        listen       443;
+        server_name  denylist.pulcloud.io;
+        root         /var/www/htdocs;
+
+        # acme
+        location /.well-known/acme-challenge/ {
+                rewrite ^/.well-known/acme-challenge/(.*) /$1 break;
+                root /acme;
+        }
+        # error
+        error_page   500 502 503 504  /50x.html;
+        location = /50x.html {
+            root  /var/www/htdocs;
+        }
+        ssl                  on;
+        ssl_certificate      /etc/ssl/denylist.pulcloud.io.fullchain.pem;
+        ssl_certificate_key  /etc/ssl/private/denylist.pulcloud.io.key;
+
+        ssl_session_timeout  5m;
+        ssl_session_cache    shared:SSL:1m;
+
+        ssl_ciphers  HIGH:!aNULL:!MD5:!RC4;
+        ssl_prefer_server_ciphers   on;
+    }
