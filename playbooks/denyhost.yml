@@ -1,0 +1,20 @@
+---
+# this post assumes you have registered the DNS name in a clean environment
+- name: add new ip to denylist
+  hosts: denylist
+  remote_user: pulsys
+  become: true
+  become_method: doas
+  become_user: root
+  environment:
+    USER: pulsys
+    HOME: /home/pulsys
+  roles:
+    - role: roles/denyhost
+
+  post_tasks:
+    - name: tell everyone on slack you ran an ansible playbook
+      community.general.slack:
+        token: "{{ vault_pul_slack_token }}"
+        msg: "Ansible ran `{{ ansible_play_name }}` on {{ inventory_hostname }}"
+        channel: "{{ slack_alerts_channel }}"
