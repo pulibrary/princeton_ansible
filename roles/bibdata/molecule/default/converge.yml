@@ -13,10 +13,30 @@
         update_cache: true
         cache_valid_time: 600
   roles:
-    # Will need to re-add common when we move it out of deploy_user
+    # re-add when removed from: ruby_s, deploy_user, rails_app, and samba
     # - role: common
     - role: deploy_user
     - role: redis
+    # re-add when removed from passenger
+    # - role: ruby_s
+    # re-add when removed from rails_app
+    # - role: bind9
+    # re-add when removed from rails_app
+    # - role: passenger
+    # re-add when removed from rails_app
+    # - role: postgresql
+    # re-add when removed from rails_app
+    # - role: nodejs
+    # Must be before the rails_app & passenger roles so that nginx restarts on all boxes
+    - role: sidekiq_worker
+      when: "'worker' in inventory_hostname"
+    - role: rails_app
+    - role: timezone
+    - role: bibdata
+    - role: bibdata_sqs_poller
+    # re-add when removed from hr_share
+    # - role: samba
+    - role: hr_share
   tasks:
     - name: "Include bibdata"
       include_role:
