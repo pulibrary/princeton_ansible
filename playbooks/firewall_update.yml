@@ -70,9 +70,6 @@
       paloaltonetworks.panos.panos_address_object:
         provider: "{{ panos_provider }}"
         state: gathered
-      #  gathered_filter: "ip-netmask contains 192.168.1.100"
-      #  fails with "in matches_gathered_filter\nException: No field named ip-netmask"
-      #   gathered_filter: "ip-netmask contains {{ test_ip }}"
         gathered_filter: "value contains 192.168.1.100"
       register: test_object
 
@@ -91,6 +88,20 @@
     - name: show address stuff
       ansible.builtin.debug:
         var: address_stuff
+
+    - name: Get a list rules for our test object
+      paloaltonetworks.panos.panos_security_rule:
+      # we want all rules where the rule's 'destination_ip' matches
+      # the 'name' field from the test_object . . . 
+      # something like test_object.gathered.name?
+        provider: "{{ panos_provider }}"
+        state: "gathered"
+        gathered_filter: "destination_ip == Lib-LabWin2019"
+      register: sec_rules
+
+    - name: show rules stuff
+      ansible.builtin.debug:
+        var: sec_rules
 
     - name: Get a list of all security rules
       paloaltonetworks.panos.panos_security_rule:
