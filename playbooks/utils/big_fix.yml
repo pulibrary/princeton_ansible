@@ -1,0 +1,50 @@
+---
+#  This playbook will install the BigFix agent
+# By default this playbook runs on all hosts in the three environment groups. To run against a single host or group, use '--limit <group_or_host_name>'. For example '--limit qa' or '--limit figgy-web-staging1.princeton.edu'."
+#
+- name: install Big Fix Agent on a host
+  hosts: staging:qa:production
+  remote_user: pulsys
+  serial: "{{ concurrent_vms | default('5') }}"
+  become: true
+  vars_files:
+    - ../../group_vars/all/vault.yml
+
+  tasks:
+
+  - name: Create bigfix directory
+    ansible.builtin.file:
+      path: /etc/opt/BESClient
+      state: directory
+      mode: '0755'
+    when: "ansible_facts.services['besclient.service'] is not defined"
+
+  - name: Download BigFix masthead
+    ansible.builtin.get_url:
+      url: "{{ vault_bigfix_url }}"
+      dest: "/etc/opt/BESClient/actionsite.afxm"
+      owner: root
+      group: root
+      mode: "0600"
+
+  - name: Download the bigfix deb file
+    ansible.builtin.get_url:
+      url: "https://software.bigfix.com/download/bes/100/BESAgent-10.0.7.52-debian6.amd64.deb"
+      dest: "/tmp/BESAgent-10.0.7.52-debian6.amd64.deb"
+      owner: pulsys
+      group: pulsys
+      mode: "0644"
+    when: "ansible_facts.services['besclient.service'] is not defined"
+
+  - name: install BESClient agent
+    ansible.builtin.apt:
+      deb: "/tmp/BESAgent-10.0.7.52-debian6.amd64.deb"
+    when: "ansible_facts.services['besclient.service'] is not defined"
+
+  - name: Launch the BigFix client
+    ansible.builtin.command: /etc/init.d/besclient start
+
+  post_tasks:
+    - name: send information to slack
+      ansible.builtin.include_tasks:
+        file: slack_tasks_end_of_playbook.yml
