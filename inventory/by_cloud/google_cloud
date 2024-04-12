@@ -1,35 +1,57 @@
-# most GCP resources run openBSD, which has 'doas'
-# instead of 'sudo', so we set the become_method for those
+# for openBSD, which has 'doas'instead of 'sudo'
+# set ansible_become_method
+
 [bastion_dev]
-bastion-dev.pulcloud.io become_method: doas
+bastion-dev.pulcloud.io
+
 [bastion_production]
-bastion-prod.pulcloud.io become_method: doas
+bastion-prod.pulcloud.io
+
 [bastion_staging]
-bastion-staging.pulcloud.io ansible_python_interpreter=/usr/bin/python
+bastion-staging.pulcloud.io 
+
+[bastions: children]
+bastion_dev
+bastion_production
+bastion_staging
+
+[bastions: vars]
+ansible_python_interpreter=/usr/bin/python
+ansible_become_method: doas
+
 [dspace_dev]
 gcp_dataspace_dev1 ansible_host=10.0.20.4
 gcp_oar_dev1 ansible_host=10.0.20.3
 gcp_oar_beta1 ansible_host=10.0.10.12
+
 [dspace_production]
 gcp-dataspace-prod1 ansible_host=10.244.0.2
 gcp-oar-prod1 ansible_host=10.244.0.3
 gcp-postgres-prod1 ansible_host=10.240.0.2
+
 [dspace_staging]
 gcp_dataspace_staging1 ansible_host=10.132.0.5
 gcp_oar_staging1 ansible_host=10.132.0.4
+
 [docnow_production]
 community.docnow.io ansible_host=10.140.0.4
+
 [docnow_staging]
 smoketest.docnow.io ansible_host=10.244.0.5
+
 [obsd_httpd_dev]
 dev.pulcloud.io
+
 [obsd_httpd_production]
 #inventory name is prod.pucloud.io but the VM name in google cloud is pul-gcdc-prod-adc
 prod.pulcloud.io ansible_host=10.246.0.2
+
 [obsd_httpd_staging]
 staging.pulcloud.io ansible_host=10.140.0.3
+
 [pulmirror_production]
 pulmirror.princeton.edu ansible_host=10.132.0.20
+
 [sftp_production]
 proquestdrop.pulcloud.io ansible_host=10.140.0.15
 
@@ -49,8 +71,6 @@ sftp_production
 
 [gcp_production:vars]
 ansible_ssh_common_args='-o ProxyCommand="ssh -W %h:%p -q pulsys@bastion-prod.pulcloud.io"'
-# this var assumes that all GCP boxes run OpenBSD
-become_method: doas
 
 [gcp_staging:children]
 dspace_staging
@@ -59,5 +79,3 @@ obsd_httpd_staging
 
 [gcp_staging:vars]
 ansible_ssh_common_args='-o ProxyCommand="ssh -W %h:%p -q pulsys@bastion-staging.pulcloud.io"'
-# this var assumes that all GCP boxes run OpenBSD
-become_method: doas
