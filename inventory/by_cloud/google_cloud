@@ -1,5 +1,5 @@
 # for openBSD, which has 'doas'instead of 'sudo'
-# set ansible_become_method
+# set ansible_become_method - see the 'obsd' group of groups
 
 [bastion_dev]
 bastion-dev.pulcloud.io
@@ -8,16 +8,7 @@ bastion-dev.pulcloud.io
 bastion-prod.pulcloud.io
 
 [bastion_staging]
-bastion-staging.pulcloud.io 
-
-[bastions: children]
-bastion_dev
-bastion_production
-bastion_staging
-
-[bastions: vars]
-ansible_python_interpreter=/usr/bin/python
-ansible_become_method: doas
+bastion-staging.pulcloud.io ansible_python_interpreter=/usr/bin/python
 
 [dspace_dev]
 gcp_dataspace_dev1 ansible_host=10.0.20.4
@@ -79,3 +70,16 @@ obsd_httpd_staging
 
 [gcp_staging:vars]
 ansible_ssh_common_args='-o ProxyCommand="ssh -W %h:%p -q pulsys@bastion-staging.pulcloud.io"'
+
+[obsd:children]
+bastion_dev
+bastion_production
+bastion_staging
+obsd_httpd_dev
+obsd_httpd_production
+obsd_httpd_staging
+pulmirror_production
+sftp_production
+
+[obsd:vars]
+ansible_become_method=doas
