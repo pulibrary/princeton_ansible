@@ -1,0 +1,39 @@
+---
+# use this playbook to pin a group of VMs to a specific kernel
+- name: install "{{ linux_kernel_version }}" on host
+  hosts: staging:qa:production
+  remote_user: pulsys
+  become: true
+  vars_files:
+    - ../../group_vars/figgy/kernel.yml
+
+  tasks:
+    - name: Install specific kernel version
+      ansible.builtin.apt:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - "linux-image-{{ linux_kernel_version }}-generic"
+        - "linux-headers-{{ linux_kernel_version }}-generic"
+
+    - name: Update GRUB to set default kernel
+      ansible.builtin.command: update-grub
+
+    - name: Pin kernel package to prevent updates
+      ansible.builtin.copy:
+        dest: /etc/apt/preferences.d/pin-kernel
+        content: |
+          Package: linux-image-{{ linux_kernel_version }}-generic
+          Pin: version "{{ linux_kernel_version }}.111"
+          Pin-Priority: 1000
+
+          Package: linux-image-{{ linux_kernel_version }}-generic
+          Pin: version "{{ linux_kernel_version }}.111"
+          Pin-Priority: 1000
+      notify:
+        - update package cache
+
+  handlers:
+    - name: update package cache
+      ansible.builtin.apt:
+        update_cache: true
