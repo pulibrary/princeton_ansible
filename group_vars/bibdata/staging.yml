@@ -11,7 +11,7 @@ pg_hba_method: "md5"
 pg_hba_source: "{{ ansible_host }}/32"
 passenger_server_name: bibdata-staging.*
 passenger_app_root: "/opt/bibdata/current/public"
-passenger_app_env: "production"
+passenger_app_env: "staging"
 passenger_extra_config: "{{ lookup('file', 'roles/bibdata/templates/nginx_extra_config')  }}"
 rails_app_name: "bibdata"
 rails_app_directory: "bibdata"
@@ -22,7 +22,7 @@ rails_app_dependencies:
   - libtool
   - autoconf
   - redis-tools
-rails_app_env: "production"
+rails_app_env: "staging"
 rails_app_vars:
   - name: ALMA_REGION
     value: "{{ vault_alma_region }}"
@@ -142,48 +142,4 @@ postgres_port: "{{ bibdata_db_port }}"
 postgres_admin_user: "{{ db_clusteradmin_user }}"
 postgres_admin_password: "{{ db_clusteradmin_password }}"
 postgresql_is_local: false
-
-datadog_api_key: "{{ vault_datadog_key }}"
-datadog_config:
-  tags: "application:bibdata, environment:staging, type:webserver"
-  apm_enabled: "true"
-  log_enabled: true
-  process_config:
-    enabled: "true"
-  apm_config:
-    analyzed_spans:
-      bibdata|rack.request: 1
-    filter_tags:
-      reject: ["http.useragent:nginx/1.23.4 (health check)", "operation:heartbeat", "operation:job_fetch", "operation:scheduled_push", "operation:scheduled_poller_wait"]
-    ignore_resources: ["sidekiq.heartbeat", "sidekiq.job_fetch", "sidekiq.scheduled_push"]
-datadog_checks:
-  ruby:
-    init_config:
-    logs:
-      - type: file
-        path: /opt/bibdata/current/log/production.log
-        service: bibdata
-        source: ruby
-      - type: file
-        path: /opt/bibdata/current/log/traject-error.log
-        service: traject
-        source: ruby
-  nginx:
-    init_config:
-    logs:
-      - type: file
-        path: /var/log/nginx/access.log
-        service: bibdata
-        source: nginx
-        sourcecategory: http_web_access
-      - type: file
-        path: /var/log/nginx/error.log
-        service: bibdata
-        source: nginx
-        sourcecategory: http_web_access
-  tls:
-    init_config:
-    instances:
-      - server: bibdata-alma-staging.princeton.edu
-        port: 443
 timezone: "America/New_York"
