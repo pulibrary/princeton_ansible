@@ -57,9 +57,15 @@
     owner: root
     group: root
     mode: 0644
+- name: check if fail2ban is running
+  ansible.builtin.service:
+    name: fail2ban
+    state: started
+  register: fail2ban_status
 
 - name: restart and enable fail2ban
   ansible.builtin.service:
     name: fail2ban
     state: restarted
     enabled: true
+  when: fail2ban_status.changed
