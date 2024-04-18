@@ -5,6 +5,22 @@ nginxplus
 
 **Note** We copied [https://github.com/nginxinc/ansible-role-nginx](https://github.com/nginxinc/ansible-role-nginx), then removed things we don't use to simplify it. All credit goes to NGINX for writing the upstream role. 
 
+fail2ban
+========
+
+Nobody in the VPN gets blocked, thanks to our nginx
+load balancer rate-limit configuration.
+
+* To see which IPs are currently banned: `sudo ufw status`
+* To see which IPs are banned due to a certain fail2ban rule: `sudo fail2ban-client status nginx-limit-req`
+* To unban an IP: `sudo fail2ban-client unban [IP address]`, for example, if the IP address is 123.123.123.456, run `sudo fail2ban-client unban 123.123.123.456`.
+* To manually ban an IP permanently from all load-balanced resources: `sudo ufw deny from [IP address]` (this step would need to be repeated on both load balancers)
+
+Note that ufw needs to have at least one rule for the fail2ban
+integration to work.  We have a permanent REJECT rule for traffic
+from 192.0.2.0 (which is a reserved IP for special use that
+will never actually send us any traffic) for this reason, do not delete this rule please.
+
 Using this role
 ===============
 
