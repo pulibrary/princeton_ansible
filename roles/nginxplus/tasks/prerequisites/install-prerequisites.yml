@@ -25,6 +25,7 @@
     file_type: file
     excludes: 
       - "nginx-limit-req.conf"
+      - "nginx-badbots.conf"
   register: unwanted_fail2ban_files
 
 - name: Delete unwanted configuration files
@@ -32,6 +33,22 @@
     path: "{{ item.path }}"
     state: absent
   with_items: "{{ unwanted_fail2ban_files['files'] }}"
+
+- name: Add nginx-badbots filter
+  ansible.builtin.copy:
+    src: "fail2ban/nginx-badbots-filter.conf"
+    dest: "/etc/fail2ban/filter.d/nginx-badbots.conf"
+    owner: root
+    group: root
+    mode: 0644
+
+- name: Add nginx-badbots restriction
+  ansible.builtin.copy:
+    src: "fail2ban/nginx-badbots-restriction.conf"
+    dest: "/etc/fail2ban/jail.d/nginx-badbots.conf"
+    owner: root
+    group: root
+    mode: 0644
 
 - name: Add nginx-limit-req fail2ban configuration
   ansible.builtin.copy:
