@@ -38,7 +38,7 @@ passed in as parameters) is always nice for users too:
 
     - hosts: servers
       roles:
-         - { role: roles/drupal9, x: 42 }
+         - { role: roles/drupal10, x: 42 }
 
 License
 -------
