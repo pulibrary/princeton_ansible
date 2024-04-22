@@ -6,15 +6,23 @@
     update_cache: true
 
 - name: "Install: NGINX Signing Key URL"
-  set_fact:
+  ansible.builtin.set_fact:
     default_keysite: >-
-      {{ (ansible_distribution_release == "trusty")
+      {{ (ansible_distribution_release == "jammy")
       | ternary("http://nginx.org/keys/nginx_signing.key", "https://nginx.org/keys/nginx_signing.key") }}
 
 - name: "Install: Set NGINX Signing Key URL"
-  set_fact:
+  ansible.builtin.set_fact:
     keysite: "{{ nginx_signing_key | default(default_keysite) }}"
 
 - name: "Install: Add APT NGINX Signing Key"
-  apt_key:
+  ansible.builtin.apt_key:
     url: "{{ keysite }}"
+
+- name: "Install: Set NGINX App-Protect Signing Key URL"
+  ansible.builtin.set_fact:
+    app_protect_keysite: "{{ nginx_app_protect_signing_key }}"
+
+- name: "Install: Add APT NGINX App-Protect Signing Key"
+  ansible.builtin.apt_key:
+    url: "{{ app_protect_keysite }}"
