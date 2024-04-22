@@ -40,54 +40,26 @@
         # target_ip: "{{ lookup('dig', 'fs-d12345.efs.ap-southeast-2.amazonaws.com', '@10.75.0.2') }}"
       register: ip_in_question
 
-    # - name: Use lookup to get IPs
-    #   ansible.builtin.shell:
-    #     cmd: dig {{ VM_host_name }}
-    #     # target_ip: "{{ lookup('dig', 'fs-d12345.efs.ap-southeast-2.amazonaws.com', '@10.75.0.2') }}"
-    #   register: ip_in_question
-
-    - name: show variable from 'host' command
-      ansible.builtin.debug:
-        var: ip_in_question
-
     - name: show just IP from 'host' command
       ansible.builtin.debug:
         msg: >-
           {{ ip_in_question.stdout | regex_findall("[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+") }}
 
-    # - name: Find all address objects
-    #   paloaltonetworks.panos.panos_object_facts:
-    #     provider: "{{ panos_provider }}"
-    #     name_regex: ".*2019.*"
-    #     object_type: "address"
-
-    - name: Hardcode a known IP address for testing
-      ansible.builtin.set_fact:
-        test_ip:
-          - "192.168.1.100"
+# for testing purposes, we are using a known object
+# in the test firewall; eventually use the ip_in_question
+# here with the regex above
 
     - name: find object with known IP
       paloaltonetworks.panos.panos_address_object:
         provider: "{{ panos_provider }}"
         state: gathered
         gathered_filter: "value contains 192.168.1.100"
+        # gathered_filter: "value contains {{ ip_in_question.stdout | regex_findall("[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+") }}"
       register: test_object
 
     - name: show test object address
       ansible.builtin.debug:
         var: test_object
-
-    - name: find address stuff with panos_address_object
-      paloaltonetworks.panos.panos_address_object:
-        provider: "{{ panos_provider }}"
-        state: gathered
-        gathered_filter: "*"
-      #        gathered_filter: "value contains {{ test_ip }}"
-      register: address_stuff
-
-    - name: show address stuff
-      ansible.builtin.debug:
-        var: address_stuff
 
     - name: Get a list rules for our test object
       paloaltonetworks.panos.panos_security_rule:
@@ -96,25 +68,15 @@
       # something like test_object.gathered.name?
         provider: "{{ panos_provider }}"
         state: "gathered"
-        gathered_filter: "destination_ip == Lib-LabWin2019"
+        gathered_filter: "destination_ip contains {{ test_object.gathered[0].name }}"
+        # "destination_ip": [ "Lib-LabWin2019" ]
       register: sec_rules
 
     - name: show rules stuff
       ansible.builtin.debug:
         var: sec_rules
 
-    - name: Get a list of all security rules
-      paloaltonetworks.panos.panos_security_rule:
-        provider: "{{ panos_provider }}"
-        destination_ip: "{{ test_ip }}"
-        state: "gathered"
-        gathered_filter: "*"
-      register: sec_rules
-
-    - name: show rules stuff
-      ansible.builtin.debug:
-        var: sec_rules
-
+# This task needs to use the sec_rules var eventually
     - name: Get the definitions for the rules
       paloaltonetworks.panos.panos_security_rule:
         provider: "{{ panos_provider }}"
