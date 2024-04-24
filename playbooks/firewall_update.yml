@@ -7,9 +7,7 @@
   vars:
     ansible_python_interpreter: /usr/libexec/platform-python
     panos_provider:
-      # ip_address: "{{ secret_ip_address }}"
       ip_address: "{{ provider_IP }}"
-      # api_key: "{{ palo_alto_api_key }}"
       api_key: "{{ provider_API_key }}"
   tasks:
     - name: Install required library for pan-os API call
@@ -18,85 +16,56 @@
           - pan-python
           - pan-os-python
 
-    - name: show interpreter
-      ansible.builtin.debug:
-        var: ansible_python_interpreter
-
-    - name: install python3 dnf
+    - name: install python3 dnf and bind-utils
       ansible.builtin.dnf:
-        name: python3-dnf
+        name:
+          - python3-dnf
+          - bind-utils
         state: present
       become: true
 
-    - name: install bind-utils
-      ansible.builtin.dnf:
-        name: bind-utils
-        state: present
-      become: true
+    # - name: install bind-utils
+    #   ansible.builtin.dnf:
+    #     name: bind-utils
+    #     state: present
+    #   become: true
 
     - name: Get IP from 'host' command
       ansible.builtin.shell:
         cmd: host {{ VM_host_name }}
       register: ip_in_question
 
-    - name: set filter IP
-      ansible.builtin.set_fact:
-        filter_ip: '{{ ip_in_question.stdout | regex_findall("[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+") | first  }}'
-
-    # - name: show filter_ip
-    #   ansible.builtin.debug:
-    #     var: filter_ip
-    # 
     - name: set filter condition
       ansible.builtin.set_fact:
         filter_condition: 'value contains '
 
-    # - name: show just IP from 'host' command
-    #   ansible.builtin.debug:
-    #     msg: >-
-    #       {{ ip_in_question.stdout | regex_findall("[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+") }}
+    - name: set filter IP
+      ansible.builtin.set_fact:
+        filter_ip: '{{ ip_in_question.stdout | regex_findall("[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+") | first  }}'
 
-    - name: create filter from IP and condition
+    - name: create filter from condition and IP
       ansible.builtin.set_fact:
         filter_input: "{{ filter_condition }}{{filter_ip }}"
-
-    - name: show new var
-      ansible.builtin.debug:
-        var: filter_input
-
-# for testing purposes, we are using a known object
-# in the test firewall; eventually use the ip_in_question
-# here with the regex above
-# change the task and var names when we do that
 
     - name: find object from filter
       paloaltonetworks.panos.panos_address_object:
         provider: "{{ panos_provider }}"
         state: gathered
-        # gathered_filter: "value contains 192.168.1.100"
         gathered_filter: "{{ filter_input }}"
       register: test_object
 
     - name: Display the object address
       ansible.builtin.debug:
-        var: test_object
+        msg: "The {{ VM_host_name }} is represented in the firewall by this object: {{ test_object.gathered[0].name }}
 
     - name: Get all rules for the address
       paloaltonetworks.panos.panos_security_rule:
-      # we want all rules where the rule's 'destination_ip' matches
-      # the 'name' field from the test_object . . . 
-      # something like test_object.gathered.name?
         provider: "{{ panos_provider }}"
         state: "gathered"
         gathered_filter: "destination_ip contains {{ test_object.gathered[0].name }}"
-        # "destination_ip": [ "Lib-LabWin2019" ]
       register: sec_rules
 
-    # - name: Display all rules
-    #   ansible.builtin.debug:
-    #     var: sec_rules
-
-    - name: Messing around
+    - name: Display rules for selected VM
       vars: 
         output: "The {{ VM_host_name }} VM allows these connections:\n
             {% for item in sec_rules.gathered %}
