@@ -1,0 +1,53 @@
+---
+# tasks file for roles/postfix
+- name: Postfix | Install Postfix
+  ansible.builtin.apt:
+    name: postfix
+    state: present
+    update_cache: true
+
+- name: Postfix | Configure Postfix as relay host
+  ansible.builtin.lineinfile:
+    path: "{{ postfix_main_cf }}"
+    line: "{{ item }}"
+    state: present
+  loop:
+    - "relayhost = [{{ proofpoint_host }}]:{{ proofpoint_port }}"
+    - "smtp_use_tls = yes"
+    - "smtp_tls_security_level = may"
+    - "smtp_sasl_auth_enable = yes"
+    - "smtp_sasl_security_options ="
+    - "smtp_sasl_tls_security_options ="
+    - "smtp_sasl_password_maps = hash:/etc/postfix/sasl_passwd"
+    - "smtp_tls_CAfile = /etc/ssl/certs/ca-certificates.crt"
+
+- name: Postfix | Add Proofpoint authentication credentials
+  ansible.builtin.copy:
+    dest: /etc/postfix/sasl_passwd
+    content: |
+      [{{ proofpoint_host }}]:{{ proofpoint_port }} {{ proofpoint_username }}:{{ proofpoint_password }}
+  notify: restart postfix
+
+- name: Postfix | Secure the password file
+  ansible.builtin.file:
+    path: /etc/postfix/sasl_passwd
+    owner: root
+    group: root
+    mode: '0600'
+
+- name: Postfix | Generate Postfix hash map for authentication
+  ansible.builtin.command: postmap /etc/postfix/sasl_passwd
+  notify: restart postfix
+
+- name: Postfix | Configure Postfix relay restrictions
+  ansible.builtin.lineinfile:
+    path: "{{ postfix_main_cf }}"
+    line: "{{ item }}"
+    state: present
+  loop:
+    - "mynetworks = {{ allowed_relay_networks }}"  # Define allowed networks
+    - "relay_domains = mydomain.com"              # Define allowed relay domains
+    - "smtpd_recipient_restrictions = permit_mynetworks, reject_unauth_destination"  # Restrict unauthorized relays
+    - "smtpd_sender_restrictions = reject_unknown_sender_domain"  # Reject if sender's domain is unknown
+    - "smtpd_helo_restrictions = reject_invalid_helo_hostname"   # Reject invalid HELO/EHLO hostnames
+  notify: restart postfix
