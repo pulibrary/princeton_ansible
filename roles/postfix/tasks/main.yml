@@ -12,7 +12,8 @@
     line: "{{ item }}"
     state: present
   loop:
-    - "relayhost = [{{ proofpoint_host }}]:{{ proofpoint_port }}"
+    - "relayhost = [{{ smtp_relay_host }}]:{{ smtp_relay_port }}"
+    - "mynetworks = /etc/postfix/mynetworks"
     - "smtp_use_tls = yes"
     - "smtp_tls_security_level = may"
     - "smtp_sasl_auth_enable = yes"
@@ -25,7 +26,7 @@
   ansible.builtin.copy:
     dest: /etc/postfix/sasl_passwd
     content: |
-      [{{ proofpoint_host }}]:{{ proofpoint_port }} {{ proofpoint_username }}:{{ proofpoint_password }}
+      [{{ smtp_relay_host }}]:{{ smtp_relay_port }} {{ smtp_relay_username }}:{{ smtp_relay_password }}
   notify: restart postfix
 
 - name: Postfix | Secure the password file
@@ -41,13 +42,10 @@
 
 - name: Postfix | Configure Postfix relay restrictions
   ansible.builtin.lineinfile:
-    path: "{{ postfix_main_cf }}"
-    line: "{{ item }}"
-    state: present
-  loop:
-    - "mynetworks = {{ allowed_relay_networks }}"  # Define allowed networks
-    - "relay_domains = mydomain.com"              # Define allowed relay domains
-    - "smtpd_recipient_restrictions = permit_mynetworks, reject_unauth_destination"  # Restrict unauthorized relays
-    - "smtpd_sender_restrictions = reject_unknown_sender_domain"  # Reject if sender's domain is unknown
-    - "smtpd_helo_restrictions = reject_invalid_helo_hostname"   # Reject invalid HELO/EHLO hostnames
+    path: "{{ allowed_relay_hosts }}"
+    line: "{{ relay_new_host }}"
+    create: true
+  when:
+    - running_on_server
+    - not relay_host
   notify: restart postfix
