@@ -92,13 +92,13 @@
         # "destination_ip": [ "Lib-LabWin2019" ]
       register: sec_rules
 
-    - name: Display all rules
-      ansible.builtin.debug:
-        var: sec_rules
+    # - name: Display all rules
+    #   ansible.builtin.debug:
+    #     var: sec_rules
 
     - name: Messing around
       vars: 
-        output: "Firewall rules for {{ VM_host_name }}:
+        output: "Firewall rules for {{ VM_host_name }}:\n
             {% for item in sec_rules.gathered %}
               {{ item.rule_name }}\n
               Destination is {{ item.destination_ip }}\n
@@ -109,17 +109,6 @@
       ansible.builtin.debug:
         msg: "{{ output.split('\n') }}"
 
-    - name: Display deets for first rule
-      ansible.builtin.debug:
-        msg:
-          - Rule names: "{{ sec_rules.gathered|map(attribute='rule_name') }}"
-          - Destinations: "{{ sec_rules.gathered|map(attribute='destination_ip') }}"
-          - Applications: "{{ sec_rules.gathered|map(attribute='application') }}"
-          - Services: "{{ sec_rules.gathered|map(attribute='service') }}"
-          # - "Rule name: {{ sec_rules.gathered[0].rule_name }}"
-          # - "Destination: {{ sec_rules.gathered[0].destination_ip }}"
-          # - "Application: {{ sec_rules.gathered[0].application }}"
-          # - "Service: {{ sec_rules.gathered[0].service }}"
 
 # Future work - create tasks to make changes:
 # - name: Generate a new Palo Alto rule set
