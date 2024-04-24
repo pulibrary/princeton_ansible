@@ -2,7 +2,7 @@
 # by default this playbook runs in the staging environment
 # to run in production, pass '-e runtime_env=production'
 - name: build mailrelay to proofpoint
-  hosts: lib-ponyexpr_{{ runtime_env | default('staging') }}
+  hosts: postfix_{{ runtime_env | default('staging') }}
   remote_user: pulsys
   become: true
   vars_files:
@@ -13,6 +13,7 @@
       when: runtime_env | default('staging') == "production"
     - role: roles/postfix
 
+  post_tasks:
     - name: tell everyone on slack you ran an ansible playbook
       community.general.slack:
         token: "{{ vault_pul_slack_token }}"
