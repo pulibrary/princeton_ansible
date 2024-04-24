@@ -97,13 +97,15 @@
         var: sec_rules
 
     - name: Messing around
-      ansible.builtin.debug:
-        msg: "{% for item in sec_rules.gathered %}
-                Rule name is {{ item.rule_name }}
-                Destination is {{ item.destination_ip }}
-                Application (more restrictive) is {{ item.application }}
-                Service (less restrictive) is {{ item.service }}
+      vars: 
+        output: "{% for item in sec_rules.gathered %}
+                    Rule name is {{ item.rule_name }}
+                    Destination is {{ item.destination_ip }}
+                    Application (more restrictive) is {{ item.application }}
+                    Service (less restrictive) is {{ item.service }}
               {% endfor %}"
+      ansible.builtin.debug:
+        msg: "{{ output.split('\n') }}"
 
     - name: Display deets for first rule
       ansible.builtin.debug:
