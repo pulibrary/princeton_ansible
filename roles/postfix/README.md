@@ -9,7 +9,10 @@ Role Variables
 
 Most use for this role will involve adding your IP address to the allow list with the following variable:
 
-`relay_new_host: 1.2.3.4`
+```bash
+relay_new_host: 1.2.3.4
+postfix_host: "<hostname of pony express>"
+```
 
 
 Example Playbook
