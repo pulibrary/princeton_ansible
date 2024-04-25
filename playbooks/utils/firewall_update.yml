@@ -1,0 +1,88 @@
+---
+# Automates management of the library's Palo Alto firewall
+# This playbook can only be run on Ansible Tower
+#
+- name: View records on the Palo Alto firewall
+  hosts: localhost
+  vars:
+    ansible_python_interpreter: /usr/libexec/platform-python
+    panos_provider:
+      ip_address: "{{ provider_IP }}"
+      api_key: "{{ provider_API_key }}"
+  tasks:
+    - name: Install required library for pan-os API call
+      ansible.builtin.pip:
+        name:
+          - pan-python
+          - pan-os-python
+
+    - name: install python3 dnf and bind-utils
+      ansible.builtin.dnf:
+        name:
+          - python3-dnf
+          - bind-utils
+        state: present
+      become: true
+
+    - name: Get IP from 'host' command
+      ansible.builtin.shell:
+        cmd: host {{ VM_host_name }}
+      register: ip_in_question
+
+    - name: set filter condition
+      ansible.builtin.set_fact:
+        filter_condition: 'value contains '
+
+    - name: set filter IP
+      ansible.builtin.set_fact:
+        filter_ip: '{{ ip_in_question.stdout | regex_findall("[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+") | first  }}'
+
+    - name: create filter from condition and IP
+      ansible.builtin.set_fact:
+        filter_input: "{{ filter_condition }}{{filter_ip }}"
+
+    - name: find object from filter
+      paloaltonetworks.panos.panos_address_object:
+        provider: "{{ panos_provider }}"
+        state: gathered
+        gathered_filter: "{{ filter_input }}"
+      register: test_object
+
+    - name: Display the object address
+      ansible.builtin.debug:
+        msg: "{{ VM_host_name }} is represented in the firewall as: {{ test_object.gathered[0].name }}"
+
+    - name: Get all rules for the address
+      paloaltonetworks.panos.panos_security_rule:
+        provider: "{{ panos_provider }}"
+        state: "gathered"
+        gathered_filter: "destination_ip contains {{ test_object.gathered[0].name }}"
+      register: sec_rules
+
+    - name: Display rules for selected VM
+      vars: 
+        output: "{{ VM_host_name }} allows the following traffic:\n
+            {% for item in sec_rules.gathered %}
+              {{ item.rule_name }}\n
+              Packets that match the signature for these applications {{ item.application }}\n
+              Any packets on the port(s) related to these services {{ item.service }}\n
+              From these source addresses (machine or subnet): {{ item.source_ip }}\n
+              \n
+                 {% endfor %}"
+      ansible.builtin.debug:
+        msg: "{{ output.split('\n') }}"
+
+# Future work - create tasks to make changes:
+# - name: Generate a new Palo Alto rule set
+#   paloaltonetworks.panos.panos_security_rule:
+# - name: Commit new firewall rules
+#   paloaltonetworks.panos.panos_commit_firewall:
+
+# other relevant docs:
+# main collection page: https://paloaltonetworks.github.io/pan-os-ansible/
+# module pages we might need:
+# https://paloaltonetworks.github.io/pan-os-ansible/modules/panos_loadcfg.html
+# https://paloaltonetworks.github.io/pan-os-ansible/modules/panos_nat_rule.html
+# https://paloaltonetworks.github.io/pan-os-ansible/modules/panos_security_rule.html
+# If we need to create objects, see deprecated module for ref:
+# https://paloaltonetworks.github.io/pan-os-ansible/modules/panos_object.html
