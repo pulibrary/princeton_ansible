@@ -28,6 +28,7 @@
     content: |
       [{{ smtp_relay_host }}]:{{ smtp_relay_port }} {{ smtp_relay_username }}:{{ smtp_relay_password }}
     mode: '0644'
+  when: running_on_server
   notify: restart postfix
 
 - name: Postfix | Secure the password file
@@ -36,10 +37,12 @@
     owner: root
     group: root
     mode: '0600'
+  when: running_on_server
 
 - name: Postfix | Generate Postfix hash map for authentication
   ansible.builtin.command: postmap /etc/postfix/sasl_passwd
   changed_when: false
+  when: running_on_server
   notify: restart postfix
 
 - name: Postfix | Configure Postfix relay restrictions
