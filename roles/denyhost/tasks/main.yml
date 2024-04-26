@@ -13,7 +13,7 @@
     backup: false
 
 - name: Register ACME name
-  ansible.builtin.shell: /usr/sbin/acme-client -v denylist.pulcloud.io
+  ansible.builtin.shell: /usr/sbin/acme-client -v {{ gcp_fqdn }}
   changed_when: false
   ignore_errors: true
 
@@ -21,7 +21,7 @@
   ansible.builtin.cron:
     name: "Download current certs"
     hour: "0"
-    job: "/usr/sbin/acme-client denylist.pulcloud.io && rcctl reload nginx && logger 'Updated ssl certs'"
+    job: "/usr/sbin/acme-client {{ gcp_fqdn }} && rcctl reload nginx && logger 'Updated ssl certs'"
     user: root
 
 - name: Deploy full nginx
