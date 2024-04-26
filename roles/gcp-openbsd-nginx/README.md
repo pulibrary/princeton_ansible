@@ -1,15 +1,12 @@
 Role Name
 =========
 
-Manages an OpenBSD vm which is used by panos to add items to a deny list
+Manages an OpenBSD vm on Google Cloud that runs nginx
 
 Requirements
 ------------
 
 DNS registered [at Google Cloud](https://console.cloud.google.com/net-services/dns/zones?referrer=search&project=pul-gcdc)
-
-edit the [files/drop.txt](files/drop.txt) and run the playbook
-
 
 
 Example Playbook

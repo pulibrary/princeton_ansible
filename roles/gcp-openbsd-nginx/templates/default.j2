@@ -8,13 +8,13 @@ error_log  logs/denylist.error.log  info;
     server {
         listen       80;
         listen       [::]:80;
-        server_name  denylist.pulcloud.io;
+        server_name  {{ gcp_fqdn }};
         root         /var/www/htdocs;
 
         access_log  logs/denylist.access.log  main;
 
         # redirect to https server
-        return 301 https://denylist.pulcloud.io$request_uri;
+        return 301 https://{{ gcp_fqdn }}$request_uri;
         #
 
     }
@@ -24,7 +24,7 @@ error_log  logs/denylist.error.log  info;
     #
     server {
         listen       443;
-        server_name  denylist.pulcloud.io;
+        server_name  {{ gcp_fqdn }};
         root         /var/www/htdocs;
 
         # acme
@@ -38,8 +38,8 @@ error_log  logs/denylist.error.log  info;
             root  /var/www/htdocs;
         }
         ssl                  on;
-        ssl_certificate      /etc/ssl/denylist.pulcloud.io.fullchain.pem;
-        ssl_certificate_key  /etc/ssl/private/denylist.pulcloud.io.key;
+        ssl_certificate      /etc/ssl/{{ gcp_fqdn }}.fullchain.pem;
+        ssl_certificate_key  /etc/ssl/private/{{ gcp_fqdn }}.key;
 
         ssl_session_timeout  5m;
         ssl_session_cache    shared:SSL:1m;
