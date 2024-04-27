@@ -10,7 +10,8 @@ Role Variables
 Most use for this role will involve adding your IP address to the allow list with the following variable:
 
 ```bash
-relay_new_host: 1.2.3.4
+relay_add_host: 1.2.3.4
+relay_remove_host: 1.2.3.4
 postfix_host: "<hostname of pony express>"
 ```
 
