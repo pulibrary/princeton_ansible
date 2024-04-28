@@ -1,13 +1,13 @@
 ---
-- name: set up and configure fail2ban
+- name: Nginxplus | set up and configure fail2ban
   ansible.builtin.import_tasks: prerequisites/install-prerequisites.yml
   tags: fail2ban
 
-- name: Adjust file limits on host
+- name: Nginxplus | Adjust file limits on host
   ansible.builtin.import_tasks: adjust_ulimit.yml
   when: nginx_type == "plus"
 
-- name: add nginxplus keys
+- name: Nginxplus | add nginxplus keys
   ansible.builtin.import_tasks: keys/apt-key.yml
 
 - name: Install NGINX
@@ -46,9 +46,16 @@
       when: nginx_debug_output
   when: nginx_enable
 
-- name: make localhost changes
+- name: Nginxplus | make localhost changes
   ansible.builtin.import_tasks: localhost.yml
 
-- name: validate nginx configuration work
+- name: Nginxplus | install keepalived
+  ansible.builtin.apt:
+    name: nginx-ha-keepalived
+    state: present
+    update_cache: true
+  when: nginx_type == "plus"
+
+- name: Nginxplus | validate nginx configuration work
   ansible.builtin.import_tasks: validate.yml
   when: nginx_type == "plus"
