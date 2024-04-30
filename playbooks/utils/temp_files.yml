@@ -1,0 +1,16 @@
+---
+# use this playbook to create a cron job that deletes untouched files in the tmp directory
+# if the 7 day frequency is not enough re-run the playbook with `-e delete_frequency=1`
+- name: root cronjob to delete tmp directory
+  hosts: staging:qa:production
+  remote_user: pulsys
+  become: true
+  tasks:
+
+  - name: Ensure cron job is present to clean up /tmp directory
+    ansible.builtin.cron:
+      name: "Cleanup /tmp directory"
+      user: "root"
+      special_time: "weekly"
+      job: "find /tmp -type f -atime +{{ delete_frequency | default('7')}} -delete"
+      state: present
