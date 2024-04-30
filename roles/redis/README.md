@@ -41,6 +41,7 @@ with, e.g., `ag central_redis.*: group_vars`
 #### Apps using central redis
 - orangelight
 - pulfalight
+- bibdata
 - libwww
     - currently configured using a "prefix" strategy. This may mean it's using
         database 0. Some relevant info:
