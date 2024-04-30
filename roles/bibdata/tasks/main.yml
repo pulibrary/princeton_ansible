@@ -6,19 +6,3 @@
 
 - name: bibdata | include tasks to mount disks
   ansible.builtin.include_tasks: mounts.yml
-
-- name: bibdata | include tasks to set redis config for workers
-  ansible.builtin.include_tasks: redis_overcommit_memory.yml
-  when: "'worker' in inventory_hostname"
-
-- name: bibdata | configure redis for all interfaces
-  ansible.builtin.lineinfile:
-    path: /etc/redis/redis.conf
-    regexp: '^bind 127\.0\.0\.1'
-    line: bind 0.0.0.0
-    owner: redis
-    group: redis
-    mode: '0644'
-  changed_when: false
-  notify:
-    - restart redis
