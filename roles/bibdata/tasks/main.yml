@@ -8,17 +8,21 @@
   ansible.builtin.include_tasks: mounts.yml
 
 - name: bibdata | update rubygems
-  ansible.builtin.command: sudo gem update --system 3.5.7
-  changed_when: false
+  ansible.builtin.command: gem update --system 3.5.7
+  become: true
+  register: update_rubygems
+  changed_when: '"Latest version already installed. Done." not in update_rubygems.stdout'
   tags: rubygems
 
 - name: bibdata | install default bundler
-  ansible.builtin.command: sudo gem install --default bundler:2.5.7
-  changed_when: false
+  ansible.builtin.command: gem install --default bundler:2.5.7
+  become: true
+  register: install_default_bundler
+  changed_when: '"Fetching bundler-2.5.7.gem" in install_default_bundler.stdout'
   tags: rubygems
 
 - name: bibdata | remove old default bundler
-  ansible.builtin.command: sudo rm -rf /usr/local/lib/ruby/gems/3.1.0/specifications/default/bundler-2.5.9.gemspec
-  changed_when: false
+  ansible.builtin.file:
+    path: /usr/local/lib/ruby/gems/3.1.0/specifications/default/bundler-2.5.9.gemspec
+    state: absent
   tags: rubygems
-  notify: restart nginx
