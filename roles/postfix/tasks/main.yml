@@ -1,5 +1,15 @@
 ---
 # tasks file for roles/postfix
+- name: Postfix | add mailname
+  ansible.builtin.copy:
+    dest: "/etc/mailname"
+    content: |
+      "{{ ansible_facts['hostname'] }}"
+    force: false
+    owner: root
+    group: root
+    mode: "0644"
+
 - name: Postfix | Install Postfix
   ansible.builtin.apt:
     name: postfix
@@ -9,7 +19,7 @@
 - name: Postfix | create networks file
   ansible.builtin.copy:
     src: "mynetworks"
-    dest: "{{ allowed_relay_hosts }}"
+    dest: "{{ postfix_allowed_relay_hosts }}"
     owner: root
     group: root
     mode: '0644'
@@ -27,7 +37,7 @@
   ansible.builtin.copy:
     dest: /etc/postfix/sasl_passwd
     content: |
-      [{{ smtp_relay_host }}]:{{ smtp_relay_port }} {{ smtp_relay_username }}:{{ smtp_relay_password }}
+      [{{ postfix_smtp_relay_host }}]:{{ postfix_smtp_relay_port }} {{ postfix_smtp_relay_username }}:{{ postfix_smtp_relay_password }}
     mode: '0644'
   when: running_on_server
   notify: restart postfix
@@ -48,7 +58,7 @@
 
 - name: Postfix | Add Postfix hosts
   ansible.builtin.lineinfile:
-    path: "{{ allowed_relay_hosts }}"
+    path: "{{ postfix_allowed_relay_hosts }}"
     line: "{{ relay_add_host }}"
     state: present
     mode: '0644'
@@ -62,7 +72,7 @@
 
 - name: Postfix | Remove Postfix hosts
   ansible.builtin.lineinfile:
-    path: "{{ allowed_relay_hosts }}"
+    path: "{{ postfix_allowed_relay_hosts }}"
     line: "{{ relay_remove_host }}"
     state: absent
     mode: '0644'
