@@ -1,17 +1,27 @@
 ---
-- name: Install GPG Agent
+- name: Nginxplus | Install GPG Agent
   ansible.builtin.apt:
     name: gpg-agent
     state: present
     update_cache: true
 
-- name: "Install: NGINX Signing Key URL"
+- name: Nginxplus | Install NGINX Signing Key URL focal
+  ansible.builtin.set_fact:
+    default_keysite: >-
+      {{ (ansible_distribution_release == "focal")
+      | ternary("http://nginx.org/keys/nginx_signing.key", "https://nginx.org/keys/nginx_signing.key") }}
+  when:
+    - ansible_distribution_release == "focal"
+
+- name: Nginxplus | Install NGINX Signing Key URL jammy
   ansible.builtin.set_fact:
     default_keysite: >-
       {{ (ansible_distribution_release == "jammy")
       | ternary("http://nginx.org/keys/nginx_signing.key", "https://nginx.org/keys/nginx_signing.key") }}
+  when:
+    - ansible_distribution_release == "jammy"
 
-- name: "Install: Set NGINX Signing Key URL"
+- name: Nginxplus | Install Set NGINX Signing Key URL
   ansible.builtin.set_fact:
     keysite: "{{ nginx_signing_key | default(default_keysite) }}"
 
