@@ -2,6 +2,12 @@
 # To run the playbook:
 # ansible-playbook playbooks/utils/checkmk_agent.yml --limit=<machine/group> -e checkmk_folder=linux/rdss
 # folder names must be all lower case and should not begin with a slash
+# rule_group environment variable specifies which rule group to apply to the hosts, by default the rails rule group will be applied
+# to run in with the another group, pass '-e rule_group=group_name'
+# by default this playbook runs in the staging environment
+# to run in production, pass '-e runtime_env=production'
+# For example `ansible-playbook playbooks/utils/checkmk_add_rule.yml --ask-vault-pass --limit=pdc-describe-staging2.princeton.edu` 
+#  will run with the staging runtime environment and the rails rule group on pdc-describe-staging2
 
 - name: Install CheckMk agent on host
   hosts: staging:qa:production
@@ -10,17 +16,24 @@
 
   vars_files:
     - ../../group_vars/all/vault.yml
-    - ../../group_vars/all/checkmk.yml
-    - ../../group_vars/checkmk/rule.yml
+    - ../../group_vars/checkmk/{{ runtime_env | default('staging') }}.yml
+    - ../../group_vars/checkmk/rule_{{ rule_group | default('rails') }}.yml
+
+  pre_tasks:
+      - name: stop playbook if you didn't use --limit
+        fail:
+          msg: "you must use -l or --limit"
+        when: ansible_limit is not defined
+        run_once: true
 
   tasks:
-    - name: "Create a rule for systemd processes to ignore"
+    - name: "Create the rules"
       checkmk.general.rule:
         server_url: "{{checkmk_agent_server_protocol}}://{{ checkmk_agent_server }}"
         site: "{{ checkmk_agent_site }}"
         automation_user: "{{ checkmk_agent_user }}"
         automation_secret: "{{ checkmk_agent_pass }}"
-        ruleset: "checkgroup_parameters:systemd_services_summary"
+        ruleset: "{{ item.ruleset }}"
         rule:
           conditions: {
             "host_labels": [],
@@ -34,17 +47,26 @@
             "service_labels": []
           }
           properties: {
-            "comment": "Allow systemd processes to be monitored on {{ inventory_hostname }}",
-            "description": "{{ inventory_hostname }} - Alert on Disabled Systemd",
+            "comment": "{{ item.comment }} on {{ inventory_hostname }}",
+            "description": "{{ inventory_hostname }} - {{ item.name }}",
             "disabled": false,
             "documentation_url": "https://github.com/Checkmk/ansible-collection-checkmk.general/blob/main/plugins/modules/rules.py"
           }
-          value_raw: "{{ systemd_value_raw }}"
+          value_raw: "{{ item.value_raw }}"
           location:
-            folder: "/linux/rdss"
+            folder: "{{ item.folder }}"
         state: "present"
       register: response
+      with_items: "{{ checkmk_rules }}"
 
+    - name: "Start activation including foreign changes."
+      checkmk.general.activation:
+        server_url: "{{checkmk_agent_server_protocol}}://{{ checkmk_agent_server }}"
+        site: "{{ checkmk_agent_site }}"
+        automation_user: "{{ checkmk_agent_user }}"
+        automation_secret: "{{ checkmk_agent_pass }}"
+        force_foreign_changes: 'true'
+      
     - name: Show the ID of the new rule
       ansible.builtin.debug:
-        msg: "RULE ID : {{ response.id }}"
+        msg: "RULE ID : {{ response }}"
