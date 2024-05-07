@@ -62,13 +62,13 @@ molecule test
 
 ## Create a new role
 In all the steps below substitute your role name for `your_new_role`
-1. Initialize the role with molecule.
+1. Initialize the role with [ansible-galaxy](https://www.redhat.com/sysadmin/developing-ansible-role)
    Run the following command from the root of this repo:
 
    ```bash
    export your_new_role=<fill in the role name here>
    cd roles
-   molecule init role $your_new_role
+   ansible-galaxy role init $your_new_role
    cd ..
    ```
 1. Set up to run from github actions `vi .github/workflows/molecule_tests.yml` add for your role at the end matrix of the roles
