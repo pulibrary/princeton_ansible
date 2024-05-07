@@ -17,12 +17,16 @@
   - name: Populate service facts
     ansible.builtin.service_facts:
 
+  - name: Populate package facts
+    ansible.builtin.package_facts:
+
   - name: Create bigfix directory
     ansible.builtin.file:
       path: /etc/opt/BESClient
       state: directory
       mode: '0755'
-    when: "ansible_facts.services['besclient.service'] is not defined"
+    when:
+      - "ansible_facts.services['besclient.service'] is not defined"
 
   - name: Download BigFix masthead
     ansible.builtin.get_url:
@@ -49,7 +53,8 @@
       owner: pulsys
       group: pulsys
       mode: "0644"
-    when: "ansible_facts.services['falcon-sensor.service'] is not defined"
+    when:
+      - "'falcon-sensor' not in ansible_facts.packages"
 
   - name: install BESClient agent
     ansible.builtin.apt:
@@ -63,19 +68,34 @@
   - name: install crowdstrike falcon sensor agent
     ansible.builtin.apt:
       deb: "/tmp/falcon-sensor_7.05.0-16004_amd64.deb"
-    when: "ansible_facts.services['falcon-sensor.service'] is not defined"
+    when:
+      - "'falcon-sensor' not in ansible_facts.packages"
 
   - name: launch crowdstrike falcon agent
     command: /opt/CrowdStrike/falconctl -s --cid={{ princeton_cid }}
     become: true
-    when: "not 'falcon-sensor.service' in services"
+    when:
+      - "'falcon-sensor' not in ansible_facts.packages"
 
   - name: start and enable crowdstrike falcon agent
     ansible.builtin.systemd_service:
       name: "falcon-sensor"
       enabled: true
       state: started
-    when: "ansible_facts.services['falcon-sensor.service'] is not defined"
+    when:
+      - "'falcon-sensor' not in ansible_facts.packages"
+
+  - name: Check for rapid7 path
+    ansible.builtin.stat:
+      path: /opt/rapid7
+    register: rapid7_home
+
+  - name: create new rapid7 directory
+    ansible.builtin.file:
+      path: /opt/rapid7
+      state: directory
+    when:
+      - not rapid7_home.stat.exists
 
   - name: Copy Rapid7 install script to box
     ansible.builtin.copy:
@@ -85,17 +105,20 @@
       group: pulsys
       mode: '0744'
     become: true
-    when: "ansible_facts.services['ir_agent.service'] is not defined"
+    when:
+      - not rapid7_home.stat.exists
 
   - name: Execute Rapid7 install script
     ansible.builtin.shell: sudo /opt/rapid7/Rapid7_agent_installer.sh install_start --token {{ vault_Rapid7_token }} --attributes="Library Systems"
-    when: "ansible_facts.services['ir_agent.service'] is not defined"
+    when:
+      - not rapid7_home.stat.exists
 
   - name: Restart or start rapid7
     ansible.builtin.service:
       name: ir_agent
       state: started
-    when: "ansible_facts.services['ir_agent.service'] is not defined"
+    when:
+      - not rapid7_home.stat.exists
 
   post_tasks:
     - name: send information to slack
