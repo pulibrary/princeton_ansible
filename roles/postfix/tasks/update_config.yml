@@ -6,22 +6,7 @@
     owner: root
     group: root
     mode: '0644'
-  delegate_to: "{{ postfix_host }}"
   when:
     - running_on_server
-    - not relay_host
   tags: update_config
-  notify: restart postfix
-
-- name: Postfix | Remove Postfix hosts
-  ansible.builtin.lineinfile:
-    path: "{{ postfix_allowed_relay_hosts }}"
-    line: "{{ relay_remove_host }}"
-    state: absent
-    mode: '0644'
-  delegate_to: "{{ postfix_host }}"
-  when:
-    - running_on_server
-    - not relay_host
-  tags: relay_remove update_config
   notify: restart postfix
