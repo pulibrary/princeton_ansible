@@ -8,15 +8,65 @@ lint: |
   yamllint .
   ansible-lint
 platforms:
-  - name: instance
+  - name: nomadserver1
     image: "quay.io/pulibrary/jammy-ansible:latest"
     command: ""
     volumes:
-      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
     privileged: true
     pre_build_image: true
     groups:
       - nomad_servers
+    cgroupns_mode: host # make docker work
+    capabilities:
+      - SYS_ADMIN
+      - SYS_RAWIO
+    dns_servers:
+      - 127.0.0.1
+      - 8.8.8.8
+    network_mode: "nomad" # make dockers talk to each other
+    networks:
+      - name: "nomad"
+    published_ports:
+      - 127.0.0.1:8500:8500 # consul port
+  - name: nomadserver2
+    image: "quay.io/pulibrary/jammy-ansible:latest"
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    privileged: true
+    pre_build_image: true
+    groups:
+      - nomad_servers
+    cgroupns_mode: host # make docker work
+    capabilities:
+      - SYS_ADMIN
+      - SYS_RAWIO
+    dns_servers:
+      - 127.0.0.1
+      - 8.8.8.8
+    network_mode: "nomad" # make dockers talk to each other
+    networks:
+      - name: "nomad"
+  - name: nomadserver3
+    image: "quay.io/pulibrary/jammy-ansible:latest"
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    privileged: true
+    pre_build_image: true
+    groups:
+      - nomad_servers
+    cgroupns_mode: host # make docker work
+    capabilities:
+      - SYS_ADMIN
+      - SYS_RAWIO
+    dns_servers:
+      - 127.0.0.1
+      - 8.8.8.8
+    network_mode: "nomad" # make dockers talk to each other
+    networks:
+      - name: "nomad"
 provisioner:
   name: ansible
   log: true
