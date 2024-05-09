@@ -62,13 +62,13 @@ molecule test
 
 ## Create a new role
 In all the steps below substitute your role name for `your_new_role`
-1. Initialize the role with molecule.
+1. Initialize the role with [ansible-galaxy](https://www.redhat.com/sysadmin/developing-ansible-role)
    Run the following command from the root of this repo:
 
    ```bash
    export your_new_role=<fill in the role name here>
    cd roles
-   molecule init role $your_new_role
+   ansible-galaxy role init $your_new_role
    cd ..
    ```
 1. Set up to run from github actions `vi .github/workflows/molecule_tests.yml` add for your role at the end matrix of the roles
@@ -77,23 +77,16 @@ In all the steps below substitute your role name for `your_new_role`
    ```
 1. Setup the directory to run molecule
 
-   1. copy over the root molecule.yml
+   1. copy all molecule and lint files (note you need the `.` in the command
+      below to get the hidden files)
       ```bash
-      cp roles/example/molecule.yml roles/$your_new_role/molecule/default
-      cp roles/example/main.yml roles/$your_new_role/meta/main.yml
-      cp roles/example/.ansible-lint roles/$your_new_role/.ansible-lint
-      cp roles/example/yamllint roles/$your_new_role/.yamllint
+      cp roles/example/. $your_new_role
       ```
 
    1. edit `vi roles/$your_new_role/meta/main.yml` and add a description
 
    1. edit `vi roles/$your_new_role/molecule/default/converge.yml`
-      1. Add:
-         ```
-         vars:
-           - running_on_server: false
-         ```
-      1. replace `name: roles/your_new_role` with `name: your_new_role`
+      1. replace `name: Converge` with `name: your_new_role`
 
 1. Test that your role is now working
    All tests should pass
@@ -108,10 +101,7 @@ In all the steps below substitute your role name for `your_new_role`
    1. Add an `inventory/all_projects/your_new_project` file and list all VMs and other resources. Group them by environment - see any of the existing files for examples.
    1. Add your new groups to the relevant files in the `inventory/by_environment/` directory. For example, add `your_new_project_production` to `inventory/by_environment/production`. Try to keep the lists alphabetized.
 
-## Generating Molecule Tests
-
-
-## Molecule tests
+## Running Molecule tests
 
 You can run `molecule test` from either the root directory or the role directory (for example roles/example)
 If you are writing tests we have found it is easier to test just your examples by running from the role directory.
