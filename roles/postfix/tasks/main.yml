@@ -17,8 +17,8 @@
     update_cache: true
 
 - name: Postfix | create networks file
-  ansible.builtin.copy:
-    src: "mynetworks"
+  ansible.builtin.template:
+    src: "mynetworks.j2"
     dest: "{{ postfix_allowed_relay_hosts }}"
     owner: root
     group: root
@@ -56,29 +56,6 @@
   when: running_on_server
   notify: restart postfix
 
-- name: Postfix | Add Postfix hosts
-  ansible.builtin.lineinfile:
-    path: "{{ postfix_allowed_relay_hosts }}"
-    line: "{{ relay_add_host }}"
-    state: present
-    mode: '0644'
-    insertafter: EOF
-  delegate_to: "{{ postfix_host }}"
-  when:
-    - running_on_server
-    - not relay_host
-  tags: relay_add
-  notify: restart postfix
-
-- name: Postfix | Remove Postfix hosts
-  ansible.builtin.lineinfile:
-    path: "{{ postfix_allowed_relay_hosts }}"
-    line: "{{ relay_remove_host }}"
-    state: absent
-    mode: '0644'
-  delegate_to: "{{ postfix_host }}"
-  when:
-    - running_on_server
-    - not relay_host
-  tags: relay_remove
-  notify: restart postfix
+- name: Postfix | Add relay host
+  ansible.builtin.include_tasks: update_config.yml
+  tags: update_config
