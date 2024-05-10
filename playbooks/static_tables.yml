@@ -6,7 +6,8 @@
   remote_user: pulsys
   become: true
   vars:
-    desired_nodejs_version: v20.13.1
+    desired_nodejs_version: v20.11.1
+    capistrano_directory: 'static_tables'
   # vars_files:
   #   - ../group_vars/static_tables/common.yml
   #   - ../group_vars/static_tables/{{ runtime_env | default('staging') }}.yml
@@ -17,14 +18,11 @@
     - role: deploy_user
     - role: capistrano
     - role: nodejs
+    - role: nginxplus
+    - role: static_tables
     # - role: datadog
     #   when: runtime_env | default('staging') == "production"
 
-  tasks:
-  - name: uninstall Apache
-    ansible.builtin.apt:
-      name: apache2
-      state: absent
   post_tasks:
     - name: tell everyone on slack you ran an ansible playbook
       community.general.slack:
