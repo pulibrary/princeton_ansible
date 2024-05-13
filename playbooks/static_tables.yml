@@ -1,0 +1,31 @@
+---
+# by default this playbook runs in the staging environment
+# to run in production, pass '-e runtime_env=production'
+- name: build the Static Tables site
+  hosts: static_tables_{{ runtime_env | default('staging') }}
+  remote_user: pulsys
+  become: true
+  vars:
+    desired_nodejs_version: v20.11.1
+    capistrano_directory: 'static_tables'
+  # vars_files:
+  #   - ../group_vars/static_tables/common.yml
+  #   - ../group_vars/static_tables/{{ runtime_env | default('staging') }}.yml
+  #   - ../group_vars/static_tables/vault.yml
+  roles:
+    # Uncomment common role when it is removed from deploy_user role
+    # - role: roles/common
+    - role: deploy_user
+    - role: capistrano
+    - role: nodejs
+    - role: nginxplus
+    - role: static_tables
+    # - role: datadog
+    #   when: runtime_env | default('staging') == "production"
+
+  post_tasks:
+    - name: tell everyone on slack you ran an ansible playbook
+      community.general.slack:
+        token: "{{ vault_pul_slack_token }}"
+        msg: "Ansible ran `{{ ansible_play_name }}` on {{ inventory_hostname }}"
+        channel: "{{ slack_alerts_channel }}"
