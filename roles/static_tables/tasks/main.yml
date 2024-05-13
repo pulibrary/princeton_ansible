@@ -21,3 +21,22 @@
   ansible.builtin.apt:
     name: apache2
     state: absent
+
+- name: static_tables | temporary step - make repos safe
+  ansible.builtin.command: git config --global --add safe.directory /opt/static_tables/current
+  become: true
+  tags:
+    - deploy_site
+
+- name: static_tables | temporary step - deploy using git 
+  ansible.builtin.git:
+    repo: https://github.com/pulibrary/static-tables.git
+    dest: /opt/static_tables/current
+    clone: true
+    update: true
+    force: true
+    version: main
+  become: true
+  notify: restart nginx
+  tags:
+    - deploy_site
