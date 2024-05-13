@@ -4,7 +4,7 @@
     url: https://dl.yarnpkg.com/debian/pubkey.gpg
     state: present
   register: yarn_pkg_registered
-  when: "{{ use_yarn }}"
+  when: use_yarn
 
 - name: nodejs | get yarn keys from other sources
   ansible.builtin.apt_key:
@@ -13,7 +13,7 @@
     state: present
   when: 
     - yarn_pkg_registered is failed
-    - "{{ use_yarn }}"
+    - use_yarn
   register: yarn_key_registered
   loop:
     - "hkp://pool.sks-keyservers.net"
@@ -26,7 +26,7 @@
   ansible.builtin.apt_repository:
     repo: "{{ nodejs__yarn_upstream_repository }}"
     state: present
-  when: "{{ use_yarn }}"
+  when: use_yarn
 
 - name: nodejs | uninstall any apt installed node
   ansible.builtin.apt:
@@ -57,4 +57,4 @@
   ansible.builtin.apt:
     name: ["yarn"]
     state: present
-  when: "{{ use_yarn }}"
+  when: use_yarn
