@@ -6,11 +6,10 @@
   gather_facts: false
   tasks:
     - name: register output of consul members
-      command:  consul members
+      command: consul members
       environment:
         CONSUL_HTTP_TOKEN: '{{ consul_acl_master_token }}'
       register: consul_members_results
-      ignore_errors: false
     - name: test consul cluster has members
       assert:
         that:
@@ -20,14 +19,15 @@
     - name: register output of consul DNS command
       command: dig consul.service.consul SRV
       register: consul_dns_results
-      ignore_errors: false
     - name: test consul dns has consul members
       assert:
         that:
           - "'ANSWER SECTION:' in consul_dns_results.stdout"
           - "'ANSWER: 3' in consul_dns_results.stdout"
-
-  # Tests
-  # 1. Find DNS entries: consul.service.consul
-  #   Validates that DNS server is working and that consul and nomad are
-  #   connected
+    - name: register output of nomad command
+      command: nomad operator raft list-peers
+      register: nomad_operator_raft_results
+    - name: test nomad cluster registration
+      assert:
+        that:
+          - "'nomadserver1' in nomad_operator_raft_results.stdout"

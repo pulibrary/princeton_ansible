@@ -4,11 +4,13 @@
   ansible.builtin.include_role:
     name: 'ansible-consul'
     public: true
+
 # Set up a runner host
 - name: 'nomad-node | register a host to run unique commands'
   set_fact:
     unique_command_runner: '{{ ansible_hostname }}'
   run_once: true
+
 # Set up DNS ACLs
 # Get current tokens
 - name: 'nomad-node | Register existing tokens'
@@ -36,7 +38,10 @@
     cmd: "consul acl set-agent-token dns '{{ consul_dns_token }}'"
   environment:
     CONSUL_HTTP_TOKEN: '{{ consul_acl_master_token }}'
-# Create a DNS token
-# Register
+
+- name: 'nomad-node | Install nomad'
+  ansible.builtin.include_role:
+    name: 'ansible-nomad'
+    public: true
 # Set up Nomad ACLs
 # Other ACLs??
