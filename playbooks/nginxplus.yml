@@ -41,7 +41,7 @@
   roles:
     - role: ../roles/nginxplus
 
-- name: restart nginx with updated loadbalancer configuration
+- name: restart nginx, load new config
   hosts: nginxplus_production
   remote_user: pulsys
   strategy: linear
@@ -60,7 +60,7 @@
     - name: tell everyone on slack you ran an ansible playbook
       community.general.slack:
         token: "{{ vault_pul_slack_token }}"
-        msg: "Ansible ran `{{ ansible_play_name }}` on {{ inventory_hostname }}"
+        msg: "Ansible ran `{{ ansible_play_name }}` on {{ inventory_hostname }}. Honeybadger may log connection errors around this time due to the nginx restart."
         channel: "{{ item }}"
       loop: "{{ slack_alerts_channel }}"
       tags: always
