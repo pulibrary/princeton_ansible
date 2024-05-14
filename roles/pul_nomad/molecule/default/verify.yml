@@ -5,6 +5,20 @@
   hosts: all
   gather_facts: false
   tasks:
-    - name: Example assertion
-      ansible.builtin.assert:
-        that: true
+    - name: test for consul members
+      command:  consul members
+      environment:
+        CONSUL_HTTP_TOKEN: '{{ consul_acl_master_token }}'
+      register: consul_members_results
+      ignore_errors: false
+    - name: assert consul cluster has members
+      assert:
+        that:
+          - "'nomadserver1' in consul_members_results.stdout"
+          - "'nomadserver2' in consul_members_results.stdout"
+          - "'nomadserver3' in consul_members_results.stdout"
+
+  # Tests
+  # 1. Find DNS entries: consul.service.consul
+  #   Validates that DNS server is working and that consul and nomad are
+  #   connected
