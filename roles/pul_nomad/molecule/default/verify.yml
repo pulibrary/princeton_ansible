@@ -5,18 +5,27 @@
   hosts: all
   gather_facts: false
   tasks:
-    - name: test for consul members
+    - name: register output of consul members
       command:  consul members
       environment:
         CONSUL_HTTP_TOKEN: '{{ consul_acl_master_token }}'
       register: consul_members_results
       ignore_errors: false
-    - name: assert consul cluster has members
+    - name: test consul cluster has members
       assert:
         that:
           - "'nomadserver1' in consul_members_results.stdout"
           - "'nomadserver2' in consul_members_results.stdout"
           - "'nomadserver3' in consul_members_results.stdout"
+    - name: register output of consul DNS command
+      command: dig consul.service.consul SRV
+      register: consul_dns_results
+      ignore_errors: false
+    - name: test consul dns has consul members
+      assert:
+        that:
+          - "'ANSWER SECTION:' in consul_dns_results.stdout"
+          - "'ANSWER: 3' in consul_dns_results.stdout"
 
   # Tests
   # 1. Find DNS entries: consul.service.consul
