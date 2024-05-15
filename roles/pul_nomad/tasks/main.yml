@@ -41,34 +41,34 @@
 
 # Consul setup for nomad
 
-- name: 'nomad-node | Create Nomad Policy to reference'
+- name: 'pul_nomad | Create Nomad Policy to reference'
   ansible.builtin.copy:
-    src: nomad-node-policy.hcl
-    dest: "/etc/consul/nomad-node-policy.hcl"
+    src: pul_nomad_policy.hcl
+    dest: "/etc/consul/pul_nomad_policy.hcl"
     owner: "{{ consul_user }}"
     group: "{{ consul_group }}"
 
-- name: 'nomad-node | Register existing policies'
+- name: 'pul_nomad | Register existing policies'
   ansible.builtin.shell:
     cmd: "consul acl policy list -format json"
   environment:
     CONSUL_HTTP_TOKEN: '{{ consul_acl_master_token }}'
   register: policies
 
-- name: 'nomad-node | Store existing_consul_policies'
+- name: 'pul_nomad | Store existing_consul_policies'
   set_fact:
     existing_consul_policies: "{{ policies.stdout | from_json | map(attribute='Name') }}"
 
-- name: 'nomad-node | Install Nomad Consul Policy'
+- name: 'pul_nomad | Install Nomad Consul Policy'
   ansible.builtin.shell:
-    cmd: "consul acl policy create -name 'nomad-agents' -description 'Policy for Nomad agents' -rules '@/etc/consul/nomad-node-policy.hcl'"
+    cmd: "consul acl policy create -name 'nomad-agents' -description 'Policy for Nomad agents' -rules '@/etc/consul/pul_nomad_policy.hcl'"
   environment:
     CONSUL_HTTP_TOKEN: '{{ consul_acl_master_token }}'
   when:
     - "unique_command_runner == ansible_hostname"
     - "'nomad-agents' not in existing_consul_policies"
 
-- name: 'nomad-node | Create nomad ACL token'
+- name: 'pul_nomad | Create nomad ACL token'
   ansible.builtin.shell:
     cmd: "consul acl token create -policy-name 'nomad-agents' -secret '{{ nomad_consul_token }}'"
   environment:
@@ -82,11 +82,27 @@
     name: 'ansible-nomad'
     public: true
 
+- name: 'pul_nomad | Register existing nomad acl tokens'
+  ansible.builtin.shell:
+    cmd: "nomad acl token list || true"
+  environment:
+    NOMAD_TOKEN: '{{ pul_nomad_management_token }}'
+  register: nomad_acl_tokens
+  when:
+    - "unique_command_runner == ansible_hostname"
+
+- name: 'pul_nomad | Store existing_nomad_acl_tokens'
+  set_fact:
+    existing_nomad_acl_tokens: "{{ nomad_acl_tokens.stdout }}"
+  when:
+    - "unique_command_runner == ansible_hostname"
+
 - name: 'pul_nomad | Bootstrap nomad'
   ansible.builtin.command:
     cmd: nomad acl bootstrap -
     stdin: '{{ pul_nomad_management_token }}'
   when:
     - "unique_command_runner == ansible_hostname"
+    - "'Bootstrap Token' not in existing_nomad_acl_tokens"
 # Set up Nomad ACLs
 # Other ACLs??
