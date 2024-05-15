@@ -1,30 +1,30 @@
 ---
 # tasks file for pul_nomad
-- name: 'nomad-node | Install consul'
+- name: 'pul_nomad | Install consul'
   ansible.builtin.include_role:
     name: 'ansible-consul'
     public: true
 
 # Set up a runner host
-- name: 'nomad-node | register a host to run unique commands'
+- name: 'pul_nomad | register a host to run unique commands'
   set_fact:
     unique_command_runner: '{{ ansible_hostname }}'
   run_once: true
 
 # Set up DNS ACLs
 # Get current tokens
-- name: 'nomad-node | Register existing tokens'
+- name: 'pul_nomad | Register existing tokens'
   ansible.builtin.shell:
     cmd: "consul acl token list -format json"
   environment:
     CONSUL_HTTP_TOKEN: '{{ consul_acl_master_token }}'
   register: tokens
 
-- name: 'nomad-node | Store existing_consul_tokens'
+- name: 'pul_nomad | Store existing_consul_tokens'
   set_fact:
     existing_consul_tokens: "{{ tokens.stdout | from_json | map(attribute='SecretID') }}"
 
-- name: 'nomad-node | Create DNS ACL token'
+- name: 'pul_nomad | Create DNS ACL token'
   ansible.builtin.shell:
     cmd: "consul acl token create -templated-policy 'builtin/dns' -secret '{{ consul_dns_token }}'"
   environment:
@@ -33,13 +33,51 @@
     - "unique_command_runner == ansible_hostname"
     - "consul_dns_token not in existing_consul_tokens"
 
-- name: 'nomad-node | Assign DNS ACL token'
+- name: 'pul_nomad | Assign DNS ACL token'
   ansible.builtin.shell:
     cmd: "consul acl set-agent-token dns '{{ consul_dns_token }}'"
   environment:
     CONSUL_HTTP_TOKEN: '{{ consul_acl_master_token }}'
 
-- name: 'nomad-node | Install nomad'
+# Consul setup for nomad
+
+- name: 'nomad-node | Create Nomad Policy to reference'
+  ansible.builtin.file:
+    src: nomad-node-policy.hcl
+    dest: "/etc/consul/nomad-node-policy.hcl"
+    owner: "{{ consul_user }}"
+    group: "{{ consul_group }}"
+
+- name: 'nomad-node | Register existing policies'
+  ansible.builtin.shell:
+    cmd: "consul acl policy list -format json"
+  environment:
+    CONSUL_HTTP_TOKEN: '{{ consul_acl_master_token }}'
+  register: policies
+
+- name: 'nomad-node | Store existing_consul_policies'
+  set_fact:
+    existing_consul_policies: "{{ policies.stdout | from_json | map(attribute='Name') }}"
+
+- name: 'nomad-node | Install Nomad Consul Policy'
+  ansible.builtin.shell:
+    cmd: "consul acl policy create -name 'nomad-agents' -description 'Policy for Nomad agents' -rules '@/etc/consul/nomad-node-policy.hcl'"
+  environment:
+    CONSUL_HTTP_TOKEN: '{{ consul_acl_master_token }}'
+  when:
+    - "unique_command_runner == ansible_hostname"
+    - "'nomad-agents' not in existing_consul_policies"
+
+- name: 'nomad-node | Create nomad ACL token'
+  ansible.builtin.shell:
+    cmd: "consul acl token create -policy-name 'nomad-agents' -secret '{{ consul_nomad_token }}'"
+  environment:
+    CONSUL_HTTP_TOKEN: '{{ consul_acl_master_token }}'
+  when:
+    - "unique_command_runner == ansible_hostname"
+    - "consul_nomad_token not in existing_consul_tokens"
+
+- name: 'pul_nomad | Install nomad'
   ansible.builtin.include_role:
     name: 'ansible-nomad'
     public: true
