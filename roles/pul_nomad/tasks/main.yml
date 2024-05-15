@@ -42,7 +42,7 @@
 # Consul setup for nomad
 
 - name: 'nomad-node | Create Nomad Policy to reference'
-  ansible.builtin.file:
+  ansible.builtin.copy:
     src: nomad-node-policy.hcl
     dest: "/etc/consul/nomad-node-policy.hcl"
     owner: "{{ consul_user }}"
@@ -70,12 +70,12 @@
 
 - name: 'nomad-node | Create nomad ACL token'
   ansible.builtin.shell:
-    cmd: "consul acl token create -policy-name 'nomad-agents' -secret '{{ consul_nomad_token }}'"
+    cmd: "consul acl token create -policy-name 'nomad-agents' -secret '{{ nomad_consul_token }}'"
   environment:
     CONSUL_HTTP_TOKEN: '{{ consul_acl_master_token }}'
   when:
     - "unique_command_runner == ansible_hostname"
-    - "consul_nomad_token not in existing_consul_tokens"
+    - "nomad_consul_token not in existing_consul_tokens"
 
 - name: 'pul_nomad | Install nomad'
   ansible.builtin.include_role:
