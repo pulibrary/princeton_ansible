@@ -42,6 +42,9 @@ Values for passenger configuration directives inside `nginx.conf`. These default
     nginx_keepalive_timeout: "65"
     nginx_remove_default_vhost: true
 
+optional variable: `passenger_max_pool_size`: if you set this the role will set a number of passenger processes. passenger default is 6. also this will make the role pre-warm your site.
+
+
 Nginx directives.
 
 ## Dependencies
