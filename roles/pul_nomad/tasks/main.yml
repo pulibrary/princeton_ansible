@@ -24,6 +24,28 @@
   set_fact:
     existing_consul_tokens: "{{ tokens.stdout | from_json | map(attribute='SecretID') }}"
 
+- name: 'nomad-node | Register existing node identities'
+  set_fact:
+    existing_node_names: "{{ tokens.stdout | from_json | community.general.json_query('[*].NodeIdentities[].NodeName') }}"
+
+- name: 'nomad-node | Generate Consul ACL Agent Token'
+  ansible.builtin.shell:
+    cmd: "consul acl token create -node-identity '{{ inventory_hostname }}:dc1' -format json"
+  when:
+    - "inventory_hostname not in existing_node_names"
+  environment:
+    CONSUL_HTTP_TOKEN: '{{ consul_acl_master_token }}'
+  register: created_agent_token
+
+- name: 'nomad-node | Set Consul ACL Agent Token'
+  ansible.builtin.shell:
+    cmd: "consul acl set-agent-token agent {{ created_agent_token.stdout | from_json | community.general.json_query('SecretID')}}"
+  environment:
+    CONSUL_HTTP_TOKEN: '{{ consul_acl_master_token }}'
+  when:
+    - "inventory_hostname not in existing_node_names"
+    - created_agent_token
+
 - name: 'pul_nomad | Create DNS ACL token'
   ansible.builtin.shell:
     cmd: "consul acl token create -templated-policy 'builtin/dns' -secret '{{ consul_dns_token }}'"
