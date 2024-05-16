@@ -91,18 +91,10 @@
   when:
     - "unique_command_runner == ansible_hostname"
 
-- name: 'pul_nomad | Store existing_nomad_acl_tokens'
-  set_fact:
-    existing_nomad_acl_tokens: "{{ nomad_acl_tokens.stdout }}"
-  when:
-    - "unique_command_runner == ansible_hostname"
-
 - name: 'pul_nomad | Bootstrap nomad'
   ansible.builtin.command:
     cmd: nomad acl bootstrap -
     stdin: '{{ pul_nomad_management_token }}'
   when:
     - "unique_command_runner == ansible_hostname"
-    - "'Bootstrap Token' not in existing_nomad_acl_tokens"
-# Set up Nomad ACLs
-# Other ACLs??
+    - "'Bootstrap Token' not in nomad_acl_tokens.stdout "
