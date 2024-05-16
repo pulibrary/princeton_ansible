@@ -16,6 +16,7 @@
           - "'nomadserver1' in consul_members_results.stdout"
           - "'nomadserver2' in consul_members_results.stdout"
           - "'nomadserver3' in consul_members_results.stdout"
+          - "'nomadclient1' in consul_members_results.stdout"
     - name: register output of consul DNS command
       command: dig consul.service.consul SRV
       register: consul_dns_results
@@ -33,3 +34,17 @@
       assert:
         that:
           - "'nomadserver1' in nomad_operator_raft_results.stdout"
+- name: Verify Clients
+  hosts: nomad_clients
+  gather_facts: false
+  tasks:
+    - name: register output of nomad node status
+      command: nomad node status
+      environment:
+        NOMAD_TOKEN: '{{ pul_nomad_management_token }}'
+      register: nomad_node_status
+    - name: test nomad client status
+      assert:
+        that:
+          - "'nomadclient1' in nomad_node_status.stdout"
+          - "'ready' in nomad_node_status.stdout"
