@@ -1,4 +1,12 @@
 ---
+- name: static_tables | Install .env in shared application directory
+  ansible.builtin.template:
+    src: "env.j2"
+    dest: "{{ capistrano_base_dir }}/shared/.env"
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+    mode: 0644
+
 - name: static_tables | nginx configuration
   ansible.builtin.copy:
     src: files/nginx.conf
@@ -11,8 +19,8 @@
     - app-nginx-conf
 
 - name: static_tables | nginx conf.d configuration
-  ansible.builtin.copy:
-    src: files/default.conf
+  ansible.builtin.template:
+    src: default.conf.j2
     dest: /etc/nginx/conf.d/
     owner: root
     group: root
