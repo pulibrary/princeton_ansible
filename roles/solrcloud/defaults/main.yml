@@ -15,40 +15,33 @@ solr_service_state: started
 solr_log4j: "{{ solr_log4j_path | default('/solr/log4j.properties') }}"
 solr_log_dir: /solr/logs
 solr_home: /solr
-solr_data_dir: '{{ solr_home }}/data'
+solr_data_dir: "{{ solr_home }}/data"
 solr_installation: /opt/solr
 
 # Ports
 solr_port: 8983
-solr_jmx_enabled: 'true'
+solr_jmx_enabled: "true"
 solr_jmx_port: 1099
-solr_host: '{{ inventory_hostname }}'
+solr_host: "{{ inventory_hostname }}"
 
 # garbage collection settings
 solr_gc_tune: "-XX:NewRatio=3 \
--XX:SurvivorRatio=4 \
--XX:TargetSurvivorRatio=90 \
--XX:MaxTenuringThreshold=8 \
--XX:+UseConcMarkSweepGC \
--XX:+UseParNewGC \
--XX:ConcGCThreads=4 \
--XX:ParallelGCThreads=4 \
--XX:+CMSScavengeBeforeRemark \
--XX:PretenureSizeThreshold=64m \
--XX:+UseCMSInitiatingOccupancyOnly \
--XX:CMSInitiatingOccupancyFraction=50 \
--XX:CMSMaxAbortablePrecleanTime=6000 \
--XX:+CMSParallelRemarkEnabled \
--XX:+ParallelRefProcEnabled"
+  -XX:SurvivorRatio=4 \
+  -XX:TargetSurvivorRatio=90 \
+  -XX:MaxTenuringThreshold=8 \
+  -XX:ConcGCThreads=4 \
+  -XX:ParallelGCThreads=4 \
+  -XX:PretenureSizeThreshold=64m \
+  -XX:+ParallelRefProcEnabled"
 
 # Enable verbose GC logging
+# these are the Java 9 settings
+# GCID and GCCause are always logged
 gc_log_settings: "-verbose:gc \
--XX:+PrintHeapAtGC \
--XX:+PrintGCDetails \
--XX:+PrintGCDateStamps \
--XX:+PrintGCTimeStamps \
--XX:+PrintTenuringDistribution \
--XX:+PrintGCApplicationStoppedTime"
+  -Xlog:gc=debug:file=/solr/logs/gc.txt:time,uptime,pid,tid,level,tags \
+  -Xlog:gc+heap=debug \
+  -Xlog:gc+age=trace \
+  -Xlog:safepoint"
 
 solr_stack_size: 256k
 solr_heap: "{{ solr_heap_setting | default('20g') }}"
@@ -64,22 +57,22 @@ solr_jetty_output_buffer_size: 32768
 solr_jetty_output_aggregation_size: 8192
 solr_jetty_request_header_size: 8192
 solr_jetty_response_header_size: 8192
-solr_jetty_send_server_version: 'false'
-solr_jetty_send_date_header: 'false'
+solr_jetty_send_server_version: "false"
+solr_jetty_send_date_header: "false"
 solr_jetty_header_cache_size: 512
-solr_jetty_delay_dispatch_until_content: 'false'
+solr_jetty_delay_dispatch_until_content: "false"
 solr_jetty_http_selectors: -1
 solr_jetty_http_acceptors: -1
 
 # ZOOKEEPER
 solr_zookeeper_client_port: 2181
 lib_zk1_host_name: localhost
-solr_zookeeper_hosts_string_multi: '{{ lib_zk1_host_name }}:{{ solr_zookeeper_client_port }},{{ lib_zk2_host_name }}:{{ solr_zookeeper_client_port }},{{ lib_zk3_host_name }}:{{ solr_zookeeper_client_port }}'
+solr_zookeeper_hosts_string_multi: "{{ lib_zk1_host_name }}:{{ solr_zookeeper_client_port }},{{ lib_zk2_host_name }}:{{ solr_zookeeper_client_port }},{{ lib_zk3_host_name }}:{{ solr_zookeeper_client_port }}"
 solr_zookeeper_hosts_string_default: localhost:{{ solr_zookeeper_client_port }}
 solr_zookeeper_hosts_string: '{{ solr_zookeeper_hosts_string_default if lib_zk1_host_name == "localhost" else solr_zookeeper_hosts_string_multi }}'
 
-solr_znode: ''
-solr_znode_path: '/{{ solr_znode }}'
+solr_znode: ""
+solr_znode_path: "/{{ solr_znode }}"
 
 solr_zk_host: '{{ solr_zookeeper_hosts_string }}{{ solr_znode_path if solr_znode else "" }}'
 
@@ -95,7 +88,7 @@ log_root_level: WARN
 log_file_size: 500MB
 log_max_backup_index: 9
 
-solr_log_root_level: '{{ log_root_level }}'
-solr_log_file_size: '{{ log_file_size }}'
-solr_log_max_backup_index: '{{ log_max_backup_index }}'
+solr_log_root_level: "{{ log_root_level }}"
+solr_log_file_size: "{{ log_file_size }}"
+solr_log_max_backup_index: "{{ log_max_backup_index }}"
 solr_cloud_url: "https://pulmirror.princeton.edu/mirror/solr/dist/lucene/solr/{{ solr_cloud_version }}/{{ solr_cloud_package }}"
