@@ -19,6 +19,7 @@
   environment:
     CONSUL_HTTP_TOKEN: '{{ consul_acl_master_token }}'
   register: tokens
+  changed_when: false
 
 - name: 'pul_nomad | Store existing_consul_tokens'
   set_fact:
@@ -36,6 +37,7 @@
   environment:
     CONSUL_HTTP_TOKEN: '{{ consul_acl_master_token }}'
   register: created_agent_token
+  changed_when: false
 
 - name: 'nomad-node | Set Consul ACL Agent Token'
   ansible.builtin.shell:
@@ -60,6 +62,8 @@
     cmd: "consul acl set-agent-token dns '{{ consul_dns_token }}'"
   environment:
     CONSUL_HTTP_TOKEN: '{{ consul_acl_master_token }}'
+  when:
+    - "consul_dns_token not in existing_consul_tokens"
 
 # Consul setup for nomad
 
@@ -104,6 +108,7 @@
   environment:
     CONSUL_HTTP_TOKEN: '{{ consul_acl_master_token }}'
   register: policies
+  changed_when: false
 
 - name: 'pul_nomad | Store existing_consul_policies'
   set_fact:
@@ -140,6 +145,7 @@
   register: nomad_acl_tokens
   when:
     - "unique_command_runner == ansible_hostname"
+  changed_when: false
 
 - name: 'pul_nomad | Bootstrap nomad'
   ansible.builtin.command:
