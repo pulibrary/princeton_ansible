@@ -64,12 +64,19 @@
 # Consul setup for nomad
 
 # tasks file for pulibrary-nomad-node
-- name: 'nomad-node | Install Podman'
+- name: 'nomad-node | Install Docker'
   when: "nomad_node_role == 'client'"
   ansible.builtin.apt:
-    name: "podman"
+    name: "docker"
     state: present
     update_cache: true
+
+- name: 'nomad-node | Keep Docker up'
+  when: "nomad_node_role == 'client'"
+  ansible.builtin.service:
+    name: "docker"
+    state: "started"
+    enabled: true
 
 - name: 'pul_nomad | Create Nomad Policy to reference'
   ansible.builtin.copy:
