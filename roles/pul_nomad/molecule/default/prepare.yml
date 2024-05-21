@@ -17,5 +17,15 @@
         name: "dnsutils"
         state: present
         update_cache: true
+    # Disable some docker things to let it work in molecule.
+    - name: Create a directory if it does not exist
+      ansible.builtin.file:
+        path: /etc/docker
+        state: directory
+        mode: '0755'
+    - name: prepare | set up daemon.json
+      ansible.builtin.copy:
+        dest: /etc/docker/daemon.json
+        content: '{"storage-driver": "vfs", "iptables": false }'
     - name: refetch facts
       setup:
