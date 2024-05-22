@@ -11,6 +11,11 @@
     unique_command_runner: "{{ groups['nomad_servers'][0] }}"
   run_once: true
 
+# Output unique_command runner
+- name: 'pul_nomad | output unique_command_runner'
+  debug:
+    msg: "unique_command_runner: {{ unique_command_runner }}, inventory_hostname: {{ inventory_hostname }}"
+
 # Set up DNS ACLs
 # Get current tokens
 - name: 'pul_nomad | Register existing tokens'
@@ -31,9 +36,9 @@
 
 - name: 'nomad-node | Generate Consul ACL Agent Token'
   ansible.builtin.shell:
-    cmd: "consul acl token create -node-identity '{{ inventory_hostname }}:dc1' -format json"
+    cmd: "consul acl token create -node-identity '{{ inventory_hostname_short }}:dc1' -format json"
   when:
-    - "inventory_hostname not in existing_node_names"
+    - "inventory_hostname_short not in existing_node_names"
   environment:
     CONSUL_HTTP_TOKEN: '{{ consul_acl_master_token }}'
   register: created_agent_token
@@ -45,7 +50,7 @@
   environment:
     CONSUL_HTTP_TOKEN: '{{ consul_acl_master_token }}'
   when:
-    - "inventory_hostname not in existing_node_names"
+    - "inventory_hostname_short not in existing_node_names"
     - created_agent_token
 
 - name: 'pul_nomad | Create DNS ACL token'
@@ -54,7 +59,7 @@
   environment:
     CONSUL_HTTP_TOKEN: '{{ consul_acl_master_token }}'
   when:
-    - "unique_command_runner == ansible_hostname"
+    - "unique_command_runner == inventory_hostname"
     - "consul_dns_token not in existing_consul_tokens"
 
 - name: 'pul_nomad | Assign DNS ACL token'
@@ -120,7 +125,7 @@
   environment:
     CONSUL_HTTP_TOKEN: '{{ consul_acl_master_token }}'
   when:
-    - "unique_command_runner == ansible_hostname"
+    - "unique_command_runner == inventory_hostname"
     - "'nomad-agents' not in existing_consul_policies"
 
 - name: 'pul_nomad | Create nomad ACL token'
@@ -129,7 +134,7 @@
   environment:
     CONSUL_HTTP_TOKEN: '{{ consul_acl_master_token }}'
   when:
-    - "unique_command_runner == ansible_hostname"
+    - "unique_command_runner == inventory_hostname"
     - "nomad_consul_token not in existing_consul_tokens"
 
 - name: 'pul_nomad | Install nomad'
@@ -144,7 +149,7 @@
     NOMAD_TOKEN: '{{ pul_nomad_management_token }}'
   register: nomad_acl_tokens
   when:
-    - "unique_command_runner == ansible_hostname"
+    - "unique_command_runner == inventory_hostname"
   changed_when: false
 
 - name: 'pul_nomad | Bootstrap nomad'
@@ -152,5 +157,5 @@
     cmd: nomad acl bootstrap -
     stdin: '{{ pul_nomad_management_token }}'
   when:
-    - "unique_command_runner == ansible_hostname"
+    - "unique_command_runner == inventory_hostname"
     - "'Bootstrap Token' not in nomad_acl_tokens.stdout "
