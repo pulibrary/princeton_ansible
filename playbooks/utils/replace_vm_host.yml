@@ -1,13 +1,40 @@
 ---
-#  This playbook will delete a VM and replace it
+#  This playbook will delete a VM and replace it. This is the only warning you will get. Running this playbook has destructive consequences
 #     
-- name: remove falcon on a host
+- name: replace a host on VSphere
   hosts: localhost
   remote_user: pulsys
   become: true
 
   tasks:
+
+    - name: Gather MAC address of VM to replace
+      community.vmware.vmware_vm_info:
+        hostname: '{{ vcenter_hostname }}'
+        username: '{{ vcenter_username }}'
+        password: '{{ vcenter_password }}'
+        vm_name: "{{ vm_to_replace }}"
+      facts:
+        - mac_address
+        - uuid
+      register: vm_info
+
+    - name: Set powerstate of a virtual machine to poweroff by using UUID
+      community.vmware.vmware_guest:
+        hostname: "{{ vcenter_hostname }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        uuid: "{{ vm_info.uuid }}"
+        state: poweredoff
     
+    - name: Remove virtual machine by using UUID
+      community.vmware.vmware_guest:
+        hostname: "{{ vcenter_hostname }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        uuid: "{{ vm_info.uuid }}"
+        state: absent
+
     - name: Create a virtual machine from a template
       community.vmware.vmware_guest:
         hostname: "{{ vcenter_hostname }}"
@@ -35,7 +62,7 @@
             state: present
         networks:
         - name: "{{ vm_network | default('Virtual Machine Network')}}"
-          mac: "{{ vm_MAC_address }}"
+          mac: "{{ vm_info.mac_address }}"
         wait_for_ip_address: true
 
   post_tasks:
