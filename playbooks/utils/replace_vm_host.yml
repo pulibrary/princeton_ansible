@@ -5,6 +5,9 @@
   hosts: localhost
   remote_user: pulsys
   become: true
+  vars_files:
+    - ../../group_vars/vsphere/vault.yml
+    - ../../group_vars/vsphere/{{ runtime_env | default('staging') }}.yml
 
   tasks:
 
@@ -17,6 +20,7 @@
       facts:
         - mac_address
         - uuid
+        - datastore_url
       register: vm_info
 
     - name: Set powerstate of a virtual machine to poweroff by using UUID
@@ -47,7 +51,7 @@
         disk:
         - size_gb: 30
           type: thin
-          datastore: "{{ vm_datastore }}"
+          datastore: "{{ vm_info.datastore_url }}"
     # Add another disk from an existing VMDK
         hardware:
           memory_mb: "{{ vm_memory | default('8192') }}"
