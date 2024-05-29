@@ -19,6 +19,7 @@
   community.general.ufw:
     rule: reject
     from_ip: "192.0.2.0"
+  when: running_on_server
 
 - name: Nginxplus | identify unwanted configuration files that we should delete
   ansible.builtin.find:
@@ -29,37 +30,37 @@
       - "nginx-badbots.conf"
   register: unwanted_fail2ban_files
 
-- name: Delete unwanted configuration files
+- name: Nginxplus | Delete unwanted configuration files
   ansible.builtin.file:
     path: "{{ item.path }}"
     state: absent
   with_items: "{{ unwanted_fail2ban_files['files'] }}"
 
-- name: Add nginx-badbots filter
+- name: Nginxplus | Add nginx-badbots filter
   ansible.builtin.copy:
     src: "fail2ban/nginx-badbots-filter.conf"
     dest: "/etc/fail2ban/filter.d/nginx-badbots.conf"
     owner: root
     group: root
-    mode: 0644
+    mode: "0644"
 
-- name: Add nginx-badbots restriction
+- name: Nginxplus | Add nginx-badbots restriction
   ansible.builtin.copy:
     src: "fail2ban/nginx-badbots-restriction.conf"
     dest: "/etc/fail2ban/jail.d/nginx-badbots.conf"
     owner: root
     group: root
-    mode: 0644
+    mode: "0644"
 
-- name: Add nginx-limit-req fail2ban configuration
+- name: Nginxplus | Add nginx-limit-req fail2ban configuration
   ansible.builtin.copy:
     src: "fail2ban/nginx-limit-req.conf"
     dest: "/etc/fail2ban/jail.d/nginx-limit-req.conf"
     owner: root
     group: root
-    mode: 0644
+    mode: "0644"
 
-- name: start and enable fail2ban
+- name: Nginxplus | start and enable fail2ban
   ansible.builtin.service:
     name: fail2ban
     state: started
