@@ -1,8 +1,20 @@
 ---
 - name: "Install: Add NGINX Plus Repository"
-  apt_repository:
-    repo: deb https://plus-pkgs.nginx.com/{{ ansible_distribution|lower }} {{ ansible_distribution_release }} nginx-plus
+  ansible.builtin.apt_repository:
+    repo: deb https://pkgs.nginx.com/plus/{{ ansible_distribution|lower }} {{ ansible_distribution_release }} nginx-plus
     filename: nginx-plus
+    update_cache: false
+
+- name: "Install: Add app-protect Repository"
+  ansible.builtin.apt_repository:
+    repo: deb https://pkgs.nginx.com/app-protect/{{ ansible_distribution|lower }} {{ ansible_distribution_release }} nginx-plus
+    filename: app-protect
+    update_cache: false
+
+- name: "Install: Add App-protect security Repository"
+  ansible.builtin.apt_repository:
+    repo: deb https://pkgs.nginx.com/app-protect-security-updates/{{ ansible_distribution|lower }} {{ ansible_distribution_release }} nginx-plus
+    filename: app-protect-security-updates
     update_cache: false
 
 - name: "Install: Verify NGINX Plus License"
@@ -11,7 +23,7 @@
     create: true
     mode: 0644
     block: |
-      Acquire::https::plus-pkgs.nginx.com::Verify-Peer "true";
-      Acquire::https::plus-pkgs.nginx.com::Verify-Host "true";
-      Acquire::https::plus-pkgs.nginx.com::SslCert     "/etc/ssl/nginx/nginx-repo.crt";
-      Acquire::https::plus-pkgs.nginx.com::SslKey      "/etc/ssl/nginx/nginx-repo.key";
+      Acquire::https::pkgs.nginx.com::Verify-Peer "true";
+      Acquire::https::pkgs.nginx.com::Verify-Host "true";
+      Acquire::https::pkgs.nginx.com::SslCert     "/etc/ssl/nginx/nginx-repo.crt";
+      Acquire::https::pkgs.nginx.com::SslKey      "/etc/ssl/nginx/nginx-repo.key";

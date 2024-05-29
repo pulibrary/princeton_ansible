@@ -1,118 +1,129 @@
 ---
-- name: "Setup: Upload NGINX Main Configuration File"
-  copy:
+- name: Nginxplus | Setup Upload NGINX Main Configuration File
+  ansible.builtin.template:
     src: "{{ nginx_main_upload_src }}"
     dest: "{{ nginx_main_upload_dest }}"
-    mode: 0755
-    backup: true
+    mode: "0755"
+    owner: root
+    group: root
   notify: Reload NGINX
   when: nginx_main_upload_enable
 
-- name: "Setup: Ensure NGINX HTTP Directory Exists"
-  file:
+- name: Nginxplus | Setup Ensure NGINX HTTP Directory Exists
+  ansible.builtin.file:
     path: "{{ nginx_http_upload_dest }}"
     state: directory
-    mode: 0755
+    mode: "0755"
   when: nginx_http_upload_enable
 
-- name: "Setup: Ensure NGINX template Directory Exists"
-  file:
+- name: Nginxplus | Setup Ensure NGINX template Directory Exists
+  ansible.builtin.file:
     path: "{{ nginx_template_upload_dest }}"
     state: directory
-    mode: 0755
+    mode: "0755"
   when: nginx_template_upload_enable
 
-- name: "Setup: Upload NGINX HTTP Configuration Files"
-  copy:
+- name: Nginxplus | Setup Upload NGINX HTTP Configuration Files
+  ansible.builtin.copy:
     src: "{{ item }}"
     dest: "{{ nginx_http_upload_dest }}"
-    mode: 0755
+    mode: "0755"
     backup: true
-  with_fileglob: "{{ nginx_http_upload_src }}"
+  with_fileglob: "{{ dev_nginx_http_upload_src | default('nginx_http_upload_src') }}"
   notify: Reload NGINX
   when: nginx_http_upload_enable
   tags: update_conf
 
-- name: "Setup: Upload NGINX template Configuration Files"
-  copy:
+- name: Nginxplus | Setup Upload Loadbalancer Configuration File
+  ansible.builtin.template:
+    src: "{{ nginx_loadbalancer_main_upload_src }}"
+    dest: "{{ nginx_http_upload_dest }}/001-default.conf"
+    mode: "0755"
+    owner: root
+    group: root
+  notify: Reload NGINX
+  when: nginx_http_upload_enable
+
+- name: Nginxplus | Setup Upload NGINX template Configuration Files
+  ansible.builtin.copy:
     src: "{{ item }}"
     dest: "{{ nginx_template_upload_dest }}"
-    mode: 0755
+    mode: "0755"
     backup: true
-  with_fileglob: "{{ nginx_template_upload_src }}"
+  with_fileglob: "{{ dev_nginx_template_upload_src | default('nginx_template_upload_src') }}"
   notify: Reload NGINX
   when: nginx_template_upload_enable
   tags: update_conf
 
-- name: "Setup: Ensure NGINX Stream Directory Exists"
-  file:
+- name: Nginxplus | Setup Ensure NGINX Stream Directory Exists
+  ansible.builtin.file:
     path: "{{ nginx_stream_upload_dest }}"
     state: directory
-    mode: 0755
+    mode: "0755"
   when: nginx_stream_upload_enable
   tags: update_conf
 
-- name: "Setup: Upload NGINX Stream Configuration Files"
-  copy:
+- name: Nginxplus | Setup Upload NGINX Stream Configuration Files
+  ansible.builtin.copy:
     src: "{{ item }}"
     dest: "{{ nginx_stream_upload_dest }}"
-    mode: 0755
+    mode: "0755"
     backup: true
   with_fileglob: "{{ nginx_stream_upload_src }}"
   notify: Reload NGINX
   when: nginx_stream_upload_enable
   tags: update_conf
 
-- name: "Setup: Ensure NGINX HTML Directory Exists"
-  file:
+- name: Nginxplus | Setup Ensure NGINX HTML Directory Exists
+  ansible.builtin.file:
     path: "{{ nginx_html_upload_dest }}"
     state: directory
-    mode: 0755
+    mode: "0755"
   when: nginx_html_upload_enable
   tags: update_conf
 
-- name: "Setup: Upload NGINX HTML Files"
-  copy:
+- name: Nginxplus | Setup Upload NGINX HTML Files
+  ansible.builtin.copy:
     src: "{{ item }}"
     dest: "{{ nginx_html_upload_dest }}"
-    mode: 0755
+    mode: "0755"
     backup: true
   with_fileglob: "{{ nginx_html_upload_src }}"
   notify: Reload NGINX
   when: nginx_html_upload_enable
   tags: update_conf
 
-- name: "Setup: Ensure SSL Certificate Directory Exists"
-  file:
+- name: Nginxplus | Setup Ensure SSL Certificate Directory Exists
+  ansible.builtin.file:
     path: "{{ nginx_ssl_crt_upload_dest }}"
     state: directory
-    mode: 0755
+    mode: "0755"
   when: nginx_ssl_upload_enable
 
-- name: "Setup: Ensure SSL Key Directory Exists"
-  file:
+- name: Nginxplus | Setup Ensure SSL Key Directory Exists
+  ansible.builtin.file:
     path: "{{ nginx_ssl_key_upload_dest }}"
     state: directory
-    mode: 0755
+    mode: "0755"
   when: nginx_ssl_upload_enable
   tags: SSL
 
-- name: "Setup: Upload NGINX SSL Certificates"
-  copy:
+- name: Nginxplus | Setup Upload NGINX SSL Certificates
+  ansible.builtin.copy:
     src: "{{ item }}"
     dest: "{{ nginx_ssl_crt_upload_dest }}"
-    mode: 0640
+    mode: "0640"
     decrypt: true
     backup: true
   with_fileglob: "{{ nginx_ssl_crt_upload_src }}"
   when: nginx_ssl_upload_enable
   tags: SSL
 
-- name: "(Setup: All NGINX) Upload NGINX SSL Keys"
-  copy:
+- name: Nginxplus | (Setup All NGINX) Upload NGINX SSL Keys
+  ansible.builtin.copy:
     src: "{{ item }}"
     dest: "{{ nginx_ssl_key_upload_dest }}"
-    mode: 0640
+    mode: "0640"
     decrypt: true
     backup: true
   with_fileglob: "{{ nginx_ssl_key_upload_src }}"
