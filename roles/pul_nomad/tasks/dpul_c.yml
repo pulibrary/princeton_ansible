@@ -1,9 +1,5 @@
 ---
-# Todo:
-# Include the postgres role on the clients only
-# Define the variables in the role included
-# Export the variables to nomad using the ansible unique_command_runner
-- name: PostgreSQL | create postgresql db users
+- name: 'pul_nomad_dpulc | create postgresql db users'
   community.postgresql.postgresql_user:
     name: '{{ dpul_c_db_user }}'
     password: '{{ dpul_c_db_password }}'
@@ -14,7 +10,7 @@
   become_user: '{{ dpul_c_postgres_admin_user }}'
   run_once: true
 
-- name: pul_nomad | create postgresql database
+- name: 'pul_nomad_dpulc | create postgresql database'
   community.postgresql.postgresql_db:
     name: '{{ dpul_c_db_name }}'
     encoding: 'UTF-8'
@@ -25,18 +21,25 @@
   become_user: '{{ dpul_c_postgres_admin_user }}'
   run_once: true
 
-- name: PostgreSQL | ensure access to postgres server for client connections
+- name: 'pul_nomad_dpulc | ensure access to postgres server for client connections'
   ansible.builtin.lineinfile:
     path: '/etc/postgresql/{{ dpul_c_postgres_version }}/main/pg_hba.conf'
     line: 'host  all      all {{ ansible_default_ipv4.address }}/32       md5'
   delegate_to: '{{ dpul_c_postgres_host }}'
   register: remote_postgres_configured
   throttle: 1 # have this task run one machine at a time to avoid race condition
+  when:
+    - "nomad_node_role == 'client'"
 
-- name: PostgreSQL | reload postgresql
+- name: 'pul_nomad_dpulc | reload postgresql'
   ansible.builtin.service:
     name: postgresql
     state: reloaded
   when:
     - remote_postgres_configured.changed
   delegate_to: '{{ dpul_c_postgres_host }}'
+
+- name: 'pul_nomad_dpulc | add the application environment variables'
+  ansible.builtin.shell:
+    cmd: 'nomad var put -force nomad/jobs/dpulc_staging {{ dpul_c_nomad_env_vars.keys() | zip(dpul_c_nomad_env_vars.values()) | map("join", "=") | join(" ") }}'
+  run_once: true
