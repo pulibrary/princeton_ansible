@@ -1,29 +1,30 @@
 ---
-- name: "Install Required Ubuntu Dependencies"
-  apt:
+- name: Nginxplus | Install Required Ubuntu Dependencies
+  ansible.builtin.apt:
     name:
       - apt-transport-https
       - dirmngr
       - fail2ban
 
-- name: ensure ufw does not block anything
+- name: Nginxplus | ensure ufw does not block anything
   community.general.ufw:
     state: enabled
     policy: allow
+  when: running_on_server
 
 # Note: the following IP address is "reserved for special use",
 # we expect to never receive any traffic from it, so it is safe
 # to block indefinitely as an example
-- name: add an intial ufw rule that blocks a sample ip
+- name: Nginxplus | add an intial ufw rule that blocks a sample ip
   community.general.ufw:
     rule: reject
     from_ip: "192.0.2.0"
 
-- name: identify unwanted configuration files that we should delete
+- name: Nginxplus | identify unwanted configuration files that we should delete
   ansible.builtin.find:
     paths: /etc/fail2ban/jail.d
     file_type: file
-    excludes: 
+    excludes:
       - "nginx-limit-req.conf"
       - "nginx-badbots.conf"
   register: unwanted_fail2ban_files
