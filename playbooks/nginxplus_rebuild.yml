@@ -1,12 +1,16 @@
 ---
 - name: rebuild nginx server
-  hosts: nginxplus_production # default to staging when we get a staging environment going
+  hosts: nginxplus_{{ runtime_env | default('staging') }}
   remote_user: pulsys
   strategy: free
   become: true
   vars_files:
     - ../group_vars/nginxplus/main.yml
-
+    - ../group_vars/nginxplus/{{ runtime_env | default('staging') }}.yml
+  vars:
+    - post_install: |
+        Possible Things left to do:
+        - follow the nginxplus [HA instructions](https://github.com/pulibrary/pul-it-handbook/blob/main/services/nginxplus.md)
   pre_tasks:
   - name: stop playbook if you didn't use --limit
     fail:
@@ -25,18 +29,19 @@
 # rebuilds the load balancer from scratch
   roles:
     - role: ../roles/datadog
+      when: runtime_env | default('staging') == "production"
     - role: ../roles/deploy_user
     - role: ../roles/nginxplus
 
 - name: restart rebuilt nginx and announce success
-  hosts: nginxplus_production # default to staging when we get a staging environment going
+  hosts: nginxplus_{{ runtime_env | default('staging') }}
   remote_user: pulsys
   strategy: linear
   become: true
 
   tasks:
     - name: nginxplus | restart nginx for realsies
-      service: 
+      ansible.builtin.service: 
         name: nginx
         state: restarted
       tags: always
