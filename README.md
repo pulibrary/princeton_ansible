@@ -137,7 +137,7 @@ cd to the role in question
 % docker ps -qaf ancestor=quay.io/pulibrary/jammy-ansible:latest | xargs docker rm
 % docker volume ls -qf dangling=true | xargs docker volume rm
 % docker rmi quay.io/pulibrary/jammy-ansible
-% molecule converage
+% molecule converge
 ```
 
 # Usage

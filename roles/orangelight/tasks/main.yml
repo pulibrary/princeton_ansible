@@ -1,2 +1,22 @@
 ---
 # tasks file for roles/orangelight
+
+- name: orangelight | update rubygems
+  ansible.builtin.command: gem update --system 3.5.10
+  become: true
+  register: update_rubygems
+  changed_when: '"Latest version already installed. Done." not in update_rubygems.stdout'
+  tags: rubygems
+
+- name: orangelight | install default bundler
+  ansible.builtin.command: gem install --default bundler:2.5.10
+  become: true
+  register: install_default_bundler
+  changed_when: '"Fetching bundler-2.5.10.gem" in install_default_bundler.stdout'
+  tags: rubygems
+
+- name: orangelight | remove old default bundler
+  ansible.builtin.file:
+    path: /usr/local/lib/ruby/gems/3.1.0/specifications/default/bundler-2.5.9.gemspec
+    state: absent
+  tags: rubygems
