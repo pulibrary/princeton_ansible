@@ -1,4 +1,41 @@
+---
 # Todo:
 # Include the postgres role on the clients only
 # Define the variables in the role included
 # Export the variables to nomad using the ansible unique_command_runner
+- name: PostgreSQL | create postgresql db users
+  community.postgresql.postgresql_user:
+    name: '{{ dpul_c_db_user }}'
+    password: '{{ dpul_c_db_password }}'
+    encrypted: true
+    state: 'present'
+  delegate_to: '{{ dpul_c_postgres_host }}'
+  become: true
+  become_user: postgres
+  run_once: true
+
+- name: pul_nomad | create postgresql database
+  community.postgresql.postgresql_db:
+    name: '{{ dpul_c_db_name }}'
+    encoding: 'UTF-8'
+    state: 'present'
+    owner: "{{ dpul_c_db_user }}"
+  delegate_to: '{{ dpul_c_postgres_host }}'
+  become: true
+  become_user: postgres
+  run_once: true
+
+- name: PostgreSQL | ensure access to postgres server for client connections
+  ansible.builtin.lineinfile:
+    path: '/etc/postgresql/{{ dpul_c_postgres_version }}/main/pg_hba.conf'
+    line: 'host  all      all {{ ansible_default_ipv4.address }}/32       md5'
+  delegate_to: '{{ dpul_c_postgres_host }}'
+  register: remote_postgres_configured
+
+- name: PostgreSQL | reload postgresql
+  ansible.builtin.service:
+    name: postgresql
+    state: reloaded
+  when:
+    - remote_postgres_configured.changed
+  delegate_to: '{{ dpul_c_postgres_host }}'
