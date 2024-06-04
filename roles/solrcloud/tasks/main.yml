@@ -4,16 +4,7 @@
     name: ["cifs-utils"]
     state: present
 
-- name: Unmount diglibdata shares
-  ansible.posix.mount:
-    path: "/mnt/{{ item.path }}"
-    state: unmounted
-  loop:
-    - { path: "solr_backup", src: "solrbackup", opts: "solr" }
-  tags:
-    - fix_backups
-
-- name: solrcloud | create mounts
+- name: solrcloud | create directories for mounts
   ansible.builtin.file:
     path: "/mnt/{{ item }}"
     state: "directory"
@@ -22,8 +13,6 @@
     owner: deploy
   loop:
     - solr_backup
-  tags:
-    - fix_backups
 
 - name: solrcloud | Copy smb credentials
   ansible.builtin.copy:
@@ -34,15 +23,13 @@
     - running_on_server
   loop:
     - solr.smb.credentials
-  tags:
-    - fix_backups
 
 - name: solrcloud | Create mount to diglibdata shares
   ansible.posix.mount:
     path: "/mnt/{{ item.path }}"
     src: "//diglibdata1.princeton.edu/{{ item.src }}"
     fstype: cifs
-    opts: "credentials=/etc/{{ item.opts }}.smb.credentials"
+    opts: "credentials=/etc/{{ item.opts }}.smb.credentials,uid=1001,gid=1001"
     state: mounted
   when:
     - running_on_server
