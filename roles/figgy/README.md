@@ -6,7 +6,7 @@ This role installs [figgy](https://github.com/pulibrary/figgy) a Valkyrie based 
 Requirements
 ------------
 
-Figgy will need a [postgresql](../psql/) database, a [sidekiq](../sidekiq) worker, a [filewatcher](../filewatcher) worker, a [pubsub](../figgy_pubsub_worker) worker.
+Figgy will need a [postgresql](../postgresql) database, a [sidekiq](../sidekiq) worker, a [filewatcher](../filewatcher) worker, a [pubsub](../figgy_pubsub_worker) worker.
 In addition figgy will need [memcached](../memcached) and [rabbitmq](../rabbitmq)
 
 Role Variables
