@@ -4,6 +4,15 @@
     name: ["cifs-utils"]
     state: present
 
+- name: Unmount diglibdata shares
+  ansible.posix.mount:
+    path: "/mnt/{{ item.path }}"
+    state: unmounted
+  loop:
+    - { path: "solr_backup", src: "solrbackup", opts: "solr" }
+  tags:
+    - fix_backups
+
 - name: solrcloud | create mounts
   ansible.builtin.file:
     path: "/mnt/{{ item }}"
@@ -13,6 +22,8 @@
     owner: deploy
   loop:
     - solr_backup
+  tags:
+    - fix_backups
 
 - name: solrcloud | Copy smb credentials
   ansible.builtin.copy:
@@ -23,6 +34,8 @@
     - running_on_server
   loop:
     - solr.smb.credentials
+  tags:
+    - fix_backups
 
 - name: solrcloud | Create mount to diglibdata shares
   ansible.posix.mount:
@@ -35,6 +48,8 @@
     - running_on_server
   loop:
     - { path: "solr_backup", src: "solrbackup", opts: "solr" }
+  tags:
+    - fix_backups
 
 - name: solrcloud | update host file
   ansible.builtin.lineinfile:
