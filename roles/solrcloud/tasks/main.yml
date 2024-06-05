@@ -4,11 +4,13 @@
     name: ["cifs-utils"]
     state: present
 
-- name: solrcloud | create mounts
+- name: solrcloud | create directories for mounts
   ansible.builtin.file:
     path: "/mnt/{{ item }}"
     state: "directory"
     mode: 0755
+    group: deploy
+    owner: deploy
   loop:
     - solr_backup
 
@@ -23,28 +25,39 @@
     - solr.smb.credentials
 
 - name: solrcloud | Create mount to diglibdata shares
-  mount:
+  ansible.posix.mount:
     path: "/mnt/{{ item.path }}"
     src: "//diglibdata1.princeton.edu/{{ item.src }}"
     fstype: cifs
-    opts: "credentials=/etc/{{ item.opts }}.smb.credentials"
+    opts: "credentials=/etc/{{ item.opts }}.smb.credentials,uid=1001,gid=1001"
     state: mounted
   when:
     - running_on_server
   loop:
-    - {path: "solr_backup", src: "solrbackup", opts: "solr"}
+    - { path: "solr_backup", src: "solrbackup", opts: "solr" }
+  tags:
+    - fix_backups
 
 - name: solrcloud | update host file
   ansible.builtin.lineinfile:
     dest: /etc/hosts
-    regexp: '{{ item.address }}.*{{ item.hostname }}$'
-    line: '{{ item.address }} {{ item.hostname }}'
+    regexp: "{{ item.address }}.*{{ item.hostname }}$"
+    line: "{{ item.address }} {{ item.hostname }}"
     state: present
   become: true
   loop:
-    - {hostname: '{{ lib_zk1_host_name }}.princeton.edu', address: "{{ lib_zk1_host }}"}
-    - {hostname: '{{ lib_zk2_host_name }}.princeton.edu', address: "{{ lib_zk2_host }}"}
-    - {hostname: '{{ lib_zk3_host_name }}.princeton.edu', address: "{{ lib_zk3_host }}"}
+    - {
+        hostname: "{{ lib_zk1_host_name }}.princeton.edu",
+        address: "{{ lib_zk1_host }}",
+      }
+    - {
+        hostname: "{{ lib_zk2_host_name }}.princeton.edu",
+        address: "{{ lib_zk2_host }}",
+      }
+    - {
+        hostname: "{{ lib_zk3_host_name }}.princeton.edu",
+        address: "{{ lib_zk3_host }}",
+      }
   tags:
     - hosts
   when: lib_zk1_host_name != "localhost" and lib_zk2_host_name != "localhost" and lib_zk3_host_name != "localhost"
