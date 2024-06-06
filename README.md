@@ -6,6 +6,17 @@ Princeton Ansible Playbooks
 
 # Setting up your Python Environment
 
+## First-time basic setup on MacOS
+
+1. Install homebrew
+1. Run `bin/first-time-setup.sh`
+
+You can then follow the instructions in the
+following sections to run your playbooks:
+1. [Setup your environment](#setup-your-environment)
+1. [Automatically pull vault password from lastpass](#automatically-pull-vault-password-from-lastpass)
+1. [Usage](#usage)
+
 ## Install Prerequisites
 
 ### MacOS
