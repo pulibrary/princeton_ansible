@@ -22,7 +22,7 @@
 
     - name: Print out deleted VM information
       ansible.builtin.debug:
-        msg: You have just deleted {{ vm_info }}
+        msg: You will be removing this VM {{ vm_info }}
 
     - name: Set powerstate of a virtual machine to poweroff by using UUID
       community.vmware.vmware_guest:
@@ -34,17 +34,18 @@
         cluster: "{{ vcenter_cluster }}"
         uuid: "{{ vm_info.virtual_machines[0].uuid }}"
         state: poweredoff
-    
-    - name: Remove virtual machine by using UUID
-      community.vmware.vmware_guest:
-        hostname: "{{ vcenter_hostname }}"
-        username: "{{ vcenter_username }}"
-        password: "{{ vcenter_password }}"
-        validate_certs: false
-        datacenter: "{{ vcenter_datacenter }}"
-        cluster: "{{ vcenter_cluster }}"
-        uuid: "{{ vm_info.uuid }}"
-        state: absent
+
+    # this will be a manual step for now 
+    #- name: Remove virtual machine by using UUID
+    #  community.vmware.vmware_guest:
+    #    hostname: "{{ vcenter_hostname }}"
+    #    username: "{{ vcenter_username }}"
+    #    password: "{{ vcenter_password }}"
+    #    validate_certs: false
+    #    datacenter: "{{ vcenter_datacenter }}"
+    #    cluster: "{{ vcenter_cluster }}"
+    #    uuid: "{{ vm_info.virtual_machines[0].uuid }}"
+    #    state: absent
 
     - name: Create a virtual machine from a template
       community.vmware.vmware_guest:
@@ -76,7 +77,7 @@
             state: present
         networks:
         - name: "{{ vm_network | default('Virtual Machine Network')}}"
-          mac: "{{ vm_info.mac_address }}"
+          mac: "{{ vm_info.[0].mac_address }}"
         wait_for_ip_address: true
 
   post_tasks:
