@@ -1,7 +1,7 @@
 ---
 #  This playbook will delete a VM and replace it. This is the only warning you will get. Running this playbook has destructive consequences
 #     
-- name: replace a host on VSphere
+- name: Replace {{ vm_to_replace }} on VSphere with {{ replacement_vm }}
   hosts: localhost
   remote_user: pulsys
   become: true
@@ -49,7 +49,7 @@
 
     - name: Extract MAC address from VM info
       set_fact:
-        mac_address: "{{ vm_info.virtual_machines[0].guest.net[0].mac_address }}"
+        mac_address: "{{ vm_info.virtual_machines[0].mac_address | first }}"
 
     - name: Print out the MAC address 
       ansible.builtin.debug:
@@ -70,7 +70,7 @@
         disk:
         - size_gb: 30
           type: thin
-          datastore: "{{ vm_info.virtual_machines[0].datastore }}"
+          datastore: "{{ vm_info.virtual_machines[0].datastore_url }}"
     # Add another disk from an existing VMDK
         hardware:
           memory_mb: "{{ vm_memory | default('8192') }}"
