@@ -46,9 +46,14 @@
     #    cluster: "{{ vcenter_cluster }}"
     #    uuid: "{{ vm_info.virtual_machines[0].uuid }}"
     #    state: absent
+
+    - name: Extract MAC address from VM info
+      set_fact:
+        mac_address: "{{ vm_info.virtual_machines[0].guest.net[0].mac_address }}"
+
     - name: Print out the MAC address 
       ansible.builtin.debug:
-        msg: This is your MAC address {{ vm_info.virtual_machines[0].mac_address | length > 0 }}
+        msg: This is your MAC address {{ mac_address }}
 
     - name: Create the replacement virtual machine from a template
       community.vmware.vmware_guest:
@@ -65,7 +70,7 @@
         disk:
         - size_gb: 30
           type: thin
-          datastore: "{{ vm_info.virtual_machines[0].datastore_url }}"
+          datastore: "{{ vm_info.virtual_machines[0].datastore }}"
     # Add another disk from an existing VMDK
         hardware:
           memory_mb: "{{ vm_memory | default('8192') }}"
@@ -80,7 +85,7 @@
             state: present
         networks:
         - name: "{{ vm_network | default('Virtual Machine Network')}}"
-          mac: "{{ vm_info.virtual_machines[0].mac_address | length > 0 }}"
+          mac: "{{ mac_address }}"
         wait_for_ip_address: true
 
   post_tasks:
