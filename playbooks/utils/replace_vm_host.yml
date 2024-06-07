@@ -6,6 +6,8 @@
   remote_user: pulsys
   become: true
   vars_files:
+    - ../../group_vars/all/vars.yml
+    - ../../group_vars/all/vault.yml
     - ../../group_vars/vsphere/vault.yml
     - ../../group_vars/vsphere/{{ runtime_env | default('staging') }}.yml
 
@@ -49,11 +51,11 @@
 
     - name: Extract MAC address from VM info
       set_fact:
-        mac_address: "{{ vm_info.virtual_machines[0].mac_address | first }}"
+        stripped_mac_address: "{{ vm_info.virtual_machines[0].mac_address | first }}"
 
     - name: Print out the MAC address 
       ansible.builtin.debug:
-        msg: This is your MAC address {{ mac_address }}
+        msg: This is your MAC address {{ stripped_mac_address }}
 
     - name: Create the replacement virtual machine from a template
       community.vmware.vmware_guest:
@@ -83,9 +85,10 @@
           - controller_number: 0
             unit_number: 0
             state: present
+            type: client
         networks:
         - name: "{{ vm_network | default('Virtual Machine Network')}}"
-          mac: "{{ mac_address }}"
+          mac: "{{ stripped_mac_address }}"
         wait_for_ip_address: true
 
   post_tasks:
