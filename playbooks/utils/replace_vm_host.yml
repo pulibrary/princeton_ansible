@@ -22,7 +22,7 @@
 
     - name: Print out deleted VM information
       ansible.builtin.debug:
-        msg: You will be removing this VM {{ vm_info }}
+        msg: You will be removing this VM {{ vm_info.virtual_machines }}
 
     - name: Set powerstate of a virtual machine to poweroff by using UUID
       community.vmware.vmware_guest:
@@ -48,7 +48,7 @@
     #    state: absent
     - name: Print out the MAC address 
       ansible.builtin.debug:
-        msg: This is your MAC address {{ vm_info.virtual_machines[0].mac_address | first }}
+        msg: This is your MAC address {{ vm_info.virtual_machines[0].mac_address | length > 0 }}
 
     - name: Create the replacement virtual machine from a template
       community.vmware.vmware_guest:
@@ -80,7 +80,7 @@
             state: present
         networks:
         - name: "{{ vm_network | default('Virtual Machine Network')}}"
-          mac: "{{ vm_info.virtual_machines[0].mac_address | first }}"
+          mac: "{{ vm_info.virtual_machines[0].mac_address | length > 0 }}"
         wait_for_ip_address: true
 
   post_tasks:
