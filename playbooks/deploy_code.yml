@@ -7,7 +7,7 @@
 - name: Deploy code with Capistrano
   # hosts: towerdeploy
   hosts: localhost
-  remote_user: pulsys
+  remote_user: deploy
   # become: true
   vars:
     project_dir: /tmp/{{ repo_name }}
@@ -37,6 +37,7 @@
       token: "{{ vault_tower_slack_token }}"
       msg: "{{ tower_user_first_name | default('Ansible') }} has started a deploy of the `{{ branch_name | default('main') }}` branch of `{{ repo_name }}` to the {{ runtime_env | default('staging') }} environment. If you don't see a 'success' message, check the #ansible-alerts channel for failure details."
       channel: "{{ slack_alerts_channel }}"
+
   - name: let folks on slack know where to find the log
     community.general.slack:
       token: "{{ vault_tower_slack_token }}"
@@ -71,13 +72,15 @@
 
     - name: generate SSH code deploy key
       community.crypto.openssh_keypair:
-        path: "~/.ssh/code_deploy_key"
+        path: "/Users/deploy/.ssh/code_deploy_key"
         type: rsa
         size: 4096
         state: present
         force: false
-      become: true
-      become_user: deploy
+        owner: deploy
+        group: deploy
+#      become: true
+#      become_user: deploy
 #      become_user: "{{ deploy_user }}"
 
     - name: Fetch the deploy key from the current host
@@ -86,8 +89,8 @@
         src: "~/.ssh/code_deploy_key"
         dest: "/tmp/"
         flat: true
-      become: true
-      become_user: deploy
+#      become: true
+#      become_user: deploy
 #      become_user: "{{ deploy_user }}"
 
     - name: push the code deploy key to {{ dest_host }}
@@ -131,4 +134,3 @@
         Content-Type: application/x-www-form-urlencoded
       follow_redirects: safe
       status_code: 201,202
-
