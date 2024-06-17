@@ -86,25 +86,25 @@
     - name: Fetch the deploy key from the current host
       run_once: true
       ansible.builtin.fetch:
-        src: "~/.ssh/code_deploy_key"
+        src: "/home/deploy/.ssh/code_deploy_key"
         dest: "/tmp/"
         flat: true
 #      become: true
 #      become_user: deploy
 #      become_user: "{{ deploy_user }}"
 
-    - name: push the code deploy key to {{ dest_host }}
+    - name: push the code deploy key to hosts in the {{ repo_name }}_{{ runtime_env }} group
       ansible.builtin.copy:
         src: /tmp/code_deploy_key.pub
         dest: /tmp/
-      delegate_to: "{{ dest_host }}"
+      delegate_to: "{{ repo_name }}_{{ runtime_env }}"
 
     - name: install the key
       ansible.posix.authorized_key:
         user: deploy
         state: present
         key: "{{ lookup('file', '/tmp/code_deploy_key.pub') }}"
-      delegate_to: "{{ dest_host }}"
+      delegate_to: "{{ repo_name }}_{{ runtime_env }}"
 
     - name: cap deploy
       ansible.builtin.shell: "cd {{ project_dir }} && BRANCH={{ branch_name | default('main') }} cap {{ runtime_env | default('staging') }} deploy"
