@@ -31,7 +31,7 @@
 
     - name: set filter condition
       ansible.builtin.set_fact:
-        filter_condition: 'value contains '
+        filter_condition: 'value == '
 
     - name: set filter IP
       ansible.builtin.set_fact:
@@ -39,7 +39,7 @@
 
     - name: create filter from condition and IP
       ansible.builtin.set_fact:
-        filter_input: "{{ filter_condition }}{{filter_ip }}"
+        filter_input: "{{ filter_condition }}{{filter_ip }}/32"
 
     - name: find object from filter
       paloaltonetworks.panos.panos_address_object:
@@ -56,7 +56,7 @@
       paloaltonetworks.panos.panos_security_rule:
         provider: "{{ panos_provider }}"
         state: "gathered"
-        gathered_filter: "destination_ip contains {{ test_object.gathered[0].name }}"
+        gathered_filter: "destination_ip == {{ test_object.gathered[0].name }}"
       register: sec_rules
 
     - name: Display rules for selected VM
