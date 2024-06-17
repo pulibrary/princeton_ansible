@@ -1,24 +1,13 @@
-Role Name
-=========
+Postfix
+=======
 
 Creates a relay to proofpoint and creates a relay for our applications
 
+Usage
+-----
+The most common use of this role will involve adding your IP address to the allow list of our relay. Edit [vars/main.yml](vars/main.yml) and add the IP address of your VM under `postfix_relay_hosts_addresses:`.
 
-Role Variables
---------------
-
-Most use for this role will involve adding your IP address to the allow list of our relay. Edit the [vars/main.yml](vars/main.yml)
-
-Add the IP address of your VM under `postfix_relay_hosts_addresses:`
-
-Example Playbook
-----------------
-
-Including an example of how to use your role (for instance, with variables passed in as parameters) is always nice for users too:
-
-    - hosts: servers
-      roles:
-         - { role: username.rolename, x: 42 }
+Then run https://github.com/pulibrary/princeton_ansible/blob/main/playbooks/postfix.yml according to its commented documentation.
 
 License
 -------
