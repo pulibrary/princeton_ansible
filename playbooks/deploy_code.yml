@@ -12,6 +12,7 @@
   vars:
     project_dir: /tmp/{{ repo_name }}
 #    github_key_path:
+
   pre_tasks:
   - name: tell git hub you are planning to deploy
     ansible.builtin.uri:
@@ -26,9 +27,11 @@
       follow_redirects: true
       status_code: 201,202
     register: git_result
+
   - name: debug
     ansible.builtin.debug:
       msg: 'Told git we were starting {{ git_result.json.id }}'
+
   - name: let folks on slack know a deploy has begun
     community.general.slack:
       token: "{{ vault_tower_slack_token }}"
@@ -65,6 +68,40 @@
     - name: display user
       ansible.builtin.debug:
         var: current_user
+
+    - name: generate SSH code deploy key
+      community.crypto.openssh_keypair:
+        path: "~/.ssh/code_deploy_key"
+        type: rsa
+        size: 4096
+        state: present
+        force: false
+      become: true
+      become_user: deploy
+#      become_user: "{{ deploy_user }}"
+
+    - name: Fetch the deploy key from the current host
+      run_once: true
+      ansible.builtin.fetch:
+        src: "~/.ssh/code_deploy_key"
+        dest: "/tmp/"
+        flat: true
+      become: true
+      become_user: deploy
+#      become_user: "{{ deploy_user }}"
+
+    - name: push the code deploy key to {{ dest_host }}
+      ansible.builtin.copy:
+        src: /tmp/code_deploy_key.pub
+        dest: /tmp/
+      delegate_to: "{{ dest_host }}"
+
+    - name: install the key
+      ansible.posix.authorized_key:
+        user: deploy
+        state: present
+        key: "{{ lookup('file', '/tmp/code_deploy_key.pub') }}"
+      delegate_to: "{{ dest_host }}"
 
     - name: cap deploy
       ansible.builtin.shell: "cd {{ project_dir }} && BRANCH={{ branch_name | default('main') }} cap {{ runtime_env | default('staging') }} deploy"
