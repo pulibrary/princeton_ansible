@@ -1,12 +1,10 @@
 Role Name
 =========
 
-A brief description of the role goes here.
+Configures a Nomad/Consul cluster for deployment of PUL's applications in to. Sets up Nomad & Consul Clients and Servers.
 
 Requirements
 ------------
-
-Any pre-requisites that may not be covered by Ansible itself or the role should be mentioned here. For instance, if the role uses the EC2 module, it may be a good idea to mention in this section that the boto package is required.
 
 Role Variables
 --------------
