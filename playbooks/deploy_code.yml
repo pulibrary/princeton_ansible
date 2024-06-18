@@ -111,7 +111,7 @@
       # delegate_to: "{{ item }}"
       # loop: "{{ groups[target_group] }}"
 
-- name: Create the SSH connection so we can cap deploy
+- name: Actually cap deploy
   hosts: localhost
   remote_user: deploy
   # become: true
@@ -120,9 +120,9 @@
 
   tasks:
     - name: cap deploy
-      ansible.builtin.shell: "cd {{ project_dir }} && BRANCH={{ branch_name | default('main') }} cap {{ runtime_env | default('staging') }} deploy"
-      # become: true
-      # become_user: pulsys
+      ansible.builtin.command: "cd {{ project_dir }} && BRANCH={{ branch_name | default('main') }} cap {{ runtime_env | default('staging') }} deploy"
+      become: true
+      become_user: deploy
 
 #    - name: update PR
 #      could use the GitHub API:
