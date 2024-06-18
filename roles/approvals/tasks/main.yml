@@ -34,3 +34,17 @@
     state: "present"
     line: "{{ deploy_user }} ALL=(ALL) NOPASSWD: /usr/bin/systemctl status nginx"
     validate: "visudo -cf %s"
+
+- name: approvals | update rubygems
+  ansible.builtin.command: gem update --system 3.5.13
+  become: true
+  register: update_rubygems
+  changed_when: '"Latest version already installed. Done." not in update_rubygems.stdout'
+  tags: rubygems
+
+- name: approvals | install default bundler
+  ansible.builtin.command: gem install --default bundler:2.5.13
+  become: true
+  register: install_default_bundler
+  changed_when: '"Fetching bundler-2.5.13.gem" in install_default_bundler.stdout'
+  tags: rubygems
