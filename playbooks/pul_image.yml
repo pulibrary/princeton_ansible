@@ -1,0 +1,40 @@
+---
+# this playbook will create an AWS VM
+# Ansible expects you to have `~/.aws/credentials` configured
+# you will need to create these on your own
+#
+# 
+- hosts: all
+  become: true
+  tasks:
+    - name: Create user pulsys
+      user:
+        name: pulsys
+        state: present
+        create_home: true
+
+    - name: Add authorized keys for user pulsys
+      ansible.builtin.authorized_key:
+        user: pulsys
+        state: present
+        key: "{{ item }}"
+      loop:
+        # just the ops team for now
+        - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJfzzsSCWft0+Y5BBEgczdCQt9SIdU2Zft0aPiR3PRSR acozine"
+        - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBItBQDPb3UWItqYUtURAlNjwtFyk5Hz7WYOLWGkfxUk bd"
+        - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIjsG/xtqi+W0qToHig+zuGKbPXQCj+ngXFj+SvzMAdD dp"
+        - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDT/YSMGz9LutWtO1boqqYQnXLSeKIUzio9W2G2f09JG kayiwa"
+        - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKDUPnOTVebrlXOOu7t1P2Wv+SB6rMC4jOEtqsaR8MVZ vkarasic"
+        - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMH8s0NE+Gvkqbe2QlDRsCjg8fnfbN3HLHPqRNZs/o0b vkarasic2"
+
+    - name: Install Vim
+      ansible.builtin.apt:
+        name: vim
+        state: present
+        update_cache: true
+
+    - name: Remove packer user
+      user:
+        name: packer
+        state: absent
+        remove: true
