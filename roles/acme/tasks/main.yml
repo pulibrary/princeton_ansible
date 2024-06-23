@@ -1,0 +1,19 @@
+---
+# tasks file for roles/acme
+- name: ACME | Ensure presence of cerbot
+  community.general.snap:
+    name: certbot
+    classic: true
+
+- name: ACME | Ensure action is defined
+  ansible.builtin.fail:
+    msg: "You must define certbot_action as either 'generate' or 'revoke'."
+  when: certbot_action is not defined
+
+- name: ACME | Run certbot generate tasks
+  ansible.builtin.include_tasks: generate.yml
+  when: certbot_action == "generate"
+
+- name: ACME | Run certbot revoke tasks
+  ansible.builtin.include_tasks: revoke.yml
+  when: certbot_action == "revoke"

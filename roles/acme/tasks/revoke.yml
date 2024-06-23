@@ -1,0 +1,13 @@
+---
+- name: ACME | Revoke SSL certificates using certbot
+  ansible.builtin.command: >
+    sudo /usr/bin/certbot revoke --cert-path /etc/letsencrypt/live/{{ tld_domain_name }}/cert.pem --non-interactive --agree-tos
+    --email {{ certbot_email }}
+    --server https://acme.sectigo.com/v2/InCommonRSAOV
+    --eab-kid {{ eab_kid_value }}
+    --eab-hmac-key {{ eab_hmac_key_value }}
+  environment:
+    EAB_KID_VALUE: "{{ eab_kid_value }}"
+    EAB_HMAC_KEY_VALUE: "{{ eab_hmac_key_value }}"
+    TLD_DOMAIN_NAME: "{{ tld_domain_name }}"
+  changed_when: false
