@@ -1,0 +1,16 @@
+---
+- name: setup monit on pdc_infrastructure
+  hosts: pdc_production:prds_production
+  remote_user: pulsys
+  become: true
+  vars_files:
+    - ../../group_vars/all/vars.yml
+    - ../../group_vars/all/vault.yml
+
+  roles:
+    - role: roles/monit
+
+  post_tasks:
+    - name: send information to slack
+      ansible.builtin.include_tasks:
+        file: utils/slack_tasks_end_of_playbook.yml
