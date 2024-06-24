@@ -1,0 +1,11 @@
+{{ ansible_managed | comment }}
+check process {{ apache_service_name }}
+  with pidfile /var/run/{{ apache_service_name }}/{{ apache_service_name }}.pid
+  start program = "/usr/sbin/service {{ apache_service_name }} start"
+  stop program  = "/usr/sbin/service {{ apache_service_name }} stop"
+  if failed port 80 protocol http
+    request "/"
+    with timeout 10 seconds
+    then restart
+  if 5 restarts within 5 cycles then timeout
+

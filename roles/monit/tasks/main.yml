@@ -1,0 +1,23 @@
+---
+# tasks file for roles/monit
+- name: Monit | Install Monit
+  ansible.builtin.apt:
+    name: monit
+    state: present
+    update_cache: true
+
+- name: Monit | Ensure Monit is running
+  ansible.builtin.service:
+    name: monit
+    state: started
+    enabled: true
+
+- name: Monit | Create Monit configuration for Apache2
+  ansible.builtin.template:
+    src: apache2_monit.conf.j2
+    dest: "{{ monit_conf_dir }}/apache2_monit.conf"
+    owner: root
+    group: root
+    mode: '0644'
+  notify:
+    - Restart monit
