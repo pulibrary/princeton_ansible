@@ -1,35 +1,14 @@
 ---
-- name: ACME | Obtain SSL certificates using certbot with SAN domain
-  ansible.builtin.command: >
-    sudo /usr/bin/certbot certonly --standalone --non-interactive --agree-tos
-    --email {{ acme_certbot_email }}
-    --server https://acme.sectigo.com/v2/InCommonRSAOV
-    --eab-kid {{ acme_eab_kid_value }}
-    --eab-hmac-key {{ acme_eab_hmac_key_value }}
-    --domain {{ acme_tld_san_domain }}
-    --domain {{ acme_tld_san_domain_1 }}
-    --cert-name {{ acme_tld_domain_name }}
-  when: tld_san_domain is defined and tld_san_domain != ""
-  changed_when: false
-  environment:
-    EAB_KID_VALUE: "{{ acme_eab_kid_value }}"
-    EAB_HMAC_KEY_VALUE: "{{ acme_acme_eab_hmac_key_value }}"
-    TLD_SAN_DOMAIN: "{{ acme_tld_san_domain }}"
-    TLD_DOMAIN: "{{ acme_tld_san_domain_1 }}"
-    TLD_DOMAIN_NAME: "{{ acme_tld_domain_name }}"
+- name: ACME | Obtain SSL certificates using certbot
+  ansible.builtin.template:
+    src: generate_certbot.j2
+    dest: "/tmp/generate_certbot.sh"
+    mode: '0755'
+  loop: "{{ acme_tld_domain_name }}"
+  notify:
+    - Run generate_certbot
 
-- name: ACME | Obtain SSL certificates using certbot without SAN domain
-  ansible.builtin.command: >
-    sudo /usr/bin/certbot certonly --standalone --non-interactive --agree-tos
-    --email {{ acme_certbot_email }}
-    --server https://acme.sectigo.com/v2/InCommonRSAOV
-    --eab-kid {{ acme_eab_kid_value }}
-    --eab-hmac-key {{ acme_eab_hmac_key_value }}
-    --domain {{ acme_tld_domain_name }}
-    --cert-name {{ acme_tld_domain_name }}
-  when: tld_san_domain is not defined or tld_san_domain == ""
-  changed_when: false
-  environment:
-    EAB_KID_VALUE: "{{ acme_eab_kid_value }}"
-    EAB_HMAC_KEY_VALUE: "{{ acme_eab_hmac_key_value }}"
-    TLD_DOMAIN_NAME: "{{ acme_tld_domain_name }}"
+- name: ACME | Run generate_certbot
+  ansible.builtin.shell: /tmp/generate_certbot.sh
+  args:
+    removes: /tmp/generate_certbot.sh
