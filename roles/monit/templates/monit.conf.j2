@@ -8,4 +8,9 @@ check process {{ apache_service_name }}
     with timeout 10 seconds
     then restart
   if 5 restarts within 5 cycles then timeout
+  depends on {{ globus_ftp_service_name }}
 
+check process {{ globus_ftp_service_name }}
+  with pidfile /run/{{ globus_ftp_service_name }}.pid
+  start program = "/usr/sbin/service {{ globus_ftp_service_name }} start"
+  stop program  = "/usr/sbin/service {{ globus_ftp_service_name }} stop"
