@@ -1,0 +1,25 @@
+---
+# by default this playbook runs in the staging environment
+# to run in production, pass '-e runtime_env=production'
+- name: build whichiso
+  hosts: whichiso_{{ runtime_env | default('staging') }}
+  remote_user: pulsys
+  become: true
+  vars_files:
+    - ../site_vars.yml
+    - ../group_vars/whichiso/main.yml
+    - ../group_vars/whichiso/{{ runtime_env | default('staging') }}.yml
+    - ../group_vars/whichiso/vault.yml
+
+  vars:
+    - post_install: |
+        Possible Things left to do:
+        - run a cap deploy for whichiso: https://github.com/pulibrary/whichiso
+
+  roles:
+    - role: roles/rails_app
+
+  post_tasks:
+      - name: send information to slack
+        ansible.builtin.include_tasks:
+          file: utils/slack_tasks_end_of_playbook.yml
