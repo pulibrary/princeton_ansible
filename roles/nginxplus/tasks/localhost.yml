@@ -26,11 +26,19 @@
     mode: "0644"
   when: running_on_server
 
-- name: Nginxplus | add custom error page for default site
+- name: Nginxplus | add custom error pages
   ansible.builtin.copy:
-    src: files/error.html
-    dest: "/var/local/www/default/error.html"
+    src: "files/{{item}}"
+    dest: "/var/local/www/default/{{item}}"
     owner: nginx
     group: nginx
     mode: "0644"
   when: running_on_server
+  tags:
+    - error_pages
+  loop:
+    - "error.html"
+    - "error.json"
+    - "forbidden.json"
+    - "ratelimit.json"
+    - "too_large.json"
