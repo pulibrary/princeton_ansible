@@ -31,7 +31,7 @@
 
     - name: set filter condition
       ansible.builtin.set_fact:
-        filter_condition: 'value contains '
+        filter_condition: "value == "
 
     - name: set filter IP
       ansible.builtin.set_fact:
@@ -60,18 +60,17 @@
       register: sec_rules
 
     - name: Display rules for selected VM
-      vars: 
+      vars:
         output: "{{ VM_host_name }} allows the following traffic:\n
-            {% for item in sec_rules.gathered %}
-              {{ item.rule_name }}\n
-              Packets that match the signature for these applications {{ item.application }}\n
-              Any packets on the port(s) related to these services {{ item.service }}\n
-              From these source addresses (machine or subnet): {{ item.source_ip }}\n
-              \n
-                 {% endfor %}"
+          {% for item in sec_rules.gathered %}
+          {{ item.rule_name }}\n
+          Packets that match the signature for these applications {{ item.application }}\n
+          Any packets on the port(s) related to these services {{ item.service }}\n
+          From these source addresses (machine or subnet): {{ item.source_ip }}\n
+          \n
+          {% endfor %}"
       ansible.builtin.debug:
         msg: "{{ output.split('\n') }}"
-
 # Future work - create tasks to make changes:
 # - name: Generate a new Palo Alto rule set
 #   paloaltonetworks.panos.panos_security_rule:
