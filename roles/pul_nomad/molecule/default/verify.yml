@@ -1,0 +1,63 @@
+---
+# This is an example playbook to execute Ansible tests.
+
+- name: Verify
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: register output of consul members
+      command: consul members
+      environment:
+        CONSUL_HTTP_TOKEN: '{{ consul_acl_master_token }}'
+      register: consul_members_results
+    - name: test consul cluster has members
+      assert:
+        that:
+          - "'nomadserver1' in consul_members_results.stdout"
+          - "'nomadserver2' in consul_members_results.stdout"
+          - "'nomadserver3' in consul_members_results.stdout"
+          - "'nomadclient1' in consul_members_results.stdout"
+    - name: register output of consul DNS command
+      command: dig consul.service.consul SRV
+      register: consul_dns_results
+    - name: test consul dns has consul members
+      assert:
+        that:
+          - "'ANSWER SECTION:' in consul_dns_results.stdout"
+          - "'ANSWER: 3' in consul_dns_results.stdout"
+    - name: register output of nomad command
+      command: nomad operator raft list-peers
+      register: nomad_operator_raft_results
+      environment:
+        NOMAD_TOKEN: '{{ pul_nomad_management_token }}'
+    - name: test nomad cluster registration
+      assert:
+        that:
+          - "'nomadserver1' in nomad_operator_raft_results.stdout"
+- name: Verify Clients
+  hosts: nomad_clients
+  gather_facts: false
+  tasks:
+    - name: register output of nomad node status
+      command: nomad node status
+      environment:
+        NOMAD_TOKEN: '{{ pul_nomad_management_token }}'
+      register: nomad_node_status
+    - name: test nomad client status
+      assert:
+        that:
+          - "'nomadclient1' in nomad_node_status.stdout"
+          - "'ready' in nomad_node_status.stdout"
+- name: Verify Docker Nomad Driver
+  hosts: nomad_clients
+  gather_facts: false
+  tasks:
+    - name: register output of nomad node status
+      command: nomad node status -self
+      environment:
+        NOMAD_TOKEN: '{{ pul_nomad_management_token }}'
+      register: nomad_node_status
+    - name: test nomad docker driver
+      assert:
+        that:
+          - "'docker' in nomad_node_status.stdout"
