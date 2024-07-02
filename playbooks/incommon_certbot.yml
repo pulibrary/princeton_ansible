@@ -15,21 +15,16 @@
     when: ansible_limit is not defined
     run_once: true
   vars_files:
+    - ../group_vars/all/vars.yml
     - ../group_vars/all/vault.yml
 
+  roles:
+    - roles/acme
+
   tasks:
-    - name: install certbot software
-      ansible.builtin.apt:
-        name: "{{ item }}"
-        state: present
-      loop:
-        - certbot
 
-    - name: update acme certificates for {{ domain_name }}
-      ansible.builtin.command: /usr/bin/certbot certonly --standalone --non-interactive --agree-tos --email lsupport@princeton.edu --server https://acme.sectigo.com/v2/InCommonRSAOV --eab-kid {{ vault_acme_eab_kid }} --eab-hmac-key {{ vault_acme_eab_hmac_key }} --domain {{ domain_name }}.princeton.edu --cert-name {{ domain_name }}
-
-    - name: tell everyone on slack you ran an ansible playbook
-      community.general.slack:
-        token: "{{ vault_pul_slack_token }}"
-        msg: "Ansible ran `{{ ansible_play_name }}` on {{ inventory_hostname }}"
-        channel: "{{ slack_alerts_channel }}"
+    #    - name: tell everyone on slack you ran an ansible playbook
+    #      community.general.slack:
+    #        token: "{{ vault_pul_slack_token }}"
+    #        msg: "Ansible ran `{{ ansible_play_name }}` on {{ inventory_hostname }}"
+    #        channel: "{{ slack_alerts_channel }}"

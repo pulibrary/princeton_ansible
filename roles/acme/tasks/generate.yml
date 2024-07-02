@@ -1,0 +1,14 @@
+---
+- name: ACME | Obtain SSL certificates using certbot
+  ansible.builtin.template:
+    src: generate_certbot.j2
+    dest: "/tmp/generate_certbot.sh"
+    mode: '0755'
+  loop: "{{ acme_tld_domain_name }}"
+  notify:
+    - Run generate_certbot
+
+- name: ACME | Run generate_certbot
+  ansible.builtin.shell: /tmp/generate_certbot.sh
+  args:
+    removes: /tmp/generate_certbot.sh

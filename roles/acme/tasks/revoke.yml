@@ -1,0 +1,14 @@
+---
+- name: ACME | Revoke SSL certificates using certbot
+  ansible.builtin.template:
+    src: revoke_certbot.j2
+    dest: "/tmp/revoke_certbot.sh"
+    mode: '0755'
+  loop: "{{ acme_tld_domain_name }}"
+  notify:
+    - Run revoke_certbot
+
+- name: ACME | Run revoke_certbot
+  ansible.builtin.command: /tmp/revoke_certbot.sh
+  args:
+    removes: /tmp/revoke_certbot.sh
