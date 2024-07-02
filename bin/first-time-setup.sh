@@ -20,6 +20,7 @@ fi
 
 asdf plugin add awscli
 asdf plugin add python
+asdf plugin add ruby
 asdf install
 pip install pipenv
 gem install lastpass-ansible
