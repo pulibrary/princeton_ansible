@@ -1,0 +1,28 @@
+---
+name: Maintenance task
+about: Document some maintenance that needs to be done
+title: ''
+labels: maintenance
+assignees: ''
+
+---
+### What maintenance needs to be done?
+
+### Level of urgency
+- [ ] High
+- [ ] Moderate
+- [ ] Low
+
+### Relevant deadlines
+If this maintenance relates to an End of Life date or other deadline, please enter it here.
+- [ ] EOL Date MM/DD/YYYY
+
+### Why is this maintenance needed?
+- A clear description of why this is needed.
+
+### Acceptance criteria
+ - [ ]
+ - [ ]
+ - [ ]
+
+### Implementation notes, if any
