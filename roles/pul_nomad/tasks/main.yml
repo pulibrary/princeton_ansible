@@ -20,7 +20,7 @@
 # Get current tokens
 - name: 'pul_nomad | Register existing tokens'
   ansible.builtin.shell:
-    cmd: "consul acl token list -format json"
+    cmd: "/usr/local/bin/consul acl token list -format json"
   environment:
     CONSUL_HTTP_TOKEN: '{{ consul_acl_master_token }}'
   register: tokens
@@ -36,7 +36,7 @@
 
 - name: 'nomad-node | Generate Consul ACL Agent Token'
   ansible.builtin.shell:
-    cmd: "consul acl token create -node-identity '{{ inventory_hostname_short }}:dc1' -format json"
+    cmd: "/usr/local/bin/consul acl token create -node-identity '{{ inventory_hostname_short }}:dc1' -format json"
   when:
     - "inventory_hostname_short not in existing_node_names"
   environment:
@@ -46,7 +46,7 @@
 
 - name: 'nomad-node | Set Consul ACL Agent Token'
   ansible.builtin.shell:
-    cmd: "consul acl set-agent-token agent {{ created_agent_token.stdout | from_json | community.general.json_query('SecretID')}}"
+    cmd: "/usr/local/bin/consul acl set-agent-token agent {{ created_agent_token.stdout | from_json | community.general.json_query('SecretID')}}"
   environment:
     CONSUL_HTTP_TOKEN: '{{ consul_acl_master_token }}'
   when:
@@ -55,7 +55,7 @@
 
 - name: 'pul_nomad | Create DNS ACL token'
   ansible.builtin.shell:
-    cmd: "consul acl token create -templated-policy 'builtin/dns' -secret '{{ consul_dns_token }}'"
+    cmd: "/usr/local/bin/consul acl token create -templated-policy 'builtin/dns' -secret '{{ consul_dns_token }}'"
   environment:
     CONSUL_HTTP_TOKEN: '{{ consul_acl_master_token }}'
   when:
@@ -64,7 +64,7 @@
 
 - name: 'pul_nomad | Assign DNS ACL token'
   ansible.builtin.shell:
-    cmd: "consul acl set-agent-token dns '{{ consul_dns_token }}'"
+    cmd: "/usr/local/bin/consul acl set-agent-token dns '{{ consul_dns_token }}'"
   environment:
     CONSUL_HTTP_TOKEN: '{{ consul_acl_master_token }}'
 
@@ -72,29 +72,61 @@
 
 # tasks file for pulibrary-nomad-node
 - name: Add Docker GPG apt Key
-  when: "nomad_node_role == 'client'"
+  when:
+    - "nomad_node_role == 'client'"
+    - "ansible_os_family == 'Debian'"
   apt_key:
     url: https://download.docker.com/linux/ubuntu/gpg
     state: present
 
 - name: Add Docker Repository
-  when: "nomad_node_role == 'client'"
+  when:
+    - "nomad_node_role == 'client'"
+    - "ansible_os_family == 'Debian'"
   apt_repository:
     repo: deb https://download.docker.com/linux/ubuntu jammy stable
     state: present
 
 - name: Update apt and install docker-ce
-  when: "nomad_node_role == 'client'"
+  when:
+    - "nomad_node_role == 'client'"
+    - "ansible_os_family == 'Debian'"
   apt:
     name: docker-ce
     state: latest
     update_cache: true
 
-
 - name: 'nomad-node | Keep Docker up'
-  when: "nomad_node_role == 'client'"
+  when:
+    - "nomad_node_role == 'client'"
+    - "ansible_os_family == 'Debian'"
   ansible.builtin.service:
     name: "docker"
+    state: "started"
+    enabled: true
+
+# Only install podman on Rocky boxes - it's too out of date for Debian machines.
+- name: 'pul_nomad | Install Podman'
+  ansible.builtin.dnf:
+      name: podman
+      state: latest
+  when:
+    - "ansible_os_family == 'RedHat'"
+
+# DMIDecode is needed for Rocky boxes, it makes cpu fingerprinting work.
+- name: 'pul_nomad | Install dmidecode'
+  ansible.builtin.dnf:
+      name: dmidecode
+      state: latest
+  when:
+    - "ansible_os_family == 'RedHat'"
+
+- name: 'nomad-node | Keep Podman up'
+  when:
+    - "nomad_node_role == 'client'"
+    - "ansible_os_family == 'RedHat'"
+  ansible.builtin.service:
+    name: "podman.socket"
     state: "started"
     enabled: true
 
@@ -107,7 +139,7 @@
 
 - name: 'pul_nomad | Register existing policies'
   ansible.builtin.shell:
-    cmd: "consul acl policy list -format json"
+    cmd: "/usr/local/bin/consul acl policy list -format json"
   environment:
     CONSUL_HTTP_TOKEN: '{{ consul_acl_master_token }}'
   register: policies
@@ -119,7 +151,7 @@
 
 - name: 'pul_nomad | Install Nomad Consul Policy'
   ansible.builtin.shell:
-    cmd: "consul acl policy create -name 'nomad-agents' -description 'Policy for Nomad agents' -rules '@/etc/consul/pul_nomad_policy.hcl'"
+    cmd: "/usr/local/bin/consul acl policy create -name 'nomad-agents' -description 'Policy for Nomad agents' -rules '@/etc/consul/pul_nomad_policy.hcl'"
   environment:
     CONSUL_HTTP_TOKEN: '{{ consul_acl_master_token }}'
   when:
@@ -128,7 +160,7 @@
 
 - name: 'pul_nomad | Create nomad ACL token'
   ansible.builtin.shell:
-    cmd: "consul acl token create -policy-name 'nomad-agents' -secret '{{ nomad_consul_token }}'"
+    cmd: "/usr/local/bin/consul acl token create -policy-name 'nomad-agents' -secret '{{ nomad_consul_token }}'"
   environment:
     CONSUL_HTTP_TOKEN: '{{ consul_acl_master_token }}'
   when:
@@ -142,7 +174,7 @@
 
 - name: 'pul_nomad | Register existing nomad acl tokens'
   ansible.builtin.shell:
-    cmd: "nomad acl token list || true"
+    cmd: "/usr/local/bin/nomad acl token list || true"
   environment:
     NOMAD_TOKEN: '{{ pul_nomad_management_token }}'
   register: nomad_acl_tokens
@@ -152,7 +184,7 @@
 
 - name: 'pul_nomad | Bootstrap nomad'
   ansible.builtin.command:
-    cmd: nomad acl bootstrap -
+    cmd: /usr/local/bin/nomad acl bootstrap -
     stdin: '{{ pul_nomad_management_token }}'
   when:
     - "unique_command_runner == inventory_hostname"
