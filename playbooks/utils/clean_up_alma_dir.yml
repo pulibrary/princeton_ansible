@@ -1,0 +1,25 @@
+---
+- name: Delete oldest files from /alma directories
+  hosts: libsftp_{{ runtime_env | default 'production'}}
+  remote_user: pulsys
+  become: true
+
+  tasks:
+    - name: identify old files
+      # equivalent of find /alma/ -type f -not -newermt "2024-01-01" -ls
+      ansible.builtin.find:
+        paths: /alma
+        age: 12w # twelve weeks old, roughly 3 months
+        filetype: file
+        recurse: true
+      register: files_to_delete
+
+    - name: show old files
+      ansible.builtin.debug:
+        var: "{{ files_to_delete }}"
+
+    - name: delete old files
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop: "{{ files_to_delete }}"
