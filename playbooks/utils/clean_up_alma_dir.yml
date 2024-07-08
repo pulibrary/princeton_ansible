@@ -4,12 +4,23 @@
   remote_user: pulsys
   become: true
 
+  vars:
+    slack_alerts_channel: infrastructure
+
   tasks:
+
+    - set_fact:
+        mount: "{{ ansible_mounts[0] }}"
+    - set_fact: disk_usage="{{ mount.size_total - mount.size_available }}"
+    - set_fact: disk_usage_ratio="{{ disk_usage|float / mount.size_total }}"
+    - set_fact: disk_usage_s="{{ (disk_usage|float / 1000000000) | round(1, 'common') }}GB"
+    - set_fact: disk_total_s="{{ (mount.size_total / 1000000000) | round(1, 'common') }}GB"
+
     - name: identify old files
       # equivalent of find /alma/ -type f -not -newermt "2024-01-01" -ls
       ansible.builtin.find:
         paths: /alma
-        age: 12w # twelve weeks old, roughly 3 months
+        age: 20w # twelve weeks old, roughly 3 months
         filetype: file
         recurse: true
       register: files_to_delete
@@ -23,3 +34,10 @@
         path: "{{ item }}"
         state: absent
       loop: "{{ files_to_delete }}"
+
+  post_tasks:
+  - name: let folks on slack know the state of the directories
+    community.general.slack:
+      token: "{{ vault_tower_slack_token }}"
+      msg: "Ansible has successfully deleted old files from /alma on libsftp_{{ runtime_env | default('staging') }}. The {{ ansible_mounts[0].mount }} disk was using {{ disk_usage_s }} or {{ disk_usage_ratio }} of the space, before deleting."
+      channel: "{{ slack_alerts_channel }}"
