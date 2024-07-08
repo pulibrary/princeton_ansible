@@ -1,6 +1,5 @@
 {{ ansible_managed | comment }}
-check process {{ apache_service_name }}
-  with pidfile /var/run/{{ apache_service_name }}/{{ apache_service_name }}.pid
+check process {{ apache_service_name }} with pidfile /var/run/{{ apache_service_name }}/{{ apache_service_name }}.pid
   start program = "/usr/sbin/service {{ apache_service_name }} start"
   stop program  = "/usr/sbin/service {{ apache_service_name }} stop"
   if failed port 80 protocol http
@@ -8,9 +7,12 @@ check process {{ apache_service_name }}
     with timeout 10 seconds
     then restart
   if 5 restarts within 5 cycles then timeout
-  depends on {{ globus_ftp_service_name }}
-
-check process {{ globus_ftp_service_name }}
-  with pidfile /run/{{ globus_ftp_service_name }}.pid
+# Monitor and restart globus-gridftp-server after apache2 restarts
+check process {{ globus_ftp_service_name }} with pidfile /run/{{ globus_ftp_service_name }}.pid 
   start program = "/usr/sbin/service {{ globus_ftp_service_name }} start"
   stop program  = "/usr/sbin/service {{ globus_ftp_service_name }} stop"
+  if 5 restarts within 5 cycles then timeout
+
+# Trigger globus-gridftp-server restart on apache2 restart and log the restart
+check file apache2_error_log with path {{ apache_error_log_path }}
+  if match "AH00489" then exec "/usr/sbin/service globus-gridftp-server restart >> /var/log/globus_restart.log"
