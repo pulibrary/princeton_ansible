@@ -26,8 +26,12 @@
 
     - name: show old files
       ansible.builtin.debug:
-        var: item
-      loop: "{{ files_to_delete | dict2items }}"
+        var: item.path
+      loop: "{{ files_to_delete.files }}"
+      # msg: "{{ files_to_delete[item.path] }}"
+    # loop: "{{ files_to_delete.keys() | list }}"
+    # The task includes an option with an undefined variable.
+    # The error was: 'ansible.utils.unsafe_proxy.AnsibleUnsafeText object' has no attribute 'path'.
 
     - name: delete old files
       ansible.builtin.file:
