@@ -19,7 +19,7 @@
       # equivalent of find /alma/ -type f -not -newermt "2024-01-01" -ls
       ansible.builtin.find:
         paths: /alma/publishing
-        age: 20w # twelve weeks old, roughly 3 months
+        age: "{{ number_of_weeks }}"
         file_type: file
         recurse: true
       register: files_to_delete
@@ -39,5 +39,5 @@
     - name: let folks on slack know the state of the directories
       community.general.slack:
         token: "{{ vault_tower_slack_token }}"
-        msg: "Ansible has successfully deleted old files from /alma on libsftp_{{ runtime_env | default('staging') }}. The {{ ansible_mounts[0].mount }} disk was using {{ disk_usage_s }} or {{ disk_usage_ratio }} of the space, before deleting."
+        msg: "Ansible has deleted old files on libsftp_{{ runtime_env | default('staging') }}. The `{{ ansible_mounts[0].mount }}` disk was using {{ disk_usage_s }} or {{ disk_usage_ratio }} of the space, before deleting."
         channel: "{{ slack_alerts_channel }}"
