@@ -5,12 +5,14 @@
 # to deploy a selected branch, pass '-e branch_name=my_branch'
 # to deploy to production, pass '-e runtime_env=production'
 - name: Deploy code with Capistrano
-  hosts: towerdeploy
-  remote_user: pulsys
-  become: true
+  # hosts: towerdeploy
+  hosts: localhost
+  remote_user: deploy
+  # become: true
   vars:
     project_dir: /tmp/{{ repo_name }}
 #    github_key_path:
+
   pre_tasks:
   - name: tell git hub you are planning to deploy
     ansible.builtin.uri:
@@ -25,20 +27,72 @@
       follow_redirects: true
       status_code: 201,202
     register: git_result
+
   - name: debug
     ansible.builtin.debug:
       msg: 'Told git we were starting {{ git_result.json.id }}'
+
   - name: let folks on slack know a deploy has begun
     community.general.slack:
       token: "{{ vault_tower_slack_token }}"
       msg: "{{ tower_user_first_name | default('Ansible') }} has started a deploy of the `{{ branch_name | default('main') }}` branch of `{{ repo_name }}` to the {{ runtime_env | default('staging') }} environment. If you don't see a 'success' message, check the #ansible-alerts channel for failure details."
       channel: "{{ slack_alerts_channel }}"
+
   - name: let folks on slack know where to find the log
     community.general.slack:
       token: "{{ vault_tower_slack_token }}"
       msg: "Job progress can be found: https://ansible-tower.princeton.edu/#/jobs/playbook/{{ tower_job_id }}/output"
       channel: "{{ slack_alerts_channel }}"
     when: tower_job_id is defined
+
+  tasks:
+    - name: generate SSH code deploy key
+      community.crypto.openssh_keypair:
+        path: "/home/deploy/.ssh/code_deploy_key"
+        type: ed25519
+        state: present
+        force: false
+        owner: deploy
+        group: deploy
+        mode: 0400
+#      become: true
+#      become_user: deploy
+#      become_user: "{{ deploy_user }}"
+
+- name: Create the SSH connection so we can cap deploy
+  hosts: "{{ repo_name }}_{{ runtime_env }}"
+  remote_user: pulsys
+  # become: true
+
+  tasks:
+    - name: push the code deploy public key to hosts in the {{ repo_name }}_{{ runtime_env }} group
+      ansible.builtin.copy:
+        src: "/home/deploy/.ssh/code_deploy_key.pub"
+        # dest: /tmp/
+        dest: "/home/deploy/.ssh/code_deploy_key.pub"
+        group: deploy
+        owner: deploy
+        mode: 0777
+      # delegate_to: "{{ item }}"
+      # loop: "{{ groups[target_group] }}"
+
+    - name: install the key
+      ansible.posix.authorized_key:
+        user: deploy
+        state: present
+        manage_dir: true
+        key: "{{ lookup('file', '/home/deploy/.ssh/code_deploy_key.pub') }}"
+      #  key: "{{ lookup('file', '/home/deploy/.ssh/code_deploy_key.pub' }}"
+      become: true
+      # delegate_to: "{{ item }}"
+      # loop: "{{ groups[target_group] }}"
+
+- name: Actually cap deploy
+  hosts: localhost
+  remote_user: deploy
+  # become: true
+  vars:
+    project_dir: /tmp/{{ repo_name }}
 
   tasks:
     - name: update code repo
@@ -50,14 +104,37 @@
         version: "{{ branch_name | default('main') }}"
         clone: true
         update: true
-        # force: true
       become: true
       become_user: deploy
+      become_method: su
+
+    - name: do not use project-defined ruby version
+      ansible.builtin.file:
+        path: "{{ project_dir }}/.ruby-version"
+        state: absent
+
+    - name: make sure a log file exists
+      ansible.builtin.file:
+        path: "{{ project_dir }}/log/capistrano.log"
+        state: touch
+        owner: deploy
+        group: deploy
+
+    - name: check user
+      ansible.builtin.shell: "whoami"
+      register: current_user
+    
+    - name: display user
+      ansible.builtin.debug:
+        var: current_user
 
     - name: cap deploy
-      ansible.builtin.shell: "cd {{ project_dir }} && BRANCH={{ branch_name | default('main') }} /usr/local/bin/cap {{ runtime_env | default('staging') }} deploy"
+      ansible.builtin.shell:
+        cmd: "BRANCH={{ branch_name | default('main') }} cap {{ runtime_env | default('staging') }} deploy"
+        chdir: "{{ project_dir }}"
       become: true
       become_user: deploy
+      become_method: su
 
 #    - name: update PR
 #      could use the GitHub API:
@@ -82,4 +159,3 @@
         Content-Type: application/x-www-form-urlencoded
       follow_redirects: safe
       status_code: 201,202
-    
