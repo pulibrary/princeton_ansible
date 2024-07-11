@@ -1,7 +1,12 @@
 ---
 # tasks file for roles/researchdata
+- name: Researchdata | Create capistrano path
+  ansible.builtin.file:
+    path: "{{ capistrano_base_dir }}/shared"
+    state: directory
+    mode: "0755"
 
-- name:  add pg_trgm extension for drupal 10 postgres compatibility
+- name: Reseearchdata | add pg_trgm extension for drupal 10 postgres compatibility
   community.postgresql.postgresql_ext:
     name: pg_trgm
     db: "{{ drupal_db_name }}"
@@ -12,15 +17,15 @@
     login_password: "{{ db_clusteradmin_password }}"
   when: running_on_server
 
-- name: install the cron for running drush cron
-  cron:
+- name: Researchdata | install the cron for running drush cron
+  ansible.builtin.cron:
     name: "run drush cron"
     minute: 0
     job: "sudo -u {{ drupal_web_owner }} {{ drupal_docroot }}/current/vendor/bin/drush cron"
     user: "{{ deploy_user }}"
 
-- name: install the cron for migrating the training rss
-  cron:
+- name: Researchdata | install the cron for migrating the training rss
+  ansible.builtin.cron:
     name: "run rss event migration"
     minute: 10
     job: "sudo -u {{ drupal_web_owner }} {{ drupal_docroot }}/current/vendor/bin/drush migrate:import -y event_rss_importer"
