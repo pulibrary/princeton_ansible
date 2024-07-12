@@ -16,5 +16,14 @@
     #- ../../group_vars/all/checkmk.yml  # this is the likely correct path when prod goes live
     - ../../group_vars/checkmk/vault.yml
 
+  pre_tasks:
+    - name: set stripped agent hostname as fact
+      ansible.builtin.set_fact:
+        checkmk_agent_host_name: "{{ inventory_hostname | regex_search('^[^.]*') }}"
+
+    - name: did that regex work?
+      ansible.builtin.debug:
+        var: checkmk_agent_host_name
+
   roles:
     - role: checkmk.general.agent
