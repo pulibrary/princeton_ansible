@@ -1,9 +1,4 @@
-# Ansible managed
-map "$http_origin" $cors {
-  default '';
-  "~^https?://localhost(:[0-9]+)?$" "$http_origin";
-  "~^https?://{{ static_tables_cors_allow }}$" "$http_origin";
-}
+{{ ansible_managed | comment }}
 
 server {
     listen       80;
@@ -12,9 +7,7 @@ server {
     #access_log  /var/log/nginx/host.access.log  main;
 
     location / {
-        if ($cors != "") {
-          add_header 'Access-Control-Allow-Origin' "$cors" always;
-        }
+        add_header Access-Control-Allow-Origin '*';
         root   /opt/static_tables/current/dist;
         index  index.html index.htm;
         try_files $uri $uri/ /index.html;
@@ -34,3 +27,4 @@ server {
     #     root   /usr/share/nginx/html;
     # }
 }
+
