@@ -1,7 +1,7 @@
 ---
 # tasks file for nfsserver
 #
-- name: nfsserver | create shares
+- name: Nfsserver | create shares
   ansible.builtin.file:
     path: "{{ item }}"
     state: directory
@@ -16,19 +16,18 @@
     - "{{ open_marc_records_mount }}"
     - "{{ tigerdata_fileshare_mount }}"
 
-- name: nfsserver | add conan group
-
+- name: Nfsserver | add conan group
   ansible.builtin.group:
     name: "conan"
 
-- name: deploy_user | create system user
+- name: Nfsserver | create system user
   ansible.builtin.user:
     name: "conan"
     group: "conan"
     home: "/home/conan"
     shell: "/usr/bin/bash"
 
-- name: nfsserver | create cdh shares
+- name: Nfsserver | create cdh shares
   ansible.builtin.file:
     path: "{{ item }}"
     state: directory
@@ -39,34 +38,35 @@
   loop:
     - "{{ cdh_fileshare_mount }}"
 
-- name: nfsserver | add fqdn for idmapping
-  ansible.builtin.lineinfile:
-    path: /etc/idmapd.conf
-    insertbefore: '# Domain = localdomain'
-    line: "Domain = {{ inventory_hostname }}"
-    state: present  
-  when: running_on_server
-
-- name: nfsserver | make idmapping work
+- name: Nfsserver | make idmapping work
   ansible.builtin.copy:
     content: "options nfsd nfs4_disable_idmapping=N"
     dest: "/etc/modprobe.d/nfsd.conf"
     mode: "0644"
   when: running_on_server
 
-- name: nfsserver | install nfsserver packages
+- name: Nfsserver | install nfsserver packages
   ansible.builtin.apt:
     name: "{{ nfsserver_packages }}"
     state: present
   when: nfsserver_is_local
 
-- name: nfsserver | install nfsclient packages
+- name: Nfsserver | install nfsclient packages
   ansible.builtin.apt:
     name: "{{ nfsclient_packages }}"
     state: present
   when: not nfsserver_is_local
 
-- name: nfsserver | configure exports
+- name: Nfsserver | add fqdn for idmapping
+  ansible.builtin.lineinfile:
+    path: /etc/idmapd.conf
+    insertbefore: '# Domain = localdomain'
+    line: "Domain = {{ inventory_hostname }}"
+    state: present
+  when:
+    - running_on_server
+
+- name: Nfsserver | configure exports
   ansible.builtin.template:
     src: exports.j2
     dest: /etc/exports
@@ -75,7 +75,7 @@
     - reload exports
   when: nfsserver_is_local
 
-- name: nfsserver | start nfs server
+- name: Nfsserver | start nfs server
   ansible.builtin.service:
     name: "{{ nfsserver_services }}"
     state: started

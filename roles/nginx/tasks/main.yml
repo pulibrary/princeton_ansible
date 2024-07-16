@@ -1,0 +1,48 @@
+---
+# tasks file for roles/nginx
+- name: Nginx | Install prerequisites
+  ansible.builtin.apt:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - curl
+    - gnupg2
+    - ca-certificates
+    - lsb-release
+    - ubuntu-keyring
+
+- name: Nginx | import signing key
+  ansible.builtin.apt_key:
+    state: present
+    url: https://nginx.org/keys/nginx_signing.key
+
+- name: Add Nginx repository
+  ansible.builtin.apt_repository:
+    repo: deb http://nginx.org/packages/ubuntu/ {{ ansible_distribution_release }} nginx
+    state: present
+    filename: nginx
+
+- name: Nginx | Refresh apt cache
+  ansible.builtin.apt:
+    update_cache: true
+
+- name: Nginx | Install Nginx
+  ansible.builtin.apt:
+    name: nginx
+    state: present
+
+- name: Nginx | copy configuration
+  ansible.builtin.template:
+    src: default.conf.j2
+    dest: "{{ nginx_config_file }}"
+    mode: "0755"
+  notify:
+    - Restart Nginx
+  when: running_on_server
+
+- name: Nginx | Ensure Nginx is running
+  ansible.builtin.service:
+    name: nginx
+    state: started
+    enabled: true
+  when: running_on_server
