@@ -1,0 +1,51 @@
+---
+- name: List all VMs in the dev vSphere
+  hosts: localhost
+  remote_user: pulsys
+  become: true
+
+  vars_files:
+    - ../../group_vars/vsphere/vault.yml
+    - ../../group_vars/vsphere/{{ runtime_env | default('staging') }}.yml
+
+  # vars:
+  #   vcenter_host:
+  #   vcenter_username:
+  #   vcenter_password:
+  #   vcenter_validate_certs: false
+
+  tasks:
+    - name: Gather state of VM to reboot
+      community.vmware.vmware_vm_info:
+        hostname: "{{ vcenter_hostname }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        validate_certs: false
+        datacenter: "{{ vcenter_datacenter }}"
+        cluster: "{{ vcenter_cluster }}"
+        vm_name: "{{ vm_to_reboot }}"
+      facts:
+        - mac_address
+        - uuid
+        - datastore_url
+      register: vm_info
+
+    - name: View VM state
+      ansible.builtin.debug:
+        var: vm_info
+
+    - name: Reboot a virtual machine using UUID
+      community.vmware.vmware_guest_powerstate:
+        hostname: "{{ vcenter_hostname }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        validate_certs: false
+        datacenter: "{{ vcenter_datacenter }}"
+        cluster: "{{ vcenter_cluster }}"
+        uuid: "{{ vm_info.uuid }}"
+        state: reboot_guest
+      register: reboot_status
+
+    - name: view the status
+      ansible.builtin.debug:
+        var: reboot_status
