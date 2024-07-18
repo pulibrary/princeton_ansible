@@ -29,8 +29,7 @@
 
     - name: show old files
       ansible.builtin.debug:
-        msg: this playbook will delete "{{ item.path }}"
-      loop: "{{ files_to_delete.files }}"
+        msg: this playbook will delete "{{ files_to_delete.files | map(attribute='path') | list | join(", ") }}"
 
     - name: delete old files
       ansible.builtin.file:
@@ -42,5 +41,5 @@
     - name: let folks on slack know the state of the directories
       community.general.slack:
         token: "{{ vault_tower_slack_token }}"
-        msg: "Ansible has deleted old files from {{ alma_path }} on libsftp_{{ runtime_env | default('staging') }}. The `{{ ansible_mounts[0].mount }}` disk was using {{ disk_usage_s }} or {{ disk_usage_ratio }} of the space, before deleting."
+        msg: "Ansible has deleted old files from /alma/{{ alma_subdir }} on libsftp_{{ runtime_env | default('staging') }}. The `{{ ansible_mounts[0].mount }}` disk was using {{ disk_usage_s }} or {{ disk_usage_ratio }} of the space, before deleting."
         channel: "{{ slack_alerts_channel }}"
