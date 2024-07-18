@@ -29,15 +29,15 @@
         msg: this playbook will delete "{{ item.path }}"
       loop: "{{ files_to_delete.files }}"
 
-    - name: delete old files
-      ansible.builtin.file:
-        path: "{{ item.path }}"
-        state: absent
-      loop: "{{ files_to_delete.files }}"
-
-  post_tasks:
-    - name: let folks on slack know the state of the directories
-      community.general.slack:
-        token: "{{ vault_tower_slack_token }}"
-        msg: "Ansible has deleted old files from {{ alma_path }} on libsftp_{{ runtime_env | default('staging') }}. The `{{ ansible_mounts[0].mount }}` disk was using {{ disk_usage_s }} or {{ disk_usage_ratio }} of the space, before deleting."
-        channel: "{{ slack_alerts_channel }}"
+  #   - name: delete old files
+  #     ansible.builtin.file:
+  #       path: "{{ item.path }}"
+  #       state: absent
+  #     loop: "{{ files_to_delete.files }}"
+  # 
+  # post_tasks:
+  #   - name: let folks on slack know the state of the directories
+  #     community.general.slack:
+  #       token: "{{ vault_tower_slack_token }}"
+  #       msg: "Ansible has deleted old files from {{ alma_path }} on libsftp_{{ runtime_env | default('staging') }}. The `{{ ansible_mounts[0].mount }}` disk was using {{ disk_usage_s }} or {{ disk_usage_ratio }} of the space, before deleting."
+  #       channel: "{{ slack_alerts_channel }}"
