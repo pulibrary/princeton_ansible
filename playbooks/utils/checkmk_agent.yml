@@ -15,22 +15,13 @@
     - ../../group_vars/checkmk/{{ runtime_env | default('staging') }}.yml
     #- ../../group_vars/all/checkmk.yml  # this is the likely correct path when prod goes live
     - ../../group_vars/checkmk/vault.yml
+  vars:
+    checkmk_agent_host_ip: "{{ hostvars[inventory_hostname]['ansible_default_ipv4']['address'] }}"
 
   pre_tasks:
-    - name: set stripped agent hostname as fact
+    - name: set stripped agent hostname (only content before the first .) as fact
       ansible.builtin.set_fact:
         checkmk_agent_host_name: "{{ inventory_hostname | regex_search('^[^.]*') }}"
 
-    - name: did that regex work?
-      ansible.builtin.debug:
-        var: checkmk_agent_host_name
-
-  tasks:
-    - name: view hostvar IP
-      ansible.builtin.debug
-        var: ansible_default_ipv4
-        # the agent role sets checkmk_agent_host_ip to:
-        #  "{{ hostvars[inventory_hostname]['ansible_default_ipv4']['address'] }}"
-
-  # roles:
-  #   - role: checkmk.general.agent
+  roles:
+    - role: checkmk.general.agent
