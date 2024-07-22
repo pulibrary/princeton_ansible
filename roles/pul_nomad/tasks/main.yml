@@ -1,0 +1,190 @@
+---
+# tasks file for pul_nomad
+- name: 'pul_nomad | Install consul'
+  ansible.builtin.include_role:
+    name: 'ansible-consul'
+    public: true
+
+# Set up a runner host
+- name: 'pul_nomad | register a host to run unique commands'
+  set_fact:
+    unique_command_runner: "{{ groups['nomad_servers'][0] }}"
+  run_once: true
+
+# Output unique_command runner
+- name: 'pul_nomad | output unique_command_runner'
+  debug:
+    msg: "unique_command_runner: {{ unique_command_runner }}, inventory_hostname: {{ inventory_hostname }}"
+
+# Set up DNS ACLs
+# Get current tokens
+- name: 'pul_nomad | Register existing tokens'
+  ansible.builtin.shell:
+    cmd: "consul acl token list -format json"
+  environment:
+    CONSUL_HTTP_TOKEN: '{{ consul_acl_master_token }}'
+  register: tokens
+  changed_when: false
+
+- name: 'pul_nomad | Store existing_consul_tokens'
+  set_fact:
+    existing_consul_tokens: "{{ tokens.stdout | from_json | map(attribute='SecretID') }}"
+
+- name: 'nomad-node | Register existing node identities'
+  set_fact:
+    existing_node_names: "{{ tokens.stdout | from_json | community.general.json_query('[*].NodeIdentities[].NodeName') }}"
+
+- name: 'nomad-node | Generate Consul ACL Agent Token'
+  ansible.builtin.shell:
+    cmd: "consul acl token create -node-identity '{{ inventory_hostname_short }}:dc1' -format json"
+  when:
+    - "inventory_hostname_short not in existing_node_names"
+  environment:
+    CONSUL_HTTP_TOKEN: '{{ consul_acl_master_token }}'
+  register: created_agent_token
+  changed_when: false
+
+- name: 'nomad-node | Set Consul ACL Agent Token'
+  ansible.builtin.shell:
+    cmd: "consul acl set-agent-token agent {{ created_agent_token.stdout | from_json | community.general.json_query('SecretID')}}"
+  environment:
+    CONSUL_HTTP_TOKEN: '{{ consul_acl_master_token }}'
+  when:
+    - "inventory_hostname_short not in existing_node_names"
+    - created_agent_token
+
+- name: 'pul_nomad | Create DNS ACL token'
+  ansible.builtin.shell:
+    cmd: "consul acl token create -templated-policy 'builtin/dns' -secret '{{ consul_dns_token }}'"
+  environment:
+    CONSUL_HTTP_TOKEN: '{{ consul_acl_master_token }}'
+  when:
+    - "unique_command_runner == inventory_hostname"
+    - "consul_dns_token not in existing_consul_tokens"
+
+- name: 'pul_nomad | Assign DNS ACL token'
+  ansible.builtin.shell:
+    cmd: "consul acl set-agent-token dns '{{ consul_dns_token }}'"
+  environment:
+    CONSUL_HTTP_TOKEN: '{{ consul_acl_master_token }}'
+
+# Consul setup for nomad
+
+# tasks file for pulibrary-nomad-node
+- name: Add Docker GPG apt Key
+  when: "nomad_node_role == 'client'"
+  apt_key:
+    url: https://download.docker.com/linux/ubuntu/gpg
+    state: present
+
+- name: Add Docker Repository
+  when: "nomad_node_role == 'client'"
+  apt_repository:
+    repo: deb https://download.docker.com/linux/ubuntu jammy stable
+    state: present
+
+- name: Update apt and install docker-ce
+  when: "nomad_node_role == 'client'"
+  apt:
+    name: docker-ce
+    state: latest
+    update_cache: true
+
+
+- name: 'nomad-node | Keep Docker up'
+  when: "nomad_node_role == 'client'"
+  ansible.builtin.service:
+    name: "docker"
+    state: "started"
+    enabled: true
+
+- name: 'pul_nomad | Create Nomad Policy to reference'
+  ansible.builtin.copy:
+    src: pul_nomad_policy.hcl
+    dest: "/etc/consul/pul_nomad_policy.hcl"
+    owner: "{{ consul_user }}"
+    group: "{{ consul_group }}"
+
+- name: 'pul_nomad | Register existing policies'
+  ansible.builtin.shell:
+    cmd: "consul acl policy list -format json"
+  environment:
+    CONSUL_HTTP_TOKEN: '{{ consul_acl_master_token }}'
+  register: policies
+  changed_when: false
+
+- name: 'pul_nomad | Store existing_consul_policies'
+  set_fact:
+    existing_consul_policies: "{{ policies.stdout | from_json | map(attribute='Name') }}"
+
+- name: 'pul_nomad | Install Nomad Consul Policy'
+  ansible.builtin.shell:
+    cmd: "consul acl policy create -name 'nomad-agents' -description 'Policy for Nomad agents' -rules '@/etc/consul/pul_nomad_policy.hcl'"
+  environment:
+    CONSUL_HTTP_TOKEN: '{{ consul_acl_master_token }}'
+  when:
+    - "unique_command_runner == inventory_hostname"
+    - "'nomad-agents' not in existing_consul_policies"
+
+- name: 'pul_nomad | Create nomad ACL token'
+  ansible.builtin.shell:
+    cmd: "consul acl token create -policy-name 'nomad-agents' -secret '{{ nomad_consul_token }}'"
+  environment:
+    CONSUL_HTTP_TOKEN: '{{ consul_acl_master_token }}'
+  when:
+    - "unique_command_runner == inventory_hostname"
+    - "nomad_consul_token not in existing_consul_tokens"
+
+- name: 'pul_nomad | Install nomad'
+  ansible.builtin.include_role:
+    name: 'ansible-nomad'
+    public: true
+
+- name: 'pul_nomad | Register existing nomad acl tokens'
+  ansible.builtin.shell:
+    cmd: "nomad acl token list || true"
+  environment:
+    NOMAD_TOKEN: '{{ pul_nomad_management_token }}'
+  register: nomad_acl_tokens
+  when:
+    - "unique_command_runner == inventory_hostname"
+  changed_when: false
+
+- name: 'pul_nomad | Bootstrap nomad'
+  ansible.builtin.command:
+    cmd: nomad acl bootstrap -
+    stdin: '{{ pul_nomad_management_token }}'
+  when:
+    - "unique_command_runner == inventory_hostname"
+    - "'Bootstrap Token' not in nomad_acl_tokens.stdout "
+
+- import_tasks: dpul_c.yml
+  tags:
+    - notest
+    - dpulc
+
+- name: 'pul_nomad | Install deploy user'
+  ansible.builtin.include_role:
+    name: 'deploy_user'
+    public: true
+  when:
+    - "nomad_node_role == 'server'"
+
+- name: 'pul_nomad | export NOMAD_TOKEN for deploy user'
+  ansible.builtin.lineinfile:
+    dest: "/home/deploy/.bashrc"
+    state: present
+    regexp: '^export NOMAD_TOKEN'
+    line: "export NOMAD_TOKEN={{ pul_nomad_management_token }}"
+    insertbefore: BOF
+  when:
+    - "nomad_node_role == 'server'"
+- name: 'pul_nomad | export GITHUB_TOKEN for deploy user'
+  ansible.builtin.lineinfile:
+    dest: "/home/deploy/.bashrc"
+    state: present
+    regexp: '^export GITHUB_TOKEN'
+    line: "export GITHUB_TOKEN={{ tower_github_token }}"
+    insertbefore: BOF
+  when:
+    - "nomad_node_role == 'server'"
