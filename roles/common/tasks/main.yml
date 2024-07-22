@@ -12,9 +12,11 @@
   loop:
     - ca-certificates
     - apt-transport-https
+  when:
+    - ansible_os_family == "Debian"
 
 - name: common | install snapd
-  ansible.builtin.apt:
+  ansible.builtin.package:
     name: "{{ item }}"
     state: present
   loop:
@@ -28,7 +30,7 @@
   when: running_on_server
 
 - name: common | install building software and build essentials
-  ansible.builtin.apt:
+  ansible.builtin.package:
     name: "{{ item }}"
     state: present
     update_cache: true
@@ -40,6 +42,11 @@
     dest: "/etc/tmux.conf"
     mode: 0644
 
+- name: common | create vim directory
+  ansible.builtin.file:
+    path: /etc/vim
+    state: directory
+
 - name: common | copy vimrc
   ansible.builtin.copy:
     src: files/vimrc.local
@@ -47,7 +54,7 @@
     mode: 0644
 
 - name: common | install configured dependencies
-  ansible.builtin.apt:
+  ansible.builtin.package:
     name: '{{ configured_dependencies }}'
     state: present
 
@@ -58,12 +65,16 @@
   retries: 3
   delay: 60
   until: duf_repo is succeeded
-  when: running_on_server
+  when:
+    - running_on_server
+    - ansible_os_family == "Debian"
 
 - name: common | install dust
   ansible.builtin.apt:
     deb: "{{ dust_url }}/v{{ dust_version }}/du-dust_{{ dust_version }}-1_amd64.deb"
-  when: running_on_server
+  when:
+    - running_on_server
+    - ansible_os_family == "Debian"
 
 - name: common | install fdfind
   ansible.builtin.apt:
