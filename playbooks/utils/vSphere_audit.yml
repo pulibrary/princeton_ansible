@@ -1,0 +1,57 @@
+---
+- name: Get info from vSphere
+  hosts: localhost
+
+  vars_files:
+    - ../../group_vars/vsphere/vault.yml
+    - ../../group_vars/vsphere/{{ runtime_env | default('staging') }}.yml
+
+  tasks:
+    - name: Gather info on templates
+      community.vmware.vmware_vm_info:
+        hostname: "{{ vcenter_hostname }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        validate_certs: false
+        show_datacenter: true
+        show_cluster: true
+        show_esxi_hostname: true
+        vm_type: template
+      register: template_info
+
+    - name: View template info
+      ansible.builtin.debug:
+        var: template_info
+
+    - name: Gather info on ESXi hosts
+      community.vmware.vmware_host_facts:
+        hostname: "{{ vcenter_hostname }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        validate_certs: false
+        show_datacenter: true
+        # schema: vsphere
+        # properties:
+        #   - hardware.memorySize
+        #   - something like numberOfVMs?
+      register: esxi_host_info
+
+    - name: View ESXi host info
+      ansible.builtin.debug:
+        var: esxi_host_info
+
+    - name: Gather info on storage
+      community.vmware.vmware_datastore_info:
+        hostname: "{{ vcenter_hostname }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        validate_certs: false
+        # schema: vsphere
+        # properties:
+        #   - name
+        #   - something like availableSpace?
+      register: storage_info
+
+    - name: View storage availability
+      ansible.builtin.debug:
+        var: storage_info
