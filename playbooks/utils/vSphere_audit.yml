@@ -23,17 +23,16 @@
       ansible.builtin.debug:
         var: template_info
 
-    - name: Gather info on ESXi hosts
+    - name: Gather memory stats on ESXi hosts
       community.vmware.vmware_host_facts:
         hostname: "{{ vcenter_hostname }}"
         username: "{{ vcenter_username }}"
         password: "{{ vcenter_password }}"
         validate_certs: false
         esxi_hostname: "{{ item }}"
-        # schema: vsphere
-        # properties:
-        #   - hardware.memorySize
-        #   - something like numberOfVMs?
+        schema: vsphere
+        properties:
+          - ansible_memfree_mb
       loop:
         - lib-vmserv001a-dev.princeton.edu
         - lib-vmserv002a-dev.princeton.edu
@@ -41,11 +40,11 @@
         - lib-vmserv001b-dev.princeton.edu
         - lib-vmserv002b-dev.princeton.edu
         - lib-vmserv003b-dev.princeton.edu
-      register: esxi_host_info
+      register: esxi_host_memory
 
-    - name: View ESXi host info
+    - name: View ESXi memory stats
       ansible.builtin.debug:
-        var: esxi_host_info
+        var: esxi_host_memory
 
     - name: Gather info on storage
       community.vmware.vmware_datastore_info:
@@ -53,10 +52,10 @@
         username: "{{ vcenter_username }}"
         password: "{{ vcenter_password }}"
         validate_certs: false
-        # schema: vsphere
-        # properties:
-        #   - name
-        #   - something like availableSpace?
+        schema: vsphere
+        properties:
+          - name
+          - freeSpace
       register: storage_info
 
     - name: View storage availability
