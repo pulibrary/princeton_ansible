@@ -1,5 +1,5 @@
 ---
-- name: Get info from vSphere
+- name: View information about templates, VMs, memory, and storage from vSphere
   hosts: localhost
 
   vars_files:
@@ -19,26 +19,97 @@
         vm_type: template
       register: template_info
 
-    - name: View template info
-      ansible.builtin.debug:
-        var: template_info
+    - name: Get a list of templates
+      ansible.builtin.set_fact:
+        template_names: "{{ template_info.virtual_machines | map(attribute='guest_name') }}"
 
-    - name: Gather info on ESXi hosts
-      community.vmware.vmware_host_facts:
+    - name: View list of templates
+      ansible.builtin.debug:
+        var: template_names
+
+    - name: Gather info on vms
+      community.vmware.vmware_vm_info:
         hostname: "{{ vcenter_hostname }}"
         username: "{{ vcenter_username }}"
         password: "{{ vcenter_password }}"
         validate_certs: false
         show_datacenter: true
-        # schema: vsphere
-        # properties:
-        #   - hardware.memorySize
-        #   - something like numberOfVMs?
-      register: esxi_host_info
+        show_cluster: true
+        show_esxi_hostname: true
+        vm_type: vm
+      register: vm_info
 
-    - name: View ESXi host info
+    - name: View vm info
       ansible.builtin.debug:
-        var: esxi_host_info
+        var: vm_info
+
+    - name: Get a list of esxi_hosts
+      ansible.builtin.set_fact:
+        esxi_hostnames: "{{ vm_info.virtual_machines | map(attribute='esxi_hostname') | unique }}"
+
+    - name: View esxi host info
+      ansible.builtin.debug:
+        var: esxi_hostnames
+
+    - name: Gather memory stats on ESXi hosts
+      community.vmware.vmware_host_facts:
+        hostname: "{{ vcenter_hostname }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        validate_certs: false
+        esxi_hostname: "{{ item }}"
+        schema: vsphere
+        properties:
+          - summary.config.name
+          - hardware.memorySize
+          - summary.quickStats.overallMemoryUsage
+      loop: "{{ esxi_hostnames }}"
+      register: esxi_host_memory
+
+    - name: View ESXi memory stats
+      ansible.builtin.debug:
+        var: esxi_host_memory
+        # divide by 1073741824 to get gigabytes
+
+    - name: Get array of ESXi memory stats
+      ansible.builtin.set_fact:
+        slim_esxi_host_memory: "{{ esxi_host_memory | community.general.json_query('results[*].ansible_facts.{Name: summary.config.name, Usedmemory: summary.quickStats.overallMemoryUsage, Totalmemory: hardware.memorySize}') }}"
+
+    - name: View array of ESXi stats
+      ansible.builtin.debug:
+        var: slim_esxi_host_memory
+
+    # I tried to copy the way this blog post: https://www.middlewareinventory.com/blog/ansible-json-query/
+    # built its "phonebook" in this task but it never worked
+    # if I put ':' between the items, it says
+    # "template error while templating string: expected token ',', got ':'. String: {{ memory_stats | default({}) | combine ( {item.Name: item.Usedmemory: item.Totalmemory} ) }}. expected token ',', got ':'",
+    # if I put ',' instead, it says
+    # "template error while templating string: expected token ':', got ','. String: {{ memory_stats | default({}) | combine ( {item.Name, item.Usedmemory, item.Totalmemory} ) }}. expected token ':', got ','",
+    # - name: JSON view of ESXi memory stats
+    #   ansible.builtin.set_fact:
+    #     memory_stats: "{{ memory_stats | default({}) | combine ( {item.Name: item.Usedmemory: item.Totalmemory} ) }}"
+    #   loop: "{{ slim_esxi_host_memory }}"
+
+    # - name: View dict of ESXi stats
+    #   ansible.builtin.debug:
+    #     var: memory_stats
+
+    - name: Better view of ESXi memory stats
+      ansible.builtin.debug:
+        # var: slim_esxi_host_memory
+        # {{ slim_tagged_vms | selectattr('Tag_name', 'equalto', item) | map(attribute='VM_name') }}
+        msg: The {{ item }} server is using {{ slim_esxi_host_memory | selectattr('Name', 'equalto', item) | map(attribute='Usedmemory') | sum | human_readable }} out of {{ slim_esxi_host_memory | selectattr('Name', 'equalto', item) | map(attribute='Totalmemory') | sum | human_readable(unit='G') }} total.
+      loop: "{{ esxi_hostnames }}"  # divide by 1073741824 to get gigabytes
+        # currently we get 0.0 GB used out of 511; should be 129 or so out of 511 for that host
+        # need to find the correct data for that
+
+    - name: show number of VMs by esxi_hostname
+      ansible.builtin.debug:
+        msg:
+          - The {{ item }} esxi_hostname contains {{ vm_info.virtual_machines | selectattr('esxi_hostname', 'equalto', item) | length }} VMs
+          # - which have disk sizes of {{ slim_tagged_vms | selectattr('Tag_name', 'equalto', item) | map(attribute='Disk_size') }}
+          # - the total size of the {{ item }} backup is {{ slim_tagged_vms | selectattr('Tag_name', 'equalto', item) | map(attribute='Disk_size') | sum | human_readable }}
+      loop: "{{ esxi_hostnames }}"
 
     - name: Gather info on storage
       community.vmware.vmware_datastore_info:
@@ -46,12 +117,25 @@
         username: "{{ vcenter_username }}"
         password: "{{ vcenter_password }}"
         validate_certs: false
-        # schema: vsphere
-        # properties:
-        #   - name
-        #   - something like availableSpace?
+        schema: vsphere
+        properties:
+          - info.name
+          - info.freeSpace
       register: storage_info
+
+    - name: Get a list of storage nodes
+      ansible.builtin.set_fact:
+        storage_nodes: "{{ storage_info.datastores | map(attribute='info.name') | unique }}"
 
     - name: View storage availability
       ansible.builtin.debug:
         var: storage_info
+
+    - name: View storage node list
+      ansible.builtin.debug:
+        var: storage_nodes
+
+    - name: better view of storage info
+      ansible.builtin.debug:
+        msg: The {{ item }} datastore has {{ storage_info.datastores | selectattr('info.name', 'equalto', item) | map(attribute='info.freeSpace') | sum | human_readable }} of free space.
+      loop: "{{ storage_nodes }}"
