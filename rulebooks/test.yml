@@ -1,0 +1,27 @@
+---
+# this rulebook contains the basics:
+# a source and a rule with one condition and one action
+- name: First PUL rulebook - reboot a VM
+  # not sure what the 'hosts' line should be for a rulebook
+  # does this value get passed to the playbook when a condition is met?
+  hosts: sandbox-vkarasic.lib.princeton.edu
+  gather_facts: true
+  sources:
+    # this is not working - we need to understand the specifics
+    # of setting up a webhook from CheckMK
+    # or can we use the existing Slack webhook?
+    - name: CheckMK webhook
+      ansible.eda.webhook:
+        host: 0.0.0.0
+        port: 5000
+
+  rules:
+    - name: service is down
+      # this doesn't work yet either
+      # we need a way to view the content of the incoming webhook
+      # once we can see that, we can make the condition match the content 
+      condition: event.payload.message == "Service: Systemd Service Summary State: CRITICAL"
+      # this ^^^ is based on the messages we see when a service goes down and CheckMK alerts us in slack
+      action:
+        run_playbook:
+          name: ../playbooks/utils/vm_reboot.yml
