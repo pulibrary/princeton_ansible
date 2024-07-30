@@ -88,9 +88,13 @@
         wait_for_ip_address: true
       register: new_vm_deets
 
-    - name: view new VM details
+    # - name: view new VM details
+    #   ansible.builtin.debug:
+    #     var: new_vm_deets
+
+    - name: view automatically added mac address
       ansible.builtin.debug:
-        var: new_vm_deets
+        var: new_vm_deets.instance.hw_eth0.mac_address
 
     - name: add NIC with custom mac address
       community.vmware.vmware_guest_network:
@@ -105,9 +109,13 @@
         mac_address: "00:50:56:ac:c2:e4"
       register: new_nic
 
-    - name: view new NIC details
+    - name: view details for original mac address
       ansible.builtin.debug:
-        var: new_nic
+        var: new_nic.network_info[0].mac_address
+
+    - name: view details for new mac address
+      ansible.builtin.debug:
+        var: new_nic.network_info[1].mac_address
 
   # post_tasks:
   #     - name: send information to slack
