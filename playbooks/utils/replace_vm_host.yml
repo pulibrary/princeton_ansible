@@ -107,19 +107,50 @@
         network_name: "{{ vm_network | default('Virtual Machine Network')}}"
         connected: true
         mac_address: "00:50:56:ac:c2:e4"
-      register: new_nic
+        # mac: "{{ vm_info.mac_address }}"
+      register: double_nic
 
-    - name: view all info for new nic
+    - name: view all info for VM with two NICs
       ansible.builtin.debug:
-        var: new_nic
+        var: double_nic
 
     - name: view details for original mac address
       ansible.builtin.debug:
-        var: new_nic.network_info[0].mac_address
+        var: double_nic.network_info[0].mac_address
 
     - name: view details for new mac address
       ansible.builtin.debug:
-        var: new_nic.network_info[1].mac_address
+        var: double_nic.network_info[1].mac_address
+
+    - name: delete NIC with automatic mac address
+      community.vmware.vmware_guest_network:
+        hostname: "{{ vcenter_hostname }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        validate_certs: false
+        datacenter: "{{ vcenter_datacenter }}"
+        name: acozine-test
+        network_name: "{{ vm_network | default('Virtual Machine Network')}}"
+        state: absent
+        mac_address: "{{ new_vm_deets.instance.hw_eth0.macaddress }}"
+
+    - name: Power the new VM on
+      community.vmware.vmware_guest:
+        hostname: "{{ vcenter_hostname }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        validate_certs: false
+        datacenter: "{{ vcenter_datacenter }}"
+        cluster: "{{ vcenter_cluster }}"
+        folder: /{{ vm_folder | default('dev-rebootable-vms') }}
+        # name: "{{ replacement_vm }}"
+        name: acozine-test
+        state: powered-on
+      register: vm_status
+
+    - name: view final outcome
+      ansible.builtin.debug:
+        var: vm_status
 
   # post_tasks:
   #     - name: send information to slack
