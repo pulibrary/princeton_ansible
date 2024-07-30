@@ -62,7 +62,7 @@
         folder: /{{ vm_folder | default('dev-rebootable-vms') }}
         # name: "{{ replacement_vm }}"
         name: acozine-test
-        state: poweredoff
+        state: present
         template: "{{ vm_template | default('template_jammy_spring_2024')}}"
         disk:
           - size_gb: 30
@@ -121,6 +121,16 @@
     - name: view details for new mac address
       ansible.builtin.debug:
         var: double_nic.network_info[1].mac_address
+
+    - name: power down the VM so we can mess with the network settings
+      community.vmware.vmware_guest_network:
+        hostname: "{{ vcenter_hostname }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        validate_certs: false
+        datacenter: "{{ vcenter_datacenter }}"
+        name: acozine-test
+        state: poweredoff
 
     - name: delete NIC with automatic mac address
       community.vmware.vmware_guest_network:
