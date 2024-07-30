@@ -10,48 +10,37 @@
     - ../../group_vars/vsphere/{{ runtime_env | default('staging') }}.yml
 
   tasks:
-    # - name: Gather MAC address of VM to replace
-    #   community.vmware.vmware_vm_info:
-    #     hostname: '{{ vcenter_hostname }}'
-    #     username: '{{ vcenter_username }}'
-    #     password: '{{ vcenter_password }}'
-    #     validate_certs: false
-    #     datacenter: "{{ vcenter_datacenter }}"
-    #     cluster: "{{ vcenter_cluster }}"
-    #     vm_name: "{{ vm_to_replace }}"
-    #   facts:
-    #     - mac_address
-    #     - uuid
-    #     - datastore_url
-    #   register: vm_info
+    - name: Gather MAC address of VM to replace
+      community.vmware.vmware_vm_info:
+        hostname: "{{ vcenter_hostname }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        validate_certs: false
+        datacenter: "{{ vcenter_datacenter }}"
+        cluster: "{{ vcenter_cluster }}"
+        vm_name: "{{ vm_to_replace }}"
+      facts:
+        - mac_address
+        - uuid
+        - datastore_url
+      register: old_vm_info
 
-    # - name: Print out deleted VM information
-    #   ansible.builtin.debug:
-    #     msg: You have just deleted {{ vm_info }}
+    - name: Print out old VM information
+      ansible.builtin.debug:
+        msg: You are planning to delete {{ old_vm_info }}
 
-    # - name: Set powerstate of a virtual machine to poweroff by using UUID
-    #   community.vmware.vmware_guest:
-    #     hostname: "{{ vcenter_hostname }}"
-    #     username: "{{ vcenter_username }}"
-    #     password: "{{ vcenter_password }}"
-    #     validate_certs: false
-    #     datacenter: "{{ vcenter_datacenter }}"
-    #     cluster: "{{ vcenter_cluster }}"
-    #     uuid: "{{ vm_info.uuid }}"
-    #     state: poweredoff
+    - name: Power off old VM using UUID
+      community.vmware.vmware_guest:
+        hostname: "{{ vcenter_hostname }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        validate_certs: false
+        datacenter: "{{ vcenter_datacenter }}"
+        cluster: "{{ vcenter_cluster }}"
+        uuid: "{{ old_vm_info.uuid }}"
+        state: poweredoff
 
-    # - name: Remove virtual machine by using UUID
-    #   community.vmware.vmware_guest:
-    #     hostname: "{{ vcenter_hostname }}"
-    #     username: "{{ vcenter_username }}"
-    #     password: "{{ vcenter_password }}"
-    #     validate_certs: false
-    #     datacenter: "{{ vcenter_datacenter }}"
-    #     cluster: "{{ vcenter_cluster }}"
-    #     uuid: "{{ vm_info.uuid }}"
-    #     state: absent
-
-    - name: Create a virtual machine from a template
+    - name: Create a new virtual machine from a template
       community.vmware.vmware_guest:
         hostname: "{{ vcenter_hostname }}"
         username: "{{ vcenter_username }}"
@@ -60,15 +49,13 @@
         datacenter: "{{ vcenter_datacenter }}"
         cluster: "{{ vcenter_cluster }}"
         folder: /{{ vm_folder | default('dev-rebootable-vms') }}
-        # name: "{{ replacement_vm }}"
-        name: acozine-test
+        name: "{{ replacement_vm }}"
         state: present
         template: "{{ vm_template | default('template_jammy_spring_2024')}}"
         disk:
           - size_gb: 30
             type: thin
-            # datastore: "{{ vm_info.datastore_url }}"
-            datastore: VMSANVOL003_05TB_3Par
+            datastore: "{{ old_vm_info.datastore_url }}"
         # Add another disk from an existing VMDK
         hardware:
           memory_mb: "{{ vm_memory | default('8192') }}"
@@ -83,8 +70,6 @@
             state: present
         networks:
           - name: "{{ vm_network | default('Virtual Machine Network')}}"
-            # mac: "{{ vm_info.mac_address }}"
-            # mac: "00:50:56:ac:c2:e4"
         wait_for_ip_address: true
       register: new_vm_deets
 
@@ -103,11 +88,10 @@
         password: "{{ vcenter_password }}"
         validate_certs: false
         datacenter: "{{ vcenter_datacenter }}"
-        name: acozine-test
+        name: "{{ replacement_vm }}"
         network_name: "{{ vm_network | default('Virtual Machine Network')}}"
         connected: true
-        mac_address: "00:50:56:ac:c2:e4"
-        # mac: "{{ vm_info.mac_address }}"
+        mac: "{{ old_vm_info.mac_address }}"
       register: double_nic
 
     - name: view all info for VM with two NICs
@@ -129,7 +113,7 @@
         password: "{{ vcenter_password }}"
         validate_certs: false
         datacenter: "{{ vcenter_datacenter }}"
-        name: acozine-test
+        name: "{{ replacement_vm }}"
         state: poweredoff
 
     - name: delete NIC with automatic mac address
@@ -139,7 +123,7 @@
         password: "{{ vcenter_password }}"
         validate_certs: false
         datacenter: "{{ vcenter_datacenter }}"
-        name: acozine-test
+        name: "{{ replacement_vm }}"
         network_name: "{{ vm_network | default('Virtual Machine Network')}}"
         state: absent
         mac_address: "{{ new_vm_deets.instance.hw_eth0.macaddress }}"
@@ -154,7 +138,7 @@
         cluster: "{{ vcenter_cluster }}"
         folder: /{{ vm_folder | default('dev-rebootable-vms') }}
         # name: "{{ replacement_vm }}"
-        name: acozine-test
+        name: "{{ replacement_vm }}"
         state: powered-on
       register: vm_status
 
@@ -162,7 +146,18 @@
       ansible.builtin.debug:
         var: vm_status
 
-  # post_tasks:
-  #     - name: send information to slack
-  #       ansible.builtin.include_tasks:
-  #         file: slack_tasks_end_of_playbook.yml
+    - name: Remove old VM using UUID
+      community.vmware.vmware_guest:
+        hostname: "{{ vcenter_hostname }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        validate_certs: false
+        datacenter: "{{ vcenter_datacenter }}"
+        cluster: "{{ vcenter_cluster }}"
+        uuid: "{{ old_vm_info.uuid }}"
+        state: absent
+
+  post_tasks:
+    - name: send information to slack
+      ansible.builtin.include_tasks:
+        file: slack_tasks_end_of_playbook.yml
