@@ -24,6 +24,10 @@
 
     - name: Print out old VM information
       ansible.builtin.debug:
+        var: old_vm_info
+
+    - name: Print out old VM information
+      ansible.builtin.debug:
         msg: You are planning to delete {{ old_vm_info }}
 
     - name: Power off old VM using UUID
@@ -34,7 +38,7 @@
         validate_certs: false
         datacenter: "{{ vcenter_datacenter }}"
         cluster: "{{ vcenter_cluster }}"
-        uuid: "{{ old_vm_info.instance_uuid }}"
+        uuid: "{{ old_vm_info.virtual_machines[0].instance_uuid }}"
         state: poweredoff
 
     - name: Create a new virtual machine from a template
@@ -151,7 +155,7 @@
         validate_certs: false
         datacenter: "{{ vcenter_datacenter }}"
         cluster: "{{ vcenter_cluster }}"
-        uuid: "{{ old_vm_info.instance_uuid }}"
+        uuid: "{{ old_vm_info.virtual_machines[0].instance_uuid }}"
         state: absent
 
   post_tasks:
