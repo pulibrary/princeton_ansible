@@ -84,8 +84,30 @@
         networks:
           - name: "{{ vm_network | default('Virtual Machine Network')}}"
             # mac: "{{ vm_info.mac_address }}"
-            mac: "00:50:56:ac:c2:e4"
-        # wait_for_ip_address: true
+            # mac: "00:50:56:ac:c2:e4"
+        wait_for_ip_address: true
+      register: new_vm_deets
+
+    - name: view new VM details
+      ansible.builtin.debug:
+        var: new_vm_deets
+
+    - name: add NIC with custom mac address
+      community.vmware.vmware_guest_network:
+        hostname: "{{ vcenter_hostname }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        validate_certs: false
+        datacenter: "{{ vcenter_datacenter }}"
+        name: acozine-test
+        network_name: "{{ vm_network | default('Virtual Machine Network')}}"
+        connected: true
+        mac_address: "00:50:56:ac:c2:e4"
+      register: new_nic
+
+    - name: view new NIC details
+      ansible.builtin.debug:
+        var: new_nic
 
   # post_tasks:
   #     - name: send information to slack
