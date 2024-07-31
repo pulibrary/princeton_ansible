@@ -23,22 +23,39 @@
       ansible.builtin.debug:
         var: template_info
 
-    - name: Gather info on ESXi hosts
+    - name: Gather memory stats on ESXi hosts
       community.vmware.vmware_host_facts:
         hostname: "{{ vcenter_hostname }}"
         username: "{{ vcenter_username }}"
         password: "{{ vcenter_password }}"
         validate_certs: false
-        show_datacenter: true
-        # schema: vsphere
-        # properties:
-        #   - hardware.memorySize
-        #   - something like numberOfVMs?
-      register: esxi_host_info
+        # esxi_hostname: "{{ item }}"
+        esxi_hostname: "lib-vmserv001a-dev.princeton.edu"
+        schema: vsphere
+        properties:
+          - summary.config.name
+          - hardware.memorySize
+          - summary.quickStats.overallMemoryUsage
+      # loop:
+      #   - lib-vmserv001a-dev.princeton.edu
+      #   - lib-vmserv002a-dev.princeton.edu
+      #   - lib-vmserv003a-dev.princeton.edu
+      #   - lib-vmserv001b-dev.princeton.edu
+      #   - lib-vmserv002b-dev.princeton.edu
+      #   - lib-vmserv003b-dev.princeton.edu
+      register: esxi_host_memory
 
-    - name: View ESXi host info
+    - name: View ESXi memory stats
       ansible.builtin.debug:
-        var: esxi_host_info
+        var: esxi_host_memory
+        # divide by 1073741824 to get gigabytes
+
+    - name: View ESXi memory stats in GB
+      ansible.builtin.debug:
+        msg: The {{ esxi_host_memory.ansible_facts.summary.config.name }} server is using {{ esxi_host_memory.ansible_facts.summary.quickStats.overallMemoryUsage | human_readable(unit='G') }} out of {{ esxi_host_memory.ansible_facts.hardware.memorySize | human_readable(unit='G') }}
+        # divide by 1073741824 to get gigabytes
+        # currently we get 0.0 GB used out of 511; should be 129 or so out of 511 for that host
+        # need to find the correct data for that
 
     - name: Gather info on storage
       community.vmware.vmware_datastore_info:
@@ -46,10 +63,10 @@
         username: "{{ vcenter_username }}"
         password: "{{ vcenter_password }}"
         validate_certs: false
-        # schema: vsphere
-        # properties:
-        #   - name
-        #   - something like availableSpace?
+        schema: vsphere
+        properties:
+          - info.name
+          - info.freeSpace
       register: storage_info
 
     - name: View storage availability
