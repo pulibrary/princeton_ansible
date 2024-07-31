@@ -30,6 +30,17 @@
       ansible.builtin.debug:
         msg: You are planning to delete {{ old_vm_info }}
 
+    - name: Move old VM to the DeleteMe folder
+      community.vmware.vmware_guest_move:
+        hostname: "{{ vcenter_hostname }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        validate_certs: false
+        datacenter: "{{ vcenter_datacenter }}"
+        folder: "{{ old_vm_info.virtual_machines[0].folder }}"
+        dest_folder: ToBeDeleted
+        uuid: "{{ old_vm_info.virtual_machines[0].uuid }}"
+
     - name: Power off old VM using UUID
       community.vmware.vmware_guest_powerstate:
         hostname: "{{ vcenter_hostname }}"
@@ -37,7 +48,7 @@
         password: "{{ vcenter_password }}"
         validate_certs: false
         datacenter: "{{ vcenter_datacenter }}"
-        folder: "{{ old_vm_info.virtual_machines[0].folder }}"
+        folder: ToBeDeleted
         uuid: "{{ old_vm_info.virtual_machines[0].uuid }}"
         state: powered-off
 
@@ -49,7 +60,7 @@
         validate_certs: false
         datacenter: "{{ vcenter_datacenter }}"
         cluster: "{{ vcenter_cluster }}"
-        folder: /{{ vm_folder | default('dev-rebootable-vms') }}
+        folder: /{{ vm_folder | default('AnsibleControlledVMs') }}
         name: "{{ replacement_vm }}"
         state: present
         template: "{{ vm_template | default('template_jammy_spring_2024')}}"
