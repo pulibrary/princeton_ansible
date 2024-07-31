@@ -1,7 +1,7 @@
 ---
 #  This playbook will delete a VM and replace it. This is the only warning you will get. Running this playbook has destructive consequences
 #
-- name: replace a host on VSphere
+- name: replace the {{ replacement_vm }} VM on vSphere
   hosts: localhost
   remote_user: pulsys
   become: true
@@ -18,7 +18,7 @@
         validate_certs: false
         show_datacenter: true
         show_mac_address: true
-        show_cluster: true
+        # show_cluster: true
         vm_name: "{{ replacement_vm }}"
       register: old_vm_info
 
@@ -37,7 +37,6 @@
         password: "{{ vcenter_password }}"
         validate_certs: false
         datacenter: "{{ vcenter_datacenter }}"
-        cluster: "{{ vcenter_cluster }}"
         folder: "{{ old_vm_info.virtual_machines[0].folder }}"
         uuid: "{{ old_vm_info.virtual_machines[0].instance_uuid }}"
         state: powered-off
@@ -109,14 +108,15 @@
         var: double_nic.network_info[1].mac_address
 
     - name: power down the VM so we can mess with the network settings
-      community.vmware.vmware_guest:
+      community.vmware.vmware_guest_powerstate:
         hostname: "{{ vcenter_hostname }}"
         username: "{{ vcenter_username }}"
         password: "{{ vcenter_password }}"
         validate_certs: false
         datacenter: "{{ vcenter_datacenter }}"
-        name: "{{ replacement_vm }}"
-        state: poweredoff
+        # use UUID instead of name to avoid confusion of the 2 VMs
+        uuid: "{{ new_vm_deets.instance.instance_uuid }}"
+        state: powered-off
 
     - name: delete NIC with automatic mac address
       community.vmware.vmware_guest_network:
@@ -137,14 +137,13 @@
         password: "{{ vcenter_password }}"
         validate_certs: false
         datacenter: "{{ vcenter_datacenter }}"
-        cluster: "{{ vcenter_cluster }}"
         folder: /{{ vm_folder | default('dev-rebootable-vms') }}
         # use UUID instead of name to avoid confusion of the 2 VMs
         uuid: "{{ new_vm_deets.instance.instance_uuid }}"
         state: powered-on
       register: vm_status
 
-    - name: view final outcome
+    - name: view status of new VM
       ansible.builtin.debug:
         var: vm_status
 
