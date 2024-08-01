@@ -21,7 +21,7 @@
     stat:
       path: "/opt/mediaflux"
     register: "mediaflux_check"
-  - name: Print the variable to the screen 
+  - name: Print the variable to the screen
     ansible.builtin.debug:
       msg: "{{ mediaflux_check.stat.exists }}"
   - name: install the jar file
@@ -33,11 +33,29 @@
         "Install location?":
           - "/opt/mediaflux"
     when: mediaflux_check.stat.exists == False
+  - name: Copy mflux licence
+    ansible.builtin.copy:
+      src: files/licence-{{ runtime_env }}.xml
+      dest: /opt/mediaflux/config/licence.xml
+  - name: Copy mediaflux service file
+    become: true
+    ansible.builtin.copy:
+      src: files/mediaflux.service
+      dest: /etc/systemd/system/mediaflux.service
+  - name: Reload systemd
+    ansible.builtin.systemd:
+      daemon_reload: yes
+  - name: Start mediaflux if not started
+    ansible.builtin.service:
+      name: mediaflux
+      state: started
+      enabled: yes
+  - name: Stop and disable the firewall
+    ansible.builtin.systemd:
+      name: firewalld
+      state: stopped
+      enabled: no
 
-  # - name: Copy mflux licence 
-  #   ansible.builtin.copy:
-  #     src: files/licence-{{ runtime_env }}.xml
-  #     dest: /opt/mediaflux/config/licence.xml
   # - name: enable tkbcopr
   #   community.general.copr:
   #     host: mflux-{{ runtime_env }}.princeton.edu
