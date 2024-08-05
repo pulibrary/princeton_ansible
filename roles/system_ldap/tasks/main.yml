@@ -15,7 +15,7 @@
   loop:
     - "{{ sssd__unwanted_packages_list }}"
 
-- name: system_ldap | change hostname to match AD 
+- name: system_ldap | change hostname to match AD
   ansible.builtin.command: hostnamectl set-hostname {{ host_ad_name | default(omit)}}
   when:
     - running_on_server
@@ -24,15 +24,15 @@
   ansible.builtin.lineinfile:
     path: /etc/ssh/sshd_config
     state: present
-    regexp: '^PasswordAuthentication no'
-    line: 'PasswordAuthentication yes'
+    regexp: "^PasswordAuthentication no"
+    line: "PasswordAuthentication yes"
 
 - name: system_ldap | allow users authentication
   ansible.builtin.lineinfile:
     path: /etc/ssh/sshd_config
     state: present
-    regexp: '^AllowUsers pulsys'
-    line: '# AllowUsers pulsys'
+    regexp: "^AllowUsers pulsys"
+    line: "# AllowUsers pulsys"
   notify: restart sshd
 
 - name: system_ldap | configure pam to enable mkhomedir
@@ -63,20 +63,31 @@
     - "/alma/publishing"
     - "/alma/recap"
     - "/alma/scsb_renewals"
-    
+
 - name: system_ldap | grant {{ deploy_user }} access to alma directory
   ansible.builtin.user:
     name: "{{ deploy_user }}"
     group: "domain users@pu.win.princeton.edu"
     append: true
-    
+
+- name: system_ldap | create pul_g group for aspace
+  ansible.builtin.group:
+    name: "pul_g"
+    state: present
+
+- name: system_ldap | create aspace user
+  ansible.builtin.user:
+    name: "{{ aspaceftp_user }}"
+    shell: /usr/bin/bash
+    group: "pul_g"
+
 - name: system_ldap | create aspace directory drop
   ansible.builtin.file:
     path: /alma/aspace
     state: directory
     recurse: true
     owner: "{{ aspaceftp_user }}"
-    group: "domain users@pu.win.princeton.edu"
+    group: "pul_g"
     mode: 0775
 
 - name: system_ldap | create local group for alma
