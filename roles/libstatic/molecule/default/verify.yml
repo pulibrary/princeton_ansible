@@ -3,8 +3,8 @@
   hosts: all
   gather_facts: false
   tasks:
-  - name: test for libstatic code git repos
-    stat:
+  - name: Test for libstatic code git repos
+    ansible.builtin.stat:
       path: "{{ item }}"
     loop:
       - "/var/local/firestone-renovations"
@@ -15,17 +15,13 @@
       - "/var/local/jameslyon"
       - "/var/local/njmaps"
       - "/var/local/versailles"
-      - "/etc/apache2/sites-enabled/000-lib-static-staging1.conf"
-      - "/etc/apache2/sites-enabled/000-milberg-staging.conf"
-      - "/etc/apache2/sites-enabled/000-cicognara-staging.conf"
-      - "/etc/apache2/sites-enabled/000-daviesproject-staging.conf"
     register: libstatic_repos
     failed_when:
       - not libstatic_repos.stat.exists
 
-  - name: test for presence libwww apache config
-    lineinfile:
-      path: "/etc/apache2/sites-enabled/000-lib-static-staging1.conf"
+  - name: Test for presence libwww apache config
+    ansible.builtin.lineinfile:
+      path: "/etc/apache2/sites-enabled/000-static-staging1.lib.conf"
       line: "{{ item }}"
       state: present
     loop:
