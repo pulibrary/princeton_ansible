@@ -1,0 +1,102 @@
+---
+  - name: Update and install required system packages
+    ansible.builtin.dnf:
+        - curl
+        - vim
+        - git
+        - java-1.8.0-openjdk
+        - wget
+        - expect
+        - python3-pexpect
+        - python3-psycopg2
+      state: latest
+      update_cache: true
+  - name: enable tkbcopr for fdfind
+    community.general.copr: 
+      state: enabled
+      name: tkbcopr/fd
+  - name: install fdfind
+    ansible.builtin.dnf:
+      - fd      
+  - name: download the installer
+    ansible.builtin.get_url:
+      url: https://www.arcitecta.com/software/mf/4.16.047/mflux-dev_4.16.047_jvm_1.8.jar
+      dest: /home/pulsys
+      mode: '0444'
+  - name: Check if mediaflux is installed
+    ansible.builtin.stat:
+      path: "/opt/mediaflux"
+    register: "mediaflux_check"
+  - name: Print the variable to the screen
+    ansible.builtin.debug:
+      msg: "{{ mediaflux_check.stat.exists }}"
+  - name: install the jar file
+    become: true
+    ansible.builtin.expect:
+      ansible.builtin.command: java -jar mflux-dev_4.16.047_jvm_1.8.jar nogui
+      responses:
+        "[accept,decline]:": "accept"
+        "Install location?":
+          - "/opt/mediaflux"
+    when: mediaflux_check.stat.exists == False
+  - name: Copy mflux licence
+    ansible.builtin.copy:
+      src: files/licence-{{ runtime_env }}.xml
+      dest: /opt/mediaflux/config/licence.xml
+  - name: Copy mediaflux service file
+    become: true
+    ansible.builtin.copy:
+      src: files/mediaflux.service
+      dest: /etc/systemd/system/mediaflux.service
+  - name: Reload systemd
+    ansible.builtin.systemd:
+      daemon_reload: yes
+    when:
+      - running_on_server
+  - name: Start mediaflux if not started
+    ansible.builtin.service:
+      name: mediaflux
+      state: started
+      enabled: yes
+    when:
+      - running_on_server
+  - name: Stop and disable the firewall
+    ansible.builtin.systemd:
+      name: firewalld
+      state: stopped
+      enabled: no
+    when: 
+      - running_on_server
+# Make a mediaflux group
+  - name: Ensure group "mediaflux" exists
+    ansible.builtin.group:
+      name: mediaflux
+      state: present
+# Add a mediaflux user to mediaflux group
+  - name: Add the user 'mediaflux' with a primary group of 'mediaflux'
+    ansible.builtin.user:
+      name: mediaflux
+      comment: mediaflux user
+      group: mediaflux
+# We are creating a directory to contain tcl scripts 
+  - name: create services folder
+    become: yes
+    become_user: root
+    ansible.builtin.file: 
+      path: "{{ mediaflux_home }}/config/services"
+      state: directory
+      owner: "{{ mflux_user }}"
+      group: "{{ mflux_group }}"
+      mode: "u=rwx,g=rwx,o=r"
+  - name: copy services script
+    become: yes
+    become_user: root
+    ansible.builtin.template:
+      src: "vendor-controller-mediaflux-primordial-1.0.tcl.j2"
+      dest: "{{ mediaflux_home }}/config/services/vendor-controller-mediaflux-services-1.0.tcl"
+      owner: "{{ mflux_user }}"
+      group: "{{ mflux_group }}"
+      mode: "u=rwx,g=rw,o=r"
+    tags:
+      - mediaflux
+      - init
