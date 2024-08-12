@@ -1,102 +1,120 @@
 ---
-  - name: Update and install required system packages
-    ansible.builtin.dnf:
-        - curl
-        - vim
-        - git
-        - java-1.8.0-openjdk
-        - wget
-        - expect
-        - python3-pexpect
-        - python3-psycopg2
-      state: latest
-      update_cache: true
-  - name: enable tkbcopr for fdfind
-    community.general.copr: 
-      state: enabled
-      name: tkbcopr/fd
-  - name: install fdfind
-    ansible.builtin.dnf:
-      - fd      
-  - name: download the installer
-    ansible.builtin.get_url:
-      url: https://www.arcitecta.com/software/mf/4.16.047/mflux-dev_4.16.047_jvm_1.8.jar
-      dest: /home/pulsys
-      mode: '0444'
-  - name: Check if mediaflux is installed
-    ansible.builtin.stat:
-      path: "/opt/mediaflux"
-    register: "mediaflux_check"
-  - name: Print the variable to the screen
-    ansible.builtin.debug:
-      msg: "{{ mediaflux_check.stat.exists }}"
-  - name: install the jar file
-    become: true
-    ansible.builtin.expect:
-      ansible.builtin.command: java -jar mflux-dev_4.16.047_jvm_1.8.jar nogui
-      responses:
-        "[accept,decline]:": "accept"
-        "Install location?":
-          - "/opt/mediaflux"
-    when: mediaflux_check.stat.exists == False
-  - name: Copy mflux licence
-    ansible.builtin.copy:
-      src: files/licence-{{ runtime_env }}.xml
-      dest: /opt/mediaflux/config/licence.xml
-  - name: Copy mediaflux service file
-    become: true
-    ansible.builtin.copy:
-      src: files/mediaflux.service
-      dest: /etc/systemd/system/mediaflux.service
-  - name: Reload systemd
-    ansible.builtin.systemd:
-      daemon_reload: yes
-    when:
-      - running_on_server
-  - name: Start mediaflux if not started
-    ansible.builtin.service:
-      name: mediaflux
-      state: started
-      enabled: yes
-    when:
-      - running_on_server
-  - name: Stop and disable the firewall
-    ansible.builtin.systemd:
-      name: firewalld
-      state: stopped
-      enabled: no
-    when: 
-      - running_on_server
+- name: MFlux | Update and install required system packages
+  ansible.builtin.dnf:
+    name:
+      - vim
+      - git
+      - java-1.8.0-openjdk
+      - wget
+      - expect
+      - python3-pexpect
+      - python3-psycopg2
+    state: present
+    update_cache: true
+
+- name: MFlux | enable tkbcopr for fdfind
+  community.general.copr:
+    state: enabled
+    name: tkbcopr/fd
+  when:
+    - running_on_server
+
+- name: MFlux | install fdfind
+  ansible.builtin.dnf:
+    name:
+      - fd
+    state: present
+  when:
+    - running_on_server
+
+- name: MFlux | download the installer
+  ansible.builtin.get_url:
+    url: https://www.arcitecta.com/software/mf/4.16.047/mflux-dev_4.16.047_jvm_1.8.jar
+    dest: /home/pulsys
+    mode: '0444'
+
+- name: Mflux | heck if mediaflux is installed
+  ansible.builtin.stat:
+    path: "/opt/mediaflux"
+  register: "mediaflux_check"
+
+- name: MFlux | Print the variable to the screen
+  ansible.builtin.debug:
+    msg: "{{ mediaflux_check.stat.exists }}"
+
+- name: MFlux | install the jar file
+  ansible.builtin.expect:
+    ansible.builtin.command: java -jar mflux-dev_4.16.047_jvm_1.8.jar nogui
+    responses:
+      "[accept,decline]:": "accept"
+      "Install location?":
+        - "/opt/mediaflux"
+  when: mediaflux_check.stat.exists == False
+  become: true
+
+- name: MFlux | copy licence
+  ansible.builtin.copy:
+    src: files/licence-{{ runtime_env }}.xml
+    dest: /opt/mediaflux/config/licence.xml
+    mode: '0444'
+  when:
+    - running_on_server
+
+- name: Mflux | copy service file
+  become: true
+  ansible.builtin.copy:
+    src: files/mediaflux.service
+    dest: /etc/systemd/system/mediaflux.service
+    mode: '0755'
+
+- name: MFlux | Reload systemd
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+- name: Mflux | start mediaflux if not started
+  ansible.builtin.service:
+    name: mediaflux
+    state: started
+    enabled: true
+  when:
+    - running_on_server
+
+- name: Mflux | stop and disable the firewall
+  ansible.builtin.systemd:
+    name: firewalld
+    state: stopped
+    enabled: false
 # Make a mediaflux group
-  - name: Ensure group "mediaflux" exists
-    ansible.builtin.group:
-      name: mediaflux
-      state: present
+- name: Mflux | Ensure group "mediaflux" exists
+  ansible.builtin.group:
+    name: mediaflux
+    state: present
 # Add a mediaflux user to mediaflux group
-  - name: Add the user 'mediaflux' with a primary group of 'mediaflux'
-    ansible.builtin.user:
-      name: mediaflux
-      comment: mediaflux user
-      group: mediaflux
-# We are creating a directory to contain tcl scripts 
-  - name: create services folder
-    become: yes
-    become_user: root
-    ansible.builtin.file: 
-      path: "{{ mediaflux_home }}/config/services"
-      state: directory
-      owner: "{{ mflux_user }}"
-      group: "{{ mflux_group }}"
-      mode: "u=rwx,g=rwx,o=r"
-  - name: copy services script
-    become: yes
-    become_user: root
-    ansible.builtin.template:
-      src: "vendor-controller-mediaflux-primordial-1.0.tcl.j2"
-      dest: "{{ mediaflux_home }}/config/services/vendor-controller-mediaflux-services-1.0.tcl"
-      owner: "{{ mflux_user }}"
-      group: "{{ mflux_group }}"
-      mode: "u=rwx,g=rw,o=r"
-    tags:
-      - mediaflux
-      - init
+- name: Mflux | Add the user 'mediaflux' with a primary group of 'mediaflux'
+  ansible.builtin.user:
+    name: mediaflux
+    comment: mediaflux user
+    group: mediaflux
+# We are creating a directory to contain tcl scripts
+- name: Mflux | create services folder
+  ansible.builtin.file:
+    path: "{{ mediaflux_home }}/config/services"
+    state: directory
+    owner: "{{ mflux_user }}"
+    group: "{{ mflux_group }}"
+    mode: "u=rwx,g=rwx,o=r"
+  become: true
+  become_user: root
+
+- name: MFlux | copy services script
+  ansible.builtin.template:
+    src: "vendor-controller-mediaflux-primordial-1.0.tcl.j2"
+    dest: "{{ mediaflux_home }}/config/services/vendor-controller-mediaflux-services-1.0.tcl"
+    owner: "{{ mflux_user }}"
+    group: "{{ mflux_group }}"
+    mode: "u=rwx,g=rw,o=r"
+  become: true
+  become_user: root
+  tags:
+    - mediaflux
+    - init
