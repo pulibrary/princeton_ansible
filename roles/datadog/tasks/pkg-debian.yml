@@ -1,5 +1,5 @@
 ---
-- name: Install apt-transport-https
+- name: Datadog | Install apt-transport-https
   ansible.builtin.apt:
     name: apt-transport-https
     state: present
@@ -31,6 +31,16 @@
     - "deb http://apt.datadoghq.com/ stable main"
     - "deb http://apt.datadoghq.com/ stable 6"
   when: not ansible_check_mode
+
+- name: Add an expired key by id from a keyserver
+  ansible.builtin.apt_key:
+    keyserver: keyserver.ubuntu.com
+    id: "{{ recv_key | default(omit) }}"
+  when: recv_key is defined
+
+- name: update release info
+  ansible.builtin.command: apt-get --allow-releaseinfo-change update
+  changed_when: false
 
 - name: Ensure Datadog repository is up-to-date
   ansible.builtin.apt_repository:
