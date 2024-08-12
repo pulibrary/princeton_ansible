@@ -62,7 +62,20 @@
       paloaltonetworks.panos.panos_security_rule:
         provider: "{{ panos_provider }}"
         state: "merged"
+        name: "LibLab_DSS-Prod1_Rule2"
         source_ip: 'PU Subnet - LibNet'
+
+    - name: Get updated rule
+      paloaltonetworks.panos.panos_security_rule:
+        provider: "{{ panos_provider }}"
+        state: "gathered"
+        gathered_filter: "name contains 'LibLab_DSS-Prod1'"
+        # gathered_filter: "destination_ip contains {{ test_object.gathered[0].name }}"
+      register: changed_rules
+
+    - name: Debug return values
+      ansible.builtin.debug:
+        var: changed_rules
 
 # we have two possible use cases:
 # when the source_ip we are looking for is the only source_ip value
