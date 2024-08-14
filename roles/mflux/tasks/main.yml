@@ -30,7 +30,7 @@
 - name: MFlux | download the installer
   ansible.builtin.get_url:
     url: https://www.arcitecta.com/software/mf/4.16.047/mflux-dev_4.16.047_jvm_1.8.jar
-    dest: /home/pulsys
+    dest: /tmp/mflux-dev_4.16.047_jvm_1.8.jar
     mode: '0444'
 
 - name: Mflux | check if mediaflux is installed
@@ -44,7 +44,7 @@
 
 - name: MFlux | install the jar file
   ansible.builtin.expect:
-    ansible.builtin.command: java -jar mflux-dev_4.16.047_jvm_1.8.jar nogui
+    command: java -jar /tmp/mflux-dev_4.16.047_jvm_1.8.jar nogui
     responses:
       "[accept,decline]:": "accept"
       "Install location?":
@@ -70,6 +70,8 @@
 - name: MFlux | Reload systemd
   ansible.builtin.systemd:
     daemon_reload: true
+  when:
+    - running_on_server
 
 - name: Mflux | start mediaflux if not started
   ansible.builtin.service:
@@ -84,6 +86,8 @@
     name: firewalld
     state: stopped
     enabled: false
+  when:
+    - running_on_server
 # Make a mediaflux group
 - name: Mflux | Ensure group "mediaflux" exists
   ansible.builtin.group:
@@ -101,7 +105,7 @@
     path: "{{ mediaflux_home }}/config/services"
     state: directory
     owner: "{{ mflux_user }}"
-    group: "{{ mflux_group }}"
+    group: "{{ mflux_user }}"
     mode: "u=rwx,g=rwx,o=r"
   become: true
   become_user: root
@@ -111,7 +115,7 @@
     src: "vendor-controller-mediaflux-primordial-1.0.tcl.j2"
     dest: "{{ mediaflux_home }}/config/services/vendor-controller-mediaflux-services-1.0.tcl"
     owner: "{{ mflux_user }}"
-    group: "{{ mflux_group }}"
+    group: "{{ mflux_user }}"
     mode: "u=rwx,g=rw,o=r"
   become: true
   become_user: root
