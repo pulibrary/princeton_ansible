@@ -1,82 +1,82 @@
 ---
-- name: "Add datadog_user groups"
+- name: Datadog | Add datadog_user groups
   ansible.builtin.user:
     name: '{{ datadog_user }}'
     append: true
     groups:
       - 'adm'
-- name: Create /etc/datadog-agent
+- name: Datadog | Create /etc/datadog-agent
   ansible.builtin.file:
     dest: /etc/datadog-agent
     state: directory
-    mode: 0755
+    mode: "0755"
 
-- name: Create main Datadog agent yaml configuration file (beta)
+- name: Datadog | Create main Datadog agent yaml configuration file (beta)
   ansible.builtin.template:
     src: datadog.yaml.j2
     dest: /etc/datadog-agent/datadog.yaml
     owner: '{{ datadog_user }}'
     group: '{{ datadog_group }}'
-    mode: 0644
+    mode: "0644"
   notify: restart datadog-agent
 
-- name: Create a configuration file for each Datadog check
+- name: Datadog | Create a configuration file for each Datadog check
   ansible.builtin.template:
     src: checks.yaml.j2
     dest: "/etc/datadog-agent/conf.d/{{ item }}.yaml"
     owner: '{{ datadog_user }}'
     group: '{{ datadog_group }}'
-    mode: 0644
+    mode: "0644"
   with_items: '{{ datadog_checks|list }}'
   notify: restart datadog-agent
 
-- name: Create a configuration file for each type Datadog check
+- name: Datadog | Create a configuration file for each type Datadog check
   ansible.builtin.template:
     src: checks-typed.yaml.j2
     dest: "/etc/datadog-agent/conf.d/{{ item.type }}.d/conf.yaml"
     owner: '{{ datadog_user }}'
     group: '{{ datadog_group }}'
-    mode: 0644
+    mode: "0644"
   with_items: '{{ datadog_typed_checks }}'
   notify: restart datadog-agent
 
-- name: Create a nginx config file if it is configures
+- name: Datadog | Create a nginx config file if it is configures
   ansible.builtin.template:
     src: nginx.status.conf
     dest: "/etc/nginx/conf.d/status.conf"
     owner: '{{ datadog_user }}'
     group: '{{ datadog_group }}'
-    mode: 0644
+    mode: "0644"
   when: item.type == 'nginx'
   with_items: '{{ datadog_typed_checks }}'
   notify: restart datadog-agent
 
-- name: Create trace agent configuration file
+- name: Datadog | Create trace agent configuration file
   ansible.builtin.template:
     src: datadog.conf.j2
     dest: /etc/datadog-agent/trace-agent.conf
     owner: '{{ datadog_user }}'
     group: '{{ datadog_group }}'
-    mode: 0644
+    mode: "0644"
   notify: restart datadog-agent
 
-- name: Create process agent configuration file
+- name: Datadog | Create process agent configuration file
   ansible.builtin.template:
     src: datadog.conf.j2
     dest: /etc/datadog-agent/process-agent.conf
     owner: '{{ datadog_user }}'
     group: '{{ datadog_group }}'
-    mode: 0644
+    mode: "0644"
   notify: restart datadog-agent
 
-- name: Ensure datadog-agent is running
+- name: Datadog | Ensure datadog-agent is running
   ansible.builtin.service:
     name: datadog-agent
     state: started
     enabled: true
   when: datadog_enabled
 
-- name: Ensure datadog-agent is not running
+- name: Datadog | Ensure datadog-agent is not running
   ansible.builtin.service:
     name: datadog-agent
     state: stopped
