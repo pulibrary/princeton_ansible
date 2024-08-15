@@ -1,0 +1,29 @@
+---
+- name: Get info on VEEAM backup tags from vSphere
+  hosts: localhost
+
+  vars_files:
+    - ../../group_vars/vsphere/vault.yml
+    - ../../group_vars/vsphere/{{ runtime_env | default('staging') }}.yml
+
+  tasks:
+    - name: Gather info on tags
+      community.vmware.vmware_vm_info:
+        hostname: "{{ vcenter_hostname }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        validate_certs: false
+        show_tag: true
+      register: tagged_vms
+
+    - name: View vms with tags
+      ansible.builtin.debug:
+        var: tagged_vms
+
+    # - name: sample debug with json query
+    #   ansible.builtin.debug:
+    #     msg: "{{ item.tags }}"
+    #   with_items:
+    #     - "{{ tagged_vms.virtual_machines | community.general.json_query(query) }}"
+    #   vars:
+    #     query: "[?guest_name=='DC0_H0_VM0']"
