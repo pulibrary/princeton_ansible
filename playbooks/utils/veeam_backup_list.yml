@@ -7,18 +7,24 @@
     - ../../group_vars/vsphere/{{ runtime_env | default('staging') }}.yml
 
   tasks:
-    - name: Gather info on tags
+    - name: Gather info on tags and storage
       community.vmware.vmware_vm_info:
         hostname: "{{ vcenter_hostname }}"
         username: "{{ vcenter_username }}"
         password: "{{ vcenter_password }}"
         validate_certs: false
         show_tag: true
+        show_allocated: true
       register: tagged_vms
+
+    - name: View full variable
+      ansible.builtin.debug:
+        var: tagged_vms
 
     - name: View vms with tags
       ansible.builtin.debug:
-        var: tagged_vms
+        msg: The {{ item.guest_name }} vm has {{ item.tags }} for tags
+      loop: "{{ tagged_vms.virtual_machines }}"
 
     # - name: sample debug with json query
     #   ansible.builtin.debug:
