@@ -25,6 +25,9 @@
           msg: "you must use -l or --limit"
         when: ansible_limit is not defined
         run_once: true
+      - name: set stripped agent hostname (only content before the first .) as fact
+        ansible.builtin.set_fact:
+          checkmk_agent_host_name: "{{ inventory_hostname | regex_search('^[^.]*') }}"
 
   tasks:
     - name: "Create the rules"
@@ -39,7 +42,7 @@
             "host_labels": [],
             "host_name": {
               "match_on": [
-                "{{ inventory_hostname }}"
+                "{{ checkmk_agent_host_name }}"
               ],
               "operator": "one_of"
             },
@@ -47,8 +50,8 @@
             "service_labels": []
           }
           properties: {
-            "comment": "{{ item.comment }} on {{ inventory_hostname }}",
-            "description": "{{ inventory_hostname }} - {{ item.name }}",
+            "comment": "{{ item.comment }} on {{ checkmk_agent_host_name }}",
+            "description": "{{ checkmk_agent_host_name }} - {{ item.name }}",
             "disabled": false,
             "documentation_url": "https://github.com/Checkmk/ansible-collection-checkmk.general/blob/main/plugins/modules/rules.py"
           }
