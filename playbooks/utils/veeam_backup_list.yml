@@ -60,8 +60,9 @@
     - name: Display all tags
       ansible.builtin.debug:
         var: item
-      loop: "{{ tagged_vms.virtual_machines | community.general.json_query('tags[*].name') }}"
-
+      loop: "{{ tagged_vms | community.general.json_query(not_null) }}"
+      vars:
+        not_null: "virtual_machines[?not_null(tags)]"
     # none of these work
     # - name: view dot_tags_selectattr var
     #   ansible.builtin.debug:
