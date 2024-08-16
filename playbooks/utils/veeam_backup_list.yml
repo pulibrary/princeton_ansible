@@ -7,6 +7,7 @@
     - ../../group_vars/vsphere/{{ runtime_env | default('staging') }}.yml
 
   vars:
+    - vm_tags_dict: "{{ tagged_vms.virtual_machines.tags }}"
     - fake_wed_vms: "{{ tagged_vms.virtual_machines | selectattr('tags[0].name', 'equalto', 'Fake_Wed_A') }}"
     - fake_tue_vms: "{{ tagged_vms.virtual_machines | selectattr('tags[0].name', 'equalto', 'Fake_Tue_A') }}"
     - known_tagged_vm: "{{ tagged_vms.virtual_machines | selectattr('guest_name', 'equalto', 'dss-staging1') }}"
@@ -30,9 +31,9 @@
       ansible.builtin.debug:
         var: known_tagged_vm
 
-    - name: view selectattr vars - Tue
+    - name: view all tags with mapped vars
       ansible.builtin.debug:
-        var: fake_tue_vms
+        msg: "{{ tagged_vms.virtual_machines | map('extract', tags) | flatten | map(attribute='name') }}"
 
     - name: view selectattr vars - Wed
       ansible.builtin.debug:
