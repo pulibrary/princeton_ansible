@@ -6,6 +6,11 @@
     - ../../group_vars/vsphere/vault.yml
     - ../../group_vars/vsphere/{{ runtime_env | default('staging') }}.yml
 
+  vars:
+    - fake_wed_vms: "{{ tagged_vms.virtual_machines | selectattr('tags[0].name', 'is', 'Fake_Wed_A') }}"
+    - fake_tue_vms: "{{ tagged_vms.virtual_machines | selectattr('tags[0].name', 'is', 'Fake_Tue_A') }}"
+    - known_tagged_vm: "{{ tagged_vms.virtual_machines | selectattr('guest_name', 'is', 'dss-staging1' }}"
+
   tasks:
     - name: Gather info on tags and storage
       community.vmware.vmware_vm_info:
@@ -21,18 +26,26 @@
       ansible.builtin.debug:
         var: tagged_vms
 
-    - name: Use selectattr to view only entries with tags
+    - name: view selectattr vars - one VM
       ansible.builtin.debug:
-        msg: The {{ tagged_vms.virtual_machines | selectattr('tags[0].name', 'in', 'Fake_Wed_A, Fake_Tue_A') }}
+        var: known_tagged_vm
 
-    - name: View vms with tags
+    - name: view selectattr vars - Tue
       ansible.builtin.debug:
-        msg: The {{ tagged_vms.virtual_machines | map(attribute='guest_name') }} vm has {{ tagged_vms.virtual_machines | map(attribute='tags') }} for tags and {{ tagged_vms.virtual_machines | map(attribute='allocated.storage') }} allocated storage
-      loop: "{{ tagged_vms.virtual_machines }}"
-      when: "tagged_vms.virtual_machines.guest_name == 'dss-staging1'"
-      # Nope, 'run_once' did not avoid the 'skipping' entries for all the other VMs
-      # trying this without the loop
-      # without the loop, we can't use 'item.whatnot'
+        var: fake_tue_vms
+
+    - name: view selectattr vars - Wed
+      ansible.builtin.debug:
+        var: fake_wed_vms
+
+    # - name: View vms with tags
+    #   ansible.builtin.debug:
+    #     msg: The {{ tagged_vms.virtual_machines | map(attribute='guest_name') }} vm has {{ tagged_vms.virtual_machines | map(attribute='tags') }} for tags and {{ tagged_vms.virtual_machines | map(attribute='allocated.storage') }} allocated storage
+    #   loop: "{{ tagged_vms.virtual_machines }}"
+    #   when: "tagged_vms.virtual_machines.guest_name == 'dss-staging1'"
+    # Nope, 'run_once' did not avoid the 'skipping' entries for all the other VMs
+    # trying this without the loop
+    # without the loop, we can't use 'item.whatnot'
 
     # - name: sample debug with json query
     #   ansible.builtin.debug:
