@@ -25,6 +25,9 @@
           msg: "you must use -l or --limit"
         when: ansible_limit is not defined
         run_once: true
+      - name: set stripped agent hostname (only content before the first .) as fact
+        ansible.builtin.set_fact:
+          checkmk_agent_host_name: "{{ inventory_hostname | regex_search('^[^.]*') }}"
 
   tasks:
     - name: write hostname using jinja2
@@ -40,7 +43,7 @@
         site: "{{ checkmk_agent_site }}"
         automation_user: "{{ checkmk_agent_user }}"
         automation_secret: "{{ checkmk_agent_pass }}"
-        hosts: "{{ inventory_hostname }}"
+        hosts: "{{ checkmk_agent_host_name }}"
         state: "new"
       
     - name: "Start activation including foreign changes."
