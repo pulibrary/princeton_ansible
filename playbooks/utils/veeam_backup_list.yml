@@ -7,11 +7,12 @@
     - ../../group_vars/vsphere/{{ runtime_env | default('staging') }}.yml
 
   vars:
-    - vms_with_tags: "{{ tagged_vms.virtual_machines | selectattr('tags', is not, 'empty') }}"
-    # - fake_wed_vms: "{{ tagged_vms.virtual_machines | selectattr('tags[0].name', 'equalto', 'Fake_Wed_A') }}"
-    - fake_tue_vms: "{{ tagged_vms.virtual_machines | selectattr('tags[0].name', 'equalto', 'Fake_Tue_A') }}"
+    - tags_not_empty: "{{ tagged_vms.virtual_machines | selectattr('tags', not, 'empty') }}"
+    - map_flatten_selectattr: "{{ tagged_vms.virtual_machines | map(attribute='tags') | flatten | selectattr('name', 'equalto', 'Fake_Tue_A') }}"
+    - dot_tags_selectattr: "{{ tagged_vms.virtual_machines.tags | selectattr('name', 'equalto, 'Fake_Tue_A') }}"
+    - selectattr_with_tag_zero: "{{ tagged_vms.virtual_machines | selectattr('tags[0].name', 'equalto', 'Fake_Tue_A') }}"
+    - selectattr_twice: "{{ tagged_vms.virtual_machines | selectattr('tags') | flatten | selectattr('name', 'equalto', 'Fake_Wed_A') }}"
     - known_tagged_vm: "{{ tagged_vms.virtual_machines | selectattr('guest_name', 'equalto', 'dss-staging1') }}"
-    - fake_wed_vms: "{{ tagged_vms.virtual_machines | selectattr('tags') | flatten | selectattr('name', 'equalto', 'Fake_Wed_A') }}"
     # the formulation below works, but returns only the 'tags' dicts
     # we need to see the name of the VM and eventually the disk space
     # - fake_wed_vms: "{{ tagged_vms.virtual_machines | map(attribute='tags') | flatten | selectattr('name', 'equalto', 'Fake_Wed_A') }}"
@@ -31,7 +32,7 @@
       ansible.builtin.debug:
         var: tagged_vms
 
-    - name: view selectattr vars - one VM
+    - name: view known tagged VM
       ansible.builtin.debug:
         var: known_tagged_vm
 
@@ -39,10 +40,30 @@
       ansible.builtin.debug:
         msg: "{{ tagged_vms.virtual_machines | map(attribute='tags') | flatten | map(attribute='name') }}"
 
-    - name: view selectattr vars - Wed
+    - name: view tags_not_empty var
       ansible.builtin.debug:
-        msg: These are the tagged vms {{ vms_with_tags }}
-        # using the fake_wed_vms var gives us "success" and the message "VARIABLE IS NOT DEFINED"
+        var: tags_not_empty
+      ignore_errors: true
+
+    - name: view map_flatten_selectattr var
+      ansible.builtin.debug:
+        var: map_flatten_selectattr
+      ignore_errors: true
+
+    - name: view dot_tags_selectattr var
+      ansible.builtin.debug:
+        var: dot_tags_selectattr
+      ignore_errors: true
+
+    - name: view selectattr_with_tag_zero var
+      ansible.builtin.debug:
+        var: selectattr_with_tag_zero
+      ignore_errors: true
+
+    - name: view selectattr_twice var
+      ansible.builtin.debug:
+        var: selectattr_twice
+      ignore_errors: true
 
     # - name: View vms with tags
     #   ansible.builtin.debug:
