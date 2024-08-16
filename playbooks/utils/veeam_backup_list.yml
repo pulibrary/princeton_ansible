@@ -7,12 +7,6 @@
     - ../../group_vars/vsphere/{{ runtime_env | default('staging') }}.yml
 
   vars:
-    - tags_not_empty: "{{ tagged_vms.virtual_machines | selectattr('tags', 'defined') }}"
-    - dict2items_selectattr: "{{ tagged_vms.virtual_machines | map('dict2items') | flatten | selectattr('value', '==', 'Fake_Tue_A') | map(attribute='guest_name') }}"
-    - map_flatten_selectattr: "{{ tagged_vms.virtual_machines | map(attribute='tags') | flatten | selectattr('name', 'equalto', 'Fake_Tue_A') }}"
-    - dot_tags_selectattr: "{{ tagged_vms.virtual_machines.tags | selectattr('name', 'equalto', 'Fake_Tue_A') }}"
-    - selectattr_with_tag_zero: "{{ tagged_vms.virtual_machines | selectattr('tags[0].name', 'equalto', 'Fake_Tue_A') }}"
-    - selectattr_twice: "{{ tagged_vms.virtual_machines | selectattr('tags') | flatten | selectattr('name', 'equalto', 'Fake_Wed_A') }}"
     - known_tagged_vm: "{{ tagged_vms.virtual_machines | selectattr('guest_name', 'equalto', 'dss-staging1') }}"
     # the formulation below works, but returns only the 'tags' dicts
     # we need to see the name of the VM and eventually the disk space
@@ -42,56 +36,10 @@
       ansible.builtin.debug:
         msg: "{{ tagged_vms.virtual_machines | map(attribute='tags') | flatten | map(attribute='name') }}"
 
-    - name: view tags_not_empty var
-      ansible.builtin.debug:
-        var: tags_not_empty
-      ignore_errors: true
-
-    - name: view map_flatten_selectattr var
-      ansible.builtin.debug:
-        var: map_flatten_selectattr
-      ignore_errors: true
-
-    - name: view dict2items_selectattr var
-      ansible.builtin.debug:
-        var: dict2items_selectattr
-      ignore_errors: true
-
-    - name: Display all tags
+    - name: Display VMs that have tags
       ansible.builtin.debug:
         var: item
       loop: "{{ tagged_vms | community.general.json_query(not_null) }}"
       vars:
         not_null: "virtual_machines[?not_null(tags)]"
-    # none of these work
-    # - name: view dot_tags_selectattr var
-    #   ansible.builtin.debug:
-    #     var: dot_tags_selectattr
-    #   ignore_errors: true
-
-    # - name: view selectattr_with_tag_zero var
-    #   ansible.builtin.debug:
-    #     var: selectattr_with_tag_zero
-    #   ignore_errors: true
-
-    # - name: view selectattr_twice var
-    #   ansible.builtin.debug:
-    #     var: selectattr_twice
-    #   ignore_errors: true
-
-    # - name: View vms with tags
-    #   ansible.builtin.debug:
-    #     msg: The {{ tagged_vms.virtual_machines | map(attribute='guest_name') }} vm has {{ tagged_vms.virtual_machines | map(attribute='tags') }} for tags and {{ tagged_vms.virtual_machines | map(attribute='allocated.storage') }} allocated storage
-    #   loop: "{{ tagged_vms.virtual_machines }}"
-    #   when: "tagged_vms.virtual_machines.guest_name == 'dss-staging1'"
-    # Nope, 'run_once' did not avoid the 'skipping' entries for all the other VMs
-    # trying this without the loop
-    # without the loop, we can't use 'item.whatnot'
-
-    # - name: sample debug with json query
-    #   ansible.builtin.debug:
-    #     msg: "{{ item.tags }}"
-    #   with_items:
-    #     - "{{ tagged_vms.virtual_machines | community.general.json_query(query) }}"
-    #   vars:
-    #     query: "[?guest_name=='DC0_H0_VM0']"
+      # this returns the correct list of 4 VMs - huzzah!
