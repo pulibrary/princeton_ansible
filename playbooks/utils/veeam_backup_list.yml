@@ -44,22 +44,23 @@
       ansible.builtin.debug:
         var: tagged_vms
 
-    - name: Display VMs with a specific tag
-      ansible.builtin.debug:
-        msg: "{{ vms_and_tags | community.general.json_query(match_specific) }}"
-      vars:
-        match_specific: "virtual_machines.tags[*].name == {{ item }}"
-      loop: "{{ backup_tags }}"
-      register: single_tagged_vms
+    # the registered var from this task contained two items in 'results', each one contained:
+      # 'item: <name_of_tag>' and
+      # 'msg: true'
+    # - name: Display VMs with a specific tag
+    #   ansible.builtin.debug:
+    #     msg: "{{ vms_and_tags | community.general.json_query(match_specific) }}"
+    #   vars:
+    #     match_specific: "virtual_machines.tags[*].name == {{ item }}"
+    #   loop: "{{ backup_tags }}"
+    #   register: single_tagged_vms
 
-    - name: what do single tagged_vms look like?
-      ansible.builtin.debug:
-        var: single_tagged_vms
+    # - name: what do single tagged_vms look like?
+    #   ansible.builtin.debug:
+    #     var: single_tagged_vms
 
-    - name: view vm names by tag
+    - name: view Fake_Wed_A vms
       ansible.builtin.debug:
-        # take the list of VMs that have tags, sort and total per tag
-        msg: These VMs {{ tagged_vms|json_query('results[*].item.guest_name') }} match the specific tag
-      # this conditional does not work
-      # when: tagged_vms|json_query('results[*].item.tags[*].name') == {{ item }}
-      loop: "{{ backup_tags }}"
+        # build a list of VMs with one specific tags
+        var: item
+      loop: "{{ tagged_vms|json_query('results[*].item.tags[*][?name=='Fake_Wed_A'') }}"
