@@ -59,8 +59,11 @@
     #   ansible.builtin.debug:
     #     var: single_tagged_vms
 
-    - name: view Fake_Wed_A vms
-      ansible.builtin.debug:
+    - name: create a dict of fields we want
+      ansible.builtin.set_fact:
         # build a list of VMs with one specific tags
-        var: item
-      loop: "{{ tagged_vms | json_query('results[*].item.tags[*][?name == 'Fake_Wed_A']') }}"
+        slim_tagged_vms: "{{ tagged_vms.results[*].item.{VM_name: guest_name, Tag_name: tags[0].name, Disk_size: allocated.storage} }}"
+
+    - name: look at slim_tagged_vms
+      ansible.builtin.debug:
+        var: slim_tagged_vms
