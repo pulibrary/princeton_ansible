@@ -44,21 +44,6 @@
       ansible.builtin.debug:
         var: tagged_vms
 
-    # the registered var from this task contained two items in 'results', each one contained:
-      # 'item: <name_of_tag>' and
-      # 'msg: true'
-    # - name: Display VMs with a specific tag
-    #   ansible.builtin.debug:
-    #     msg: "{{ vms_and_tags | community.general.json_query(match_specific) }}"
-    #   vars:
-    #     match_specific: "virtual_machines.tags[*].name == {{ item }}"
-    #   loop: "{{ backup_tags }}"
-    #   register: single_tagged_vms
-
-    # - name: what do single tagged_vms look like?
-    #   ansible.builtin.debug:
-    #     var: single_tagged_vms
-
     - name: create a dict of fields we want
       ansible.builtin.set_fact:
         # build a list of VMs with tags, names, and disk size
@@ -67,3 +52,8 @@
     - name: look at slim_tagged_vms
       ansible.builtin.debug:
         var: slim_tagged_vms
+
+    - name: all VMs tagged Fake Wed A
+      ansible.builtin.debug:
+        msg: These VMs {{ slim_tagged_vms | json_query('slim_tagged_vms[?Tag_name==`Fake_Wed_A`].name') }} are tagged with Fake_Wed_A
+      # loop: backup_tags
