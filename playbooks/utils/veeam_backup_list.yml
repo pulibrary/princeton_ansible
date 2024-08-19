@@ -44,8 +44,9 @@
       ansible.builtin.debug:
         var: tagged_vms
 
-    # - name: view vms by tag
-    #   ansible.builtin.debug:
-    #     # take the list of VMs that have tags, sort and total per tag
-    #     msg: "{{ tagged_vms.virtual_machines | map(attribute='tags') | flatten | map(attribute='name') }}"
-    #   loop: backup_tags
+    - name: view vm names by tag
+      ansible.builtin.debug:
+        # take the list of VMs that have tags, sort and total per tag
+        msg: These VMs {{ tagged_vms.results[*].item.guest_name }} have this tag {{ item }}
+      when: tagged_vms.results[*].item.tags|json_query(‘[*].name‘) == item
+      loop: backup_tags
