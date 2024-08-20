@@ -41,14 +41,18 @@
       vars:
         not_null: "virtual_machines[?not_null(tags)]"
 
-    # - name: debug alt var
-    #   ansible.builtin.debug:
-    #     var: alt_tagged_vms
+    - name: debug alt var
+      ansible.builtin.debug:
+        var: tagged_vms
 
     - name: create a dict of fields we want from tagged VMs
       ansible.builtin.set_fact:
         # build a list of VMs with tags, names, and disk size
         slim_tagged_vms: "{{ tagged_vms | community.general.json_query('tagged_vms[*].{VM_name: guest_name, Tag_name: tags[0].name, Disk_size: allocated.storage}') }}"
+
+    - name: debug slim var
+      ansible.builtin.debug:
+        var: slim_tagged_vms
 
     # - name: create a dict of fields we want from tagged VMs
     #   ansible.builtin.set_fact:
