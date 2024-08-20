@@ -26,29 +26,34 @@
       ansible.builtin.debug:
         var: unique_tags
 
-    - name: Find and show only VMs that have tags
-      ansible.builtin.debug:
-        var: item
-      loop: "{{ vms_and_tags | community.general.json_query(not_null) }}"
-      vars:
-        not_null: "virtual_machines[?not_null(tags)]"
-      # this returns the correct list of 4 VMs - huzzah!
-      register: tagged_vms
+    # - name: Find and show only VMs that have tags
+    #   ansible.builtin.debug:
+    #     var: item
+    #   loop: "{{ vms_and_tags | community.general.json_query(not_null) }}"
+    #   vars:
+    #     not_null: "virtual_machines[?not_null(tags)]"
+    #   # this returns the correct list of 4 VMs - huzzah!
+    #   register: tagged_vms
 
-    - name: Find VMs that have tags - with set_fact for tidiness
+    - name: Find VMs that have tags
       ansible.builtin.set_fact:
-        alt_tagged_vms: "{{ vms_and_tags | community.general.json_query(not_null) }}"
+        tagged_vms: "{{ vms_and_tags | community.general.json_query(not_null) }}"
       vars:
         not_null: "virtual_machines[?not_null(tags)]"
 
-    - name: debug alt var
-      ansible.builtin.debug:
-        var: alt_tagged_vms
+    # - name: debug alt var
+    #   ansible.builtin.debug:
+    #     var: alt_tagged_vms
 
     - name: create a dict of fields we want from tagged VMs
       ansible.builtin.set_fact:
         # build a list of VMs with tags, names, and disk size
-        slim_tagged_vms: "{{ tagged_vms | community.general.json_query('results[*].item.{VM_name: guest_name, Tag_name: tags[0].name, Disk_size: allocated.storage}') }}"
+        slim_tagged_vms: "{{ tagged_vms | community.general.json_query('alt_tagged_vms[*].{VM_name: guest_name, Tag_name: tags[0].name, Disk_size: allocated.storage}') }}"
+
+    # - name: create a dict of fields we want from tagged VMs
+    #   ansible.builtin.set_fact:
+    #     # build a list of VMs with tags, names, and disk size
+    #     slim_tagged_vms: "{{ tagged_vms | community.general.json_query('results[*].item.{VM_name: guest_name, Tag_name: tags[0].name, Disk_size: allocated.storage}') }}"
 
     - name: show data for VMs by tag
       ansible.builtin.debug:
