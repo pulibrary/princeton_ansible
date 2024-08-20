@@ -7,23 +7,40 @@
     - ../../group_vars/vsphere/{{ runtime_env | default('staging') }}.yml
 
   tasks:
-    - name: Gather info on tags
+    - name: Gather info from vSphere on VMs, tags, and storage
       community.vmware.vmware_vm_info:
         hostname: "{{ vcenter_hostname }}"
         username: "{{ vcenter_username }}"
         password: "{{ vcenter_password }}"
         validate_certs: false
         show_tag: true
-      register: tagged_vms
+        show_allocated: true
+        vm_type: vm
+      register: vms_and_tags
 
-    - name: View vms with tags
+    - name: Get a list of tags
+      ansible.builtin.set_fact:
+        unique_tags: "{{ vms_and_tags.virtual_machines | map(attribute='tags') | flatten | map(attribute='name') | unique }}"
+
+    - name: View list of tags
       ansible.builtin.debug:
-        var: tagged_vms
+        var: unique_tags
 
-    # - name: sample debug with json query
-    #   ansible.builtin.debug:
-    #     msg: "{{ item.tags }}"
-    #   with_items:
-    #     - "{{ tagged_vms.virtual_machines | community.general.json_query(query) }}"
-    #   vars:
-    #     query: "[?guest_name=='DC0_H0_VM0']"
+    - name: Find VMs that have tags
+      ansible.builtin.set_fact:
+        tagged_vms: "{{ vms_and_tags | community.general.json_query(not_null) }}"
+      vars:
+        not_null: "virtual_machines[?not_null(tags)]"
+
+    - name: create a dict of fields we want from tagged VMs
+      ansible.builtin.set_fact:
+        # build a list of VMs with tags, names, and disk size
+        slim_tagged_vms: "{{ tagged_vms | community.general.json_query('[*].{VM_name: guest_name, Tag_name: tags[0].name, Disk_size: allocated.storage}') }}"
+
+    - name: show data for VMs by tag
+      ansible.builtin.debug:
+        msg:
+          - The {{ item }} tag marks these VMs {{ slim_tagged_vms | selectattr('Tag_name', 'equalto', item) | map(attribute='VM_name') }}
+          - which have disk sizes of {{ slim_tagged_vms | selectattr('Tag_name', 'equalto', item) | map(attribute='Disk_size') }}
+          - the total size of the {{ item }} backup is {{ slim_tagged_vms | selectattr('Tag_name', 'equalto', item) | map(attribute='Disk_size') | sum | human_readable }}
+      loop: "{{ unique_tags }}"
