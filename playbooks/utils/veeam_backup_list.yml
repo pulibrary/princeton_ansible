@@ -28,6 +28,11 @@
         msg:
           - Here's a list of all the tags in this environment:
           - "{{ vms_and_tags.virtual_machines | map(attribute='tags') | flatten | map(attribute='name') | unique }}"
+      register: unique_tags
+
+    - name: view unique tags var
+      ansible.builtin.debug:
+        var: unique_tags
 
     - name: Find and show only VMs that have tags
       ansible.builtin.debug:
@@ -50,3 +55,11 @@
           - which have disk sizes of {{ slim_tagged_vms | selectattr('Tag_name', 'equalto', item) | map(attribute='Disk_size') }}
           - the total size of the {{ item }} backup is {{ slim_tagged_vms | selectattr('Tag_name', 'equalto', item) | map(attribute='Disk_size') | sum | human_readable }}
       loop: "{{ backup_tags }}"
+
+    - name: show data for tagged VMs using filters - with discovered tags
+      ansible.builtin.debug:
+        msg:
+          - The {{ item }} tag marks these VMs {{ slim_tagged_vms | selectattr('Tag_name', 'equalto', item) | map(attribute='VM_name') }}
+          - which have disk sizes of {{ slim_tagged_vms | selectattr('Tag_name', 'equalto', item) | map(attribute='Disk_size') }}
+          - the total size of the {{ item }} backup is {{ slim_tagged_vms | selectattr('Tag_name', 'equalto', item) | map(attribute='Disk_size') | sum | human_readable }}
+      loop: "{{ unique_tags }}"
