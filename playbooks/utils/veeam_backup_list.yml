@@ -6,11 +6,6 @@
     - ../../group_vars/vsphere/vault.yml
     - ../../group_vars/vsphere/{{ runtime_env | default('staging') }}.yml
 
-  vars:
-    backup_tags:
-      - Fake_Wed_A
-      - Fake_Tue_A
-
   tasks:
     - name: Gather info from vSphere on VMs, tags, and storage
       community.vmware.vmware_vm_info:
@@ -23,11 +18,11 @@
         vm_type: vm
       register: vms_and_tags
 
-    - name: Find a list of tags with mapped vars
+    - name: Get a list of tags
       ansible.builtin.set_fact:
         unique_tags: "{{ vms_and_tags.virtual_machines | map(attribute='tags') | flatten | map(attribute='name') | unique }}"
 
-    - name: view unique tags var
+    - name: View list of tags
       ansible.builtin.debug:
         var: unique_tags
 
@@ -45,15 +40,7 @@
         # build a list of VMs with tags, names, and disk size
         slim_tagged_vms: "{{ tagged_vms | community.general.json_query('results[*].item.{VM_name: guest_name, Tag_name: tags[0].name, Disk_size: allocated.storage}') }}"
 
-    - name: show data for tagged VMs using filters
-      ansible.builtin.debug:
-        msg:
-          - The {{ item }} tag marks these VMs {{ slim_tagged_vms | selectattr('Tag_name', 'equalto', item) | map(attribute='VM_name') }}
-          - which have disk sizes of {{ slim_tagged_vms | selectattr('Tag_name', 'equalto', item) | map(attribute='Disk_size') }}
-          - the total size of the {{ item }} backup is {{ slim_tagged_vms | selectattr('Tag_name', 'equalto', item) | map(attribute='Disk_size') | sum | human_readable }}
-      loop: "{{ backup_tags }}"
-
-    - name: show data for tagged VMs using filters - with discovered tags
+    - name: show data for VMs by tag
       ansible.builtin.debug:
         msg:
           - The {{ item }} tag marks these VMs {{ slim_tagged_vms | selectattr('Tag_name', 'equalto', item) | map(attribute='VM_name') }}
