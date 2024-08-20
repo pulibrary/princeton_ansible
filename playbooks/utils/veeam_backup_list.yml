@@ -53,9 +53,31 @@
       ansible.builtin.debug:
         var: slim_tagged_vms
 
+    - name: get disk size for tagged VMs
+      ansible.builtin.set_fact:
+        matched_disks: "{{ slim_tagged_vms | json_query(disk_size_match_to_tag) }}"
+      vars:
+        disk_size_match_to_tag: '[?Tag_name==`{{ item }}`].Disk_size'
+      loop: "{{ backup_tags }}"
+
+    - name: get VM names for tagged VMs
+      ansible.builtin.set_fact:
+        matched_vms: "{{ slim_tagged_vms | json_query(name_match_to_tag) }}"
+      vars:
+        name_match_to_tag: '[?Tag_name==`{{ item }}`].VM_name'
+      loop: "{{ backup_tags }}"
+
+    - name: look at matched_disks
+      ansible.builtin.debug:
+        var: matched_disks
+
+    - name: look at matched_vms
+      ansible.builtin.debug:
+        var: matched_vms
+
     - name: all VMs tagged {{ item }}
       ansible.builtin.debug:
-        msg: The {{ item }} tag is on these VMs {{ slim_tagged_vms | json_query(name_match_to_tag) }} and {{ slim_tagged_vms | json_query(disk_size_match_to_tag) | human_readable }} total disk
+        msg: The {{ item }} tag is on these VMs {{ slim_tagged_vms | json_query(name_match_to_tag) }} and {{ slim_tagged_vms | json_query(disk_size_match_to_tag) }} total disk
       vars:
         name_match_to_tag: '[?Tag_name==`{{ item }}`].VM_name'
         disk_size_match_to_tag: '[?Tag_name==`{{ item }}`].Disk_size'
