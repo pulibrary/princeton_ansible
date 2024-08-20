@@ -61,13 +61,14 @@
       loop: "{{ backup_tags }}"
       register: matched_disks_dict
 
-    - name: get VM names for tagged VMs
-      ansible.builtin.set_fact:
-        matched_vms: "{{ slim_tagged_vms | json_query(name_match_to_tag) }}"
-      vars:
-        name_match_to_tag: '[?Tag_name==`{{ item }}`].VM_name'
-      loop: "{{ backup_tags }}"
-      register: matched_vms_dict
+    # probably don't need this
+    # - name: get VM names for tagged VMs
+    #   ansible.builtin.set_fact:
+    #     matched_vms: "{{ slim_tagged_vms | json_query(name_match_to_tag) }}"
+    #   vars:
+    #     name_match_to_tag: '[?Tag_name==`{{ item }}`].VM_name'
+    #   loop: "{{ backup_tags }}"
+    #   register: matched_vms_dict
 
     - name: look at matched_disks
       ansible.builtin.debug:
@@ -78,9 +79,26 @@
     #   ansible.builtin.debug:
     #     msg: The VMs marked {{ matched_disks_dict.results | map(attribute='item') }} have {{ matched_disks_dict.results | map(attribute='ansible_facts.matched_disks') | list | int | human_readable }}" disk size
 
-    - name: look at matched_vms
+    # probably don't need this
+    # - name: look at matched_vms
+    #   ansible.builtin.debug:
+    #     var: matched_vms_dict
+
+    - name: all VMs tagged {{ item }}
       ansible.builtin.debug:
-        var: matched_vms_dict
+        msg: The {{ item }} tag is on these VMs {{ slim_tagged_vms | json_query(name_match_to_tag) }} and {{ slim_tagged_vms | json_query(disk_size_match_to_tag) }} total disk
+      vars:
+        name_match_to_tag: '[?Tag_name==`{{ item }}`].VM_name'
+        disk_size_match_to_tag: '[?Tag_name==`{{ item }}`].Disk_size'
+      loop: "{{ backup_tags }}"
+
+    - name: all VMs tagged {{ item }}
+      ansible.builtin.debug:
+        msg: The {{ item }} tag is on these VMs {{ slim_tagged_vms | json_query(name_match_to_tag) }} and {{ slim_tagged_vms | json_query(disk_size_match_to_tag) | int }} total disk
+      vars:
+        name_match_to_tag: '[?Tag_name==`{{ item }}`].VM_name'
+        disk_size_match_to_tag: '[?Tag_name==`{{ item }}`].Disk_size'
+      loop: "{{ backup_tags }}"
 
     - name: all VMs tagged {{ item }}
       ansible.builtin.debug:
