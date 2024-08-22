@@ -107,3 +107,19 @@
   tags:
     - mediaflux
     - init
+
+- name: install the mediaflux desktop
+  become: true
+  ansible.builtin.command: java -Dmf.host=localhost -Dmf.transport=http -Dmf.domain=system -Dmf.user=manager -Dmf.password=change_me -Dmf.port=80 -jar /opt/mediaflux/bin/aterm.jar --app exec package.install :url https://www.arcitecta.com/software/adesktop/1.2.020/adesktop_1.2.020.zip
+  when:
+    - running_on_server
+
+- name: MFlux | Restart mediaflux
+  ansible.builtin.systemd:
+    name: mediaflux
+    state: restarted
+  when:
+    - running_on_server
+  tags:
+    - mediaflux
+    - init
