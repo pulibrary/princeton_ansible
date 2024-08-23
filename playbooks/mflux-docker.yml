@@ -1,0 +1,49 @@
+---
+# this will run on your local machine and build a docker image for local mediaflux development
+# to run this playbook, use the following command: ansible-playbook mflux-docker.yml
+# to run the docker image, use the following command: docker run -it -rm -d -p 0.0.0.0:80 -name mediaflux-development Rocky-ansible-base
+- name: Pull latest Rocky9 Image
+  hosts: localhost
+  tasks:
+  - name: Pull Docker-Rocky9 Image
+    docker_container:
+      name: "Rocky-ansible-base"
+      image: "eniocarboni/docker-rockylinux-systemd:9"
+      state: started
+      privileged: true
+      volumes:
+        - "/sys/fs/cgroup:/sys/fs/cgroup:rw"
+      command: tail -f /dev/null
+      cgroupns_mode: host
+  - name: Add Rocky9 Image to Ansible Hosts
+    add_host:
+      name: "Rocky-ansible-base"
+      ansible_connection: docker
+      ansible_ssh_user: root
+
+# Run the mediaflux configurations for the docker image
+- name: install mediaflux in a docker container
+  hosts: "Rocky-ansible-base"
+  gather_facts: false
+  vars:
+       runtime_env: "docker"
+  vars_files:
+    - ../group_vars/mflux/docker.yml
+    - ../group_vars/mflux/vault.yml
+  roles:
+    - role: ../roles/mflux
+
+- name: Snapshot base image to create newly configured Image
+  hosts: localhost
+  tasks:
+    - name: Commit Docker image
+      command: docker commit "Rocky-ansible-base" "mediaflux-development"
+
+
+# get rid of systemd in the docker build
+
+# Just run mediaflux
+# - /usr/bin/java -jar /opt/mediaflux/bin/aserver.jar application.home=/opt/mediaflux nogui
+
+# Create a distributable docker image
+# docker create --name mediaflux-a --publish 0.0.0.0:8888:8888 --mac-address 02:42:ac:11:00:02 eniocarboni/docker-rockylinux-systemd
