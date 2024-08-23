@@ -53,11 +53,22 @@
     dest: /etc/vim/vimrc.local
     mode: 0644
 
+- name: common | ensure logrotate timer dir exists
+  ansible.builtin.file:
+    path: /etc/systemd/system/logrotate.timer.d
+    state: directory
+    mode: 0755
+    owner: root
+    group: root
+
 - name: common | override default logrotate timer
   ansible.builtin.template:
     src: "logrotate_timer.j2"
     dest: "/etc/systemd/system/logrotate.timer.d/override.conf"
     mode: 0644
+
+- name: common | reload to pick up logrotate timer settings
+  ansible.builtin.command: systemctl daemon-reload
 
 - name: common | install configured dependencies
   ansible.builtin.package:
