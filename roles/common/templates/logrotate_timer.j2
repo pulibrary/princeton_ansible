@@ -1,0 +1,16 @@
+{{ ansible_managed | comment }}
+# This file defines how frequently systemd checks
+# to see if a log file is so large it should be rotated
+[Unit]
+Description=rotation of log files by size
+Documentation=man:logrotate(8) man:logrotate.conf(5)
+[Timer]
+# OnActiveSec sets how long systemd waits to check logs
+# after restarting a service
+OnActiveSec=20seconds
+# OnUnitActiveSec sets how often systemd checks logs
+OnUnitActiveSec={{ logrotate_wait_general | default('10minutes') }}
+AccuracySec=1m
+Persistent=true
+[Install]
+WantedBy=timers.target
