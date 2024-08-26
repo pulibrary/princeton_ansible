@@ -21,7 +21,7 @@
 
     - name: Get a list of templates
       ansible.builtin.set_fact:
-        template_names: "{{ template_info.virtual_machines | map(attribute='guest_name') }}"
+        template_names: "{{ template_info.virtual_machines | map(attribute='guest_name') | sort }}"
 
     - name: View list of templates
       ansible.builtin.debug:
@@ -33,8 +33,10 @@
         username: "{{ vcenter_username }}"
         password: "{{ vcenter_password }}"
         validate_certs: false
-        show_datacenter: true
+        show_allocated: true
+        # per the docs, this gathers memory usage in MB
         show_cluster: true
+        show_datacenter: true
         show_esxi_hostname: true
         vm_type: vm
       register: vm_info
@@ -45,7 +47,7 @@
 
     - name: Get a list of esxi_hosts
       ansible.builtin.set_fact:
-        esxi_hostnames: "{{ vm_info.virtual_machines | map(attribute='esxi_hostname') | unique }}"
+        esxi_hostnames: "{{ vm_info.virtual_machines | map(attribute='esxi_hostname') | unique | sort }}"
 
     - name: View esxi host info
       ansible.builtin.debug:
@@ -79,6 +81,24 @@
       ansible.builtin.debug:
         var: slim_esxi_host_memory
 
+    - name: Get array of VM memory stats
+      ansible.builtin.set_fact:
+        slim_vm_memory: "{{ vm_info | community.general.json_query('virtual_machines[*].{ESXI_host: esxi_hostname, Memory_in_MB: allocated.memory}') }}"
+
+    - name: View array of VM memory stats
+      ansible.builtin.debug:
+        var: slim_vm_memory
+
+    - name: Get memory in MB per esxi host
+      ansible.builtin.set_fact:
+        vm_memory_array: "{{ slim_vm_memory | selectattr('ESXI_host', 'equalto', item) | map(attribute='Memory_in_MB') | sum }}"
+      loop: "{{ esxi_hostnames }}"
+      register: vm_memory_per_esxi_host
+
+    - name: View memory in MB per esxi host
+      ansible.builtin.debug:
+        var: vm_memory_per_esxi_host
+
     # I tried to copy the way this blog post: https://www.middlewareinventory.com/blog/ansible-json-query/
     # built its "phonebook" in this task but it never worked
     # if I put ':' between the items, it says
@@ -94,14 +114,35 @@
     #   ansible.builtin.debug:
     #     var: memory_stats
 
-    - name: Better view of ESXi memory stats
+    # This returned the error "Unexpected templating type error . . . unsupported operand type(s) for /: 'int' and 'str'"
+    # - name: Correctly converted view of ESXi memory stats
+    #   ansible.builtin.debug:
+    #     msg: The VMs on the {{ item }} host are using roughly {{ vm_info.virtual_machines | selectattr('esxi_hostname', 'equalto', item) | map(attribute='allocated.memory') | sum | int / 1024 | human_readable }}
+    #   loop: "{{ esxi_hostnames }}"  # divide by 1073741824 to get gigabytes
+
+    - name: Get shorter array of ESXI memory stats
+      ansible.builtin.set_fact:
+        esxi_memory_for_all_vms: "{{ vm_memory_per_esxi_host | community.general.json_query('results[*].{ESXI_host: item, Sum_of_vm_mmory_in_MB: ansible_facts.vm_memory_array}') }}"
+
+    - name: View shorter array of ESXI memory stats
       ansible.builtin.debug:
-        # var: slim_esxi_host_memory
-        # {{ slim_tagged_vms | selectattr('Tag_name', 'equalto', item) | map(attribute='VM_name') }}
-        msg: The {{ item }} server is using {{ slim_esxi_host_memory | selectattr('Name', 'equalto', item) | map(attribute='Usedmemory') | sum | human_readable }} out of {{ slim_esxi_host_memory | selectattr('Name', 'equalto', item) | map(attribute='Totalmemory') | sum | human_readable(unit='G') }} total.
-      loop: "{{ esxi_hostnames }}"  # divide by 1073741824 to get gigabytes
-        # currently we get 0.0 GB used out of 511; should be 129 or so out of 511 for that host
-        # need to find the correct data for that
+        var: esxi_memory_for_all_vms
+
+    - name: Try ESXI memory stats with mapping
+      ansible.builtin.debug:
+        msg: The VMs on {{ item.0 }} are using {{ ( item.1 | int * 104576 ) | human_readable }}
+      with_together:
+        - "{{ esxi_memory_for_all_vms | map(attribute='ESXI_host') | list }}"
+        - "{{ esxi_memory_for_all_vms | map(attribute='Sum_of_vm_mmory_in_MB') | list }}"
+
+    # This attempt gave us a long array of 1 KB messages . . .
+    # - name: View ESXi memory used by VMs
+    #   ansible.builtin.debug:
+    #     msg: The VMs on the {{ item.item }} host are using {{ item.ansible_facts.vm_memory_array | int * 1048576 | human_readable }}
+       # this part gives 0 GB
+       # because the var in the loop does not match the Name attribute in slim_esxi_host_memory
+       # out of {{ slim_esxi_host_memory | selectattr('Name', 'equalto', item) | map(attribute='Totalmemory') | sum | human_readable(unit='G') }} total.
+      # loop: "{{ vm_memory_per_esxi_host.results }}"
 
     - name: show number of VMs by esxi_hostname
       ansible.builtin.debug:
@@ -125,7 +166,7 @@
 
     - name: Get a list of storage nodes
       ansible.builtin.set_fact:
-        storage_nodes: "{{ storage_info.datastores | map(attribute='info.name') | unique }}"
+        storage_nodes: "{{ storage_info.datastores | map(attribute='info.name') | unique | sort }}"
 
     - name: View storage availability
       ansible.builtin.debug:
