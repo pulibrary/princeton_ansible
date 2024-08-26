@@ -49,6 +49,8 @@
     src: files/mediaflux.service
     dest: /etc/systemd/system/mediaflux.service
     mode: '0755'
+  when:
+    - running_on_server
 
 - name: MFlux | Reload systemd
   ansible.builtin.systemd:
@@ -71,6 +73,7 @@
     enabled: false
   when:
     - running_on_server
+
 # Make a mediaflux group
 - name: Mflux | Ensure group "mediaflux" exists
   ansible.builtin.group:
@@ -82,6 +85,7 @@
     name: mediaflux
     comment: mediaflux user
     group: mediaflux
+
 # We are creating a directory to contain tcl scripts
 - name: Mflux | create services folder
   ansible.builtin.file:
@@ -91,7 +95,20 @@
     group: "{{ mflux_user }}"
     mode: "u=rwx,g=rwx,o=r"
   become: true
-  become_user: root
+  become_user: "{{ mflux_user }}"
+  when:
+    - running_on_server
+
+# We are creating a directory to contain tcl scripts
+- name: Mflux | create services folder | when in docker
+  ansible.builtin.file:
+    path: "{{ mediaflux_home }}/config/services"
+    state: directory
+    owner: "{{ mflux_user }}"
+    group: "{{ mflux_user }}"
+    mode: "u=rwx,g=rwx,o=r"
+  when:
+    - not running_on_server
 
 - name: MFlux | copy services script
   ansible.builtin.template:
@@ -100,8 +117,22 @@
     owner: "{{ mflux_user }}"
     group: "{{ mflux_user }}"
     mode: "u=rwx,g=rw,o=r"
-  become: true
-  become_user: root
+  become_user: "{{ mflux_user }}"
+  when:
+    - running_on_server
+  tags:
+    - mediaflux
+    - init
+
+- name: MFlux | copy services script | when in docker
+  ansible.builtin.template:
+    src: "vendor-controller-mediaflux-primordial-1.0.tcl.j2"
+    dest: "{{ mediaflux_home }}/config/services/vendor-controller-mediaflux-services-1.0.tcl"
+    owner: "{{ mflux_user }}"
+    group: "{{ mflux_user }}"
+    mode: "u=rwx,g=rw,o=r"
+  when:
+    - not running_on_server
   tags:
     - mediaflux
     - init
@@ -118,6 +149,14 @@
     state: restarted
   when:
     - running_on_server
+  tags:
+    - mediaflux
+    - init
+
+- name: Mflux | Start mediaflux | when in docker
+  ansible.builtin.command: /usr/bin/java -jar /opt/mediaflux/bin/aserver.jar application.home=/opt/mediaflux nogui
+  when:
+    - not running_on_server
   tags:
     - mediaflux
     - init

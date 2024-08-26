@@ -8,20 +8,16 @@
   - name: Pull Docker-Rocky9 Image
     docker_container:
       name: "Rocky-ansible-base"
-      image: "eniocarboni/docker-rockylinux-systemd:9"
+      image: "rockylinux:9"
       state: started
-      privileged: true
-      volumes:
-        - "/sys/fs/cgroup:/sys/fs/cgroup:rw"
       command: tail -f /dev/null
-      cgroupns_mode: host
   - name: Add Rocky9 Image to Ansible Hosts
     add_host:
       name: "Rocky-ansible-base"
       ansible_connection: docker
       ansible_ssh_user: root
 
-# Run the mediaflux configurations for the docker image
+# Run the mediaflux configurations for the docker container
 - name: install mediaflux in a docker container
   hosts: "Rocky-ansible-base"
   gather_facts: false
@@ -39,8 +35,6 @@
     - name: Commit Docker image
       command: docker commit "Rocky-ansible-base" "mediaflux-development"
 
-
-# get rid of systemd in the docker build
 
 # Just run mediaflux
 # - /usr/bin/java -jar /opt/mediaflux/bin/aserver.jar application.home=/opt/mediaflux nogui
