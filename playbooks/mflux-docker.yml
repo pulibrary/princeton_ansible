@@ -35,9 +35,30 @@
     - name: Commit Docker image
       command: docker commit "Rocky-ansible-base" "mediaflux-development"
 
+- name: Update entrypoint
+  hosts: localhost
+  tasks:
+  - name: Update entrypoint
+    docker_container:
+      name: "mediaflux-development"
+      image: "mediaflux-development"
+      state: started
+      command: /usr/bin/java -jar /opt/mediaflux/bin/aserver.jar application.home=/opt/mediaflux nogui
+  - name: Add mediaflux-development to Ansible Hosts
+    add_host:
+      name: "mediaflux-development"
+      ansible_connection: docker
+      ansible_ssh_user: root
+
+- name: Snapshot mediaflux-development to create newly configured Image
+  hosts: localhost
+  tasks:
+    - name: Commit Docker mediaflux-development
+      command: docker commit "mediaflux-development" "mediaflux-development2"
+
 
 # Just run mediaflux
 # - /usr/bin/java -jar /opt/mediaflux/bin/aserver.jar application.home=/opt/mediaflux nogui
 
 # Create a distributable docker image
-# docker create --name mediaflux-a --publish 0.0.0.0:8888:8888 --mac-address 02:42:ac:11:00:02 eniocarboni/docker-rockylinux-systemd
+# docker create --name mediaflux-a --publish 0.0.0.0:8888:8888 --mac-address 02:42:ac:11:00:02 mediaflux-development 
