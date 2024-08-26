@@ -11,6 +11,7 @@
       image: "rockylinux:9"
       state: started
       command: tail -f /dev/null
+      mac_address: "02:42:ac:11:00:08"
   - name: Add Rocky9 Image to Ansible Hosts
     add_host:
       name: "Rocky-ansible-base"
@@ -33,23 +34,24 @@
   hosts: localhost
   tasks:
     - name: Commit Docker image
-      command: docker commit "Rocky-ansible-base" "mediaflux-development"
+      command: docker commit "Rocky-ansible-base" "mediaflux-base"
 
 - name: Update entrypoint
   hosts: localhost
   tasks:
   - name: Update entrypoint
     docker_container:
-      name: "mediaflux-development"
-      image: "mediaflux-development"
+      name: "mediaflux-container"
+      image: "mediaflux-base"
       state: started
-      networks:
-        - name: "mediaflux-network"
       mac_address: "02:42:ac:11:00:02"
       command: /usr/bin/java -jar /opt/mediaflux/bin/aserver.jar application.home=/opt/mediaflux nogui
-  - name: Add mediaflux-development to Ansible Hosts
+      published_ports: 8888:80
+      publish_all_ports: true
+      privileged: true
+  - name: Add mediaflux-container to Ansible Hosts
     add_host:
-      name: "mediaflux-development"
+      name: "mediaflux-container"
       ansible_connection: docker
       ansible_ssh_user: root
 
@@ -57,7 +59,7 @@
   hosts: localhost
   tasks:
     - name: Commit Docker mediaflux-development
-      command: docker commit "mediaflux-development" "mediaflux-development2"
+      command: docker commit "mediaflux-container" "mediaflux-development"
 
 - name: Clean Up Docker Containers
   hosts: localhost
@@ -68,18 +70,20 @@
         state: absent
         force_kill: yes
 
-# - name: Clean Up Docker Containers
-#   hosts: localhost
-#   tasks:
-#     - name: Remove Running Base Image
-#       docker_container:
-#         name: mediaflux-development
-#         state: absent
-#         force_kill: yes
+- name: Clean Up Docker Containers
+  hosts: localhost
+  tasks:
+    - name: Remove Running Base Image
+      docker_container:
+        name: mediaflux-container
+        state: absent
+        force_kill: yes
 
 
 # Just run mediaflux
 # - /usr/bin/java -jar /opt/mediaflux/bin/aserver.jar application.home=/opt/mediaflux nogui
 
 # Create a distributable docker image
-# docker create --name mediaflux-a --publish 0.0.0.0:8888:8888 --mac-address 02:42:ac:11:00:02 mediaflux-development2
+# docker create --name mediaflux-a --publish 8888:80 mediaflux-development
+
+# docker run mediaflux-a
