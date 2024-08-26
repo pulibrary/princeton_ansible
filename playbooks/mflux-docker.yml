@@ -43,6 +43,9 @@
       name: "mediaflux-development"
       image: "mediaflux-development"
       state: started
+      networks:
+        - name: "mediaflux-network"
+      mac_address: "02:42:ac:11:00:02"
       command: /usr/bin/java -jar /opt/mediaflux/bin/aserver.jar application.home=/opt/mediaflux nogui
   - name: Add mediaflux-development to Ansible Hosts
     add_host:
@@ -56,9 +59,27 @@
     - name: Commit Docker mediaflux-development
       command: docker commit "mediaflux-development" "mediaflux-development2"
 
+- name: Clean Up Docker Containers
+  hosts: localhost
+  tasks:
+    - name: Remove Running Base Image
+      docker_container:
+        name: Rocky-ansible-base
+        state: absent
+        force_kill: yes
+
+# - name: Clean Up Docker Containers
+#   hosts: localhost
+#   tasks:
+#     - name: Remove Running Base Image
+#       docker_container:
+#         name: mediaflux-development
+#         state: absent
+#         force_kill: yes
+
 
 # Just run mediaflux
 # - /usr/bin/java -jar /opt/mediaflux/bin/aserver.jar application.home=/opt/mediaflux nogui
 
 # Create a distributable docker image
-# docker create --name mediaflux-a --publish 0.0.0.0:8888:8888 --mac-address 02:42:ac:11:00:02 mediaflux-development 
+# docker create --name mediaflux-a --publish 0.0.0.0:8888:8888 --mac-address 02:42:ac:11:00:02 mediaflux-development2
