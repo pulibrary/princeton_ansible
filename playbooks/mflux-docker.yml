@@ -11,7 +11,7 @@
       image: "rockylinux:9"
       state: started
       command: tail -f /dev/null
-      mac_address: "02:42:ac:11:00:08"
+      mac_address: "02:42:ac:11:00:02"
   - name: Add Rocky9 Image to Ansible Hosts
     add_host:
       name: "Rocky-ansible-base"
@@ -35,6 +35,15 @@
   tasks:
     - name: Commit Docker image
       command: docker commit "Rocky-ansible-base" "mediaflux-base"
+
+- name: Clean Up Docker Containers
+  hosts: localhost
+  tasks:
+    - name: Remove Running Base Image
+      docker_container:
+        name: Rocky-ansible-base
+        state: absent
+        force_kill: yes
 
 - name: Update entrypoint
   hosts: localhost
@@ -66,15 +75,6 @@
   tasks:
     - name: Remove Running Base Image
       docker_container:
-        name: Rocky-ansible-base
-        state: absent
-        force_kill: yes
-
-- name: Clean Up Docker Containers
-  hosts: localhost
-  tasks:
-    - name: Remove Running Base Image
-      docker_container:
         name: mediaflux-container
         state: absent
         force_kill: yes
@@ -83,7 +83,8 @@
 # Just run mediaflux
 # - /usr/bin/java -jar /opt/mediaflux/bin/aserver.jar application.home=/opt/mediaflux nogui
 
-# Create a distributable docker image
-# docker create --name mediaflux-a --publish 8888:80 mediaflux-development
+# Create a docker container from the image
+# docker create --name mediaflux-a --publish 8888:80 --mac-address 02:42:ac:11:00:02 mediaflux-development
 
-# docker run mediaflux-a
+# Start the container
+# docker start mediaflux-a
