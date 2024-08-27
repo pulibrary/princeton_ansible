@@ -95,21 +95,6 @@
     owner: "{{ mflux_user }}"
     group: "{{ mflux_user }}"
     mode: "u=rwx,g=rwx,o=r"
-  become: true
-  become_user: "{{ mflux_user }}"
-  when:
-    - running_on_server
-
-# We are creating a directory to contain tcl scripts for docker
-- name: Mflux | create services folder | when in docker
-  ansible.builtin.file:
-    path: "{{ mediaflux_home }}/config/services"
-    state: directory
-    owner: "{{ mflux_user }}"
-    group: "{{ mflux_user }}"
-    mode: "u=rwx,g=rwx,o=r"
-  when:
-    - not running_on_server
 
 - name: MFlux | copy services script
   ansible.builtin.template:
@@ -118,25 +103,26 @@
     owner: "{{ mflux_user }}"
     group: "{{ mflux_user }}"
     mode: "u=rwx,g=rw,o=r"
-  become_user: "{{ mflux_user }}"
-  when:
-    - running_on_server
+  # when:
+  #   - running_on_server
   tags:
     - mediaflux
     - init
 
-- name: MFlux | copy services script | when in docker
-  ansible.builtin.template:
-    src: "vendor-controller-mediaflux-primordial-1.0.tcl.j2"
-    dest: "{{ mediaflux_home }}/config/services/vendor-controller-mediaflux-services-1.0.tcl"
-    owner: "{{ mflux_user }}"
-    group: "{{ mflux_user }}"
-    mode: "u=rwx,g=rw,o=r"
-  when:
-    - not running_on_server
-  tags:
-    - mediaflux
-    - init
+# - name: MFlux | copy services script | when in docker
+#   ansible.builtin.template:
+#     src: "vendor-controller-mediaflux-primordial-1.0.tcl.j2"
+#     dest: "{{ mediaflux_home }}/config/services/vendor-controller-mediaflux-services-1.0.tcl"
+#     owner: "{{ mflux_user }}"
+#     group: "{{ mflux_user }}"
+#     mode: "u=rwx,g=rw,o=r"
+#   when:
+#     - not running_on_server
+#   tags:
+#     - mediaflux
+#     - init
+
+# TODO: FIGURE OUT WHY CI IS FAILING
 
 - name: Mflux | Start mediaflux | when in docker
   ansible.builtin.shell: "/usr/bin/java -jar /opt/mediaflux/bin/aserver.jar application.home=/opt/mediaflux nogui </dev/null >/dev/null 2>&1 &"
