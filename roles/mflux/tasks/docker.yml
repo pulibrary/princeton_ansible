@@ -1,0 +1,13 @@
+---
+- name: Mflux | Start mediaflux | when in docker
+  ansible.builtin.shell: "/usr/bin/java -jar /opt/mediaflux/bin/aserver.jar application.home=/opt/mediaflux nogui </dev/null >/dev/null 2>&1 &"
+  tags:
+    - mediaflux
+    - init
+
+- name: Mflux | Wait for mediaflux | when in docker
+  ansible.builtin.wait_for:
+    port: 80
+
+- name: install the mediaflux desktop | when in docker
+  ansible.builtin.command: java -Dmf.host=localhost -Dmf.transport=http -Dmf.domain=system -Dmf.user=manager -Dmf.password=change_me -Dmf.port=80 -jar /opt/mediaflux/bin/aterm.jar --app exec package.install :url https://www.arcitecta.com/software/adesktop/1.2.020/adesktop_1.2.020.zip

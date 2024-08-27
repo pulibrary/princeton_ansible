@@ -1,0 +1,79 @@
+---
+# this will run on your local machine and build a docker image for local mediaflux development
+# to run this playbook, use the following command: ansible-playbook mflux-docker.yml
+# pass -e docker_tag={tag_number} to specify the tag for the docker image
+
+# Create a docker container from the local version of the image
+# docker create --name mediaflux-dev --publish 8888:80 --mac-address 02:42:ac:11:00:02 mediaflux-development
+
+# Don't forget to start the container
+# docker start mediaflux-dev
+
+- name: Pull latest Rocky9 Image
+  hosts: localhost
+  tasks:
+  - name: Pull Docker-Rocky9 Image
+    docker_container:
+      name: "Rocky-ansible-base"
+      image: "rockylinux:9"
+      state: started
+      command: tail -f /dev/null
+      mac_address: "02:42:ac:11:00:02"
+  - name: Add Rocky9 Image to Ansible Hosts
+    add_host:
+      name: "Rocky-ansible-base"
+      ansible_connection: docker
+      ansible_ssh_user: root
+
+# Run the mediaflux configurations for the docker container
+- name: install mediaflux in a docker container
+  hosts: "Rocky-ansible-base"
+  gather_facts: false
+  vars:
+       runtime_env: "docker"
+  vars_files:
+    - ../group_vars/mflux/docker.yml
+    - ../group_vars/mflux/vault.yml
+  roles:
+    - role: ../roles/mflux
+
+- name: Update mediaflux base image to start and configure mediaflux
+  hosts: localhost
+  vars_files:
+    - ../group_vars/mflux/docker.yml
+    - ../group_vars/mflux/vault.yml
+  tasks:
+    - name: Commit Rocky Ansible Base image
+      command: docker commit "Rocky-ansible-base" "mediaflux-base"
+    - name: Remove Running Base Image
+      docker_container:
+        name: Rocky-ansible-base
+        state: absent
+        force_kill: yes
+    - name: Update entrypoint to mediaflux
+      docker_container:
+        name: "mediaflux-container"
+        image: "mediaflux-base"
+        state: started
+        mac_address: "02:42:ac:11:00:02"
+        command: /usr/bin/java -jar /opt/mediaflux/bin/aserver.jar application.home=/opt/mediaflux nogui
+        published_ports: 8888:80
+        publish_all_ports: true
+        privileged: true
+    - name: Commit Docker mediaflux-development
+      command: docker commit "mediaflux-container" "mediaflux-development"
+    - name: Log into DockerHub
+      community.docker.docker_login:
+        username: "{{ docker_user }}"
+        password: "{{ docker_pass }}"
+    - name: Tag and push to docker hub
+      community.docker.docker_image:
+        name: "mediaflux-development"
+        repository: "{{ docker_user }}/mediaflux_dev:{{ docker_tag }}"
+        push: true
+        source: local
+    - name: Remove Running Base Image
+      docker_container:
+        name: mediaflux-container
+        state: absent
+        force_kill: yes
