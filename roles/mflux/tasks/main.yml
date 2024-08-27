@@ -44,36 +44,6 @@
     dest: /opt/mediaflux/config/licence.xml
     mode: '0444'
 
-- name: Mflux | copy service file
-  ansible.builtin.copy:
-    src: files/mediaflux.service
-    dest: /etc/systemd/system/mediaflux.service
-    mode: '0755'
-  when:
-    - running_on_server
-
-- name: MFlux | Reload systemd
-  ansible.builtin.systemd:
-    daemon_reload: true
-  when:
-    - running_on_server
-
-- name: Mflux | start mediaflux if not started
-  ansible.builtin.service:
-    name: mediaflux
-    state: started
-    enabled: true
-  when:
-    - running_on_server
-
-- name: Mflux | stop and disable the firewall
-  ansible.builtin.systemd:
-    name: firewalld
-    state: stopped
-    enabled: false
-  when:
-    - running_on_server
-
 # Make a mediaflux group
 - name: Mflux | Ensure group "mediaflux" exists
   ansible.builtin.group:
@@ -103,52 +73,18 @@
     owner: "{{ mflux_user }}"
     group: "{{ mflux_user }}"
     mode: "u=rwx,g=rw,o=r"
-  # when:
-  #   - running_on_server
   tags:
     - mediaflux
     - init
 
-# - name: MFlux | copy services script | when in docker
-#   ansible.builtin.template:
-#     src: "vendor-controller-mediaflux-primordial-1.0.tcl.j2"
-#     dest: "{{ mediaflux_home }}/config/services/vendor-controller-mediaflux-services-1.0.tcl"
-#     owner: "{{ mflux_user }}"
-#     group: "{{ mflux_user }}"
-#     mode: "u=rwx,g=rw,o=r"
-#   when:
-#     - not running_on_server
-#   tags:
-#     - mediaflux
-#     - init
-
-# TODO: FIGURE OUT WHY CI IS FAILING
-
-- name: Mflux | Start mediaflux | when in docker
-  ansible.builtin.shell: "/usr/bin/java -jar /opt/mediaflux/bin/aserver.jar application.home=/opt/mediaflux nogui </dev/null >/dev/null 2>&1 &"
-  tags:
-    - mediaflux
-    - init
-  when:
-    - runtime_env == "docker"
-
-- name: Mflux | Wait for mediaflux | when in docker
-  ansible.builtin.wait_for:
-    port: 80
-  when:
-    - runtime_env == "docker"
-
-- name: install the mediaflux desktop
-  ansible.builtin.command: java -Dmf.host=localhost -Dmf.transport=http -Dmf.domain=system -Dmf.user=manager -Dmf.password=change_me -Dmf.port=80 -jar /opt/mediaflux/bin/aterm.jar --app exec package.install :url https://www.arcitecta.com/software/adesktop/1.2.020/adesktop_1.2.020.zip
-  when:
-    - runtime_env != "molecule"
-
-- name: MFlux | Restart mediaflux
-  ansible.builtin.systemd:
-    name: mediaflux
-    state: restarted
+# Run the Server specific tasks
+- name: Mflux | import server tasks
+  ansible.builtin.import_tasks: server.yml
   when:
     - running_on_server
-  tags:
-    - mediaflux
-    - init
+
+# Run the Docker specific tasks
+- name: Mflux | import docker tasks
+  ansible.builtin.import_tasks: docker.yml
+  when:
+    - not running_on_server
