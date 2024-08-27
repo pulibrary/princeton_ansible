@@ -2,6 +2,7 @@
 # this will run on your local machine and build a docker image for local mediaflux development
 # to run this playbook, use the following command: ansible-playbook mflux-docker.yml
 # to run the docker image, use the following command: docker run -it -rm -d -p 0.0.0.0:80 -name mediaflux-development Rocky-ansible-base
+
 - name: Pull latest Rocky9 Image
   hosts: localhost
   tasks:
@@ -66,9 +67,22 @@
 
 - name: Snapshot mediaflux-development to create newly configured Image
   hosts: localhost
+  vars_files:
+    - ../group_vars/mflux/docker.yml
+    - ../group_vars/mflux/vault.yml
   tasks:
     - name: Commit Docker mediaflux-development
       command: docker commit "mediaflux-container" "mediaflux-development"
+    - name: Log into DockerHub
+      community.docker.docker_login:
+        username: "{{ docker_user }}"
+        password: "{{ docker_pass }}"
+    - name: Tag and push to docker hub
+      community.docker.docker_image:
+        name: "mediaflux-development"
+        repository: "{{ docker_user }}/mediaflux_dev:{{ docker_tag }}"
+        push: true
+        source: local
 
 - name: Clean Up Docker Containers
   hosts: localhost
@@ -78,7 +92,6 @@
         name: mediaflux-container
         state: absent
         force_kill: yes
-
 
 # Just run mediaflux
 # - /usr/bin/java -jar /opt/mediaflux/bin/aserver.jar application.home=/opt/mediaflux nogui
