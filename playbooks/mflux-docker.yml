@@ -1,7 +1,11 @@
 ---
-# this will run on your local machine and build a docker image for local mediaflux development
+# this will run on your local machine and build a docker image.
+# when run without any arguments, it will tag the image as latest and push it to docker hub for ci.
+
 # to run this playbook, use the following command: ansible-playbook mflux-docker.yml
 # pass -e docker_tag={tag_number} to specify the tag for the docker image
+# pass -t publish_image to push the image to docker hub
+# to run the playbook for local development, pass -e platform_base=arm64 -e docker_base_image=rockylinux:9 -e docker_tag=dev
 
 # Create a docker container from the local version of the image
 # docker create --name mediaflux-dev --publish 8888:80 --mac-address 02:42:ac:11:00:02 mediaflux-development
@@ -9,16 +13,21 @@
 # Don't forget to start the container
 # docker start mediaflux-dev
 
+
 - name: Pull latest Rocky9 Image
   hosts: localhost
+  vars_files:
+    - ../group_vars/mflux/docker.yml
+    - ../group_vars/mflux/vault.yml
   tasks:
   - name: Pull Docker-Rocky9 Image
     docker_container:
       name: "Rocky-ansible-base"
-      image: "rockylinux:9"
+      image: "{{ docker_base_image }}"
       state: started
       command: tail -f /dev/null
       mac_address: "02:42:ac:11:00:02"
+      platform: "linux/{{ platform_base }}"
   - name: Add Rocky9 Image to Ansible Hosts
     add_host:
       name: "Rocky-ansible-base"
@@ -56,10 +65,12 @@
         image: "mediaflux-base"
         state: started
         mac_address: "02:42:ac:11:00:02"
-        command: /usr/bin/java -jar /opt/mediaflux/bin/aserver.jar application.home=/opt/mediaflux nogui
+        command: /opt/mediaflux/runit.sh
+        # command: /usr/bin/java -jar /opt/mediaflux/bin/aserver.jar application.home=/opt/mediaflux nogui
         published_ports: 8888:80
         publish_all_ports: true
         privileged: true
+        platform: "linux/{{ platform_base }}"
     - name: Commit Docker mediaflux-development
       command: docker commit "mediaflux-container" "mediaflux-development"
     - name: Log into DockerHub
@@ -71,7 +82,9 @@
         name: "mediaflux-development"
         repository: "{{ docker_user }}/mediaflux_dev:{{ docker_tag }}"
         push: true
+        force_tag: true
         source: local
+      tags: "publish_image"
     - name: Remove Running Base Image
       docker_container:
         name: mediaflux-container
