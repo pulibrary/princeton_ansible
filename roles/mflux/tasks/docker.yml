@@ -5,6 +5,14 @@
     dest: /opt/mediaflux/runit.sh
     mode: '0777'
 
+- name: Mflux | create the logs directory | when in docker
+  ansible.builtin.file:
+    path: "{{ mediaflux_home }}/volatile/logs"
+    state: directory
+    owner: "{{ mflux_user }}"
+    group: "{{ mflux_user }}"
+    mode: "u=rw,g=rw,o=r"
+
 - name: Mflux | create start log file | when in docker
   ansible.builtin.file:
     path: "{{ mediaflux_home }}/volatile/logs/runit.log"
@@ -12,7 +20,6 @@
     owner: "{{ mflux_user }}"
     group: "{{ mflux_user }}"
     mode: "u=rw,g=rw,o=r"
-
 
 - name: Mflux | Start mediaflux | when in docker
   ansible.builtin.shell: "/opt/mediaflux/runit.sh <{{ mediaflux_home }}/volatile/logs/runit.log >{{ mediaflux_home }}/volatile/logs/runit.log 2>&1 &"
