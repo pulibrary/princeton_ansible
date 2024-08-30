@@ -15,10 +15,11 @@
   - name: Pull Docker-Rocky9 Image
     docker_container:
       name: "Rocky-ansible-base"
-      image: "rockylinux:9"
+      image: "amd64/rockylinux:9"
       state: started
       command: tail -f /dev/null
       mac_address: "02:42:ac:11:00:02"
+      platform: "linux/amd64"
   - name: Add Rocky9 Image to Ansible Hosts
     add_host:
       name: "Rocky-ansible-base"
@@ -56,10 +57,12 @@
         image: "mediaflux-base"
         state: started
         mac_address: "02:42:ac:11:00:02"
-        command: /usr/bin/java -jar /opt/mediaflux/bin/aserver.jar application.home=/opt/mediaflux nogui
+        command: /opt/mediaflux/runit.sh
+        # command: /usr/bin/java -jar /opt/mediaflux/bin/aserver.jar application.home=/opt/mediaflux nogui
         published_ports: 8888:80
         publish_all_ports: true
         privileged: true
+        platform: "linux/amd64"
     - name: Commit Docker mediaflux-development
       command: docker commit "mediaflux-container" "mediaflux-development"
     - name: Log into DockerHub

@@ -1,6 +1,21 @@
 ---
+- name: MFlux | copy run script | when in docker
+  ansible.builtin.copy:
+    src: files/runit.sh
+    dest: /opt/mediaflux/runit.sh
+    mode: '0777'
+
+- name: Mflux | create start log file | when in docker
+  ansible.builtin.file:
+    path: "{{ mediaflux_home }}/volatile/logs/runit.log"
+    state: touch
+    owner: "{{ mflux_user }}"
+    group: "{{ mflux_user }}"
+    mode: "u=rw,g=rw,o=r"
+
+
 - name: Mflux | Start mediaflux | when in docker
-  ansible.builtin.shell: "/usr/bin/java -jar /opt/mediaflux/bin/aserver.jar application.home=/opt/mediaflux nogui </dev/null >/dev/null 2>&1 &"
+  ansible.builtin.shell: "/opt/mediaflux/runit.sh <{{ mediaflux_home }}/volatile/logs/runit.log >{{ mediaflux_home }}/volatile/logs/runit.log 2>&1 &"
   tags:
     - mediaflux
     - init
