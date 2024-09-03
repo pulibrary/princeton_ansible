@@ -25,24 +25,18 @@
         # show_cluster: true
         vm_name: "{{ replacement_vm }}"
       register: old_vm_info
+      tags: 
+        - 'disk'
 
     - name: Print out old VM information
       ansible.builtin.debug:
         var: old_vm_info
-
-    - name: Gather disk info from virtual machine using name
-      community.vmware.vmware_guest_disk_info:
-        hostname: "{{ vcenter_hostname }}"
-        username: "{{ vcenter_username }}"
-        password: "{{ vcenter_password }}"
-        name: "{{ replacement_vm }}"
-      register: disk_info
       tags: 
         - 'disk'
 
-    - name: Print out old VM disk information
+    - name: Print out disk size in KB
       ansible.builtin.debug:
-        var: disk_info
+        msg: "{{ old_vm_info.virtual_machines[0].allocated.storage / 1024 }}"
       tags: 
         - 'disk'
 
@@ -83,16 +77,15 @@
         name: "{{ replacement_vm }}"
         state: present
         template: "{{ vm_template | default('template_jammy_spring_2024')}}"
-        disk: "{{ disk_info }}"
-
-          # - size_gb: 30
-          #   # this may not be acceptable to our new templates
-          #   # type: thin
-          #   datastore: "{{ old_vm_info.virtual_machines[0].datastore_url }}"
+        disk:
+          - size: "{{ (old_vm_info.virtual_machines[0].allocated.storage / 1024) | int }}kb"
+            # this may not be acceptable to our new templates
+            # type: thin
+            datastore: "{{ old_vm_info.virtual_machines[0].datastore_url }}"
         # Add another disk from an existing VMDK
         hardware:
-          memory_mb: "{{ vm_memory | default('8192') }}"
-          num_cpus: "{{ vm_cpus | default('2') }}"
+          memory_mb: "{{ old_vm_info.virtual_machines[0].allocated.memory | int | default('16384') }}"
+          num_cpus: "{{ old_vm_info.virtual_machines[0].allocated.cpu | int | default('2') }}"
           num_cpu_cores_per_socket: "{{ vm_cpu_cores | default('1') }}"
           scsi: paravirtual
           version: latest # Hardware version of virtual machine
