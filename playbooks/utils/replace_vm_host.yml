@@ -30,6 +30,20 @@
       ansible.builtin.debug:
         var: old_vm_info
 
+    - name: Gather disk info from virtual machine using name
+      community.vmware.vmware_guest_disk_info:
+        hostname: "{{ vcenter_hostname }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        name: "{{ replacement_vm }}"
+      register: disk_info
+      tags: disk
+
+    - name: Print out old VM disk information
+      ansible.builtin.debug:
+        var: disk_info
+      tags: disk
+
     - name: Print out old VM information
       ansible.builtin.debug:
         msg: You are planning to delete {{ old_vm_info }}
@@ -67,11 +81,12 @@
         name: "{{ replacement_vm }}"
         state: present
         template: "{{ vm_template | default('template_jammy_spring_2024')}}"
-        disk:
-          - size_gb: 30
-            # this may not be acceptable to our new templates
-            # type: thin
-            datastore: "{{ old_vm_info.virtual_machines[0].datastore_url }}"
+        disk: "{{ disk_info }}"
+
+          # - size_gb: 30
+          #   # this may not be acceptable to our new templates
+          #   # type: thin
+          #   datastore: "{{ old_vm_info.virtual_machines[0].datastore_url }}"
         # Add another disk from an existing VMDK
         hardware:
           memory_mb: "{{ vm_memory | default('8192') }}"
@@ -149,6 +164,9 @@
         network_name: "{{ vm_network | default('Virtual Machine Network')}}"
         state: absent
         mac_address: "{{ new_vm_deets.instance.hw_eth0.macaddress }}"
+
+    - name: Update the memory and the disks to be correct
+      
 
     - name: Power the new VM on
       community.vmware.vmware_guest_powerstate:
