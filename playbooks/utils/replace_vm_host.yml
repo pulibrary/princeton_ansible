@@ -110,36 +110,6 @@
       ansible.builtin.debug:
         var: new_vm_deets.instance.hw_eth0.macaddress
 
-    - name: add NIC with custom mac address
-      community.vmware.vmware_guest_network:
-        hostname: "{{ vcenter_hostname }}"
-        username: "{{ vcenter_username }}"
-        password: "{{ vcenter_password }}"
-        validate_certs: false
-        datacenter: "{{ vcenter_datacenter }}"
-        # new VM var does not include UUID; use moid, which is unique in each vCenter instance
-        moid: "{{ new_vm_deets.instance.moid }}"
-        # uuid: "{{ new_vm_deets.instance.uuid }}"
-        # name: "{{ replacement_vm }}"
-        folder: "{{ old_vm_info.virtual_machines[0].folder }}"
-        network_name: "{{ vm_network | default('Virtual Machine Network')}}"
-        device_type: "e1000"
-        connected: true
-        mac_address: "{{ old_vm_info.virtual_machines[0].mac_address[0] }}"
-      register: double_nic
-
-    - name: view all info for VM with two NICs
-      ansible.builtin.debug:
-        var: double_nic
-
-    - name: view details for original mac address
-      ansible.builtin.debug:
-        var: double_nic.network_info[0].mac_address
-
-    - name: view details for new mac address
-      ansible.builtin.debug:
-        var: double_nic.network_info[1].mac_address
-
     - name: power down the VM so we can mess with the network settings
       community.vmware.vmware_guest_powerstate:
         hostname: "{{ vcenter_hostname }}"
@@ -164,8 +134,32 @@
         state: absent
         mac_address: "{{ new_vm_deets.instance.hw_eth0.macaddress }}"
 
-    # - name: Update the memory and the disks to be correct
+    - name: add NIC with custom mac address
+      community.vmware.vmware_guest_network:
+        hostname: "{{ vcenter_hostname }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        validate_certs: false
+        datacenter: "{{ vcenter_datacenter }}"
+        # new VM var does not include UUID; use moid, which is unique in each vCenter instance
+        moid: "{{ new_vm_deets.instance.moid }}"
+        # uuid: "{{ new_vm_deets.instance.uuid }}"
+        # name: "{{ replacement_vm }}"
+        folder: "{{ old_vm_info.virtual_machines[0].folder }}"
+        network_name: "{{ vm_network | default('Virtual Machine Network')}}"
+        device_type: "e1000"
+        connected: true
+        mac_address: "{{ old_vm_info.virtual_machines[0].mac_address[0] }}"
+      register: new_nic
+
+    - name: view all info for VM with two NICs
+      ansible.builtin.debug:
+        var: new_nic
       
+    - name: view details for new mac address
+      ansible.builtin.debug:
+        var: new_nic.network_info[1].mac_address
+
 
     - name: Power the new VM on
       community.vmware.vmware_guest_powerstate:
