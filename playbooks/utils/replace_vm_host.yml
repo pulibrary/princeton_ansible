@@ -28,6 +28,7 @@
       tags: 
         - 'disk'
         - remove-old
+        - known-hosts
 
     - name: Print out old VM information
       ansible.builtin.debug:
@@ -35,6 +36,7 @@
       tags: 
         - 'disk'
         - remove-old
+        - known-hosts
 
     - name: Print out disk size in KB
       ansible.builtin.debug:
@@ -152,7 +154,7 @@
         mac_address: "{{ old_vm_info.virtual_machines[0].mac_address[0] }}"
       register: new_nic
 
-    - name: view all info for VM with two NICs
+    - name: view all info for VM with the new NICs
       ansible.builtin.debug:
         var: new_nic
       
@@ -192,6 +194,17 @@
         force: true
       tags:
         - remove-old
+      
+    - name: Remove host from ansible tower known hosts
+      ansible.builtin.known_hosts:
+        path: /home/deploy/.ssh/known_hosts
+        name: "{{ replacement_vm }}.princeton.edu"
+        state: "absent"
+      delegate_to: towerdeploy1.princeton.edu
+      become: true
+      become_user: deploy
+      tags:
+        - known-hosts
 
   post_tasks:
     - name: send information to slack
