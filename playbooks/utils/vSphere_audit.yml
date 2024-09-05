@@ -76,21 +76,13 @@
       ansible.builtin.set_fact:
         storage_nodes: "{{ storage_info.datastores | map(attribute='info.name') | unique | sort }}"
 
-    - name: View list of templates
+    - name: View list of available templates
       ansible.builtin.debug:
         var: template_names
 
-    - name: View the list of ESXi hosts
+    - name: View list of ESXi hosts
       ansible.builtin.debug:
         var: esxi_hostnames
-
-    - name: View ESXi memory stats
-      ansible.builtin.debug:
-        var: esxi_host_memory
-
-    - name: View array of ESXi stats
-      ansible.builtin.debug:
-        var: slim_esxi_host_memory
 
     - name: View memory usage per ESXi host
       ansible.builtin.debug:
@@ -110,7 +102,7 @@
       ansible.builtin.debug:
         var: storage_nodes
 
-    - name: better view of storage info
+    - name: View free space per storage node
       ansible.builtin.debug:
         msg: The {{ item }} datastore has {{ storage_info.datastores | selectattr('info.name', 'equalto', item) | map(attribute='info.freeSpace') | sum | human_readable }} of free space.
       loop: "{{ storage_nodes }}"
