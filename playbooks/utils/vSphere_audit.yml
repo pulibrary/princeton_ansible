@@ -23,10 +23,6 @@
       ansible.builtin.set_fact:
         template_names: "{{ template_info.virtual_machines | map(attribute='guest_name') | sort }}"
 
-    - name: View list of templates
-      ansible.builtin.debug:
-        var: template_names
-
     - name: Gather info on all vms
       community.vmware.vmware_vm_info:
         hostname: "{{ vcenter_hostname }}"
@@ -41,17 +37,9 @@
         vm_type: vm
       register: vm_info
 
-    - name: View vm info
-      ansible.builtin.debug:
-        var: vm_info
-
     - name: Generate a list of ESXi hosts
       ansible.builtin.set_fact:
         esxi_hostnames: "{{ vm_info.virtual_machines | map(attribute='esxi_hostname') | unique | sort }}"
-
-    - name: View the list of ESXi hosts
-      ansible.builtin.debug:
-        var: esxi_hostnames
 
     - name: Gather memory stats on ESXi hosts
       community.vmware.vmware_host_facts:
@@ -68,13 +56,37 @@
       loop: "{{ esxi_hostnames }}"
       register: esxi_host_memory
 
-    - name: View ESXi memory stats
-      ansible.builtin.debug:
-        var: esxi_host_memory
-
     - name: Get array of ESXi memory stats
       ansible.builtin.set_fact:
         slim_esxi_host_memory: "{{ esxi_host_memory | community.general.json_query('results[*].ansible_facts.{Name: summary.config.name, Usedmemory: summary.quickStats.overallMemoryUsage, Totalmemory: hardware.memorySize}') }}"
+
+    - name: Gather info on storage
+      community.vmware.vmware_datastore_info:
+        hostname: "{{ vcenter_hostname }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        validate_certs: false
+        schema: vsphere
+        properties:
+          - info.name
+          - info.freeSpace
+      register: storage_info
+
+    - name: Generate a list of storage nodes
+      ansible.builtin.set_fact:
+        storage_nodes: "{{ storage_info.datastores | map(attribute='info.name') | unique | sort }}"
+
+    - name: View list of templates
+      ansible.builtin.debug:
+        var: template_names
+
+    - name: View the list of ESXi hosts
+      ansible.builtin.debug:
+        var: esxi_hostnames
+
+    - name: View ESXi memory stats
+      ansible.builtin.debug:
+        var: esxi_host_memory
 
     - name: View array of ESXi stats
       ansible.builtin.debug:
@@ -93,22 +105,6 @@
         msg:
           - The {{ item }} esxi_hostname contains {{ vm_info.virtual_machines | selectattr('esxi_hostname', 'equalto', item) | length }} VMs
       loop: "{{ esxi_hostnames }}"
-
-    - name: Gather info on storage
-      community.vmware.vmware_datastore_info:
-        hostname: "{{ vcenter_hostname }}"
-        username: "{{ vcenter_username }}"
-        password: "{{ vcenter_password }}"
-        validate_certs: false
-        schema: vsphere
-        properties:
-          - info.name
-          - info.freeSpace
-      register: storage_info
-
-    - name: Generate a list of storage nodes
-      ansible.builtin.set_fact:
-        storage_nodes: "{{ storage_info.datastores | map(attribute='info.name') | unique | sort }}"
 
     - name: View storage node list
       ansible.builtin.debug:
