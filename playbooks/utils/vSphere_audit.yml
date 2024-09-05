@@ -7,7 +7,7 @@
     - ../../group_vars/vsphere/{{ runtime_env | default('staging') }}.yml
 
   tasks:
-    - name: Gather info on templates
+    - name: Gather info on all templates
       community.vmware.vmware_vm_info:
         hostname: "{{ vcenter_hostname }}"
         username: "{{ vcenter_username }}"
@@ -19,7 +19,7 @@
         vm_type: template
       register: template_info
 
-    - name: Get a list of templates
+    - name: Generate a list of templates
       ansible.builtin.set_fact:
         template_names: "{{ template_info.virtual_machines | map(attribute='guest_name') | sort }}"
 
@@ -27,7 +27,7 @@
       ansible.builtin.debug:
         var: template_names
 
-    - name: Gather info on vms
+    - name: Gather info on all vms
       community.vmware.vmware_vm_info:
         hostname: "{{ vcenter_hostname }}"
         username: "{{ vcenter_username }}"
@@ -45,7 +45,7 @@
       ansible.builtin.debug:
         var: vm_info
 
-    - name: Get a list of ESXi hosts
+    - name: Generate a list of ESXi hosts
       ansible.builtin.set_fact:
         esxi_hostnames: "{{ vm_info.virtual_machines | map(attribute='esxi_hostname') | unique | sort }}"
 
@@ -71,7 +71,6 @@
     - name: View ESXi memory stats
       ansible.builtin.debug:
         var: esxi_host_memory
-        # divide by 1073741824 to get gigabytes
 
     - name: Get array of ESXi memory stats
       ansible.builtin.set_fact:
@@ -81,7 +80,7 @@
       ansible.builtin.debug:
         var: slim_esxi_host_memory
 
-    - name: Try again with ESXi stats, with mapping
+    - name: View memory usage per ESXi host
       ansible.builtin.debug:
         msg: The {{ item.0 }} host is using {{ ( item.1 | int * 1048576 ) | human_readable }} out of {{ item.2 | human_readable }} available memory.
       with_together:
@@ -89,54 +88,10 @@
         - "{{ slim_esxi_host_memory | map(attribute='Usedmemory') | list }}"
         - "{{ slim_esxi_host_memory | map(attribute='Totalmemory') | list }}"
 
-    - name: Get array of VM memory stats
-      ansible.builtin.set_fact:
-        slim_vm_memory: "{{ vm_info | community.general.json_query('virtual_machines[*].{ESXI_host: esxi_hostname, Memory_in_MB: allocated.memory}') }}"
-
-    - name: View array of VM memory stats
-      ansible.builtin.debug:
-        var: slim_vm_memory
-
-    - name: Get memory in MB per esxi host
-      ansible.builtin.set_fact:
-        vm_memory_array: "{{ slim_vm_memory | selectattr('ESXI_host', 'equalto', item) | map(attribute='Memory_in_MB') | sum }}"
-      loop: "{{ esxi_hostnames }}"
-      register: vm_memory_per_esxi_host
-
-    - name: View memory in MB per esxi host
-      ansible.builtin.debug:
-        var: vm_memory_per_esxi_host
-
-    - name: Get shorter array of ESXI memory stats
-      ansible.builtin.set_fact:
-        esxi_memory_for_all_vms: "{{ vm_memory_per_esxi_host | community.general.json_query('results[*].{ESXI_host: item, Sum_of_vm_mmory_in_MB: ansible_facts.vm_memory_array}') }}"
-
-    - name: View shorter array of ESXI memory stats
-      ansible.builtin.debug:
-        var: esxi_memory_for_all_vms
-
-    - name: Try ESXI memory stats with mapping
-      ansible.builtin.debug:
-        msg: The VMs on {{ item.0 }} are using {{ ( item.1 | int * 1048576 ) | human_readable }}
-      with_together:
-        - "{{ esxi_memory_for_all_vms | map(attribute='ESXI_host') | list }}"
-        - "{{ esxi_memory_for_all_vms | map(attribute='Sum_of_vm_mmory_in_MB') | list }}"
-
-    # This attempt gave us a long array of 1 KB messages . . .
-    # - name: View ESXi memory used by VMs
-    #   ansible.builtin.debug:
-    #     msg: The VMs on the {{ item.item }} host are using {{ item.ansible_facts.vm_memory_array | int * 1048576 | human_readable }}
-       # this part gives 0 GB
-       # because the var in the loop does not match the Name attribute in slim_esxi_host_memory
-       # out of {{ slim_esxi_host_memory | selectattr('Name', 'equalto', item) | map(attribute='Totalmemory') | sum | human_readable(unit='G') }} total.
-      # loop: "{{ vm_memory_per_esxi_host.results }}"
-
-    - name: show number of VMs by esxi_hostname
+    - name: View number of VMs per ESXi host
       ansible.builtin.debug:
         msg:
           - The {{ item }} esxi_hostname contains {{ vm_info.virtual_machines | selectattr('esxi_hostname', 'equalto', item) | length }} VMs
-          # - which have disk sizes of {{ slim_tagged_vms | selectattr('Tag_name', 'equalto', item) | map(attribute='Disk_size') }}
-          # - the total size of the {{ item }} backup is {{ slim_tagged_vms | selectattr('Tag_name', 'equalto', item) | map(attribute='Disk_size') | sum | human_readable }}
       loop: "{{ esxi_hostnames }}"
 
     - name: Gather info on storage
@@ -151,13 +106,9 @@
           - info.freeSpace
       register: storage_info
 
-    - name: Get a list of storage nodes
+    - name: Generate a list of storage nodes
       ansible.builtin.set_fact:
         storage_nodes: "{{ storage_info.datastores | map(attribute='info.name') | unique | sort }}"
-
-    - name: View storage availability
-      ansible.builtin.debug:
-        var: storage_info
 
     - name: View storage node list
       ansible.builtin.debug:
