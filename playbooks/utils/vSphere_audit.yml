@@ -45,11 +45,11 @@
       ansible.builtin.debug:
         var: vm_info
 
-    - name: Get a list of esxi_hosts
+    - name: Get a list of ESXi hosts
       ansible.builtin.set_fact:
         esxi_hostnames: "{{ vm_info.virtual_machines | map(attribute='esxi_hostname') | unique | sort }}"
 
-    - name: View esxi host info
+    - name: View the list of ESXi hosts
       ansible.builtin.debug:
         var: esxi_hostnames
 
@@ -81,6 +81,14 @@
       ansible.builtin.debug:
         var: slim_esxi_host_memory
 
+    - name: Try again with ESXi stats, with mapping
+      ansible.builtin.debug:
+        msg: The {{ item.0 }} host is using {{ ( item.1 | int * 104576 ) | human_readable }} out of {{ item.2 | human_readable }} available memory.
+      with_together:
+        - "{{ slim_esxi_host_memory | map(attribute='Name') | list }}"
+        - "{{ slim_esxi_host_memory | map(attribute='Usedmemory') | list }}"
+        - "{{ slim_esxi_host_memory | map(attribute='Totalmemory') | list }}"
+
     - name: Get array of VM memory stats
       ansible.builtin.set_fact:
         slim_vm_memory: "{{ vm_info | community.general.json_query('virtual_machines[*].{ESXI_host: esxi_hostname, Memory_in_MB: allocated.memory}') }}"
@@ -98,27 +106,6 @@
     - name: View memory in MB per esxi host
       ansible.builtin.debug:
         var: vm_memory_per_esxi_host
-
-    # I tried to copy the way this blog post: https://www.middlewareinventory.com/blog/ansible-json-query/
-    # built its "phonebook" in this task but it never worked
-    # if I put ':' between the items, it says
-    # "template error while templating string: expected token ',', got ':'. String: {{ memory_stats | default({}) | combine ( {item.Name: item.Usedmemory: item.Totalmemory} ) }}. expected token ',', got ':'",
-    # if I put ',' instead, it says
-    # "template error while templating string: expected token ':', got ','. String: {{ memory_stats | default({}) | combine ( {item.Name, item.Usedmemory, item.Totalmemory} ) }}. expected token ':', got ','",
-    # - name: JSON view of ESXi memory stats
-    #   ansible.builtin.set_fact:
-    #     memory_stats: "{{ memory_stats | default({}) | combine ( {item.Name: item.Usedmemory: item.Totalmemory} ) }}"
-    #   loop: "{{ slim_esxi_host_memory }}"
-
-    # - name: View dict of ESXi stats
-    #   ansible.builtin.debug:
-    #     var: memory_stats
-
-    # This returned the error "Unexpected templating type error . . . unsupported operand type(s) for /: 'int' and 'str'"
-    # - name: Correctly converted view of ESXi memory stats
-    #   ansible.builtin.debug:
-    #     msg: The VMs on the {{ item }} host are using roughly {{ vm_info.virtual_machines | selectattr('esxi_hostname', 'equalto', item) | map(attribute='allocated.memory') | sum | int / 1024 | human_readable }}
-    #   loop: "{{ esxi_hostnames }}"  # divide by 1073741824 to get gigabytes
 
     - name: Get shorter array of ESXI memory stats
       ansible.builtin.set_fact:
