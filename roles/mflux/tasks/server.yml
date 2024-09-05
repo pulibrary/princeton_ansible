@@ -21,8 +21,11 @@
     state: stopped
     enabled: false
 
+- name: update the system manager password
+  ansible.builtin.command: java -Dmf.host=localhost -Dmf.transport=http -Dmf.domain=system -Dmf.user=manager -Dmf.password=change_me -Dmf.port=80 -jar /opt/mediaflux/bin/aterm.jar --app exec authentication.user.password.set :domain system :user manager :password "{{ mflux_manager_password }}"
+
 - name: install the mediaflux desktop
-  ansible.builtin.command: java -Dmf.host=localhost -Dmf.transport=http -Dmf.domain=system -Dmf.user=manager -Dmf.password=change_me -Dmf.port=80 -jar /opt/mediaflux/bin/aterm.jar --app exec package.install :url https://www.arcitecta.com/software/adesktop/1.2.020/adesktop_1.2.020.zip
+  ansible.builtin.command: java -Dmf.host=localhost -Dmf.transport=http -Dmf.domain=system -Dmf.user=manager -Dmf.password="{{ mflux_manager_password }}" -Dmf.port=80 -jar /opt/mediaflux/bin/aterm.jar --app exec package.install :url https://www.arcitecta.com/software/adesktop/1.2.020/adesktop_1.2.020.zip
 
 - name: MFlux | Restart mediaflux
   ansible.builtin.systemd:
