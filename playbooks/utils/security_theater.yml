@@ -51,21 +51,35 @@
   # we might want to gather auth using
   # https://crowdstrike.github.io/ansible_collection_falcon/auth_module.html#ansible-collections-crowdstrike-falcon-auth-module
 
-  - name: get the hash of the sensor file to Download
+  - name: get the hash for RHEL sensor file
     crowdstrike.falcon.sensor_download_info:
       # https://crowdstrike.github.io/ansible_collection_falcon/sensor_download_info_module.html
       # add task details here
       client_id: "{{ vault_crowdstrike_client_id }}"
       client_secret: "{{ vault_crowdstrike_secret }}"
-      filter: "platform:'linux'"
+      filter: "platform:'linux' + os:'RHEL' + os_version:'9 - arm64' "
       sort: "version|desc"
     delegate_to: localhost
     become: false
-    register: falcon_versions
+    register: RHEL_falcon_versions
 
-  - name: view list of falcon versions
+  - name: get the hash for Ubuntu sensor file
+    crowdstrike.falcon.sensor_download_info:
+      client_id: "{{ vault_crowdstrike_client_id }}"
+      client_secret: "{{ vault_crowdstrike_secret }}"
+      filter: "platform:'linux' + os:'Ubuntu'"
+      sort: "version|desc"
+    delegate_to: localhost
+    become: false
+    register: Ubuntu_falcon_versions
+
+  - name: view list of RHEL falcon versions
     ansible.builtin.debug:
-      var: falcon_versions
+      var: RHEL_falcon_versions
+
+  - name: view list of Ubuntu falcon versions
+    ansible.builtin.debug:
+      var: Ubuntu_falcon_versions
 
   # https://crowdstrike.github.io/ansible_collection_falcon/sensor_download_info_module.html
   # - name: Download the Falcon sensor deb file
