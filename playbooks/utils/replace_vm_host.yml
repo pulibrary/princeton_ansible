@@ -1,58 +1,74 @@
 ---
 #  This playbook will delete a VM and replace it. This is the only warning you will get. Running this playbook has destructive consequences
-#     
-- name: replace a host on VSphere
+#  This playbook should only be run from ansible tower.  No need for detailed instructions of examples here, because you should not run it here.
+#
+- name: replace the {{ replacement_vm }} VM on vSphere
   hosts: localhost
   remote_user: pulsys
   become: true
+  vars:
+    slack_alerts_channel: "#infrastructure"
   vars_files:
+    - ../../group_vars/all/vault.yml
     - ../../group_vars/vsphere/vault.yml
     - ../../group_vars/vsphere/{{ runtime_env | default('staging') }}.yml
-
   tasks:
-
     - name: Gather MAC address of VM to replace
       community.vmware.vmware_vm_info:
-        hostname: '{{ vcenter_hostname }}'
-        username: '{{ vcenter_username }}'
-        password: '{{ vcenter_password }}'
+        hostname: "{{ vcenter_hostname }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
         validate_certs: false
-        datacenter: "{{ vcenter_datacenter }}"
-        cluster: "{{ vcenter_cluster }}"
-        vm_name: "{{ vm_to_replace }}"
-      facts:
-        - mac_address
-        - uuid
-        - datastore_url
-      register: vm_info
+        show_datacenter: true
+        show_mac_address: true
+        show_allocated: true
+        # show_cluster: true
+        vm_name: "{{ replacement_vm }}"
+      register: old_vm_info
+      tags: 
+        - 'disk'
+        - remove-old
 
-    - name: Print out deleted VM information
+    - name: Print out old VM information
       ansible.builtin.debug:
-        msg: You have just deleted {{ vm_info }}
+        var: old_vm_info
+      tags: 
+        - 'disk'
+        - remove-old
 
-    - name: Set powerstate of a virtual machine to poweroff by using UUID
-      community.vmware.vmware_guest:
-        hostname: "{{ vcenter_hostname }}"
-        username: "{{ vcenter_username }}"
-        password: "{{ vcenter_password }}"
-        validate_certs: false
-        datacenter: "{{ vcenter_datacenter }}"
-        cluster: "{{ vcenter_cluster }}"
-        uuid: "{{ vm_info.uuid }}"
-        state: poweredoff
-    
-    - name: Remove virtual machine by using UUID
-      community.vmware.vmware_guest:
-        hostname: "{{ vcenter_hostname }}"
-        username: "{{ vcenter_username }}"
-        password: "{{ vcenter_password }}"
-        validate_certs: false
-        datacenter: "{{ vcenter_datacenter }}"
-        cluster: "{{ vcenter_cluster }}"
-        uuid: "{{ vm_info.uuid }}"
-        state: absent
+    - name: Print out disk size in KB
+      ansible.builtin.debug:
+        msg: "{{ old_vm_info.virtual_machines[0].allocated.storage / 1024 }}"
+      tags: 
+        - 'disk'
 
-    - name: Create a virtual machine from a template
+    - name: Print out old VM information
+      ansible.builtin.debug:
+        msg: You are planning to delete {{ old_vm_info }}
+
+    - name: Move old VM to the DeleteMe folder
+      community.vmware.vmware_guest_move:
+        hostname: "{{ vcenter_hostname }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        validate_certs: false
+        datacenter: "{{ vcenter_datacenter }}"
+        dest_folder: "{{ vm_delete_me_folder }}"
+        uuid: "{{ old_vm_info.virtual_machines[0].uuid }}"
+      ignore_errors: true
+
+    - name: Power off old VM using UUID
+      community.vmware.vmware_guest_powerstate:
+        hostname: "{{ vcenter_hostname }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        validate_certs: false
+        datacenter: "{{ vcenter_datacenter }}"
+        folder: ToBeDeleted
+        uuid: "{{ old_vm_info.virtual_machines[0].uuid }}"
+        state: powered-off
+
+    - name: Create a new virtual machine from a template
       community.vmware.vmware_guest:
         hostname: "{{ vcenter_hostname }}"
         username: "{{ vcenter_username }}"
@@ -60,32 +76,135 @@
         validate_certs: false
         datacenter: "{{ vcenter_datacenter }}"
         cluster: "{{ vcenter_cluster }}"
-        folder: /{{ vm_folder | default('dev-rebootable-vms') }}
+        folder: /{{ vm_folder | default('AnsibleControlledVMs') }}
         name: "{{ replacement_vm }}"
-        state: poweredon
+        state: present
         template: "{{ vm_template | default('template_jammy_spring_2024')}}"
         disk:
-        - size_gb: 30
-          type: thin
-          datastore: "{{ vm_info.datastore_url }}"
-    # Add another disk from an existing VMDK
+          - size: "{{ (old_vm_info.virtual_machines[0].allocated.storage / 1024) | int }}kb"
+            # this may not be acceptable to our new templates
+            # type: thin
+            datastore: "{{ old_vm_info.virtual_machines[0].datastore_url }}"
+        # Add another disk from an existing VMDK
         hardware:
-          memory_mb: "{{ vm_memory | default('8192') }}"
-          num_cpus: "{{ vm_cpus | default('2') }}"
+          memory_mb: "{{ old_vm_info.virtual_machines[0].allocated.memory | int | default('16384') }}"
+          num_cpus: "{{ old_vm_info.virtual_machines[0].allocated.cpu | int | default('2') }}"
           num_cpu_cores_per_socket: "{{ vm_cpu_cores | default('1') }}"
           scsi: paravirtual
-          version: 7.1 # Hardware version of virtual machine
+          version: latest # Hardware version of virtual machine
           boot_firmware: "efi"
         cdrom:
           - controller_number: 0
             unit_number: 0
             state: present
         networks:
-        - name: "{{ vm_network | default('Virtual Machine Network')}}"
-          mac: "{{ vm_info.mac_address }}"
+          - name: "{{ vm_network | default('Virtual Machine Network')}}"
         wait_for_ip_address: true
+      register: new_vm_deets
+
+    - name: view new VM details
+      ansible.builtin.debug:
+        var: new_vm_deets
+
+    - name: view automatically added mac address
+      ansible.builtin.debug:
+        var: new_vm_deets.instance.hw_eth0.macaddress
+
+    - name: power down the VM so we can mess with the network settings
+      community.vmware.vmware_guest_powerstate:
+        hostname: "{{ vcenter_hostname }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        validate_certs: false
+        datacenter: "{{ vcenter_datacenter }}"
+        # new VM var does not include UUID; use moid, which is unique in each vCenter instance
+        moid: "{{ new_vm_deets.instance.moid }}"
+        state: powered-off
+
+    - name: delete NIC with automatic mac address
+      community.vmware.vmware_guest_network:
+        hostname: "{{ vcenter_hostname }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        validate_certs: false
+        datacenter: "{{ vcenter_datacenter }}"
+        # new VM var does not include UUID; use moid, which is unique in each vCenter instance
+        moid: "{{ new_vm_deets.instance.moid }}"
+        network_name: "{{ vm_network | default('Virtual Machine Network')}}"
+        state: absent
+        mac_address: "{{ new_vm_deets.instance.hw_eth0.macaddress }}"
+
+    - name: add NIC with custom mac address
+      community.vmware.vmware_guest_network:
+        hostname: "{{ vcenter_hostname }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        validate_certs: false
+        datacenter: "{{ vcenter_datacenter }}"
+        # new VM var does not include UUID; use moid, which is unique in each vCenter instance
+        moid: "{{ new_vm_deets.instance.moid }}"
+        # uuid: "{{ new_vm_deets.instance.uuid }}"
+        # name: "{{ replacement_vm }}"
+        folder: "{{ old_vm_info.virtual_machines[0].folder }}"
+        network_name: "{{ vm_network | default('Virtual Machine Network')}}"
+        device_type: "vmxnet3"
+        connected: true
+        mac_address: "{{ old_vm_info.virtual_machines[0].mac_address[0] }}"
+      register: new_nic
+
+    - name: view all info for VM with the new NICs
+      ansible.builtin.debug:
+        var: new_nic
+      
+    - name: view details for new mac address
+      ansible.builtin.debug:
+        var: new_nic.network_info[1].mac_address
+
+
+    - name: Power the new VM on
+      community.vmware.vmware_guest_powerstate:
+        hostname: "{{ vcenter_hostname }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        validate_certs: false
+        datacenter: "{{ vcenter_datacenter }}"
+        folder: /{{ vm_folder | default('dev-rebootable-vms') }}
+        # new VM var does not include UUID; use moid, which is unique in each vCenter instance
+        moid: "{{ new_vm_deets.instance.moid }}"
+        state: powered-on
+      register: vm_status
+
+    - name: view status of new VM
+      ansible.builtin.debug:
+        var: vm_status
+
+    - name: Remove old VM using UUID
+      community.vmware.vmware_guest:
+        hostname: "{{ vcenter_hostname }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        validate_certs: false
+        datacenter: "{{ vcenter_datacenter }}"
+        cluster: "{{ vcenter_cluster }}"
+        folder: "{{ old_vm_info.virtual_machines[0].folder }}"
+        uuid: "{{ old_vm_info.virtual_machines[0].uuid }}"
+        state: absent
+        force: true
+      tags:
+        - remove-old
+      
+    - name: Remove host from ansible tower known hosts
+      ansible.builtin.known_hosts:
+        path: /home/deploy/.ssh/known_hosts
+        name: "{{ replacement_vm }}.princeton.edu"
+        state: "absent"
+      delegate_to: towerdeploy1.princeton.edu
+      become: true
+      become_user: deploy
+      tags:
+        - known-hosts
 
   post_tasks:
-      - name: send information to slack
-        ansible.builtin.include_tasks:
-          file: slack_tasks_end_of_playbook.yml
+    - name: send information to slack
+      ansible.builtin.include_tasks:
+        file: slack_tasks_end_of_playbook.yml
