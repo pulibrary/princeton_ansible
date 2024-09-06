@@ -24,3 +24,17 @@
 
 - name: Mflux | ldap create authentication domain
   ansible.builtin.command: java -Dmf.host=localhost -Dmf.transport=http -Dmf.domain=system -Dmf.user=manager -Dmf.password="{{ mflux_manager_password }}" -Dmf.port=80 -jar /opt/mediaflux/bin/aterm.jar --app exec	authentication.ldap.domain.create :domain princeton :provider princeton :user < :uid sAMAccountName :path "OU=people,DC=pu,DC=win,DC=princeton,DC=edu" :group memberOf :case-sensitive false >
+  ignore_errors: true
+
+#  We believe that this step may have been done on other servers, and the "mediaflux" active directory account is already created/in use
+# - name: Mflux | create a secure channel to the AD server
+#   ansible.builtin.command: java -Dmf.host=localhost -Dmf.transport=http -Dmf.domain=system -Dmf.user=manager -Dmf.password="(mflux_pass_lastpass)^" -Dmf.port=80 -jar /opt/mediaflux/bin/aterm.jar --app exec active.directory.domain.join :account-name lib-rdss-docker :auth user :domain pu.win.princeton.edu :ldap-domain princeton :username (ldap_user)@princeton.edu :password "(ldap_pass)"
+
+# We were able manually connect to ldap through the command line, but we were unable to connect to the ldap server through mediaflux
+# We connected using the following command(s):
+# export LDAP_SERVER="ad-a.princeton.edu"
+# export MFLUX_USER="(mflux_ldap_user)"
+# ldapsearch -x -H ldaps://$LDAP_SERVER -D "CN=$MFLUX_USER,OU=Library - Office of the Deputy University Librarian,OU=People,DC=pu,DC=win,DC=princeton,DC=edu" -W -b "OU=people,DC=pu,DC=win,DC=princeton,DC=edu" "(sAMAccountName=*)" sAMAccountName -z 1
+
+# Next course of action is to try to connect to the ldap server through the mediaflux
+# Biggest difference between the succesful manual command and the unsuccessful ansible command is the passing of th ldap server
