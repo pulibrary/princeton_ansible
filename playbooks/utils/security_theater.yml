@@ -55,27 +55,33 @@
     crowdstrike.falcon.sensor_download_info:
       # https://crowdstrike.github.io/ansible_collection_falcon/sensor_download_info_module.html
       # add task details here
-      
-  - name: Download the Falcon sensor deb file
-    crowdstrike.falcon.sensor_download:
-      # https://crowdstrike.github.io/ansible_collection_falcon/sensor_download_module.html#ansible-collections-crowdstrike-falcon-sensor-download-module
       client_id: "{{ vault_crowdstrike_client_id }}"
       client_secret: "{{ vault_crowdstrike_secret }}"
-      dest: "/tmp/"
-      owner: pulsys
-      group: pulsys
-      mode: "0644"
-    when:
-      - "'falcon-sensor' not in ansible_facts.packages"
+      filter: "platform:'linux'"
+      sort: "version|desc"
+    register: falcon_versions
 
-  - name: install BESClient agent
-    ansible.builtin.apt:
-      deb: "/tmp/BESAgent-10.0.7.52-debian6.amd64.deb"
-    when: "ansible_facts.services['besclient.service'] is not defined"
+  # - name: Download the Falcon sensor deb file
+  #   crowdstrike.falcon.sensor_download:
+  #     # https://crowdstrike.github.io/ansible_collection_falcon/sensor_download_module.html#ansible-collections-crowdstrike-falcon-sensor-download-module
+  #     client_id: "{{ vault_crowdstrike_client_id }}"
+  #     client_secret: "{{ vault_crowdstrike_secret }}"
+  #     hash: "{{ falcon_versions.??? }}"
+  #     dest: "/tmp/"
+  #     owner: pulsys
+  #     group: pulsys
+  #     mode: "0644"
+  #   when:
+  #     - "'falcon-sensor' not in ansible_facts.packages"
 
-  - name: Launch the BigFix client
-    ansible.builtin.command: /etc/init.d/besclient start
-    when: "ansible_facts.services['besclient.service'] is not defined"
+  # - name: install BESClient agent
+  #   ansible.builtin.apt:
+  #     deb: "/tmp/BESAgent-10.0.7.52-debian6.amd64.deb"
+  #   when: "ansible_facts.services['besclient.service'] is not defined"
+
+  # - name: Launch the BigFix client
+  #   ansible.builtin.command: /etc/init.d/besclient start
+  #   when: "ansible_facts.services['besclient.service'] is not defined"
 
   - name: install crowdstrike falcon sensor agent
     ansible.builtin.apt:
@@ -132,7 +138,7 @@
     when:
       - not rapid7_home.stat.exists
 
-  post_tasks:
-    - name: send information to slack
-      ansible.builtin.include_tasks:
-        file: slack_tasks_end_of_playbook.yml
+  # post_tasks:
+  #   - name: send information to slack
+  #     ansible.builtin.include_tasks:
+  #       file: slack_tasks_end_of_playbook.yml
