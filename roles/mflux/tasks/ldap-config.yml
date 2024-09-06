@@ -1,3 +1,19 @@
 ---
-- name:  Mflux | add the princeton ldap provider the mediaflux desktop
+- name: Mflux | add the princeton ldap provider the mediaflux desktop
   ansible.builtin.command: java -Dmf.host=localhost -Dmf.transport=http -Dmf.domain=system -Dmf.user=manager -Dmf.password="{{ mflux_manager_password }}" -Dmf.port=80 -jar /opt/mediaflux/bin/aterm.jar --app exec	ldap.provider.add :auth user :bind < :user "CN={{ mflux_ldap_user }},OU=Library - Office of the Deputy University Librarian,OU=People,DC=pu,DC=win,DC=princeton,DC=edu" :password {{ mflux_ldap_password }} > :host -type "host" "ad-a.princeton.edu" :host -type "host" "ad-c.princeton.edu" :host -type "host" "ad-g.princeton.edu" :host -type "host" "ad-h.princeton.edu" :name princeton :port 636 :ssl -allowUntrusted true true :uid sAMAccountName
+
+- name: Mflux | Create /opt/mediaflux/config/security/krb5.conf
+  ansible.builtin.copy:
+    src: files/krb5.conf
+    dest: /opt/mediaflux/config/security/krb5.conf
+    owner: "{{ mflux_user }}"
+    group: "{{ mflux_user }}"
+    mode: u=rw,g=r
+
+- name: Mflux | Create /opt/mediaflux/config/security/gssapi_jaas.conf
+  ansible.builtin.copy:
+    src: files/gssapi_jaas.conf
+    dest: /opt/mediaflux/config/security/gssapi_jaas.conf
+    owner: "{{ mflux_user }}"
+    group: "{{ mflux_user }}"
+    mode: u=rw,g=r
