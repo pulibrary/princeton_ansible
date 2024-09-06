@@ -51,10 +51,15 @@
   # we might want to gather auth using
   # https://crowdstrike.github.io/ansible_collection_falcon/auth_module.html#ansible-collections-crowdstrike-falcon-auth-module
 
+  # all modules in the crowdstrike.falcon collection
+  # require the pip package crowdstrike-falconpy
+  # we can install it on Tower, I think, download the files to there, and then
+  # use the copy module
+  # or we can split this out, downloading the files to our filesystem in one play and
+  # installing them in another one . . .
+
   - name: get the hash for RHEL sensor file
     crowdstrike.falcon.sensor_download_info:
-      # https://crowdstrike.github.io/ansible_collection_falcon/sensor_download_info_module.html
-      # add task details here
       client_id: "{{ vault_crowdstrike_client_id }}"
       client_secret: "{{ vault_crowdstrike_secret }}"
       filter: "platform:'linux' + os:'RHEL' + os_version:'9 - arm64' "
@@ -62,6 +67,28 @@
     delegate_to: localhost
     become: false
     register: RHEL_falcon_versions
+
+  - name: sort list of RHEL falcon versions by date
+    ansible.builtin.set_fact:
+      RHEL_date_ordered:  "{{ RHEL_falcon_versions.installers | sort(attribute='release_date') | reverse }}"
+
+  - name: view date-sorted list
+    ansible.builtin.debug:
+      var: RHEL_date_ordered
+
+  - name: Download the Falcon sensor file for RHEL
+    crowdstrike.falcon.sensor_download:
+      client_id: "{{ vault_crowdstrike_client_id }}"
+      client_secret: "{{ vault_crowdstrike_secret }}"
+      # skips the current latest release and the previous release, using N-2
+      hash: "{{ RHEL_date_ordered[2].sha256 }}"
+      dest: "/tmp/"
+      owner: pulsys
+      group: pulsys
+      mode: "0644"
+    when:
+      - "'falcon-sensor' not in ansible_facts.packages"
+      - ansible_os_family == "RedHat"
 
   - name: get the hash for Ubuntu sensor file
     crowdstrike.falcon.sensor_download_info:
@@ -73,13 +100,32 @@
     become: false
     register: Ubuntu_falcon_versions
 
-  - name: view list of RHEL falcon versions
-    ansible.builtin.debug:
-      var: RHEL_falcon_versions
+  - name: sort list of Ubuntu falcon versions by date
+    ansible.builtin.set_fact:
+      Ubuntu_date_ordered:  "{{ Ubuntu_falcon_versions.installers | sort(attribute='release_date') | reverse }}"
 
-  - name: view list of Ubuntu falcon versions
+  - name: view date-sorted list
     ansible.builtin.debug:
-      var: Ubuntu_falcon_versions
+      var: Ubuntu_date_ordered
+
+  # when set up this way, works on my laptop
+  # we probably want this to run at the top with
+  # run_once: true
+  - name: Download the Falcon sensor file for Ubuntu
+    crowdstrike.falcon.sensor_download:
+      client_id: "{{ vault_crowdstrike_client_id }}"
+      client_secret: "{{ vault_crowdstrike_secret }}"
+      # skips the current latest release and the previous release, using N-2
+      hash: "{{ Ubuntu_date_ordered[2].sha256 }}"
+      dest: "/Users/alicia/"
+      owner: alicia
+      group: staff
+      mode: "0644"
+    become: false
+    delegate_to: localhost
+    when:
+      - "'falcon-sensor' not in ansible_facts.packages"
+      - ansible_os_family == "Debian"
 
   # https://crowdstrike.github.io/ansible_collection_falcon/sensor_download_info_module.html
   # - name: Download the Falcon sensor deb file
@@ -94,6 +140,8 @@
   #     mode: "0644"
   #   when:
   #     - "'falcon-sensor' not in ansible_facts.packages"
+  #     - ansible_os_family == "RedHat"
+
 
   # - name: install BESClient agent
   #   ansible.builtin.apt:
