@@ -1,5 +1,5 @@
 ---
-#  This playbook will delete a VM and replace it. This is the only warning you will get. Running this playbook has destructive consequences
+#  This playbook deletes a VM and replaces it from a vSphere template. This is the only warning you will get. Running this playbook has destructive consequences!
 #  This playbook should only be run from ansible tower.  No need for detailed instructions of examples here, because you should not run it here.
 #
 - name: replace the {{ replacement_vm }} VM on the {{ runtime_env | default('staging') }} vSphere
@@ -35,11 +35,11 @@
 
     - name: Print out disk size
       ansible.builtin.debug:
-        msg: This VM has "{{ old_vm_info.virtual_machines[0].allocated.storage | human_readable }}" GB of disk allocated.
+        msg: This VM has {{ old_vm_info.virtual_machines[0].allocated.storage | human_readable }} of disk allocated.
 
-    - name: Print out old VM information
+    - name: Print out warning
       ansible.builtin.debug:
-        msg: You are planning to delete {{ old_vm_info }}
+        msg: Ansible will now move and delete {{ old_vm_info.virtual_machines[0].guest_name }}
 
     - name: Move old VM to the DeleteMe folder
       community.vmware.vmware_guest_move:
@@ -75,10 +75,10 @@
         template: "{{ vm_template | default('template_jammy_spring_2024')}}"
         disk:
           - size: "{{ (old_vm_info.virtual_machines[0].allocated.storage / 1024) | int }}kb"
-            # this may not be acceptable to our new templates
+            # we are not able to use 'type: thin' with our fall 2024 templates
             # type: thin
             datastore: "{{ old_vm_info.virtual_machines[0].datastore_url }}"
-        # Add another disk from an existing VMDK
+        # TODO: Add another disk from an existing VMDK
         hardware:
           memory_mb: "{{ old_vm_info.virtual_machines[0].allocated.memory | int | default('16384') }}"
           num_cpus: "{{ old_vm_info.virtual_machines[0].allocated.cpu | int | default('2') }}"
@@ -136,8 +136,6 @@
         datacenter: "{{ vcenter_datacenter }}"
         # new VM var does not include UUID; use moid, which is unique in each vCenter instance
         moid: "{{ new_vm_deets.instance.moid }}"
-        # uuid: "{{ new_vm_deets.instance.uuid }}"
-        # name: "{{ replacement_vm }}"
         folder: "{{ old_vm_info.virtual_machines[0].folder }}"
         network_name: "{{ vm_network | default('Virtual Machine Network')}}"
         device_type: "vmxnet3"
@@ -148,7 +146,7 @@
     - name: view all info for VM with the new NICs
       ansible.builtin.debug:
         var: new_nic
-      
+
     - name: view details for new mac address
       ansible.builtin.debug:
         var: new_nic.network_info[0].mac_address
@@ -182,8 +180,8 @@
         uuid: "{{ old_vm_info.virtual_machines[0].uuid }}"
         state: absent
         force: true
-      
-    - name: Remove host from ansible tower known hosts
+
+    - name: Remove host from TowerDeploy1 known hosts
       ansible.builtin.known_hosts:
         path: /home/deploy/.ssh/known_hosts
         name: "{{ replacement_vm }}.princeton.edu"
