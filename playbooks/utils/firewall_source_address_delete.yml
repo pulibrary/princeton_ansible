@@ -4,6 +4,8 @@
 #
 - name: Delete source addresses that are no longer needed
   hosts: localhost
+  gather_facts: no
+
   vars:
     ansible_python_interpreter: /usr/libexec/platform-python
     panos_provider:
@@ -30,7 +32,47 @@
         gather_subset: 'config'
         provider: "{{ panos_provider }}"
 
-    # - name: Get IP from 'host' command
+# copied from https://github.com/wpacket/pan-ansible/blob/master/pan_config_pull.yml
+
+# This playbook will connect to every device listed in the hosts file with the following command
+#
+# ansible-playbook pan_config_pull.yml -i host
+#
+# It will then  extract the running config from each devices and save them locally in ./config/
+
+
+# - name: Pull Configuration from Palo Alto Firewalls
+#   hosts: ALL
+#   gather_facts: no
+#   pre_tasks:
+#     - include_vars: vars.yml
+# 
+#   tasks:
+
+    - name: Backup configuration from PAN Equipment
+      check_mode: no
+      ansible.builtin.uri:
+        validate_certs: no
+        url: "https://{{ provider_IP }}/api/?type=config&action=show&key={{ provider_API_key }}"
+        #       ip_address: "{{ provider_IP }}"
+        #      api_key: "{{ provider_API_key }}"
+        return_content: yes
+        method: GET
+      register: configuration_string
+  
+    - name: Remove XML Header and Save file in {{configs_dir}}
+      connection: local
+      check_mode: no
+      copy:
+        content: "{{configuration_string['content']  | regex_replace('<response.*<result>') | regex_replace('</result></response>')}}"
+        dest: '{{configs_dir}}{{hostname}}.txt'
+      register: sanitized_string
+
+    - name: show me the sanitized content
+      ansible.builtin.debug:
+        var: sanitized_string
+
+      # - name: Get IP from 'host' command
     #   ansible.builtin.shell:
     #     cmd: host {{ VM_host_name }}
     #   register: ip_in_question
