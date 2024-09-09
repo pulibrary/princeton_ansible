@@ -7,6 +7,7 @@
   gather_facts: no
 
   vars:
+    configs_dir: "./"
     ansible_python_interpreter: /usr/libexec/platform-python
     panos_provider:
       ip_address: "{{ provider_IP }}"
@@ -50,20 +51,17 @@
 #   tasks:
 
     - name: Backup configuration from PAN Equipment
-      check_mode: no
       ansible.builtin.uri:
         validate_certs: no
-        url: "https://{{ provider_IP }}/api/?type=config&action=show&key={{ provider_API_key }}"
+        ansible.builtin.url: "https://{{ provider_IP }}/api/?type=config&action=show&key={{ provider_API_key }}"
         #       ip_address: "{{ provider_IP }}"
         #      api_key: "{{ provider_API_key }}"
         return_content: yes
         method: GET
       register: configuration_string
-  
+
     - name: Remove XML Header and Save file in {{configs_dir}}
-      connection: local
-      check_mode: no
-      copy:
+      ansible.builtin.copy:
         content: "{{configuration_string['content']  | regex_replace('<response.*<result>') | regex_replace('</result></response>')}}"
         dest: '{{configs_dir}}{{hostname}}.txt'
       register: sanitized_string
