@@ -2,7 +2,7 @@
 # Automates management of the library's Palo Alto firewall
 # This playbook can only be run on Ansible Tower
 #
-- name: Delete source addresses that are no longer needed
+- name: Back up firewall configuration, reload as necessary
   hosts: localhost
   gather_facts: no
 
@@ -13,6 +13,9 @@
       api_key: "{{ provider_API_key }}"
 
   tasks:
+# if we can use the Pan-OS API to export and update firewall config,
+# we can delete these first three tasks from this playbook
+
     - name: Install required library for pan-os API call
       ansible.builtin.pip:
         name:
@@ -33,99 +36,43 @@
         gather_subset: 'config'
         provider: "{{ panos_provider }}"
 
-# copied from https://github.com/wpacket/pan-ansible/blob/master/pan_config_pull.yml
+# copied and adapted from
+# https://github.com/wpacket/pan-ansible/blob/master/pan_config_pull.yml
+# These tasks extract the running config and save it locally
 
-# This playbook will connect to every device listed in the hosts file with the following command
-#
-# ansible-playbook pan_config_pull.yml -i host
-#
-# It will then  extract the running config from each devices and save them locally in ./config/
-
-
-# - name: Pull Configuration from Palo Alto Firewalls
-#   hosts: ALL
-#   gather_facts: no
-#   pre_tasks:
-#     - include_vars: vars.yml
-# 
-#   tasks:
-
-    - name: Backup configuration from PAN Equipment
+    - name: Backup firewall configuration using API
       ansible.builtin.uri:
         validate_certs: no
         url: "https://{{ provider_IP }}/api/?type=config&action=show&key={{ provider_API_key }}"
-        #       ip_address: "{{ provider_IP }}"
-        #      api_key: "{{ provider_API_key }}"
         return_content: yes
         method: GET
       register: configuration_string
 
-    - name: Remove XML Header and Save configuration file
+    - name: Remove XML header and save configuration file
       ansible.builtin.copy:
         content: "{{configuration_string['content']  | regex_replace('<response.*<result>') | regex_replace('</result></response>')}}"
         dest: '/opt/dev-firewall.txt'
-      register: sanitized_string
 
-    - name: Read content of file
+    - name: Read content of configuration file
       ansible.builtin.shell:
         cmd: cat /opt/dev-firewall.txt
+        # click on the output for this task in Tower
+        # then look at the Output tab to see the file contents
 
-    - name: show me the sanitized content
-      ansible.builtin.debug:
-        var: sanitized_string
-
-      # - name: Get IP from 'host' command
-    #   ansible.builtin.shell:
-    #     cmd: host {{ VM_host_name }}
-    #   register: ip_in_question
-
-    # - name: set filter condition
-    #   ansible.builtin.set_fact:
-    #     filter_condition: "value == "
-
-    # - name: set filter IP
-    #   ansible.builtin.set_fact:
-    #     filter_ip: '{{ ip_in_question.stdout | regex_findall("[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+") | first  }}'
-
-    # - name: create filter from condition and IP
-    #   ansible.builtin.set_fact:
-    #     filter_input: "{{ filter_condition }}{{filter_ip }}/32"
-
-    # - name: find object from filter
-    #   paloaltonetworks.panos.panos_address_object:
-    #     provider: "{{ panos_provider }}"
-    #     state: gathered
-    #     gathered_filter: "{{ filter_input }}"
-    #   register: test_object
-
-    # - name: Display the object address
-    #   ansible.builtin.debug:
-    #     msg: "{{ VM_host_name }} is represented in the firewall as: {{ test_object.gathered[0].name }}"
-
-    # - name: Get all rules for the address
-    #   paloaltonetworks.panos.panos_security_rule:
-    #     provider: "{{ panos_provider }}"
-    #     state: "gathered"
-    #     gathered_filter: "destination_ip contains {{ test_object.gathered[0].name }}"
-    #   register: sec_rules
-
-    # - name: Display rules for selected VM
-    #   vars:
-    #     output: "{{ VM_host_name }} allows the following traffic:\n
-    #       {% for item in sec_rules.gathered %}
-    #       {{ item.rule_name }}\n
-    #       Packets that match the signature for these applications {{ item.application }}\n
-    #       Any packets on the port(s) related to these services {{ item.service }}\n
-    #       From these source addresses (machine or subnet): {{ item.source_ip }}\n
-    #       \n
-    #       {% endfor %}"
-    #   ansible.builtin.debug:
-    #     msg: "{{ output.split('\n') }}"
-# Future work - create tasks to make changes:
-# - name: Generate a new Palo Alto rule set
-#   paloaltonetworks.panos.panos_security_rule:
+# Future work:
+# 1. Put the exported configuration file under source control (private GitHub repo?)
+# 2. Allow changes to the configuration file (pull requests)
+# 3. Create tasks to push and commit changed configuration:
+# - name: Push updated config to the Palo Alto API
+#   ansible.builtin.uri:
+#     validate_certs: no
+#     url: "https://{{ provider_IP }}/api/?type=config&action=show&key={{ provider_API_key }}"
+#
 # - name: Commit new firewall rules
 #   paloaltonetworks.panos.panos_commit_firewall:
+#
+# 4. Connect to ServiceNow for additional auditability
+# 5. Rename the playbook to reflect what it does, update the Tower template
 
 # other relevant docs:
 # main collection page: https://paloaltonetworks.github.io/pan-os-ansible/
