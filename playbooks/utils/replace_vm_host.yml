@@ -2,16 +2,19 @@
 #  This playbook will delete a VM and replace it. This is the only warning you will get. Running this playbook has destructive consequences
 #  This playbook should only be run from ansible tower.  No need for detailed instructions of examples here, because you should not run it here.
 #
-- name: replace the {{ replacement_vm }} VM on vSphere
+- name: replace the {{ replacement_vm }} VM on the {{ runtime_env | default('staging') }} vSphere
   hosts: localhost
   remote_user: pulsys
   become: true
+
   vars:
     slack_alerts_channel: "#infrastructure"
+
   vars_files:
     - ../../group_vars/all/vault.yml
     - ../../group_vars/vsphere/vault.yml
     - ../../group_vars/vsphere/{{ runtime_env | default('staging') }}.yml
+
   tasks:
     - name: Gather MAC address of VM to replace
       community.vmware.vmware_vm_info:
@@ -25,22 +28,14 @@
         # show_cluster: true
         vm_name: "{{ replacement_vm }}"
       register: old_vm_info
-      tags: 
-        - 'disk'
-        - remove-old
 
     - name: Print out old VM information
       ansible.builtin.debug:
         var: old_vm_info
-      tags: 
-        - 'disk'
-        - remove-old
 
     - name: Print out disk size in KB
       ansible.builtin.debug:
         msg: "{{ old_vm_info.virtual_machines[0].allocated.storage / 1024 }}"
-      tags: 
-        - 'disk'
 
     - name: Print out old VM information
       ansible.builtin.debug:
@@ -55,7 +50,6 @@
         datacenter: "{{ vcenter_datacenter }}"
         dest_folder: "{{ vm_delete_me_folder }}"
         uuid: "{{ old_vm_info.virtual_machines[0].uuid }}"
-      ignore_errors: true
 
     - name: Power off old VM using UUID
       community.vmware.vmware_guest_powerstate:
@@ -64,7 +58,6 @@
         password: "{{ vcenter_password }}"
         validate_certs: false
         datacenter: "{{ vcenter_datacenter }}"
-        folder: ToBeDeleted
         uuid: "{{ old_vm_info.virtual_machines[0].uuid }}"
         state: powered-off
 
@@ -76,7 +69,7 @@
         validate_certs: false
         datacenter: "{{ vcenter_datacenter }}"
         cluster: "{{ vcenter_cluster }}"
-        folder: /{{ vm_folder | default('AnsibleControlledVMs') }}
+        folder: "{{ old_vm_info.virtual_machines[0].folder }}"
         name: "{{ replacement_vm }}"
         state: present
         template: "{{ vm_template | default('template_jammy_spring_2024')}}"
@@ -190,8 +183,6 @@
         uuid: "{{ old_vm_info.virtual_machines[0].uuid }}"
         state: absent
         force: true
-      tags:
-        - remove-old
       
     - name: Remove host from ansible tower known hosts
       ansible.builtin.known_hosts:
@@ -201,8 +192,6 @@
       delegate_to: towerdeploy1.princeton.edu
       become: true
       become_user: deploy
-      tags:
-        - known-hosts
 
   post_tasks:
     - name: send information to slack
