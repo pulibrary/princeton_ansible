@@ -34,13 +34,15 @@
         var: old_vm_info
 
     - name: Print out relevant details of old VM
+      vars:
+        msg: |
+             The VM you are replacing has
+             a mac address of {{ old_vm_info.virtual_machines[0].mac_address[0] }}
+             {{ old_vm_info.virtual_machines[0].allocated.cpu }} CPUs
+             {{ old_vm_info.virtual_machines[0].allocated.memory | human_readable }} of memory
+             {{ old_vm_info.virtual_machines[0].allocated.storage | human_readable }} of disk allocated
       ansible.builtin.debug:
-        msg:
-          - The VM you are replacing has
-          - a mac address of {{ old_vm_info.virtual_machines[0].mac_address[0] }}
-          - {{ old_vm_info.virtual_machines[0].allocated.cpu }} CPUs
-          - {{ old_vm_info.virtual_machines[0].allocated.memory | human_readable }} of memory
-          - {{ old_vm_info.virtual_machines[0].allocated.storage | human_readable }} of disk allocated
+        msg: "{{ msg.split('\n') }}"
 
     - name: Print out warning
       ansible.builtin.debug:
@@ -181,15 +183,15 @@
         moid: "{{ new_vm_deets.instance.moid }}"
       register: new_vm_info
 
-    - name: Print out relevant details of new VM
-      ansible.builtin.debug:
-        msg:
-          - The VM you just created has
-          - a mac address of {{ new_vm_info.virtual_machines[0].mac_address[0] }}
-          - {{ new_vm_info.virtual_machines[0].allocated.cpu }} CPUs
-          - {{ new_vm_info.virtual_machines[0].allocated.memory | human_readable }} of memory
-          - {{ new_vm_info.virtual_machines[0].allocated.storage | human_readable }} of disk allocated
-
+    # - name: Print out relevant details of new VM
+    #   ansible.builtin.debug:
+    #     msg:
+    #       - The VM you just created has
+    #       - a mac address of {{ new_vm_info.virtual_machines[0].mac_address[0] }}
+    #       - {{ new_vm_info.virtual_machines[0].allocated.cpu }} CPUs
+    #       - {{ new_vm_info.virtual_machines[0].allocated.memory | human_readable }} of memory
+    #       - {{ new_vm_info.virtual_machines[0].allocated.storage | human_readable }} of disk allocated
+    # 
     - name: Remove old VM using UUID
       community.vmware.vmware_guest:
         hostname: "{{ vcenter_hostname }}"
