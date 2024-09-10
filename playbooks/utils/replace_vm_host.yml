@@ -37,6 +37,7 @@
       vars:
         msg: |
              The VM you are replacing has
+             an MOID of {{ old_vm_info.virtual_machines[0].moid }}
              a mac address of {{ old_vm_info.virtual_machines[0].mac_address[0] }}
              {{ old_vm_info.virtual_machines[0].allocated.cpu }} CPUs
              {{ old_vm_info.virtual_machines[0].allocated.memory | human_readable }} of memory
@@ -170,7 +171,7 @@
         moid: "{{ new_vm_deets.instance.moid }}"
         state: powered-on
 
-    - name: Gather details on both VMs
+    - name: Gather details on new VM
       community.vmware.vmware_vm_info:
         hostname: "{{ vcenter_hostname }}"
         username: "{{ vcenter_username }}"
@@ -183,21 +184,17 @@
         vm_name: "{{ replacement_vm }}"
       register: post_replacement_info
 
-    - name: what's in the info now?
+    - name: Print out relevant details of new VM
+      vars:
+        msg: |
+             The VM you just created has
+             an MOID of {{ new_vm_info.virtual_machines[0].moid }}
+             a mac address of {{ new_vm_info.virtual_machines[0].mac_address[0] }}
+             {{ new_vm_info.virtual_machines[0].allocated.cpu }} CPUs
+             {{ new_vm_info.virtual_machines[0].allocated.memory | human_readable }} of memory
+             {{ new_vm_info.virtual_machines[0].allocated.storage | human_readable }} of disk allocated
       ansible.builtin.debug:
-        var: post_replacement_info
-
-    # - name: Print out relevant details of VMs
-    #   vars:
-    #     msg: |
-    #          Here is a comparison of the VM you wanted to replace and the VM you just created.
-    #          a mac address of {{ new_vm_info.virtual_machines[*].mac_address[0] }}
-    #          {{ new_vm_info.virtual_machines[*].allocated.cpu }} CPUs
-    #          {{ new_vm_info.virtual_machines[*].allocated.memory | human_readable }} of memory
-    #          {{ new_vm_info.virtual_machines[*].allocated.storage | human_readable }} of disk allocated
-    #   ansible.builtin.debug:
-    #     msg: "{{ msg.split('\n') }}"
-    #   loop: post_replacement_info
+        msg: "{{ msg.split('\n') }}"
     
     - name: Remove old VM using UUID
       community.vmware.vmware_guest:
