@@ -183,15 +183,17 @@
         moid: "{{ new_vm_deets.instance.moid }}"
       register: new_vm_info
 
-    # - name: Print out relevant details of new VM
-    #   ansible.builtin.debug:
-    #     msg:
-    #       - The VM you just created has
-    #       - a mac address of {{ new_vm_info.virtual_machines[0].mac_address[0] }}
-    #       - {{ new_vm_info.virtual_machines[0].allocated.cpu }} CPUs
-    #       - {{ new_vm_info.virtual_machines[0].allocated.memory | human_readable }} of memory
-    #       - {{ new_vm_info.virtual_machines[0].allocated.storage | human_readable }} of disk allocated
-    # 
+    - name: Print out relevant details of new VM
+      vars:
+        msg: |
+             The VM you just created has
+             a mac address of {{ new_vm_info.virtual_machines[0].mac_address[0] }}
+             {{ new_vm_info.virtual_machines[0].allocated.cpu }} CPUs
+             {{ new_vm_info.virtual_machines[0].allocated.memory | human_readable }} of memory
+             {{ new_vm_info.virtual_machines[0].allocated.storage | human_readable }} of disk allocated
+      ansible.builtin.debug:
+        msg: "{{ msg.split('\n') }}"
+    
     - name: Remove old VM using UUID
       community.vmware.vmware_guest:
         hostname: "{{ vcenter_hostname }}"
