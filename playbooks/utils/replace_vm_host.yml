@@ -1,19 +1,22 @@
 ---
-#  This playbook will delete a VM and replace it. This is the only warning you will get. Running this playbook has destructive consequences
+#  This playbook deletes a VM and replaces it from a vSphere template. This is the only warning you will get. Running this playbook has destructive consequences!
 #  This playbook should only be run from ansible tower.  No need for detailed instructions of examples here, because you should not run it here.
 #
-- name: replace the {{ replacement_vm }} VM on vSphere
+- name: replace the {{ replacement_vm }} VM on the {{ runtime_env | default('staging') }} vSphere
   hosts: localhost
   remote_user: pulsys
   become: true
+
   vars:
     slack_alerts_channel: "#infrastructure"
+
   vars_files:
     - ../../group_vars/all/vault.yml
     - ../../group_vars/vsphere/vault.yml
     - ../../group_vars/vsphere/{{ runtime_env | default('staging') }}.yml
+
   tasks:
-    - name: Gather MAC address of VM to replace
+    - name: Gather info on VM to replace
       community.vmware.vmware_vm_info:
         hostname: "{{ vcenter_hostname }}"
         username: "{{ vcenter_username }}"
@@ -22,31 +25,19 @@
         show_datacenter: true
         show_mac_address: true
         show_allocated: true
-        # show_cluster: true
+        show_folder: true
         vm_name: "{{ replacement_vm }}"
       register: old_vm_info
-      tags: 
-        - 'disk'
-        - remove-old
 
     - name: Print out old VM information
       ansible.builtin.debug:
         var: old_vm_info
-      tags: 
-        - 'disk'
-        - remove-old
 
-    - name: Print out disk size in KB
+    - name: Print out warning
       ansible.builtin.debug:
-        msg: "{{ old_vm_info.virtual_machines[0].allocated.storage / 1024 }}"
-      tags: 
-        - 'disk'
+        msg: Ansible will now move and power off the current {{ old_vm_info.virtual_machines[0].guest_name }} VM, then create a replacement.
 
-    - name: Print out old VM information
-      ansible.builtin.debug:
-        msg: You are planning to delete {{ old_vm_info }}
-
-    - name: Move old VM to the DeleteMe folder
+    - name: Move old VM to the ToBeDeleted folder
       community.vmware.vmware_guest_move:
         hostname: "{{ vcenter_hostname }}"
         username: "{{ vcenter_username }}"
@@ -55,7 +46,6 @@
         datacenter: "{{ vcenter_datacenter }}"
         dest_folder: "{{ vm_delete_me_folder }}"
         uuid: "{{ old_vm_info.virtual_machines[0].uuid }}"
-      ignore_errors: true
 
     - name: Power off old VM using UUID
       community.vmware.vmware_guest_powerstate:
@@ -64,7 +54,6 @@
         password: "{{ vcenter_password }}"
         validate_certs: false
         datacenter: "{{ vcenter_datacenter }}"
-        folder: ToBeDeleted
         uuid: "{{ old_vm_info.virtual_machines[0].uuid }}"
         state: powered-off
 
@@ -76,16 +65,16 @@
         validate_certs: false
         datacenter: "{{ vcenter_datacenter }}"
         cluster: "{{ vcenter_cluster }}"
-        folder: /{{ vm_folder | default('AnsibleControlledVMs') }}
+        folder: "{{ old_vm_info.virtual_machines[0].folder }}"
         name: "{{ replacement_vm }}"
         state: present
         template: "{{ vm_template | default('template_jammy_spring_2024')}}"
         disk:
           - size: "{{ (old_vm_info.virtual_machines[0].allocated.storage / 1024) | int }}kb"
-            # this may not be acceptable to our new templates
+            # we are not able to use 'type: thin' with our fall 2024 templates
             # type: thin
             datastore: "{{ old_vm_info.virtual_machines[0].datastore_url }}"
-        # Add another disk from an existing VMDK
+        # TODO: Add another disk from an existing VMDK
         hardware:
           memory_mb: "{{ old_vm_info.virtual_machines[0].allocated.memory | int | default('16384') }}"
           num_cpus: "{{ old_vm_info.virtual_machines[0].allocated.cpu | int | default('2') }}"
@@ -105,10 +94,6 @@
     - name: view new VM details
       ansible.builtin.debug:
         var: new_vm_deets
-
-    - name: view automatically added mac address
-      ansible.builtin.debug:
-        var: new_vm_deets.instance.hw_eth0.macaddress
 
     - name: power down the VM so we can mess with the network settings
       community.vmware.vmware_guest_powerstate:
@@ -143,23 +128,11 @@
         datacenter: "{{ vcenter_datacenter }}"
         # new VM var does not include UUID; use moid, which is unique in each vCenter instance
         moid: "{{ new_vm_deets.instance.moid }}"
-        # uuid: "{{ new_vm_deets.instance.uuid }}"
-        # name: "{{ replacement_vm }}"
         folder: "{{ old_vm_info.virtual_machines[0].folder }}"
         network_name: "{{ vm_network | default('Virtual Machine Network')}}"
         device_type: "vmxnet3"
         connected: true
         mac_address: "{{ old_vm_info.virtual_machines[0].mac_address[0] }}"
-      register: new_nic
-
-    - name: view all info for VM with the new NICs
-      ansible.builtin.debug:
-        var: new_nic
-      
-    - name: view details for new mac address
-      ansible.builtin.debug:
-        var: new_nic.network_info[1].mac_address
-
 
     - name: Power the new VM on
       community.vmware.vmware_guest_powerstate:
@@ -168,16 +141,48 @@
         password: "{{ vcenter_password }}"
         validate_certs: false
         datacenter: "{{ vcenter_datacenter }}"
-        folder: /{{ vm_folder | default('dev-rebootable-vms') }}
+        folder: "{{ old_vm_info.virtual_machines[0].folder }}"
         # new VM var does not include UUID; use moid, which is unique in each vCenter instance
         moid: "{{ new_vm_deets.instance.moid }}"
         state: powered-on
-      register: vm_status
 
-    - name: view status of new VM
+    - name: Gather details on new VM
+      community.vmware.vmware_vm_info:
+        hostname: "{{ vcenter_hostname }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        validate_certs: false
+        show_datacenter: true
+        show_mac_address: true
+        show_allocated: true
+        show_folder: true
+        vm_name: "{{ replacement_vm }}"
+      register: new_vm_info
+
+    - name: Print out relevant details of old VM
+      vars:
+        msg: |
+             The VM you replaced had
+             an UUID of {{ old_vm_info.virtual_machines[0].uuid }}
+             a mac address of {{ old_vm_info.virtual_machines[0].mac_address[0] }}
+             {{ old_vm_info.virtual_machines[0].allocated.cpu }} CPUs
+             {{ (old_vm_info.virtual_machines[0].allocated.memory | int / 1024) }} GB of memory
+             {{ old_vm_info.virtual_machines[0].allocated.storage | human_readable }} of disk allocated
       ansible.builtin.debug:
-        var: vm_status
+        msg: "{{ msg.split('\n') }}"
 
+    - name: Print out relevant details of new VM
+      vars:
+        msg: |
+             The VM you just created has
+             an UUID of {{ new_vm_info.virtual_machines[0].uuid }}
+             a mac address of {{ new_vm_info.virtual_machines[0].mac_address[0] }}
+             {{ new_vm_info.virtual_machines[0].allocated.cpu }} CPUs
+             {{ (new_vm_info.virtual_machines[0].allocated.memory | int / 1024) }} GB of memory
+             {{ new_vm_info.virtual_machines[0].allocated.storage | human_readable }} of disk allocated
+      ansible.builtin.debug:
+        msg: "{{ msg.split('\n') }}"
+    
     - name: Remove old VM using UUID
       community.vmware.vmware_guest:
         hostname: "{{ vcenter_hostname }}"
@@ -186,14 +191,12 @@
         validate_certs: false
         datacenter: "{{ vcenter_datacenter }}"
         cluster: "{{ vcenter_cluster }}"
-        folder: "{{ old_vm_info.virtual_machines[0].folder }}"
+        folder: "{{ vm_delete_me_folder }}"
         uuid: "{{ old_vm_info.virtual_machines[0].uuid }}"
         state: absent
         force: true
-      tags:
-        - remove-old
-      
-    - name: Remove host from ansible tower known hosts
+
+    - name: Remove host from TowerDeploy1 known hosts
       ansible.builtin.known_hosts:
         path: /home/deploy/.ssh/known_hosts
         name: "{{ replacement_vm }}.princeton.edu"
@@ -201,8 +204,6 @@
       delegate_to: towerdeploy1.princeton.edu
       become: true
       become_user: deploy
-      tags:
-        - known-hosts
 
   post_tasks:
     - name: send information to slack
