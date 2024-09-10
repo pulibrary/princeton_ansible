@@ -16,7 +16,7 @@
     - ../../group_vars/vsphere/{{ runtime_env | default('staging') }}.yml
 
   tasks:
-    - name: Gather MAC address of VM to replace
+    - name: Gather info on VM to replace
       community.vmware.vmware_vm_info:
         hostname: "{{ vcenter_hostname }}"
         username: "{{ vcenter_username }}"
@@ -33,15 +33,20 @@
       ansible.builtin.debug:
         var: old_vm_info
 
-    - name: Print out disk size
+    - name: Print out relevant details of old VM
       ansible.builtin.debug:
-        msg: This VM has {{ old_vm_info.virtual_machines[0].allocated.storage | human_readable }} of disk allocated.
+        msg:
+          - The VM you are replacing has
+          - a mac address of {{ old_vm_info.virtual_machines[0].mac_address[0] }}
+          - {{ old_vm_info.virtual_machines[0].allocated.cpu }} CPUs
+          - {{ old_vm_info.virtual_machines[0].allocated.memory | human_readable }} of memory
+          - {{ old_vm_info.virtual_machines[0].allocated.storage | human_readable }} of disk allocated
 
     - name: Print out warning
       ansible.builtin.debug:
         msg: Ansible will now move and delete {{ old_vm_info.virtual_machines[0].guest_name }}
 
-    - name: Move old VM to the DeleteMe folder
+    - name: Move old VM to the ToBeDeleted folder
       community.vmware.vmware_guest_move:
         hostname: "{{ vcenter_hostname }}"
         username: "{{ vcenter_username }}"
@@ -162,11 +167,28 @@
         # new VM var does not include UUID; use moid, which is unique in each vCenter instance
         moid: "{{ new_vm_deets.instance.moid }}"
         state: powered-on
-      register: vm_status
 
-    - name: view status of new VM
+    - name: Gather details on new VM
+      community.vmware.vmware_vm_info:
+        hostname: "{{ vcenter_hostname }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        validate_certs: false
+        show_datacenter: true
+        show_mac_address: true
+        show_allocated: true
+        # show_cluster: true
+        moid: "{{ new_vm_deets.instance.moid }}"
+      register: new_vm_info
+
+    - name: Print out relevant details of new VM
       ansible.builtin.debug:
-        var: vm_status
+        msg:
+          - The VM you just created has
+          - a mac address of {{ new_vm_info.virtual_machines[0].mac_address[0] }}
+          - {{ new_vm_info.virtual_machines[0].allocated.cpu }} CPUs
+          - {{ new_vm_info.virtual_machines[0].allocated.memory | human_readable }} of memory
+          - {{ new_vm_info.virtual_machines[0].allocated.storage | human_readable }} of disk allocated
 
     - name: Remove old VM using UUID
       community.vmware.vmware_guest:
