@@ -1,0 +1,40 @@
+---
+#  This playbook will expand the disk on a new vm
+#     
+- name: expand disk
+  hosts: all
+  remote_user: pulsys
+  become: true
+
+  pre_tasks:
+    - name: stop playbook if you didn't use --limit
+      fail:
+        msg: "you must use -l or --limit"
+      when: ansible_limit is not defined
+      run_once: true
+
+  tasks:
+    - name: gather name of the logical volume
+      ansible.builtin.command: sudo lvdisplay
+      register: logical_volume
+
+    - name: view the logical volume
+      ansible.builtin.debug:
+        var: logical_volume
+  
+    # - name: extend the size of the logical volume
+    #   ansible.builtin.command: sudo lvextend -l +100%FREE $LV_PATH
+
+    # - name: resize the filesystem to use the newly allocated space
+    #   ansible.builtin.command:
+
+    # - name: check the new disk size
+
+    # - name: 
+
+    # - name: 
+
+  # post_tasks:
+    # - name: send information to slack
+      # ansible.builtin.include_tasks:
+        # file: slack_tasks_end_of_playbook.yml
