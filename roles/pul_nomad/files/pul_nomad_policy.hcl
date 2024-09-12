@@ -3,9 +3,12 @@ agent_prefix "" {
 }
 
 node_prefix "" {
-  policy = "read"
+  policy = "write"
 }
 
 service_prefix "" {
   policy = "write"
 }
+
+acl = "write"
+mesh = "write"
