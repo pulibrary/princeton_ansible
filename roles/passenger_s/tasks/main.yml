@@ -16,13 +16,13 @@
 - name: Passenger_s | download nginx source
   ansible.builtin.unarchive:
     src: https://nginx.org/download/nginx-{{ passenger_s_nginx_version }}.tar.gz
-    dest: /tmp
+    dest: "{{ install_path }}"
     remote_src: true
 
 - name: Passenger_s | download passenger source
   ansible.builtin.unarchive:
     src: https://www.phusionpassenger.com/latest_stable_tarball
-    dest: /tmp
+    dest: "{{ install_path }}"
     remote_src: true
 
 # there seems to be a race condition inside containers
@@ -38,9 +38,9 @@
 
 - name: Passenger_s | compile and install nginx with passenger
   ansible.builtin.shell: |
-      cd /tmp/nginx-{{ passenger_s_nginx_version }}
+      cd "{{ install_path }}/nginx-{{ passenger_s_nginx_version }}"
       ./configure --prefix=/opt/nginx \
-                  --add-dynamic-module=/tmp/passenger-{{ passenger_s_version }}-{{ passenger_s_release }}/src/nginx_module \
+                  --add-dynamic-module="{{ install_path }}/passenger-{{ passenger_s_version }}-{{ passenger_s_release }}/src/nginx_module" \
                   --with-compat \
                   --with-http_ssl_module
       make -j$(nproc)
