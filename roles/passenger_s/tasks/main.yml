@@ -1,0 +1,67 @@
+---
+# tasks file for roles/passenger_s
+- name: Passenger_s | ensure required packages
+  ansible.builtin.apt:
+    name: "{{ item }}"
+    state: present
+    update_cache: true
+  loop:
+    - curl
+    - build-essential
+    - zlib1g-dev
+    - libpcre3-dev
+    - libssl-dev
+
+- name: Passenger_s | download nginx source
+  ansible.builtin.unarchive:
+    url: https://nginx.org/download/nginx-{{ nginx_version }}.tar.gz
+    dest: /tmp
+    remote_src: true
+
+- name: Passenger_s | download passenger source
+  ansible.builtin.unarchive:
+    url: https://www.phusionpassenger.com/latest_stable_tarball
+    dest: /tmp
+    remote_src: true
+
+- name: Passenger_s | create nginx directory
+  ansible.builtin.file:
+    path: /opt/nginx
+    state: directory
+    mode: "0755"
+
+- name: Passenger_s | compile and install nginx with passenger
+  ansible.builtin.shell: |
+      cd /tmp/nginx-{{ nginx_version }}
+      ./configure --prefix=/opt/nginx \
+                  --add-dynamic-module=/tmp/passenger-{{ passenger_version }}-{{ passenger_release }}/src/nginx_module \
+                  --with-compat \
+                  --with-http_ssl_module
+      make -j$(nproc)
+      make install
+  changed_when: false
+
+- name: Passenger_s | create nginx log directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+  loop:
+    - /opt/nginx/logs
+
+- name: Passenger_s | create nginx systemd file
+  ansible.builtin.template:
+    src: nginx.service.j2
+    dest: /etc/systemd/system/nginx.service
+    mode: "0644"
+
+- name: Passenger_s | create nginx systemd file
+  ansible.builtin.systemd:
+    daemon-reload: true
+  when: running_on_server
+
+- name: Passenger_s | enable and start nginx
+  ansible.builtin.systemd:
+    name: nginx
+    enabled: true
+    state: started
