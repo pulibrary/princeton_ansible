@@ -5,10 +5,10 @@
   hosts: all
   remote_user: pulsys
   become: true
-
+#/dev/ubuntu-vg/ubuntu-lv"
   pre_tasks:
     - name: stop playbook if you didn't use --limit
-      fail:
+      ansible.builtin.fail:
         msg: "you must use -l or --limit"
       when: ansible_limit is not defined
       run_once: true
@@ -18,10 +18,31 @@
       ansible.builtin.command: sudo lvdisplay
       register: logical_volume
 
+    - name: view the ansible_facts
+      ansible.builtin.debug:
+        var: ansible_facts
+
     - name: view the logical volume
       ansible.builtin.debug:
         var: logical_volume
-  
+
+    - name: testing var
+      ansible.builtin.set_fact:
+        info: "{{ info | d({})|combine({_key: _val}) }}"
+      loop: "{{ logical_volume.stdout_lines }}"
+      vars:
+        _list: "{{ item.split('\n')|map('trim') }}"
+        _key: "{{ _list.0.split(' ')|last }}"
+        _val: "{{ _list[1:]|select()|map('from_yaml')|combine }}"
+
+    - name: view info
+      ansible.builtin.debug:
+        var: info
+
+    - name: view the specifics from logical volume
+      ansible.builtin.debug:
+        var: logical_volume.stdout_lines
+
     # - name: extend the size of the logical volume
     #   ansible.builtin.command: sudo lvextend -l +100%FREE $LV_PATH
 
