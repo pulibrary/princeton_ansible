@@ -11,6 +11,7 @@
     - zlib1g-dev
     - libpcre3-dev
     - libssl-dev
+    - libcurl4-openssl-dev
 
 - name: Passenger_s | download nginx source
   ansible.builtin.unarchive:
@@ -23,6 +24,11 @@
     src: https://www.phusionpassenger.com/latest_stable_tarball
     dest: /tmp
     remote_src: true
+
+# there seems to be a race condition inside containers
+- name: Passenger_s | pause for file system synchronization
+  ansible.builtin.pause:
+    seconds: 5
 
 - name: Passenger_s | create nginx directory
   ansible.builtin.file:
