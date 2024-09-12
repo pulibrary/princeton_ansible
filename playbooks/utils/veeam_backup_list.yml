@@ -32,9 +32,7 @@
 
     - name: Find VMs that do not have tags
       ansible.builtin.set_fact:
-        untagged_vms: "{{ vms_and_tags.virtual_machines | selectattr('tags', '==', '') | map(attribute='guest_name') }}"
-      # vms_and_tags.virtual_machines[?folder=='/Library/vm/dev-rebootable-vms'].guest_name works
-      # but vms_and_tags.virtual_machines[?tags==''].guest_name does not
+        untagged_vms: "{{ vms_and_tags.virtual_machines | rejectattr('tags') | map(attribute='guest_name') }}"
 
     - name: show untagged var
       ansible.builtin.debug:
