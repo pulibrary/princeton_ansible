@@ -67,3 +67,21 @@
     enabled: true
     state: started
   when: running_on_server
+
+# Nginx configuration.
+- name: Passenger_s | copy nginx configuration into place.
+  ansible.builtin.template:
+    src: nginx.conf.j2
+    dest: /opt/nginx/conf/nginx.conf
+    mode: "0644"
+  tags: passenger_config
+  notify: Restart nginx'
+  when: running_on_server
+
+- name: Passenger_s | Configure passenger virtual host.
+  ansible.builtin.template:
+    src: passenger.j2
+    dest: /opt/nginx/conf/conf.d/passenger.conf
+    mode: "0644"
+  notify: Restart nginx'
+  when: running_on_server
