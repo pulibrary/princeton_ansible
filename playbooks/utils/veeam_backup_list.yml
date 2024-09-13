@@ -18,7 +18,7 @@
         vm_type: vm
       register: vms_and_tags
 
-    - name: Get a list of tags
+    - name: Find all tags
       ansible.builtin.set_fact:
         unique_tags: "{{ vms_and_tags.virtual_machines | map(attribute='tags') | flatten | map(attribute='name') | unique }}"
 
@@ -26,18 +26,30 @@
       ansible.builtin.debug:
         var: unique_tags
 
-    - name: Find VMs that have tags
+    - name: Find VMs without tags
+      ansible.builtin.set_fact:
+        untagged_vms: "{{ vms_and_tags.virtual_machines | rejectattr('tags') | map(attribute='guest_name') }}"
+
+    - name: View VMs without tags
+      ansible.builtin.debug:
+        msg:
+          - Review these VMs - they have no tags now.
+          - If we want to back them up, add backup tags.
+          - If not, add the 'LIB_DONT_BACKUP' tag. 
+          - VM names with no tags {{ untagged_vms }}
+
+    - name: Find VMs with tags
       ansible.builtin.set_fact:
         tagged_vms: "{{ vms_and_tags | community.general.json_query(not_null) }}"
       vars:
         not_null: "virtual_machines[?not_null(tags)]"
 
-    - name: create a dict of fields we want from tagged VMs
+    - name: Create a dict of fields we want from tagged VMs
       ansible.builtin.set_fact:
         # build a list of VMs with tags, names, and disk size
         slim_tagged_vms: "{{ tagged_vms | community.general.json_query('[*].{VM_name: guest_name, Tag_name: tags[0].name, Disk_size: allocated.storage}') }}"
 
-    - name: show data for VMs by tag
+    - name: View data on VMs by tag
       ansible.builtin.debug:
         msg:
           - The {{ item }} tag marks these VMs {{ slim_tagged_vms | selectattr('Tag_name', 'equalto', item) | map(attribute='VM_name') }}
