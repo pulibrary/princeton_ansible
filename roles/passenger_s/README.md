@@ -12,6 +12,7 @@ Role Variables
 
 ```bash
 passenger_s_nginx_version: "1.25.2" # version of nginx
+passenger_s_real_ip_from_staging
 ```
 Dependencies
 ------------
@@ -21,11 +22,13 @@ The `ruby_s` role
 Example Playbook
 ----------------
 
-Including an example of how to use your role (for instance, with variables passed in as parameters) is always nice for users too:
+```bash
+-e "passenger_app_env=dev real_ip_from={{ real_ip_from_staging }}"
+```
 
-    - hosts: servers
-      roles:
-         - { role: username.rolename, x: 42 }
+The dev load balancer will need this flag
+```
+
 
 License
 -------

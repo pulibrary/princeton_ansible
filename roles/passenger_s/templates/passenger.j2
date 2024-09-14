@@ -6,9 +6,9 @@ server {
   passenger_set_header X-Forwarded-Proto https;
   passenger_set_header X-Forwarded-For $remote_addr;
   root {{ passenger_app_root }};
-  set_real_ip_from 128.112.203.144;
-  set_real_ip_from 128.112.203.145;
-  set_real_ip_from 128.112.203.146;
+  {% for ip in real_ip_from %}
+    set_real_ip_from {{ ip }};
+    {% endfor %}
   real_ip_header X-Real-IP;
   large_client_header_buffers 4 16k;
 
@@ -25,8 +25,8 @@ server {
 
 # this filters out the load-balancer IPs, so we don't log health checks from them
 map $remote_addr $logging_enabled {
-     "128.112.203.144" 0;
-     "128.112.203.145" 0;
-     "128.112.203.146" 0;
+  {% for ip in real_ip_from %}
+    "{{ ip }}" 0;
+    {% endfor %}
      default 1;
 }
