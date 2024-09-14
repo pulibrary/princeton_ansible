@@ -13,6 +13,15 @@
     - libssl-dev
     - libcurl4-openssl-dev
 
+- name: Passenger_s | create nginx user
+  ansible.builtin.user:
+    name: nginx
+    state: present
+    system: true
+    group: nginx
+    createhome: false
+    shell: /sbin/nologin
+
 - name: Passenger_s | download nginx source
   ansible.builtin.unarchive:
     src: https://nginx.org/download/nginx-{{ passenger_s_nginx_version }}.tar.gz
@@ -88,6 +97,8 @@
     src: nginx.conf.j2
     dest: /opt/nginx/conf/nginx.conf
     mode: "0644"
+    group: "{{ passenger_s_nginx_user }}"
+    owner: "{{ passenger_s_nginx_user }}"
   tags: passenger_config
   notify: Restart nginx'
   when: running_on_server
