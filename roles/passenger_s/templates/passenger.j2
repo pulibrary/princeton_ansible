@@ -1,11 +1,11 @@
 server {
-  listen {{ passenger_listen_port }} default_server;
-  server_name {{ passenger_server_name }};
-  passenger_enabled {{ passenger_enabled }};
-  passenger_app_env {{ passenger_app_env }};
+  listen {{ passenger_s_listen_port }} default_server;
+  server_name {{ passenger_s_server_name }};
+  passenger_enabled {{ passenger_s_enabled }};
+  passenger_app_env {{ passenger_s_app_env }};
   passenger_set_header X-Forwarded-Proto https;
   passenger_set_header X-Forwarded-For $remote_addr;
-  root {{ passenger_app_root }};
+  root {{ passenger_s_app_root }};
   {% for ip in real_ip_from %}
     set_real_ip_from {{ ip }};
     {% endfor %}
@@ -14,7 +14,7 @@ server {
 
   access_log /opt/nginx/logs/access.log custom if=$logging_enabled;
 
-  {{passenger_extra_config}}
+  {{ passenger_s_extra_config }}
 
   location /nginx_status {
     stub_status;

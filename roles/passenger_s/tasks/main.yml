@@ -13,6 +13,11 @@
     - libssl-dev
     - libcurl4-openssl-dev
 
+- name: Passenger_s | create nginx group
+  ansible.builtin.group:
+    name: nginx
+    state: present
+
 - name: Passenger_s | create nginx user
   ansible.builtin.user:
     name: nginx
@@ -100,7 +105,7 @@
     group: "{{ passenger_s_nginx_user }}"
     owner: "{{ passenger_s_nginx_user }}"
   tags: passenger_config
-  notify: Restart nginx'
+  notify: Restart nginx
   when: running_on_server
 
 - name: Passenger_s | Configure passenger virtual host.
@@ -108,5 +113,5 @@
     src: passenger.j2
     dest: /opt/nginx/conf/conf.d/passenger.conf
     mode: "0644"
-  notify: Restart nginx'
+  notify: Restart nginx
   when: running_on_server

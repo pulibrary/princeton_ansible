@@ -12,8 +12,11 @@ Role Variables
 
 ```bash
 passenger_s_nginx_version: "1.25.2" # version of nginx
-passenger_s_real_ip_from_staging
+passenger_s_real_ip_from_staging # we need this for the dev loadbalancer
 ```
+
+optional variable: `passenger_max_pool_size`: if you set this the role will set a number of passenger processes. passenger default is 6. also this will make the role pre-warm your site.
+
 Dependencies
 ------------
 
