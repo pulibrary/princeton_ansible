@@ -5,7 +5,10 @@
   hosts: all
   remote_user: pulsys
   become: true
-#/dev/ubuntu-vg/ubuntu-lv"
+
+  vars:
+    slack_alerts_channel: infrastructure
+
   pre_tasks:
     - name: stop playbook if you didn't use --limit
       ansible.builtin.fail:
@@ -14,6 +17,10 @@
       run_once: true
 
   tasks:
+    - name: check the starting disk size
+      ansible.builtin.command: df -h
+      register: starting_disk_size
+
     - name: gather name of the logical volume
       ansible.builtin.command: sudo lvdisplay
       register: logical_volume
@@ -28,34 +35,25 @@
 
     - name: testing var
       ansible.builtin.set_fact:
-        info: "{{ info | d({})|combine({_key: _val}) }}"
-      loop: "{{ logical_volume.stdout_lines }}"
-      vars:
-        _list: "{{ item.split('\n')|map('trim') }}"
-        _key: "{{ _list.0.split(' ')|last }}"
-        _val: "{{ _list[1:]|select()|map('from_yaml')|combine }}"
+        lv_path: "{{ logical_volume.stdout_lines[1] | split | last }}"
 
-    - name: view info
+    - name: view lv_path
       ansible.builtin.debug:
-        var: info
+        var: lv_path
 
-    - name: view the specifics from logical volume
-      ansible.builtin.debug:
-        var: logical_volume.stdout_lines
+    - name: extend the size of the logical volume
+      ansible.builtin.command: sudo lvextend -l +100%FREE "{{ lv_path }}"
 
-    # - name: extend the size of the logical volume
-    #   ansible.builtin.command: sudo lvextend -l +100%FREE $LV_PATH
+    - name: resize the filesystem to use the newly allocated space
+      ansible.builtin.command: sudo resize2fs "{{ lv_path }}"
 
-    # - name: resize the filesystem to use the newly allocated space
-    #   ansible.builtin.command:
+    - name: check the new disk size
+      ansible.builtin.command: df -h
+      register: new_disk_size
 
-    # - name: check the new disk size
-
-    # - name: 
-
-    # - name: 
-
-  # post_tasks:
-    # - name: send information to slack
-      # ansible.builtin.include_tasks:
-        # file: slack_tasks_end_of_playbook.yml
+  post_tasks:
+  - name: let folks on slack know the disk status
+    community.general.slack:
+      token: "{{ vault_tower_slack_token }}"
+      msg: "Ansible has successfully updated the disk from `{{ starting_disk_size }}` to `{{ new_disk_size }}` on the `{{ inventory_hostname }}` VM"
+      channel: "{{ slack_alerts_channel }}"
