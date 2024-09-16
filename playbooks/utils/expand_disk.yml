@@ -6,11 +6,11 @@
   remote_user: pulsys
   become: true
 
-  vars:
-    slack_alerts_channel: infrastructure
+  # vars:
+  #   slack_alerts_channel: infrastructure
 
-  vars_files:
-    - ../../group_vars/all/vault.yml
+  # vars_files:
+  #   - ../../group_vars/all/vault.yml
 
   pre_tasks:
     - name: stop playbook if you didn't use --limit
@@ -24,6 +24,19 @@
       ansible.builtin.command: df -h
       register: starting_disk_size
 
+    - name: check the starting lv size
+      ansible.builtin.set_fact: 
+        starting_lv_size: "{{ starting_disk_size.stdout_lines[2].split()[1] }}"
+
+    - name: view the starting_disk_size
+      ansible.builtin.debug:
+        var: starting_lv_size
+
+    - name: End the play if the disk is expanded
+      ansible.builtin.meta: end_host
+      when:
+      - starting_lv_size == '28G'
+
     - name: gather name of the logical volume
       ansible.builtin.command: sudo lvdisplay
       register: logical_volume
@@ -36,7 +49,7 @@
       ansible.builtin.debug:
         var: logical_volume
 
-    - name: testing var
+    - name: gather the logical volume path
       ansible.builtin.set_fact:
         lv_path: "{{ logical_volume.stdout_lines[1] | split | last }}"
 
