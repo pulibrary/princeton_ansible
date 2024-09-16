@@ -34,6 +34,30 @@
   ansible.builtin.command: java -Dmf.host=localhost -Dmf.transport=http -Dmf.domain=system -Dmf.user=manager -Dmf.password="{{ mflux_manager_password }}" -Dmf.port=80 -jar /opt/mediaflux/bin/aterm.jar --app exec	authentication.ldap.domain.create :domain princeton :provider princeton :user < :uid sAMAccountName :path "OU=people,DC=pu,DC=win,DC=princeton,DC=edu" :group memberOf :case-sensitive false >
   ignore_errors: true
 
+- name: MFlux | Restart mediaflux
+  ansible.builtin.systemd:
+    name: mediaflux
+    state: restarted
+  tags:
+    - mediaflux
+    - init
+
+- name: Mflux | ldap create authentication domain
+  ansible.builtin.command: java -Dmf.host=localhost -Dmf.transport=http -Dmf.domain=system -Dmf.user=manager -Dmf.password="{{ mflux_manager_password }}" -Dmf.port=80 -jar /opt/mediaflux/bin/aterm.jar --app exec actor.grant :type domain :name princeton :role -type role {{ item }}
+  loop:
+     - user
+     - standard-user
+     - desktop-experimental
+  tags:
+    - roles
+  register: role_results
+
+- name: MFlux | debug role command
+  debug:
+    msg: "{{ role_results }}"
+  tags:
+    - roles
+
 #  We believe that this step may have been done on other servers, and the "mediaflux" active directory account is already created/in use
 # - name: Mflux | create a secure channel to the AD server
 #   ansible.builtin.command: java -Dmf.host=localhost -Dmf.transport=http -Dmf.domain=system -Dmf.user=manager -Dmf.password="(mflux_pass_lastpass)^" -Dmf.port=80 -jar /opt/mediaflux/bin/aterm.jar --app exec active.directory.domain.join :account-name lib-rdss-docker :auth user :domain pu.win.princeton.edu :ldap-domain princeton :username (ldap_user)@princeton.edu :password "(ldap_pass)"
