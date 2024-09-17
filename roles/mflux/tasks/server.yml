@@ -39,6 +39,16 @@
   ansible.builtin.import_tasks: ldap-config.yml
   when: start_mflux_result is changed
 
+- name: Mflux | role create dictionary namespaces
+  ansible.builtin.command: java -Dmf.host=localhost -Dmf.transport=http -Dmf.domain=system -Dmf.user=manager -Dmf.password="{{ mflux_manager_password }}" -Dmf.port=80 -jar /opt/mediaflux/bin/aterm.jar --app exec	dictionary.namespace.create :namespace {{ item }} :ifexists ignore
+  loop:
+    - "princeton"
+    - "princeton.tigerdata"
+
+# Run the custom roles configuration tasks
+- name: Mflux | import custom-roles tasks
+  ansible.builtin.import_tasks: custom-roles.yml
+
 - name: MFlux | Restart mediaflux
   ansible.builtin.systemd:
     name: mediaflux
