@@ -20,19 +20,23 @@
       run_once: true
 
   tasks:
-    - name: check the starting disk size
+    - name: check the starting_disk_size
       ansible.builtin.command: df -h
       register: starting_disk_size
 
-    - name: check the starting lv size
-      ansible.builtin.set_fact: 
-        starting_lv_size: "{{ starting_disk_size.stdout_lines[2].split()[1] }}"
-
     - name: view the starting_disk_size
       ansible.builtin.debug:
-        var: starting_lv_size
+        var: starting_disk_size
 
-    - name: check the free physical disk size
+    - name: obtain the starting_vm_size
+      ansible.builtin.set_fact:
+        starting_vm_size: "{{ starting_disk_size.stdout_lines[2].split()[1] }}"
+
+    - name: view the starting_vm_size
+      ansible.builtin.debug:
+        var: starting_vm_size
+
+    - name: check the free_physical_disk_size
       ansible.builtin.command: pvs
       register: free_physical_disk_size
 
@@ -54,7 +58,7 @@
       when:
       - physical_disk_size_int == '0'
 
-    - name: gather name of the logical volume
+    - name: gather name of the logical_volume
       ansible.builtin.command: sudo lvdisplay
       register: logical_volume
 
@@ -62,11 +66,11 @@
       ansible.builtin.debug:
         var: ansible_facts
 
-    - name: view the logical volume
+    - name: view the logical_volume
       ansible.builtin.debug:
         var: logical_volume
 
-    - name: gather the logical volume path
+    - name: gather the lv_path
       ansible.builtin.set_fact:
         lv_path: "{{ logical_volume.stdout_lines[1] | split | last }}"
 
@@ -80,13 +84,25 @@
     - name: resize the filesystem to use the newly allocated space
       ansible.builtin.command: sudo resize2fs "{{ lv_path }}"
 
-    - name: check the new disk size
+    - name: check the new_disk_size
       ansible.builtin.command: df -h
       register: new_disk_size
+
+    - name: view the new_disk_size
+      ansible.builtin.debug:
+        var: new_disk_size
+
+    - name: obtain the new_vm_size
+      ansible.builtin.set_fact:
+        new_vm_size: "{{ new_disk_size.stdout_lines[2].split()[1] }}"
+
+    - name: view the new_vm_size
+      ansible.builtin.debug:
+        var: new_vm_size
 
   post_tasks:
   - name: let folks on slack know the disk status
     community.general.slack:
       token: "{{ vault_tower_slack_token }}"
-      msg: "Ansible has successfully updated the disk from `{{ starting_disk_size }}` to `{{ new_disk_size }}` on the `{{ inventory_hostname }}` VM"
+      msg: "Ansible has successfully updated the disk from `{{ starting_vm_size }}` to `{{ new_vm_size }}` on the `{{ inventory_hostname }}` VM"
       channel: "{{ slack_alerts_channel }}"
