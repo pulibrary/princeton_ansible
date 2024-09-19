@@ -110,7 +110,24 @@
       ansible.builtin.debug:
         var: general_purpose_storage_nodes
 
-    - name: View free space on our general purpose storage nodes
+    - name: View storage info
       ansible.builtin.debug:
-        msg: The {{ item }} datastore has {{ storage_info.datastores | selectattr('info.name', 'equalto', item) | map(attribute='info.freeSpace') | sum | human_readable }} of free space.
-      loop: "{{ storage_nodes }}"
+        var: storage_info
+
+    - name: Generate list of free space on all storage nodes
+      ansible.builtin.debug:
+        msg: The {{ item.0 }} node has {{ item.1 }} free space
+        with_together:
+          - "{{ storage_info.datastores | map(attribute='Name') | list }}"
+          - "{{ storage_info.datastores | map(attribute='freeSpace') | list }}"
+
+    - name: Generate sorted list of free space on all storage nodes
+      ansible.builtin.debug:
+        msg: The {{ item.0 }} node has {{ item.1 }} free space
+        with_together:
+          - "{{ storage_info.datastores | map(attribute='Name') | list }}"
+          - "{{ storage_info.datastores | map(attribute='freeSpace') | list | sort }}"
+
+    # - name: View free space on our general purpose storage nodes
+    #   ansible.builtin.debug:
+    #     var: "{{ storage_info.datastores | selectattr('info.name', 'equalto', item) | map(attribute='info.freeSpace') | sum | human_readable }}"
