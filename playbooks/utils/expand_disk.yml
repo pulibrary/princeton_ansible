@@ -1,0 +1,72 @@
+---
+#  This playbook will expand the disk on a new vm
+#     
+- name: expand disk
+  hosts: all
+  remote_user: pulsys
+  become: true
+
+  vars:
+    slack_alerts_channel: infrastructure
+
+  vars_files:
+    - ../../group_vars/all/vault.yml
+
+  pre_tasks:
+    - name: stop playbook if you didn't use --limit
+      ansible.builtin.fail:
+        msg: "you must use -l or --limit"
+      when: ansible_limit is not defined
+      run_once: true
+
+  tasks:
+    - name: check the starting_disk_size
+      ansible.builtin.command: df -h
+      register: starting_disk_size
+
+    - name: obtain the starting_vm_size
+      ansible.builtin.set_fact:
+        starting_vm_size: "{{ starting_disk_size.stdout_lines[2].split()[1] }}"
+
+    - name: check the free_physical_disk_size
+      ansible.builtin.command: pvs
+      register: free_physical_disk_size
+
+    - name: obtain an integer for the free_physical_disk_size
+      ansible.builtin.set_fact: 
+        physical_disk_size_int: "{{ free_physical_disk_size.stdout_lines[1] | split | last }}"
+      ignore_errors: true
+
+    - name: End the play if the disk is expanded
+      ansible.builtin.meta: end_host
+      when:
+      - physical_disk_size_int == '0'
+
+    - name: gather name of the logical_volume
+      ansible.builtin.command: sudo lvdisplay
+      register: logical_volume
+
+    - name: gather the lv_path
+      ansible.builtin.set_fact:
+        lv_path: "{{ logical_volume.stdout_lines[1] | split | last }}"
+
+    - name: extend the size of the logical volume
+      ansible.builtin.command: sudo lvextend -l +100%FREE "{{ lv_path }}"
+
+    - name: resize the filesystem to use the newly allocated space
+      ansible.builtin.command: sudo resize2fs "{{ lv_path }}"
+
+    - name: check the new_disk_size
+      ansible.builtin.command: df -h
+      register: new_disk_size
+
+    - name: obtain the new_vm_size
+      ansible.builtin.set_fact:
+        new_vm_size: "{{ new_disk_size.stdout_lines[2].split()[1] }}"
+
+  post_tasks:
+  - name: let folks on slack know the disk status
+    community.general.slack:
+      token: "{{ vault_tower_slack_token }}"
+      msg: "Ansible has successfully updated the disk from `{{ starting_vm_size }}` to `{{ new_vm_size }}` on the `{{ inventory_hostname }}` VM"
+      channel: "{{ slack_alerts_channel }}"
