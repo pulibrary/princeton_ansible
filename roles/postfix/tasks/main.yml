@@ -10,11 +10,14 @@
     group: root
     mode: "0644"
 
-- name: Postfix | Install Postfix
+- name: Postfix | Install Postfix and certbot
   ansible.builtin.apt:
-    name: postfix
+    name: "{{ item }}"
     state: present
     update_cache: true
+  loop:
+    - postfix
+    - certbot
 
 - name: Postfix | create networks file
   ansible.builtin.template:
@@ -55,6 +58,11 @@
   changed_when: false
   when: running_on_server
   notify: restart postfix
+
+- name: Postfix | update acme certificates for {{ domain_name }}
+  ansible.builtin.command: /usr/bin/certbot certonly --standalone --non-interactive --agree-tos --email lsupport@princeton.edu --server https://acme.sectigo.com/v2/InCommonRSAOV --eab-kid {{ vault_acme_eab_kid }} --eab-hmac-key {{ vault_acme_eab_hmac_key }} --domain {{ domain_name }}.princeton.edu --cert-name {{ domain_name }}
+  changed_when: false
+  when: running_on_server
 
 - name: Postfix | Configure TLS in main.cf
   ansible.builtin.blockinfile:
