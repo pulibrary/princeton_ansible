@@ -118,15 +118,16 @@
       ansible.builtin.debug:
         msg: The {{ item.0 }} node has {{ item.1 }} free space
       with_together:
-        - "{{ storage_info.datastores.info | map(attribute='Name') | list }}"
-        - "{{ storage_info.datastores.info | map(attribute='freeSpace') | list }}"
+        - "{{ storage_info.datastores[*].info | map(attribute='Name') | list }}"
+        - "{{ storage_info.datastores[*].info | map(attribute='freeSpace') | list }}"
+      ignore_errors: true
 
     - name: Generate sorted list of free space on all storage nodes
       ansible.builtin.debug:
         msg: The {{ item.0 }} node has {{ item.1 }} free space
       with_together:
-        - "{{ storage_info.datastores.info | map(attribute='Name') | list }}"
-        - "{{ storage_info.datastores.info | map(attribute='freeSpace') | list | sort }}"
+        - "{{ storage_info.datastores[*] | map(attribute='info.Name') | list }}"
+        - "{{ storage_info.datastores[*] | map(attribute='info.freeSpace') | list | sort }}"
 
     # - name: View free space on our general purpose storage nodes
     #   ansible.builtin.debug:
