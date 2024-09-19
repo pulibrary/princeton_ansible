@@ -98,11 +98,19 @@
           - The {{ item }} esxi_hostname contains {{ vm_info.virtual_machines | selectattr('esxi_hostname', 'equalto', item) | length }} VMs
       loop: "{{ esxi_hostnames }}"
 
+    - name: get list of VMSANVOL storage nodes
+      ansible.builtin.set_fact:
+        general_purpose_storage_nodes: "{{ storage_nodes | select('search', '05TB') }}"
+
     - name: View storage node list
       ansible.builtin.debug:
         var: storage_nodes
 
-    - name: View free space per storage node
+    - name: View GP storage node list
+      ansible.builtin.debug:
+        var: general_purpose_storage_nodes
+
+    - name: View free space on our general purpose storage nodes
       ansible.builtin.debug:
         msg: The {{ item }} datastore has {{ storage_info.datastores | selectattr('info.name', 'equalto', item) | map(attribute='info.freeSpace') | sum | human_readable }} of free space.
       loop: "{{ storage_nodes }}"
