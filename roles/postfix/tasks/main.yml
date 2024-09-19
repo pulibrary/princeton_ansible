@@ -10,6 +10,12 @@
     group: root
     mode: "0644"
 
+- name: Postfix | Remove snakeoil certificate references from main.cf
+  ansible.builtin.lineinfile:
+    path: "{{ postfix_main_cf }}"
+    regexp: "^(smtpd_tls_cert_file|smtpd_tls_key_file) = /etc/ssl/certs/ssl-cert-snakeoil.(pem|key)$"
+    state: absent
+
 - name: Postfix | Install Postfix and certbot
   ansible.builtin.apt:
     name: "{{ item }}"
