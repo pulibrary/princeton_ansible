@@ -56,6 +56,19 @@
   when: running_on_server
   notify: restart postfix
 
+- name: Postfix | Configure TLS in main.cf
+  ansible.builtin.blockinfile:
+    path: "{{ postfix_main_cf }}"
+    block: |
+      smtpd_tls_cert_file = /etc/letsencrypt/live/{{ domain_name }}/fullchain.pem
+      smtpd_tls_key_file = /etc/letsencrypt/live/{{ domain_name }}/privkey.pem
+      smtpd_use_tls = yes
+      smtpd_tls_session_cache_database = btree:${data_directory}/smtpd_scache
+      smtp_tls_session_cache_database = btree:${data_directory}/smtp_scache
+
+  notify: restart postfix
+  when: running_on_server
+
 - name: Postfix | Add relay host
   ansible.builtin.include_tasks: update_config.yml
   tags: update_config
