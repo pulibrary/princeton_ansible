@@ -130,10 +130,17 @@
     state: "started"
     enabled: true
 
-- name: 'pul_nomad | Create Nomad Policy to reference'
+- name: 'pul_nomad | Create Nomad Client Policy to reference'
   ansible.builtin.copy:
-    src: pul_nomad_policy.hcl
-    dest: "/etc/consul/pul_nomad_policy.hcl"
+    src: pul_nomad_client_policy.hcl
+    dest: "/etc/consul/pul_nomad_client_policy.hcl"
+    owner: "{{ consul_user }}"
+    group: "{{ consul_group }}"
+
+- name: 'pul_nomad | Create Nomad Server Policy to reference'
+  ansible.builtin.copy:
+    src: pul_nomad_server_policy.hcl
+    dest: "/etc/consul/pul_nomad_server_policy.hcl"
     owner: "{{ consul_user }}"
     group: "{{ consul_group }}"
 
@@ -149,23 +156,41 @@
   set_fact:
     existing_consul_policies: "{{ policies.stdout | from_json | map(attribute='Name') }}"
 
-- name: 'pul_nomad | Install Nomad Consul Policy'
+- name: 'pul_nomad | Install Nomad Client Consul Policy'
   ansible.builtin.shell:
-    cmd: "/usr/local/bin/consul acl policy create -name 'nomad-agents' -description 'Policy for Nomad agents' -rules '@/etc/consul/pul_nomad_policy.hcl'"
+    cmd: "/usr/local/bin/consul acl policy create -name 'nomad-client-agents' -description 'Policy for Nomad agents' -rules '@/etc/consul/pul_nomad_client_policy.hcl'"
   environment:
     CONSUL_HTTP_TOKEN: '{{ consul_acl_master_token }}'
   when:
     - "unique_command_runner == inventory_hostname"
-    - "'nomad-agents' not in existing_consul_policies"
+    - "'nomad-client-agents' not in existing_consul_policies"
 
-- name: 'pul_nomad | Create nomad ACL token'
+- name: 'pul_nomad | Install Nomad Server Consul Policy'
   ansible.builtin.shell:
-    cmd: "/usr/local/bin/consul acl token create -policy-name 'nomad-agents' -secret '{{ nomad_consul_token }}'"
+    cmd: "/usr/local/bin/consul acl policy create -name 'nomad-server-agents' -description 'Policy for Nomad agents' -rules '@/etc/consul/pul_nomad_server_policy.hcl'"
   environment:
     CONSUL_HTTP_TOKEN: '{{ consul_acl_master_token }}'
   when:
     - "unique_command_runner == inventory_hostname"
-    - "nomad_consul_token not in existing_consul_tokens"
+    - "'nomad-server-agents' not in existing_consul_policies"
+
+- name: 'pul_nomad | Create nomad client ACL token'
+  ansible.builtin.shell:
+    cmd: "/usr/local/bin/consul acl token create -policy-name 'nomad-client-agents' -secret '{{ vault_nomad_client_consul_token }}'"
+  environment:
+    CONSUL_HTTP_TOKEN: '{{ consul_acl_master_token }}'
+  when:
+    - "unique_command_runner == inventory_hostname"
+    - "vault_nomad_client_consul_token not in existing_consul_tokens"
+
+- name: 'pul_nomad | Create nomad server ACL token'
+  ansible.builtin.shell:
+    cmd: "/usr/local/bin/consul acl token create -policy-name 'nomad-server-agents' -secret '{{ vault_nomad_server_consul_token }}'"
+  environment:
+    CONSUL_HTTP_TOKEN: '{{ consul_acl_master_token }}'
+  when:
+    - "unique_command_runner == inventory_hostname"
+    - "vault_nomad_server_consul_token not in existing_consul_tokens"
 
 - name: 'pul_nomad | Install nomad'
   ansible.builtin.include_role:
