@@ -63,10 +63,20 @@
 # 1. Put the exported configuration file under source control (private GitHub repo?)
 # 2. Allow changes to the configuration file (pull requests)
 # 3. Create tasks to push and commit changed configuration:
-# - name: Push updated config to the Palo Alto API
-#   ansible.builtin.uri:
-#     validate_certs: no
-#     url: "https://{{ provider_IP }}/api/?type=config&action=show&key={{ provider_API_key }}"
+    - name: clone github repo so we have the config available
+      ansible.builtin.git:
+        repo: https://github.com/PrincetonUniversityLibrary/firewall-test.git
+        dest: /opt/
+        version: main
+        clone: true
+        update: true
+        # force: true
+      become: true
+
+    - name: Push updated config to the Palo Alto API
+      paloaltonetworks.panos.panos_loadcfg:
+        provider: "{{ panos_provider }}"
+        file: /opt/test-firewall/test-output.json
 #
 # - name: Commit new firewall rules
 #   paloaltonetworks.panos.panos_commit_firewall:
