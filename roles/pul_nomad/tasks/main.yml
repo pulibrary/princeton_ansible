@@ -34,25 +34,6 @@
   set_fact:
     existing_node_names: "{{ tokens.stdout | from_json | community.general.json_query('[*].NodeIdentities[].NodeName') }}"
 
-- name: 'nomad-node | Generate Consul ACL Agent Token'
-  ansible.builtin.shell:
-    cmd: "/usr/local/bin/consul acl token create -node-identity '{{ inventory_hostname_short }}:dc1' -format json"
-  when:
-    - "inventory_hostname_short not in existing_node_names"
-  environment:
-    CONSUL_HTTP_TOKEN: '{{ consul_acl_master_token }}'
-  register: created_agent_token
-  changed_when: false
-
-- name: 'nomad-node | Set Consul ACL Agent Token'
-  ansible.builtin.shell:
-    cmd: "/usr/local/bin/consul acl set-agent-token agent {{ created_agent_token.stdout | from_json | community.general.json_query('SecretID')}}"
-  environment:
-    CONSUL_HTTP_TOKEN: '{{ consul_acl_master_token }}'
-  when:
-    - "inventory_hostname_short not in existing_node_names"
-    - created_agent_token
-
 - name: 'pul_nomad | Create DNS ACL token'
   ansible.builtin.shell:
     cmd: "/usr/local/bin/consul acl token create -templated-policy 'builtin/dns' -secret '{{ consul_dns_token }}'"
@@ -191,6 +172,48 @@
   when:
     - "unique_command_runner == inventory_hostname"
     - "nomad_server_consul_token not in existing_consul_tokens"
+
+- name: 'nomad-node | Generate Consul Client ACL Agent Token'
+  ansible.builtin.shell:
+    cmd: "/usr/local/bin/consul acl token create -policy-name 'nomad-client-agents' -node-identity '{{ inventory_hostname_short }}:dc1' -format json"
+  when:
+    - "inventory_hostname_short not in existing_node_names"
+    - "consul_node_role == 'client'"
+  environment:
+    CONSUL_HTTP_TOKEN: '{{ consul_acl_master_token }}'
+  register: created_agent_token_client
+  changed_when: false
+
+- name: 'nomad-node | Generate Consul Server ACL Agent Token'
+  ansible.builtin.shell:
+    cmd: "/usr/local/bin/consul acl token create -policy-name 'nomad-server-agents' -node-identity '{{ inventory_hostname_short }}:dc1' -format json"
+  when:
+    - "inventory_hostname_short not in existing_node_names"
+    - "consul_node_role == 'server'"
+  environment:
+    CONSUL_HTTP_TOKEN: '{{ consul_acl_master_token }}'
+  register: created_agent_token_server
+  changed_when: false
+
+- name: 'nomad-node | Set Consul ACL Agent Token'
+  ansible.builtin.shell:
+    cmd: "/usr/local/bin/consul acl set-agent-token agent {{ created_agent_token_server.stdout | from_json | community.general.json_query('SecretID')}}"
+  environment:
+    CONSUL_HTTP_TOKEN: '{{ consul_acl_master_token }}'
+  when:
+    - "inventory_hostname_short not in existing_node_names"
+    - "consul_node_role == 'server'"
+    - created_agent_token_server
+
+- name: 'nomad-node | Set Consul ACL Agent Token'
+  ansible.builtin.shell:
+    cmd: "/usr/local/bin/consul acl set-agent-token agent {{ created_agent_token_client.stdout | from_json | community.general.json_query('SecretID')}}"
+  environment:
+    CONSUL_HTTP_TOKEN: '{{ consul_acl_master_token }}'
+  when:
+    - "inventory_hostname_short not in existing_node_names"
+    - "consul_node_role == 'client'"
+    - created_agent_token_client
 
 - name: 'pul_nomad | Install nomad'
   ansible.builtin.include_role:
