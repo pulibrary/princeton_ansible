@@ -83,6 +83,26 @@
   notify: restart postfix
   when: running_on_server
 
+- name: Postfix | Update master.cf for submission service
+  ansible.builtin.blockinfile:
+    path: "/etc/postfix/master.cf"
+    block: |
+      submission inet n - n - - smtpd
+        -o syslog_name=postfix/submission
+        -o smtpd_tls_wrappermode=no
+        -o smtpd_tls_security_level=encrypt
+        -o smtpd_sasl_auth_enable=yes
+        -o smtpd_reject_unlisted_recipient=no
+        -o smtpd_client_restrictions=permit_sasl_authenticated,reject
+        -o smtpd_sender_restrictions=permit_sasl_authenticated,reject
+        -o smtpd_recipient_restrictions=permit_mynetworks,permit_sasl_authenticated,reject
+        -o smtpd_relay_restrictions=permit_sasl_authenticated,reject_unauth_destination
+    owner: root
+    group: root
+    mode: "0644"
+  notify: restart postfix
+  when: running_on_server
+
 - name: Postfix | Add relay host
   ansible.builtin.include_tasks: update_config.yml
   tags: update_config
