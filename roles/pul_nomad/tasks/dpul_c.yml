@@ -21,12 +21,47 @@
   become_user: '{{ dpul_c_postgres_admin_user }}'
   run_once: true
 
+- name: 'pul_nomad_dpulc | create figgy postgresql db user'
+  community.postgresql.postgresql_user:
+    name: 'dpulc_staging'
+    password: '{{ dpul_c_staging_figgy_db_password }}'
+    encrypted: true
+    state: 'present'
+  delegate_to: '{{ dpul_c_staging_figgy_db_host }}'
+  become: true
+  become_user: '{{ dpul_c_postgres_admin_user }}'
+  run_once: true
+
+- name: 'pul_nomad_dpulc | grant read privileges for read-only user'
+  delegate_to: '{{ dpul_c_staging_figgy_db_host }}'
+  become: true
+  become_user: '{{ dpul_c_postgres_admin_user }}'
+  run_once: true
+  community.postgresql.postgresql_privs:
+    database: '{{ dpul_c_staging_figgy_db_name }}'
+    state: present
+    privs: SELECT
+    type: table
+    objs: ALL_IN_SCHEMA
+    roles: 'dpulc_staging'
+    grant_option: true
+
 - name: 'pul_nomad_dpulc | ensure access to postgres server for client connections'
   ansible.builtin.lineinfile:
     path: '/etc/postgresql/{{ dpul_c_postgres_version }}/main/pg_hba.conf'
     line: 'host  all      all {{ ansible_default_ipv4.address }}/32       md5'
   delegate_to: '{{ dpul_c_postgres_host }}'
   register: remote_postgres_configured
+  throttle: 1 # have this task run one machine at a time to avoid race condition
+  when:
+    - "nomad_node_role == 'client'"
+
+- name: 'pul_nomad_dpulc | ensure access to figgy postgres server for client connections'
+  ansible.builtin.lineinfile:
+    path: '/etc/postgresql/{{ dpul_c_postgres_version }}/main/pg_hba.conf'
+    line: 'host  all      all {{ ansible_default_ipv4.address }}/32       md5'
+  delegate_to: '{{ dpul_c_staging_figgy_db_host }}'
+  register: remote_figgy_postgres_configured
   throttle: 1 # have this task run one machine at a time to avoid race condition
   when:
     - "nomad_node_role == 'client'"
@@ -38,6 +73,14 @@
   when:
     - remote_postgres_configured.changed
   delegate_to: '{{ dpul_c_postgres_host }}'
+
+- name: 'pul_nomad_dpulc | reload figgy postgresql'
+  ansible.builtin.service:
+    name: postgresql
+    state: reloaded
+  when:
+    - remote_postgres_configured.changed
+  delegate_to: '{{ dpul_c_staging_figgy_db_host }}'
 
 - name: 'pul_nomad_dpulc | add the application environment variables'
   ansible.builtin.shell:
