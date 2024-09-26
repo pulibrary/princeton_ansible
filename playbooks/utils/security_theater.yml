@@ -20,6 +20,13 @@
   - name: Populate package facts
     ansible.builtin.package_facts:
 
+  - name: Import BigFix GPG key
+    ansible.builtin.rpm_key:
+      state: present
+      key: https://software.bigfix.com/download/bes/95/RPM-GPG-KEY-BigFix-9-V2
+    when:
+     - ansible_pkg_mgr == 'dnf'
+
   - name: Create bigfix directory
     ansible.builtin.file:
       path: /etc/opt/BESClient
@@ -37,16 +44,29 @@
       mode: "0600"
     when: "ansible_facts.services['besclient.service'] is not defined"
 
-  - name: Download the bigfix deb file
+  - name: Download the bigfix deb file (Ubuntu)
     ansible.builtin.get_url:
       url: "https://software.bigfix.com/download/bes/100/BESAgent-10.0.7.52-debian6.amd64.deb"
       dest: "/tmp/BESAgent-10.0.7.52-debian6.amd64.deb"
       owner: pulsys
       group: pulsys
       mode: "0644"
-    when: "ansible_facts.services['besclient.service'] is not defined"
+    when:
+     - "ansible_facts.services['besclient.service'] is not defined"
+     - ansible_pkg_mgr == 'apt'
 
-  - name: Download the Falcon sensor deb file
+  - name: Download the bigfix deb file (RedHat)
+    ansible.builtin.get_url:
+      url: "https://software.bigfix.com/download/bes/100/BESAgent-10.0.7.52-rhe6.x86_64.rpm"
+      dest: "/tmp/BESAgent-10.0.7.52-rhel6.x86_64.rpm"
+      owner: pulsys
+      group: pulsys
+      mode: "0644"
+    when:
+     - "ansible_facts.services['besclient.service'] is not defined"
+     - ansible_pkg_mgr == 'dnf'
+
+  - name: Download the Falcon sensor deb file (Ubuntu)
     ansible.builtin.get_url:
       url: "https://isoshare.cpaneldev.princeton.edu/isoShares/Agents/Falcon/Latest/linux/Ubuntu/14_16_18_20_22/falcon-sensor_7.05.0-16004_amd64.deb"
       dest: "/tmp/falcon-sensor_7.05.0-16004_amd64.deb"
@@ -56,20 +76,49 @@
     when:
       - "'falcon-sensor' not in ansible_facts.packages"
 
-  - name: install BESClient agent
+  - name: Download the Falcon sensor rpm file (RedHat)
+    ansible.builtin.get_url:
+      url: "https://isoshare.cpaneldev.princeton.edu/isoShares/Agents/Falcon/Latest/linux/RHEL/Oracle/9/falcon-sensor-7.02.0-15705.el9.x86_64.rpm"
+      dest: "/tmp/falcon-sensor_7.05.0-16004_el9.x86_64.rpm"
+      owner: pulsys
+      group: pulsys
+      mode: "0644"
+    when:
+      - "'falcon-sensor' not in ansible_facts.packages"
+
+  - name: install BESClient agent (Ubuntu)
     ansible.builtin.apt:
       deb: "/tmp/BESAgent-10.0.7.52-debian6.amd64.deb"
-    when: "ansible_facts.services['besclient.service'] is not defined"
+    when:
+      - "ansible_facts.services['besclient.service'] is not defined"
+      - ansible_pkg_mgr == 'apt'
+
+  - name: install BESClient agent (RedHat)
+    ansible.builtin.dnf:
+      name: "/tmp/BESAgent-10.0.7.52-rhel6.x86_64.rpm"
+      state: present
+    when:
+      - "ansible_facts.services['besclient.service'] is not defined"
+      - ansible_pkg_mgr == 'dnf'
 
   - name: Launch the BigFix client
     ansible.builtin.command: /etc/init.d/besclient start
     when: "ansible_facts.services['besclient.service'] is not defined"
 
-  - name: install crowdstrike falcon sensor agent
+  - name: install crowdstrike falcon sensor agent (Ubuntu)
     ansible.builtin.apt:
       deb: "/tmp/falcon-sensor_7.05.0-16004_amd64.deb"
     when:
       - "'falcon-sensor' not in ansible_facts.packages"
+      - ansible_pkg_mgr == 'apt'
+
+  - name: install crowdstrike falcon sensor agent (RedHat)
+    ansible.builtin.dnf:
+      name: "/tmp/falcon-sensor_7.05.0-16004_el9.x86_64.rpm"
+      state: present
+    when:
+      - "'falcon-sensor' not in ansible_facts.packages"
+      - ansible_pkg_mgr == 'dnf'
 
   - name: launch crowdstrike falcon agent
     command: /opt/CrowdStrike/falconctl -s --cid={{ princeton_cid }}
