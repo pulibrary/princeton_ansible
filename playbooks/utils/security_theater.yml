@@ -20,54 +20,141 @@
   - name: Populate package facts
     ansible.builtin.package_facts:
 
-  - name: Create bigfix directory
-    ansible.builtin.file:
-      path: /etc/opt/BESClient
-      state: directory
-      mode: '0755'
-    when:
-      - "ansible_facts.services['besclient.service'] is not defined"
+  # - name: Create bigfix directory
+  #   ansible.builtin.file:
+  #     path: /etc/opt/BESClient
+  #     state: directory
+  #     mode: '0755'
+  #   when:
+  #     - "ansible_facts.services['besclient.service'] is not defined"
 
-  - name: Download BigFix masthead
-    ansible.builtin.get_url:
-      url: "{{ vault_bigfix_url }}"
-      dest: "/etc/opt/BESClient/actionsite.afxm"
-      owner: root
-      group: root
-      mode: "0600"
-    when: "ansible_facts.services['besclient.service'] is not defined"
+  # - name: Download BigFix masthead
+  #   ansible.builtin.get_url:
+  #     url: "{{ vault_bigfix_url }}"
+  #     dest: "/etc/opt/BESClient/actionsite.afxm"
+  #     owner: root
+  #     group: root
+  #     mode: "0600"
+  #   when: "ansible_facts.services['besclient.service'] is not defined"
 
-  - name: Download the bigfix deb file
-    ansible.builtin.get_url:
-      url: "https://software.bigfix.com/download/bes/100/BESAgent-10.0.7.52-debian6.amd64.deb"
-      dest: "/tmp/BESAgent-10.0.7.52-debian6.amd64.deb"
-      owner: pulsys
-      group: pulsys
-      mode: "0644"
-    when: "ansible_facts.services['besclient.service'] is not defined"
+  # - name: Download the bigfix deb file
+  #   ansible.builtin.get_url:
+  #     url: "https://software.bigfix.com/download/bes/100/BESAgent-10.0.7.52-debian6.amd64.deb"
+  #     dest: "/tmp/BESAgent-10.0.7.52-debian6.amd64.deb"
+  #     owner: pulsys
+  #     group: pulsys
+  #     mode: "0644"
+  #   when: "ansible_facts.services['besclient.service'] is not defined"
 
-  - name: Download the Falcon sensor deb file
-    ansible.builtin.get_url:
-      url: "https://isoshare.cpaneldev.princeton.edu/isoShares/Agents/Falcon/Latest/linux/Ubuntu/14_16_18_20_22/falcon-sensor_7.05.0-16004_amd64.deb"
-      dest: "/tmp/falcon-sensor_7.05.0-16004_amd64.deb"
+  # WIP: use the crowdstrike collection
+
+  # we might want to gather auth using
+  # https://crowdstrike.github.io/ansible_collection_falcon/auth_module.html#ansible-collections-crowdstrike-falcon-auth-module
+
+  # all modules in the crowdstrike.falcon collection
+  # require the pip package crowdstrike-falconpy
+  # we can install it on Tower, I think, download the files to there, and then
+  # use the copy module
+  # or we can split this out, downloading the files to our filesystem in one play and
+  # installing them in another one . . .
+
+  - name: get the hash for RHEL sensor file
+    crowdstrike.falcon.sensor_download_info:
+      client_id: "{{ vault_crowdstrike_client_id }}"
+      client_secret: "{{ vault_crowdstrike_secret }}"
+      filter: "platform:'linux' + os:'RHEL' + os_version:'9 - arm64' "
+      sort: "version|desc"
+    delegate_to: localhost
+    become: false
+    register: RHEL_falcon_versions
+
+  - name: sort list of RHEL falcon versions by date
+    ansible.builtin.set_fact:
+      RHEL_date_ordered:  "{{ RHEL_falcon_versions.installers | sort(attribute='release_date') | reverse }}"
+
+  - name: view date-sorted list
+    ansible.builtin.debug:
+      var: RHEL_date_ordered
+
+  - name: Download the Falcon sensor file for RHEL
+    crowdstrike.falcon.sensor_download:
+      client_id: "{{ vault_crowdstrike_client_id }}"
+      client_secret: "{{ vault_crowdstrike_secret }}"
+      # skips the current latest release and the previous release, using N-2
+      hash: "{{ RHEL_date_ordered[2].sha256 }}"
+      dest: "/tmp/"
       owner: pulsys
       group: pulsys
       mode: "0644"
     when:
       - "'falcon-sensor' not in ansible_facts.packages"
+      - ansible_os_family == "RedHat"
 
-  - name: install BESClient agent
-    ansible.builtin.apt:
-      deb: "/tmp/BESAgent-10.0.7.52-debian6.amd64.deb"
-    when: "ansible_facts.services['besclient.service'] is not defined"
+  - name: get the hash for Ubuntu sensor file
+    crowdstrike.falcon.sensor_download_info:
+      client_id: "{{ vault_crowdstrike_client_id }}"
+      client_secret: "{{ vault_crowdstrike_secret }}"
+      filter: "platform:'linux' + os:'Ubuntu'"
+      sort: "version|desc"
+    delegate_to: localhost
+    become: false
+    register: Ubuntu_falcon_versions
 
-  - name: Launch the BigFix client
-    ansible.builtin.command: /etc/init.d/besclient start
-    when: "ansible_facts.services['besclient.service'] is not defined"
+  - name: sort list of Ubuntu falcon versions by date
+    ansible.builtin.set_fact:
+      Ubuntu_date_ordered:  "{{ Ubuntu_falcon_versions.installers | sort(attribute='release_date') | reverse }}"
+
+  - name: view date-sorted list
+    ansible.builtin.debug:
+      var: Ubuntu_date_ordered
+
+  # when set up this way, works on my laptop
+  # we probably want this to run at the top with
+  # run_once: true
+  - name: Download the Falcon sensor file for Ubuntu
+    crowdstrike.falcon.sensor_download:
+      client_id: "{{ vault_crowdstrike_client_id }}"
+      client_secret: "{{ vault_crowdstrike_secret }}"
+      # skips the current latest release and the previous release, using N-2
+      hash: "{{ Ubuntu_date_ordered[2].sha256 }}"
+      dest: "/Users/alicia/"
+      owner: alicia
+      group: staff
+      mode: "0644"
+    become: false
+    delegate_to: localhost
+    when:
+      - "'falcon-sensor' not in ansible_facts.packages"
+      - ansible_os_family == "Debian"
+
+  # https://crowdstrike.github.io/ansible_collection_falcon/sensor_download_info_module.html
+  # - name: Download the Falcon sensor deb file
+  #   crowdstrike.falcon.sensor_download:
+  #     # https://crowdstrike.github.io/ansible_collection_falcon/sensor_download_module.html#ansible-collections-crowdstrike-falcon-sensor-download-module
+  #     client_id: "{{ vault_crowdstrike_client_id }}"
+  #     client_secret: "{{ vault_crowdstrike_secret }}"
+  #     hash: "{{ falcon_versions.??? }}"
+  #     dest: "/tmp/"
+  #     owner: pulsys
+  #     group: pulsys
+  #     mode: "0644"
+  #   when:
+  #     - "'falcon-sensor' not in ansible_facts.packages"
+  #     - ansible_os_family == "RedHat"
+
+
+  # - name: install BESClient agent
+  #   ansible.builtin.apt:
+  #     deb: "/tmp/BESAgent-10.0.7.52-debian6.amd64.deb"
+  #   when: "ansible_facts.services['besclient.service'] is not defined"
+
+  # - name: Launch the BigFix client
+  #   ansible.builtin.command: /etc/init.d/besclient start
+  #   when: "ansible_facts.services['besclient.service'] is not defined"
 
   - name: install crowdstrike falcon sensor agent
     ansible.builtin.apt:
-      deb: "/tmp/falcon-sensor_7.05.0-16004_amd64.deb"
+      deb: "/tmp/{{ some_registered_var }}"
     when:
       - "'falcon-sensor' not in ansible_facts.packages"
 
@@ -120,7 +207,7 @@
     when:
       - not rapid7_home.stat.exists
 
-  post_tasks:
-    - name: send information to slack
-      ansible.builtin.include_tasks:
-        file: slack_tasks_end_of_playbook.yml
+  # post_tasks:
+  #   - name: send information to slack
+  #     ansible.builtin.include_tasks:
+  #       file: slack_tasks_end_of_playbook.yml
