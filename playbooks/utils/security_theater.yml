@@ -25,7 +25,7 @@
       state: present
       key: https://software.bigfix.com/download/bes/95/RPM-GPG-KEY-BigFix-9-V2
     when:
-     - ansible_pkg_mgr == 'dnf'
+      - ansible_os_family == "RedHat"
 
   - name: Create bigfix directory
     ansible.builtin.file:
@@ -53,7 +53,7 @@
       mode: "0644"
     when:
      - "ansible_facts.services['besclient.service'] is not defined"
-     - ansible_pkg_mgr == 'apt'
+     - ansible_os_family == "Debian"
 
   - name: Download the bigfix deb file (RedHat)
     ansible.builtin.get_url:
@@ -64,7 +64,7 @@
       mode: "0644"
     when:
      - "ansible_facts.services['besclient.service'] is not defined"
-     - ansible_pkg_mgr == 'dnf'
+     - ansible_os_family == "RedHat"
 
   - name: Download the Falcon sensor deb file (Ubuntu)
     ansible.builtin.get_url:
@@ -75,7 +75,7 @@
       mode: "0644"
     when:
       - "'falcon-sensor' not in ansible_facts.packages"
-      - ansible_pkg_mgr == 'apt'
+      - ansible_os_family == "Debian"
 
   - name: Download the Falcon sensor rpm file (RedHat)
     ansible.builtin.get_url:
@@ -86,14 +86,14 @@
       mode: "0644"
     when:
       - "'falcon-sensor' not in ansible_facts.packages"
-      - ansible_pkg_mgr == 'dnf'
+      - ansible_os_family == "RedHat"
 
   - name: install BESClient agent (Ubuntu)
     ansible.builtin.apt:
       deb: "/tmp/BESAgent-10.0.7.52-debian6.amd64.deb"
     when:
       - "ansible_facts.services['besclient.service'] is not defined"
-      - ansible_pkg_mgr == 'apt'
+      - ansible_os_family == "Debian"
 
   - name: install BESClient agent (RedHat)
     ansible.builtin.dnf:
@@ -101,7 +101,7 @@
       state: present
     when:
       - "ansible_facts.services['besclient.service'] is not defined"
-      - ansible_pkg_mgr == 'dnf'
+      - ansible_os_family == "RedHat"
 
   - name: Launch the BigFix client
     ansible.builtin.command: /etc/init.d/besclient start
@@ -112,7 +112,7 @@
       deb: "/tmp/falcon-sensor_7.05.0-16004_amd64.deb"
     when:
       - "'falcon-sensor' not in ansible_facts.packages"
-      - ansible_pkg_mgr == 'apt'
+      - ansible_os_family == "Debian"
 
   - name: install crowdstrike falcon sensor agent (RedHat)
     ansible.builtin.dnf:
@@ -120,7 +120,7 @@
       state: present
     when:
       - "'falcon-sensor' not in ansible_facts.packages"
-      - ansible_pkg_mgr == 'dnf'
+      - ansible_os_family == "RedHat"
 
   - name: launch crowdstrike falcon agent
     command: /opt/CrowdStrike/falconctl -s --cid={{ princeton_cid }}
