@@ -88,61 +88,69 @@
       ansible.builtin.debug:
         var: GB_hash
 
-    - name: View list of available templates
-      ansible.builtin.debug:
-        var: template_names
-
-    - name: View list of ESXi hosts
-      ansible.builtin.debug:
-        var: esxi_hostnames
-
-    - name: View memory usage per ESXi host
-      ansible.builtin.debug:
-        msg: The {{ item.0 }} host is using {{ ( item.1 | int * 1048576 ) | human_readable }} out of {{ item.2 | human_readable }} available memory.
-      with_together:
-        - "{{ slim_esxi_host_memory | map(attribute='Name') | list }}"
-        - "{{ slim_esxi_host_memory | map(attribute='Usedmemory') | list }}"
-        - "{{ slim_esxi_host_memory | map(attribute='Totalmemory') | list }}"
-
-    - name: View number of VMs per ESXi host
-      ansible.builtin.debug:
-        msg:
-          - The {{ item }} esxi_hostname contains {{ vm_info.virtual_machines | selectattr('esxi_hostname', 'equalto', item) | length }} VMs
-      loop: "{{ esxi_hostnames }}"
-
-    - name: get list of VMSANVOL storage nodes
+    - name: Get array from GB_hash
       ansible.builtin.set_fact:
-        general_purpose_storage_nodes: "{{ storage_nodes | select('search', '05TB') }}"
+        slim_GB_hash: "{{ GB_hash | community.general.json_query('results[*].ansible_facts.{Name: storage_info_GB.name, Storage_available: storage_info_GB.GB_available}') }}"
 
-    - name: View storage node list
+    - name: look at slim_GB_hash
       ansible.builtin.debug:
-        var: storage_nodes
+        var: slim_GB_hash
 
-    - name: View GP storage node list
-      ansible.builtin.debug:
-        var: general_purpose_storage_nodes
+    # - name: View list of available templates
+    #   ansible.builtin.debug:
+    #     var: template_names
 
-    - name: View storage info
-      ansible.builtin.debug:
-        var: storage_info
+    # - name: View list of ESXi hosts
+    #   ansible.builtin.debug:
+    #     var: esxi_hostnames
 
-    - name: View free space per GP storage node
-      ansible.builtin.debug:
-        msg:
-          - The {{ item }} storage node has {{ GB_hash.results[*].ansible_facts.storage_info_GB | selectattr('name', 'equalto', item) | map(attribute='GB_available') }} free space
-      loop: "{{ general_purpose_storage_nodes }}"
+    # - name: View memory usage per ESXi host
+    #   ansible.builtin.debug:
+    #     msg: The {{ item.0 }} host is using {{ ( item.1 | int * 1048576 ) | human_readable }} out of {{ item.2 | human_readable }} available memory.
+    #   with_together:
+    #     - "{{ slim_esxi_host_memory | map(attribute='Name') | list }}"
+    #     - "{{ slim_esxi_host_memory | map(attribute='Usedmemory') | list }}"
+    #     - "{{ slim_esxi_host_memory | map(attribute='Totalmemory') | list }}"
 
-    - name: Generate list of free space on all storage nodes
-      ansible.builtin.debug:
-        msg: The {{ item.0 }} node has {{ item.1 }} free space
-      with_together:
-        - "{{ GB_hash.results[*].ansible_facts.storage_info_GB | map(attribute='name') | list }}"
-        - "{{ GB_hash.results[*].ansible_facts.storage_info_GB | map(attribute='GB_available') | list }}"
-      ignore_errors: true
+    # - name: View number of VMs per ESXi host
+    #   ansible.builtin.debug:
+    #     msg:
+    #       - The {{ item }} esxi_hostname contains {{ vm_info.virtual_machines | selectattr('esxi_hostname', 'equalto', item) | length }} VMs
+    #   loop: "{{ esxi_hostnames }}"
 
-    - name: Generate sorted list of free space on all storage nodes
-      ansible.builtin.debug:
-        msg: The {{ item.0 }} node has {{ item.1 }} free space
-      with_together:
-        - "{{ GB_hash.results.ansible_facts.storage_info_GB | map(attribute='name') | list }}"
-        - "{{ GB_hash.results.ansible_facts.storage_info_GB | map(attribute='GB_available') | list | sort }}"
+    # - name: get list of VMSANVOL storage nodes
+    #   ansible.builtin.set_fact:
+    #     general_purpose_storage_nodes: "{{ storage_nodes | select('search', '05TB') }}"
+
+    # - name: View storage node list
+    #   ansible.builtin.debug:
+    #     var: storage_nodes
+
+    # - name: View GP storage node list
+    #   ansible.builtin.debug:
+    #     var: general_purpose_storage_nodes
+
+    # - name: View storage info
+    #   ansible.builtin.debug:
+    #     var: storage_info
+
+    # - name: View free space per GP storage node
+    #   ansible.builtin.debug:
+    #     msg:
+    #       - The {{ item }} storage node has {{ GB_hash.results[*].ansible_facts.storage_info_GB | selectattr('name', 'equalto', item) | map(attribute='GB_available') }} free space
+    #   loop: "{{ general_purpose_storage_nodes }}"
+
+    # - name: Generate list of free space on all storage nodes
+    #   ansible.builtin.debug:
+    #     msg: The {{ item.0 }} node has {{ item.1 }} free space
+    #   with_together:
+    #     - "{{ GB_hash.results[*].ansible_facts.storage_info_GB | map(attribute='name') | list }}"
+    #     - "{{ GB_hash.results[*].ansible_facts.storage_info_GB | map(attribute='GB_available') | list }}"
+    #   ignore_errors: true
+
+    # - name: Generate sorted list of free space on all storage nodes
+    #   ansible.builtin.debug:
+    #     msg: The {{ item.0 }} node has {{ item.1 }} free space
+    #   with_together:
+    #     - "{{ GB_hash.results.ansible_facts.storage_info_GB | map(attribute='name') | list }}"
+    #     - "{{ GB_hash.results.ansible_facts.storage_info_GB | map(attribute='GB_available') | list | sort }}"
