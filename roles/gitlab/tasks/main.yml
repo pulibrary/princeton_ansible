@@ -7,6 +7,7 @@
       - ca-certificates
       - tzdata
       - perl
+      - certbot
     state: present
     update_cache: true
 
@@ -36,6 +37,11 @@
   environment:
     DEBIAN_FRONTEND: noninteractive
 
+- name: Gitlab | update acme certificates for {{ inventory_hostname }}
+  ansible.builtin.command: /usr/bin/certbot certonly --standalone --non-interactive --agree-tos --email lsupport@princeton.edu --server https://acme.sectigo.com/v2/InCommonRSAOV --eab-kid {{ vault_acme_eab_kid }} --eab-hmac-key {{ vault_acme_eab_hmac_key }} --domain {{ inventory_hostname }} --cert-name {{ inventory_hostname }}
+  changed_when: false
+  when: running_on_server
+
 - name: GitLab | Add package repository (alternative)
   ansible.builtin.get_url:
     url: https://packages.gitlab.com/install/repositories/gitlab/gitlab-ce/script.deb.sh
@@ -44,6 +50,7 @@
 
 - name: GitLab | Execute the script
   ansible.builtin.command: /tmp/script.deb.sh
+  changed_when: false
 
 - name: GitLab | install CE package
   ansible.builtin.apt:
