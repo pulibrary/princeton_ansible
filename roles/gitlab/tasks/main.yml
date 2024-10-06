@@ -1,0 +1,55 @@
+---
+# tasks file for roles/gitlab
+- name: Gitlab | Install required packages
+  ansible.builtin.apt:
+    name:
+      - curl
+      - ca-certificates
+      - tzdata
+    state: present
+    update_cache: true
+
+- name: Gitlab | Configure Postfix
+  # Example with debconf:
+  ansible.builtin.debconf:
+    name: postfix
+    question: postfix/{{ item.question }}
+    value: "{{ item.value }}"
+    vtype: "{{ item.vtype }}"
+  notify: Restart mail service
+  loop:
+    # General mail configuration type
+    - question: main_mailer_type
+      value: "Satellite system"
+      vtype: select
+    # SMTP relay host
+    - question: relayhost
+      value: "lib-ponyexpr-prod.princeton.edu"
+      vtype: string
+
+- name: Gitlab | Install required postfix
+  ansible.builtin.apt:
+    name: postfix
+    autoremove: true
+    state: present
+  environment:
+    DEBIAN_FRONTEND: noninteractive
+
+- name: GitLab | add package repository
+  ansible.builtin.apt_repository:
+    repo: deb https://packages.gitlab.com/install/repositories/gitlab/gitlab-ce/script.deb.sh main
+    state: present
+
+- name: GitLab | install CE package
+  ansible.builtin.apt:
+    name: gitlab-ce
+    state: present
+
+- name: Copy GitLab configuration file
+  ansible.builtin.template:
+    src: gitlab.rb.j2
+    dest: /etc/gitlab/gitlab.rb
+    owner: root
+    group: root
+    mode: "0600"
+  notify: reconfigure gitlab
