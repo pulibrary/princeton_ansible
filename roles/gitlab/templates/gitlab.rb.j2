@@ -1,0 +1,57 @@
+# {{ ansible_managed | comment }}
+## GitLab configuration settings
+##! https://gitlab.com/gitlab-org/omnibus-gitlab/blame/master/files/gitlab-config-template/gitlab.rb.template
+##! /opt/gitlab/etc/gitlab.rb.template
+##! You can run `gitlab-ctl diff-config` to compare the contents of the current gitlab.rb with
+##! the gitlab.rb.template from the currently running version.
+## GitLab URL
+##! https://docs.gitlab.com/omnibus/settings/configuration.html#configuring-the-external-url-for-gitlab
+##! https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/instancedata-data-retrieval.html
+external_url 'https://{{ loadbalancer_domain_name }}'
+
+################################################################################
+## gitlab.yml configuration
+##! Docs: https://gitlab.com/gitlab-org/omnibus-gitlab/blob/master/doc/settings/gitlab.yml.md
+################################################################################
+gitlab_rails['gitlab_ssh_host'] = '{{ inventory_hostname }}'
+gitlab_rails['smtp_enable'] = true
+gitlab_rails['smtp_address'] = "localhost"
+gitlab_rails['gitlab_email_enabled'] = true
+gitlab_rails['gitlab_default_theme'] = 2
+gitlab_rails['trusted_proxies'] = ['128.112.203.144', '128.112.203.145', '128.112.203.146']
+gitlab_rails['lfs_enabled'] = true
+ gitlab_rails['lfs_storage_path'] = "/var/opt/gitlab/gitlab-rails/shared/lfs-objects"
+gitlab_rails['ldap_enabled'] = true
+gitlab_rails['ldap_servers'] = {
+  'main' => {
+    'label' => 'pu_LDAP',
+    'host' =>  'ldapproxy.princeton.edu',
+    'port' => 636,
+    'uid' => 'sAMAccountName',
+    'bind_dn'=> '{{ pu_ldap_bind_dn }}',
+    'password' => '{{ pu_ldap_password }}',
+    'encryption'=> 'simple_tls',
+    'verify_certificates' => true,
+    'timeout' => 10,
+    'active_directory' => true,
+    'user_filter'=> '(&(objectCategory=Person)(sAMAccountName=*))',
+    'base'=> 'dc=pu,dc=win,dc=princeton,dc=edu',
+    'retry_empty_result_with_codes' => [80],
+    'allow_username_or_email_login' => false,
+    'block_auto_created_users' => false
+  }
+}
+registry_external_url 'https://{{ inventory_hostname }}'
+nginx['ssl_certificate'] = "/etc/letsencrypt/live/git.lib/fullchain.pem"
+nginx['ssl_certificate_key'] = "/etc/letsencrypt/live/git.lib/privkey.pem"
+nginx['ssl_protocols'] = "TLSv1.2 TLSv1.3"
+nginx['ssl_session_cache'] = "shared:SSL:10m"
+nginx['ssl_session_tickets'] = "off"
+nginx['listen_port'] = 443
+nginx['listen_https'] = true
+nginx['real_ip_trusted_addresses'] = ['128.112.203.144', '128.112.203.145', '128.112.203.146']
+nginx['real_ip_header'] = 'X-Forwarded-For'
+registry_nginx['enable'] = true
+registry_nginx['listen_port'] = 5050
+registry_nginx['ssl_certificate'] = "/etc/letsencrypt/live/git.lib/fullchain.pem"
+registry_nginx['ssl_certificate_key'] = "/etc/letsencrypt/live/git.lib/privkey.pem"
