@@ -6,6 +6,7 @@
       - curl
       - ca-certificates
       - tzdata
+      - perl
     state: present
     update_cache: true
 
@@ -35,10 +36,14 @@
   environment:
     DEBIAN_FRONTEND: noninteractive
 
-- name: GitLab | add package repository
-  ansible.builtin.apt_repository:
-    repo: deb https://packages.gitlab.com/install/repositories/gitlab/gitlab-ce/script.deb.sh main
-    state: present
+- name: GitLab | Add package repository (alternative)
+  ansible.builtin.get_url:
+    url: https://packages.gitlab.com/install/repositories/gitlab/gitlab-ce/script.deb.sh
+    dest: /tmp/script.deb.sh
+    mode: "0755"
+
+- name: GitLab | Execute the script
+  ansible.builtin.command: /tmp/script.deb.sh
 
 - name: GitLab | install CE package
   ansible.builtin.apt:
