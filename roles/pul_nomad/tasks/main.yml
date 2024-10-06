@@ -215,6 +215,48 @@
     - "consul_node_role == 'client'"
     - created_agent_token_client
 
+- name: 'pul_nomad | Configure DNS for consul'
+  become: true
+  ansible.builtin.lineinfile:
+    path: /etc/resolv.conf
+    regexp: ^nameserver 127.0.0.1
+    line: nameserver 127.0.0.1
+    create: true
+    owner: root
+    group: root
+    mode: u=rw,g=r,o=r
+  tags:
+    - notest
+
+# Control DNSMasq configuration
+- name: Create Dnsmasq configuration
+  ansible.builtin.copy:
+    src: dnsmasq.conf
+    dest: "/etc/dnsmasq.conf"
+    owner: root
+    group: "root"
+    mode: "0644"
+  become: true
+  notify: restart dnsmasq
+  when:
+    - "ansible_os_family == 'RedHat'"
+  tags: dnsmasq
+
+# Allows DNSMasq to listen on the podman interface, so containers can query
+# consul. ENS160 is the WLAN interface - listen on everything else.
+- name: Create Dnsmasq configuration for podman
+  ansible.builtin.copy:
+    src: dnsmasq-11-podman.conf
+    dest: "/etc/dnsmasq.d/11-podman"
+    owner: root
+    group: "root"
+    mode: "0644"
+  become: true
+  notify: restart dnsmasq
+  when:
+    - "ansible_os_family == 'RedHat'"
+  tags: dnsmasq
+
 - name: 'pul_nomad | Install nomad'
   ansible.builtin.include_role:
     name: 'ansible-nomad'
