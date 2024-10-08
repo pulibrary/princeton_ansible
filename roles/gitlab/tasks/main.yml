@@ -1,0 +1,67 @@
+---
+# tasks file for roles/gitlab
+- name: Gitlab | Install required packages
+  ansible.builtin.apt:
+    name:
+      - curl
+      - ca-certificates
+      - tzdata
+      - perl
+      - certbot
+    state: present
+    update_cache: true
+
+- name: Gitlab | Configure Postfix
+  # Example with debconf:
+  ansible.builtin.debconf:
+    name: postfix
+    question: postfix/{{ item.question }}
+    value: "{{ item.value }}"
+    vtype: "{{ item.vtype }}"
+  notify: Restart mail service
+  loop:
+    # General mail configuration type
+    - question: main_mailer_type
+      value: "Satellite system"
+      vtype: select
+    # SMTP relay host
+    - question: relayhost
+      value: "lib-ponyexpr-prod.princeton.edu"
+      vtype: string
+
+- name: Gitlab | Install required postfix
+  ansible.builtin.apt:
+    name: postfix
+    autoremove: true
+    state: present
+  environment:
+    DEBIAN_FRONTEND: noninteractive
+
+- name: Gitlab | update acme certificates for {{ inventory_hostname }}
+  ansible.builtin.command: /usr/bin/certbot certonly --standalone --non-interactive --agree-tos --email lsupport@princeton.edu --server https://acme.sectigo.com/v2/InCommonRSAOV --eab-kid {{ vault_acme_eab_kid }} --eab-hmac-key {{ vault_acme_eab_hmac_key }} --domain {{ inventory_hostname }} --cert-name {{ inventory_hostname }}
+  changed_when: false
+  when: running_on_server
+
+- name: GitLab | Add package repository (alternative)
+  ansible.builtin.get_url:
+    url: https://packages.gitlab.com/install/repositories/gitlab/gitlab-ce/script.deb.sh
+    dest: /tmp/script.deb.sh
+    mode: "0755"
+
+- name: GitLab | Execute the script
+  ansible.builtin.command: /tmp/script.deb.sh
+  changed_when: false
+
+- name: GitLab | install CE package
+  ansible.builtin.apt:
+    name: gitlab-ce
+    state: present
+
+- name: Copy GitLab configuration file
+  ansible.builtin.template:
+    src: gitlab.rb.j2
+    dest: /etc/gitlab/gitlab.rb
+    owner: root
+    group: root
+    mode: "0600"
+  notify: Reconfigure gitlab
