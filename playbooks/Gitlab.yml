@@ -6,6 +6,11 @@
   hosts: gitlab_{{ runtime_env | default('staging') }}
   remote_user: pulsys
   become: true
+  vars:
+    - post_install: |
+        Things left to do:
+        - comment out `AllowUsers pulsys` as `/etc/ssh/sshd_config`
+        - Restart the openssh-server `sudo systemctl restart sshd`
   vars_files:
     - ../group_vars/gitlab/{{ runtime_env | default('staging') }}.yml
     - ../group_vars/gitlab/vault.yml
@@ -18,3 +23,7 @@
         token: "{{ vault_pul_slack_token }}"
         msg: "Ansible ran `{{ ansible_play_name }}` on {{ inventory_hostname }}"
         channel: "{{ slack_alerts_channel }}"
+
+    - name: Post role reminders
+      ansible.builtin.debug:
+        msg: "{{ post_install.split('\n') }}"
