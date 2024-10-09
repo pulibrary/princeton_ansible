@@ -1,16 +1,17 @@
 ---
-# To run the playbook:
-# ansible-playbook playbooks/utils/checkmk_agent.yml --limit=<machine/group> -e checkmk_folder=linux/rdss
-# folder names must be all lower case and should not begin with a slash
-# rule_group environment variable specifies which rule group to apply to the hosts, by default the rails rule group will be applied
-# to run in with the another group, pass '-e rule_group=group_name'
+# To run this playbook:
+# confirm that the agent is installed already on your machine(s)
+# if it is not, run playbooks/utils/checkmk_agent.yml to install the CheckMK agent
+# rule_group environment variable specifies which rule group to apply to the hosts
+# by default the rails rule group will be applied
+# to apply a different rule group, pass '-e rule_group=group_name'
 # by default this playbook runs in the staging environment
 # to run in production, pass '-e runtime_env=production'
 # For example `ansible-playbook playbooks/utils/checkmk_add_rule.yml --ask-vault-pass --limit=pdc-describe-staging2.princeton.edu` 
 #  will run with the staging runtime environment and the rails rule group on pdc-describe-staging2
 
-- name: Install CheckMk agent on host
-  hosts: staging:qa:production
+- name: Install CheckMk rules on host
+  hosts: "{{ runtime_env | default ('staging') }}"
   remote_user: pulsys
   become: true
 
