@@ -5,7 +5,9 @@ This Ansible role configures the Uncomplicated Firewall (UFW) on Ubuntu systems.
 ## Requirements
 
 - Ansible 2.9 or higher
-- Ubuntu (Jammy)
+- Supported Operating Systems:
+    - Rocky Linux (tested on 9)
+    - Ubuntu (tested on jammy)
 
 ## Role Variables
 
