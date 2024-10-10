@@ -1,0 +1,107 @@
+---
+# tasks file for roles/ufw_firewall
+- name: Firewall | Determine OS family
+  ansible.builtin.set_fact:
+    os_family: "{{ ansible_os_family }}"
+
+- name: Firewall | Install firewalld (for RHEL-based systems)
+  ansible.builtin.dnf:
+    name: firewalld
+    state: present
+  when: os_family == 'RedHat'
+
+- name: Firewall | Enable and start firewalld (for RedHat-based systems)
+  ansible.builtin.service:
+    name: firewalld
+    state: started
+    enabled: true
+  when: os_family == 'RedHat'
+
+- name: Firewall | Install UFW (for Debian-based systems)
+  ansible.builtin.apt:
+    name: ufw
+    state: present
+    update_cache: true
+  when: os_family == 'Debian'
+
+- name: Firewall | Enable UFW (for Debian-based systems)
+  ansible.builtin.ufw:
+    state: enabled
+  when: os_family == 'Debian'
+
+- name: Firewall | Allow SSH (for Debian-based systems)
+  ansible.builtin.ufw:
+    rule: allow
+    port: 22
+    proto: tcp
+  when: os_family == 'Debian'
+
+- name: Firewall | Allow networks (for RHEL-based systems)
+  ansible.posix.firewalld:
+    zone: public
+    source: "{{ item }}"
+    permanent: true
+    state: enabled
+    immediate: true
+  loop: "{{ firewall_allowed_networks }}"
+  when: os_family == 'RedHat'
+
+- name: Firewall | Allow networks (for Debian-based systems)
+  ansible.builtin.ufw:
+    rule: allow
+    src: "{{ item }}"
+  loop: "{{ firewall_allowed_networks }}"
+  when: os_family == 'Debian'
+
+- name: Firewall | Allow ports (for RHEL-based systems)
+  ansible.posix.firewalld:
+    zone: public
+    port: "{{ item.port }}/{{ item.proto | default('tcp') }}"
+    permanent: true
+    state: enabled
+    immediate: true
+  loop: "{{ firewall_allowed_ports }}"
+  when: os_family == 'RedHat'
+
+- name: Firewall | Allow ports (for Debian-based systems)
+  ansible.builtin.ufw:
+    rule: allow
+    port: "{{ item.port }}"
+    proto: "{{ item.proto | default('tcp') }}"
+  loop: "{{ firewall_allowed_ports }}"
+  when: os_family == 'Debian'
+
+- name: Firewall | Deny networks (for RHEL-based systems)
+  ansible.posix.firewalld:
+    zone: public
+    source: "{{ item }}"
+    permanent: true
+    state: absent
+    immediate: true
+  loop: "{{ firewall_denied_networks }}"
+  when: os_family == 'RedHat'
+
+- name: Firewall | Deny networks (for Debian-based systems)
+  ansible.builtin.ufw:
+    rule: deny
+    src: "{{ item }}"
+  loop: "{{ firewall_denied_networks }}"
+  when: os_family == 'Debian'
+
+- name: Firewall | Deny ports (for RHEL-based systems)
+  ansible.posix.firewalld:
+    zone: public
+    port: "{{ item.port }}/{{ item.proto | default('tcp') }}"
+    permanent: true
+    state: absent
+    immediate: true
+  loop: "{{ firewall_denied_ports }}"
+  when: os_family == 'RedHat'
+
+- name: Firewall | Deny ports (for Debian-based systems)
+  ansible.builtin.ufw:
+    rule: deny
+    port: "{{ item.port }}"
+    proto: "{{ item.proto | default('tcp') }}"
+  loop: "{{ firewall_denied_ports }}"
+  when: os_family == 'Debian'
