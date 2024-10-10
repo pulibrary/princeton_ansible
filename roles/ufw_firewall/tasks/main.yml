@@ -1,0 +1,43 @@
+---
+# tasks file for roles/ufw_firewall
+- name: UFW Firewall | Ensure UFW is installed
+  ansible.builtin.apt:
+    name: ufw
+    state: present
+    update_cache: true
+
+- name: UFW Firewall | Enable UFW
+  ansible.builtin.ufw:
+    state: enabled
+
+- name: UFW Firewall | Allow SSH
+  ansible.builtin.ufw:
+    rule: allow
+    port: 22
+    proto: tcp
+
+- name: UFW Firewall | Allow networks
+  ansible.builtin.ufw:
+    rule: allow
+    src: "{{ item }}"
+  loop: "{{ ufw_firewall_allowed_networks }}"
+
+- name: UFW Firewall | Allow ports
+  ansible.builtin.ufw:
+    rule: allow
+    port: "{{ item.port }}"
+    proto: "{{ item.proto | default('tcp') }}"
+  loop: "{{ ufw_firewall_allowed_ports }}"
+
+- name: UFW Firewall | Deny networks
+  ansible.builtin.ufw:
+    rule: deny
+    src: "{{ item }}"
+  loop: "{{ ufw_firewall_denied_networks }}"
+
+- name: UFW Firewall | Deny ports
+  ansible.builtin.ufw:
+    rule: deny
+    port: "{{ item.port }}"
+    proto: "{{ item.proto | default('tcp') }}"
+  loop: "{{ ufw_firewall_denied_ports }}"
