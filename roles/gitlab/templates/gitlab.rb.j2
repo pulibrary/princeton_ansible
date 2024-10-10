@@ -15,7 +15,14 @@ external_url 'https://{{ gitlab_loadbalancer_domain_name }}'
 ################################################################################
 gitlab_rails['gitlab_ssh_host'] = '{{ inventory_hostname }}'
 gitlab_rails['smtp_enable'] = true
-gitlab_rails['smtp_address'] = "localhost"
+gitlab_rails['smtp_address'] = "lib-ponyexpr-prod.princeton.edu"
+gitlab_rails['smtp_port'] = 25
+gitlab_rails['smtp_tls'] = false
+gitlab_rails['smtp_openssl_verify_mode'] = 'none'
+gitlab_rails['smtp_enable_starttls_auto'] = false
+gitlab_rails['smtp_ssl'] = false
+gitlab_rails['smtp_force_ssl'] = false
+gitlab_rails['gitlab_email_from'] = 'no-reply@princeton.edu'
 gitlab_rails['gitlab_email_enabled'] = true
 gitlab_rails['gitlab_default_theme'] = 2
 gitlab_rails['trusted_proxies'] = [{{ gitlab_trusted_proxies }}]
@@ -55,3 +62,10 @@ registry_nginx['enable'] = true
 registry_nginx['listen_port'] = 5050
 registry_nginx['ssl_certificate'] = "/etc/letsencrypt/live/{{ inventory_hostname }}/fullchain.pem"
 registry_nginx['ssl_certificate_key'] = "/etc/letsencrypt/live/{{ inventory_hostname }}/privkey.pem"
+gitlab_rails['backup_upload_connection'] = {
+  'provider' => 'Google',
+  'google_storage_access_key_id' => '{{ gitlab_google_key_id }}',
+  'google_storage_secret_access_key' => '{{ gitlab_google_access_key }}',
+}
+gitlab_rails['backup_upload_remote_directory'] = '{{ gitlab_google_bucket }}'
+gitlab_rails['backup_keep_time'] = 2419200
