@@ -6,20 +6,44 @@
   hosts: staging:qa:production
   remote_user: pulsys
   serial: "{{ concurrent_vms | default('5') }}"
-  become: true
+  # roles already add 'become' so don't to it here
+  # for the falcon install portion
+  # become: true
+  # 
+  # Ansible Platform 2.5 has been released - wait to upgrade except 
+  # go ahead and use EDA version 2.5, which works with our existing 2.4
+  # this gives us enterprise functionality - SSO, horizontal scaling (multiple
+  # rulebook sources) this is known as "event streams"
+  # GA of 2.5 by Nov. 1
+  #
   vars_files:
     - ../../group_vars/crowdstrike/vault.yml
     - ../../group_vars/crowdstrike/vars.yml
     - ../../group_vars/all/vars.yml
     - ../../group_vars/all/vault.yml
 
-  tasks:
+  pre-tasks:
   - name: Populate service facts
     ansible.builtin.service_facts:
 
   - name: Populate package facts
     ansible.builtin.package_facts:
 
+  roles:
+  - role: crowdstrike.falcon.falcon_install
+    vars:
+      falcon_client_id: <FALCON_CLIENT_ID>
+      falcon_client_secret: <FALCON_CLIENT_SECRET>
+      falcon_sensor_version_decrement: 2
+      # be sure to add this so we don't download if we don't need to
+      falcon_api_sensor_download_path: /opt/install/
+
+  - role: crowdstrike.falcon.falcon_configure
+    vars:
+      falcon_client_id: <FALCON_CLIENT_ID>
+      falcon_client_secret: <FALCON_CLIENT_SECRET>
+
+  tasks:
   # - name: Create bigfix directory
   #   ansible.builtin.file:
   #     path: /etc/opt/BESClient
@@ -152,6 +176,7 @@
   #   ansible.builtin.command: /etc/init.d/besclient start
   #   when: "ansible_facts.services['besclient.service'] is not defined"
 
+# do not need to do the install/launch/start/enable tasks - the roles will take care of it
   - name: install crowdstrike falcon sensor agent
     ansible.builtin.apt:
       deb: "/tmp/{{ some_registered_var }}"
@@ -159,6 +184,7 @@
       - "'falcon-sensor' not in ansible_facts.packages"
 
   - name: launch crowdstrike falcon agent
+  # pass the CID into the falcon configure role
     command: /opt/CrowdStrike/falconctl -s --cid={{ princeton_cid }}
     become: true
     when:
