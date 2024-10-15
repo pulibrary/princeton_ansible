@@ -33,14 +33,14 @@
       ansible.builtin.debug:
         var: old_vm_info
 
-    - name: set the network name to the private network if the IP starts with 172.20
+    - name: set the vm network to the private network if the IP starts with 172.20
       ansible.builtin.set_fact:
-        network_name: "VM Network - LibNetPvt"
+        vm_network: "VM Network - LibNetPvt"
       when: old_vm_info.virtual_machines[0].ip_address is match("172.20.*")
 
     - name: Print out warning
       ansible.builtin.debug:
-        msg: Ansible will now move and power off the current {{ old_vm_info.virtual_machines[0].guest_name }} VM, then create a replacement in the {{ network_name }} network.
+        msg: Ansible will now move and power off the current {{ old_vm_info.virtual_machines[0].guest_name }} VM, then create a replacement in the {{ vm_network }} network.
 
     - name: Move old VM to the ToBeDeleted folder
       community.vmware.vmware_guest_move:
