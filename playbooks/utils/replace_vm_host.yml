@@ -23,18 +23,24 @@
         password: "{{ vcenter_password }}"
         validate_certs: false
         show_allocated: true
-        show_attribute: true
         show_folder: true
         show_datacenter: true
         show_mac_address: true
-        # show_net does not return the NAME of the network, only the MAC address and IP addresses
-        # show_net: true
         vm_name: "{{ replacement_vm }}"
       register: old_vm_info
 
     - name: Print out old VM information
       ansible.builtin.debug:
         var: old_vm_info
+
+    - name: set the network name to the private network if the IP starts with 172.20
+      ansible.builtin.set_fact:
+        network_name: "VM Network - LibNetPvt"
+      when: old_vm_info.virtual_machines[0].ip_address is match("172.20.*")
+
+    - name: Print the network name
+      ansible.builtin.debug:
+        var: network_name
 
     - name: Print out warning
       ansible.builtin.debug:
