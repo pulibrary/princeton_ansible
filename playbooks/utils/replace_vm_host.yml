@@ -22,10 +22,10 @@
         username: "{{ vcenter_username }}"
         password: "{{ vcenter_password }}"
         validate_certs: false
-        show_datacenter: true
-        show_mac_address: true
         show_allocated: true
         show_folder: true
+        show_datacenter: true
+        show_mac_address: true
         vm_name: "{{ replacement_vm }}"
       register: old_vm_info
 
@@ -33,9 +33,14 @@
       ansible.builtin.debug:
         var: old_vm_info
 
+    - name: set the vm network to the private network if the IP starts with 172.20
+      ansible.builtin.set_fact:
+        vm_network: "VM Network - LibNetPvt"
+      when: old_vm_info.virtual_machines[0].ip_address is match("172.20.*")
+
     - name: Print out warning
       ansible.builtin.debug:
-        msg: Ansible will now move and power off the current {{ old_vm_info.virtual_machines[0].guest_name }} VM, then create a replacement.
+        msg: Ansible will now move and power off the current {{ old_vm_info.virtual_machines[0].guest_name }} VM, then create a replacement in the {{ vm_network }} network.
 
     - name: Move old VM to the ToBeDeleted folder
       community.vmware.vmware_guest_move:
@@ -182,7 +187,7 @@
              {{ new_vm_info.virtual_machines[0].allocated.storage | human_readable }} of disk allocated
       ansible.builtin.debug:
         msg: "{{ msg.split('\n') }}"
-    
+
     - name: Remove old VM using UUID
       community.vmware.vmware_guest:
         hostname: "{{ vcenter_hostname }}"
