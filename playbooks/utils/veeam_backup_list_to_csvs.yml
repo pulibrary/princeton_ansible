@@ -1,0 +1,94 @@
+---
+- name: Get info on VEEAM backup tags from vSphere and save to CSV
+  hosts: localhost
+
+  vars_files:
+    - ../../group_vars/vsphere/vault.yml
+    - ../../group_vars/vsphere/{{ runtime_env | default('staging') }}.yml
+
+  tasks:
+    - name: Gather info from vSphere on VMs, tags, and storage
+      community.vmware.vmware_vm_info:
+        hostname: "{{ vcenter_hostname }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        validate_certs: false
+        show_tag: true
+        show_allocated: true
+        vm_type: vm
+      register: vms_and_tags
+
+    - name: Find all unique tags
+      ansible.builtin.set_fact:
+        unique_tags: "{{ vms_and_tags.virtual_machines | map(attribute='tags') | flatten | map(attribute='name') | unique }}"
+
+    - name: Create CSV file for tags
+      copy:
+        dest: "/tmp/tags_report.csv"
+        content: "Tag\n"
+      delegate_to: localhost
+
+    - name: Append tags to CSV
+      lineinfile:
+        path: "/tmp/tags_report.csv"
+        line: "{{ item }}"
+      loop: "{{ unique_tags }}"
+      delegate_to: localhost
+
+    - name: Append report date and time to tags CSV
+      lineinfile:
+        path: "/tmp/tags_report.csv"
+        line: "Report Date/Time {{ lookup('pipe', 'date +%m.%d.%Y %H:%M') }}"
+      delegate_to: localhost
+
+    - name: Find VMs without tags
+      ansible.builtin.set_fact:
+        untagged_vms: "{{ vms_and_tags.virtual_machines | rejectattr('tags') | map(attribute='guest_name') }}"
+
+    - name: Create CSV file for VMs without tags
+      copy:
+        dest: "/tmp/untagged_vms_report.csv"
+        content: "VM Name\n"
+      delegate_to: localhost
+
+    - name: Append untagged VMs to CSV
+      lineinfile:
+        path: "/tmp/untagged_vms_report.csv"
+        line: "{{ item }}"
+      loop: "{{ untagged_vms }}"
+      delegate_to: localhost
+
+    - name: Append report date and time to untagged VMs CSV
+      lineinfile:
+        path: "/tmp/untagged_vms_report.csv"
+        line: "Report Date/Time {{ lookup('pipe', 'date +%m.%d.%Y %H:%M') }}"
+      delegate_to: localhost
+
+    - name: Find VMs with tags
+      ansible.builtin.set_fact:
+        tagged_vms: "{{ vms_and_tags | community.general.json_query(not_null) }}"
+      vars:
+        not_null: "virtual_machines[?not_null(tags)]"
+
+    - name: Create a dict of fields we want from tagged VMs
+      ansible.builtin.set_fact:
+        slim_tagged_vms: "{{ tagged_vms | community.general.json_query('[*].{VM_name: guest_name, Tag_name: tags[0].name, Disk_size: allocated.storage}') }}"
+
+    - name: Create CSV file for VMs with tags
+      copy:
+        dest: "/tmp/tagged_vms_report.csv"
+        content: "VM Name,Tag Name,Disk Size\n"
+      delegate_to: localhost
+
+    - name: Append tagged VMs to CSV
+      lineinfile:
+        path: "/tmp/tagged_vms_report.csv"
+        line: "{{ item.VM_name }},{{ item.Tag_name }},{{ item.Disk_size }}"
+      loop: "{{ slim_tagged_vms }}"
+      delegate_to: localhost
+
+    - name: Append report date and time to tagged VMs CSV
+      lineinfile:
+        path: "/tmp/tagged_vms_report.csv"
+        line: "Report Date/Time {{ lookup('pipe', 'date +%m.%d.%Y %H:%M') }}"
+      delegate_to: localhost
