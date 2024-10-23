@@ -2,13 +2,13 @@
 # by default this playbook runs in the staging environment
 # to run in production, pass '-e runtime_env=production'
 - name: change the Allsearch banner
-  hosts: allsearch_frontend_{{ runtime_env | default('staging') }}
+  hosts: allsearch_api_{{ runtime_env | default('staging') }}
   remote_user: pulsys
   become: true
   vars_files:
-    - ../group_vars/allsearch_frontend/vault.yml
-    - ../group_vars/allsearch_frontend/common.yml
-    - ../group_vars/allsearch_frontend/{{ runtime_env | default('staging') }}.yml
+    - ../group_vars/allsearch_api/vault.yml
+    - ../group_vars/allsearch_api/common.yml
+    - ../group_vars/allsearch_api/{{ runtime_env | default('staging') }}.yml
 
   tasks:
   #   - name: Check the text for commas
@@ -18,7 +18,9 @@
   #         - pan-os-python
 
     - name: Run the Rake task
-      ansible.builtin.shell: "cd {{ capistrano_base_dir }} && /usr/local/bin/rake banner:update"
+      ansible.builtin.shell: "cd {{ passenger_app_root }} && bundle exec rake banner:update ['{{ banner_text }}',{{alert_status}},{{dismissible}},{{autoclear}}]"
+      #bundle exec rake banner:update\['new banner',info,true,true\]
+      #text,alert_status[info|success|warning|error],dismissible,autoclear
       become: true
       become_user: deploy
 
