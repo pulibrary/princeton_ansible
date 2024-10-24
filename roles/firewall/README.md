@@ -6,8 +6,8 @@ This Ansible role configures the Uncomplicated Firewall (UFW) on Ubuntu systems.
 
 - Ansible 2.9 or higher
 - Supported Operating Systems:
-    - Rocky Linux (tested on 9)
-    - Ubuntu (tested on jammy)
+  - Rocky Linux (tested on 9)
+  - Ubuntu (tested on jammy)
 
 ## Role Variables
 
@@ -17,4 +17,3 @@ This Ansible role configures the Uncomplicated Firewall (UFW) on Ubuntu systems.
 | `ufw_firewall_allowed_ports` | `[]` | List of ports to allow (each item can be a dictionary with `port` and optional `proto` keys) |
 | `ufw_firewall_denied_networks` | `[]` | List of networks to deny (CIDR notation or single IP addresses) |
 | `ufw_firewall_denied_ports` | `[]` | List of ports to deny (each item can be a dictionary with `port` and optional `proto` keys) |
-
