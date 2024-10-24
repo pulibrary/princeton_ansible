@@ -7,6 +7,15 @@
   loop:
     - libapache2-mod-php{{ php_version }}
 
+- name: install apache modules
+  community.general.apache2_module:
+    name: "{{ item }}"
+    identifier: "{{ item }}"
+    state: present
+  notify: restart apache
+  with_items:
+    - php{{ php_version }}
+
 - name: video_reserves | create directories for shared files
   ansible.builtin.file:
     path: '{{ capistrano_base_dir }}/{{ item }}'
