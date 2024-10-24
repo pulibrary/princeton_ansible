@@ -215,16 +215,14 @@
     - "consul_node_role == 'client'"
     - created_agent_token_client
 
+# We need to get DNSMasq's 127.0.0.1 above the Princeton nameservers, but
+# NetworkManager manages DNS on RedHat machines. This updates the connection to
+# prepend the DNS server.
 - name: 'pul_nomad | Configure DNS for consul'
   become: true
-  ansible.builtin.lineinfile:
-    path: /etc/resolv.conf
-    regexp: ^nameserver 127.0.0.1
-    line: nameserver 127.0.0.1
-    create: true
-    owner: root
-    group: root
-    mode: u=rw,g=r,o=r
+  ansible.builtin.shell: '/bin/nmcli connection modify {{ ansible_default_ipv4.interface }} ipv4.dns "127.0.0.1" && /bin/nmcli connection up {{ ansible_default_ipv4.interface }}'
+  when:
+    - "ansible_os_family == 'RedHat'"
   tags:
     - notest
 
