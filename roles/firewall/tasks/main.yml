@@ -13,37 +13,11 @@
   community.general.ufw:
     state: enabled
 
-- name: Firewall | Allow SSH
-  community.general.ufw:
-    rule: allow
-    port: 22
-    proto: tcp
-
-- name: Firewall | Allow networks
-  community.general.ufw:
-    rule: allow
-    src: "{{ item }}"
-  loop: "{{ firewall_allowed_networks }}"
-
-- name: Firewall | Allow ports
-  community.general.ufw:
-    rule: allow
-    port: "{{ item.port }}"
-    proto: "{{ item.proto | default('tcp') }}"
-  loop: "{{ firewall_allowed_ports }}"
-
-- name: Firewall | Deny networks
-  community.general.ufw:
-    rule: deny
-    src: "{{ item }}"
-  loop: "{{ firewall_denied_networks }}"
-
-- name: Firewall | Deny ports
-  community.general.ufw:
-    rule: deny
-    port: "{{ item.port }}"
-    proto: "{{ item.proto | default('tcp') }}"
-  loop: "{{ firewall_denied_ports }}"
+- name: Firewall | generic rules
+  ansible.builtin.include_tasks: rules.yml
+  loop: "{{ firewall_rules }}"
+  loop_control:
+    loop_var: rule
 
 - name: Firewall | Deny all other incoming traffic (UFW)
   community.general.ufw:
