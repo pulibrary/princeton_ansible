@@ -1,5 +1,5 @@
 ---
-- name: video_reserves | install apache php modules
+- name: Video_reserves | install apache php modules
   ansible.builtin.apt:
     name: "{{ item }}"
     state: present
@@ -7,28 +7,40 @@
   loop:
     - libapache2-mod-php{{ php_version }}
 
-- name: install apache modules
+- name: Video_reserves | Get list of enabled Apache modules
+  ansible.builtin.command: apache2ctl -M
+  register: apache2_modules
+  changed_when: false
+
+- name: Debug apache2_modules output
+  ansible.builtin.debug:
+    msg: "{{ apache2_modules.stdout.splitlines() }}"
+
+- name: Video_reserves | install apache modules
   community.general.apache2_module:
     name: "{{ item }}"
     identifier: "{{ item }}"
     state: present
+  when: >-
+        (apache2_modules.stdout is defined and
+        'php{{ php_version }}' not in apache2_modules.stdout.splitlines())
   notify: restart apache
-  with_items:
+  loop:
     - php{{ php_version }}
 
-- name: video_reserves | create directories for shared files
+- name: Video_reserves | create directories for shared files
   ansible.builtin.file:
     path: '{{ capistrano_base_dir }}/{{ item }}'
     state: 'directory'
     owner: '{{ deploy_user }}'
     group: '{{ deploy_user }}'
-    mode: 0755
+    mode: "0755"
   changed_when: false
   with_items:
     - '{{ capistrano_directory }}/shared/hrc'
     - '{{ capistrano_directory }}/shared/hrc/admin'
 
-- name: video_reserves | add config restrictions
+- name: Video_reserves | add config restrictions
   ansible.builtin.template:
     src: config.tpl.j2
     dest: "{{ apache_doc_root }}/shared/hrc/admin/config.php"
@@ -37,7 +49,7 @@
     mode: '0640'
   when: running_on_server
 
-- name: video_reserves | copy apache cert files
+- name: Video_reserves | copy apache cert files
   ansible.builtin.copy:
     src: "files/certs/{{ item }}"
     dest: "/etc/apache2/ssl/certs/"
@@ -47,7 +59,7 @@
     - "{{ inventory_hostname }}_cert.cer"
     - "{{ inventory_hostname }}_chained.pem"
 
-- name: video_reserves | copy apache private files
+- name: Video_reserves | copy apache private files
   ansible.builtin.copy:
     src: "files/private/{{ item }}"
     dest: "/etc/apache2/ssl/private/"
@@ -55,21 +67,21 @@
   with_items:
     - "{{ inventory_hostname }}_priv.key"
 
-- name: video_reserves | Add video_reserves
+- name: Video_reserves | Add video_reserves
   ansible.builtin.template:
     src: "apache2-site.conf.j2"
     dest: "/etc/apache2/sites-available/000-video_reserves.conf"
-    mode: 0644
+    mode: "0644"
   notify: restart apache
   become: true
 
-- name: video_reserves | enable apache2 sites
+- name: Video_reserves | enable apache2 sites
   ansible.builtin.command: "a2ensite 000-video_reserves.conf"
   become: true
   register: apache2_enabled
   changed_when: '"Enabling site" in apache2_enabled.stdout'
 
-- name: video_reserves | disable the default apache2 site
+- name: Video_reserves | disable the default apache2 site
   ansible.builtin.command: "a2dissite 000-default"
   become: true
   register: apache2_disable
