@@ -38,6 +38,11 @@
         vm_network: "VM Network - ip4-library-servers"
       when: old_vm_info.virtual_machines[0].ip_address is match("172.20.*")
 
+    - name: set the vm network to the public network if the IP starts with 128.112
+      ansible.builtin.set_fact:
+        vm_network: "Virtual Machine Network"
+      when: old_vm_info.virtual_machines[0].ip_address is match("128.112.*")
+
     - name: Print out warning
       ansible.builtin.debug:
         msg: Ansible will now move and power off the current {{ old_vm_info.virtual_machines[0].guest_name }} VM, then create a replacement in the {{ vm_network }} network.
@@ -92,7 +97,7 @@
             unit_number: 0
             state: present
         networks:
-          - name: "{{ vm_network | default('Virtual Machine Network')}}"
+          - name: "{{ vm_network }}"
         wait_for_ip_address: true
       register: new_vm_deets
 
@@ -120,7 +125,7 @@
         datacenter: "{{ vcenter_datacenter }}"
         # new VM var does not include UUID; use moid, which is unique in each vCenter instance
         moid: "{{ new_vm_deets.instance.moid }}"
-        network_name: "{{ vm_network | default('Virtual Machine Network')}}"
+        network_name: "{{ vm_network }}"
         state: absent
         mac_address: "{{ new_vm_deets.instance.hw_eth0.macaddress }}"
 
@@ -134,7 +139,7 @@
         # new VM var does not include UUID; use moid, which is unique in each vCenter instance
         moid: "{{ new_vm_deets.instance.moid }}"
         folder: "{{ old_vm_info.virtual_machines[0].folder }}"
-        network_name: "{{ vm_network | default('Virtual Machine Network')}}"
+        network_name: "{{ vm_network }}"
         device_type: "vmxnet3"
         connected: true
         mac_address: "{{ old_vm_info.virtual_machines[0].mac_address[0] }}"
