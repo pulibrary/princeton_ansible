@@ -22,6 +22,10 @@
       ansible.builtin.set_fact:
         unique_tags: "{{ vms_and_tags.virtual_machines | map(attribute='tags') | flatten | map(attribute='name') | unique }}"
 
+    - name: Debug for find all unique tags
+      ansible.builtin.debug:
+        var: vms_and_tags
+
     - name: View list of tags
       ansible.builtin.debug:
         var: unique_tags
@@ -74,7 +78,7 @@
     - name: Append report date and time to tags CSV
       lineinfile:
         path: "/tmp/tags_report.csv"
-        line: "Report Date/Time {{ lookup('pipe', 'date +%m.%d.%Y %H:%M') }}"
+        line: "Report Date/Time {{ lookup('pipe', \"date '+%m.%d.%Y %H:%M'\") }}"
       delegate_to: localhost
 
     - name: Find VMs without tags
@@ -97,7 +101,7 @@
     - name: Append report date and time to untagged VMs CSV
       lineinfile:
         path: "/tmp/untagged_vms_report.csv"
-        line: "Report Date/Time {{ lookup('pipe', 'date +%m.%d.%Y %H:%M') }}"
+        line: "Report Date/Time {{ lookup('pipe', \"date '+%m.%d.%Y %H:%M'\") }}"
       delegate_to: localhost
 
     - name: Find VMs with tags
@@ -126,5 +130,5 @@
     - name: Append report date and time to tagged VMs CSV
       lineinfile:
         path: "/tmp/tagged_vms_report.csv"
-        line: "Report Date/Time {{ lookup('pipe', 'date +%m.%d.%Y %H:%M') }}"
+        line: "Report Date/Time {{ lookup('pipe', \"date '+%m.%d.%Y %H:%M'\") }}"
       delegate_to: localhost
