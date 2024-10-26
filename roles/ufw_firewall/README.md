@@ -11,10 +11,15 @@ This Ansible role configures the Uncomplicated Firewall (UFW) on our Linux syste
 
 ## Role Variables
 
-the examples below allow http and redis to those CIDR subnets
+the examples below allow ssh, http, and redis to those CIDR subnets. For ssh make sure you use the [defaults/main.yml](defaults/main.yml) example or you will lose access to your VM
 
 ```yaml
 ufw_firewall_rules:
+  - service: ssh
+    port: 22
+    protocol: tcp
+    allowed_cidrs:
+      - 128.112.200.0/21
   - service: http
     port: 80
     protocol: tcp
