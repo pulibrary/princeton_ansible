@@ -66,3 +66,17 @@
   when: nginx_remove_default_vhost
   notify:
     - restart nginx
+
+- name: Phusion | Create nginx override dir
+  ansible.builtin.file:
+    path: /etc/systemd/system/nginx.service.d
+    state: directory
+  tags: nginx
+
+- name: Phusion | Restart nginx on crash
+  ansible.builtin.copy:
+    src: 'systemd_override.conf'
+    dest: /etc/systemd/system/nginx.service.d/override.conf
+  tags: nginx
+  notify:
+    - reload systemd
