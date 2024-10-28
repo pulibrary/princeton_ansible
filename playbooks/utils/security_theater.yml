@@ -3,15 +3,28 @@
 # By default this playbook runs on all hosts in the three environment groups. To run against a single host or group, use '--limit <group_or_host_name>'. For example '--limit qa' or '--limit figgy-web-staging1.princeton.edu'."
 #
 - name: install OIT Security Tools on a host
-  hosts: staging:qa:production
+  hosts: all
   remote_user: pulsys
   serial: "{{ concurrent_vms | default('5') }}"
-  become: true
   vars_files:
     - ../../group_vars/crowdstrike/vault.yml
     - ../../group_vars/crowdstrike/vars.yml
     - ../../group_vars/all/vars.yml
     - ../../group_vars/all/vault.yml
+
+  roles:
+  - role: crowdstrike.falcon.falcon_install
+    vars:
+      falcon_client_id: "{{ vault_crowdstrike_client_id }}"
+      falcon_client_secret: "{{ vault_crowdstrike_secret }}"
+      falcon_sensor_version_decrement: 2
+      # be sure to add this so we don't download if we don't need to
+      falcon_api_sensor_download_path: /opt/
+
+  - role: crowdstrike.falcon.falcon_configure
+    vars:
+      falcon_client_id: "{{ vault_crowdstrike_client_id }}"
+      falcon_client_secret: "{{ vault_crowdstrike_secret }}"
 
   tasks:
   - name: Populate service facts
@@ -66,28 +79,6 @@
      - "ansible_facts.services['besclient.service'] is not defined"
      - ansible_os_family == "RedHat"
 
-  - name: Download the Falcon sensor deb file (Ubuntu)
-    ansible.builtin.get_url:
-      url: "https://isoshare.cpaneldev.princeton.edu/isoShares/Agents/Falcon/Latest/linux/Ubuntu/14_16_18_20_22/falcon-sensor_7.05.0-16004_amd64.deb"
-      dest: "/tmp/falcon-sensor_7.05.0-16004_amd64.deb"
-      owner: pulsys
-      group: pulsys
-      mode: "0644"
-    when:
-      - "'falcon-sensor' not in ansible_facts.packages"
-      - ansible_os_family == "Debian"
-
-  - name: Download the Falcon sensor rpm file (RedHat)
-    ansible.builtin.get_url:
-      url: "https://isoshare.cpaneldev.princeton.edu/isoShares/Agents/Falcon/Latest/linux/RHEL/Oracle/9/falcon-sensor-7.02.0-15705.el9.x86_64.rpm"
-      dest: "/tmp/falcon-sensor_7.05.0-16004_el9.x86_64.rpm"
-      owner: pulsys
-      group: pulsys
-      mode: "0644"
-    when:
-      - "'falcon-sensor' not in ansible_facts.packages"
-      - ansible_os_family == "RedHat"
-
   - name: install BESClient agent (Ubuntu)
     ansible.builtin.apt:
       deb: "/tmp/BESAgent-10.0.7.52-debian6.amd64.deb"
@@ -106,36 +97,6 @@
   - name: Launch the BigFix client
     ansible.builtin.command: /etc/init.d/besclient start
     when: "ansible_facts.services['besclient.service'] is not defined"
-
-  - name: install crowdstrike falcon sensor agent (Ubuntu)
-    ansible.builtin.apt:
-      deb: "/tmp/falcon-sensor_7.05.0-16004_amd64.deb"
-    when:
-      - "'falcon-sensor' not in ansible_facts.packages"
-      - ansible_os_family == "Debian"
-
-  - name: install crowdstrike falcon sensor agent (RedHat)
-    ansible.builtin.dnf:
-      name: "/tmp/falcon-sensor_7.05.0-16004_el9.x86_64.rpm"
-      disable_gpg_check: true      
-      state: present
-    when:
-      - "'falcon-sensor' not in ansible_facts.packages"
-      - ansible_os_family == "RedHat"
-
-  - name: launch crowdstrike falcon agent
-    command: /opt/CrowdStrike/falconctl -s --cid={{ princeton_cid }}
-    become: true
-    when:
-      - "'falcon-sensor' not in ansible_facts.packages"
-
-  - name: start and enable crowdstrike falcon agent
-    ansible.builtin.systemd_service:
-      name: "falcon-sensor"
-      enabled: true
-      state: started
-    when:
-      - "'falcon-sensor' not in ansible_facts.packages"
 
   - name: Check for rapid7 path
     ansible.builtin.stat:
@@ -172,7 +133,7 @@
     when:
       - not rapid7_home.stat.exists
 
-  post_tasks:
-    - name: send information to slack
-      ansible.builtin.include_tasks:
-        file: slack_tasks_end_of_playbook.yml
+  # post_tasks:
+  #   - name: send information to slack
+  #     ansible.builtin.include_tasks:
+  #       file: slack_tasks_end_of_playbook.yml
