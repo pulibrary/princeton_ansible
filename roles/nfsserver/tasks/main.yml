@@ -1,80 +1,16 @@
 ---
 # tasks file for nfsserver
-#
-- name: Nfsserver | create shares
-  ansible.builtin.file:
-    path: "{{ item }}"
-    state: directory
-    recurse: true
-    owner: "{{ deploy_user }}"
-    group: "{{ deploy_user }}"
-    mode: "0755"
-  loop:
-    - "{{ bibdata_fileshare_mount }}"
-    - "{{ drupal7_fileshare_mount }}"
-    - "{{ pas_fileshare_mount }}"
-    - "{{ open_marc_records_mount }}"
-    - "{{ tigerdata_fileshare_mount }}"
+- name: NFsserver | add CDH user
+  ansible.builtin.import_tasks: users.yml
 
-- name: Nfsserver | add conan group
-  ansible.builtin.group:
-    name: "conan"
+- name: NFsserver | add directories
+  ansible.builtin.import_tasks: directories.yml
 
-- name: Nfsserver | create system user
-  ansible.builtin.user:
-    name: "conan"
-    group: "conan"
-    home: "/home/conan"
-    shell: "/usr/bin/bash"
+- name: NFsserver | add packages
+  ansible.builtin.import_tasks: packages.yml
 
-- name: Nfsserver | create cdh shares
-  ansible.builtin.file:
-    path: "{{ item }}"
-    state: directory
-    recurse: true
-    owner: "conan"
-    group: "conan"
-    mode: "0755"
-  loop:
-    - "{{ cdh_fileshare_mount }}"
-
-- name: Nfsserver | make idmapping work
-  ansible.builtin.copy:
-    content: "options nfsd nfs4_disable_idmapping=N"
-    dest: "/etc/modprobe.d/nfsd.conf"
-    mode: "0644"
-  when: running_on_server
-
-- name: Nfsserver | install nfsserver packages
-  ansible.builtin.apt:
-    name: "{{ nfsserver_packages }}"
-    state: present
-  when: nfsserver_is_local
-
-- name: Nfsserver | install nfsclient packages
-  ansible.builtin.apt:
-    name: "{{ nfsclient_packages }}"
-    state: present
-  when: not nfsserver_is_local
-
-- name: Nfsserver | add fqdn for idmapping
-  ansible.builtin.lineinfile:
-    path: /etc/idmapd.conf
-    insertbefore: '# Domain = localdomain'
-    line: "Domain = {{ inventory_hostname }}"
-    state: present
-  when:
-    - running_on_server
-
-- name: Nfsserver | configure exports
-  ansible.builtin.template:
-    src: exports.j2
-    dest: /etc/exports
-    mode: "0644"
-  notify:
-    - reload exports
-  when: nfsserver_is_local
-  tags: update_config
+- name: NFsserver | configure NFS exports
+  ansible.builtin.import_tasks: exports.yml
 
 - name: Nfsserver | start nfs server
   ansible.builtin.service:
