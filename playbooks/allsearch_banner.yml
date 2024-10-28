@@ -4,7 +4,8 @@
 - name: change the Allsearch banner
   hosts: allsearch_api_{{ runtime_env | default('staging') }}
   remote_user: deploy
-  # become: true
+  vars:
+    - passenger_root: "/opt/allsearch_api/current"
   vars_files:
     - ../group_vars/allsearch_api/vault.yml
     - ../group_vars/allsearch_api/common.yml
@@ -18,7 +19,7 @@
   #         - pan-os-python
 
     - name: Run the Rake task
-      ansible.builtin.shell: "cd /opt/allsearch_api/current && /usr/bin/bash --login -c 'RAILS_ENV=staging bundle exec rake banner:update['{{ banner_text }}',{{alert_status | default('info') }},{{dismissible | default('true')}},{{autoclear | default('false')}}]'"
+      ansible.builtin.shell: "cd {{ passenger_root }} && /usr/bin/bash --login -c 'RAILS_ENV={{ rails_env | default('staging') }} bundle exec rake banner:update['{{ banner_text }}',{{alert_status | default('info') }},{{dismissible | default('true')}},{{autoclear | default('false')}}]'"
       #bundle exec rake banner:update\['new banner',info,true,true\]
       #text,alert_status[info|success|warning|error],dismissible,autoclear
 
