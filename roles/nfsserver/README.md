@@ -15,24 +15,17 @@ In your group vars create your share definition using the example in
 [defaults/main.yml](defaults/main.yml)
 
 ```yaml
+shares:
+  - mount: "/var/nfs/bibdata"
+    name: "bibdata"
+    hosts:
+      - "{{ servers.bibdata.staging1 }}"
+...
 nfsserver_exports:
-  - share: /mnt/export
+  - share: "{{ bibdata_fileshare_mount }}"
     hosts:
-      - name: "10.0.0.0/24"
-        options:
-          - ro
-          - no_subtree_check
-           - nohide
-      - name: "172.16.0.0/24"
-        options:
-          - rw
-          - sync
-          - no_wdelay
-  - share: /mnt/export2
-    hosts:
-      - name: "10.2.3.0/24"
-        options:
-          - ro
+      - name: "{{ servers.bibdata.staging1 }}"
+        options: "{{ default_nfs_option }}"
 ```
 
 License
