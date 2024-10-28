@@ -28,6 +28,13 @@ nfsserver_exports:
         options: "{{ default_nfs_option }}"
 ```
 
+If you have different needs than the default_nfs_option. Add this to your `group_vars/project/environment.yml`
+
+```yaml
+default_nfs_option:
+  - ro
+```
+
 License
 -------
 
