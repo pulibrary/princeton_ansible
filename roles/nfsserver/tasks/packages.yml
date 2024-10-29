@@ -1,0 +1,23 @@
+---
+- name: Nfsserver | install nfsserver packages
+  ansible.builtin.apt:
+    name: "{{ nfsserver_packages }}"
+    state: present
+  when: nfsserver_is_local
+
+- name: Nfsserver | install nfsclient packages (Ubuntu)
+  ansible.builtin.apt:
+    name: "{{ nfsclient_packages }}"
+    state: present
+  when:
+    - not nfsserver_is_local
+    - ansible_os_family == "Debian"
+
+- name: Nfsserver | install nfsclient packages (Rocky)
+  ansible.builtin.apt:
+    name: "{{ rhel_nfsclient_packages }}"
+    state: present
+  when:
+    - not nfsserver_is_local
+    - ansible_os_family == "RedHat"
+
