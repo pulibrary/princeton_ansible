@@ -1,0 +1,14 @@
+---
+- name: 'pul_nomad_logging | set grafana variables'
+  ansible.builtin.shell:
+    cmd: '/usr/local/bin/nomad var put -force nomad/jobs/grafana {{ logging_grafana_nomad_env_vars.keys() | zip(logging_grafana_nomad_env_vars.values()) | map("join", "=") | join(" ") }}'
+  environment:
+    NOMAD_TOKEN: '{{ pul_nomad_management_token }}'
+  run_once: true
+
+- name: 'pul_nomad_logging | set log shipping variables'
+  ansible.builtin.shell:
+    cmd: '/usr/local/bin/nomad var put -force nomad/jobs/grafana {{ logging_shipping_nomad_env_vars.keys() | zip(logging_shipping_nomad_env_vars.values()) | map("join", "=") | join(" ") }}'
+  environment:
+    NOMAD_TOKEN: '{{ pul_nomad_management_token }}'
+  run_once: true
