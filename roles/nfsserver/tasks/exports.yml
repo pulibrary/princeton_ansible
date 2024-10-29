@@ -1,0 +1,26 @@
+---
+- name: Nfsserver | make idmapping work
+  ansible.builtin.copy:
+    content: "options nfsd nfs4_disable_idmapping=N"
+    dest: "/etc/modprobe.d/nfsd.conf"
+    mode: "0644"
+  when: running_on_server
+
+- name: Nfsserver | add fqdn for idmapping
+  ansible.builtin.lineinfile:
+    path: /etc/idmapd.conf
+    insertbefore: '# Domain = localdomain'
+    line: "Domain = {{ inventory_hostname }}"
+    state: present
+  when:
+    - running_on_server
+
+- name: Nfsserver | configure exports
+  ansible.builtin.template:
+    src: exports.j2
+    dest: /etc/exports
+    mode: "0644"
+  notify:
+    - reload exports
+  when: nfsserver_is_local
+  tags: update_config
