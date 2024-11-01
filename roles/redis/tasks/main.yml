@@ -1,8 +1,23 @@
 ---
-- name: Redis | configure redis ppa
-  ansible.builtin.apt_repository:
-    repo: ppa:redislabs/redis
-    filename: redis
+- name: Redis | Download and add the Redis GPG key
+  ansible.builtin.shell:
+    cmd: |
+      curl -fsSL https://packages.redis.io/gpg | gpg --dearmor -o /usr/share/keyrings/redis-archive-keyring.gpg
+      chmod 644 /usr/share/keyrings/redis-archive-keyring.gpg
+  changed_when: false
+
+- name: Redis | Set correct permissions for the Redis GPG key
+  ansible.builtin.file:
+    path: /usr/share/keyrings/redis-archive-keyring.gpg
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Redis | add the Redis labs APT repository
+  ansible.builtin.copy:
+    content: "deb [signed-by=/usr/share/keyrings/redis-archive-keyring.gpg] https://packages.redis.io/deb {{ ansible_lsb.codename }} main\n"
+    dest: /etc/apt/sources.list.d/redis.list
+    mode: '0644'
 
 - name: Redis | update apt cache
   ansible.builtin.apt:
