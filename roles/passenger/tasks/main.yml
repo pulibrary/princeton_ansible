@@ -1,30 +1,29 @@
 ---
 # Variable setup.
 - name: Phusion | Include OS-specific variables.
-  include_vars: "main.yml"
+  ansible.builtin.include_vars: "main.yml"
 
 - name: Phusion | Define nginx_user.
   ansible.builtin.set_fact:
     nginx_user: "{{ __nginx_user }}"
   when: nginx_user is not defined
 
-# Passenger repository setup.
-- name: Phusion | Add Passenger apt key.
-  ansible.builtin.apt_key:
-    keyserver: keyserver.ubuntu.com
-    id: 561F9B9CAC40B2F7
-    state: present
+# passenger keys
+- name: Phusion | Add Phusion Passenger GPG key
+  ansible.builtin.shell:
+    cmd: curl https://oss-binaries.phusionpassenger.com/auto-software-signing-gpg-key.txt | gpg --dearmor | tee /etc/apt/trusted.gpg.d/phusion.gpg >/dev/null
+  changed_when: false
 
-- name: Phusion | Add Phusion apt repo.
-  ansible.builtin.apt_repository:
-    repo: 'deb https://oss-binaries.phusionpassenger.com/apt/passenger {{ ansible_distribution_release }} main'
-    state: present
-    filename: passenger
+# Passenger repository setup.
+- name: Phusion | Add Phusion Passenger APT repository
+  ansible.builtin.shell:
+    cmd: echo deb https://oss-binaries.phusionpassenger.com/apt/passenger {{ ansible_distribution_release }} main > /etc/apt/sources.list.d/passenger.list
   changed_when: false
 
 - name: Phusion | Install Nginx and Passenger.
   ansible.builtin.apt:
     name: "{{ nginx_passenger_packages }}"
+    update_cache: true
     state: present
 
 # Nginx and passenger configuration.
@@ -32,7 +31,7 @@
   ansible.builtin.template:
     src: nginx.conf.j2
     dest: /etc/nginx/nginx.conf
-    mode: 0644
+    mode: "0644"
   tags: passenger_config
   notify: 'passenger : restart nginx'
 
@@ -49,7 +48,7 @@
   ansible.builtin.template:
     src: passenger.j2
     dest: /etc/nginx/sites-available/passenger
-    mode: 0644
+    mode: "0644"
   notify: restart nginx
 
 - name: Phusion | Ensure passenger virtual host is enabled.
@@ -62,7 +61,7 @@
   ansible.builtin.file:
     path: /etc/nginx/sites-enabled/default
     state: absent
-    mode: 0644
+    mode: "0644"
   when: nginx_remove_default_vhost
   notify:
     - restart nginx
@@ -71,12 +70,14 @@
   ansible.builtin.file:
     path: /etc/systemd/system/nginx.service.d
     state: directory
+    mode: "0644"
   tags: nginx
 
 - name: Phusion | Restart nginx on crash
   ansible.builtin.copy:
     src: 'systemd_override.conf'
     dest: /etc/systemd/system/nginx.service.d/override.conf
+    mode: "0644"
   tags: nginx
   notify:
     - reload systemd
