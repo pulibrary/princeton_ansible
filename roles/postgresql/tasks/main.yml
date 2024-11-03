@@ -4,10 +4,17 @@
     pkg: ca-certificates
     state: present
 
-- name: PostgreSQL | Add PostgreSQL repository apt-key
-  ansible.builtin.apt_key:
-    url: "{{ postgres_apt_key_url }}"
-    state: present
+- name: PostgreSQL | Create pgdg directory
+  ansible.builtin.file:
+    path: /usr/share/postgresql-common/pgdg
+    state: directory
+    mode: "0755"
+
+- name: PostgreSQL | Download PostgreSQL GPG key
+  ansible.builtin.get_url:
+    url: https://www.postgresql.org/media/keys/ACCC4CF8.asc
+    dest: /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc
+    mode: "0644"
 
 - name: PostgreSQL | add postgres:10 appstream
   ansible.builtin.dnf:
@@ -18,19 +25,17 @@
     - running_on_server
     - ansible_distribution == "CentOS"
 
-- name: PostgreSQL | add postgresql repository for latest ubuntu
-  ansible.builtin.apt_repository:
-    repo: 'deb http://apt.postgresql.org/pub/repos/apt/ {{ ansible_distribution_release }}-pgdg main'
+- name: PostgreSQL | Add PostgreSQL repository
+  ansible.builtin.lineinfile:
+    path: /etc/apt/sources.list.d/pgdg.list
+    line: "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt {{ ansible_distribution_release }}-pgdg main"
+    mode: "0644"
+    create: true
     state: present
-  when:
-    - ansible_distribution_release != "bionic"
 
-- name: PostgreSQL | add postgresql repository for Bionic
-  ansible.builtin.apt_repository:
-    repo: 'deb https://apt-archive.postgresql.org/pub/repos/apt/ {{ ansible_distribution_release }}-pgdg main'
-    state: present
-  when:
-    - ansible_distribution_release == "bionic"
+- name: PostgreSQL | update cache
+  ansible.builtin.apt:
+    update_cache: true
 
 - name: PostgreSQL | install postgresql server packages
   ansible.builtin.apt:
@@ -62,7 +67,8 @@
     - running_on_server
     - ansible_distribution == "CentOS"
 
-- import_tasks: extensions.yml
+- name: PostgreSQL | add extensions
+  ansible.builtin.import_tasks: extensions.yml
 
 - name: PostgreSQL | install configuration file
   ansible.builtin.template:
@@ -70,7 +76,7 @@
     dest: '/etc/postgresql/{{ postgres_version }}/main/postgresql.conf'
     group: postgres
     owner: postgres
-    mode: 0644
+    mode: "0644"
   register: configure_postgres
   when: postgresql_is_local
   notify: restart local postgres
@@ -81,22 +87,22 @@
     dest: '/etc/postgresql/{{ postgres_version }}/main/conf.d/statistics.conf'
     group: postgres
     owner: postgres
-    mode: 0644
+    mode: "0644"
   register: configure_postgres
   when: postgresql_is_local
   notify: restart local postgres
 
 - name: PostgreSQL | rotate the logs for postgresql
-  template:
+  ansible.builtin.template:
     src: 'logrotate.d.postgresql.j2'
     dest: '/etc/logrotate.d/postgresql'
-    mode: 0644
+    mode: "0644"
 
 - name: PostgreSQL | add replication postgresql configuration
   template:
     src: replication.conf.j2
     dest: "/etc/postgresql/{{ postgres_version }}/main/conf.d/replication.conf"
-    mode: 0644
+    mode: "0644"
   when:
     - running_on_server
     - postgresql_cluster_member == true
@@ -130,7 +136,7 @@
   ansible.builtin.template:
     src: pg_pass.j2
     dest: "~/.pgpass"
-    mode: 0600
+    mode: "0600"
     owner: postgres
   changed_when: false
   when: postgresql_is_local
@@ -150,21 +156,34 @@
   notify:
     - reload local postgres
 
-- include_tasks: pg_hba.yml
-- include_tasks: warm_standby_leader.yml
+- name: PostgreSQL | configure pg_hba access
+  ansible.builtin.include_tasks: pg_hba.yml
+
+- name: PostgreSQL | configure warm standby
+  ansible.builtin.include_tasks: warm_standby_leader.yml
   when:
     - postgresql_cluster != false
     - inventory_hostname == postgresql_cluster.leader
-- include_tasks: warm_standby_follower.yml
+
+- name: PostgreSQL | configure standby follower
+  ansible.builtin.include_tasks: warm_standby_follower.yml
   when:
     - postgresql_cluster != false
     - inventory_hostname in postgresql_cluster.followers
-- include_tasks: logical_replication.yml
+
+- name: PostgreSQL | configure logical replication
+  ansible.builtin.include_tasks: logical_replication.yml
   when:
     - postgresql_cluster != false
     - inventory_hostname == postgresql_cluster.leader
     - postgresql_logical_replication != false
-- include_tasks: create_db.yml
-- include_tasks: create_users.yml
-- include_tasks: create_read_only_user.yml
+
+- name: PostgreSQL | create databases
+  ansible.builtin.include_tasks: create_db.yml
+
+- name: PostgreSQL | create users
+  ansible.builtin.include_tasks: create_users.yml
+
+- name: PostgreSQL | create read only user
+  ansible.builtin.include_tasks: create_read_only_user.yml
   when: application_dbuser_ro_name is defined
