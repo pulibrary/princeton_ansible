@@ -199,13 +199,23 @@
     - "libgdal-dev"
     - "gdal-bin"
 
+- name: Figgy | Remove rasterio and dependencies
+  ansible.builtin.pip:
+    name:
+      - rasterio
+      - snuggs
+      - affine
+    executable: pip3
+    state: absent
+
 - name: Figgy | Install cogeo-mosaic apt prerequisites
   ansible.builtin.apt:
     name: "{{ item }}"
     state: present
   loop:
-    - "python3-setuptools"
     - "cython3"
+    - "python3-rasterio"
+    - "python3-setuptools"
 
 - name: Figgy | update pip3 for cogeo-mosaic
   ansible.builtin.pip:
@@ -233,6 +243,7 @@
     executable: pip3
     extra_args: --pre
   changed_when: "'molecule-idempotence-notest' not in ansible_skip_tags"
+  when: running_on_server
 
 - name: Figgy | Create cloud_config directory
   ansible.builtin.file:
