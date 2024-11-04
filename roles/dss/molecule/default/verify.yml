@@ -1,20 +1,21 @@
 ---
 - name: Verify
   hosts: all
-  gather_facts: false
   tasks:
-    - name: Check ruby package status
-      ansible.builtin.package:
-        name: "{{ item }}"
-        state: present
-      check_mode: true
-      register: pkg_status
-      loop:
-        - ruby-switch
-        - ruby2.6-dev
-        - ruby2.6
-
-    - name: Test for ruby packages
+    - name: Dss | check rubygems version
+      ansible.builtin.command: gem --version
+      register: result
+      changed_when: false
+    - name: Dss | assert rubygems version
       ansible.builtin.assert:
         that:
-          - not pkg_status.changed
+          - result.stdout is match("3.5.13")
+
+    - name: Dss | check bundler version
+      ansible.builtin.command: bundler -v
+      register: result
+      changed_when: false
+    - name: Dss | assert bundler version
+      ansible.builtin.assert:
+        that:
+          - result.stdout is match("Bundler version 2.5.13")
