@@ -1,97 +1,100 @@
 ---
-# tasks file for system_ldap
-#
-- name: system_ldap | Install sssd
+- name: System_ldap | install necessary packages
   ansible.builtin.apt:
     name: "{{ item }}"
-    state: "present"
+    state: present
+    update_cache: true
   loop:
-    - "{{ sssd_pkg_list }}"
+    - adcli
+    - krb5-user
+    - libnss-sss
+    - libpam-sss
+    - sssd
+    - sssd-tools
 
-- name: system_ldap | Remove unwanted packages
-  ansible.builtin.apt:
-    name: "{{ item }}"
-    state: "{{ sssd__unwanted_packages_state }}"
-  loop:
-    - "{{ sssd__unwanted_packages_list }}"
+- name: System_ldap | configure Kerberos
+  ansible.builtin.blockinfile:
+    path: /etc/krb5.conf
+    mode: "0644"
+    create: true
+    block: |
+      [logging]
+        default = FILE:/var/log/krb5libs.log
+        kdc = FILE:/var/log/krb5kdc.log
+        admin_server = FILE:/var/log/kadmind.log
 
-- name: system_ldap | change hostname to match AD 
-  ansible.builtin.command: hostnamectl set-hostname {{ host_ad_name | default(omit)}}
-  when:
-    - running_on_server
+      [libdefaults]
+        dns_lookup_realm = false
+        dns_lookup_kdc = true
+        ticket_lifetime = 24h
+        renew_lifetime = 7d
+        forwardable = true
+        rdns = false
+        default_realm = {{ ad_domain | upper }}
+        default_ccache_name = KEYRING:persistent:%{uid}
 
-- name: system_ldap | allow password authentication
+      [realms]
+        {{ ad_domain | upper }} = {
+          kdc = {{ ad_domain_controller }}
+          admin_server = {{ ad_domain_controller }}
+        }
+
+      [domain_realm]
+        .{{ ad_domain | lower }} = {{ ad_domain | upper }}
+        {{ ad_domain | lower }} = {{ ad_domain | upper }}
+
+- name: System_ldap | create sssd.conf
+  ansible.builtin.template:
+    src: sssd.conf.j2
+    dest: /etc/sssd/sssd.conf
+    mode: "0644"
+
+- name: System_ldap | enable and start sssd service
+  ansible.builtin.service:
+    name: sssd
+    state: started
+    enabled: true
+
+- name: System_ldap | join the domain
+  ansible.builtin.command: realm join {{ ad_domain }} -U {{ ad_admin_user }} --install=/
+  environment:
+    KRB5_CONFIG: /etc/krb5.conf
+  changed_when: false
+  when: running_on_server
+
+- name: System_ldap | verify domain join
+  ansible.builtin.command: realm list
+  register: realm_list
+  changed_when: false
+  when: running_on_server
+
+- name: System_ldap | debug realm list output
+  ansible.builtin.debug:
+    var: realm_list.stdout
+  when: running_on_server
+
+- name: System_ldap | configure PAM
   ansible.builtin.lineinfile:
-    path: /etc/ssh/sshd_config
-    state: present
-    regexp: '^PasswordAuthentication no'
-    line: 'PasswordAuthentication yes'
+    path: /etc/pam.d/common-session
+    line: 'session required pam_mkhomedir.so skel=/etc/skel umask=0022'
 
-- name: system_ldap | allow users authentication
-  ansible.builtin.lineinfile:
-    path: /etc/ssh/sshd_config
-    state: present
-    regexp: '^AllowUsers pulsys'
-    line: '# AllowUsers pulsys'
-  notify: restart sshd
-
-- name: system_ldap | configure pam to enable mkhomedir
-  ansible.builtin.shell: realm permit "{{ ad_user | default('almasftp@pu.win.princeton.edu') }}"
-  become: true
-  tags:
-    - add_sftp_user
-  when:
-    - running_on_server
-  ignore_errors: true
-
-- name: system_ldap | create alma directory drop
+- name: System_ldap | create home directory for AD users
   ansible.builtin.file:
-    path: "{{ item }}"
+    path: /home/{{ ad_test_user }}
     state: directory
-    recurse: true
-    owner: "{{ almasftp_user }}"
-    group: "domain users@pu.win.princeton.edu"
-    mode: 0775
-  loop:
-    - "/alma/bursar"
-    - "/alma/datasync_processing"
-    - "/alma/fund_adjustment"
-    - "/alma/invoice_status"
-    - "/alma/invoices"
-    - "/alma/people"
-    - "/alma/pod"
-    - "/alma/publishing"
-    - "/alma/recap"
-    - "/alma/scsb_renewals"
-    
-- name: system_ldap | grant {{ deploy_user }} access to alma directory
-  ansible.builtin.user:
-    name: "{{ deploy_user }}"
-    group: "domain users@pu.win.princeton.edu"
-    append: true
-    
-- name: system_ldap | create aspace directory drop
-  ansible.builtin.file:
-    path: /alma/aspace
-    state: directory
-    recurse: true
-    owner: "{{ aspaceftp_user }}"
-    group: "domain users@pu.win.princeton.edu"
-    mode: 0775
+    mode: "0700"
+    owner: "{{ ad_test_user }}"
+    group: "{{ ad_test_user }}"
+  when: running_on_server
 
-- name: system_ldap | create local group for alma
-  ansible.builtin.group:
-    name: "domain users@pu.win.princeton.edu"
-    state: present
-    gid: 1687000513
+- name: System_ldap | test login with AD user
+  ansible.builtin.command: su - {{ ad_test_user }} -c 'exit 0'
+  changed_when: false
+  ignore_errors: true  # Ignore errors if the user cannot log in yet
+  register: ad_login_result
+  when: running_on_server
 
-- name: system_ldap | create local user for alma
-  ansible.builtin.user:
-    name: almasftp
-    uid: 1621151009
-    shell: /usr/bin/bash
-    group: "domain users@pu.win.princeton.edu"
-    password: "{{ almasftp_user_password }}"
-
-- name: system_ldap | Flush handlers to be able to use SSSD authentication
-  meta: flush_handlers
+- name: System_ldap | debug AD login result
+  ansible.builtin.debug:
+    var: ad_login_result
+  when: running_on_server

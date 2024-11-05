@@ -1,71 +1,30 @@
-Role Name
-=========
+# Ansible Role: sssd_ad
 
-Configures an endpoint to use [SSSD](https://ubuntu.com/server/docs/service-sssd) to connect to Princeton Active Directory
+This Ansible role configures an Ubuntu Jammy (22.04) machine to authenticate against an Active Directory domain using SSSD (System Security Services Daemon).
 
-Requirements
-------------
+## Requirements
 
-One will need access to [OIT AD Machine Registration Tool](https://tools.princeton.edu/Dept/) This allows you to register a new name for AD
+- Ansible 2.9 or higher
+- An Ubuntu Jammy (22.04) target machine
+- Access to an Active Directory domain controller
+- An AD user with permissions to join machines to the domain
 
-When the playbook is run the first time, it will fail until you add the following manual steps.
+## Role Variables
 
-```zsh
-sudo realm discover pu.win.princeton.edu
-sudo realm join -U doas-libsftp pu.win.princeton.edu
-```
+| Variable | Description |
+|---|---|
+| `ad_domain` | The name of your Active Directory domain (e.g., example.com) |
+| `ad_domain_controller` | The hostname or IP address of your domain controller |
+| `ad_admin_user` | An Active Directory user with permissions to join machines to the domain |
+| `ad_test_user` | A test user in your Active Directory domain |
 
-The password for the step above can be found by looking in the LastPass Vault:
+## Dependencies
 
-```zsh
-lpass ls | grep doas-libsftp
-lpass show <results_from_above> --password | pbcopy
+None
 
-```
+## Example Playbook
 
-Enable mkhomedir with the steps below:
-
-```zsh
-sudo bash -c "cat > /usr/share/pam-configs/mkhomedir" <<EOF
-Name: activate mkhomedir
-Default: yes
-Priority: 900
-Session-Type: Additional
-Session:
-        required                        pam_mkhomedir.so umask=0022 skel=/etc/skel
-EOF
-```
-Then activate with
-
-```zsh
-sudo pam-auth-update
-```
-
-
-Role Variables
---------------
-
-
-Dependencies
-------------
-
-- [roles/common](roles/common)
-
-Example Playbook
-----------------
-
-To allow a new user to log in run
-
-```zsh
-ansible-playbook -v playbooks/lib_sftp.yml -e ad_user=netid@pu.win.princeton.edu -t add_sftp_user
-```
-
-License
--------
-
-BSD
-
-Author Information
-------------------
-
-An optional section for the role authors to include contact information, or a website (HTML is not allowed).
+```yaml
+- hosts: your_ubuntu_servers
+  roles:
+    - sssd_ad

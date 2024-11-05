@@ -3,17 +3,14 @@
   hosts: all
   gather_facts: false
   tasks:
-  - name: check sssd package status
-    package:
-      name: "{{ item }}"
-      state: present
-    check_mode: true
-    register: pkg_status
-    loop:
-      - sssd
-      - sssd-ldap
-
-  - name: test for sssd packages
-    assert:
-      that:
-        - not pkg_status.changed
+    - name: System_ldap | Verify packages are installed
+      ansible.builtin.apt:
+        name:
+          - adcli
+          - krb5-user
+          - libnss-sss
+          - libpam-sss
+          - sssd
+          - sssd-tools
+        state: present
+      changed_when: false
