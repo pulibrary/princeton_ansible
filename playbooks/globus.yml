@@ -4,31 +4,22 @@
 # you will need to create these on your own
 # the playbook will create a user `{{ project_user }}` as created in the `pre_tasks` block
 # If the playbook creates a new `{{ project_user }}` with access keys and saves them in your
-# ~/.aws/ansible_key_list.txt if none exists. These variables will need to go inventory_hostname
+# ~/.aws/ansible_key_list.txt if none exists. These variables will need to go into the
 # `group_vars/globus/vault.yml` if this is the first time running
-#
-# If you new environment is called `cdh_globus` run your playbook with the following 
-# `ansible-playbook playbooks/aws_ec2.yml -e safe_runtime_env=cdh_globus -u pulsys`
-#
-# by default this playbook runs in the staging environment
-# to run in production, pass '-e runtime_env=production'
 # 
-# by default the ec2 instace will be called "pdc-globus-staging" (or production)
-# to give it a different name pass '-e ec2_name=any-name-I-want'
+# NOTE: You must pass a variable for globus_instance_name 
+#
+# If your new Globus instance is called `cdh_globus` run your playbook with the following 
+# `ansible-playbook playbooks/globus.yml -e globus_instance_name=cdh_globus -u pulsys`
 #
 # NOTE: You may need to run `pipenv sync` in your princeton_ansible shell
 # in order to install boto3 and other AWS required libraries.
-#
 
 - name: build a Globus ec2 instance
   hosts: localhost
   gather_facts: false
-  vars:
-    - safe_runtime_env: "{{ runtime_env | default('staging') }}"
-    - default_ec2_name: "pdc-globus-{{ safe_runtime_env }}"
-    - safe_ec2_name: "{{ ec2_name |  default(default_ec2_name) }}"
   vars_files:
-    - ../group_vars/globus/{{ safe_runtime_env }}.yml
+    - ../group_vars/globus/{{ globus_instance_name }}.yml
     - ../group_vars/globus/common.yml
     - ../group_vars/globus/vault.yml
   pre_tasks:
@@ -106,7 +97,7 @@
       amazon.aws.ec2_instance:
         aws_access_key: "{{ project_user_aws_access_key }}"
         aws_secret_key: "{{ project_user_aws_secret_key }}"
-        name: "{{ safe_ec2_name }}"
+        name: "{{ globus_instance_name }}"
         vpc_subnet_id: "{{ vpc_subnet_id }}"
         security_groups:
           - "{{ globus_ssh_security_group }}"
