@@ -1,4 +1,25 @@
 ---
+- name: System_ldap | change hostname to match AD
+  ansible.builtin.command: hostnamectl set-hostname {{ host_ad_name | default(omit) }}
+  changed_when: false
+  when:
+    - running_on_server
+
+- name: System_ldap | allow password authentication
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    state: present
+    regexp: '^PasswordAuthentication no'
+    line: 'PasswordAuthentication yes'
+
+- name: System_ldap | allow users authentication
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    state: present
+    regexp: '^AllowUsers pulsys'
+    line: '# AllowUsers pulsys'
+  notify: restart sshd
+
 - name: System_ldap | install necessary packages
   ansible.builtin.apt:
     name: "{{ item }}"
