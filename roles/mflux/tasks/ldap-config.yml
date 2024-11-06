@@ -41,6 +41,8 @@
   tags:
     - mediaflux
     - init
+  when:
+    - running_on_server
 
 - name: Mflux | ldap wait for mediaflux on port 80 to become open on the host
   ansible.builtin.wait_for:
@@ -53,7 +55,17 @@
      - standard-user
      - desktop-experimental
   register: role_results
+  when:
+    - running_on_server
 
 - name: MFlux | debug role command
   debug:
     msg: "{{ role_results }}"
+  when:
+    - running_on_server
+
+- name: MFlux | setup cas domain
+  ansible.builtin.command: java -Dmf.host=localhost -Dmf.transport=http -Dmf.domain=system -Dmf.user=manager -Dmf.password="{{ mflux_manager_password }}" -Dmf.port=80 -jar /opt/mediaflux/bin/aterm.jar --app exec application.property.set :property -app cas.token.logon -name cas.authentication.domain princeton
+
+- name: MFlux | setup cas host
+  ansible.builtin.command: java -Dmf.host=localhost -Dmf.transport=http -Dmf.domain=system -Dmf.user=manager -Dmf.password="{{ mflux_manager_password }}" -Dmf.port=80 -jar /opt/mediaflux/bin/aterm.jar --app exec application.property.set :property -app cas.token.logon -name cas.service.validate.host fed.princeton.edu

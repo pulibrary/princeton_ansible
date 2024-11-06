@@ -33,3 +33,13 @@
 
 - name: install the mediaflux desktop | when in docker
   ansible.builtin.command: java -Dmf.host=localhost -Dmf.transport=http -Dmf.domain=system -Dmf.user=manager -Dmf.password=change_me -Dmf.port=80 -jar /opt/mediaflux/bin/aterm.jar --app exec package.install :url https://www.arcitecta.com/software/adesktop/1.2.020/adesktop_1.2.020.zip
+
+- name: install the cas login | when in docker
+  ansible.builtin.command: java -Dmf.host=localhost -Dmf.transport=http -Dmf.domain=system -Dmf.user=manager -Dmf.password=change_me -Dmf.port=80 -jar /opt/mediaflux/bin/aterm.jar --app exec package.install :url {{ vault_mflux_cas_download_link }}
+
+# Run the ldap configuration tasks
+- name: Mflux | import ldap-config tasks
+  ansible.builtin.import_tasks: ldap-config.yml
+
+# - name: Mflux | Allow SHA1
+# Remove SHA1 from /etc/crypto-policies/back-ends/java.config
