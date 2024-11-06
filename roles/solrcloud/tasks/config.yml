@@ -95,3 +95,25 @@
   loop:
     - jts-core-1.15.1.jar
   notify: restart SolrCloud
+
+- name: solrcloud | Create solr home lib dir
+  ansible.builtin.file:
+    path: "{{ solr_data_dir}}/lib"
+    owner: '{{ solr_user }}'
+    group: '{{ solr_group }}'
+    state: directory
+  tags: scriptplugins
+
+- name: solrcloud | Copy scripting engine jar files
+  ansible.builtin.copy:
+    src: files/{{ item }}
+    dest: "{{ solr_data_dir }}/lib/{{ item }}"
+    mode: 0644
+  loop:
+    - nashorn-core-15.4.jar
+    - asm-7.3.1.jar
+    - asm-commons-7.3.1.jar
+    - asm-tree-7.3.1.jar
+    - asm-util-7.3.1.jar
+  notify: restart SolrCloud
+  tags: scriptplugins
