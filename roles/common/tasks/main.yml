@@ -6,14 +6,30 @@
     "ansible_hostname not in inventory_hostname"
   tags: "update_hostname"
 
-- name: Common | Install Common packages
-  ansible.builtin.include_tasks: "{{ item }}"
+- name: Common | Install common shared packages
+  ansible.builtin.package:
+    name: "{{ item }}"
+    state: present
   loop:
-    - ubuntu.yml
-    - rockylinux.yml
+    - "{{ common_shared_packages }}"
+
+- name: Common | Install common ubuntu packages
+  ansible.builtin.package:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - "{{ common_ubuntu_packages }}"
   when:
-    - item is defined
-    - item is not none
+    - ansible_os_family == "Debian"
+
+- name: Common | Install common RHEL packages
+  ansible.builtin.package:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - "{{ common_rhel_packages }}"
+  when:
+    - ansible_os_family == "RedHat"
 
 - name: Common | copy tmux.conf
   ansible.builtin.template:
@@ -56,34 +72,12 @@
     name: '{{ configured_dependencies }}'
     state: present
 
-- name: Common | install duf
-  ansible.builtin.package:
-    state: present
-  when:
-    - ansible_distribution == "Ubuntu"
-    - ansible_distribution_release == "jammy"
-
 - name: Common | install dust
   ansible.builtin.apt:
     deb: "{{ dust_url }}/v{{ dust_version }}/du-dust_{{ dust_version }}-1_amd64.deb"
   when:
     - running_on_server
     - ansible_os_family == "Debian"
-
-- name: Common | install fdfind
-  ansible.builtin.package:
-    name: fd-find
-    state: present
-  when:
-    - ansible_os_family == "Debian"
-    - running_on_server
-
-- name: Common | install plocate (jammy)
-  ansible.builtin.apt:
-    name: plocate
-    state: present
-  when:
-    - ansible_distribution =="Ubuntu" and ansible_distribution_release == "jammy"
 
 - name: Common | install vector, but not in testing
   ansible.builtin.include_tasks: vector.yml

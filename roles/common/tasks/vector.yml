@@ -1,4 +1,27 @@
 ---
+- name: Check if Vector is installed
+  ansible.builtin.stat:
+    path: /usr/local/bin/vector
+  register: vector_binary
+
+- name: Common |  Install Vector repo
+  ansible.builtin.shell: |
+    set -euxo pipefail
+    bash -c "$(curl -L https://setup.vector.dev)"
+  args:
+    creates: /usr/local/bin/vector
+  when:
+    - ansible_os_family == "RedHat"
+    - not vector_binary.stat.exists
+
+- name: Common | Install vector
+  ansible.builtin.package:
+    name: vector
+    state: present
+  when:
+    - ansible_os_family == "RedHat"
+    - not vector_binary.stat.exists
+
 - name: Common | Install Vector Datadog Keys
   ansible.builtin.apt_key:
     url: "{{ item }}"
