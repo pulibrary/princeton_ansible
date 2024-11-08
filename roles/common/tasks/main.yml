@@ -6,36 +6,14 @@
     "ansible_hostname not in inventory_hostname"
   tags: "update_hostname"
 
-- name: Common | Add apt HTTPS capabilities.
-  ansible.builtin.package:
-    name: "{{ item }}"
-    state: present
+- name: Common | Install Common packages
+  ansible.builtin.include_tasks: "{{ item }}"
   loop:
-    - ca-certificates
-    - apt-transport-https
+    - ubuntu.yml
+    - rockylinux.yml
   when:
-    - ansible_os_family == "Debian"
-
-- name: Common | install snapd
-  ansible.builtin.package:
-    name: "{{ item }}"
-    state: present
-  loop:
-    - snapd
-  when: running_on_server
-
-- name: Common | Install procs
-  community.general.snap:
-    name:
-      - procs
-  when: running_on_server
-
-- name: Common | install building software and build essentials
-  ansible.builtin.package:
-    name: "{{ item }}"
-    state: present
-    update_cache: true
-  with_items: "{{ common_packages }}"
+    - item is defined
+    - item is not none
 
 - name: Common | copy tmux.conf
   ansible.builtin.template:
@@ -79,15 +57,11 @@
     state: present
 
 - name: Common | install duf
-  ansible.builtin.apt:
-    deb: "{{ duf_url }}/v{{ duf_version }}/duf_{{ duf_version }}_linux_amd64.deb"
-  register: duf_repo
-  retries: 3
-  delay: 60
-  until: duf_repo is succeeded
+  ansible.builtin.package:
+    state: present
   when:
-    - running_on_server
-    - ansible_os_family == "Debian"
+    - ansible_distribution == "Ubuntu"
+    - ansible_distribution_release == "jammy"
 
 - name: Common | install dust
   ansible.builtin.apt:
@@ -97,9 +71,12 @@
     - ansible_os_family == "Debian"
 
 - name: Common | install fdfind
-  ansible.builtin.apt:
-    deb: "{{ fd_find_url }}/v{{ fd_find_version }}/fd_{{ fd_find_version }}_amd64.deb"
-  when: running_on_server
+  ansible.builtin.package:
+    name: fd-find
+    state: present
+  when:
+    - ansible_os_family == "Debian"
+    - running_on_server
 
 - name: Common | install plocate (jammy)
   ansible.builtin.apt:
@@ -109,5 +86,5 @@
     - ansible_distribution =="Ubuntu" and ansible_distribution_release == "jammy"
 
 - name: Common | install vector, but not in testing
-  include_tasks: vector.yml
+  ansible.builtin.include_tasks: vector.yml
   when: running_on_server
