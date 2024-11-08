@@ -1,28 +1,51 @@
 ---
 - name: Verify
   hosts: all
-  gather_facts: false
-  tasks:
-  - name: check common package status
-    ansible.builtin.apt:
-      name: "{{ item }}"
-      state: present
-    check_mode: true
-    register: pkg_status
-    loop:
+  vars:
+    common_ubuntu_packages:
       - acl
-      - htop
-      - python3-apt
       - build-essential
       - curl
       - git
-      - unzip
-      - zip
-      - tmux
-      - vim
+      - htop
+      - jq
+      - libcurl4
+      - libssl-dev
+      - libyaml-dev
+      - python3-apt
+      - python3-pip
+      - python-setuptools
       - silversearcher-ag
+      - tmux
+      - tree
+      - unzip
+      - vim
+      - wget
+      - zip
+      - zlib1g-dev
+  gather_facts: false
+  tasks:
+    - name: Common | Verify tmux.conf exists
+      ansible.builtin.stat:
+        path: /etc/tmux.conf
+      register: tmux_conf
 
-  - name: test packages are installed
-    ansible.builtin.assert:
-      that:
-        - not pkg_status.changed
+    - name: Common | Assert tmux.conf exists
+      ansible.builtin.assert:
+        that:
+          - tmux_conf.stat.exists
+
+    - name: Common | Verify vimrc exists
+      ansible.builtin.stat:
+        path: /etc/vim/vimrc.local
+      register: vimrc
+
+    - name: Common | Assert vimrc exists
+      ansible.builtin.assert:
+        that:
+          - vimrc.stat.exists
+
+    - name: Common | Verify common Ubuntu packages are installed
+      ansible.builtin.apt:
+        name: "{{ common_ubuntu_packages }}"
+        state: present
