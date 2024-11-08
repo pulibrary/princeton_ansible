@@ -9,7 +9,7 @@ This Ansible role configures an Ubuntu Jammy (22.04) machine to authenticate aga
 - Access to an Active Directory domain controller
 - An AD user with permissions to join machines to the domain
 
-One will need access to [OIT AD Machine Registration Tool](https://tools.princeton.edu/Dept/) This allows you to register a new name for AD
+- Access to [OIT AD Machine Registration Tool](https://tools.princeton.edu/Dept/) to register a new Active Directory name
 
 ## Role Variables
 
