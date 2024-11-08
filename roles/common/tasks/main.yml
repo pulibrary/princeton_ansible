@@ -1,11 +1,12 @@
 ---
-- name: common | Confirm that hostname matches inventory
+- name: Common | Confirm that hostname matches inventory
   ansible.builtin.hostname:
     name: "{{ inventory_hostname }}"
   when:
     "ansible_hostname not in inventory_hostname"
   tags: "update_hostname"
-- name: common | Add apt HTTPS capabilities.
+
+- name: Common | Add apt HTTPS capabilities.
   ansible.builtin.package:
     name: "{{ item }}"
     state: present
@@ -15,7 +16,7 @@
   when:
     - ansible_os_family == "Debian"
 
-- name: common | install snapd
+- name: Common | install snapd
   ansible.builtin.package:
     name: "{{ item }}"
     state: present
@@ -23,60 +24,61 @@
     - snapd
   when: running_on_server
 
-- name: common | Install procs
+- name: Common | Install procs
   community.general.snap:
     name:
       - procs
   when: running_on_server
 
-- name: common | install building software and build essentials
+- name: Common | install building software and build essentials
   ansible.builtin.package:
     name: "{{ item }}"
     state: present
     update_cache: true
   with_items: "{{ common_packages }}"
 
-- name: common | copy tmux.conf
+- name: Common | copy tmux.conf
   ansible.builtin.template:
     src: "tmux.conf.j2"
     dest: "/etc/tmux.conf"
-    mode: 0644
+    mode: "0644"
 
-- name: common | create vim directory
+- name: Common | create vim directory
   ansible.builtin.file:
     path: /etc/vim
     state: directory
+    mode: "0644"
 
-- name: common | copy vimrc
+- name: Common | copy vimrc
   ansible.builtin.copy:
     src: files/vimrc.local
     dest: /etc/vim/vimrc.local
-    mode: 0644
+    mode: "0644"
 
-- name: common | ensure logrotate timer dir exists
+- name: Common | ensure logrotate timer dir exists
   ansible.builtin.file:
     path: /etc/systemd/system/logrotate.timer.d
     state: directory
-    mode: 0755
+    mode: "0755"
     owner: root
     group: root
   when: ansible_service_mgr=="systemd"
 
-- name: common | override default logrotate timer
+- name: Common | override default logrotate timer
   ansible.builtin.template:
     src: "logrotate_timer.j2"
     dest: "/etc/systemd/system/logrotate.timer.d/override.conf"
-    mode: 0644
+    mode: "0644"
   when: ansible_service_mgr=="systemd"
   notify:
     - reload logrotate timer settings
 
-- name: common | install configured dependencies
+- name: Common | install configured dependencies
   ansible.builtin.package:
     name: '{{ configured_dependencies }}'
     state: present
 
-- name: common | install duf
+- name: Common | install duf
   ansible.builtin.apt:
     deb: "{{ duf_url }}/v{{ duf_version }}/duf_{{ duf_version }}_linux_amd64.deb"
   register: duf_repo
@@ -87,25 +89,25 @@
     - running_on_server
     - ansible_os_family == "Debian"
 
-- name: common | install dust
+- name: Common | install dust
   ansible.builtin.apt:
     deb: "{{ dust_url }}/v{{ dust_version }}/du-dust_{{ dust_version }}-1_amd64.deb"
   when:
     - running_on_server
     - ansible_os_family == "Debian"
 
-- name: common | install fdfind
+- name: Common | install fdfind
   ansible.builtin.apt:
     deb: "{{ fd_find_url }}/v{{ fd_find_version }}/fd_{{ fd_find_version }}_amd64.deb"
   when: running_on_server
 
-- name: common | install plocate (jammy)
+- name: Common | install plocate (jammy)
   ansible.builtin.apt:
     name: plocate
     state: present
   when:
     - ansible_distribution =="Ubuntu" and ansible_distribution_release == "jammy"
 
-- name: install vector, but not in testing
+- name: Common | install vector, but not in testing
   include_tasks: vector.yml
   when: running_on_server
