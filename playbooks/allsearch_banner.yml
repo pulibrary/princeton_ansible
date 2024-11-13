@@ -6,17 +6,20 @@
   remote_user: deploy
   vars:
     - passenger_root: "/opt/allsearch_api/current"
+    - text_no_comma: "dog cat"
+    - text_escaped_comma: "dog\, cat"
+    - text_unescaped_comma: "dog, cat"
   vars_files:
     - ../group_vars/allsearch_api/vault.yml
     - ../group_vars/allsearch_api/common.yml
     - ../group_vars/allsearch_api/{{ runtime_env | default('staging') }}.yml
 
   tasks:
-  #   - name: Check the text for commas
-  #     ansible.builtin.pip:
-  #       name:
-  #         - pan-python
-  #         - pan-os-python
+    - name: Check the text for commas
+      ansible.builtin.set_fact:
+      # the regex (?<!\\), matches any unescaped comma (\,)
+      # example filter {{ 'ansible' | regex_replace('^a.*i(.*)$', 'a\\1') }} returns able
+
 
     - name: Run the Rake task
       ansible.builtin.shell: "cd {{ passenger_root }} && /usr/bin/bash --login -c 'RAILS_ENV={{ rails_env | default('staging') }} bundle exec rake banner:update['{{ banner_text }}',{{alert_status | default('info') }},{{dismissible | default('true')}},{{autoclear | default('false')}}]'"
