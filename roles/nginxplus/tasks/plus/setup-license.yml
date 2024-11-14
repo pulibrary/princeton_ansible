@@ -1,16 +1,23 @@
 ---
 - name: "Create SSL Directory"
-  file:
+  ansible.builtin.file:
     path: /etc/ssl/nginx
     state: directory
-    mode: 0755
+    mode: "0755"
 
 - name: "Copy NGINX Plus Certificate and License Key"
-  copy:
+  ansible.builtin.copy:
     src: "{{ item }}"
     dest: /etc/ssl/nginx
     decrypt: true
-    mode: 0644
-  with_items:
+    mode: "0644"
+  loop:
     - "{{ nginx_license.certificate }}"
     - "{{ nginx_license.key }}"
+
+- name: "Copy NGINX Plus jwt"
+  ansible.builtin.copy:
+    src: "files/licence/nginx-repo.jwt"
+    dest: /etc/ssl/nginx/licence.jwt
+    decrypt: true
+    mode: "0644"
