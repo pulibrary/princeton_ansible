@@ -1,10 +1,61 @@
 ---
 # This is an example playbook to execute Ansible tests.
-
-- name: Verify
+#
+- name: Verify NFS server configuration
   hosts: all
-  gather_facts: false
+  become: true
+  vars:
+    - running_on_server: false
+    - nfsserver_is_local: true
+    - bibdata_fileshare_mount: "/var/nfs/bibdata"
+    - cdh_fileshare_mount: "/var/nfs/cdh"
+    - drupal7_fileshare_mount: "/var/nfs/drupal7"
+    - open_marc_records_mount: "/var/nfs/open_marc_records"
+    - pas_fileshare_mount: "/var/nfs/pas"
+    - tigerdata_fileshare_mount: "/var/nfs/tigerdata"
+    - nfsserver_packages: nfs-kernel-server
+    - nfsserver_services: nfs-kernel-server
+    - nfsclient_packages: nfs-common
   tasks:
-  - name: Example assertion
-    ansible.builtin.assert:
-      that: true
+
+    - name: Nfsserver | Verify conan group exists
+      ansible.builtin.group:
+        name: conan
+        state: present
+      changed_when: false
+
+    - name: Nfsserver | Verify conan user exists
+      ansible.builtin.user:
+        name: conan
+        group: conan
+        home: /home/conan
+        shell: /usr/bin/bash
+        state: present
+      changed_when: false
+
+    - name: Nfsserver | Verify shares exist
+      ansible.builtin.stat:
+        path: "{{ share }}"
+      register: result
+      loop:
+        - "{{ bibdata_fileshare_mount }}"
+        - "{{ drupal7_fileshare_mount }}"
+        - "{{ pas_fileshare_mount }}"
+        - "{{ open_marc_records_mount }}"
+        - "{{ tigerdata_fileshare_mount }}"
+        - "{{ cdh_fileshare_mount }}"
+      loop_control:
+        loop_var: share
+    - name: Nfsserver | Assert shares exist
+      ansible.builtin.assert:
+        that:
+          - item.stat.isdir is true
+          - item.stat.exists is true
+      loop: "{{ result.results }}"
+
+    - name: Nfsserver | Verify NFS server packages are installed
+      ansible.builtin.apt:
+        name: "{{ nfsserver_packages }}"
+        state: present
+      changed_when: false
+      when: nfsserver_is_local
