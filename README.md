@@ -78,11 +78,11 @@ In all the steps below substitute your role name for `your_new_role`
 
    ```bash
    export your_new_role=<fill in the role name here>
-   cd roles
-   ansible-galaxy role init $your_new_role
-   cd ..
+   cd roles/$your_new_role
+   molecule init scenario
+   cd ../..
    ```
-1. Set up to run from github actions `vi .github/workflows/molecule_tests.yml` add for your role at the end matrix of the roles
+1. Set up to run from github actions `vim .github/workflows/molecule_tests.yml` add for your role at the end matrix of the roles
    ```
        - your_new_role
    ```
@@ -91,7 +91,7 @@ In all the steps below substitute your role name for `your_new_role`
    1. copy all molecule and lint files (note you need the `.` in the command
       below to get the hidden files)
       ```bash
-      cp roles/example/. $your_new_role
+      cp -r roles/example/* $your_new_role
       ```
 
    1. edit `vi roles/$your_new_role/meta/main.yml` and add a description
