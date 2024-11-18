@@ -1,12 +1,31 @@
 ---
 # tasks file for lib_sftp
+- name: Lib_sftp | create local group for alma
+  ansible.builtin.group:
+    name: "{{ lib_sftp_domain_group | default('omit') }}"
+    state: present
+
+- name: Lib_sftp | create local user for alma
+  ansible.builtin.user:
+    name: "{{ almasftp_user }}"
+    shell: /usr/bin/bash
+    group: "{{ lib_sftp_domain_group | default('omit') }}"
+    password: "{{ almasftp_user_password }}"
+
+- name: Lib_sftp | create local user for aspaceftp_user
+  ansible.builtin.user:
+    name: "{{ aspaceftp_user }}"
+    shell: /usr/bin/bash
+    group: "{{ lib_sftp_domain_group | default('omit') }}"
+    password: "{{ aspaceftp_user_password }}"
+
 - name: Lib_sftp | create alma directory drop
   ansible.builtin.file:
     path: "{{ item }}"
     state: directory
     recurse: true
     owner: "{{ almasftp_user }}"
-    group: "domain users@pu.win.princeton.edu"
+    group: "{{ lib_sftp_domain_group | default('omit') }}"
     mode: "0755"
   loop:
     - "/alma/bursar"
@@ -23,7 +42,7 @@
 - name: Lib_sftp | grant {{ deploy_user }} access to alma directory
   ansible.builtin.user:
     name: "{{ deploy_user }}"
-    group: "domain users@pu.win.princeton.edu"
+    groups: "{{ lib_sftp_domain_group | default('omit') }}"
     append: true
 
 - name: Lib_sftp | create aspace directory drop
@@ -32,20 +51,8 @@
     state: directory
     recurse: true
     owner: "{{ aspaceftp_user }}"
-    group: "domain users@pu.win.princeton.edu"
+    group: "{{ lib_sftp_domain_group | default('omit') }}"
     mode: "0755"
-
-- name: Lib_sftp | create local group for alma
-  ansible.builtin.group:
-    name: "domain users@pu.win.princeton.edu"
-    state: present
-
-- name: Lib_sftp | create local user for alma
-  ansible.builtin.user:
-    name: almasftp
-    shell: /usr/bin/bash
-    group: "domain users@pu.win.princeton.edu"
-    password: "{{ almasftp_user_password }}"
 
 - name: Lib_sftp | Flush handlers to be able to use SSSD authentication
   ansible.builtin.meta: flush_handlers

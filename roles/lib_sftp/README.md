@@ -1,7 +1,7 @@
 Role Name
 =========
 
-A brief description of the role goes here.
+Binds our sftp servers to use active directory
 
 Requirements
 ------------
