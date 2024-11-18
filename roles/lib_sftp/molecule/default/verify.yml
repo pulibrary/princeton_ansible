@@ -1,20 +1,37 @@
 ---
-- name: Verify
+- name: Verify lib_sftp configuration
   hosts: all
-  gather_facts: false
+  become: true
   tasks:
-    - name: Check ruby package status
-      ansible.builtin.package:
-        name: "{{ item }}"
-        state: present
-      check_mode: true
-      register: pkg_status
-      loop:
-        - ruby-switch
-        - ruby2.6-dev
-        - ruby2.6
 
-    - name: Test for ruby packages
+    - name: Lib_sftp | Verify alma directories exist
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      register: alma_dirs
+      loop:
+        - "/alma/bursar"
+        - "/alma/datasync_processing"
+        - "/alma/fund_adjustment"
+        - "/alma/invoice_status"
+        - "/alma/invoices"
+        - "/alma/people"
+        - "/alma/pod"
+        - "/alma/publishing"
+        - "/alma/recap"
+        - "/alma/scsb_renewals"
+
+    - name: Lib_sftp | Assert alma directories exist
       ansible.builtin.assert:
         that:
-          - not pkg_status.changed
+          - alma_dirs.results | map(attribute='stat.isdir') | all(item=True)
+          - alma_dirs.results | map(attribute='stat.exists') | all(item=True)
+
+    - name: Lib_sftp | Verify aspace directory exists
+      ansible.builtin.stat:
+        path: /alma/aspace
+      register: aspace_dir
+
+    - name: Lib_sftp | Assert aspace directory exists
+      ansible.builtin.assert:
+        that:
+          - aspace_dirs.results | map(attribute='stat.isdir') | all(item=True)
