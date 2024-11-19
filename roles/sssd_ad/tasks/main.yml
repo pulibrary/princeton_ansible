@@ -92,6 +92,31 @@
         dns proxy = no
   notify: restart smb
 
+- name: Sssd_ad | ensure /run/samba directory exists
+  ansible.builtin.file:
+    path: /run/samba
+    state: directory
+    owner: root
+    group: sambashare
+    mode: "0770"
+
+- name: Sssd_ad | ensure sambashare group exists
+  ansible.builtin.group:
+    name: sambashare
+    state: present
+
+- name: Sssd_ad | add current user to sambashare group
+  ansible.builtin.user:
+    name: "{{ ansible_user }}"
+    groups: sambashare
+    append: true
+
+- name: Sssd_ad | restart Samba services
+  ansible.builtin.service:
+    name: smbd
+    state: restarted
+  notify: restart smb
+
 - name: Sssd_ad | enable and start sssd service
   ansible.builtin.service:
     name: sssd
@@ -139,7 +164,7 @@
     state: directory
     mode: "0700"
     owner: "{{ ad_test_user }}"
-    group: "{{ ad_test_user }}"
+    group: "sambashare"
   when:
     - running_on_server
     - ad_user_check.rc == 0
