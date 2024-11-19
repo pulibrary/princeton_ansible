@@ -35,6 +35,7 @@
     - sssd
     - sssd-tools
     - realmd
+    - samba
 
 - name: Sssd_ad | configure Kerberos
   ansible.builtin.blockinfile:
@@ -48,7 +49,7 @@
         admin_server = FILE:/var/log/kadmind.log
 
       [libdefaults]
-        default_realm = PU.WIN.PRINCETON.EDU  # Set this to your domain's realm
+        default_realm = PU.WIN.PRINCETON.EDU
         dns_lookup_realm = false
         dns_lookup_kdc = true
         ticket_lifetime = 24h
@@ -74,6 +75,22 @@
     mode: "0600"
     owner: root
     group: root
+
+- name: Sssd_ad | create samba config file
+  ansible.builtin.blockinfile:
+    path: /etc/samba/smb.conf
+    mode: "0644"
+    create: true
+    block: |
+      [global]
+        workgroup = WORKGROUP
+        security = ads
+        realm = PU.WIN.PRINCETON.EDU
+        kerberos method = secrets and keytab
+        log file = /var/log/samba/%m.log
+        max log size = 50
+        dns proxy = no
+  notify: restart smb
 
 - name: Sssd_ad | enable and start sssd service
   ansible.builtin.service:
@@ -110,6 +127,12 @@
     path: /etc/pam.d/common-session
     line: 'session required pam_mkhomedir.so skel=/etc/skel umask=0022'
 
+- name: Sssd_ad | check if AD user exists
+  ansible.builtin.command: getent passwd {{ ad_test_user }}
+  register: ad_user_check
+  ignore_errors: true
+  when: running_on_server
+
 - name: Sssd_ad | create home directory for AD users
   ansible.builtin.file:
     path: /home/{{ ad_test_user }}
@@ -119,8 +142,7 @@
     group: "{{ ad_test_user }}"
   when:
     - running_on_server
-    - ad_test_user is not none
-    - "'{{ ad_test_user }}' in lookup('ansible.builtin.getent', 'passwd')"
+    - ad_user_check.rc == 0
 
 - name: Sssd_ad | test login with AD user
   ansible.builtin.command: su - {{ ad_test_user }} -c 'exit 0'
@@ -133,4 +155,3 @@
   ansible.builtin.debug:
     var: ad_login_result
   when: running_on_server
-
