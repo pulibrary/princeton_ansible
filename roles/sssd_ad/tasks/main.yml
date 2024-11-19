@@ -48,24 +48,24 @@
         admin_server = FILE:/var/log/kadmind.log
 
       [libdefaults]
+        default_realm = PU.WIN.PRINCETON.EDU  # Set this to your domain's realm
         dns_lookup_realm = false
         dns_lookup_kdc = true
         ticket_lifetime = 24h
         renew_lifetime = 7d
         forwardable = true
         rdns = false
-      #  default_realm = {{ ad_domain | upper }}
         default_ccache_name = KEYRING:persistent:%{uid}
 
       [realms]
-        {{ ad_domain | upper }} = {
+        PU.WIN.PRINCETON.EDU = {
           kdc = {{ ad_domain_controller }}
           admin_server = {{ ad_domain_controller }}
         }
 
       [domain_realm]
-        .{{ ad_domain | lower }} = {{ ad_domain | upper }}
-        {{ ad_domain | lower }} = {{ ad_domain | upper }}
+        .pu.win.princeton.edu = PU.WIN.PRINCETON.EDU
+        pu.win.princeton.edu = PU.WIN.PRINCETON.EDU
 
 - name: Sssd_ad | create sssd.conf
   ansible.builtin.template:
@@ -88,6 +88,10 @@
   environment:
     KRB5_CONFIG: /etc/krb5.conf
   changed_when: false
+  failed_when: >
+    result.rc != 0 and
+    ("Already joined" not in result.stderr)
+  register: result
   when: running_on_server
 
 - name: Sssd_ad | verify domain join
@@ -113,12 +117,15 @@
     mode: "0700"
     owner: "{{ ad_test_user }}"
     group: "{{ ad_test_user }}"
-  when: running_on_server
+  when:
+    - running_on_server
+    - ad_test_user is not none
+    - "'{{ ad_test_user }}' in lookup('ansible.builtin.getent', 'passwd')"
 
 - name: Sssd_ad | test login with AD user
   ansible.builtin.command: su - {{ ad_test_user }} -c 'exit 0'
   changed_when: false
-  ignore_errors: true  # Ignore errors if the user cannot log in yet
+  ignore_errors: true
   register: ad_login_result
   when: running_on_server
 
@@ -126,3 +133,4 @@
   ansible.builtin.debug:
     var: ad_login_result
   when: running_on_server
+
