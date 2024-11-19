@@ -34,6 +34,7 @@
     - libpam-sss
     - sssd
     - sssd-tools
+    - realmd
 
 - name: Sssd_ad | configure Kerberos
   ansible.builtin.blockinfile:
@@ -53,7 +54,7 @@
         renew_lifetime = 7d
         forwardable = true
         rdns = false
-        default_realm = {{ ad_domain | upper }}
+      #  default_realm = {{ ad_domain | upper }}
         default_ccache_name = KEYRING:persistent:%{uid}
 
       [realms]
@@ -70,7 +71,9 @@
   ansible.builtin.template:
     src: sssd.conf.j2
     dest: /etc/sssd/sssd.conf
-    mode: "0644"
+    mode: "0600"
+    owner: root
+    group: root
 
 - name: Sssd_ad | enable and start sssd service
   ansible.builtin.service:
