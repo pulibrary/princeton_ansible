@@ -32,43 +32,36 @@
     - krb5-user
     - libnss-sss
     - libpam-sss
+    - packagekit
     - sssd
     - sssd-tools
     - realmd
     - samba
 
 - name: Sssd_ad | configure Kerberos
-  ansible.builtin.blockinfile:
-    path: /etc/krb5.conf
+  ansible.builtin.template:
+    src: krb5.conf.j2
+    dest: /etc/krb5.conf
     mode: "0644"
-    create: true
-    block: |
-      [logging]
-        default = FILE:/var/log/krb5libs.log
-        kdc = FILE:/var/log/krb5kdc.log
-        admin_server = FILE:/var/log/kadmind.log
+    owner: root
+    group: root
 
-      [libdefaults]
-        default_realm = PU.WIN.PRINCETON.EDU
-        dns_lookup_realm = false
-        dns_lookup_kdc = true
-        ticket_lifetime = 24h
-        renew_lifetime = 7d
-        forwardable = true
-        rdns = false
-        default_ccache_name = KEYRING:persistent:%{uid}
+- name: Sssd_ad | Discover the domain
+  ansible.builtin.command: realm discover {{ ad_domain }}
+  register: realm_discovery
+  changed_when: false
 
-      [realms]
-        PU.WIN.PRINCETON.EDU = {
-          kdc = {{ ad_domain_controller }}
-          admin_server = {{ ad_domain_controller }}
-        }
+- name: Sssd_ad | join the domain
+  ansible.builtin.command: realm join {{ ad_domain }} -U {{ ad_admin_user }}
+  vars:
+    ansible_become_pass: "{{ ad_admin_password }}"
+  become: true
+  when:
+    - running_on_server
+    - "'configured' not in realm_discovery.stdout"
+  changed_when: false
 
-      [domain_realm]
-        .pu.win.princeton.edu = PU.WIN.PRINCETON.EDU
-        pu.win.princeton.edu = PU.WIN.PRINCETON.EDU
-
-- name: Sssd_ad | create sssd.conf
+- name: Sssd_ad | Configure sssd.conf
   ansible.builtin.template:
     src: sssd.conf.j2
     dest: /etc/sssd/sssd.conf
@@ -123,28 +116,6 @@
     state: started
     enabled: true
   register: sssd_service
-  when: running_on_server
-
-- name: Sssd_ad | join the domain
-  ansible.builtin.command: realm join {{ ad_domain }} -U {{ ad_admin_user }} --install=/
-  environment:
-    KRB5_CONFIG: /etc/krb5.conf
-  changed_when: false
-  failed_when: >
-    result.rc != 0 and
-    ("Already joined" not in result.stderr)
-  register: result
-  when: running_on_server
-
-- name: Sssd_ad | verify domain join
-  ansible.builtin.command: realm list
-  register: realm_list
-  changed_when: false
-  when: running_on_server
-
-- name: Sssd_ad | debug realm list output
-  ansible.builtin.debug:
-    var: realm_list.stdout
   when: running_on_server
 
 - name: Sssd_ad | configure PAM
