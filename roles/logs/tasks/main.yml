@@ -1,29 +1,26 @@
 ---
 # tasks file for roles/logs
-- name: logs | ensure grafana key ring exists
+- name: Logs | ensure grafana key ring exists
   ansible.builtin.file:
     path: /etc/apt/keyrings/
     state: directory
     mode: '0755'
 
-- name: logs | add grafana key and repo
-  block:
-    - name: grafanarepo |no apt key
-      ansible.builtin.get_url:
-        url: https://apt.grafana.com/gpg.key
-        dest: /etc/apt/keyrings/grafana.gpg
+- name: Logs | add grafana key and repo
+  ansible.builtin.shell: /usr/bin/wget -q -O - https://apt.grafana.com/gpg.key | gpg --dearmor > /etc/apt/keyrings/grafana.gpg
+  changed_when: false
 
-    - name: grafanarepo | apt source
-      ansible.builtin.apt_repository:
-        repo: "deb [signed-by=/etc/apt/keyrings/grafana.gpg] https://apt.grafana.com stable main {{ ansible_distribution_release }} stable"
-        state: present
-        file: grafana
+- name: Grafanarepo | apt source
+  ansible.builtin.apt_repository:
+    repo: "deb [signed-by=/etc/apt/keyrings/grafana.gpg] https://apt.grafana.com stable main"
+    state: present
+    filename: grafana
 
-- name: logs | install grafana and promtail
+- name: Logs | install grafana and promtail
   ansible.builtin.apt:
     name: "{{ item }}"
     update_cache: true
-  loop: 
+  loop:
     - grafana
     - loki
     - promtail
