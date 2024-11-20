@@ -1,22 +1,22 @@
 ---
 # tasks file for roles/ufw_firewall
-
 - name: UFW | Install UFW
   ansible.builtin.package:
     name: ufw
     state: present
 
-- name: UFW | Enable UFW
-  community.general.ufw:
-    state: enabled
+- name: UFW | Reload UFW to apply changes
+  ansible.builtin.command: ufw enable
+  changed_when: false
 
-- name: UFW | generic rules
-  ansible.builtin.include_tasks: rules.yml
-  loop: "{{ ufw_firewall_rules }}"
-  loop_control:
-    loop_var: rule
+- name: UFW | generic rules template
+  ansible.builtin.template:
+    src: user.rules.j2
+    dest: "/etc/ufw/user.rules"
+    owner: root
+    group: root
+    mode: "0640"
 
-- name: UFW | Deny all other incoming traffic
-  community.general.ufw:
-    rule: deny
-    direction: in
+- name: UFW | Reload UFW to apply changes
+  ansible.builtin.command: ufw reload
+  changed_when: false
