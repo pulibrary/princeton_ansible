@@ -77,7 +77,7 @@
         cluster: "{{ vcenter_cluster }}"
         folder: "{{ old_vm_info.virtual_machines[0].folder }}"
         name: "{{ replacement_vm }}"
-        state: present
+        state: powered-off
         template: "{{ vm_template | default('template_jammy_spring_2024')}}"
         disk:
           - size: "{{ (old_vm_info.virtual_machines[0].allocated.storage / 1024) | int }}kb"
@@ -105,16 +105,16 @@
       ansible.builtin.debug:
         var: new_vm_deets
 
-    - name: power down the VM so we can mess with the network settings
-      community.vmware.vmware_guest_powerstate:
-        hostname: "{{ vcenter_hostname }}"
-        username: "{{ vcenter_username }}"
-        password: "{{ vcenter_password }}"
-        validate_certs: false
-        datacenter: "{{ vcenter_datacenter }}"
-        # new VM var does not include UUID; use moid, which is unique in each vCenter instance
-        moid: "{{ new_vm_deets.instance.moid }}"
-        state: powered-off
+    # - name: power down the VM so we can mess with the network settings
+    #   community.vmware.vmware_guest_powerstate:
+    #     hostname: "{{ vcenter_hostname }}"
+    #     username: "{{ vcenter_username }}"
+    #     password: "{{ vcenter_password }}"
+    #     validate_certs: false
+    #     datacenter: "{{ vcenter_datacenter }}"
+    #     # new VM var does not include UUID; use moid, which is unique in each vCenter instance
+    #     moid: "{{ new_vm_deets.instance.moid }}"
+    #     state: powered-off
 
     - name: delete NIC with automatic mac address
       community.vmware.vmware_guest_network:
