@@ -3,7 +3,7 @@
 # By default this playbook runs on all hosts in the three environment groups. To run against a single host or group, use '--limit <group_or_host_name>'. For example '--limit qa' or '--limit figgy-web-staging1.princeton.edu'."
 #
 - name: install OIT Security Tools on a host
-  hosts: localhost
+  hosts: all
   remote_user: pulsys
   serial: "{{ concurrent_vms | default('5') }}"
   vars_files:
@@ -13,135 +13,135 @@
     - ../../group_vars/all/vault.yml
 
   tasks:
-  - name: Get all Linux Sensor Installers
-    crowdstrike.falcon.sensor_download_info:
-      filter: "platform:'linux'"
-      falcon_client_id: "{{ vault_crowdstrike_client_id }}"
-      falcon_client_secret: "{{ vault_crowdstrike_secret }}"
-      cloud: "us-1"
+    # - name: Get all Linux Sensor Installers
+    #   crowdstrike.falcon.sensor_download_info:
+    #     filter: "platform:'linux'"
+    #     falcon_client_id: "{{ vault_crowdstrike_client_id }}"
+    #     falcon_client_secret: "{{ vault_crowdstrike_secret }}"
+    #     cloud: "us-1"
 
-  - name: Import falcon install role
-    ansible.builtin.import_role:
-      name: crowdstrike.falcon.falcon_install
-    vars:
-      falcon_client_id: "{{ vault_crowdstrike_client_id }}"
-      falcon_client_secret: "{{ vault_crowdstrike_secret }}"
-      falcon_sensor_version_decrement: 2
-      # be sure to add this so we don't download if we don't need to
-      falcon_api_sensor_download_path: /opt/
+    # - name: Import falcon install role
+    #   ansible.builtin.import_role:
+    #     name: crowdstrike.falcon.falcon_install
+    #   vars:
+    #     falcon_client_id: "{{ vault_crowdstrike_client_id }}"
+    #     falcon_client_secret: "{{ vault_crowdstrike_secret }}"
+    #     falcon_sensor_version_decrement: 2
+    #     # be sure to add this so we don't download if we don't need to
+    #     falcon_api_sensor_download_path: /opt/
 
-  - name: Import falcon install role
-    ansible.builtin.import_role:
-      name: crowdstrike.falcon.falcon_configure
-    vars:
-      falcon_client_id: "{{ vault_crowdstrike_client_id }}"
-      falcon_client_secret: "{{ vault_crowdstrike_secret }}"
+    # - name: Import falcon install role
+    #   ansible.builtin.import_role:
+    #     name: crowdstrike.falcon.falcon_configure
+    #   vars:
+    #     falcon_client_id: "{{ vault_crowdstrike_client_id }}"
+    #     falcon_client_secret: "{{ vault_crowdstrike_secret }}"
 
-  - name: Populate service facts
-    ansible.builtin.service_facts:
+    - name: Populate service facts
+      ansible.builtin.service_facts:
 
-  - name: Populate package facts
-    ansible.builtin.package_facts:
+    - name: Populate package facts
+      ansible.builtin.package_facts:
 
-  - name: Import BigFix GPG key
-    ansible.builtin.rpm_key:
-      state: present
-      key: https://software.bigfix.com/download/bes/95/RPM-GPG-KEY-BigFix-9-V2
-    when:
-      - ansible_os_family == "RedHat"
+    - name: Import BigFix GPG key
+      ansible.builtin.rpm_key:
+        state: present
+        key: https://software.bigfix.com/download/bes/95/RPM-GPG-KEY-BigFix-9-V2
+      when:
+        - ansible_os_family == "RedHat"
 
-  - name: Create bigfix directory
-    ansible.builtin.file:
-      path: /etc/opt/BESClient
-      state: directory
-      mode: '0755'
-    when:
-      - "ansible_facts.services['besclient.service'] is not defined"
+    - name: Create bigfix directory
+      ansible.builtin.file:
+        path: /etc/opt/BESClient
+        state: directory
+        mode: "0755"
+      when:
+        - "ansible_facts.services['besclient.service'] is not defined"
 
-  - name: Download BigFix masthead
-    ansible.builtin.get_url:
-      url: "{{ vault_bigfix_url }}"
-      dest: "/etc/opt/BESClient/actionsite.afxm"
-      owner: root
-      group: root
-      mode: "0600"
-    when: "ansible_facts.services['besclient.service'] is not defined"
+    - name: Download BigFix masthead
+      ansible.builtin.get_url:
+        url: "{{ vault_bigfix_url }}"
+        dest: "/etc/opt/BESClient/actionsite.afxm"
+        owner: root
+        group: root
+        mode: "0600"
+      when: "ansible_facts.services['besclient.service'] is not defined"
 
-  - name: Download the bigfix deb file (Ubuntu)
-    ansible.builtin.get_url:
-      url: "https://software.bigfix.com/download/bes/100/BESAgent-10.0.7.52-debian6.amd64.deb"
-      dest: "/tmp/BESAgent-10.0.7.52-debian6.amd64.deb"
-      owner: pulsys
-      group: pulsys
-      mode: "0644"
-    when:
-     - "ansible_facts.services['besclient.service'] is not defined"
-     - ansible_os_family == "Debian"
+    - name: Download the bigfix deb file (Ubuntu)
+      ansible.builtin.get_url:
+        url: "https://software.bigfix.com/download/bes/100/BESAgent-10.0.7.52-debian6.amd64.deb"
+        dest: "/tmp/BESAgent-10.0.7.52-debian6.amd64.deb"
+        owner: pulsys
+        group: pulsys
+        mode: "0644"
+      when:
+        - "ansible_facts.services['besclient.service'] is not defined"
+        - ansible_os_family == "Debian"
 
-  - name: Download the bigfix deb file (RedHat)
-    ansible.builtin.get_url:
-      url: "https://software.bigfix.com/download/bes/100/BESAgent-10.0.7.52-rhe6.x86_64.rpm"
-      dest: "/tmp/BESAgent-10.0.7.52-rhel6.x86_64.rpm"
-      owner: pulsys
-      group: pulsys
-      mode: "0644"
-    when:
-     - "ansible_facts.services['besclient.service'] is not defined"
-     - ansible_os_family == "RedHat"
+    - name: Download the bigfix deb file (RedHat)
+      ansible.builtin.get_url:
+        url: "https://software.bigfix.com/download/bes/100/BESAgent-10.0.7.52-rhe6.x86_64.rpm"
+        dest: "/tmp/BESAgent-10.0.7.52-rhel6.x86_64.rpm"
+        owner: pulsys
+        group: pulsys
+        mode: "0644"
+      when:
+        - "ansible_facts.services['besclient.service'] is not defined"
+        - ansible_os_family == "RedHat"
 
-  - name: install BESClient agent (Ubuntu)
-    ansible.builtin.apt:
-      deb: "/tmp/BESAgent-10.0.7.52-debian6.amd64.deb"
-    when:
-      - "ansible_facts.services['besclient.service'] is not defined"
-      - ansible_os_family == "Debian"
+    - name: install BESClient agent (Ubuntu)
+      ansible.builtin.apt:
+        deb: "/tmp/BESAgent-10.0.7.52-debian6.amd64.deb"
+      when:
+        - "ansible_facts.services['besclient.service'] is not defined"
+        - ansible_os_family == "Debian"
 
-  - name: install BESClient agent (RedHat)
-    ansible.builtin.dnf:
-      name: "/tmp/BESAgent-10.0.7.52-rhel6.x86_64.rpm"
-      state: present
-    when:
-      - "ansible_facts.services['besclient.service'] is not defined"
-      - ansible_os_family == "RedHat"
+    - name: install BESClient agent (RedHat)
+      ansible.builtin.dnf:
+        name: "/tmp/BESAgent-10.0.7.52-rhel6.x86_64.rpm"
+        state: present
+      when:
+        - "ansible_facts.services['besclient.service'] is not defined"
+        - ansible_os_family == "RedHat"
 
-  - name: Launch the BigFix client
-    ansible.builtin.command: /etc/init.d/besclient start
-    when: "ansible_facts.services['besclient.service'] is not defined"
+    - name: Launch the BigFix client
+      ansible.builtin.command: /etc/init.d/besclient start
+      when: "ansible_facts.services['besclient.service'] is not defined"
 
-  - name: Check for rapid7 path
-    ansible.builtin.stat:
-      path: /opt/rapid7
-    register: rapid7_home
+    - name: Check for rapid7 path
+      ansible.builtin.stat:
+        path: /opt/rapid7
+      register: rapid7_home
 
-  - name: create new rapid7 directory
-    ansible.builtin.file:
-      path: /opt/rapid7
-      state: directory
-    when:
-      - not rapid7_home.stat.exists
+    - name: create new rapid7 directory
+      ansible.builtin.file:
+        path: /opt/rapid7
+        state: directory
+      when:
+        - not rapid7_home.stat.exists
 
-  - name: Copy Rapid7 install script to box
-    ansible.builtin.copy:
-      src: ../../bin/Rapid7_agent_installer.sh
-      dest: /opt/rapid7/
-      owner: pulsys
-      group: pulsys
-      mode: '0744'
-    become: true
-    when:
-      - not rapid7_home.stat.exists
+    - name: Copy Rapid7 install script to box
+      ansible.builtin.copy:
+        src: ../../bin/Rapid7_agent_installer.sh
+        dest: /opt/rapid7/
+        owner: pulsys
+        group: pulsys
+        mode: "0744"
+      become: true
+      when:
+        - not rapid7_home.stat.exists
 
-  - name: Execute Rapid7 install script
-    ansible.builtin.shell: sudo /opt/rapid7/Rapid7_agent_installer.sh install_start --token {{ vault_Rapid7_token }} --attributes="Library Systems"
-    when:
-      - not rapid7_home.stat.exists
+    - name: Execute Rapid7 install script
+      ansible.builtin.shell: sudo /opt/rapid7/Rapid7_agent_installer.sh install_start --token {{ vault_Rapid7_token }} --attributes="Library Systems"
+      when:
+        - not rapid7_home.stat.exists
 
-  - name: Restart or start rapid7
-    ansible.builtin.service:
-      name: ir_agent
-      state: started
-    when:
-      - not rapid7_home.stat.exists
+    - name: Restart or start rapid7
+      ansible.builtin.service:
+        name: ir_agent
+        state: started
+      when:
+        - not rapid7_home.stat.exists
 
   # post_tasks:
   #   - name: send information to slack
