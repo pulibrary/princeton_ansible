@@ -69,20 +69,24 @@
     owner: root
     group: root
 
-- name: Sssd_ad | create samba config file
-  ansible.builtin.blockinfile:
+- name: Sssd_ad | Restart sssd service
+  ansible.builtin.systemd:
+    name: sssd
+    state: restarted
+    enabled: true
+
+- name: Sssd_ad | configure smb
+  ansible.builtin.lineinfile:
     path: /etc/samba/smb.conf
+    line: "{{ item }}"
     mode: "0644"
-    create: true
-    block: |
-      [global]
-        workgroup = WORKGROUP
-        security = ads
-        realm = PU.WIN.PRINCETON.EDU
-        kerberos method = secrets and keytab
-        log file = /var/log/samba/%m.log
-        max log size = 50
-        dns proxy = no
+  loop:
+    - '[global]'
+    - '   workgroup = {{ ad_workgroup }}'
+    - '   security = ads'
+    - '   realm = {{ ad_domain | upper }}'
+    - '   kerberos method = secrets and keytab'
+    - '   idmap config * : range = 16777216-33554431'
   notify: restart smb
 
 - name: Sssd_ad | ensure /run/samba directory exists
@@ -127,6 +131,7 @@
   ansible.builtin.command: getent passwd {{ ad_test_user }}
   register: ad_user_check
   ignore_errors: true
+  changed_when: false
   when: running_on_server
 
 - name: Sssd_ad | create home directory for AD users
