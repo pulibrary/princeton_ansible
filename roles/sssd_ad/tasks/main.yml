@@ -51,15 +51,32 @@
   register: realm_discovery
   changed_when: false
 
+- name: Sssd_ad | Ensure domain can be discovered
+  ansible.builtin.fail:
+    msg: "Failed to discover {{ ad_domain }}. Check DNS and network settings"
+  when:
+    - running_on_server
+    - "'realm-name: {{ ad_domain }}' not in realm_discover.stdout"
+
 - name: Sssd_ad | join the domain
-  ansible.builtin.command: realm join {{ ad_domain }} -U {{ ad_admin_user }}
+  ansible.builtin.command: realm join -U {{ ad_admin_user }} {{ ad_domain }}
   vars:
     ansible_become_pass: "{{ ad_admin_password }}"
   become: true
+  register: join_output
   when:
     - running_on_server
-    - "'configured' not in realm_discovery.stdout"
+  failed_when: "'Successfully enrolled' not in join_output.stdout"
+
+- name: Sssd_ad | Verify domain join
+  ansible.builtin.command: "realm list"
+  register: realm_list
   changed_when: false
+
+- name: Sssd_ad | Ensure domain is listed
+  ansible.builtin.fail:
+    msg: "The domain {{ ad_domain }} is not listed. Join may have failed."
+  when: "'realm-name: {{ ad_domain }}' not in realm_list.stdout"
 
 - name: Sssd_ad | Configure sssd.conf
   ansible.builtin.template:
@@ -74,6 +91,17 @@
     name: sssd
     state: restarted
     enabled: true
+
+- name: Sssd_ad | Update NSS configuration
+  ansible.builtin.lineinfile:
+    path: /etc/nsswitch.conf
+    regexp: "{{ item.regexp }}"
+    line: "{{ item.line }}"
+    state: present
+  loop:
+    - { regexp: "^passwd:.*", line: "passwd:         compat systemd sss" }
+    - { regexp: "^group:.*", line: "group:          compat systemd sss" }
+    - { regexp: "^shadow:.*", line: "shadow:         compat sss" }
 
 - name: Sssd_ad | configure smb
   ansible.builtin.lineinfile:
