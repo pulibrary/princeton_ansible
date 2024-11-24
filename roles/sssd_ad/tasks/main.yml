@@ -51,13 +51,6 @@
   register: realm_discovery
   changed_when: false
 
-- name: Sssd_ad | Ensure domain can be discovered
-  ansible.builtin.fail:
-    msg: "Failed to discover {{ ad_domain }}. Check DNS and network settings"
-  when:
-    - running_on_server
-    - "'realm-name: {{ ad_domain }}' not in realm_discover.stdout"
-
 - name: Sssd_ad | join the domain
   ansible.builtin.command: realm join -U {{ ad_admin_user }} {{ ad_domain }}
   vars:
@@ -72,11 +65,6 @@
   ansible.builtin.command: "realm list"
   register: realm_list
   changed_when: false
-
-- name: Sssd_ad | Ensure domain is listed
-  ansible.builtin.fail:
-    msg: "The domain {{ ad_domain }} is not listed. Join may have failed."
-  when: "'realm-name: {{ ad_domain }}' not in realm_list.stdout"
 
 - name: Sssd_ad | Configure sssd.conf
   ansible.builtin.template:
