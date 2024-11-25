@@ -1,4 +1,20 @@
 ---
+- name: Nginxplus | Create nginx override dir
+  ansible.builtin.file:
+    path: /etc/systemd/system/nginx.service.d
+    state: directory
+    mode: "0755"
+
+- name: Nginxplus | Restart nginx on crash
+  ansible.builtin.copy:
+    src: 'systemd_override.conf'
+    dest: /etc/systemd/system/nginx.service.d/override.conf
+    mode: "0644"
+  tags:
+    - notest
+  notify:
+    - reload systemd
+
 - name: Nginxplus | create default directory
   ansible.builtin.file:
     path: "/var/local/www/default"
@@ -10,8 +26,8 @@
 
 - name: Nginxplus | add svg logo files
   ansible.builtin.copy:
-    src: files/{{item}}
-    dest: "/var/local/www/default/{{item}}"
+    src: files/{{ item }}
+    dest: "/var/local/www/default/{{ item }}"
     owner: nginx
     group: nginx
     mode: "0644"
@@ -33,8 +49,8 @@
 
 - name: Nginxplus | add custom error pages
   ansible.builtin.copy:
-    src: "files/{{item}}"
-    dest: "/var/local/www/default/{{item}}"
+    src: "files/{{ item }}"
+    dest: "/var/local/www/default/{{ item }}"
     owner: nginx
     group: nginx
     mode: "0644"
