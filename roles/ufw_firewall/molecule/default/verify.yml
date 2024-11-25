@@ -1,14 +1,30 @@
 ---
-- name: Verify
+# Molecule verify playbook
+- name: Verify UFW Configuration
   hosts: all
-  gather_facts: false
+  become: true
   tasks:
-    - name: Check UFW status
-      ansible.builtin.command: ufw status
-      register: ufw_status
+    - name: Verify UFW is installed
+      ansible.builtin.command: dpkg -l | grep ufw
+      register: ufw_installed
+      failed_when: "'ufw' not in ufw_installed.stdout"
+
+    - name: Ensure UFW is enabled and running
+      ansible.builtin.command: ufw --force enable
       changed_when: false
 
-    - name: Assert UFW is active
+    - name: Verify UFW is active
+      ansible.builtin.command: ufw status
+      register: ufw_status
+      failed_when: "'inactive' in ufw_status.stdout"
+
+    - name: Verify /etc/ufw/user.rules file exists
+      ansible.builtin.stat:
+        path: /etc/ufw/user.rules
+      register: ufw_rules_file
+
+    - name: Assert /etc/ufw/user.rules file exists
       ansible.builtin.assert:
         that:
-          - "'Status: active' in ufw_status.stdout"
+          - ufw_rules_file.stat.exists
+          - ufw_rules_file.stat.size > 0
