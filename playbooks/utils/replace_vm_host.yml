@@ -77,7 +77,7 @@
         cluster: "{{ vcenter_cluster }}"
         folder: "{{ old_vm_info.virtual_machines[0].folder }}"
         name: "{{ replacement_vm }}"
-        state: present
+        state: powered-off
         template: "{{ vm_template | default('template_jammy_spring_2024')}}"
         disk:
           - size: "{{ (old_vm_info.virtual_machines[0].allocated.storage / 1024) | int }}kb"
@@ -104,17 +104,6 @@
     - name: view new VM details
       ansible.builtin.debug:
         var: new_vm_deets
-
-    - name: power down the VM so we can mess with the network settings
-      community.vmware.vmware_guest_powerstate:
-        hostname: "{{ vcenter_hostname }}"
-        username: "{{ vcenter_username }}"
-        password: "{{ vcenter_password }}"
-        validate_certs: false
-        datacenter: "{{ vcenter_datacenter }}"
-        # new VM var does not include UUID; use moid, which is unique in each vCenter instance
-        moid: "{{ new_vm_deets.instance.moid }}"
-        state: powered-off
 
     - name: delete NIC with automatic mac address
       community.vmware.vmware_guest_network:
@@ -175,6 +164,7 @@
              The VM you replaced had
              an UUID of {{ old_vm_info.virtual_machines[0].uuid }}
              a mac address of {{ old_vm_info.virtual_machines[0].mac_address[0] }}
+             an IP address of {{ old_vm_info.virtual_machines[0].ip_address }}
              in the {{ vm_network }} network
              {{ old_vm_info.virtual_machines[0].allocated.cpu }} CPUs
              {{ (old_vm_info.virtual_machines[0].allocated.memory | int / 1024) }} GB of memory
@@ -189,6 +179,7 @@
              an UUID of {{ new_vm_info.virtual_machines[0].uuid }}
              a mac address of {{ new_vm_info.virtual_machines[0].mac_address[0] }}
              in the {{ vm_network }} network
+             an IP address of {{ new_vm_info.virtual_machines[0].ip_address }}
              {{ new_vm_info.virtual_machines[0].allocated.cpu }} CPUs
              {{ (new_vm_info.virtual_machines[0].allocated.memory | int / 1024) }} GB of memory
              {{ new_vm_info.virtual_machines[0].allocated.storage | human_readable }} of disk allocated
