@@ -9,13 +9,35 @@
   ansible.builtin.command: ufw enable
   changed_when: false
 
+- name: Ensure /etc/ufw/user.rules is removed
+  ansible.builtin.file:
+    path: "/etc/ufw/user.rules"
+    state: absent
+
 - name: UFW | generic rules template
   ansible.builtin.template:
     src: user.rules.j2
-    dest: "/etc/ufw/user.rules"
+    dest: "/tmp/temp_user.rules"
     owner: root
     group: root
     mode: "0640"
+
+- name: Debug ufw_firewall_rules inside the role
+  ansible.builtin.debug:
+    var: ufw_firewall_rules
+
+- name: UFW | copy the temp to location
+  ansible.builtin.copy:
+    src: "/tmp/temp_user.rules"
+    dest: /etc/ufw/user.rules
+    owner: root
+    group: root
+    remote_src: true
+    mode: "0640"
+
+- name: Output rendered template
+  ansible.builtin.command: cat /tmp/temp_user.rules
+  changed_when: false
 
 - name: UFW | Reload UFW to apply changes
   ansible.builtin.command: ufw reload
