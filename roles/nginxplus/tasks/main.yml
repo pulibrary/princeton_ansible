@@ -12,20 +12,24 @@
 
 - name: Install NGINX
   block:
-
-    - ansible.builtin.import_tasks: opensource/install-oss.yml
+    - name: Nginxplus | Install OSS
+      ansible.builtin.import_tasks: opensource/install-oss.yml
       when: nginx_type == "opensource"
 
-    - ansible.builtin.import_tasks: plus/install-plus.yml
+    - name: Nginxplus | Install Plus
+      ansible.builtin.import_tasks: plus/install-plus.yml
       when: nginx_type == "plus"
 
-    - ansible.builtin.import_tasks: conf/cleanup-config.yml
+    - name: Nginxplus | Cleanup Config
+      ansible.builtin.import_tasks: conf/cleanup-config.yml
       when: nginx_cleanup_config
 
-    - ansible.builtin.import_tasks: modules/install-modules.yml
+    - name: Nginxplus | Install Nginxplus Modules
+      ansible.builtin.import_tasks: modules/install-modules.yml
       when: true in nginx_modules.values()
 
-    - ansible.builtin.import_tasks: conf/upload-config.yml
+    - name: Nginxplus | Upload config tasks
+      ansible.builtin.import_tasks: conf/upload-config.yml
       when: nginx_main_upload_enable
             or nginx_http_upload_enable
             or nginx_template_upload_enable
@@ -33,18 +37,22 @@
             or nginx_html_upload_enable
             or nginx_ssl_upload_enable
 
-    - ansible.builtin.import_tasks: conf/template-config.yml
+    - name: Nginxplus | Template Config Tasks
+      ansible.builtin.import_tasks: conf/template-config.yml
       when: nginx_main_template_enable
             or nginx_http_template_enable
             or nginx_stream_template_enable
             or nginx_rest_api_enable
 
-    - ansible.builtin.import_tasks: conf/setup-status.yml
+    - name: Nginxplus | enable nginx status
+      ansible.builtin.import_tasks: conf/setup-status.yml
       when: nginx_status_enable
 
-    - ansible.builtin.import_tasks: conf/debug-output.yml
+    - name: Nginxplus | debug Output
+      ansible.builtin.import_tasks: conf/debug-output.yml
       when: nginx_debug_output
   when: nginx_enable
+
 
 - name: Nginxplus | make localhost changes
   ansible.builtin.import_tasks: localhost.yml
