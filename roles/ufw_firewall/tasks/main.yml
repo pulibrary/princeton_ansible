@@ -1,28 +1,35 @@
 ---
-# tasks file for roles/ufw_firewall
+# Main tasks for ufw_firewall role
 - name: UFW | Install UFW
   ansible.builtin.package:
     name: ufw
     state: present
 
-- name: UFW | disable UFW
-  ansible.builtin.command: ufw disable
+- name: UFW | Enable UFW
+  ansible.builtin.command: ufw --force enable
   changed_when: false
 
-- name: UFW | generic rules template
+- name: UFW | Deploy custom before.rules
   ansible.builtin.template:
-    src: user.rules.j2
-    dest: "/etc/ufw/user.rules"
+    src: before.rules.j2
+    dest: /etc/ufw/before.rules
     owner: root
     group: root
-    mode: "0640"
-  become: true
-  become_user: root
+    mode: "0644"
+  notify: Reload UFW
 
-- name: UFW | Reload UFW to apply changes
-  ansible.builtin.command: ufw reload
-  changed_when: false
+- name: UFW | Deploy custom after.rules
+  ansible.builtin.template:
+    src: after.rules.j2
+    dest: /etc/ufw/after.rules
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload UFW
 
-- name: UFW | Enable and start UFW
-  ansible.builtin.command: ufw enable
-  changed_when: false
+- name: UFW | Ensure default forward policy
+  ansible.builtin.lineinfile:
+    path: /etc/default/ufw
+    regexp: '^DEFAULT_FORWARD_POLICY='
+    line: 'DEFAULT_FORWARD_POLICY="ACCEPT"'
+  notify: Reload UFW
