@@ -5,56 +5,20 @@
     name: ufw
     state: present
 
-- name: UFW | check if /etc/ufw/user.rules exists
-  ansible.builtin.stat:
-    path: "/etc/ufw/user.rules"
-  register: ufw_rules_stat
-
-- name: UFW | debug stat result
-  ansible.builtin.debug:
-    var: ufw_rules_stat
-
-- name: UFW | ensure /etc/ufw/user.rules is removed
-  ansible.builtin.file:
-    path: "/etc/ufw/user.rules"
-    state: absent
+- name: UFW | disable UFW
+  ansible.builtin.command: ufw disable
+  changed_when: false
 
 - name: UFW | generic rules template
   ansible.builtin.template:
     src: user.rules.j2
-    dest: "/tmp/temp_user.rules"
+    dest: "/etc/ufw/user.rules"
     owner: root
     group: root
     mode: "0640"
+  become: true
+  become_user: root
 
-- name: Debug ufw_firewall_rules inside the role
-  ansible.builtin.debug:
-    var: ufw_firewall_rules
-
-- name: UFW | copy the temp to location
-  ansible.builtin.copy:
-    src: "/tmp/temp_user.rules"
-    dest: /etc/ufw/user.rules
-    owner: root
-    group: root
-    remote_src: true
-    mode: "0640"
-
-- name: Debug copied file stats
-  ansible.builtin.stat:
-    path: "/etc/ufw/user.rules"
-  register: copied_file_stat
-
-- name: Output file stats
-  ansible.builtin.debug:
-    var: copied_file_stat
-
-- name: UFW | Reload UFW with debug
-  ansible.builtin.command:
-    cmd: ufw reload
-  register: ufw_reload_result
+- name: UFW | Reload UFW to apply changes
+  ansible.builtin.command: ufw reload
   changed_when: false
-
-- name: Debug UFW reload result
-  ansible.builtin.debug:
-    var: ufw_reload_result
