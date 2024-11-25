@@ -1,29 +1,34 @@
 ---
-- name: "Install: Add NGINX Plus Repository"
-  ansible.builtin.apt_repository:
-    repo: deb https://pkgs.nginx.com/plus/{{ ansible_distribution|lower }} {{ ansible_distribution_release }} nginx-plus
-    filename: nginx-plus
-    update_cache: false
+- name: "Download and add NGINX signing key to keyring"
+  ansible.builtin.shell: |
+    wget -qO - https://cs.nginx.com/static/keys/nginx_signing.key | gpg --dearmor | sudo tee /usr/share/keyrings/nginx-archive-keyring.gpg >/dev/null
+  args:
+    creates: /usr/share/keyrings/nginx-archive-keyring.gpg
 
-- name: "Install: Add app-protect Repository"
-  ansible.builtin.apt_repository:
-    repo: deb https://pkgs.nginx.com/app-protect/{{ ansible_distribution|lower }} {{ ansible_distribution_release }} nginx-plus
-    filename: app-protect
-    update_cache: false
+- name: "Download and add App Protect Security Updates key to keyring"
+  ansible.builtin.shell: |
+    wget -qO - https://cs.nginx.com/static/keys/app-protect-security-updates.key | gpg --dearmor | sudo tee /usr/share/keyrings/app-protect-security-updates.gpg >/dev/null
+  args:
+    creates: /usr/share/keyrings/app-protect-security-updates.gpg
 
-- name: "Install: Add App-protect security Repository"
-  ansible.builtin.apt_repository:
-    repo: deb https://pkgs.nginx.com/app-protect-security-updates/{{ ansible_distribution|lower }} {{ ansible_distribution_release }} nginx-plus
-    filename: app-protect-security-updates
-    update_cache: false
+- name: "Add NGINX App Protect repository to sources list"
+  ansible.builtin.shell: |
+    printf "deb [signed-by=/usr/share/keyrings/nginx-archive-keyring.gpg] https://pkgs.nginx.com/app-protect/ubuntu `lsb_release -cs` nginx-plus\n" | sudo tee /etc/apt/sources.list.d/nginx-app-protect.list
+  args:
+    creates: /etc/apt/sources.list.d/nginx-app-protect.list
 
-- name: "Install: Verify NGINX Plus License"
-  blockinfile:
-    path: /etc/apt/apt.conf.d/90nginx
-    create: true
-    mode: 0644
-    block: |
-      Acquire::https::pkgs.nginx.com::Verify-Peer "true";
-      Acquire::https::pkgs.nginx.com::Verify-Host "true";
-      Acquire::https::pkgs.nginx.com::SslCert     "/etc/ssl/nginx/nginx-repo.crt";
-      Acquire::https::pkgs.nginx.com::SslKey      "/etc/ssl/nginx/nginx-repo.key";
+- name: "Add App Protect Security Updates repository to sources list"
+  ansible.builtin.shell: |
+    printf "deb [signed-by=/usr/share/keyrings/app-protect-security-updates.gpg] https://pkgs.nginx.com/app-protect-security-updates/ubuntu `lsb_release -cs` nginx-plus\n" | sudo tee -a /etc/apt/sources.list.d/nginx-app-protect.list
+  args:
+    creates: /etc/apt/sources.list.d/nginx-app-protect.list
+
+- name: "Download 90pkgs-nginx configuration file"
+  ansible.builtin.get_url:
+    url: https://cs.nginx.com/static/files/90pkgs-nginx
+    dest: /etc/apt/apt.conf.d/90pkgs-nginx
+    mode: '0644'
+
+- name: "Update APT cache"
+  ansible.builtin.apt:
+    update_cache: true
