@@ -1,19 +1,19 @@
 ---
-- name: php | debug web server
+- name: Php | debug web server
   ansible.builtin.debug:
     msg: PHP Web Server {{ php_webserver }}
 
 # See https://github.com/ansible/ansible/issues/62262 for why this is required
 # Short version: There is a bug in the ansible.builtin.apt module where, when using wildcards,
 # the 'absent' state fails if there are already no packages that match the wildcard.
-- name: php | check if unwanted php packages are installed
+- name: Php | check if unwanted php packages are installed
   ansible.builtin.shell: dpkg -l | grep php{{ php_unwanted_version }}*
   ignore_errors: true
   changed_when: false
   no_log: true
   register: php_unwanted_packages
 
-- name: php | remove packages that begin with 'php{{ php_unwanted_version }}'
+- name: Php | remove packages that begin with 'php{{ php_unwanted_version }}'
   ansible.builtin.apt:
     name: php{{ php_unwanted_version }}*
     state: absent
@@ -21,33 +21,35 @@
   notify: restart apache
   when: php_version != php_unwanted_version and php_unwanted_packages.rc == 0
 
-- name: php | install required Ubuntu dependencies
+- name: Php | install required Ubuntu dependencies
   ansible.builtin.apt:
     name:
       - apt-transport-https
       - dirmngr
 
-- name: php | Add ondrej sury repository
+- name: Php | Add ondrej sury repository
   ansible.builtin.apt_repository:
     repo: "ppa:ondrej/php"
     update_cache: true
     state: present
 
-- name: php | install php
+- name: Php | install php
   ansible.builtin.apt:
     name: ["php{{ php_version }}", "php{{ php_version }}-dev", "php{{ php_version }}-curl", "php{{ php_version }}-zip"]
     state: present
   tags: ['skip_ansible_lint']
   notify: restart {{ php_webserver }}
 
-- name: php | Install datadog trace php repository
+- name: Php | Install datadog trace php repository
   ansible.builtin.apt:
     deb: "https://github.com/DataDog/dd-trace-php/releases/download/{{ ddtrace_repo_version }}/datadog-php-tracer_{{ ddtrace_repo_version }}_amd64.deb"
     state: present
   when: datadog_enabled
 
-- include_tasks: configure-apache2.yml
+- name: Php | Configure Apache2
+  ansible.builtin.include_tasks: configure-apache2.yml
   when: php_webserver == 'apache2'
 
-- include_tasks: configure-nginx.yml
+- name: Php | Configure Nginx
+  ansible.builtin.include_tasks: configure-nginx.yml
   when: php_webserver == 'nginx'

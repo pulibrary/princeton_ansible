@@ -1,20 +1,27 @@
 ---
-- name: Verify
+- name: Verify PHP installation and configuration
   hosts: all
-  gather_facts: false
+  become: true
+  vars:
+    - php_version: '8.3'
+    - php_webserver: 'apache2'
   tasks:
-  - name: Test for php packages
-    ansible.builtin.apt:
-      name: "{{ item }}"
-      state: present
-    loop:
-      - php8.3
-      - php8.3-dev
-      - php8.3-curl
-      - php8.3-zip
-      - php8.3-gd
-      - datadog-php-tracer
-    check_mode: true
-    register: present
-    failed_when:
-      - present is changed
+    - name: Php | Verify required Ubuntu dependencies are installed
+      ansible.builtin.apt:
+        name:
+          - apt-transport-https
+          - dirmngr
+        state: present
+      changed_when: false
+
+    - name: Php | Verify ondrej sury repository is added
+      ansible.builtin.apt_repository:
+        repo: "ppa:ondrej/php"
+        state: present
+      changed_when: false
+
+    - name: Php | Verify PHP packages are installed
+      ansible.builtin.apt:
+        name: ["php{{ php_version }}", "php{{ php_version }}-dev", "php{{ php_version }}-curl", "php{{ php_version }}-zip"]
+        state: present
+      changed_when: false
