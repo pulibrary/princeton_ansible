@@ -6,8 +6,12 @@
 
 ### RULES ###
 {% for item in ufw_firewall_rules %}
--A ufw-before-input -p {{ item.protocol }} -s {{ item.source }} --dport {{ item.port }} -j {{ item.action }}
+-A ufw-before-input -p {{ item.protocol }} -s {{ item.source }} --dport {{ item.port | default('any') }} -j {{ item.action }}
 {% endfor %}
 ### END RULES ###
+
+### DEFAULT DENY ALL RULE ###
+-A ufw-before-input -j DROP
+### END DEFAULT DENY ALL ###
 
 COMMIT
