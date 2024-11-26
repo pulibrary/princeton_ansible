@@ -4,6 +4,7 @@
   ansible.builtin.command: hostnamectl set-hostname {{ host_ad_name | default(omit) }}
   changed_when: false
   when:
+    - ansible_os_family == "Debian"
     - running_on_server
 
 - name: Sssd_ad | allow password authentication
@@ -22,7 +23,7 @@
   when: running_on_server
   notify: restart sshd
 
-- name: Sssd_ad | install necessary packages
+- name: Sssd_ad | install necessary packages (Ubuntu)
   ansible.builtin.apt:
     name: "{{ item }}"
     state: present
@@ -32,11 +33,32 @@
     - krb5-user
     - libnss-sss
     - libpam-sss
+    - oddjob
+    - oddjob-mkhomedir
     - packagekit
     - sssd
     - sssd-tools
     - realmd
     - samba
+  when: ansible_os_family == "Debian"
+
+- name: Sssd_ad | install necessary packages (Redhat)
+  ansible.builtin.dnf:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - adcli
+    - krb5-libs
+    - krb5-workstation
+    - nss-pam-ldapd
+    - oddjob
+    - oddjob-mkhomedir
+    - realmd
+    - samba-common
+    - samba-common-tools
+    - sssd
+    - sssd-tools
+  when: ansible_os_family == "RedHat"
 
 - name: Sssd_ad | configure Kerberos
   ansible.builtin.template:
@@ -81,7 +103,7 @@
     state: restarted
     enabled: true
 
-- name: Sssd_ad | Update NSS configuration
+- name: Sssd_ad | Update NSS configuration (Ubuntu)
   ansible.builtin.lineinfile:
     path: /etc/nsswitch.conf
     regexp: "{{ item.regexp }}"
@@ -91,6 +113,19 @@
     - { regexp: "^passwd:.*", line: "passwd:         compat systemd sss" }
     - { regexp: "^group:.*", line: "group:          compat systemd sss" }
     - { regexp: "^shadow:.*", line: "shadow:         compat sss" }
+  when: ansible_os_family == "Debian"
+
+- name: Sssd_ad | Update NSS configuration (Redhat)
+  ansible.builtin.lineinfile:
+    path: /etc/nsswitch.conf
+    regexp: "{{ item.regexp }}"
+    line: "{{ item.line }}"
+    state: present
+  loop:
+    - { regexp: "^passwd:.*", line: "passwd:      files sss" }
+    - { regexp: "^group:.*", line: "group:       files sss" }
+    - { regexp: "^shadow:.*", line: "shadow:      files sss" }
+  when: ansible_os_family == "RedHat"
 
 - name: Sssd_ad | configure smb
   ansible.builtin.lineinfile:
