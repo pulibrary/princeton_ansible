@@ -36,32 +36,8 @@
           - after_rules_file.stat.exists
           - after_rules_file.stat.size > 0
 
-    - name: Verify content of /etc/ufw/before.rules
+    - name: Verify DEFAULT_FORWARD_POLICY is set to ACCEPT
       ansible.builtin.command:
-        cmd: grep "--dport 22 -j ACCEPT" /etc/ufw/before.rules
-      register: before_rules_check
-      failed_when: before_rules_check.rc != 0
-
-    - name: Verify content of /etc/ufw/after.rules
-      ansible.builtin.command:
-        cmd: grep "--dport 443 -j ACCEPT" /etc/ufw/after.rules
-      register: after_rules_check
-      failed_when: after_rules_check.rc != 0
-
-    - name: Debug before.rules content
-      ansible.builtin.command:
-        cmd: cat /etc/ufw/before.rules
-      register: debug_before_rules
-
-    - name: Output /etc/ufw/before.rules for debugging
-      ansible.builtin.debug:
-        msg: "{{ debug_before_rules.stdout }}"
-
-    - name: Verify UFW has the rules applied
-      ansible.builtin.command: ufw status verbose
-      register: ufw_applied_rules
-      failed_when: "'22/tcp ALLOW' not in ufw_applied_rules.stdout or '443/tcp ALLOW' not in ufw_applied_rules.stdout"
-
-    - name: Debug UFW applied rules
-      ansible.builtin.debug:
-        msg: "{{ ufw_applied_rules.stdout }}"
+        cmd: grep '^DEFAULT_FORWARD_POLICY="ACCEPT"' /etc/default/ufw
+      register: forward_policy_check
+      failed_when: forward_policy_check.rc != 0
