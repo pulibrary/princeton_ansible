@@ -1,14 +1,43 @@
 ---
-- name: Verify
+# Molecule verify playbook
+- name: Verify UFW Configuration
   hosts: all
-  gather_facts: false
+  become: true
   tasks:
-    - name: Check UFW status
+    - name: Verify UFW is installed
+      ansible.builtin.command: dpkg -l | grep ufw
+      register: ufw_installed
+      failed_when: "'ufw' not in ufw_installed.stdout"
+
+    - name: Verify UFW is active
       ansible.builtin.command: ufw status
       register: ufw_status
-      changed_when: false
+      failed_when: "'inactive' in ufw_status.stdout"
 
-    - name: Assert UFW is active
+    - name: Verify /etc/ufw/before.rules exists
+      ansible.builtin.stat:
+        path: /etc/ufw/before.rules
+      register: before_rules_file
+
+    - name: Assert /etc/ufw/before.rules exists
       ansible.builtin.assert:
         that:
-          - "'Status: active' in ufw_status.stdout"
+          - before_rules_file.stat.exists
+          - before_rules_file.stat.size > 0
+
+    - name: Verify /etc/ufw/after.rules exists
+      ansible.builtin.stat:
+        path: /etc/ufw/after.rules
+      register: after_rules_file
+
+    - name: Assert /etc/ufw/after.rules exists
+      ansible.builtin.assert:
+        that:
+          - after_rules_file.stat.exists
+          - after_rules_file.stat.size > 0
+
+    - name: Verify DEFAULT_FORWARD_POLICY is set to ACCEPT
+      ansible.builtin.command:
+        cmd: grep '^DEFAULT_FORWARD_POLICY="ACCEPT"' /etc/default/ufw
+      register: forward_policy_check
+      failed_when: forward_policy_check.rc != 0

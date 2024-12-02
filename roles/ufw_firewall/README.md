@@ -15,21 +15,16 @@ the examples below allow ssh, http, and redis to those CIDR subnets. For ssh mak
 
 ```yaml
 ufw_firewall_rules:
-  - service: ssh
+  - protocol: tcp
+    source: 10.249.64.0/18
     port: 22
-    protocol: tcp
-    allowed_cidrs:
-      - 128.112.200.0/21
-  - service: http
+    action: ACCEPT
+  - protocol: tcp
+    source: 128.112.200.0/21
     port: 80
-    protocol: tcp
-    allowed_cidrs:
-      - 128.112.200.0/21
-      - 128.112.0.0/16
-  - service: redis
+    action: ACCEPT
+  - protocol: tcp
+    source: 128.112.200.0/21
     port: 6379
-    protocol: tcp
-    allowed_cidrs:
-      - 128.112.200.0/21
-      - 128.112.0.0/16
+    action: ACCEPT
 ```
