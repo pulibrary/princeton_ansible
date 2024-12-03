@@ -1,4 +1,18 @@
 ---
+- name: Nginxplus | Install GPG Agent
+  ansible.builtin.apt:
+    name: gpg-agent
+    state: present
+    update_cache: true
+
+- name: Nginxplus | Add nginx-plus repository
+  become: true
+  ansible.builtin.lineinfile:
+    path: /etc/apt/sources.list.d/nginx-plus.list
+    line: "deb [signed-by=/usr/share/keyrings/nginx-archive-keyring.gpg] https://pkgs.nginx.com/plus/ubuntu {{ ansible_distribution_release }} nginx-plus"
+    mode: "0644"
+    create: true
+
 - name: "Download and add NGINX signing key to keyring"
   ansible.builtin.shell: |
     wget -qO - https://cs.nginx.com/static/keys/nginx_signing.key | gpg --dearmor | sudo tee /usr/share/keyrings/nginx-archive-keyring.gpg >/dev/null
