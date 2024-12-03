@@ -4,7 +4,7 @@
     path: /usr/local/bin/vector
   register: vector_binary
 
-- name: Common |  Install Vector repo
+- name: Common |  Install Vector repo on Redhat
   ansible.builtin.shell: |
     set -euxo pipefail
     bash -c "$(curl -L https://setup.vector.dev)"
@@ -14,7 +14,7 @@
     - ansible_os_family == "RedHat"
     - not vector_binary.stat.exists
 
-- name: Common | Install vector
+- name: Common | Install vector on Redhat
   ansible.builtin.package:
     name: vector
     state: present
@@ -22,7 +22,7 @@
     - ansible_os_family == "RedHat"
     - not vector_binary.stat.exists
 
-- name: Common | Install Vector Datadog Keys
+- name: Common | Install Vector Datadog Keys on Ubuntu
   ansible.builtin.apt_key:
     url: "{{ item }}"
     state: present
@@ -34,14 +34,14 @@
   when:
     - ansible_os_family == "Debian"
 
-- name: Common | Install Vector Datadog Repo
+- name: Common | Install Vector Datadog Repo on Ubuntu
   ansible.builtin.apt_repository:
     repo: "deb [signed-by=/usr/share/keyrings/datadog-archive-keyring.gpg] https://apt.vector.dev/ stable vector-0"
     filename: "vector"
   when:
     - ansible_os_family == "Debian"
 
-- name: Common | install vector
+- name: Common | Install Vector on Ubuntu
   ansible.builtin.apt:
     name: vector
     update_cache: true
