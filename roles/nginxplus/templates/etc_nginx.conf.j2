@@ -48,9 +48,18 @@ events {
 http {
     include       /etc/nginx/mime.types;
     default_type  application/octet-stream;
-
-    log_format json_logs '{"source": "nginx","message":"nginx log captured","time": $time_iso8601, "resp_body_size
-": $body_bytes_sent, "host": "$http_host", "address": "$remote_addr", "request_length": $request_length, "method": "$request_method", "uri": "$request_uri", "status": $status,  "user_agent": "$http_user_agent", "resp_time": $request_time, "upstream_addr": "$upstream_addr"}';
+    log_format json_logs escape=json '{'
+        '"remote_ip": "$remote_addr",'
+        '"remote_user": "$remote_user",'
+        '"timestamp": "$time_iso8601",'
+        '"method": "$request_method",'
+        '"uri": "$request_uri",'
+        '"protocol": "$server_protocol",'
+        '"status": "$status",'
+        '"body_bytes_sent": "$body_bytes_sent",'
+        '"referer": "$http_referer",'
+        '"user_agent": "$http_user_agent"'
+    '}';
 
     access_log  /var/log/nginx/access.log json_logs;
 
