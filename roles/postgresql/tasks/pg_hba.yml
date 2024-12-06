@@ -1,5 +1,5 @@
 ---
-- name: PostgreSQL | ensure access to postgres server for client connections
+- name: PostgreSQL | ensure access to postgres server for client connections (Ubuntu)
   ansible.builtin.lineinfile:
     path: '/etc/postgresql/{{ postgres_version }}/main/pg_hba.conf'
     line: 'host  {{ pg_hba_postgresql_database }}      {{ pg_hba_postgresql_user }} {{ ansible_default_ipv4.address }}/32       md5'
@@ -8,6 +8,19 @@
   when:
     - postgres_host is not none
     - not postgresql_is_local
+    - ansible_os_family == "Debian"
+    - running_on_server
+
+- name: PostgreSQL | ensure access to postgres server for client connections (Redhat)
+  ansible.builtin.lineinfile:
+    path: '/var/lib/pgsql/{{ postgres_version }}/data/pg_hba.conf'
+    line: 'host  {{ pg_hba_postgresql_database }}      {{ pg_hba_postgresql_user }} {{ ansible_default_ipv4.address }}/32       md5'
+  delegate_to: '{{ postgres_host }}'
+  register: remote_postgres_configured
+  when:
+    - postgres_host is not none
+    - not postgresql_is_local
+    - ansible_os_family == "Redhat"
     - running_on_server
 
 - name: PostgreSQL | reload postgresql

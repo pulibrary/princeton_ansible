@@ -1,0 +1,245 @@
+# {{ ansible_managed | comment }} and will be replaced. Make changes on the
+# -----------------------------
+# PostgreSQL configuration file
+# -----------------------------
+
+#------------------------------------------------------------------------------
+# FILE LOCATIONS
+#------------------------------------------------------------------------------
+
+# The default values of these variables are driven from the -D command-line
+# option or PGDATA environment variable, represented here as ConfigDir.
+
+data_directory = '/var/lib/postgresql/{{ postgres_version }}/main' # use data in another directory
+					# (change requires restart)
+hba_file = '/etc/postgresql/{{ postgres_version }}/main/pg_hba.conf' # host-based authentication file
+					# (change requires restart)
+ident_file = '/etc/postgresql/{{ postgres_version }}/main/pg_ident.conf' # ident configuration file
+					# (change requires restart)
+
+# If external_pid_file is not explicitly set, no extra PID file is written.
+external_pid_file = '/var/run/postgresql/{{ postgres_version }}-main.pid' # write an extra PID file
+					# (change requires restart)
+
+
+#------------------------------------------------------------------------------
+# CONNECTIONS AND AUTHENTICATION
+#------------------------------------------------------------------------------
+
+# - Connection Settings -
+
+listen_addresses = '*' # what IP address(es) to listen on;
+					# comma-separated list of addresses;
+					# defaults to 'localhost'; use '*' for all
+					# (change requires restart)
+port = 5432 # (change requires restart)
+max_connections = 400 # (change requires restart)
+#superuser_reserved_connections = 3	# (change requires restart)
+unix_socket_directories = '/var/run/postgresql' # comma-separated list of directories
+					# (change requires restart)
+# - Authentication -
+
+
+# - SSL -
+
+ssl = on
+#ssl_ca_file = ''
+ssl_cert_file = '/etc/ssl/certs/ssl-cert-snakeoil.pem'
+#ssl_crl_file = ''
+#ssl_crl_dir = ''
+ssl_key_file = '/etc/ssl/private/ssl-cert-snakeoil.key'
+
+
+#------------------------------------------------------------------------------
+# RESOURCE USAGE (except WAL)
+#------------------------------------------------------------------------------
+
+# - Memory -
+
+shared_buffers = {{ buffer_memory }} # min 128kB
+					# (change requires restart)
+					# (change requires restart)
+dynamic_shared_memory_type = posix # the default is usually the first option
+					# supported by the operating system:
+work_mem = {{ work_mem }}
+# - Background Writer -
+maintenance_work_mem = {{ maintenance_work_mem }}
+
+#------------------------------------------------------------------------------
+# WRITE-AHEAD LOG
+#------------------------------------------------------------------------------
+
+#checkpoint_warning = 30s		# 0 disables
+max_wal_size = 1GB
+min_wal_size = 80MB
+
+checkpoint_timeout = 10min  # range 30s-1d
+checkpoint_completion_target = 0.7  # checkpoint target duration, 0.0 - 1.0
+# - Prefetching during recovery -
+
+
+
+#------------------------------------------------------------------------------
+# QUERY TUNING
+#------------------------------------------------------------------------------
+
+# - Planner Method Configuration -
+
+random_page_cost = 1.1 # same scale as above
+effective_cache_size = {{ cache_size }}
+
+
+
+#------------------------------------------------------------------------------
+# REPORTING AND LOGGING
+#------------------------------------------------------------------------------
+
+# - Where to Log -
+
+logging_collector = on   # Enable capturing of stderr, jsonlog,
+					# and csvlog into log files. Required
+					# to be on for csvlogs and jsonlogs.
+					# (change requires restart)
+log_destination = 'jsonlog'
+
+# These are only used if logging_collector is on:
+log_directory = 'pg_log' # relative to PGDATA (/var/lib/postgresql/15/main/pg_log/)
+log_filename = 'pg.log'  # can include strftime() escapes, but daily rotation is enough
+log_statement = 'none'
+log_file_mode = 0644     # allow Datadog to read log files
+# log_rotation_age = 1d		 # We use logrotate, which takes precedence over these configurations
+# log_rotation_size = 1GB  # We use logrotate, which takes precedence over these configurations
+log_checkpoints = on
+log_connections = on
+log_disconnections = on
+
+# prefix recommended for Datadog:
+log_line_prefix= '%m [%p] %d %a %u %h %c '
+# log_line_prefix = '%m [%p] %q%u@%d '
+log_lock_waits = on      # log lock waits deadlock_timeout
+log_temp_files = 0       # log temporary files equal or larger
+log_timezone = 'localtime'
+
+#------------------------------------------------------------------------------
+# PROCESS TITLE
+#------------------------------------------------------------------------------
+
+cluster_name = '{{ postgres_version }}/main' # added to process titles if nonempty
+					# (change requires restart)
+#update_process_title = on
+
+
+#------------------------------------------------------------------------------
+# STATISTICS
+#------------------------------------------------------------------------------
+
+
+
+#------------------------------------------------------------------------------
+# AUTOVACUUM
+#------------------------------------------------------------------------------
+
+autovacuum = on # Enable autovacuum subprocess?  'on'
+					# requires track_counts to also be on.
+autovacuum_max_workers = 3 # max number of autovacuum subprocesses
+					# (change requires restart)
+
+
+#------------------------------------------------------------------------------
+# CLIENT CONNECTION DEFAULTS
+#------------------------------------------------------------------------------
+
+
+# - Locale and Formatting -
+
+datestyle = 'iso, mdy'
+#intervalstyle = 'postgres'
+timezone = 'localtime'
+
+# These settings are initialized by initdb, but they can be changed.
+lc_messages = 'en_US.UTF-8' # locale for system error message
+					# strings
+lc_monetary = 'en_US.UTF-8' # locale for monetary formatting
+lc_numeric = 'en_US.UTF-8' # locale for number formatting
+lc_time = 'en_US.UTF-8' # locale for time formatting
+
+# default configuration for text search
+default_text_search_config = 'pg_catalog.english'
+
+# - Shared Library Preloading -
+
+#local_preload_libraries = ''
+#session_preload_libraries = ''
+shared_preload_libraries = 'pg_stat_statements'	# (change requires restart)
+#jit_provider = 'llvmjit'		# JIT library to use
+
+# - Other Defaults -
+
+#dynamic_library_path = '$libdir'
+#extension_destdir = ''			# prepend path when loading extensions
+					# and shared objects (added by Debian)
+#gin_fuzzy_search_limit = 0
+
+
+#------------------------------------------------------------------------------
+# LOCK MANAGEMENT
+#------------------------------------------------------------------------------
+
+#deadlock_timeout = 1s
+#max_locks_per_transaction = 64		# min 10
+					# (change requires restart)
+#max_pred_locks_per_transaction = 64	# min 10
+					# (change requires restart)
+#max_pred_locks_per_relation = -2	# negative values mean
+					# (max_pred_locks_per_transaction
+					#  / -max_pred_locks_per_relation) - 1
+#max_pred_locks_per_page = 2            # min 0
+
+
+#------------------------------------------------------------------------------
+# VERSION AND PLATFORM COMPATIBILITY
+#------------------------------------------------------------------------------
+
+# - Previous PostgreSQL Versions -
+
+#array_nulls = on
+#backslash_quote = safe_encoding	# on, off, or safe_encoding
+#escape_string_warning = on
+#lo_compat_privileges = off
+#quote_all_identifiers = off
+#standard_conforming_strings = on
+#synchronize_seqscans = on
+
+# - Other Platforms and Clients -
+
+#transform_null_equals = off
+
+
+#------------------------------------------------------------------------------
+# ERROR HANDLING
+#------------------------------------------------------------------------------
+
+#exit_on_error = off			# terminate session on any error?
+#restart_after_crash = on		# reinitialize after backend crash?
+#data_sync_retry = off			# retry or panic on failure to fsync
+					# data?
+					# (change requires restart)
+#recovery_init_sync_method = fsync	# fsync, syncfs (Linux 5.8+)
+
+
+#------------------------------------------------------------------------------
+# CONFIG FILE INCLUDES
+#------------------------------------------------------------------------------
+
+# These options allow settings to be loaded from files other than the
+# default postgresql.conf.  Note that these are directives, not variable
+# assignments, so they can usefully be given more than once.
+
+include_dir = 'conf.d' # include files ending in '.conf' from
+
+
+#------------------------------------------------------------------------------
+# CUSTOMIZED OPTIONS
+#------------------------------------------------------------------------------
+
+# Add settings for extensions here
