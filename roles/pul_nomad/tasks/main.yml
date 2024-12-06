@@ -102,12 +102,46 @@
   when:
     - "ansible_os_family == 'RedHat'"
 
-- name: 'nomad-node | Keep Podman up'
+- name: 'pul_nomad | Keep Podman up'
   when:
     - "nomad_node_role == 'client'"
     - "ansible_os_family == 'RedHat'"
   ansible.builtin.service:
     name: "podman.socket"
+    state: "started"
+    enabled: true
+
+- name: 'pul_nomad | Create podman update override dir'
+  ansible.builtin.file:
+    path: /etc/systemd/system/podman-auto-update.service.d
+    state: directory
+  tags: podman_conf
+  when:
+    - "nomad_node_role == 'client'"
+    - "ansible_os_family == 'RedHat'"
+
+- name: 'pul_nomad | Prune podman containers nightly'
+  ansible.builtin.copy:
+    src: 'auto_update_override.conf'
+    dest: /etc/systemd/system/podman-auto-update.service.d/override.conf
+  when:
+    - "nomad_node_role == 'client'"
+    - "ansible_os_family == 'RedHat'"
+  tags:
+    - notest
+    - podman_conf
+  notify:
+    - reload systemd
+
+- name: 'pul_nomad | Configure nightly prune timer'
+  when:
+    - "nomad_node_role == 'client'"
+    - "ansible_os_family == 'RedHat'"
+  tags:
+    - notest
+    - podman_conf
+  ansible.builtin.service:
+    name: "podman-auto-update.timer"
     state: "started"
     enabled: true
 
