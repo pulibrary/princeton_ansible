@@ -2,7 +2,6 @@
 - name: rebuild nginx server
   hosts: nginxplus_{{ runtime_env | default('staging') }}
   remote_user: pulsys
-  strategy: free
   become: true
   vars_files:
     - ../group_vars/nginxplus/main.yml
@@ -17,6 +16,9 @@
       msg: "you must use -l or --limit"
     when: ansible_limit is not defined
     run_once: true
+
+  - name: synchronize letsencrypt tls certs
+    ansible.builtin.import_tasks: letsencrypt_sync.yml
 
   - name: tell infrastructure and ansible-alerts the playbook is starting
     community.general.slack:
@@ -43,7 +45,7 @@
     - name: nginxplus | restart nginx for realsies
       ansible.builtin.service: 
         name: nginx
-        state: restarted
+        state: reloaded
       tags: always
 
   post_tasks:
