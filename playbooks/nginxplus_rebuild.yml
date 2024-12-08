@@ -1,4 +1,3 @@
----
 - name: rebuild nginx server
   hosts: nginxplus_{{ runtime_env | default('staging') }}
   remote_user: pulsys
@@ -6,29 +5,33 @@
   vars_files:
     - ../group_vars/nginxplus/main.yml
     - ../group_vars/nginxplus/{{ runtime_env | default('staging') }}.yml
-  vars:
-    - post_install: |
-        Possible Things left to do:
-        - follow the nginxplus [HA instructions](https://github.com/pulibrary/pul-it-handbook/blob/main/services/nginxplus.md)
+  vars_prompt:
+    - name: "letsencrypt_confirmation"
+      prompt: "Have you already run the Let's Encrypt playbook? (yes/no)"
+      private: no
+
   pre_tasks:
-  - name: stop playbook if you didn't use --limit
-    fail:
-      msg: "you must use -l or --limit"
-    when: ansible_limit is not defined
-    run_once: true
+    - name: Stop playbook if you didn't use --limit
+      fail:
+        msg: "You must use -l or --limit."
+      when: ansible_limit is not defined
+      run_once: true
 
-  - name: synchronize letsencrypt tls certs
-    ansible.builtin.import_tasks: letsencrypt_sync.yml
+    - name: Fail if Let's Encrypt playbook was not run
+      fail:
+        msg: "Please run the Let's Encrypt playbook before proceeding."
+      when: letsencrypt_confirmation != "yes"
+      run_once: true
 
-  - name: tell infrastructure and ansible-alerts the playbook is starting
-    community.general.slack:
-      token: "{{ vault_tower_slack_token }}"
-      msg: "Ansible is now running `{{ ansible_play_name }}` with the `{{ ansible_run_tags }}` tag on {{ inventory_hostname }}"
-      channel: "{{ item }}"
-    loop: "{{ slack_alerts_channel }}"
-    tags: always
+    - name: Tell infrastructure and ansible-alerts the playbook is starting
+      community.general.slack:
+        token: "{{ vault_tower_slack_token }}"
+        msg: "Ansible is now running `{{ ansible_play_name }}` with the `{{ ansible_run_tags }}` tag on {{ inventory_hostname }}"
+        channel: "{{ item }}"
+      loop: "{{ slack_alerts_channel }}"
+      tags: always
 
-# rebuilds the load balancer from scratch
+# Rebuilds the load balancer from scratch
   roles:
     - role: ../roles/datadog
       when: runtime_env | default('staging') == "production"
@@ -43,16 +46,17 @@
 
   tasks:
     - name: nginxplus | restart nginx for realsies
-      ansible.builtin.service: 
+      ansible.builtin.service:
         name: nginx
         state: reloaded
       tags: always
 
   post_tasks:
-    - name: tell everyone on slack you ran an ansible playbook
+    - name: Tell everyone on Slack you ran an ansible playbook
       community.general.slack:
         token: "{{ vault_pul_slack_token }}"
         msg: "Ansible ran `{{ ansible_play_name }}` on {{ inventory_hostname }}"
         channel: "{{ item }}"
       loop: "{{ slack_alerts_channel }}"
       tags: always
+
