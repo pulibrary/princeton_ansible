@@ -19,8 +19,10 @@
   - name: Populate package facts
     ansible.builtin.package_facts:
   
-  roles:
-  - role: crowdstrike.falcon.falcon_install
+  tasks:
+  - name: include falcon_install 
+    ansible.builtin.include_role: 
+      name: crowdstrike.falcon.falcon_install
     vars:
       falcon_client_id: "{{ vault_crowdstrike_client_id }}"
       falcon_client_secret: "{{ vault_crowdstrike_secret }}"
@@ -30,14 +32,15 @@
     when:
       - "'falcon-sensor' not in ansible_facts.packages"
 
-  - role: crowdstrike.falcon.falcon_configure
+  - name: include falcon_configure 
+    ansible.builtin.include_role:
+      name: crowdstrike.falcon.falcon_configure
     vars:
       falcon_client_id: "{{ vault_crowdstrike_client_id }}"
       falcon_client_secret: "{{ vault_crowdstrike_secret }}"
     when:
       - "'falcon-sensor' not in ansible_facts.packages"
 
-  tasks:
   - name: Import BigFix GPG key
     ansible.builtin.rpm_key:
       state: present
