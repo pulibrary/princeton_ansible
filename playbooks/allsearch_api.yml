@@ -17,6 +17,26 @@
     - role: roles/rails_app
     - role: datadog
       when: runtime_env | default('staging') == "production"
+  tasks:
+    - name: allsearch_api | update rubygems
+      ansible.builtin.command: gem update --system 3.5.23
+      become: true
+      register: update_rubygems
+      changed_when: '"Latest version already installed. Done." not in update_rubygems.stdout'
+      tags: rubygems
+
+    - name: allsearch_api | install default bundler
+      ansible.builtin.command: gem install --default bundler:2.5.23
+      become: true
+      register: install_default_bundler
+      changed_when: '"Fetching bundler-2.5.23.gem" in install_default_bundler.stdout'
+      tags: rubygems
+
+    - name: allsearch_api | remove old default bundler
+      ansible.builtin.file:
+        path: /usr/local/lib/ruby/gems/3.3.0/specifications/default/bundler-2.5.13.gemspec
+        state: absent
+      tags: rubygems
 
   post_tasks:
     - name: tell everyone on slack you ran an ansible playbook
@@ -24,3 +44,4 @@
         token: "{{ vault_pul_slack_token }}"
         msg: "Ansible ran `{{ ansible_play_name }}` on {{ inventory_hostname }}"
         channel: "{{ slack_alerts_channel }}"
+
