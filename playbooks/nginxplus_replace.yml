@@ -1,5 +1,5 @@
 ---
-- name: replace nginx server
+- name: Replace nginx server
   hosts: nginxplus_{{ runtime_env | default('staging') }}
   remote_user: pulsys
   become: true
@@ -37,25 +37,18 @@
   roles:
     - role: ../roles/datadog
       when: runtime_env | default('staging') == "production"
-    - role: ../roles/deploy_user
     - role: ../roles/nginxplus
 
-- name: restart rebuilt nginx and announce success
+- name: Restart replaced nginx and announce success
   hosts: nginxplus_{{ runtime_env | default('staging') }}
   remote_user: pulsys
   strategy: linear
   become: true
 
   tasks:
-    - name: nginxplus | restart nginx for realsies
-      ansible.builtin.service:
-        name: nginx
-        state: reloaded
-      tags: always
 
   post_tasks:
-      - name: send information to slack
-        ansible.builtin.include_tasks:
-          file: utils/slack_tasks_end_of_playbook.yml
-        tags: always
-
+    - name: Send information to slack
+      ansible.builtin.include_tasks:
+        file: utils/slack_tasks_end_of_playbook.yml
+      tags: always
