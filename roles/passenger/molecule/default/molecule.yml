@@ -9,10 +9,14 @@ lint: |
   ansible-lint
 platforms:
   - name: instance
-    image: "quay.io/pulibrary/jammy-ansible:latest"
-    command: ""
+    image: "ghcr.io/pulibrary/pul_containers:jammy_multi"
+    command: "/lib/systemd/systemd"
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    tmpfs:
+      - /tmp
+      - /run
+      - /run/lock
     cgroupns_mode: host
     privileged: true
     pre_build_image: true
@@ -20,7 +24,7 @@ provisioner:
   name: ansible
   config_options:
     defaults:
-      remote_tmp: /tmp
+      remote_tmp: /tmp/ansible
   log: true
 verifier:
   name: ansible

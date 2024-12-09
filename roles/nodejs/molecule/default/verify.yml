@@ -2,17 +2,34 @@
 - name: Verify
   hosts: all
   gather_facts: false
-  tasks:
-  - name: check yarn package status
-    ansible.builtin.apt:
-      name: "{{ item }}"
-      state: present
-    check_mode: true
-    register: pkg_status
-    loop:
-      - yarn
 
-  - name: test for yarn packages
-    ansible.builtin.assert:
-      that:
-        - not pkg_status.changed
+  tasks:
+    - name: Check Node.js version
+      ansible.builtin.command: node --version
+      register: node_version
+      changed_when: false
+
+    - name: Assert Node.js version
+      ansible.builtin.assert:
+        that:
+          - node_version.stdout is version('v18.20.4')
+
+    - name: Check npm version
+      ansible.builtin.command: npm --version
+      register: npm_version
+      changed_when: false
+
+    - name: Assert npm version is installed
+      ansible.builtin.assert:
+        that:
+          - npm_version.stdout is defined
+
+    - name: Check Yarn version
+      ansible.builtin.command: yarn --version
+      register: yarn_version
+      changed_when: false
+
+    - name: Assert Yarn version is installed
+      ansible.builtin.assert:
+        that:
+          - yarn_version.stdout is defined
