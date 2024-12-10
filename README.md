@@ -1,10 +1,10 @@
-Princeton Ansible Playbooks
-===========================
 <p align="left">
   <a href="https://github.com/pulibrary/princeton_ansible"><img alt="Princeton Ansible Workflow" src="https://github.com/pulibrary/princeton_ansible/workflows/Molecule%20Tests/badge.svg"></a>
 </p>
-
+Princeton Ansible Playbooks
+===========================
 # Setting up your Python Environment
+A collection of roles and playbooks for provisioning and managing the machines that run PUL applications.
 
 ## First-time basic setup on MacOS
 
@@ -153,49 +153,41 @@ cd to the role in question
 
 # Usage
 
-If you need to run a playbook
+## Running a playbook
+
+Run a playbook
 
 ```bash
 ansible-playbook playbooks/example.yml
 ```
 
-Running a playbook from an error or a specific task
+Run a playbook from an error or a specific task
 ```bash
 ansible-playbook playbooks/example.yml --start-at-task="Task Name"
 ```
 
-## Provisioning to a service with multiple hosts (no downtime)
+## Avoiding downtime
 
-Check to make sure you're going to run on the correct host
-`$ ansible-playbook playbooks/figgy_production.yml --limit figgy3.princeton.edu --list-hosts`
+To ensure uptime while provisioning a set of machines, the general process is to remove half the machines from the load balancer, provision and deploy them, then put them back on the load balancer and remove the other half for provisioning and deployment.
 
-coordinate with operations to take the machine off load balancer
-run playbook:
-`$ ansible-playbook playbooks/figgy_production.yml --limit figgy3.princeton.edu`
+2 ways to remove machines from the load balancer:
+- Use the capistrano tasks, duplicated to every rails application, called `remove_from_nginx` and `serve_from_nginx` to remove and replace sets of machines.
+- [Use the load balancer UI](https://github.com/pulibrary/pul-it-handbook/blob/main/services/nginxplus.md#using-the-admin-ui) to control which boxes are being served.
 
-capistrano deploy to the box that's off the load balancer.
-Make sure you're depoying the already-deployed commit! Note the way to do this
-may vary by project in figgy it's the BRANCH env var
-`$ bundle exec HOSTS=figgy3 BRANCH=commit_hash cap production deploy`
+To run a playbook on only a subset of hosts, use the `--limit` option to `ansible-playbook`, e.g.:
 
-SSH to the box that's off the load balancer and check that the index page still looks okay
+```
+$ ansible-playbook playbooks/figgy_production.yml --limit figgy3.princeton.edu
+```
+
+You can also add `--list-hosts` just to check which hosts will be affected before you run.
+
+Make sure to deploy the application to each set of boxes after they are provisioned, to ensure the local webserver is restarted after the environment changes.
+
+To check the newly-provisioned boxes before swapping to the other group, SSH to the box that's off the load balancer and check that the index page still looks okay
 `$ curl localhost:80`
-  A bunch of the page only shows up if you're logged in, but you can see the menus and stuff
 
-Tell ops that one's done; switch the load balancer to the other box. Repeat the process.
-
-After both boxes are provisioned, ops puts them back up on the load
-balancer
-
-provision the workers:
-`$ ansible-playbook playbooks/figgy_production.yml --limit figgy_production_workers`
-
-Some roles don't have the right `become` / sudo settings. (Figgy doesn't have
-this problem). the `-b` flag to ansible-playbook will correct these.
-
-how to do a dry run? it's unclear. documentation suggests it's `--check`
-
-Finally, deploy from robots channel to get the new functionality on all the boxes at once
+Note that some playbooks have separate sections for webservers and workers. Make sure that all the boxes get provisioned.
 
 # Connections to other boxes
 
