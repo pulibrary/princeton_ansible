@@ -15,6 +15,7 @@
     path: '/mnt/{{ item }}'
     state: 'directory'
     mode: 0755
+  tags: 'mounts'
   loop:
     - hydra_sources
     - figgy_binaries
@@ -27,6 +28,8 @@
     - 'illiad/images'
     - 'illiad/ocr_scan'
     - 'illiad/cdl_scans'
+    - 'hosted_illiad'
+    - 'hosted_illiad/ILL_OCR_Scans'
 
 - name: figgy | Copy smb credentials
   ansible.builtin.copy:
@@ -161,6 +164,18 @@
     - images
     - ocr_scan
     - cdl_scans
+
+- name: figgy | Create hosted ILLiad mounts
+  ansible.posix.mount:
+    name: /mnt/hosted_illiad/{{ item }}
+    src: //lib-fileshare.princeton.edu/{{ item }}
+    fstype: cifs
+    opts: 'credentials=/etc/illiad.smb.credentials,uid={{ deploy_user_uid }},gid=33'
+    state: mounted
+  tags: 'mounts'
+  when: running_on_server
+  loop:
+    - ILL_OCR_Scans
 
 ## Symlink to Mounts
 - name: figgy | Create symlinks
