@@ -6,6 +6,10 @@ labels: ''
 assignees: ''
 
 ---
+### Relevant deadlines
+If the new VMs must be ready by a certain date, please enter it here.
+- [ ] We need these VMs by: MM/DD/YYYY
+
 ### Describe the VM(s) you need
 
 If you do not know the answers to some of these questions, that's okay. Please add the information you do have, and we will work together to gather any other information we need. You can also look at the [documentation](https://github.com/pulibrary/pul-it-handbook/blob/main/services/new_vms_for_devs.md) in pul-it-handbook.
@@ -31,8 +35,5 @@ What firewall changes should be made? (for example, port 22 for SSH, etc.)
 What else should we add to each VM? (for example, mount Isilon drives, add NFS server access)
 - [ ] Additional resources:
 
-### Relevant deadlines
-If the new VMs must be ready by a certain date, please enter it here.
-- [ ] We need these VMs by: MM/DD/YYYY
 
 ### Implementation notes, if any
