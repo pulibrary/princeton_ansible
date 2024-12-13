@@ -10,7 +10,7 @@
   ansible.builtin.shell: /usr/bin/wget -q -O - https://apt.grafana.com/gpg.key | gpg --dearmor > /etc/apt/keyrings/grafana.gpg
   changed_when: false
 
-- name: Grafanarepo | apt source
+- name: Logs | Grafanarepo apt source
   ansible.builtin.apt_repository:
     repo: "deb [signed-by=/etc/apt/keyrings/grafana.gpg] https://apt.grafana.com stable main"
     state: present
@@ -24,3 +24,12 @@
     - grafana
     - loki
     - promtail
+
+- name: Logs | Replace domain entry with our inventory name
+  ansible.builtin.lineinfile:
+    path: /etc/grafana/grafana.ini
+    regexp: ''
+    line: domain="{{ inventory_hostname }}"
+    owner: root
+    group: root
+    mode: '0644'
