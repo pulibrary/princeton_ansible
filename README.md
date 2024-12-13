@@ -1,64 +1,42 @@
 <p align="left">
   <a href="https://github.com/pulibrary/princeton_ansible"><img alt="Princeton Ansible Workflow" src="https://github.com/pulibrary/princeton_ansible/workflows/Molecule%20Tests/badge.svg"></a>
 </p>
+
 Princeton Ansible Playbooks
 ===========================
-# Setting up your Python Environment
 A collection of roles and playbooks for provisioning and managing the machines that run PUL applications.
 
-## First-time basic setup on MacOS
+# Project Setup for Development and Testing
+## First-time setup
+
+Do these things once, after you clone this repo.
+
+### Mac
 
 1. Install homebrew
-1. Run `bin/first-time-setup.sh`
-
-You can then follow the instructions in the
-following sections to run your playbooks:
-1. [Setup your environment](#setup-your-environment)
-1. [Automatically pull vault password from lastpass](#automatically-pull-vault-password-from-lastpass)
-1. [Usage](#usage)
-
-## Install Prerequisites
-
-### MacOS
-
- 1. Install [Docker Desktop](https://docs.docker.com/desktop/install/mac-install/)
- 1. Install ruby and python
-    1. If using [asdf], install the plugins as listed in .tool-versions
-       ```
-       asdf install
-       pip install pipenv
-       ```
-       **NOTE** You may encounter an error `include the header <string.h> or explicitly provide a declaration for 'memcmp'`.   Many thanks to folks here for solving this (https://github.com/openssl/openssl/issues/18720#issuecomment-1185940347). Instead run:
-       ```
-       optflags=-Wno-error=implicit-function-declaration ASDF_RUBY_BUILD_VERSION=v20220630 asdf install
-       ```
-
-       **NOTE** You may need to run `asdf plugin-add python`
-    1. Otherwise:
-       1. `brew install python`
-       1. `brew install rbenv`
-       1. `brew install pipenv`
- 1. If you have errors when running pipenv sync in the Setup your Environment
-   step below, you may need to update pip within the shell; see
-   https://stackoverflow.com/questions/65658570/pipenv-install-fails-on-cryptography-package-disabling-pep-517-processing-is-i/67095614#67095614
-
+1. Install [Docker Desktop](https://docs.docker.com/desktop/install/mac-install/)
+1. Run `bin/first-time-setup.sh` - this installs all the language and tooling dependencies
+1. Run `bin/setup` - this adds a [pre-commit hook](https://github.com/pulibrary/princeton_ansible/blob/main/.githooks/pre-commit) to your environment that will prevent you from accidentally checking in unencrypted vault files.
+1. follow the steps under "Every time setup"
 
 ### Microsoft Windows/ Ubuntu
 
  1. Use the [WSL Document](./README_Windows.md)
 
-## Setup your environment
+## Every time setup
 
-**Note: These commands should be run for each shell you run**
+Run these commands every time you use this repo
+
 ```bash
-bin/setup
 pipenv sync
 pipenv shell
+source princeton_ansible_env.sh
+lpass login <your-netid@princeton.edu>
 ```
 
-NOTE: The `bin/setup` is very important since it adds a [pre-commit hook](https://github.com/pulibrary/princeton_ansible/blob/main/.githooks/pre-commit) to your environment that will prevent you from accidentally checking in unencrypted vault files.
+Now you can run tests (See "Running molecule tests") or playbooks (See "Usage")
 
-## Determine if everything is installed correctly
+## Validate that everything is installed correctly
 
 Make sure docker is running before you run the following (from inside the `pipenv shell`) to test the installation:
 
@@ -67,7 +45,6 @@ cd roles/common
 pip3 install 'molecule-plugins[docker]'
 molecule test
 ```
-
 
 # Developing
 
@@ -213,15 +190,10 @@ after which any `git diff` command should decrypt your ansible-vault files.
 
 If a file is not decrypting with `git diff` you may need to add the file you're trying to diff to `.gitattributes`.
 
-## Automatically pull vault password from lastpass
+## Troubleshooting lastpass
 
-  More information about lastpass-cli can be found here: https://lastpass.github.io/lastpass-cli/lpass.1.html
-1. `brew install lastpass-cli`
-2. `lpass login <email@email.com>`
-3. `gem install lastpass-ansible` or `asdf exec gem install lastpass-ansible`
-4. `source princeton_ansible_env.sh`
+More information about lastpass-cli can be found here: https://lastpass.github.io/lastpass-cli/lpass.1.html
 
-### Troubleshooting lastpass
 * If you get the message `[WARNING]: Error in vault password file loading (default): Invalid vault password was provided from script`, it's possible you have vault passwords hanging around from previous projects, and they are overriding the lastpass password. If you no longer need those passwords, remove them. For example:
 
 ```bash
