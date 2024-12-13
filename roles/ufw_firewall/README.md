@@ -1,6 +1,6 @@
 # UFW Firewall Role
 
-This Ansible role configures the Uncomplicated Firewall (UFW) on our Linux systems. It allows you to define allowed and denied networks and ports, making it easy to manage your firewall rules.
+This Ansible role configures the Uncomplicated Firewall (UFW) on our Linux systems. It allows you to define allowed and denied networks and ports, making it easy to manage your firewall rules. Further descriptions of the networks will be on [IT-Handbook](https://github.com/pulibrary/pul-it-handbook)
 
 ## Requirements
 
@@ -16,24 +16,11 @@ the examples below allow ssh, http, and redis to those CIDR subnets. For ssh mak
 ```yaml
 ufw_firewall_rules:
   - protocol: tcp
-    source: 10.249.64.0/18
-    port: 22
-    action: ACCEPT
-  - protocol: tcp
-    source: 128.112.200.0/21
-    protocol: tcp
-    allowed_cidrs:
-      - 128.112.200.0/21
-  - service: http
-    protocol: tcp
-    allowed_cidrs: "{{ ufw_campus_and_vpn }}"
-  - service: http
+    source: "{{ ufw_campus_and_vpn }}"
     port: 80
     action: ACCEPT
   - protocol: tcp
-    source: 128.112.200.0/21
-    protocol: tcp
-    allowed_cidrs:
-      - 128.112.200.0/21
-      - 128.112.0.0/16
+    source: "{{ ufw_libnet }}"
+    port: 22
+    action: ACCEPT
 ```
