@@ -21,10 +21,19 @@ ufw_firewall_rules:
     action: ACCEPT
   - protocol: tcp
     source: 128.112.200.0/21
+    protocol: tcp
+    allowed_cidrs:
+      - 128.112.200.0/21
+  - service: http
+    protocol: tcp
+    allowed_cidrs: "{{ ufw_campus_and_vpn }}"
+  - service: http
     port: 80
     action: ACCEPT
   - protocol: tcp
     source: 128.112.200.0/21
-    port: 6379
-    action: ACCEPT
+    protocol: tcp
+    allowed_cidrs:
+      - 128.112.200.0/21
+      - 128.112.0.0/16
 ```
