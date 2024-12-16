@@ -6,13 +6,18 @@
     state: restarted
 
 - name: Restart loki
-  ansible.builtin.service:
+  ansible.builtin.systemd:
     name: loki
     state: restarted
+  become: true
+  when:
+    - running_on_server
 
 - name: Reload loki service
   ansible.builtin.systemd:
     name: loki
     daemon_reload: true
-    state: "{{ loki_state | default('reloaded') }}"
+    state: reloaded
   become: true
+  when:
+    - running_on_server

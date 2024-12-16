@@ -25,12 +25,30 @@
     - loki
     - promtail
 
+- name: Copy file with variable filename
+  ansible.builtin.copy:
+    src: "pul-gcdc-{{ runtime_env }}-account-key.json"
+    dest: "/etc/loki/{{ logs_gcs_credentials }}"
+    owner: root
+    group: root
+    mode: "0644"
+  when:
+    - running_on_server
+
 - name: Logs | add gcs credentials file
   ansible.builtin.lineinfile:
     path: /etc/systemd/system/loki.service
-    search_string: 'Service'
-    insertafter: 'ExecStart=/usr/local/bin/loki --config.file=/path/to/loki-config.yaml'
+    regexp: '^Environment="GOOGLE_APPLICATION_CREDENTIALS=/etc/loki/{{ logs_gcs_credentials }}"$'
     line: 'Environment="GOOGLE_APPLICATION_CREDENTIALS=/etc/loki/{{ logs_gcs_credentials }}"'
+    insertafter: '^\[Service\]'
+  notify: Reload loki service
+
+- name: Logs | ensure ExecReload is present in Loki service
+  ansible.builtin.lineinfile:
+    path: /etc/systemd/system/loki.service
+    regexp: '^ExecReload='
+    line: 'ExecReload=/bin/kill -HUP $MAINPID'
+    insertafter: '^\[Service\]'
   notify: Reload loki service
 
 - name: Logs | add loki config
@@ -39,7 +57,7 @@
     dest: /etc/loki/config.yml
     owner: root
     group: root
-    mode: '0640'
+    mode: '0644'
   notify: Restart loki
 
 - name: Logs | add grafana ldap config
