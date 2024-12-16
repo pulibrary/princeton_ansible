@@ -25,6 +25,14 @@
     - loki
     - promtail
 
+- name: Logs | add gcs credentials file
+  ansible.builtin.lineinfile:
+    path: /etc/systemd/system/loki.service
+    search_string: 'Service'
+    insertafter: 'ExecStart=/usr/local/bin/loki --config.file=/path/to/loki-config.yaml'
+    line: 'Environment="GOOGLE_APPLICATION_CREDENTIALS=/etc/loki/{{ logs_gcs_credentials }}"'
+  notify: Reload loki service
+
 - name: Logs | add loki config
   ansible.builtin.template:
     src: config.yml.j2
