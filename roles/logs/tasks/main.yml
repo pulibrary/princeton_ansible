@@ -25,11 +25,28 @@
     - loki
     - promtail
 
-- name: Logs | Replace domain entry with our inventory name
-  ansible.builtin.lineinfile:
-    path: /etc/grafana/grafana.ini
-    regexp: ''
-    line: domain="{{ inventory_hostname }}"
+- name: Logs | add loki config
+  ansible.builtin.template:
+    src: config.yml.j2
+    dest: /etc/loki/config.yml
     owner: root
     group: root
-    mode: '0644'
+    mode: '0640'
+  notify: Restart loki
+
+- name: Logs | add grafana ldap config
+  ansible.builtin.template:
+    src: ldap.toml.j2
+    dest: /etc/grafana/ldap.toml
+    owner: root
+    group: root
+    mode: '0640'
+
+- name: Logs | add grafana config
+  ansible.builtin.template:
+    src: grafana.ini.j2
+    dest: /etc/grafana/grafana.ini
+    owner: root
+    group: root
+    mode: '0640'
+  notify: Restart grafana
