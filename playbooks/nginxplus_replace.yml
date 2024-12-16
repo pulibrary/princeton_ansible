@@ -1,0 +1,54 @@
+---
+- name: Replace nginx server
+  hosts: nginxplus_{{ runtime_env | default('staging') }}
+  remote_user: pulsys
+  become: true
+  vars_files:
+    - ../group_vars/nginxplus/main.yml
+    - ../group_vars/nginxplus/{{ runtime_env | default('staging') }}.yml
+
+  pre_tasks:
+    - name: Check if /etc/letsencrypt/live/README is present
+      ansible.builtin.stat:
+        path: /etc/letsencrypt/live/README
+      register: readme_file_stat
+      run_once: true
+
+    - name: Stop playbook if /etc/letsencrypt/live/README is not present
+      ansible.builtin.fail:
+        msg: "The file /etc/letsencrypt/live/README is not present. Please run the `letsencrypt_sync` playbook."
+      when: not (readme_file_stat.stat.exists and not readme_file_stat.stat.isdir)
+      run_once: true
+
+    - name: Stop playbook if you didn't use --limit
+      ansible.builtin.fail:
+        msg: "You must use -l or --limit."
+      when: ansible_limit is not defined
+      run_once: true
+
+    - name: Tell infrastructure and ansible-alerts the playbook is starting
+      community.general.slack:
+        token: "{{ vault_tower_slack_token }}"
+        msg: "Ansible is now running `{{ ansible_play_name }}` with the `{{ ansible_run_tags }}` tag on {{ inventory_hostname }}"
+        channel: "{{ item }}"
+      loop: "{{ slack_alerts_channel }}"
+      tags: always
+
+  roles:
+    - role: ../roles/datadog
+      when: runtime_env | default('staging') == "production"
+    - role: ../roles/nginxplus
+
+- name: Restart replaced nginx and announce success
+  hosts: nginxplus_{{ runtime_env | default('staging') }}
+  remote_user: pulsys
+  strategy: linear
+  become: true
+
+  tasks:
+
+  post_tasks:
+    - name: Send information to slack
+      ansible.builtin.include_tasks:
+        file: utils/slack_tasks_end_of_playbook.yml
+      tags: always
