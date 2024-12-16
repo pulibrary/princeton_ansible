@@ -1,0 +1,88 @@
+---
+- name: Set up and synchronize Let's Encrypt data
+  hosts: localhost
+  remote_user: pulsys
+  become: true
+  gather_facts: false
+  vars_prompt:
+    - name: "active_host"
+      prompt: "Enter the active host (e.g adc-dev1.lib.princeton.edu)"
+      private: false
+
+    - name: "backup_host"
+      prompt: "Enter the backup host (e.g adc-dev2.lib.princeton.edu)"
+      private: false
+
+  tasks:
+    # Fetch the /etc/ssh/sshd_config content from backup_host
+    - name: Fetch /etc/ssh/sshd_config from backup_host
+      ansible.builtin.slurp:
+        src: /etc/ssh/sshd_config
+      delegate_to: "{{ backup_host }}"
+      register: sshd_config_content
+      become: true
+
+    # Append root to AllowUsers in the fetched sshd_config content
+    - name: Append root to AllowUsers directive
+      ansible.builtin.blockinfile:
+        path: /etc/ssh/sshd_config
+        marker: "# ANSIBLE MANAGED BLOCK - AllowUsers"
+        block: |
+          {% if allow_users_line %}
+          {{ allow_users_line }} root
+          {% else %}
+          AllowUsers root
+          {% endif %}
+      delegate_to: "{{ backup_host }}"
+      vars:
+        sshd_config_decoded: "{{ sshd_config_content['content'] | b64decode }}"
+        allow_users_line: "{{ sshd_config_decoded | regex_search('^AllowUsers.*$', multiline=True) | default('') }}"
+      become: true
+
+    # Restart SSH service on backup_host
+    - name: Restart SSH service on backup_host
+      ansible.builtin.service:
+        name: sshd
+        state: restarted
+      delegate_to: "{{ backup_host }}"
+      become: true
+
+    # Generate SSH key on the active host
+    - name: Generate SSH key on active host for root user
+      ansible.builtin.command:
+        cmd: ssh-keygen -q -t ed25519 -f /root/.ssh/letsencrypt_sync_key -N ""
+      delegate_to: "{{ active_host }}"
+      become: true
+      become_user: root
+      args:
+        creates: /root/.ssh/letsencrypt_sync_key  # Ensures idempotence
+
+    # Fetch the public key from the active host
+    - name: Fetch the public key from the active host
+      ansible.builtin.fetch:
+        src: /root/.ssh/letsencrypt_sync_key.pub
+        dest: /tmp/letsencrypt_sync_key.pub
+        flat: true
+      delegate_to: "{{ active_host }}"
+      become: true
+      become_user: root
+
+    # Install the public key on the backup host
+    - name: Add public key to backup host root user's authorized_keys
+      ansible.posix.authorized_key:
+        user: root
+        state: present
+        key: "{{ lookup('file', '/tmp/letsencrypt_sync_key.pub') }}"
+      delegate_to: "{{ backup_host }}"
+      become: true
+      become_user: root
+
+    # Perform rsync from the active host to the backup host
+    - name: Synchronize Let's Encrypt data from active host to backup host
+      ansible.builtin.command:
+        cmd: >
+          rsync -avz -e "ssh -i /root/.ssh/letsencrypt_sync_key -o StrictHostKeyChecking=no"
+          /etc/letsencrypt/ root@{{ backup_host }}:/etc/letsencrypt/
+      delegate_to: "{{ active_host }}"
+      become: true
+      become_user: root

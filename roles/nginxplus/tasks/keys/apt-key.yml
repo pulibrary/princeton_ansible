@@ -1,40 +1,70 @@
 ---
 - name: Nginxplus | Install GPG Agent
   ansible.builtin.apt:
-    name: gpg-agent
+    name: "{{ item }}"
     state: present
     update_cache: true
+  loop:
+    - gnupg2
+    - gpg-agent
 
-- name: Nginxplus | Install NGINX Signing Key URL focal
-  ansible.builtin.set_fact:
-    default_keysite: >-
-      {{ (ansible_distribution_release == "focal")
-      | ternary("http://nginx.org/keys/nginx_signing.key", "https://nginx.org/keys/nginx_signing.key") }}
-  when:
-    - ansible_distribution_release == "focal"
-
-- name: Nginxplus | Install NGINX Signing Key URL jammy
-  ansible.builtin.set_fact:
-    default_keysite: >-
-      {{ (ansible_distribution_release == "jammy")
-      | ternary("http://nginx.org/keys/nginx_signing.key", "https://nginx.org/keys/nginx_signing.key") }}
-  when:
-    - ansible_distribution_release == "jammy"
-
-- name: Nginxplus | Install Set NGINX Signing Key URL
-  ansible.builtin.set_fact:
-    keysite: "{{ nginx_signing_key | default(default_keysite) }}"
-
-- name: "Install: Add APT NGINX Signing Key"
+- name: Nginxplus | import signing key
   ansible.builtin.apt_key:
-    url: "{{ keysite }}"
+    state: present
+    url: https://nginx.org/keys/nginx_signing.key
 
-- name: "Install: Set NGINX App-Protect Signing Key URL"
-  ansible.builtin.set_fact:
-    app_protect_keysite: "{{ nginx_app_protect_signing_key }}"
-  when: running_on_server
+- name: Nginxplus | Add Nginx repository
+  ansible.builtin.apt_repository:
+    repo: deb http://nginx.org/packages/ubuntu/ {{ ansible_distribution_release }} nginx
+    state: present
+    filename: nginx
 
-- name: "Install: Add APT NGINX App-Protect Signing Key"
-  ansible.builtin.apt_key:
-    url: "{{ app_protect_keysite }}"
-  when: running_on_server
+- name: Nginxplus | Add NGINX signing key
+  ansible.builtin.shell: |
+    /usr/bin/wget -qO - https://cs.nginx.com/static/keys/nginx_signing.key | gpg --dearmor > /usr/share/keyrings/nginx-archive-keyring.gpg
+  args:
+    creates: /usr/share/keyrings/nginx-archive-keyring.gpg
+  when:
+    - running_on_server
+
+- name: Nginxplus | Add App Protect security updates key
+  ansible.builtin.shell: |
+    /usr/bin/wget -qO - https://cs.nginx.com/static/keys/app-protect-security-updates.key | gpg --dearmor > /usr/share/keyrings/app-protect-security-updates.gpg
+  args:
+    creates: /usr/share/keyrings/app-protect-security-updates.gpg
+  when:
+    - running_on_server
+
+- name: Nginxplus | Add NGINX Plus repository
+  ansible.builtin.lineinfile:
+    path: /etc/apt/sources.list.d/nginx-plus.list
+    line: "deb [signed-by=/usr/share/keyrings/nginx-archive-keyring.gpg] https://pkgs.nginx.com/plus/ubuntu {{ ansible_distribution_release }} nginx-plus"
+    create: true
+    mode: "0644"
+  when:
+    - running_on_server
+
+- name: Nginxplus | Add App Protect repository
+  ansible.builtin.lineinfile:
+    path: /etc/apt/sources.list.d/nginx-app-protect.list
+    line: "deb [signed-by=/usr/share/keyrings/nginx-archive-keyring.gpg] https://pkgs.nginx.com/app-protect/ubuntu {{ ansible_distribution_release }} nginx-plus"
+    create: true
+    mode: "0644"
+  when:
+    - running_on_server
+
+- name: Nginxplus | Add App Protect security updates repository
+  ansible.builtin.lineinfile:
+    path: /etc/apt/sources.list.d/nginx-app-protect.list
+    line: "deb [signed-by=/usr/share/keyrings/app-protect-security-updates.gpg] https://pkgs.nginx.com/app-protect-security-updates/ubuntu {{ ansible_distribution_release }} nginx-plus"
+    create: true
+    mode: "0644"
+    insertafter: EOF
+  when:
+    - running_on_server
+
+- name: Download 90pkgs-nginx file
+  ansible.builtin.get_url:
+    url: https://cs.nginx.com/static/files/90pkgs-nginx
+    dest: /etc/apt/apt.conf.d/90pkgs-nginx
+    mode: '0644'
