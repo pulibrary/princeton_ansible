@@ -4,12 +4,15 @@
   ansible.builtin.apt:
     name: 'libsqlite3-dev'
     state: present
+  tags: mailcatcher
 
 - name: mailcatcher | install global mail catcher
   community.general.gem:
     name: mailcatcher
     user_install: false
+    version: "{{ mailcatcher_version }}"
   when: install_mailcatcher
+  tags: mailcatcher
 
 - name: mailcatcher | Install startup script for mailcatcher
   ansible.builtin.template:
@@ -18,6 +21,7 @@
     mode: 0644
   when: running_on_server and install_mailcatcher
   notify: restart mailcatcher
+  tags: mailcatcher
 
 - name: mailcatcher | Keep mailcatcher running
   ansible.builtin.service:
@@ -25,3 +29,4 @@
     enabled: true
     state: started
   when: running_on_server and install_mailcatcher
+  tags: mailcatcher
