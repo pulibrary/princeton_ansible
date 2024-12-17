@@ -41,5 +41,18 @@
 - name: Mflux | import ldap-config tasks
   ansible.builtin.import_tasks: ldap-config.yml
 
-# - name: Mflux | Allow SHA1
+- name: Mflux | role create dictionary namespaces
+  ansible.builtin.command: java -Dmf.host=localhost -Dmf.transport=http -Dmf.domain=system -Dmf.user=manager -Dmf.password="{{ mflux_manager_password }}" -Dmf.port=80 -jar /opt/mediaflux/bin/aterm.jar --app exec	dictionary.namespace.create :namespace {{ item }} :ifexists ignore
+  loop:
+    - "princeton"
+    - "princeton.tigerdata"
+
+# Run the custom roles configuration tasks
+- name: Mflux | import custom-roles tasks
+  ansible.builtin.import_tasks: custom-roles.yml
+
 # Remove SHA1 from /etc/crypto-policies/back-ends/java.config
+- name: Mflux | Allow SHA1
+  ansible.builtin.replace:
+    path: /etc/crypto-policies/back-ends/java.config
+    regexp: 'SHA1'
