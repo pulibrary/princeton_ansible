@@ -23,14 +23,24 @@
         force_apt_get: true
       when: ansible_os_family == "Debian"
 
-    - name: RedHat | Upgrade all packages
-      ansible.builtin.yum:
-        name: "*" 
-        state: latest
-        update_cache: true
-        update_only: true
-      register: yum_update_status
-      when: ansible_os_family == "RedHat"
+    - name: RedHat | Upgrade all packages with fallback
+      block:
+        - name: RedHat | Upgrade all packages using yum
+          ansible.builtin.yum:
+            name: "*"
+            state: latest
+            update_cache: true
+            update_only: true
+          register: yum_update_status
+          when: ansible_os_family == "RedHat"
+
+      rescue:
+        - name: RedHat | Upgrade all packages using dnf with skip-broken and nobest
+          ansible.builtin.dnf:
+            name: "*"
+            state: latest
+            skip_broken: true
+            nobest: true
 
     - name: RedHat | clear local repository
       ansible.builtin.command:
