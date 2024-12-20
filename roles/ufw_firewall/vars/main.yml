@@ -1,8 +1,22 @@
 ---
 # vars file for roles/ufw_firewall
+
 ufw_firewall_rules: >
     {%- set rules = [] -%}
     {%- for network in ufw_campus_and_vpn -%}
-    {{ rules.append({'protocol': 'tcp', 'source': network, 'port': 22, 'action': 'ACCEPT'}) }}
+    {{ rules.append({'protocol': 'tcp', 'source': network, 'port': ufw_firewall_ports.ssh, 'action': 'ACCEPT'}) }}
     {%- endfor -%}
     {{ rules }}
+
+ufw_firewall_after_rules: []
+
+ufw_firewall_ports:
+  ssh: 22
+
+# example of opening ports for web template
+  #    {%- for network in ufw_libnet -%}
+  #  {{ rules.append({'protocol': 'tcp', 'source': network, 'port': ufw_firewall_ports.web, 'action': 'ACCEPT'}) }}
+  #  {%- endfor -%}
+# example of defining ports for web template
+# ufw_firewall_ports:
+#   web: 80
