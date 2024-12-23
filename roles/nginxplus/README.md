@@ -21,6 +21,17 @@ integration to work.  We have a permanent REJECT rule for traffic
 from 192.0.2.0 (which is a reserved IP for special use that
 will never actually send us any traffic) for this reason, do not delete this rule please.
 
+## Testing a fail2ban rule
+
+You can use the `fail2ban-regex` command to test your rule to make sure the regular expression syntax is correct.
+
+To do this:
+
+1. Copy a representative sample of the log you want to check (otherwise it will take forever!).  For example, if you want the last 5000 lines of the nginx access log, you can `tail -n 5000 /var/log/nginx/access.log > ~/partial-access-log-for-testing`
+2. Identify the filename that contains the regular expression you want to check.  In this case, we will use `/etc/fail2ban/filter.d/nginx-badbots.conf`
+3. Run `fail2ban-regex ~/partial-access-log-for-testing /etc/fail2ban/filter.d/nginx-badbots.conf`
+4. In the results, you can see how many hits you got in a line like `Failregex: 325 total`
+
 Using this role
 ===============
 
