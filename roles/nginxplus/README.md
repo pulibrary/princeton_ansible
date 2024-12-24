@@ -23,7 +23,7 @@ will never actually send us any traffic) for this reason, do not delete this rul
 
 ## Testing a fail2ban rule
 
-You can use the `fail2ban-regex` command to test your rule to make sure the regular expression syntax is correct.
+You can use the `fail2ban-regex` command to test your rule to make sure the regular expression syntax is correct.  You can do this on the box or (if you download a selection of the log files and `brew install fail2ban`) locally.  These commands don't ban anyone, they just check your regular expressions for correctness.
 
 To do this:
 
