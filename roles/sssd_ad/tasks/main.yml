@@ -1,210 +1,73 @@
 ---
-# Windows Active Directory has a limit of hostname characters
-- name: Sssd_ad | change hostname to match AD
-  ansible.builtin.command: hostnamectl set-hostname {{ host_ad_name | default(omit) }}
-  changed_when: false
-  when:
-    - ansible_os_family == "Debian"
-    - running_on_server
-
-- name: Sssd_ad | allow password authentication
-  ansible.builtin.lineinfile:
-    path: /etc/ssh/sshd_config
-    state: present
-    regexp: '^PasswordAuthentication no'
-    line: 'PasswordAuthentication yes'
-
-- name: Sssd_ad | allow users authentication
-  ansible.builtin.lineinfile:
-    path: /etc/ssh/sshd_config
-    state: present
-    regexp: '^AllowUsers pulsys'
-    line: '# AllowUsers pulsys'
-  when: running_on_server
-  notify: restart sshd
-
-- name: Sssd_ad | install necessary packages (Ubuntu)
+- name: Sssd_ad | Ensure required packages are installed
   ansible.builtin.apt:
     name: "{{ item }}"
     state: present
-    update_cache: true
   loop:
-    - adcli
-    - krb5-user
-    - libnss-sss
-    - libpam-sss
-    - oddjob
-    - oddjob-mkhomedir
-    - packagekit
-    - sssd
-    - sssd-tools
-    - realmd
-    - samba
-  when: ansible_os_family == "Debian"
+      - adcli
+      - krb5-user
+      - libnss-sss
+      - libpam-sss
+      - ldap-utils
+      - oddjob
+      - oddjob-mkhomedir
+      - packagekit
+      - realmd
+      - sssd
+      - sssd-tools
+      - samba-common-bin
 
-- name: Sssd_ad | install necessary packages (Redhat)
-  ansible.builtin.dnf:
-    name: "{{ item }}"
-    state: present
-  loop:
-    - adcli
-    - krb5-libs
-    - krb5-workstation
-    - nss-pam-ldapd
-    - oddjob
-    - oddjob-mkhomedir
-    - realmd
-    - samba-common
-    - samba-common-tools
-    - sssd
-    - sssd-tools
-  when: ansible_os_family == "RedHat"
-
-- name: Sssd_ad | configure Kerberos
+- name: Sssd_ad | Configure realmd for TLS
   ansible.builtin.template:
-    src: krb5.conf.j2
-    dest: /etc/krb5.conf
-    mode: "0644"
+    src: realmd.conf.j2
+    dest: /etc/realmd.conf
     owner: root
     group: root
+    mode: "0644"
 
-- name: Sssd_ad | Discover the domain
-  ansible.builtin.command: realm discover {{ ad_domain }}
-  register: realm_discovery
-  changed_when: false
-  when: running_on_server
-
-- name: Sssd_ad | join the domain
-  ansible.builtin.command: realm join -U {{ ad_admin_user }} {{ ad_domain }}
-  vars:
-    ansible_become_pass: "{{ ad_admin_password }}"
-  become: true
-  register: join_output
-  when:
-    - running_on_server
-  failed_when: "'Successfully enrolled' not in join_output.stdout"
-
-- name: Sssd_ad | Verify domain join
-  ansible.builtin.command: "realm list"
-  register: realm_list
-  changed_when: false
-
-- name: Sssd_ad | Configure sssd.conf
+- name: Sssd_ad | Configure sssd for TLS
   ansible.builtin.template:
     src: sssd.conf.j2
     dest: /etc/sssd/sssd.conf
-    mode: "0600"
     owner: root
     group: root
+    mode: "0600"
 
-- name: Sssd_ad | Restart sssd service
-  ansible.builtin.systemd:
-    name: sssd
-    state: restarted
-    enabled: true
-
-- name: Sssd_ad | Update NSS configuration (Ubuntu)
-  ansible.builtin.lineinfile:
-    path: /etc/nsswitch.conf
-    regexp: "{{ item.regexp }}"
-    line: "{{ item.line }}"
-    state: present
-  loop:
-    - { regexp: "^passwd:.*", line: "passwd:         compat systemd sss" }
-    - { regexp: "^group:.*", line: "group:          compat systemd sss" }
-    - { regexp: "^shadow:.*", line: "shadow:         compat sss" }
-  when: ansible_os_family == "Debian"
-
-- name: Sssd_ad | Update NSS configuration (Redhat)
-  ansible.builtin.lineinfile:
-    path: /etc/nsswitch.conf
-    regexp: "{{ item.regexp }}"
-    line: "{{ item.line }}"
-    state: present
-  loop:
-    - { regexp: "^passwd:.*", line: "passwd:      files sss" }
-    - { regexp: "^group:.*", line: "group:       files sss" }
-    - { regexp: "^shadow:.*", line: "shadow:      files sss" }
-  when: ansible_os_family == "RedHat"
-
-- name: Sssd_ad | configure smb
-  ansible.builtin.lineinfile:
-    path: /etc/samba/smb.conf
-    line: "{{ item }}"
-    mode: "0644"
-  loop:
-    - '[global]'
-    - '   workgroup = {{ ad_workgroup }}'
-    - '   security = ads'
-    - '   realm = {{ ad_domain | upper }}'
-    - '   kerberos method = secrets and keytab'
-    - '   idmap config * : range = 16777216-33554431'
-  notify: restart smb
-
-- name: Sssd_ad | ensure /run/samba directory exists
-  ansible.builtin.file:
-    path: /run/samba
-    state: directory
+- name: Sssd_ad | Configure OpenLDAP for TLS
+  ansible.builtin.template:
+    src: ldap.conf.j2
+    dest: /etc/ldap/ldap.conf
     owner: root
-    group: sambashare
-    mode: "0770"
+    group: root
+    mode: "0644"
 
-- name: Sssd_ad | ensure sambashare group exists
-  ansible.builtin.group:
-    name: sambashare
-    state: present
+- name: Sssd_ad | Ensure CA certificate is present
+  ansible.builtin.copy:
+    src: "{{ ad_ldap_cert }}"
+    dest: /usr/local/share/ca-certificates/ad_ca.crt
+    owner: root
+    group: root
+    mode: "0644"
+  when: ad_ldap_cert is defined
 
-- name: Sssd_ad | add current user to sambashare group
-  ansible.builtin.user:
-    name: "{{ ansible_user }}"
-    groups: sambashare
-    append: true
+- name: Sssd_ad | Update CA certificates
+  ansible.builtin.command: update-ca-certificates
+  changed_when: false
+  when: ad_ldap_cert is defined
 
-- name: Sssd_ad | restart Samba services
-  ansible.builtin.service:
-    name: smbd
-    state: restarted
-  notify: restart smb
-
-- name: Sssd_ad | enable and start sssd service
+- name: Sssd_ad | Restart SSSD service
   ansible.builtin.service:
     name: sssd
-    state: started
+    state: restarted
     enabled: true
-  register: sssd_service
+
+- name: Sssd_ad | Join the AD domain using TLS
+  ansible.builtin.command: realm join --user={{ ad_admin_user }} {{ ad_domain }}
+  register: realm_join_result
+  ignore_errors: false
   when: running_on_server
 
-- name: Sssd_ad | configure PAM
-  ansible.builtin.lineinfile:
-    path: /etc/pam.d/common-session
-    line: 'session required pam_mkhomedir.so skel=/etc/skel umask=0022'
-
-- name: Sssd_ad | check if AD user exists
-  ansible.builtin.command: getent passwd {{ ad_test_user }}
-  register: ad_user_check
-  ignore_errors: true
-  changed_when: false
-  when: running_on_server
-
-- name: Sssd_ad | create home directory for AD users
-  ansible.builtin.file:
-    path: /home/{{ ad_test_user }}
-    state: directory
-    mode: "0700"
-    owner: "{{ ad_test_user }}"
-    group: "sambashare"
-  when:
-    - running_on_server
-    - ad_user_check.rc == 0
-
-- name: Sssd_ad | test login with AD user
-  ansible.builtin.command: su - {{ ad_test_user }} -c 'exit 0'
-  changed_when: false
-  ignore_errors: true
-  register: ad_login_result
-  when: running_on_server
-
-- name: Sssd_ad | debug AD login result
+- name: Sssd_ad | Display realm join result
   ansible.builtin.debug:
-    var: ad_login_result
+    var: realm_join_result.stdout
   when: running_on_server
