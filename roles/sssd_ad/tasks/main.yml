@@ -4,18 +4,33 @@
     name: "{{ item }}"
     state: present
   loop:
-      - adcli
-      - krb5-user
-      - libnss-sss
-      - libpam-sss
-      - ldap-utils
-      - oddjob
-      - oddjob-mkhomedir
-      - packagekit
-      - realmd
-      - sssd
-      - sssd-tools
-      - samba-common-bin
+    - adcli
+    - krb5-user
+    - libnss-sss
+    - libpam-sss
+    - ldap-utils
+    - oddjob
+    - oddjob-mkhomedir
+    - packagekit
+    - realmd
+    - sssd
+    - sssd-tools
+    - samba-common-bin
+
+- name: Sssd_ad | set domain on interface
+  ansible.builtin.command: resolvectl domain {{ ansible_default_ipv4.interface }} {{ ad_domain }}
+  register: resolvectl_result
+  changed_when: "'Successfully' in resolvectl_result.stderr or ad_domain in resolvectl_result.stdout"
+  notify: Restart systemd-resolved
+  when: running_on_server
+
+- name: Sssd_ad | kerberos for TLS
+  ansible.builtin.template:
+    src: krb5.conf.j2
+    dest: /etc/krb5.conf
+    owner: root
+    group: root
+    mode: "0644"
 
 - name: Sssd_ad | Configure realmd for TLS
   ansible.builtin.template:
@@ -41,33 +56,29 @@
     group: root
     mode: "0644"
 
-- name: Sssd_ad | Ensure CA certificate is present
-  ansible.builtin.copy:
-    src: "{{ ad_ldap_cert }}"
-    dest: /usr/local/share/ca-certificates/ad_ca.crt
-    owner: root
-    group: root
-    mode: "0644"
-  when: ad_ldap_cert is defined
-
 - name: Sssd_ad | Update CA certificates
   ansible.builtin.command: update-ca-certificates
   changed_when: false
   when: ad_ldap_cert is defined
 
-- name: Sssd_ad | Restart SSSD service
-  ansible.builtin.service:
-    name: sssd
-    state: restarted
-    enabled: true
-
+# - name: Sssd_ad | set up keytab
+#  ansible.builtin.include_tasks: kerberoskey.yml
+  #  when: running_on_server
+  #
 - name: Sssd_ad | Join the AD domain using TLS
-  ansible.builtin.command: realm join --user={{ ad_admin_user }} {{ ad_domain }}
+  ansible.builtin.command: realm join --user={{ ad_admin_user }} {{ ad_domain }} --install=/
   register: realm_join_result
-  ignore_errors: false
+  changed_when: "'Successfully enrolled machine in realm' in realm_join_result.stdout or 'already enrolled' in realm_join_result.stderr_lines"
+  ignore_errors: true
   when: running_on_server
 
 - name: Sssd_ad | Display realm join result
   ansible.builtin.debug:
     var: realm_join_result.stdout
   when: running_on_server
+
+- name: Sssd_ad | Restart SSSD service
+  ansible.builtin.service:
+    name: sssd
+    state: restarted
+    enabled: true
