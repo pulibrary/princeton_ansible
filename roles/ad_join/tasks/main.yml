@@ -1,0 +1,199 @@
+---
+# tasks file for roles/ad_join
+- name: Ad_join | ensure required packages are installed
+  ansible.builtin.package:
+    name: "{{ ad_join_packages }}"
+    state: present
+
+- name: Ad_join | ensure authselect profile directory exists
+  ansible.builtin.file:
+    path: "{{ authselect_custom_path }}"
+    state: directory
+    mode: "0755"
+
+- name: Ad_join | create a compressed file of the custom PAM directory
+  ansible.builtin.archive:
+    path: "{{ ad_join_authselect_custom_path }}"
+    dest: "/tmp/custom_pul_sssd.tar.gz"
+    format: gz
+    mode: "0755"
+  delegate_to: localhost
+  run_once: true
+
+- name: Ad_join | copy the custom PAM configuration
+  ansible.builtin.copy:
+    src: "/tmp/custom_pul_sssd.tar.gz"
+    dest: "{{ authselect_custom_path }}.tar.gz"
+    mode: "0755"
+    remote_src: true
+
+- name: Ad_join | extract custom PAM configuration
+  ansible.builtin.unarchive:
+    src: "{{ authselect_custom_path }}.tar.gz"
+    dest: /
+    remote_src: true
+
+- name: Ad_join | select the custom authselect profile with home directory creation
+  ansible.builtin.command: "authselect select custom/{{ authselect_profile_name }} {{ 'with-mkhomedir' if create_home_dir else '' }}"
+  args:
+    creates: /etc/authselect/authselect.conf
+
+- name: Ad_join | template sssd.conf
+  ansible.builtin.template:
+    src: sssd.conf.j2
+    dest: "{{ sssd_config_file }}"
+    owner: root
+    group: root
+    mode: "0600"
+  notify: Restart sssd
+
+- name: Ad_join | template krb5.conf
+  ansible.builtin.template:
+    src: krb5.conf.j2
+    dest: "{{ krb5_config_file }}"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Ad_join | discover the realm
+  ansible.builtin.command: "realm discover {{ ad_domain }}"
+  register: realm_discover
+  changed_when: false
+
+- name: Ad_join | join the realm
+  ansible.builtin.command: "realm join --verbose --user={{ admin_user }} --computer-ou='{{ computer_ou }}' {{ ad_domain }}"
+  when: "'already joined' not in realm_discover.stdout"
+  # Consider using 'expect' for password prompt if not using Kerberos
+
+- name: Ad_join | ensure sssd service is enabled and started
+  ansible.builtin.service:
+    name: sssd
+    enabled: true
+    state: started
+
+- name: Ad_join | flush handlers
+  ansible.builtin.meta: flush_handlers
+
+- name: Ad_join | enable oddjobd service for home directory creation
+  ansible.builtin.service:
+    name: oddjobd
+    enabled: true
+    state: started
+  when: create_home_dir
+
+- name: Ad_join | add kdc lines to krb5.conf
+  ansible.builtin.lineinfile:
+    path: /etc/krb5.conf
+    line: " kdc = {{ item }}"
+    insertafter: '^ +admin_server =.*'
+    state: present
+  with_items:
+    - pdom09.pu.win.princeton.edu
+    - pdom10.pu.win.princeton.edu
+    - pdom11.pu.win.princeton.edu
+    - pdom12.pu.win.princeton.edu
+    - pdom13.pu.win.princeton.edu
+    - pdom14.pu.win.princeton.edu
+    - pdom15.pu.win.princeton.edu
+    - pdom16.pu.win.princeton.edu
+  notify: Restart sssd
+
+- name: Ad_join | add auth_to_local line to krb5.conf
+  ansible.builtin.lineinfile:
+    path: /etc/krb5.conf
+    line: " auth_to_local = RULE:[1:$0](^.*@PU.WIN.PRINCETON.EDU$)s/@.*//"
+    insertafter: '^ +default_domain =.*'
+    state: present
+  notify: Restart sssd
+
+- name: Ad_join | disable ldap_id_use_start_tls in sssd.conf
+  community.general.ini_file:
+    path: /etc/sssd/sssd.conf
+    section: "domain/PU.WIN.PRINCETON.EDU"
+    option: ldap_id_use_start_tls
+    value: 'False'
+    no_extra_spaces: true
+    mode: "0600"
+  notify: Restart sssd
+
+- name: Ad_join | disable ldap_tls_reqcert in sssd.conf
+  community.general.ini_file:
+    path: /etc/sssd/sssd.conf
+    section: "domain/PU.WIN.PRINCETON.EDU"
+    option: ldap_tls_reqcert
+    value: 'never'
+    no_extra_spaces: true
+    mode: "0600"
+  notify: Restart sssd
+
+- name: Ad_join | remove ad_access_filter in sssd.conf
+  community.general.ini_file:
+    path: /etc/sssd/sssd.conf
+    section: "domain/PU.WIN.PRINCETON.EDU"
+    option: ad_access_filter
+    state: absent
+    mode: "0600"
+  notify: Restart sssd
+
+- name: Ad_join | ldap_disable_gc and ldap_search_base in sssd.conf
+  ansible.builtin.lineinfile:
+    path: /etc/sssd/sssd.conf
+    line: "{{ item }}"
+    insertafter: '^\[domain/PU\.WIN\.PRINCETON\.EDU\]'
+    state: present
+  with_items:
+    - " ldap_disable_gc = True"
+    - " ldap_search_base = dc=pu,dc=win,dc=princeton,dc=edu"
+  notify: Restart sssd
+
+- name: Ad_join | ensure the krb5 log file directory exists
+  ansible.builtin.file:
+    path: /var/log/sssd/
+    state: directory
+    mode: "0700"
+
+- name: Ad_join | ensure the krb5 log files exist and have the right permissions
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: touch
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - /var/log/krb5libs.log
+    - /var/log/krb5kdc.log
+    - /var/log/kadmind.log
+
+- name: Ad_join | enable Kerberos authentication in sshd_config
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^[\#]*KerberosAuthentication'
+    line: 'KerberosAuthentication yes'
+    state: present
+  notify: Restart sshd
+
+- name: Ad_join | enable GSSAPI authentication in sshd_config
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^[\#]*GSSAPIAuthentication'
+    line: 'GSSAPIAuthentication yes'
+    state: present
+  notify: Restart sshd
+
+- name: Ad_join | Ensure UsePAM is enabled in sshd_config
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^[\#]*UsePAM'
+    line: 'UsePAM yes'
+    state: present
+  notify: Restart sshd
+
+- name: Ad_join | Restart sshd
+  ansible.builtin.service:
+    name: sshd
+    state: restarted
+
+- name: Ad_join | Restart sssd
+  ansible.builtin.service:
+    name: sssd
+    state: restarted
