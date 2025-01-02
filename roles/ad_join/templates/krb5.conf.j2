@@ -1,29 +1,40 @@
-# {{ ansible_managed | comment }}
 [logging]
-    default = FILE:/var/log/krb5libs.log
-    kdc = FILE:/var/log/krb5kdc.log
-    admin_server = FILE:/var/log/kadmind.log
+    default = FILE:/var/log/krb5libs.log
+    kdc = FILE:/var/log/krb5kdc.log
+    admin_server = FILE:/var/log/kadmind.log
 
 [libdefaults]
-    dns_lookup_realm = true
-    dns_lookup_kdc = true
-    ticket_lifetime = 24h
-    renew_lifetime = 7d
-    forwardable = yes
-    rdns = false
-    pkinit_anchors = FILE:/etc/pki/tls/certs/ca-bundle.crt
-    spake_preauth_groups = edwards25519
-    dns_canonicalize_hostname = fallback
-    qualify_shortname = ""
-    default_ccache_name = KEYRING:persistent:%{uid}
+    dns_lookup_realm = true
+    dns_lookup_kdc = true
+    ticket_lifetime = 24h
+    renew_lifetime = 7d
+    forwardable = yes
+    rdns = false
+    pkinit_anchors = FILE:/etc/pki/tls/certs/ca-bundle.crt
+    spake_preauth_groups = edwards25519
+    dns_canonicalize_hostname = fallback
+    qualify_shortname = ""
+    default_ccache_name = KEYRING:persistent:%{uid}
     udp_preference_limit = 0
     default_realm = {{ ad_join_ad_realm }}
 
 [realms]
-    {{ ad_join_ad_realm }} = {
-        admin_server = pdom15.pu.win.princeton.edu
-        auth_to_local = RULE:[1:$0](^.*@PU.WIN.PRINCETON.EDU$)s/@.*//
-    }
+    {{ ad_join_ad_realm }} = {
+        kdc = pdom15.pu.win.princeton.edu
+        kdc = pdom12.pu.win.princeton.edu
+        kdc = pdom16.pu.win.princeton.edu
+        kdc = pdom11.pu.win.princeton.edu
+        kdc = pdom09.pu.win.princeton.edu
+        kdc = pdom10.pu.win.princeton.edu
+        kdc = pdom11.pu.win.princeton.edu
+        kdc = pdom12.pu.win.princeton.edu
+        kdc = pdom13.pu.win.princeton.edu
+        kdc = pdom14.pu.win.princeton.edu
+        kdc = pdom15.pu.win.princeton.edu
+        kdc = pdom16.pu.win.princeton.edu
+        admin_server = pdom15.pu.win.princeton.edu
+        auth_to_local = RULE:[1:$0](^.*@PU.WIN.PRINCETON.EDU$)s/@.*//
+      }
 
 [domain_realm]
  .pu.win.princeton.edu = {{ ad_join_ad_realm }}

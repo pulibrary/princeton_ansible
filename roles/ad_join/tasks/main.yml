@@ -16,14 +16,12 @@
     src: "custom_pul_sssd.tar.gz"
     dest: "{{ ad_join_authselect_custom_path }}.tar.gz"
     mode: "0755"
-  become: true
 
 - name: Ad_join | extract custom PAM configuration
   ansible.builtin.unarchive:
     src: "{{ ad_join_authselect_custom_path }}.tar.gz"
-    dest: /
+    dest: /etc/authselect/custom/
     remote_src: true
-  become: true
 
 - name: Ad_join | select the custom authselect profile with home directory creation
   ansible.builtin.command: "authselect select custom/{{ ad_join_authselect_profile_name }} {{ 'with-mkhomedir' if ad_join_create_home_dir else '' }}"
@@ -46,6 +44,7 @@
     owner: root
     group: root
     mode: "0644"
+  notify: Restart sssd
 
 - name: Ad_join | discover the realm
   ansible.builtin.command: "realm discover {{ ad_join_ad_domain }}"
@@ -55,7 +54,6 @@
 - name: Ad_join | join the realm
   ansible.builtin.command: "realm join --verbose --user={{ ad_join_admin_user }} --computer-ou='{{ ad_join_computer_ou }}' {{ ad_join_ad_domain }}"
   when: "'already joined' not in realm_discover.stdout"
-  # Consider using 'expect' for password prompt if not using Kerberos
 
 - name: Ad_join | ensure sssd service is enabled and started
   ansible.builtin.service:
@@ -71,72 +69,7 @@
     name: oddjobd
     enabled: true
     state: started
-  when: create_home_dir
-
-- name: Ad_join | add kdc lines to krb5.conf
-  ansible.builtin.lineinfile:
-    path: /etc/krb5.conf
-    line: " kdc = {{ item }}"
-    insertafter: '^ +admin_server =.*'
-    state: present
-  loop:
-    - pdom09.pu.win.princeton.edu
-    - pdom10.pu.win.princeton.edu
-    - pdom11.pu.win.princeton.edu
-    - pdom12.pu.win.princeton.edu
-    - pdom13.pu.win.princeton.edu
-    - pdom14.pu.win.princeton.edu
-    - pdom15.pu.win.princeton.edu
-    - pdom16.pu.win.princeton.edu
-  notify: Restart sssd
-
-- name: Ad_join | add auth_to_local line to krb5.conf
-  ansible.builtin.lineinfile:
-    path: /etc/krb5.conf
-    line: " auth_to_local = RULE:[1:$0](^.*@PU.WIN.PRINCETON.EDU$)s/@.*//"
-    insertafter: '^ +default_domain =.*'
-    state: present
-  notify: Restart sssd
-
-- name: Ad_join | disable ldap_id_use_start_tls in sssd.conf
-  community.general.ini_file:
-    path: /etc/sssd/sssd.conf
-    section: "domain/PU.WIN.PRINCETON.EDU"
-    option: ldap_id_use_start_tls
-    value: 'False'
-    no_extra_spaces: true
-    mode: "0600"
-  notify: Restart sssd
-
-- name: Ad_join | disable ldap_tls_reqcert in sssd.conf
-  community.general.ini_file:
-    path: /etc/sssd/sssd.conf
-    section: "domain/PU.WIN.PRINCETON.EDU"
-    option: ldap_tls_reqcert
-    value: 'never'
-    no_extra_spaces: true
-    mode: "0600"
-  notify: Restart sssd
-
-- name: Ad_join | remove ad_access_filter in sssd.conf
-  community.general.ini_file:
-    path: /etc/sssd/sssd.conf
-    section: "domain/PU.WIN.PRINCETON.EDU"
-    option: ad_access_filter
-    state: absent
-    mode: "0600"
-  notify: Restart sssd
-
-- name: Ad_join | ldap_disable_gc and ldap_search_base in sssd.conf
-  ansible.builtin.lineinfile:
-    path: /etc/sssd/sssd.conf
-    line: "{{ item }}"
-    insertafter: '^\[domain/PU\.WIN\.PRINCETON\.EDU\]'
-    state: present
-  with_items:
-    - " ldap_disable_gc = True"
-    - " ldap_search_base = dc=pu,dc=win,dc=princeton,dc=edu"
-  notify: Restart sssd
+  when: ad_join_create_home_dir
 
 - name: Ad_join | ensure the krb5 log file directory exists
   ansible.builtin.file:
@@ -189,3 +122,12 @@
   ansible.builtin.service:
     name: sssd
     state: restarted
+
+- name: Check sssd domain status
+  ansible.builtin.command: /usr/sbin/sssctl domain-status {{ ad_join_ad_domain }}
+  register: domain_status_result
+  ignore_errors: true
+
+- name: Display sssd domain status
+  ansible.builtin.debug:
+    var: domain_status_result.stdout_lines
