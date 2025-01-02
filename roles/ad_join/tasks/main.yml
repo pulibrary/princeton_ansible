@@ -5,6 +5,25 @@
     name: "{{ ad_join_packages }}"
     state: present
 
+- name: Ad_join | list all realms
+  ansible.builtin.command: "realm list"
+  register: realm_list
+  changed_when: false
+
+- name: do we have a realm now?
+  ansible.builtin.debug:
+    var: realm_list
+
+- name: Ad_join | join the realm
+  ansible.builtin.command: "realm join --verbose --user={{ ad_join_admin_user }} {{ ad_join_ad_domain }}"
+  when: "'kerberos-member' not in realm_list.stdout"
+  register: realm_join_output
+  changed_when: false
+
+- name: let's see about that join, eh?
+  ansible.builtin.debug:
+    var: realm_join_output
+
 - name: Ad_join | ensure authselect profile directory exists
   ansible.builtin.file:
     path: "{{ ad_join_authselect_custom_path }}"
@@ -35,7 +54,6 @@
     owner: root
     group: root
     mode: "0600"
-  notify: Restart sssd
 
 - name: Ad_join | copy krb5.conf
   ansible.builtin.copy:
@@ -44,25 +62,12 @@
     owner: root
     group: root
     mode: "0644"
-  notify: Restart sssd
 
-- name: Ad_join | discover the realm
-  ansible.builtin.command: "realm list"
-  register: realm_list
-  changed_when: false
-
-- name: Ad_join | join the realm
-  ansible.builtin.command: "realm join --verbose --user={{ ad_join_admin_user }} {{ ad_join_ad_domain }}"
-  when: "'kerberos-member' not in realm_list.stdout"
-
-- name: Ad_join | ensure sssd service is enabled and started
+- name: Ad_join | restart sssd with custom config
   ansible.builtin.service:
     name: sssd
     enabled: true
-    state: started
-
-- name: Ad_join | flush handlers
-  ansible.builtin.meta: flush_handlers
+    state: restarted
 
 - name: Ad_join | enable oddjobd service for home directory creation
   ansible.builtin.service:
