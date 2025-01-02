@@ -1,0 +1,33 @@
+---
+# by default this playbook runs in the staging environment
+# to run in production, pass '-e runtime_env=production'
+# To allow a new user to log in run
+#
+# `ansible-playbook -v playbooks/lib_sftp.yml -e ad_user=netid@pu.win.princeton.edu -t add_sftp_user`
+#
+- name: bind a VM to AD
+  hosts: all
+  remote_user: pulsys
+  become: true
+
+  pre_tasks:
+      - name: stop playbook if you didn't use --limit
+        fail:
+          msg: "you must use -l or --limit"
+        when: ansible_limit is not defined
+        run_once: true
+  vars_files:
+    - ../group_vars/all/vault.yml
+    - ../group_vars/all/vars.yml
+  roles:
+    - role: ../roles/ad_join
+
+  post_tasks:
+    - name: tell everyone on slack you ran an ansible playbook
+      community.general.slack:
+        token: "{{ vault_pul_slack_token }}"
+        msg: "Ansible ran `{{ ansible_play_name }}` on {{ inventory_hostname }}"
+        channel: "{{ slack_alerts_channel }}"
+    - name: post role reminders
+      debug:
+        msg: "{{ post_install.split('\n') }}"
