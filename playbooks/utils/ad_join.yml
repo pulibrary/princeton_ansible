@@ -10,15 +10,23 @@
   remote_user: pulsys
   become: true
 
+  vars_files:
+    - ../group_vars/all/vault.yml
+    - ../group_vars/all/vars.yml
+  vars:
+    - post_install: |
+        Possible Things left to do:
+        - to test an Active-Directory SSH login, follow this pattern:
+        - 'ssh -l <netID>@PU.WIN.PRINCETON.EDU <server-name>'
+        - anythign else we need to do?
+
+
   pre_tasks:
       - name: stop playbook if you didn't use --limit
         fail:
           msg: "you must use -l or --limit"
         when: ansible_limit is not defined
         run_once: true
-  vars_files:
-    - ../group_vars/all/vault.yml
-    - ../group_vars/all/vars.yml
   roles:
     - role: ../roles/ad_join
 
