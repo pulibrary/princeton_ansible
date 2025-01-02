@@ -15,7 +15,12 @@
     var: realm_list
 
 - name: Ad_join | join the realm
-  ansible.builtin.command: "realm join --verbose --user={{ ad_join_admin_user }} {{ ad_join_ad_domain }}"
+  ansible.builtin.expect:
+    command: "realm join --verbose --user={{ ad_join_admin_user }} {{ ad_join_ad_domain }}"
+    responses:
+      (?i)password: "{{ sssd_bind_dn_password }}"
+  # don't show passwords in logs
+  no_log: true
   when: "'kerberos-member' not in realm_list.stdout"
   register: realm_join_output
   changed_when: false
