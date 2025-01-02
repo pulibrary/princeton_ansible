@@ -37,9 +37,9 @@
     mode: "0600"
   notify: Restart sssd
 
-- name: Ad_join | template krb5.conf
-  ansible.builtin.template:
-    src: krb5.conf.j2
+- name: Ad_join | copy krb5.conf
+  ansible.builtin.copy:
+    src: krb5.conf
     dest: "{{ ad_join_krb5_config_file }}"
     owner: root
     group: root
@@ -47,13 +47,13 @@
   notify: Restart sssd
 
 - name: Ad_join | discover the realm
-  ansible.builtin.command: "realm discover {{ ad_join_ad_domain }}"
-  register: realm_discover
+  ansible.builtin.command: "realm list"
+  register: realm_list
   changed_when: false
 
 - name: Ad_join | join the realm
-  ansible.builtin.command: "realm join --verbose --user={{ ad_join_admin_user }} --computer-ou='{{ ad_join_computer_ou }}' {{ ad_join_ad_domain }}"
-  when: "'already joined' not in realm_discover.stdout"
+  ansible.builtin.command: "realm join --verbose --user={{ ad_join_admin_user }} {{ ad_join_ad_domain }}"
+  when: "'kerberos-member' not in realm_list.stdout"
 
 - name: Ad_join | ensure sssd service is enabled and started
   ansible.builtin.service:
