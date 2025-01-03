@@ -18,7 +18,7 @@
 
   - name: Populate package facts
     ansible.builtin.package_facts:
-  
+
   tasks:
   - name: include falcon_install 
     ansible.builtin.include_role: 
@@ -30,7 +30,7 @@
       # be sure to add this so we don't download if we don't need to
       falcon_api_sensor_download_path: /opt/
     when:
-      - "'falcon-sensor' not in ansible_facts.packages"
+      - "'falcon-sensor' not in ansible_facts.services"
 
   - name: include falcon_configure 
     ansible.builtin.include_role:
@@ -41,9 +41,9 @@
     when:
       - "'falcon-sensor' not in ansible_facts.packages"
 
-   - name: Install, configure, and start BigFix
-     when: "ansible_facts.services['besclient.service'] is not defined"
-     block:
+  - name: Install, configure, and start BigFix
+    when: "ansible_facts.services['besclient.service'] is not defined"
+    block:
       - name: Import BigFix GPG key
         ansible.builtin.rpm_key:
           state: present
@@ -131,7 +131,7 @@
         ansible.builtin.service:
           name: ir_agent
           state: started
-      #For future maintenance, Rapid7 block ends here
+  #     #For future maintenance, Rapid7 block ends here
 
   # post_tasks:
   #   - name: send information to slack
