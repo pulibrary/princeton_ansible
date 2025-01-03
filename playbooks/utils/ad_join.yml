@@ -13,18 +13,6 @@
   vars_files:
     - ../group_vars/all/vault.yml
     - ../group_vars/all/vars.yml
-  vars:
-    - post_install: |
-        Possible Things left to do:
-        - run `sudo authselect select custom/pul-sssd`
-        - run `sudo authselect apply-changes`
-        - run `sudo systemctl restart sssd`
-        - run `sudo systemctl restart sshd`
-        - to test an Active-Directory SSH login, follow this pattern:
-        - 'ssh -l <netID> <server-name>'
-        - in a separate ansible role add a task that will append your users to `/etc/ssh/sshd_config` in the AllowUsers pulsys netid
-        - anything else we need to do?
-
 
   pre_tasks:
       - name: stop playbook if you didn't use --limit
@@ -32,6 +20,7 @@
           msg: "you must use -l or --limit"
         when: ansible_limit is not defined
         run_once: true
+
   roles:
     - role: ../roles/ad_join
 
@@ -41,6 +30,3 @@
         token: "{{ vault_pul_slack_token }}"
         msg: "Ansible ran `{{ ansible_play_name }}` on {{ inventory_hostname }}"
         channel: "{{ slack_alerts_channel }}"
-    - name: post role reminders
-      debug:
-        msg: "{{ post_install.split('\n') }}"
