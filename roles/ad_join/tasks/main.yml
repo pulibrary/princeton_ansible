@@ -99,29 +99,13 @@
     - /var/log/krb5kdc.log
     - /var/log/kadmind.log
 
-- name: Ad_join | enable Kerberos authentication in sshd_config
-  ansible.builtin.lineinfile:
-    path: /etc/ssh/sshd_config
-    regexp: '^[\#]*KerberosAuthentication'
-    line: 'KerberosAuthentication yes'
-    state: present
-  notify: Restart sshd
-
-- name: Ad_join | enable GSSAPI authentication in sshd_config
-  ansible.builtin.lineinfile:
-    path: /etc/ssh/sshd_config
-    regexp: '^[\#]*GSSAPIAuthentication'
-    line: 'GSSAPIAuthentication yes'
-    state: present
-  notify: Restart sshd
-
-- name: Ad_join | Ensure UsePAM is enabled in sshd_config
-  ansible.builtin.lineinfile:
-    path: /etc/ssh/sshd_config
-    regexp: '^[\#]*UsePAM'
-    line: 'UsePAM yes'
-    state: present
-  notify: Restart sshd
+- name: Ad_join | replace SSHD config to allow PAM, GSSAPI, Kerberos, and users
+  ansible.builtin.template:
+    src: sshd_config.j2
+    dest: /etc/ssh/sshd_config
+    owner: root
+    group: root
+    mode: "0600"
 
 - name: Ad_join | Restart sssd
   ansible.builtin.service:
@@ -133,12 +117,12 @@
     name: sshd
     state: restarted
 
-- name: Check sssd domain status
-  ansible.builtin.command: /usr/sbin/sssctl domain-status {{ ad_join_ad_domain }}
-  register: domain_status_result
-  changed_when: false
-  ignore_errors: true
+# - name: Check sssd domain status
+#   ansible.builtin.command: /usr/sbin/sssctl domain-status {{ ad_join_ad_domain }}
+#   register: domain_status_result
+#   changed_when: false
+#   ignore_errors: true
 
-- name: Display sssd domain status
-  ansible.builtin.debug:
-    var: domain_status_result.stdout_lines
+# - name: Display sssd domain status
+#   ansible.builtin.debug:
+#     var: domain_status_result.stdout_lines
