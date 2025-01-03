@@ -9,6 +9,8 @@
   ansible.builtin.command: "realm list"
   register: realm_list
   changed_when: false
+  when:
+    - running_on_server
 
 - name: do we have a realm now?
   ansible.builtin.debug:
@@ -21,7 +23,9 @@
       (?i)password: "{{ sssd_bind_dn_password }}"
   # don't show passwords in logs
   no_log: true
-  when: "'kerberos-member' not in realm_list.stdout"
+  when:
+    - running_on_server
+    - "'kerberos-member' not in realm_list.stdout"
   register: realm_join_output
   changed_when: false
 
@@ -33,7 +37,7 @@
   ansible.builtin.file:
     path: "{{ ad_join_authselect_custom_path }}"
     state: directory
-    mode: "0755"
+    mode: "0755" 
 
 - name: Ad_join | copy the custom PAM configuration
   ansible.builtin.copy:
@@ -141,6 +145,7 @@
 - name: Check sssd domain status
   ansible.builtin.command: /usr/sbin/sssctl domain-status {{ ad_join_ad_domain }}
   register: domain_status_result
+  changed_when: false
   ignore_errors: true
 
 - name: Display sssd domain status
