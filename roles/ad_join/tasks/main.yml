@@ -12,10 +12,6 @@
   when:
     - running_on_server
 
-- name: do we have a realm now?
-  ansible.builtin.debug:
-    var: realm_list
-
 - name: Ad_join | join the realm
   ansible.builtin.expect:
     command: "realm join --verbose --user={{ ad_join_admin_user }} {{ ad_join_ad_domain }}"
@@ -27,17 +23,12 @@
     - running_on_server
     - "'kerberos-member' not in realm_list.stdout"
   register: realm_join_output
-  changed_when: false
 
-- name: let's see about that join, eh?
-  ansible.builtin.debug:
-    var: realm_join_output
-
-- name: Ad_join | ensure authselect profile directory exists
+- name: Ad_join | ensure custom PAM config directory exists
   ansible.builtin.file:
     path: "{{ ad_join_authselect_custom_path }}"
     state: directory
-    mode: "0755" 
+    mode: "0755"
 
 - name: Ad_join | copy the custom PAM configuration
   ansible.builtin.copy:
@@ -51,12 +42,19 @@
     dest: /etc/authselect/custom/
     remote_src: true
 
-- name: Ad_join | select the custom authselect profile with home directory creation
+- name: Ad_join | enable oddjobd service for home directory creation
+  ansible.builtin.service:
+    name: oddjobd
+    enabled: true
+    state: started
+  when: ad_join_create_home_dir
+
+- name: Ad_join | select the custom PAM authselect profile with home directory creation
   ansible.builtin.command: "authselect select custom/{{ ad_join_authselect_profile_name }} {{ 'with-mkhomedir' if ad_join_create_home_dir else '' }}"
   args:
     creates: /etc/authselect/authselect.conf
 
-- name: Ad_join | apply custom pam configuration
+- name: Ad_join | apply custom PAM configuration
   ansible.builtin.command: authselect apply-changes
   changed_when: false
   become: true
@@ -77,24 +75,17 @@
     group: root
     mode: "0644"
 
+- name: Ad_join | ensure the sssd log file directory exists
+  ansible.builtin.file:
+    path: /var/log/sssd/
+    state: directory
+    mode: "0700"
+
 - name: Ad_join | restart sssd with custom config
   ansible.builtin.service:
     name: sssd
     enabled: true
     state: restarted
-
-- name: Ad_join | enable oddjobd service for home directory creation
-  ansible.builtin.service:
-    name: oddjobd
-    enabled: true
-    state: started
-  when: ad_join_create_home_dir
-
-- name: Ad_join | ensure the krb5 log file directory exists
-  ansible.builtin.file:
-    path: /var/log/sssd/
-    state: directory
-    mode: "0700"
 
 - name: Ad_join | ensure the krb5 log files exist and have the right permissions
   ansible.builtin.file:
@@ -132,14 +123,14 @@
     state: present
   notify: Restart sshd
 
-- name: Ad_join | Restart sshd
-  ansible.builtin.service:
-    name: sshd
-    state: restarted
-
 - name: Ad_join | Restart sssd
   ansible.builtin.service:
     name: sssd
+    state: restarted
+
+- name: Ad_join | Restart sshd
+  ansible.builtin.service:
+    name: sshd
     state: restarted
 
 - name: Check sssd domain status
