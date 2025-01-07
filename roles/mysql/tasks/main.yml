@@ -10,14 +10,15 @@
     - python3-dev
 
 - name: MySQL | Install MariaDB key
-  ansible.builtin.apt_key:
-    url: https://mariadb.org/mariadb_release_signing_key.asc
-    state: present
+  ansible.builtin.get_url:
+    url: https://supplychain.mariadb.com/mariadb-keyring-2019.gpg
+    dest: /etc/apt/trusted.gpg.d/mariadb-keyring-2019.gpg
+    mode: '0644'
   register: install_app_key
 
 - name: MySQL | Install MariaDB repository
   ansible.builtin.apt_repository:
-    repo: "deb [arch=amd64] https://mirrors.accretive-networks.net/mariadb/repo/10.6/ubuntu {{ ansible_distribution_release }} main"
+    repo: "deb [arch=amd64,arm64] https://dlm.mariadb.com/repo/mariadb-server/11.rolling/repo/ubuntu {{ ansible_distribution_release }} main"
     state: present
     validate_certs: false
   when: install_app_key.changed
