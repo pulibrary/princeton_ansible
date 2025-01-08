@@ -12,12 +12,21 @@
     - ../group_vars/orangelight/{{ runtime_env | default('staging') }}_solr.yml
     - ../group_vars/orangelight/vault.yml
   roles:
+    - role: deploy_user
+    - role: bind9
+    - role: ruby_s
+    - role: passenger
+    - role: postgresql
+    - role: nodejs
     - role: sidekiq_worker
       when: "'indexer' in inventory_hostname"
+    - role: rails_app
+    - role: sneakers_worker
+    - role: redis
+    - role: extra_path
     - role: mailcatcher
-    - role: roles/postgresql
-    - role: roles/orangelight
-    - role: roles/datadog
+    - role: orangelight
+    - role: datadog
       when: runtime_env | default('staging') == "production"
 
   post_tasks:
