@@ -1,0 +1,43 @@
+
+{{ ansible_managed | comment }}
+
+# This sshd was compiled with PATH=/usr/local/bin:/usr/bin:/usr/local/sbin:/usr/sbin
+
+# To modify the system-wide sshd configuration, create a  *.conf  file under
+#  /etc/ssh/sshd_config.d/  which will be automatically included below
+Include /etc/ssh/sshd_config.d/*.conf
+
+# Authentication:
+
+#LoginGraceTime 2m
+PermitRootLogin prohibit-password
+#StrictModes yes
+#MaxAuthTries 6
+#MaxSessions 10
+
+#PubkeyAuthentication yes
+
+# The default is to check both .ssh/authorized_keys and .ssh/authorized_keys2
+# but this is overridden so installations will only check .ssh/authorized_keys
+AuthorizedKeysFile	.ssh/authorized_keys
+
+# Kerberos options
+# this allows ActiveDirectory authN
+KerberosAuthentication yes
+
+# GSSAPI options
+# this allows ActiveDirectory authN
+GSSAPIAuthentication yes
+
+# this allows ActiveDirectory authN
+UsePAM yes
+
+# override default of no subsystems
+# this allows ActiveDirectory authN
+Subsystem	sftp	/usr/libexec/openssh/sftp-server
+
+AllowUsers pulsys
+#add users beyond pulsys from the Ansible template
+{% for item in allowed_ssh_users %}
+AllowUsers {{ item }}
+{% endfor %}
