@@ -53,7 +53,6 @@
         fstype: nfs
         opts: rw,sync,hard
       become: true
-
   pre_tasks:
     - name: update cache
       ansible.builtin.apt:
@@ -65,6 +64,16 @@
       service:
         name: nginx
         state: restarted
+
+    - name: Copy department file to the server
+      ansible.builtin.copy:
+        src: ../group_vars/tigerdata/PeopleSoft-Departments.csv
+        dest: "/opt/{{ rails_app_directory }}/shared/departments.csv"
+        owner: deploy
+        group: deploy
+        mode: u=rw,g=r,o=r
+      tags:
+        - department_config
 
     - name: send information to slack
       ansible.builtin.include_tasks:
