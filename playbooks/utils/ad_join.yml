@@ -5,29 +5,26 @@
 #
 # `ansible-playbook -v playbooks/lib_sftp.yml -e ad_user=netid@pu.win.princeton.edu -t add_sftp_user`
 #
-- name: build the AD sftp
-  hosts: libsftp_{{ runtime_env | default('staging') }}
+- name: bind {{ inventory_hostname }} to AD
+  hosts: all
   remote_user: pulsys
   become: true
-  vars:
-    - force_settings: true
-    - drupal_git_repo: ''
-    - post_install: |
-        Look the README for additional steps to allow mkhome directory
-
-  pre_tasks:
-    - set_fact:
-        deploy_id_rsa_private_key: "{{ lookup('file', '../roles/lib_sftp/files/id_ed25519') }}\n"
 
   vars_files:
-    - ../group_vars/sftp/vault.yml
+    - ../group_vars/all/vault.yml
+    - ../group_vars/all/vars.yml
     - ../group_vars/sftp/common.yml
     - ../group_vars/sftp/{{ runtime_env | default('staging') }}.yml
+
+  pre_tasks:
+      - name: stop playbook if you didn't use --limit
+        fail:
+          msg: "you must use -l or --limit"
+        when: ansible_limit is not defined
+        run_once: true
+
   roles:
-    - role: ../roles/deploy_user
-    - role: ../roles/lib_sftp
-    - role: ../roles/datadog
-      when: runtime_env | default('staging') == "production"
+    - role: ../roles/ad_join
 
   post_tasks:
     - name: tell everyone on slack you ran an ansible playbook
@@ -35,6 +32,3 @@
         token: "{{ vault_pul_slack_token }}"
         msg: "Ansible ran `{{ ansible_play_name }}` on {{ inventory_hostname }}"
         channel: "{{ slack_alerts_channel }}"
-    - name: post role reminders
-      debug:
-        msg: "{{ post_install.split('\n') }}"
