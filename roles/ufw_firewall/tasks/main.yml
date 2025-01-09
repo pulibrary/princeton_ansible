@@ -1,13 +1,23 @@
 ---
 # Main tasks for ufw_firewall role
-- name: UFW | Install UFW
+- name: UFW| Install UFW
   ansible.builtin.package:
     name: ufw
     state: present
 
-- name: UFW | Enable UFW
-  ansible.builtin.command: ufw --force enable
-  changed_when: false
+- name: UFW | Enable IP forwarding in sysctl
+  ansible.builtin.lineinfile:
+    path: /etc/sysctl.conf
+    regexp: '^net.ipv4.ip_forward='
+    line: 'net.ipv4.ip_forward=1'
+  notify: Reload sysctl
+
+- name: UFW | Set default forward policy to ACCEPT
+  ansible.builtin.lineinfile:
+    path: /etc/default/ufw
+    regexp: '^DEFAULT_FORWARD_POLICY='
+    line: 'DEFAULT_FORWARD_POLICY="ACCEPT"'
+  notify: Reload UFW
 
 - name: UFW | Deploy custom before.rules
   ansible.builtin.template:
@@ -27,9 +37,14 @@
     mode: "0644"
   notify: Reload UFW
 
-- name: UFW | Ensure default forward policy
-  ansible.builtin.lineinfile:
-    path: /etc/default/ufw
-    regexp: '^DEFAULT_FORWARD_POLICY='
-    line: 'DEFAULT_FORWARD_POLICY="ACCEPT"'
-  notify: Reload UFW
+- name: UFW | Enable UFW
+  ansible.builtin.command: ufw --force enable
+  changed_when: false
+
+- name: UFW | Allow all outgoing traffic in UFW
+  ansible.builtin.command: ufw default allow outgoing
+  changed_when: false
+
+- name: UFW | Reload sysctl settings
+  ansible.builtin.command: sysctl -p
+  changed_when: false
