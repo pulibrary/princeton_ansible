@@ -5,26 +5,16 @@
     state: directory
     group: "{{ deploy_user }}"
     owner: "{{ deploy_user }}"
-    mode: 0755
+    mode: "0755"
 
 - name: Ezproxy | copy ezproxy binary
   ansible.builtin.copy:
     src: "{{ item }}"
     dest: "/var/local/ezproxy/ezproxy"
-    mode: 0755
+    mode: "0755"
   loop:
     - "files/ezproxy.bin"
 
-- name: Ezproxy | copy idp_file and allow file
-  ansible.builtin.copy:
-    src: "{{ item }}"
-    dest: "/var/local/ezproxy"
-    mode: 0755
-  loop:
-    - "files/idp_princeton.xml"
-    - "files/princeton_allow.txt"
-  when:
-    - running_on_server
 
 - name: Ezproxy | install dependencies for 64bit
   ansible.builtin.apt:
@@ -64,7 +54,7 @@
     state: directory
     group: "{{ deploy_user }}"
     owner: "{{ deploy_user }}"
-    mode: 0755
+    mode: "0755"
 
 - name: Ezproxy | install snapd
   ansible.builtin.apt:
@@ -92,7 +82,7 @@
     owner: root
   when: running_on_server
 
-- name: update acme certificates for {{ domain_name }}
+- name: Ezproxy | update acme certificates for {{ domain_name }}
   ansible.builtin.command: /usr/bin/certbot certonly --standalone --non-interactive --agree-tos --email lsupport@princeton.edu --server https://acme.sectigo.com/v2/InCommonRSAOV --eab-kid {{ vault_acme_eab_kid }} --eab-hmac-key {{ vault_acme_eab_hmac_key }} --domain {{ domain_name }}.princeton.edu --cert-name {{ domain_place_name }}
   notify: restart ezproxy
   when: running_on_server
@@ -103,14 +93,14 @@
     state: directory
     owner: "{{ deploy_user }}"
     group: "{{ deploy_user }}"
-    mode: 0755
+    mode: "0755"
   become: true
 
 - name: Ezproxy | rotate the logs
   ansible.builtin.template:
     src: ezproxy.j2
     dest: '/etc/logrotate.d/ezproxy'
-    mode: 0644
+    mode: "0644"
 
 - name: Ezproxy | Create app directory
   ansible.builtin.file:
@@ -118,7 +108,7 @@
     state: directory
     owner: "{{ deploy_user }}"
     group: "{{ deploy_user }}"
-    mode: 0750
+    mode: "0750"
     recurse: true
   become: true
 
@@ -126,7 +116,7 @@
   ansible.builtin.file:
     path: "/home/{{ deploy_user }}/.ssh"
     state: directory
-    mode: 0700
+    mode: "0700"
     owner: "{{ deploy_user }}"
     group: "{{ deploy_user }}"
 
@@ -142,7 +132,7 @@
     path: "{{ ezproxy_repo_root }}"
     state: directory
     recurse: true
-    mode: 0750
+    mode: "0750"
     owner: "{{ deploy_user }}"
     group: "{{ deploy_user }}"
   become: true
@@ -161,7 +151,7 @@
   ansible.builtin.template:
     src: geoip_conf.j2
     dest: "/etc/GeoIP.conf"
-    mode: 0644
+    mode: "0644"
   when:
     - running_on_server
 
@@ -186,7 +176,7 @@
   ansible.builtin.template:
     src: "shibuser.txt.j2"
     dest: /var/local/ezproxy/shibuser.txt
-    mode: 0644
+    mode: "0644"
     owner: root
     group: root
 
