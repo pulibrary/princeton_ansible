@@ -15,22 +15,16 @@
   loop:
     - "files/ezproxy.bin"
 
-
 - name: Ezproxy | install dependencies for 64bit
   ansible.builtin.apt:
-    name: ["lib32ncurses6", "lib32z1"]
+    name: "{{ item }}"
     state: present
-
-- name: Ezproxy | copy ezproxy config.txt
-  ansible.builtin.template:
-    src: "config.txt.j2"
-    dest: "/var/local/ezproxy/config.txt"
-    owner: root
-    group: root
-    mode: "0644"
-  changed_when: false
-  when:
-    - running_on_server
+  loop:
+    - libc6
+    - libstdc++6
+    - lsof
+    - lib32ncurses
+    - lib32z1
 
 - name: Ezproxy | install missing file replacements
   ansible.builtin.command: /var/local/ezproxy/ezproxy -m
@@ -41,6 +35,13 @@
   failed_when: "proxy_results.rc != 1"
   when:
     - running_on_server
+
+- name: Ezproxy | install ezproxy startup script (requires root)
+  ansible.builtin.command: /var/local/ezproxy/ezproxy -si
+  become: true
+  become_user: "root"
+  changed_when: false
+  when: running_on_server
 
 - name: Ezproxy | run command with WSKey
   ansible.builtin.command: /var/local/ezproxy/ezproxy -k "{{ oclc_wskey }}"
@@ -56,35 +57,14 @@
     owner: "{{ deploy_user }}"
     mode: "0755"
 
-- name: Ezproxy | install snapd
+- name: Ezproxy | install certbot
   ansible.builtin.apt:
-    name: snapd
+    name: certbot
     state: present
     update_cache: true
 
-- name: Ezproxy | install snap core
-  community.general.snap:
-    name: core
-  when: running_on_server
-
-- name: Ezproxy | install snap certbot
-  community.general.snap:
-    name: certbot
-    classic: true
-  when: running_on_server
-
-- name: Ezproxy | create certbot link
-  ansible.builtin.file:
-    src: "/snap/bin/certbot"
-    dest: "/usr/bin/certbot"
-    state: link
-    group: root
-    owner: root
-  when: running_on_server
-
 - name: Ezproxy | update acme certificates for {{ domain_name }}
   ansible.builtin.command: /usr/bin/certbot certonly --standalone --non-interactive --agree-tos --email lsupport@princeton.edu --server https://acme.sectigo.com/v2/InCommonRSAOV --eab-kid {{ vault_acme_eab_kid }} --eab-hmac-key {{ vault_acme_eab_hmac_key }} --domain {{ domain_name }}.princeton.edu --cert-name {{ domain_place_name }}
-  notify: restart ezproxy
   when: running_on_server
 
 - name: Ezproxy | Creates a log directory for ezproxy
@@ -99,7 +79,7 @@
 - name: Ezproxy | rotate the logs
   ansible.builtin.template:
     src: ezproxy.j2
-    dest: '/etc/logrotate.d/ezproxy'
+    dest: "/etc/logrotate.d/ezproxy"
     mode: "0644"
 
 - name: Ezproxy | Create app directory
@@ -120,7 +100,7 @@
     owner: "{{ deploy_user }}"
     group: "{{ deploy_user }}"
 
-- name: Ezproxy | Allow {{ deploy_user }} to restart ezproxy
+- name: Ezproxy | Allow ability to restart ezproxy for {{ deploy_user }}
   ansible.builtin.lineinfile:
     dest: "/etc/sudoers"
     state: "present"
@@ -164,14 +144,6 @@
   when:
     - running_on_server
 
-- name: Ezproxy | install ezproxy startup script (requires root)
-  ansible.builtin.command: /var/local/ezproxy/ezproxy -si
-  become: true
-  become_user: 'root'
-  changed_when: false
-  when: running_on_server
-
-
 - name: Ezproxy | add shib config user
   ansible.builtin.template:
     src: "shibuser.txt.j2"
@@ -180,31 +152,37 @@
     owner: root
     group: root
 
-
 - name: Ezproxy | copy a systemd service
   ansible.builtin.template:
     src: "ezproxy.service.j2"
-    dest: /var/local/ezproxy/ezproxy.service
+    dest: /lib/systemd/system/ezproxy.service
     owner: root
     group: root
     mode: a+x
   changed_when: false
   when:
     - running_on_server
+
+- name: Ezproxy | reload systemd to recognize new service
+  ansible.builtin.systemd:
+    daemon_reload: true
+  when:
+    - running_on_server
   notify: reload ezproxy
 
-- name: Ezproxy | symbolic link
-  ansible.builtin.file:
-    src: /var/local/ezproxy/ezproxy.service
-    dest: /lib/systemd/system/ezproxy.service
+- name: Ezproxy | copy ezproxy config.txt
+  ansible.builtin.template:
+    src: "config.txt.j2"
+    dest: "/var/local/ezproxy/config.txt"
     owner: root
     group: root
-    state: link
+    mode: "0644"
+  changed_when: false
   when:
     - running_on_server
 
 - name: Ezproxy | start ezproxy
   ansible.builtin.service:
     name: ezproxy
-    state: started
+    state: enabled
   when: running_on_server
