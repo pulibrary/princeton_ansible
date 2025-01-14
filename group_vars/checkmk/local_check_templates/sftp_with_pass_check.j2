@@ -1,0 +1,26 @@
+{{ ansible_managed | comment }}
+#!/bin/bash
+
+# Exit codes
+EXIT_OK=0
+EXIT_WARN=1
+EXIT_CRIT=2
+EXIT_UNKNOWN=3
+
+# Check if all credentials are defined
+if [[ -z "{{ sftp_host }}" || -z "{{ sftp_user }}" || -z "{{ sftp_password }}" ]]; then
+  echo "Critical: SFTP credentials (host, username, password) are not defined!"
+  exit $EXIT_CRIT
+fi
+
+# Attempt SFTP connection
+sftp -oBatchMode=yes -oStrictHostKeyChecking=no "{{ sftp_user }}"@"{{ sftp_host }}" <<< "{{ sftp_password }}" 2>&1
+
+# Check exit code of sftp command
+if [[ $? -eq 0 ]]; then
+  echo "OK: Successful connection to SFTP server {{ sftp_host }}"
+  exit $EXIT_OK
+else
+  echo "Critical: Connection to SFTP server {{ sftp_host }} failed!"
+  exit $EXIT_CRIT
+fi
