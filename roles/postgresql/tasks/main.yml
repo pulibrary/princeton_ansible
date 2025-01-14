@@ -49,23 +49,30 @@
     - postgresql_is_local
     - ansible_os_family == "RedHat"
 
+- name: PostgreSQL | Ensure PostgreSQL is enabled and started
+  ansible.builtin.service:
+    name: postgresql
+    enabled: true
+  when:
+    - running_on_server
+
 - name: PostgreSQL | Check if PostgreSQL data directory (RedHat)
   ansible.builtin.stat:
-    path: "{{ rh_postgres_conf_directory }}"
-  register: pgsql_data_dir
+    path: "/var/lib/pgsql/initdb_postgresql.log"
+  register: pgsql_data_install
   when:
     - postgresql_is_local
     - ansible_os_family == "RedHat"
 
 - name: PostgreSQL | Initialize PostgreSQL database (RedHat)
-  ansible.builtin.command: 
-    cmd: /usr/postgresql-setup initdb --data-checksums
+  ansible.builtin.command:
+    cmd: /bin/postgresql-setup --initdb --unit postgresql
   args:
-    creates: "{{ rh_postgres_conf_directory }}"
+    creates: "/var/lib/pgsql/initdb_postgresql.log"
   when:
-    - not pgsql_data_dir.stat.exists
-    - postgresql_is_local
     - ansible_os_family == "RedHat"
+    - not pgsql_data_install.stat.exists
+    - postgresql_is_local
 
 - name: PostgreSQL | install postgresql client packages (Ubuntu)
   ansible.builtin.apt:
@@ -211,7 +218,7 @@
     - running_on_server
   become: true
   notify:
-    - reload local postgres
+    - restart local postgres
 
 - name: PostgreSQL | configure access to postgres server
   ansible.builtin.include_tasks: pg_hba.yml
