@@ -34,7 +34,9 @@
   ansible.builtin.file:
     path: "{{ item.path }}"
     state: absent
-  with_items: "{{ unwanted_fail2ban_files['files'] }}"
+  loop: "{{ unwanted_fail2ban_files['files'] }}"
+  when: running_on_server
+  notify: restart fail2ban
 
 - name: Nginxplus | Add nginx-badbots filter
   ansible.builtin.copy:
@@ -63,6 +65,8 @@
     owner: root
     group: root
     mode: "0644"
+  when: running_on_server
+  notify: restart fail2ban
 
 - name: Nginxplus | Add nginx-limit-req fail2ban configuration
   ansible.builtin.copy:
