@@ -9,15 +9,20 @@
     - ../group_vars/sftp/{{ runtime_env | default('staging') }}.yml
 
   tasks:
-    - name: Install required Perl modules
+    - name: Set up Perl modules
       ansible.builtin.apt:
         name: "{{ item }}"
         state: present
         update_cache: true
       loop:
-        - libnet-sftp-foreign-perl
+        - cpanminus
         - libssh2-1-dev
-        - libnet-ssh-perl
+
+    - name: Install perl modules
+      ansible.builtin.command: cpanm {{ item }}
+      loop:
+        - Net::SFTP::Foreign::Backend::Net_SSH2
+        - Net::SFTP::Foreign
 
     - name: Deploy SFTP Checkmk Local Check (Perl)
       ansible.builtin.template:
