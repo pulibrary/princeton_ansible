@@ -1,0 +1,26 @@
+---
+- name: Install CheckMk sftp check scripts on host
+  hosts: "{{ runtime_env | default ('staging') }}"
+  remote_user: pulsys
+  become: true
+  vars_files:
+    - ../group_vars/sftp/vault.yml
+    - ../group_vars/sftp/common.yml
+    - ../group_vars/sftp/{{ runtime_env | default('staging') }}.yml
+
+  tasks:
+    - name: Install required Perl modules
+      ansible.builtin.apt:
+        name: "{{ item }}"
+        state: present
+        update_cache: true
+      loop:
+        - libnet-sftp-foreign-perl
+        - libssh2-1-dev
+        - libnet-ssh-perl
+
+    - name: Deploy SFTP Checkmk Local Check (Perl)
+      ansible.builtin.template:
+        src: "../../group_vars/checkmk/local_check_templates/sftp_with_pass_check.j2"
+        dest: /usr/lib/check_mk_agent/local/sftp_with_pass_check.pl
+        mode: "0755"
