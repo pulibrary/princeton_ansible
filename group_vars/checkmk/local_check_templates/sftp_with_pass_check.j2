@@ -1,26 +1,57 @@
+#!/usr/bin/env perl
+
 {{ ansible_managed | comment }}
-#!/bin/bash
+
+use strict;
+use warnings;
+use Net::SFTP::Foreign;
+use Net::SSH2;
+
+# Replace with your credentials and server details
+my $sftp_host = "{{ host_ad_name }}";
+my $sftp_user = "{{ almasftp_user }}";
+my $sftp_password = "{{ almasftp_user_password }}";
 
 # Exit codes
-EXIT_OK=0
-EXIT_WARN=1
-EXIT_CRIT=2
-EXIT_UNKNOWN=3
+my $exit_ok = 0;
+my $exit_warn = 1;
+my $exit_crit = 2;
+my $exit_unknown = 3;
 
-# Check if all credentials are defined
-if [[ -z "{{ sftp_host }}" || -z "{{ sftp_user }}" || -z "{{ sftp_password }}" ]]; then
-  echo "Critical: SFTP credentials (host, username, password) are not defined!"
-  exit $EXIT_CRIT
-fi
+# Create a new SSH2 object
+my $ssh2 = Net::SSH2->new();
 
-# Attempt SFTP connection
-sftp -oBatchMode=yes -oStrictHostKeyChecking=no "{{ sftp_user }}"@"{{ sftp_host }}" <<< "{{ sftp_password }}" 2>&1
+# Connect to the SFTP server
+eval { $ssh2->connect($sftp_host) or die "Connection failed: $@"; };
 
-# Check exit code of sftp command
-if [[ $? -eq 0 ]]; then
-  echo "OK: Successful connection to SFTP server {{ sftp_host }}"
-  exit $EXIT_OK
-else
-  echo "$EXIT_CRIT \"SFTP\" - Connection to SFTP server {{ sftp_host }} failed!"
-  exit $EXIT_CRIT
-fi
+# Handle potential exception during connection
+if ($@) {
+  print "Critical: Connection to SFTP server $sftp_host failed: $@\n";
+  exit $exit_crit;
+}
+
+# Try password authentication
+eval { $ssh2->auth_password($sftp_user, $sftp_password) or die "Authentication failed: $@"; };
+
+# Handle potential exception during authentication
+if ($@) {
+  print "Critical: Authentication to SFTP server $sftp_host failed: $@\n";
+  exit $exit_crit;
+}
+
+# Create a new SFTP object using the existing SSH2 connection
+my $sftp = Net::SFTP::Foreign->new(ssh2 => $ssh2, backend => 'Net_SSH2');
+
+# Check for SFTP object creation errors
+if ($sftp->error) {
+  print "Critical: Error creating SFTP object: $sftp->error\n";
+  exit $exit_crit;
+}
+
+# Connection successful! (Optional: Perform some basic SFTP operation)
+print "OK: Successful connection to SFTP server $sftp_host\n";
+
+# Close the connection
+$ssh2->disconnect();
+
+exit $exit_ok;
