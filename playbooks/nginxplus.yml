@@ -13,6 +13,7 @@
   become: true
   vars_files:
     - ../group_vars/nginxplus/main.yml
+    - ../group_vars/nginxplus/production.yml # when we merge the playbook this can have the environment
 
   pre_tasks:
     - name: prepare to update loadbalancer config
@@ -40,6 +41,8 @@
   # updates existing load balancer
   roles:
     - role: ../roles/nginxplus
+    - role: datadog
+      when: runtime_env | default('staging') == "production"
 
 - name: restart nginx, load new config
   hosts: nginxplus_production
@@ -48,6 +51,7 @@
   become: true
   vars_files:
     - ../group_vars/nginxplus/main.yml
+    - ../group_vars/nginxplus/production.yml # when we merge the playbook this can have the environment
 
   post_tasks:
     - name: tell everyone on slack you ran an ansible playbook
