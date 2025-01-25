@@ -15,13 +15,56 @@
     - ../../group_vars/checkmk/{{ runtime_env | default('staging') }}.yml
     #- ../../group_vars/all/checkmk.yml  # this is the likely correct path when prod goes live
     - ../../group_vars/checkmk/vault.yml
+
   vars:
     checkmk_agent_host_ip: "{{ hostvars[inventory_hostname]['ansible_default_ipv4']['address'] }}"
+    checkmk_agent_host_name: "{{ inventory_hostname | regex_search('^[^.]*') }}"
+    checkmk_api_url: "http://{{ checkmk_agent_server }}:{{ checkmk_agent_server_port }}/{{ checkmk_agent_site }}/check_mk/webapi.py"
+    checkmk_host_attributes:
+      ipaddress: "{{ checkmk_agent_host_ip }}"
+      tags: []
+      folder: "{{ checkmk_agent_folder }}"
+    checkmk_bake_agents_url: "http://{{ checkmk_agent_server }}:{{ checkmk_agent_server_port }}/{{ checkmk_agent_site }}/check_mk/webapi.py?action=bake_agents&_username={{ checkmk_agent_user }}&_secret={{ checkmk_agent_auth }}"
 
   pre_tasks:
-    - name: set stripped agent hostname (only content before the first .) as fact
-      ansible.builtin.set_fact:
-        checkmk_agent_host_name: "{{ inventory_hostname | regex_search('^[^.]*') }}"
+    - name: Add host to Checkmk via API
+      ansible.builtin.uri:
+        url: "{{ checkmk_api_url }}?action=add_host&_username={{ checkmk_agent_user }}&_secret={{ checkmk_agent_auth }}"
+        method: POST
+        body: |
+          {
+            "hostname": "{{ checkmk_agent_host_name }}",
+            "folder": "{{ checkmk_agent_folder }}",
+            "attributes": {
+              "ipaddress": "{{ checkmk_agent_host_ip }}"
+            }
+          }
+        body_format: json
+        headers:
+          Content-Type: application/json
+      register: checkmk_add_host_result
+      failed_when: >
+        checkmk_add_host_result.status not in [200, 409]  # Treat 409 (conflict) as non-fatal
 
-  roles:
-    - role: checkmk.general.agent
+    - name: Debug output of host addition API call
+      ansible.builtin.debug:
+        msg: "Checkmk host addition result: {{ checkmk_add_host_result }}"
+
+    - name: Trigger agent baking in Checkmk
+      ansible.builtin.uri:
+        url: "{{ checkmk_bake_agents_url }}"
+        method: GET
+        headers:
+          Content-Type: application/json
+      register: checkmk_bake_agents_result
+      failed_when: checkmk_bake_agents_result.status != 200
+
+    - name: Debug output of agent baking API call
+      ansible.builtin.debug:
+        msg: "Checkmk agent baking result: {{ checkmk_bake_agents_result }}"
+
+  tasks:
+    - name: Install and configure Checkmk agent
+      ansible.builtin.import_role:
+        name: checkmk.general.agent
+
