@@ -2,7 +2,6 @@
 # by default this playbook runs in the staging environment
 # to run in production, pass '-e runtime_env=production'
 - name: build special collections website
-  hosts: special_collections_{{ runtime_env | default('staging') }}
   remote_user: pulsys
   become: true
   vars:
@@ -13,13 +12,9 @@
       - run a cap for special_collections
       - where needed make sure server is greenlisted on [lib-ponyexpress](https://github.com/pulibrary/pul-the-hard-way/blob/master/services/smtp-mail-server.md)
   vars_files:
-    - ../group_vars/special_collections/{{ runtime_env | default('staging') }}.yml
-    - ../group_vars/special_collections/common.yml
-    - ../group_vars/special_collections/vault.yml
     - ../group_vars/nfsserver/common.yml
   roles:
     - role: datadog
-    - role: special_collections
 
   post_tasks:
     - name: tell everyone on slack you ran an ansible playbook
