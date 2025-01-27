@@ -79,6 +79,8 @@ In all the steps below substitute your role name for `your_new_role`
       cp -r roles/example/* $your_new_role
       ```
 
+   1. delete the create.yml and destroy.yml files
+
    1. edit `vi roles/$your_new_role/meta/main.yml` and add a description
 
    1. edit `vi roles/$your_new_role/molecule/default/converge.yml`
@@ -87,6 +89,7 @@ In all the steps below substitute your role name for `your_new_role`
 1. Test that your role is now working
    All tests should pass
 
+   If you have not created any tasks you might get an error in the `Wait for instance(s) creation to complete` task
    ```
    cd roles/$your_new_role
    molecule test
