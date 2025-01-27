@@ -1,47 +1,88 @@
 ---
+- name: PostgreSQL | Set log file path for RHEL based messages
+  ansible.builtin.set_fact:
+    postgres_log_file: /var/lib/pgsql/data/pg_log/pg.csv
+  when:
+    - ansible_os_family == "RedHat"
+    
 - name: PostgreSQL | Make sure the CA certificates are available
   ansible.builtin.apt:
     pkg: ca-certificates
     state: present
+  when:
+    - ansible_os_family == "Debian"
 
 - name: PostgreSQL | Add PostgreSQL repository apt-key
   ansible.builtin.apt_key:
     url: "{{ postgres_apt_key_url }}"
     state: present
+  when:
+    - ansible_os_family == "Debian"
 
-- name: PostgreSQL | add postgres:10 appstream
+- name: PostgreSQL | add postgres:13 appstream
   ansible.builtin.dnf:
-    name: "@postgresql:10/client"
+    name: "postgresql"
     state: present
-    ignore_errors: true
   when:
     - running_on_server
-    - ansible_distribution == "CentOS"
+    - ansible_os_family == "RedHat"
 
 - name: PostgreSQL | add postgresql repository for latest ubuntu
   ansible.builtin.apt_repository:
     repo: 'deb http://apt.postgresql.org/pub/repos/apt/ {{ ansible_distribution_release }}-pgdg main'
     state: present
   when:
-    - ansible_distribution_release != "bionic"
+    - ansible_os_family == "Debian"
 
-- name: PostgreSQL | add postgresql repository for Bionic
-  ansible.builtin.apt_repository:
-    repo: 'deb https://apt-archive.postgresql.org/pub/repos/apt/ {{ ansible_distribution_release }}-pgdg main'
-    state: present
-  when:
-    - ansible_distribution_release == "bionic"
-
-- name: PostgreSQL | install postgresql server packages
+- name: PostgreSQL | install postgresql server packages (Ubuntu)
   ansible.builtin.apt:
     name: '{{ item }}'
     state: present
     cache_valid_time: '{{ apt_cache_timeout }}'
   loop:
     - "{{ postgres_packages }}"
-  when: postgresql_is_local
+  when:
+    - postgresql_is_local
+    - ansible_os_family == "Debian"
 
-- name: PostgreSQL | install postgresql client packages
+- name: PostgreSQL | install postgresql server packages (RedHat)
+  ansible.builtin.dnf:
+    name: '{{ item }}'
+    state: present
+  loop:
+    - "{{ dnf_postgres_packages }}"
+  when:
+    - postgresql_is_local
+    - ansible_os_family == "RedHat"
+
+- name: PostgreSQL | Ensure PostgreSQL is enabled and started
+  ansible.builtin.service:
+    name: postgresql
+    state: started
+    enabled: true
+  when:
+    - running_on_server
+
+# this looks redundant given the task that follow. Test this when postgresql needs to be 15
+- name: PostgreSQL | Check if PostgreSQL data initialization logs exist (RedHat)
+  ansible.builtin.stat:
+    path: "/var/lib/pgsql/initdb_postgresql.log"
+  register: pgsql_data_install
+  when:
+    - postgresql_is_local
+    - ansible_os_family == "RedHat"
+
+- name: PostgreSQL | Initialize PostgreSQL database (RedHat)
+  ansible.builtin.command:
+    cmd: /bin/postgresql-setup --initdb --unit postgresql
+  args:
+    creates: "/var/lib/pgsql/initdb_postgresql.log"
+  when:
+    - ansible_os_family == "RedHat"
+    - not pgsql_data_install.stat.exists
+    - postgresql_is_local
+
+- name: PostgreSQL | install postgresql client packages (Ubuntu)
   ansible.builtin.apt:
     name: '{{ item }}'
     state: present
@@ -49,30 +90,47 @@
   loop:
     - "{{ postgres_client_packages }}"
   changed_when: false
+  when:
+    - ansible_os_family == "Debian"
 
-- name: PostgreSQL | install postgresql client packages Centos
+- name: PostgreSQL | install postgresql client packages (RedHat)
   ansible.builtin.dnf:
     name: "{{ item }}"
     state: present
   loop:
     - libpq-devel
     - python3-psycopg2
-    - python3-psycopg2
   when:
     - running_on_server
-    - ansible_distribution == "CentOS"
+    - ansible_os_family == "RedHat"
 
-- import_tasks: extensions.yml
+- name: PostgreSQL | add extensions
+  ansible.builtin.import_tasks: extensions.yml
 
-- name: PostgreSQL | install configuration file
+- name: PostgreSQL | install configuration file (Ubuntu)
   ansible.builtin.template:
     src: 'postgresql.conf.j2'
     dest: '/etc/postgresql/{{ postgres_version }}/main/postgresql.conf'
     group: postgres
     owner: postgres
-    mode: 0644
+    mode: "0644"
   register: configure_postgres
-  when: postgresql_is_local
+  when:
+    - postgresql_is_local
+    - ansible_os_family == "Debian"
+  notify: restart local postgres
+
+- name: PostgreSQL | install configuration file (RedHat)
+  ansible.builtin.template:
+    src: 'rh_postgresql.conf.j2'
+    dest: '/var/lib/pgsql/data/postgresql.conf'
+    group: postgres
+    owner: postgres
+    mode: "0644"
+  register: configure_postgres
+  when:
+    - postgresql_is_local
+    - ansible_os_family == "RedHat"
   notify: restart local postgres
 
 - name: PostgreSQL | install pg_stats file
@@ -81,24 +139,27 @@
     dest: '/etc/postgresql/{{ postgres_version }}/main/conf.d/statistics.conf'
     group: postgres
     owner: postgres
-    mode: 0644
+    mode: "0644"
   register: configure_postgres
-  when: postgresql_is_local
+  when:
+    - postgresql_is_local
+    - ansible_os_family == "Debian"
   notify: restart local postgres
 
 - name: PostgreSQL | rotate the logs for postgresql
-  template:
+  ansible.builtin.template:
     src: 'logrotate.d.postgresql.j2'
     dest: '/etc/logrotate.d/postgresql'
-    mode: 0644
+    mode: "0644"
 
 - name: PostgreSQL | add replication postgresql configuration
-  template:
+  ansible.builtin.template:
     src: replication.conf.j2
     dest: "/etc/postgresql/{{ postgres_version }}/main/conf.d/replication.conf"
-    mode: 0644
+    mode: "0644"
   when:
     - running_on_server
+    - ansible_os_family == "Debian"
     - postgresql_cluster_member == true
   notify: restart postgresql
 
@@ -124,19 +185,20 @@
   when:
     - postgresql_is_local
     - postgresql_leader == true
+    - ansible_os_family == "Debian"
     - running_on_server
 
 - name: PostgreSQL | ensure pgpass
   ansible.builtin.template:
     src: pg_pass.j2
     dest: "~/.pgpass"
-    mode: 0600
+    mode: "0600"
     owner: postgres
   changed_when: false
   when: postgresql_is_local
   become: true
 
-- name: PostgreSQL | ensure access to postgres server
+- name: PostgreSQL | ensure access to postgres server (Ubuntu)
   ansible.builtin.blockinfile:
     path: '/etc/postgresql/{{ postgres_version }}/main/pg_hba.conf'
     insertafter: "# Put your actual configuration here"
@@ -145,26 +207,55 @@
   when:
     - postgres_host is not none
     - postgresql_is_local
+    - ansible_os_family == "Debian"
     - running_on_server
   become: true
   notify:
     - reload local postgres
 
-- include_tasks: pg_hba.yml
-- include_tasks: warm_standby_leader.yml
+- name: PostgreSQL | ensure access to postgres server (RedHat)
+  ansible.builtin.blockinfile:
+    path: '/var/lib/pgsql/data/pg_hba.conf'
+    insertafter: "# Put your actual configuration here"
+    block: |
+      # localhost
+  when:
+    - postgres_host is not none
+    - postgresql_is_local
+    - ansible_os_family == "RedHat"
+    - running_on_server
+  become: true
+  notify:
+    - restart local postgres
+
+- name: PostgreSQL | configure access to postgres server
+  ansible.builtin.include_tasks: pg_hba.yml
+
+- name: PostgreSQL | configure warm standy
+  ansible.builtin.include_tasks: warm_standby_leader.yml
   when:
     - postgresql_cluster != false
     - inventory_hostname == postgresql_cluster.leader
-- include_tasks: warm_standby_follower.yml
+
+- name: PostgreSQL | configure warm standy follower
+  ansible.builtin.include_tasks: warm_standby_follower.yml
   when:
     - postgresql_cluster != false
     - inventory_hostname in postgresql_cluster.followers
-- include_tasks: logical_replication.yml
+
+- name: PostgreSQL | configure logical replication
+  ansible.builtin.include_tasks: logical_replication.yml
   when:
     - postgresql_cluster != false
     - inventory_hostname == postgresql_cluster.leader
     - postgresql_logical_replication != false
-- include_tasks: create_db.yml
-- include_tasks: create_users.yml
-- include_tasks: create_read_only_user.yml
+
+- name: PostgreSQL | create database
+  ansible.builtin.include_tasks: create_db.yml
+
+- name: PostgreSQL | create users
+  ansible.builtin.include_tasks: create_users.yml
+
+- name: PostgreSQL | create read-only user
+  ansible.builtin.include_tasks: create_read_only_user.yml
   when: application_dbuser_ro_name is defined
