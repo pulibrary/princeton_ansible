@@ -4,7 +4,6 @@
 # folder names must be all lower case and should not begin with a slash
 # by default this playbook runs in the staging environment
 # to run in production, pass '-e runtime_env=production'
-
 - name: Install CheckMk agent on host
   hosts: "{{ runtime_env | default ('staging') }}"
   remote_user: pulsys
@@ -12,16 +11,17 @@
 
   vars_files:
     - ../../group_vars/all/vault.yml
-    - ../../group_vars/checkmk/{{ runtime_env | default('staging') }}.yml
-    #- ../../group_vars/all/checkmk.yml  # this is the likely correct path when prod goes live
+    - ../../group_vars/checkmk/agent_common.yml
     - ../../group_vars/checkmk/vault.yml
+
   vars:
     checkmk_agent_host_ip: "{{ hostvars[inventory_hostname]['ansible_default_ipv4']['address'] }}"
 
   pre_tasks:
-    - name: set stripped agent hostname (only content before the first .) as fact
+    - name: Set stripped agent hostname (only content before the first .) as fact
       ansible.builtin.set_fact:
         checkmk_agent_host_name: "{{ inventory_hostname | regex_search('^[^.]*') }}"
 
   roles:
-    - role: checkmk.general.agent
+    - role: roles/checkmk_agent
+
