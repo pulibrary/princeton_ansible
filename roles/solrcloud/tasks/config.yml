@@ -1,5 +1,5 @@
 ---
-- name: solrcloud | Check for solr znode
+- name: Solrcloud | Check for solr znode
   ansible.builtin.command: >
     {{ solr_installation }}/bin/solr zk ls /
     -z {{ solr_zookeeper_hosts_string }}
@@ -7,14 +7,14 @@
   ignore_errors: true
   changed_when: false
 
-- name: solrcloud | Create zk chroot / solr znode using bin/solr
+- name: Solrcloud | Create zk chroot / solr znode using bin/solr
   ansible.builtin.command: >
     {{ solr_installation }}/bin/solr zk mkroot {{ solr_znode }}
     -z {{ solr_zookeeper_hosts_string }}
   when: solr_znode not in znode_check.stdout_lines and solr_znode != ''
   changed_when: false
 
-- name: solrcloud | Configure SolrCloud init script
+- name: Solrcloud | Configure SolrCloud init script
   ansible.builtin.template:
     src: 'solr.in.sh.j2'
     dest: '/etc/default/solr.in.sh'
@@ -25,7 +25,7 @@
   changed_when: false
   notify: restart SolrCloud
 
-- name: solrcloud | Configure high ulimit value for Solr
+- name: Solrcloud | Configure high ulimit value for Solr
   ansible.builtin.template:
     src: 'solr.conf.j2'
     dest: '/etc/security/limits.d/solr.conf'
@@ -33,7 +33,7 @@
     force: true
   notify: restart SolrCloud
 
-- name: solrcloud | Configure SolrCloud properties
+- name: Solrcloud | Configure SolrCloud properties
   ansible.builtin.template:
     src: 'solr.xml.j2'
     dest: '{{ solr_data_dir }}/solr.xml'
@@ -43,17 +43,17 @@
     force: true
   notify: restart SolrCloud
 
-- name: solrcloud | Configure pre 7.4 logging
+- name: Solrcloud | Configure SolrCloud 9 properties
   ansible.builtin.template:
-    src: 'log4j.properties.j2'
-    dest: '/solr/log4j.properties'
+    src: 'solr9.xml.j2'
+    dest: '{{ solr_data_dir }}/solr.xml'
     owner: '{{ solr_user }}'
     group: '{{ solr_group }}'
     mode: 0644
     force: true
   notify: restart SolrCloud
-
-- name: solrcloud | Configure logging
+  
+- name: Solrcloud | Configure logging
   ansible.builtin.template:
     src: 'log4j2.xml.j2'
     dest: '/solr/log4j2.xml'
@@ -75,7 +75,7 @@
     # - lucene-umich-solr-filters-6.0.0-SNAPSHOT.jar
   # notify: restart SolrCloud
 
-- name: solrcloud | Copy orangelight plugin jar files
+- name: Solrcloud | Copy orangelight plugin jar files
   ansible.builtin.copy:
     src: files/{{ item }}
     dest: "{{ jardirectory }}/{{ item }}"
@@ -87,7 +87,7 @@
     - lucene-umich-solr-filters-6.0.0-SNAPSHOT.jar
   notify: restart SolrCloud
 
-- name: solrcloud | Copy webapp directory plugin jar files
+- name: Solrcloud | Copy webapp directory plugin jar files
   ansible.builtin.copy:
     src: files/{{ item }}
     dest: "{{ webapp_jardirectory }}/{{ item }}"
@@ -96,7 +96,7 @@
     - jts-core-1.15.1.jar
   notify: restart SolrCloud
 
-- name: solrcloud | Create solr home lib dir
+- name: Solrcloud | Create solr home lib dir
   ansible.builtin.file:
     path: "{{ solr_data_dir}}/lib"
     owner: '{{ solr_user }}'
@@ -104,7 +104,7 @@
     state: directory
   tags: scriptplugins
 
-- name: solrcloud | Copy scripting engine jar files
+- name: Solrcloud | Copy scripting engine jar files
   ansible.builtin.copy:
     src: files/{{ item }}
     dest: "{{ solr_data_dir }}/lib/{{ item }}"
