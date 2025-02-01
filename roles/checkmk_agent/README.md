@@ -121,7 +121,5 @@ ansible-galaxy collection install checkmk.general
 
 #### Notes
 
-Ensure the Checkmk agent installation files (`check-mk-agent_{{ checkmk_agent_version }}_all.deb and check-mk-agent_{{ checkmk_agent_version }}.noarch.rpm`) are present in the `files` directory of the role.
+Ensure the `ansible-vault`'ed Checkmk agent installation files (`check-mk-agent_{{ checkmk_agent_version }}_all.deb and check-mk-agent_{{ checkmk_agent_version }}.noarch.rpm`) are present in the `files` directory of the role.
 
-License
-This project is licensed under the MIT License. See the LICENSE file for details.
