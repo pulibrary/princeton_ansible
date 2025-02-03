@@ -42,6 +42,8 @@
     mode: "0644"
     force: true
   notify: restart SolrCloud
+  when:
+    - '"8" in solr_cloud_download_version'
 
 - name: Solrcloud | Configure SolrCloud 9 properties
   ansible.builtin.template:
@@ -52,6 +54,8 @@
     mode: "0644"
     force: true
   notify: restart SolrCloud
+  when:
+    - '"9" in solr_cloud_download_version'
 
 - name: Solrcloud | Configure logging
   ansible.builtin.template:
@@ -98,10 +102,11 @@
 
 - name: Solrcloud | Create solr home lib dir
   ansible.builtin.file:
-    path: "{{ solr_data_dir}}/lib"
+    path: "{{ solr_data_dir }}/lib"
     owner: '{{ solr_user }}'
     group: '{{ solr_group }}'
     state: directory
+    mode: "0755"
   tags: scriptplugins
 
 - name: Solrcloud | Copy scripting engine jar files
