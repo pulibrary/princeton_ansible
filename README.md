@@ -4,9 +4,11 @@
 
 Princeton Ansible Playbooks
 ===========================
+
 A collection of roles and playbooks for provisioning and managing the machines that run PUL applications.
 
 # Project Setup for Development and Testing
+
 ## First-time setup
 
 Do these things once, after you clone this repo.
@@ -49,7 +51,9 @@ molecule test
 # Developing
 
 ## Create a new role
+
 In all the steps below substitute your role name for `your_new_role`
+
 1. Initialize the role with [ansible-galaxy](https://www.redhat.com/sysadmin/developing-ansible-role)
    Run the following command from the root of this repo:
 
@@ -59,14 +63,18 @@ In all the steps below substitute your role name for `your_new_role`
    molecule init scenario
    cd ../..
    ```
+
 1. Set up to run from github actions `vim .github/workflows/molecule_tests.yml` add for your role at the end matrix of the roles
+
    ```
        - your_new_role
    ```
+
 1. Setup the directory to run molecule
 
    1. copy all molecule and lint files (note you need the `.` in the command
       below to get the hidden files)
+
       ```bash
       cp -r roles/example/* $your_new_role
       ```
@@ -78,10 +86,12 @@ In all the steps below substitute your role name for `your_new_role`
 
 1. Test that your role is now working
    All tests should pass
+
    ```
    cd roles/$your_new_role
    molecule test
    ```
+
 1. Push your branch and verify that CI runs and passes on GitHub Actions.
 
 1. If the role is related to a new project, add group variables and inventory.
@@ -103,14 +113,16 @@ molecule verify
 ```
 
 If you are having issues with your tests passing and have run `molecule converge` you can connect to the running container by running
+
 ```
 molecule login
 ```
+
 ## Troubleshooting a container step
 
 If you have a specific task that is not behaving, utilize the tests to run just that step.  This is especially useful for long running `molecule converge`
 
-You basically copy the failing task into the molecule/verify.yml and run verify over and over instead of needing to run the entire converge over and over.  This makes debugging much faster and joyful! 
+You basically copy the failing task into the molecule/verify.yml and run verify over and over instead of needing to run the entire converge over and over.  This makes debugging much faster and joyful!
 
 ## Troubleshooting a test run
 
@@ -139,6 +151,7 @@ ansible-playbook playbooks/example.yml
 ```
 
 Run a playbook from an error or a specific task
+
 ```bash
 ansible-playbook playbooks/example.yml --start-at-task="Task Name"
 ```
@@ -148,13 +161,14 @@ ansible-playbook playbooks/example.yml --start-at-task="Task Name"
 To ensure uptime while provisioning a set of machines, the general process is to remove half the machines from the load balancer, provision and deploy them, then put them back on the load balancer and remove the other half for provisioning and deployment.
 
 2 ways to remove machines from the load balancer:
+
 - Use the capistrano tasks, duplicated to every rails application, called `remove_from_nginx` and `serve_from_nginx` to remove and replace sets of machines.
 - [Use the load balancer UI](https://github.com/pulibrary/pul-it-handbook/blob/main/services/nginxplus.md#using-the-admin-ui) to control which boxes are being served.
 
 To run a playbook on only a subset of hosts, use the `--limit` option to `ansible-playbook`, e.g.:
 
 ```
-$ ansible-playbook playbooks/figgy_production.yml --limit figgy3.princeton.edu
+ansible-playbook playbooks/figgy_production.yml --limit figgy3.princeton.edu
 ```
 
 You can also add `--list-hosts` just to check which hosts will be affected before you run.
@@ -170,10 +184,11 @@ Note that some playbooks have separate sections for webservers and workers. Make
 
 Currently there's no automation on firewall changes when the box you're provisioning needs to talk to the postgres or solr machines. See instructions for manual edits at:
 
-* https://github.com/pulibrary/pul-the-hard-way/blob/master/services/postgresql.md#allow-access-from-a-new-box
-* https://github.com/pulibrary/pul-the-hard-way/blob/master/services/solr.md#allow-access-from-a-new-box
+- <https://github.com/pulibrary/pul-the-hard-way/blob/master/services/postgresql.md#allow-access-from-a-new-box>
+- <https://github.com/pulibrary/pul-the-hard-way/blob/master/services/solr.md#allow-access-from-a-new-box>
 
 # Vault
+
 Use `ansible-vault edit` to make changes to the `vault.yml` file, for example:
 
 ```
@@ -181,26 +196,30 @@ ansible-vault edit group_vars/bibdata/vault.yml
 ```
 
 If you need to diff an ansible-vault file, run
+
 ```
 git config --global diff.ansible-vault.textconv "ansible-vault view"
 git config --local merge.ansible-vault.driver "./ansible-vault-merge %O %A %B %L %P"
 git config --local merge.ansible-vault.name "Ansible Vault merge driver"
 ```
+
 after which any `git diff` command should decrypt your ansible-vault files.
 
 If a file is not decrypting with `git diff` you may need to add the file you're trying to diff to `.gitattributes`.
 
 ## Troubleshooting lastpass
 
-More information about lastpass-cli can be found here: https://lastpass.github.io/lastpass-cli/lpass.1.html
+More information about lastpass-cli can be found here: <https://lastpass.github.io/lastpass-cli/lpass.1.html>
 
-* If you get the message `[WARNING]: Error in vault password file loading (default): Invalid vault password was provided from script`, it's possible you have vault passwords hanging around from previous projects, and they are overriding the lastpass password. If you no longer need those passwords, remove them. For example:
+- If you get the message `[WARNING]: Error in vault password file loading (default): Invalid vault password was provided from script`, it's possible you have vault passwords hanging around from previous projects, and they are overriding the lastpass password. If you no longer need those passwords, remove them. For example:
 
 ```bash
 rm -rf ~/.vault_pass.txt
 rm -rf ~/.ansible-vaults
 ```
-* If you get the message `ERROR! Decryption failed (no vault secrets were found that could decrypt)`, you may still need to source the environment for your shell.
+
+- If you get the message `ERROR! Decryption failed (no vault secrets were found that could decrypt)`, you may still need to source the environment for your shell.
+
 ```bash
 source princeton_ansible_env.sh
 ```
@@ -218,29 +237,32 @@ source princeton_ansible_env.sh
 ## Upgrading Ansible version
 
    1. In a pipenv shell
+
       ```bash
       pipenv sync
       pipenv shell
       ```
 
    1. Upgrade ansible
+
       ```
       pipenv update ansible
       ```
 
       If this fails you may need to
+
       ```
       pipenv uninstall ansible
       pipenv install ansible
       ```
 
    1. Create the  CI ansible environment
+
       ```
       pipenv lock -r > requirements.txt
       ```
 
-   1.  Create a PR and commit
-
+   1. Create a PR and commit
 
 ## Patching Dependabots
 
