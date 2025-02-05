@@ -28,8 +28,11 @@ load_module modules/ngx_rtmp_module.so;
 {% if nginx_modules.xslt %}
 load_module modules/ngx_http_xslt_filter_module.so;
 {% endif %}
-{% if nginx_modules.waf and nginx_type == "plus" %}
+{% if nginx_modules.waf and nginx_type == "plus" and !nginx_modules.dos %}
 load_module modules/ngx_http_app_protect_module.so;
+{% endif %}
+{% if nginx_modules.dos and nginx_type == "plus" %}
+load_module modules/ngx_http_app_protect_dos_module.so;
 {% endif %}
 
 user  nginx;
@@ -70,9 +73,13 @@ http {
     #tcp_nopush     on;
 
     keepalive_timeout  65;
+    {% if nginx_modules.waf and nginx_type == "plus" and !nginx_modules.dos %}
     app_protect_enable on;
     app_protect_security_log_enable on;
     app_protect_security_log "/etc/app_protect/conf/log_default.json" /var/log/app_protect/security.log;
+    {% elseif  %}
+    app_protect_dos_enable on;
+    {% endif %}
 
     # app_protect_security_log log_all;
 
