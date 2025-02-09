@@ -1,23 +1,16 @@
-tickTime={{ zookeeper_tick_time }}
-dataDir={{ zookeeper_data_dir }}
-dataLogDir={{ zookeeper_log_dir }}
-clientPort={{ zookeeper_client_port }}
-initLimit={{ zookeeper_init_limit }}
-syncLimit={{ zookeeper_sync_limit }}
+{{ ansible_managed | comment }}
+tickTime=2000
+initLimit=10
+syncLimit=5
+dataDir={{ zk_data_dir }}
+dataLogDir={{ zk_log_dir }}
+clientPort={{ zk_client_port }}
 
-{% if zookeeper_autopurge_purgeInterval > 0 %}
-autopurge.purgeInterval={{ zookeeper_autopurge_purgeInterval }}
-autopurge.snapRetainCount={{ zookeeper_autopurge_snapRetainCount }}
-{% endif %}
-
-{% for server in zookeeper_hosts_dict %}
-{% if server.host is defined %}
-{% if server.ip is defined %}
-server.{{server.id}}={{server.ip}}:2888:3888
-{% else %}
-server.{{server.id}}={{server.host}}:2888:3888
-{% endif %}
-{% else %}
-server.{{loop.index}}={{server}}:2888:3888
-{% endif %}
+# List of servers
+{% for node in zk_nodes %}
+server.{{ node.id }}={{ node.host }}:{{ zk_leader_port }}:{{ zk_election_port }}{% if node.is_leader %}:participant;{{ zk_client_port }}{% endif %}
 {% endfor %}
+
+# Set higher timeout for leader election
+electionAlg=3
+maxSessionTimeout=60000
