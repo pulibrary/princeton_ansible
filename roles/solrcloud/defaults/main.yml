@@ -1,0 +1,97 @@
+---
+# defaults file for roles/solrcloud
+solr_version: "8.4.0"  # Can be overridden to 9.2.0
+solr_user: "deploy"
+solr_group: "deploy"
+solr_home: "/solr"
+solr_data_dir: "/solr/data"
+solr_log_dir: /solr/logs
+
+# Java versions for different Solr versions
+java_versions:
+  "8.4.0": "openjdk-11-jdk"
+  "9.2.0": "openjdk-17-jdk"
+
+# ZooKeeper configuration example
+zookeeper_hosts:
+  - "lib-zk1.example.edu:2181"
+  - "lib-zk2.example.edu:2181"
+  - "lib-zk3.example.edu:2181"
+
+# Solr nodes example
+solr_nodes:
+  - "lib-solr1.example.edu"
+  - "lib-solr2.example.edu"
+  - "lib-solr3.example.edu"
+
+# Solr download URLs
+solr_download_urls:
+  "8.4.0": "https://pulmirror.princeton.edu/mirror/solr/dist/lucene/solr/8.4.0/solr-8.4.0.tgz"
+  "9.2.0": "https://pulmirror.princeton.edu/mirror/solr/dist/lucene/solr/solr/9.2.0/solr-9.2.0.tgz"
+
+# Files & Paths
+solr_log4j: "{{ solr_log4j_path | default('/solr/log4j.properties') }}"
+solr_home: /solr
+solr_data_dir: "{{ solr_home }}/data"
+solr_installation: /opt/solr
+
+# Ports
+solr_port: 8983
+solr_jmx_enabled: "true"
+solr_jmx_port: 1099
+solr_host: "{{ inventory_hostname }}"
+
+# garbage collection settings
+solr_gc_tune: "-XX:NewRatio=3 \
+  -XX:SurvivorRatio=4 \
+  -XX:TargetSurvivorRatio=90 \
+  -XX:MaxTenuringThreshold=8 \
+  -XX:ConcGCThreads=4 \
+  -XX:ParallelGCThreads=4 \
+  -XX:PretenureSizeThreshold=64m \
+  -XX:+ParallelRefProcEnabled"
+
+# Enable verbose GC logging
+# these are the Java 9 settings
+# GCID and GCCause are always logged
+gc_log_settings: "-verbose:gc \
+  -Xlog:gc=debug:file=/solr/logs/gc.txt:time,uptime,pid,tid,level,tags \
+  -Xlog:gc+heap=debug \
+  -Xlog:gc+age=trace \
+  -Xlog:safepoint"
+
+solr_stack_size: 256k
+solr_heap: "{{ solr_heap_setting | default('20g') }}"
+# Consider configuring the min and max separately:
+# solr_java_memory: '-Xms16g -Xmx20g'
+# ^^^ would require changes to both scripts in the templates dir
+solr_jetty_threads_min: 10
+solr_jetty_threads_max: 10000
+solr_jetty_threads_idle_timeout: 30000
+solr_jetty_threads_stop_timeout: 60000
+solr_jetty_secure_port: 8443
+solr_jetty_output_buffer_size: 32768
+solr_jetty_output_aggregation_size: 8192
+solr_jetty_request_header_size: 8192
+solr_jetty_response_header_size: 8192
+solr_jetty_send_server_version: "false"
+solr_jetty_send_date_header: "false"
+solr_jetty_header_cache_size: 512
+solr_jetty_delay_dispatch_until_content: "false"
+solr_jetty_http_selectors: -1
+solr_jetty_http_acceptors: -1
+
+# Orangelight Jar directory
+jardirectory: /opt/solr/contrib/analysis-extras/lib
+jammy_jardirectory: /opt/solr/modules/analysis-extras/lib
+
+# Webapp Jar directory
+webapp_jardirectory: /opt/solr/server/solr-webapp/webapp/WEB-INF/lib
+
+# LOG
+log_root_level: WARN
+log_file_size: 500MB
+log_max_backup_index: 9
+
+solr_log_root_level: "{{ log_root_level }}"
+solr_log_file_size: "{{ log_file_size }}"
