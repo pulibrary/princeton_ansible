@@ -1,0 +1,90 @@
+---
+# tasks file for roles/solrcloud
+- name: Solrcloud | Install dependencies
+  ansible.builtin.apt:
+    name: ["cifs-utils"]
+    state: present
+
+- name: Solrcloud | create directories for mounts
+  ansible.builtin.file:
+    path: "/mnt/{{ item }}"
+    state: "directory"
+    mode: "0755"
+    group: deploy
+    owner: deploy
+  loop:
+    - solr_backup
+
+- name: Solrcloud | Copy smb credentials
+  ansible.builtin.copy:
+    src: "files/{{ item }}"
+    dest: "/etc/{{ item }}"
+    mode: "0644"
+  when:
+    - running_on_server
+  loop:
+    - solr.smb.credentials
+
+- name: Solrcloud | Create mount to diglibdata shares
+  ansible.posix.mount:
+    path: "/mnt/{{ item.path }}"
+    src: "//diglibdata1.princeton.edu/{{ item.src }}"
+    fstype: cifs
+    opts: "credentials=/etc/{{ item.opts }}.smb.credentials,uid=1001,gid=1001"
+    state: mounted
+  when:
+    - running_on_server
+  loop:
+    - { path: "solr_backup", src: "solrbackup", opts: "solr" }
+  tags:
+    - fix_backups
+
+- name: Solrcloud | Install appropriate Java version
+  ansible.builtin.apt:
+    name: "{{ java_versions[solr_version] }}"
+    state: present
+    update_cache: true
+
+- name: Solrcloud | Create Solr directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ solr_user }}"
+    group: "{{ solr_group }}"
+    mode: "0755"
+  with_items:
+    - "{{ solr_home }}"
+    - "{{ solr_data_dir }}"
+    - "/var/run/solr"
+
+- name: Solrcloud | solr cloud install node
+  ansible.builtin.include_tasks: install.yml
+  tags:
+    - install
+
+- name: Solrcloud | Configure Solr systemd service
+  ansible.builtin.template:
+    src: solr.service.j2
+    dest: /etc/systemd/system/solr.service
+    mode: "0644"
+
+- name: Solrcloud | Configure Solr
+  ansible.builtin.template:
+    src: solr.in.sh.j2
+    dest: "/opt/solr/bin/solr.in.sh"
+    owner: "{{ solr_user }}"
+    group: "{{ solr_group }}"
+    mode: "0644"
+  notify: Restart solr
+
+- name: Solrcloud | Start and enable Solr service
+  ansible.builtin.systemd:
+    name: solr
+    state: started
+    enabled: true
+    daemon_reload: true
+
+- name: Solrcloud | configure solr cloud
+  ansible.builtin.include_tasks: config.yml
+  tags:
+    - configure

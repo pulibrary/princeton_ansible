@@ -1,0 +1,12 @@
+---
+- name: Solrcloud | Download and extract Solr
+  ansible.builtin.unarchive:
+    src: "{{ solr_download_urls[solr_version] }}"
+    dest: "/tmp"
+    remote_src: true
+  register: solr_extract
+
+- name: Solrcloud | Install Solr
+  ansible.builtin.command: "/tmp/solr-{{ solr_version }}/bin/install_solr_service.sh /tmp/solr-{{ solr_version }}.tgz -i /opt -d {{ solr_data_dir }} -u {{ solr_user }}"
+  args:
+    creates: "/opt/solr-{{ solr_version }}"
