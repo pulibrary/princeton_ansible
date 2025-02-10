@@ -1,12 +1,39 @@
 ---
-- name: Solrcloud | Download and extract Solr
-  ansible.builtin.unarchive:
-    src: "{{ solr_download_urls[solr_version] }}"
-    dest: "/tmp"
-    remote_src: true
-  register: solr_extract
-
-- name: Solrcloud | Install Solr
-  ansible.builtin.command: "/tmp/solr-{{ solr_version }}/bin/install_solr_service.sh /tmp/solr-{{ solr_version }}.tgz -i /opt -d {{ solr_data_dir }} -u {{ solr_user }}"
+- name: Solrcloud | Check for solr service
+  ansible.builtin.command: service solr status
+  ignore_errors: true
+  changed_when: false
+  register: service_solrcloud_status
   args:
-    creates: "/opt/solr-{{ solr_version }}"
+    warn: false
+
+- name: Solrcloud | Download SolrCloud binaries
+  ansible.builtin.get_url:
+    url: "{{ solr_cloud_url }}"
+    dest: '/tmp/{{ solr_cloud_package }}'
+    timeout: 300
+    mode: "0644"
+  register: solr_downloaded
+  until: solr_downloaded is succeeded
+  ignore_errors: true
+
+- name: Solrcloud | copy local copy if download fails
+  ansible.builtin.copy:
+    src: 'local_files/solr/{{ solr_cloud_package }}'
+    dest: '/tmp/{{ solr_cloud_package }}'
+    mode: "0644"
+  when: solr_downloaded is failed
+
+- name: Solrcloud | Extract SolrCloud installation script
+  ansible.builtin.shell: "tar xzf /tmp/{{ solr_cloud_package }} {{ solr_cloud_build_name }}/bin/install_solr_service.sh --strip-components=2"
+  changed_when: false
+  args:
+    chdir: /tmp
+  when: |
+    service_solrcloud_status is failed
+
+- name: Solrcloud | run SolrCloud installation script
+  ansible.builtin.shell: /tmp/install_solr_service.sh /tmp/{{ solr_cloud_package }} -f -u {{ solr_user }} -n
+  changed_when: false
+  when: |
+    service_solrcloud_status is failed

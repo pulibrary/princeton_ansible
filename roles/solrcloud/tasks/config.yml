@@ -1,4 +1,5 @@
 ---
+
 - name: Solrcloud | Check for solr znode
   ansible.builtin.command: >
     {{ solr_installation }}/bin/solr zk ls /
@@ -35,7 +36,7 @@
 
 - name: Solrcloud | Configure SolrCloud properties
   ansible.builtin.template:
-    src: "{{ 'solr9.xml.j2 if solr_version == '9.2.0' else 'solr8.xml.j2 }}"
+    src: "{% if solr_version == '9.2.0' %}solr9.xml.j2{% else %}solr8.xml.j2{% endif %}"
     dest: '{{ solr_data_dir }}/solr.xml'
     owner: '{{ solr_user }}'
     group: '{{ solr_group }}'
@@ -75,6 +76,17 @@
     # - lucene-umich-solr-filters-6.0.0-SNAPSHOT.jar
   # notify: restart SolrCloud
 
+- name: Solrcloud | Create jar directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ solr_user }}"
+    group: "{{ solr_group }}"
+    mode: "0755"
+  with_items:
+    - "{{ jardirectory }}"
+    - "{{ webapp_jardirectory }}"
+
 - name: Solrcloud | Copy orangelight plugin jar files
   ansible.builtin.copy:
     src: files/{{ item }}
@@ -85,7 +97,7 @@
   loop:
     - CJKFoldingFilter.jar
     - lucene-umich-solr-filters-6.0.0-SNAPSHOT.jar
-  notify: restart SolrCloud
+  notify: Restart solr
 
 - name: Solrcloud | Copy webapp directory plugin jar files
   ansible.builtin.copy:
@@ -94,7 +106,7 @@
     mode: "0644"
   loop:
     - jts-core-1.15.1.jar
-  notify: restart SolrCloud
+  notify: Restart solr
 
 - name: Solrcloud | Create solr home lib dir
   ansible.builtin.file:
@@ -116,5 +128,5 @@
     - asm-commons-7.3.1.jar
     - asm-tree-7.3.1.jar
     - asm-util-7.3.1.jar
-  notify: restart SolrCloud
+  notify: Restart solr
   tags: scriptplugins
