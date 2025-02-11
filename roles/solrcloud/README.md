@@ -4,18 +4,17 @@ This Ansible role installs and configures Apache Solr in SolrCloud mode with par
 
 ## Requirements
 
-* Ubuntu Jammy (22.04)
-* Ansible 2.9 or higher
-* Working ZooKeeper ensemble (see companion zookeeper role)
-* Minimum of Java 11 for Solr 8.4.0
-* Minimum of Java 17 for Solr 9.2.0 (installed automatically by the role)
+- Ubuntu Jammy (22.04)
+- Ansible 2.9 or higher
+- Working ZooKeeper ensemble (see companion zookeeper role)
+- Minimum of Java 11 for Solr 8.4.0
+- Minimum of Java 17 for Solr 9.2.0 (installed automatically by the role)
 
 ## Role Variables
 
 Available variables are listed below, along with default values (see `defaults/main.yml`):
 
-```
-yaml
+```yaml
 # Solr version - can be "8.4.0" or "9.2.0"
 solr_version: "8.4.0"
 
@@ -43,8 +42,7 @@ solr_nodes:
 
 ## Example Playbook
 
-```
-yaml
+```yaml
 ---
 - hosts: solr_nodes
   vars:
@@ -55,8 +53,7 @@ yaml
 
 ## Example Inventory
 
-```
-ini
+```ini
 [solr_nodes]
 lib-solr1.example.edu
 lib-solr2.example.edu
@@ -69,29 +66,28 @@ The role will:
 
 1. Install appropriate Java version based on Solr version
 
-   * OpenJDK 11 for Solr 8.4.0
-   * OpenJDK 17 for Solr 9.2.0
+   - OpenJDK 11 for Solr 8.4.0
+   - OpenJDK 17 for Solr 9.2.0
 
-2. Create necessary user and group
+1. Create necessary user and group
 
-3. Configure directories with proper permissions
+1. Configure directories with proper permissions
 
-4. Download and install specified Solr version
+1. Download and install specified Solr version
 
-5. Configure SolrCloud with ZooKeeper ensemble integration
+1. Configure SolrCloud with ZooKeeper ensemble integration
 
-6. Deploy version-specific solr.xml configuration
+1. Deploy version-specific solr.xml configuration
 
-7. Set up systemd service
+1. Set up systemd service
 
-8. Configure Solr to listen on all interfaces
+1. Configure Solr to listen on all interfaces
 
 ## Generated Configurations
 
 ### Directory Structure
 
 ```
-Copy
 /solr/
 ├── data/
 │   └── solr.xml  # Version-specific configuration
@@ -102,47 +98,47 @@ Copy
 
 ### Service Configuration
 
-* Systemd service file: `/etc/systemd/system/solr.service`
-* Service runs as: `deploy` user
-* Automatic startup: Enabled
-* Network: Listens on all interfaces (0.0.0.0)
+- Systemd service file: `/etc/systemd/system/solr.service`
+- Service runs as: `deploy` user
+- Automatic startup: Enabled
+- Network: Listens on all interfaces (0.0.0.0)
 
 ## Important Paths
 
-* Home directory: `/solr`
-* Data directory: `/solr/data`
-* Installation directory: `/opt/solr`
-* PID directory: `/var/run/solr`
-* Log directory: `/var/log/solr`
+- Home directory: `/solr`
+- Data directory: `/solr/data`
+- Installation directory: `/opt/solr`
+- PID directory: `/var/run/solr`
+- Log directory: `/var/log/solr`
 
 ## Dependencies
 
-* Requires a working ZooKeeper ensemble (see companion [zookeeper role](./roles/zookeeper))
-* Java dependencies are handled by the group_vars
+- Requires a working ZooKeeper ensemble (see companion [zookeeper role](./roles/zookeeper))
+- Java dependencies are handled by the group_vars
 
 ## Version-Specific Features
 
 ### Solr 8.4.0
 
-* Uses OpenJDK 11
-* Basic solr.xml configuration
+- Uses OpenJDK 11
+- Basic solr.xml configuration
 
 ### Solr 9.2.0
 
-* Uses OpenJDK 17
+- Uses OpenJDK 17
 
-* Enhanced solr.xml configuration with additional features:
+- Enhanced solr.xml configuration with additional features:
 
-  * shareSchema
-  * configSetBaseDir
-  * coreRootDirectory
-  * allowPaths
+  - shareSchema
+  - configSetBaseDir
+  - coreRootDirectory
+  - allowPaths
 
 ## Networking
 
-* SolrCloud is configured to listen on all interfaces (0.0.0.0)
-* Default port: 8983
-* Requires connectivity to ZooKeeper ensemble on port 2181
+- SolrCloud is configured to listen on all interfaces (0.0.0.0)
+- Default port: 8983
+- Requires connectivity to ZooKeeper ensemble on port 2181
 
 ## License
 

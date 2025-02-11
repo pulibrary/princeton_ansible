@@ -1,18 +1,14 @@
-Zookeeper
-=========
+# Zookeeper
 
 This Ansible role installs and configures Apache ZooKeeper in an ensemble/cluster configuration on Ubuntu Jammy (22.04).
 
-
-Requirements
-------------
+## Requirements
 
 Ubuntu Jammy (22.04)
 Ansible 2.9 or higher
 Three hosts for ZooKeeper ensemble
 
-Role Variables
---------------
+## Role Variables
 
 Available variables are listed below, along with default values (see [defaults/main.yml](defaults/main.yml)):
 
@@ -40,15 +36,15 @@ zk_nodes:
     host: "lib-zk3.example.edu"
 ```
 
+______________________________________________________________________
 
-------------
+## Example Playbook
 
-Example Playbook
-----------------
-
-    - hosts: servers
-      roles:
-         - { role: zookeeper }
+```
+- hosts: servers
+  roles:
+     - { role: zookeeper }
+```
 
 ### Example Inventory
 
@@ -60,17 +56,17 @@ Example Playbook
 
 The role will:
 
-  1. Install Zookeeper from Ubuntu's package repository
-  2. Configure the Zookeeper ensemble with the specified nodes
-  3. Set up proper node IDs in `/var/lib/zookeeper/myid`
-  4. Configure Zookeeper with the provided ports for client connections, leader election, and quorum communication
+1. Install Zookeeper from Ubuntu's package repository
+1. Configure the Zookeeper ensemble with the specified nodes
+1. Set up proper node IDs in `/var/lib/zookeeper/myid`
+1. Configure Zookeeper with the provided ports for client connections, leader election, and quorum communication
 
 ### Generated Configuration
 
 The role will generate configuration at `/etc/zookeeper/conf/zoo.cfg` with the following structure
 
-  ```yaml
-  tickTime=2000
+```yaml
+tickTime=2000
 initLimit=10
 syncLimit=5
 dataDir=/var/lib/zookeeper
@@ -87,10 +83,9 @@ maxSessionTimeout=60000
 
 ### File locations
 
-
 Important files and directories:
 
-  * Configuration file: `/etc/zookeeper/conf/zoo.cfg`
-  * Node ID file `/var/lib/zookeeper/myid`
-  * Data Directory `/var/lib/zookeeper`
-  * Log Directory `/var/log/zookeeper`
+- Configuration file: `/etc/zookeeper/conf/zoo.cfg`
+- Node ID file `/var/lib/zookeeper/myid`
+- Data Directory `/var/lib/zookeeper`
+- Log Directory `/var/log/zookeeper`
