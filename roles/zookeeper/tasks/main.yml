@@ -36,8 +36,25 @@
     mode: "0644"
   notify: Restart zookeeper
 
+- name: Zookeeper | Override ZOOMAIN in /etc/default/zookeeper
+  ansible.builtin.lineinfile:
+    path: /etc/default/zookeeper
+    regexp: '^(\s*)ZOOMAIN(\s*=)(.*)$'
+    line: 'ZOOMAIN="org.apache.zookeeper.server.quorum.QuorumPeerMain"'
+    backrefs: true
+    create: true
+    mode: "0644"
+  notify: Restart zookeeper
+
 - name: Zookeeper | Start and enable ZooKeeper service
   ansible.builtin.systemd:
     name: zookeeper
     state: started
     enabled: true
+
+- name: Zookeeper | Ensure zookeeper is running
+  ansible.builtin.wait_for:
+    port: "{{ zk_client_port }}"
+    host: "{{ inventory_hostname }}"
+    timeout: 30
+    delay: 5
