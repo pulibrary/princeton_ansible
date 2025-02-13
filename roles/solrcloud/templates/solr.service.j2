@@ -1,0 +1,25 @@
+{{ ansible_managed | comment }}
+
+[Unit]
+Description=Apache Solr
+After=network.target
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=forking
+User={{ solr_user }}
+Group={{ solr_group }}
+Environment=SOLR_INCLUDE=/opt/solr/bin/solr.in.sh
+ExecStart=/opt/solr/bin/solr start
+ExecStop=/opt/solr/bin/solr stop
+PIDFile=/var/run/solr/solr-{{ solr_port }}.pid
+Restart=on-failure
+RestartSec=3s
+TimeoutSec=180s
+PrivateTmp=true
+LimitNOFILE=65000
+LimitNPROC=65000
+
+[Install]
+WantedBy=multi-user.target
