@@ -2,7 +2,7 @@
 
 - name: Solrcloud | Check for solr znode
   ansible.builtin.command: >
-    {{ solr_installation }}/bin/solr zk ls /
+    {{ solr_install_dir }}/{{ solr_base }}/bin/solr zk ls /
     -z {{ zookeeper_hosts | join(',') }}
   register: znode_check
   ignore_errors: true
@@ -10,7 +10,7 @@
 
 - name: Solrcloud | Create zk chroot / solr znode using bin/solr
   ansible.builtin.command: >
-    {{ solr_installation }}/bin/solr zk mkroot {{ solr_znode }}
+    {{ solr_install_dir }}/{{ solr_base }}/bin/solr zk mkroot {{ solr_znode }}
     -z {{ zookeeper_hosts | join(',') }}
   when: solr_znode not in znode_check.stdout_lines and solr_znode != ''
   changed_when: false
@@ -24,7 +24,6 @@
     mode: "0644"
     force: true
   changed_when: false
-  notify: Restart solr
 
 - name: Solrcloud | Configure high ulimit value for Solr
   ansible.builtin.template:
@@ -32,17 +31,15 @@
     dest: '/etc/security/limits.d/solr.conf'
     mode: "0644"
     force: true
-  notify: Restart solr
 
 - name: Solrcloud | Configure SolrCloud properties
   ansible.builtin.template:
     src: solr.xml.j2
-    dest: '{{ solr_data_dir }}/solr.xml'
+    dest: '{{ solr_data_home }}/solr.xml'
     owner: '{{ solr_user }}'
     group: '{{ solr_group }}'
     mode: "0644"
     force: true
-  notify: Restart solr
 
 - name: Solrcloud | Configure pre 7.4 logging
   ansible.builtin.template:
@@ -52,7 +49,6 @@
     group: '{{ solr_group }}'
     mode: "0644"
     force: true
-  notify: Restart solr
 
 - name: Solrcloud | Configure logging
   ansible.builtin.template:
@@ -62,7 +58,6 @@
     group: '{{ solr_group }}'
     mode: "0644"
     force: true
-  notify: Restart solr
 
 # - name: solrcloud | Copy orangelight plugin jar files
   # ansible.builtin.copy:
@@ -97,7 +92,6 @@
   loop:
     - CJKFoldingFilter.jar
     - lucene-umich-solr-filters-6.0.0-SNAPSHOT.jar
-  notify: Restart solr
 
 - name: Solrcloud | Copy webapp directory plugin jar files
   ansible.builtin.copy:
@@ -106,11 +100,10 @@
     mode: "0644"
   loop:
     - jts-core-1.15.1.jar
-  notify: Restart solr
 
 - name: Solrcloud | Create solr home lib dir
   ansible.builtin.file:
-    path: "{{ solr_data_dir }}/lib"
+    path: "{{ solr_data_home }}/lib"
     owner: '{{ solr_user }}'
     group: '{{ solr_group }}'
     state: directory
@@ -120,7 +113,7 @@
 - name: Solrcloud | Copy scripting engine jar files
   ansible.builtin.copy:
     src: files/{{ item }}
-    dest: "{{ solr_data_dir }}/lib/{{ item }}"
+    dest: "{{ solr_data_home }}/lib/{{ item }}"
     mode: "0644"
   loop:
     - nashorn-core-15.4.jar

@@ -24,7 +24,7 @@ solr_group: "deploy"
 
 # Directory configurations
 solr_home: "/solr"
-solr_data_dir: "/solr/data"
+solr_data_home: "/solr/data"
 solr_port: 8983
 
 # ZooKeeper configuration

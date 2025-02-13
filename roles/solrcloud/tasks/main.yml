@@ -25,7 +25,7 @@
   loop:
     - solr.smb.credentials
 
-#- name: Solrcloud | Create mount to diglibdata shares
+# - name: Solrcloud | Create mount to diglibdata shares
 #  ansible.posix.mount:
 #    path: "/mnt/{{ item.path }}"
 #    src: "//diglibdata1.princeton.edu/{{ item.src }}"
@@ -47,8 +47,7 @@
     group: "{{ solr_group }}"
     mode: "0755"
   with_items:
-    - "{{ solr_home }}"
-    - "{{ solr_data_dir }}"
+    - "{{ solr_data_home }}"
     - "/var/run/solr"
 
 - name: Solrcloud | solr cloud install node
@@ -62,14 +61,10 @@
     dest: /etc/systemd/system/solr.service
     mode: "0644"
 
-- name: Solrcloud | Configure Solr
-  ansible.builtin.template:
-    src: solr.in.sh.j2
-    dest: "/opt/solr/bin/solr.in.sh"
-    owner: "{{ solr_user }}"
-    group: "{{ solr_group }}"
-    mode: "0644"
-  notify: Restart solr
+- name: Solrcloud | configure solr cloud
+  ansible.builtin.include_tasks: config.yml
+  tags:
+    - configure
 
 - name: Solrcloud | Start and enable Solr service
   ansible.builtin.systemd:
@@ -77,8 +72,3 @@
     state: started
     enabled: true
     daemon_reload: true
-
-- name: Solrcloud | configure solr cloud
-  ansible.builtin.include_tasks: config.yml
-  tags:
-    - configure
