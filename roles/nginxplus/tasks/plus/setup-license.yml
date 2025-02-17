@@ -14,6 +14,20 @@
   loop:
     - "{{ nginx_license.certificate }}"
     - "{{ nginx_license.key }}"
+  when:
+    - "'prod' in inventory_hostname"
+
+- name: "Copy NGINX Plus DoS Certificate and License Key"
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: /etc/ssl/nginx
+    decrypt: true
+    mode: "0644"
+  loop:
+    - "{{ nginx_dos_license.certificate }}"
+    - "{{ nginx_dos_license.key }}"
+  when:
+    - "'dev' in inventory_hostname"
 
 - name: Create Nginx Directory
   ansible.builtin.file:
@@ -21,9 +35,20 @@
     state: directory
     mode: "0755"
 
+- name: Copy NGINX Plus DoS jwt
+  ansible.builtin.copy:
+    src: "license/nginx-repo_dos.jwt"
+    dest: /etc/nginx/license.jwt
+    decrypt: true
+    mode: "0644"
+  when:
+    - "'dev' in inventory_hostname"
+
 - name: "Copy NGINX Plus jwt"
   ansible.builtin.copy:
     src: "license/nginx-repo.jwt"
     dest: /etc/nginx/license.jwt
     decrypt: true
     mode: "0644"
+  when:
+    - "'prod' in inventory_hostname"
