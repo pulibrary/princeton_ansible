@@ -1,0 +1,36 @@
+---
+- name: try updating postgresql db table ownership
+  hosts: postgresql_{{ runtime_env | default('staging') }}
+  remote_user: pulsys
+  become: true
+  vars:
+    - project_name: pulmap
+
+  vars_files:
+    - ../group_vars/{{ project_name }}/{{ app_runtime_env | default(runtime_env) | default('staging') }}.yml
+    # - ../group_vars/{{ project_name }}/main.yml  # some roles have this
+    - ../group_vars/{{ project_name }}/vault.yml
+  tasks:
+    - name: PostgreSQL | change postgresql database owner
+      community.postgresql.postgresql_owner:
+        db: "{{ application_db_name }}"
+        port: "{{ postgres_port }}"
+        login_host: "{{ postgres_host }}"
+        login_user: "{{ postgres_admin_user }}"
+        login_password: "{{ postgres_admin_password }}"
+        new_owner: "{{ application_dbuser_name }}"
+        obj_type: "{{ item }}"
+      with_items:
+        - database
+        - table
+        - tablespace
+        - view
+      when:
+        - running_on_server
+        - not postgresql_is_local
+      changed_when: false
+      run_once: true
+
+
+
+
