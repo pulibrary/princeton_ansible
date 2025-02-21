@@ -17,9 +17,9 @@
         # 'scope=all' pulls issues created by all users
       register: api_output
 
-    - name: view results
-      ansible.builtin.debug:
-        var: api_output
+    # - name: view results
+    #   ansible.builtin.debug:
+    #     var: api_output
 
 <<<<<<< HEAD
 #    - name: select our data
@@ -31,6 +31,7 @@
     - name: write CSV headers
       ansible.builtin.lineinfile:
         create: true
+        # TODO: change path
         dest: /Users/alicia/gitlabissues.csv
         line: Title,Issue ID,State,Assignee,Created At (UTC),Labels,URL
         insertbefore: BOF
@@ -38,6 +39,7 @@
 
     - name: write selected output to CSV
       ansible.builtin.lineinfile:
+        # TODO: change path
         dest: /Users/alicia/gitlabissues.csv
         line: "{{ item.title }},{{ item.iid }},{{ item.state }},{{ item.assignee.name | default(omit) }},{{ item.created_at }},{{ item.labels | default(omit) }},{{ item.web_url }}"
         insertafter: EOF
@@ -45,4 +47,22 @@
       loop: "{{ api_output | community.general.json_query('json[*]') }}"
       # we assume every issue will have a title, an issue ID, a state, a created_at timestamp, and a URL
       # we allow null values for assignee and labels
+<<<<<<< HEAD
 >>>>>>> 19a5db503 (pulls protected content, writes to CSV)
+=======
+
+# for sending the resulting file, we might be able to use an email notification in Tower
+# if that doesn't work, something like this should:
+    # - name: Send e-mail with CSV attached
+    #   community.general.mail:
+    #     host: "{{ vault_proofpoint_host }}"
+    #     port: 587
+    #     subject: GitLab Issue report
+    #     body: Here is the list of issues from the ops-team-handbook repo
+    #     from: ????@princeton.edu
+    #     to: ????@airtable.com
+    #     cc: ops@princeton.edu # do we have something like this?
+    #     attach:
+    #       # TODO: change path
+    #       - /Users/alicia/gitlabissues.csv
+>>>>>>> 480d8322c (adds rough draft of email task)
