@@ -8,5 +8,16 @@
         AllowOverride All
         Options -Indexes +FollowSymLinks 
         Require all granted
+        {% if item.site_name == 'pcdm-staging.lib' %}
+        RewriteEngine On
+        # Rewrite requests without extension to .xml
+        RewriteCond %{REQUEST_FILENAME} !-f
+        RewriteCond %{REQUEST_FILENAME} !-d
+        RewriteRule ^([^/]+)$ $1.xml [L]
+        
+        # Add MIME types for RDF and XML
+        AddType application/rdf+xml .rdf
+        AddType application/xml .xml
+        {% endif %}
     </Directory>
 </VirtualHost>
