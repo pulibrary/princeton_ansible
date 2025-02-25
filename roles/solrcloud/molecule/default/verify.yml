@@ -3,12 +3,18 @@
   hosts: all
   gather_facts: false
   tasks:
-  - name: find solr logs and data
-    stat:
-      path: "{{ item }}"
-    loop:
-      - /solr/logs
-      - /solr/data
-    register: solr_path
-    failed_when:
-        - solr_path.stat.isdir is not defined
+    - name: Check ruby package status
+      ansible.builtin.package:
+        name: "{{ item }}"
+        state: present
+      check_mode: true
+      register: pkg_status
+      loop:
+        - ruby-switch
+        - ruby2.6-dev
+        - ruby2.6
+
+    - name: Test for ruby packages
+      ansible.builtin.assert:
+        that:
+          - not pkg_status.changed
