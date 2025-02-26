@@ -37,6 +37,26 @@
   when: running_on_server
   become_user: '{{ deploy_user }}'
 
+# GitLab
+- name: lib_jobs | Install gitlab private key
+  ansible.builtin.copy:
+    content: "{{ lookup('file', '../files/id_ed25519') }}\n"
+    dest: "/home/deploy/.ssh/id_ed25519"
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+    mode: 0600
+  when: running_on_server
+
+- name: lib_jobs | Add ssh configuration for GitLab
+  ansible.builtin.blockinfile:
+    path: "/home/deploy/.ssh/config"
+    block: |
+      Host gitlab*
+        IdentityFile ~/.ssh/id_ed25519
+        User git
+        IdentitiesOnly yes
+        AddKeysToAgent yes
+
 # PeopleSoft Mount
 - name: lib_jobs | Copy peoplesoft smb credentials
   ansible.builtin.copy:
