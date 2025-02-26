@@ -53,7 +53,7 @@ defaultEntryPoints = ["http"]
    [entryPoints.http]
      address = ":{{ env "NOMAD_PORT_http" }}"
    [entryPoints.http.forwardedHeaders]
-     insecure = true
+     trustedIPs = ["128.112.200.245/32", "128.112.201.34/32"]
    [entryPoints.traefik]
      address = ":9091"
 
@@ -88,9 +88,10 @@ EOF
   secretKey =  "{{ .TURNSTILE_SECRET_KEY }}"
   goodBots = "apple.com,archive.org,duckduckgo.com,facebook.com,google.com,googlebot.com,googleusercontent.com,instagram.com,kagibot.org,linkedin.com,msn.com,openalex.org,twitter.com,x.com"
   persistentStateFile = "/tmp/state.json"
-  ipForwardedHeader = "X-Real-IP"
+  ipForwardedHeader = "X-Forwarded-For"
   rateLimit = 2
   protectParameters = "true"
+  exemptIps = ["128.112.200.245/32", "128.112.201.34/32"]
 [http.services]
   [http.services.lae-staging]
     [http.services.lae-staging.loadBalancer]
