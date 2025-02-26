@@ -66,7 +66,7 @@ defaultEntryPoints = ["http"]
     filename = "/etc/traefik/dynamic.toml"
 [experimental.plugins.captcha-protect]
 modulename = "github.com/libops/captcha-protect"
-version = "v1.3.2"
+version = "v1.4.0"
 EOF
 
         destination = "local/traefik.toml"
