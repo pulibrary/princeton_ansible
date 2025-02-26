@@ -9,7 +9,9 @@ brew install asdf lastpass-cli
 
 if [ -n "$ZSH_VERSION" ]; then
     if ! grep -q "asdf\.sh" ${ZDOTDIR:-~}/.zshrc; then
-        echo -e "\n. $(brew --prefix asdf)/libexec/asdf.sh" >> ${ZDOTDIR:-~}/.zshrc
+	
+	echo -e '#configure asdf' >> ${ZDOTDIR:-~}/.zshrc
+	echo -e 'export PATH="${ASDF_DATA_DIR:-$HOME/.asdf}/shims:$PATH"' >> ${ZDOTDIR:-~}/.zshrc
         . ${ZDOTDIR:-~}/.zshrc
     fi
 else
