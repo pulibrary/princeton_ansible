@@ -1,6 +1,8 @@
 ---
 - name: get issues from GitLab
   hosts: localhost
+  vars_files:
+    - ../../group_vars/gitlab/vault.yml
   tasks:
 <<<<<<< HEAD
       - name: call issue API
@@ -31,17 +33,15 @@
     - name: write CSV headers
       ansible.builtin.lineinfile:
         create: true
-        # TODO: change path
-        dest: /Users/alicia/gitlabissues.csv
-        line: Title,Issue ID,State,Assignee,Created At (UTC),Labels,URL
+        dest: /opt/gitlab_issues/gitlabissues.csv
+        line: Source,Title,Issue ID,State,Assignee,Created At (UTC),Labels,URL
         insertbefore: BOF
         state: present
 
     - name: write selected output to CSV
       ansible.builtin.lineinfile:
-        # TODO: change path
-        dest: /Users/alicia/gitlabissues.csv
-        line: "{{ item.title }},{{ item.iid }},{{ item.state }},{{ item.assignee.name | default(omit) }},{{ item.created_at }},{{ item.labels | default(omit) }},{{ item.web_url }}"
+        dest: /opt/gitlab_issues/gitlabissues.csv
+        line: GitLab,"{{ item.title }}",{{ item.iid }},{{ item.state }},{{ item.assignee.name | default('') }},{{ item.created_at }},{{ item.labels | default('') }},{{ item.web_url }}
         insertafter: EOF
         state: present
       loop: "{{ api_output | community.general.json_query('json[*]') }}"
@@ -53,6 +53,7 @@
 
 # for sending the resulting file, we might be able to use an email notification in Tower
 # if that doesn't work, something like this should:
+<<<<<<< HEAD
     # - name: Send e-mail with CSV attached
     #   community.general.mail:
     #     host: "{{ vault_proofpoint_host }}"
@@ -66,3 +67,20 @@
     #       # TODO: change path
     #       - /Users/alicia/gitlabissues.csv
 >>>>>>> 480d8322c (adds rough draft of email task)
+=======
+    - name: Send e-mail with CSV attached
+      community.general.mail:
+      # TODO: fill in TLS and other
+        host: lib-ponyexpr-prod.princeton.edu
+        port: 25
+        # username: "{{  }}"
+        # password: "{{  }}"
+        subject: GitLab Issue report
+        body: Issues from the ops-team-handbook repo
+        from: ac2754@princeton.edu
+        to: acozine@airtable.com
+        # cc: ops@princeton.edu # do we have something like this?
+        attach:
+          # TODO: change path
+          - /opt/gitlab_issues/gitlabissues.csv
+>>>>>>> 5d4982618 (refines playbook, handles commas in title data, adds email task, allows email from Tower exec nodes)
