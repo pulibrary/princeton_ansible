@@ -1,0 +1,25 @@
+{{- with nomadVar "nomad/jobs/traefik-wall-production" -}}
+http:
+  middlewares:
+    captcha-protect:
+      plugin:
+        captcha-protect:
+          # We're only protecting Blacklight apps for now.
+          protectRoutes: /catalog
+          captchaProvider: turnstile
+          siteKey: "{{ .TURNSTILE_SITE_KEY }}"
+          secretKey: "{{ .TURNSTILE_SECRET_KEY }}"
+          goodBots: apple.com,archive.org,duckduckgo.com,facebook.com,google.com,googlebot.com,googleusercontent.com,instagram.com,kagibot.org,linkedin.com,msn.com,openalex.org,twitter.com,x.com
+          persistentStateFile: /tmp/state.json
+          ipForwardedHeader: X-Forwarded-For
+          rateLimit: {{ env "rate_limit" }}
+          ipv4subnetMask: {{ env "subnet_mask" }}
+          protectParameters: "true"
+          # These are our load balancer IPs
+          exemptIps:
+            - 128.112.200.245/32
+            - 128.112.201.34/32
+          challengeTmpl: /challenge.tmpl.html
+          # Exclude facet routes - they're an ajax request.
+          excludeRoutes: "/catalog/facet,/catalog/range_limit"
+{{- end -}}

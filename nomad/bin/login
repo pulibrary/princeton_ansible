@@ -1,0 +1,16 @@
+#!/bin/bash
+
+# Make sure we're on VPN
+if ! nslookup nomad-host-prod1.lib.princeton.edu 2>&1 > /dev/null
+then
+  echo "Unable to connect to nomad-host-prod1. Ensure you're on VPN."
+  exit 1
+fi
+
+result=$(ssh deploy@nomad-host-prod1.lib.princeton.edu << EOF
+  nomad ui -authenticate -show-url
+EOF)
+
+result=$(echo $result | tail -1 | sed 's/.*web UI: .*?\(.*\)/\1/')
+echo "Opening Nomad UI..."
+open "https://nomad.lib.princeton.edu?${result}"

@@ -1,0 +1,30 @@
+#!/bin/bash
+APP=$1
+ENV=$2
+BRANCH_NAME="${BRANCH:-main}"
+REPOSITORY="${REPO:-princeton_ansible}"
+
+# Make sure we're on VPN
+if ! nslookup nomad-host-prod1.lib.princeton.edu 2>&1 > /dev/null
+then
+  echo "Unable to connect to nomad-host-prod1. Ensure you're on VPN."
+  exit 1
+fi
+
+if [[ -z "${APP}" ]];
+then
+  echo "Missing Application. Command: 'BRANCH=main ./bin/deploy <app> <env>'."
+  exit
+fi
+
+if [[ -z "${APP}" ]];
+then
+  echo "Missing Environment. Command: 'BRANCH=main ./bin/deploy <app> <env>'."
+  exit
+fi
+
+# Deploy using nomad-host-prod1, which has the nomad management key.
+SHA=$(git ls-remote https://github.com/pulibrary/${REPOSITORY}.git ${BRANCH_NAME} | awk '{ print substr($1,1,40) }')
+ssh deploy@nomad-host-prod1.lib.princeton.edu << EOF
+  curl -s "https://raw.githubusercontent.com/pulibrary/${REPOSITORY}/${SHA}/nomad/${APP}/deploy/${ENV}.hcl" | nomad job run -var "branch_or_sha=${SHA}" -
+EOF
