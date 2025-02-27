@@ -162,6 +162,11 @@ EOF
     rule = "Header(`X-Forwarded-Host`, `lae-staging.princeton.edu`)"
     entrypoints = ["http"]
     middlewares = ["captcha-protect"]
+  [http.routers.lae-production]
+    service = "lae-production"
+    rule = "Header(`X-Forwarded-Host`, `lae.princeton.edu`)"
+    entrypoints = ["http"]
+    middlewares = ["captcha-protect"]
 [http.middlewares.captcha-protect.plugin.captcha-protect]
   protectRoutes =  "/catalog"
   captchaProvider =  "turnstile"
@@ -179,6 +184,12 @@ EOF
     [http.services.lae-staging.loadBalancer]
       [[http.services.lae-staging.loadBalancer.servers]]
         url = "http://lae-staging2.princeton.edu:80"
+  [http.services.lae-production]
+    [http.services.lae-production.loadBalancer]
+      [[http.services.lae-production.loadBalancer.servers]]
+        url = "http://lae-prod1.princeton.edu:80"
+      [[http.services.lae-production.loadBalancer.servers]]
+        url = "http://lae-prod2.princeton.edu:80"
 {{- end -}}
 EOF
 
