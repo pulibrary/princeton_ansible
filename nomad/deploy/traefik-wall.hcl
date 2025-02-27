@@ -49,7 +49,7 @@ job "traefik-wall" {
       }
 
       artifact {
-        source = "https://raw.githubusercontent.com/pulibrary/princeton_ansible/${ var.branch_or_sha }/nomad/deploy/traefik-wall/static.toml.tpl"
+        source = "https://raw.githubusercontent.com/pulibrary/princeton_ansible/traefik_bot_wall/nomad/deploy/traefik-wall/static.toml.tpl"
         destination = "local/static.toml.tpl"
       }
 
