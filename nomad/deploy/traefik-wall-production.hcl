@@ -52,9 +52,6 @@ job "traefik-wall-production" {
         data = <<EOF
 defaultEntryPoints = ["http"]
 
-[log]
-  level = "DEBUG"
-
 [entryPoints]
    [entryPoints.http]
      address = ":{{ env "NOMAD_PORT_http" }}"
