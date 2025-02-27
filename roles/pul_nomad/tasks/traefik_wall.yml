@@ -1,7 +1,13 @@
 ---
-- name: 'pul_nomad_traefik_wall | set traefik wall variables'
+- name: 'pul_nomad_traefik_wall | set traefik wall staging variables'
   ansible.builtin.shell:
-    cmd: '/usr/local/bin/nomad var put -force nomad/jobs/traefik-wall {{ traefik_wall_nomad_env_vars.keys() | zip(traefik_wall_nomad_env_vars.values()) | map("join", "=") | join(" ") }}'
+    cmd: '/usr/local/bin/nomad var put -force nomad/jobs/traefik-wall-staging {{ traefik_wall_staging_nomad_env_vars.keys() | zip(traefik_wall_staging_nomad_env_vars.values()) | map("join", "=") | join(" ") }}'
+  environment:
+    NOMAD_TOKEN: '{{ pul_nomad_management_token }}'
+  run_once: true
+- name: 'pul_nomad_traefik_wall | set traefik wall production variables'
+  ansible.builtin.shell:
+    cmd: '/usr/local/bin/nomad var put -force nomad/jobs/traefik-wall-production {{ traefik_wall_production_nomad_env_vars.keys() | zip(traefik_wall_production_nomad_env_vars.values()) | map("join", "=") | join(" ") }}'
   environment:
     NOMAD_TOKEN: '{{ pul_nomad_management_token }}'
   run_once: true

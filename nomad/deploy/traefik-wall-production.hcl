@@ -160,7 +160,7 @@ EOF
 
       template {
         data = <<EOF
-{{- with nomadVar "nomad/jobs/traefik-wall" -}}
+{{- with nomadVar "nomad/jobs/traefik-wall-production" -}}
 [http.routers]
   [http.routers.lae-production]
     service = "lae-production"
