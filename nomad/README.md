@@ -11,7 +11,9 @@ Secrets for Nomad projects are handled by provisioning the nomad cluster via `an
 Starting in `princeton_ansible`
 
 1. `cd nomad`
-1. `BRANCH=<branchname> ./bin/deploy traefik-wall-staging`
+1. `BRANCH=<branchname> ./bin/deploy <app>`
+
+`<app>` above should be the same name as one of the `.hcl` files in `nomad/deploy/`
 
 ## Logging into Nomad
 
