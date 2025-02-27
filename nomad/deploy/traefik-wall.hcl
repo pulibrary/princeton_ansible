@@ -1,3 +1,8 @@
+variable "branch_or_sha" {
+  type = string
+  default = "main"
+}
+
 job "traefik-wall" {
   region      = "global"
   datacenters = ["dc1"]
