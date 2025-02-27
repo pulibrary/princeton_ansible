@@ -89,7 +89,7 @@ EOF
   goodBots = "apple.com,archive.org,duckduckgo.com,facebook.com,google.com,googlebot.com,googleusercontent.com,instagram.com,kagibot.org,linkedin.com,msn.com,openalex.org,twitter.com,x.com"
   persistentStateFile = "/tmp/state.json"
   ipForwardedHeader = "X-Forwarded-For"
-  rateLimit = 2
+  rateLimit = 20
   protectParameters = "true"
   exemptIps = ["128.112.200.245/32", "128.112.201.34/32"]
 [http.services]
