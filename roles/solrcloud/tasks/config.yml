@@ -1,29 +1,29 @@
 ---
+
 - name: Solrcloud | Check for solr znode
   ansible.builtin.command: >
-    {{ solr_installation }}/bin/solr zk ls /
-    -z {{ solr_zookeeper_hosts_string }}
+    {{ solr_install_dir }}/{{ solr_base }}/bin/solr zk ls /
+    -z {{ zookeeper_hosts | join(',') }}
   register: znode_check
   ignore_errors: true
   changed_when: false
 
 - name: Solrcloud | Create zk chroot / solr znode using bin/solr
   ansible.builtin.command: >
-    {{ solr_installation }}/bin/solr zk mkroot {{ solr_znode }}
-    -z {{ solr_zookeeper_hosts_string }}
+    {{ solr_install_dir }}/{{ solr_base }}/bin/solr zk mkroot {{ solr_znode }}
+    -z {{ zookeeper_hosts | join(',') }}
   when: solr_znode not in znode_check.stdout_lines and solr_znode != ''
   changed_when: false
 
 - name: Solrcloud | Configure SolrCloud init script
   ansible.builtin.template:
     src: 'solr.in.sh.j2'
-    dest: '/etc/default/solr.in.sh'
+    dest: '/opt/solr/bin/solr.in.sh'
     owner: '{{ solr_user }}'
     group: '{{ solr_group }}'
     mode: "0644"
     force: true
   changed_when: false
-  notify: restart SolrCloud
 
 - name: Solrcloud | Configure high ulimit value for Solr
   ansible.builtin.template:
@@ -31,33 +31,17 @@
     dest: '/etc/security/limits.d/solr.conf'
     mode: "0644"
     force: true
-  notify: restart SolrCloud
 
 - name: Solrcloud | Configure SolrCloud properties
   ansible.builtin.template:
-    src: 'solr.xml.j2'
-    dest: '{{ solr_data_dir }}/solr.xml'
+    src: solr.xml.j2
+    dest: '{{ solr_data_home }}/solr.xml'
     owner: '{{ solr_user }}'
     group: '{{ solr_group }}'
     mode: "0644"
     force: true
-  notify: restart SolrCloud
-  when:
-    - '"8" in solr_cloud_download_version'
 
-- name: Solrcloud | Configure SolrCloud 9 properties
-  ansible.builtin.template:
-    src: 'solr9.xml.j2'
-    dest: '{{ solr_data_dir }}/solr.xml'
-    owner: '{{ solr_user }}'
-    group: '{{ solr_group }}'
-    mode: "0644"
-    force: true
-  notify: restart SolrCloud
-  when:
-    - '"9" in solr_cloud_download_version'
-
-- name: solrcloud | Configure pre 7.4 logging
+- name: Solrcloud | Configure pre 7.4 logging
   ansible.builtin.template:
     src: 'log4j.properties.j2'
     dest: '/solr/log4j.properties'
@@ -65,7 +49,6 @@
     group: '{{ solr_group }}'
     mode: "0644"
     force: true
-  notify: restart SolrCloud
 
 - name: Solrcloud | Configure logging
   ansible.builtin.template:
@@ -75,7 +58,6 @@
     group: '{{ solr_group }}'
     mode: "0644"
     force: true
-  notify: restart SolrCloud
 
 # - name: solrcloud | Copy orangelight plugin jar files
   # ansible.builtin.copy:
@@ -89,6 +71,17 @@
     # - lucene-umich-solr-filters-6.0.0-SNAPSHOT.jar
   # notify: restart SolrCloud
 
+- name: Solrcloud | Create jar directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ solr_user }}"
+    group: "{{ solr_group }}"
+    mode: "0755"
+  with_items:
+    - "{{ jardirectory }}"
+    - "{{ webapp_jardirectory }}"
+
 - name: Solrcloud | Copy orangelight plugin jar files
   ansible.builtin.copy:
     src: files/{{ item }}
@@ -99,7 +92,6 @@
   loop:
     - CJKFoldingFilter.jar
     - lucene-umich-solr-filters-6.0.0-SNAPSHOT.jar
-  notify: restart SolrCloud
 
 - name: Solrcloud | Copy webapp directory plugin jar files
   ansible.builtin.copy:
@@ -108,11 +100,10 @@
     mode: "0644"
   loop:
     - jts-core-1.15.1.jar
-  notify: restart SolrCloud
 
 - name: Solrcloud | Create solr home lib dir
   ansible.builtin.file:
-    path: "{{ solr_data_dir }}/lib"
+    path: "{{ solr_data_home }}/lib"
     owner: '{{ solr_user }}'
     group: '{{ solr_group }}'
     state: directory
@@ -122,7 +113,7 @@
 - name: Solrcloud | Copy scripting engine jar files
   ansible.builtin.copy:
     src: files/{{ item }}
-    dest: "{{ solr_data_dir }}/lib/{{ item }}"
+    dest: "{{ solr_data_home }}/lib/{{ item }}"
     mode: "0644"
   loop:
     - nashorn-core-15.4.jar
@@ -130,5 +121,5 @@
     - asm-commons-7.3.1.jar
     - asm-tree-7.3.1.jar
     - asm-util-7.3.1.jar
-  notify: restart SolrCloud
+  notify: Restart solr
   tags: scriptplugins
