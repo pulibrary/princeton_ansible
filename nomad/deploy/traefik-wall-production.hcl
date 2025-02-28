@@ -69,7 +69,7 @@ defaultEntryPoints = ["http"]
     filename = "/etc/traefik/dynamic.toml"
 [experimental.plugins.captcha-protect]
 modulename = "github.com/libops/captcha-protect"
-version = "v1.4.0"
+version = "v1.5.0"
 EOF
 
         destination = "local/traefik.toml"
@@ -176,6 +176,7 @@ EOF
   protectParameters = "true"
   exemptIps = ["128.112.200.245/32", "128.112.201.34/32"]
   challengeTmpl = "/challenge.tmpl.html"
+  excludeRoutes = "/catalog/facet"
 [http.services]
   [http.services.lae-production]
     [http.services.lae-production.loadBalancer]
