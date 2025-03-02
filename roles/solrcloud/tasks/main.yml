@@ -1,30 +1,31 @@
 ---
-- name: solrcloud | Install dependencies
+# tasks file for roles/solrcloud
+- name: Solrcloud | Install dependencies
   ansible.builtin.apt:
     name: ["cifs-utils"]
     state: present
-
-- name: solrcloud | create directories for mounts
+    
+- name: Solrcloud | create directories for mounts
   ansible.builtin.file:
     path: "/mnt/{{ item }}"
     state: "directory"
-    mode: 0755
+    mode: "0755"
     group: deploy
     owner: deploy
   loop:
     - solr_backup
 
-- name: solrcloud | Copy smb credentials
+- name: Solrcloud | Copy smb credentials
   ansible.builtin.copy:
     src: "files/{{ item }}"
     dest: "/etc/{{ item }}"
-    mode: 0644
+    mode: "0644"
   when:
     - running_on_server
   loop:
     - solr.smb.credentials
 
-- name: solrcloud | Create mount to diglibdata shares
+- name: Solrcloud | Create mount to diglibdata shares
   ansible.posix.mount:
     path: "/mnt/{{ item.path }}"
     src: "//diglibdata1.princeton.edu/{{ item.src }}"
@@ -34,45 +35,40 @@
   when:
     - running_on_server
   loop:
-    - { path: "solr_backup", src: "solrbackup", opts: "solr" }
+    - {path: "solr_backup", src: "solrbackup", opts: "solr"}
   tags:
     - fix_backups
 
-- name: solrcloud | update host file
-  ansible.builtin.lineinfile:
-    dest: /etc/hosts
-    regexp: "{{ item.address }}.*{{ item.hostname }}$"
-    line: "{{ item.address }} {{ item.hostname }}"
-    state: present
-  become: true
-  loop:
-    - {
-        hostname: "{{ lib_zk1_host_name }}.princeton.edu",
-        address: "{{ lib_zk1_host }}",
-      }
-    - {
-        hostname: "{{ lib_zk2_host_name }}.princeton.edu",
-        address: "{{ lib_zk2_host }}",
-      }
-    - {
-        hostname: "{{ lib_zk3_host_name }}.princeton.edu",
-        address: "{{ lib_zk3_host }}",
-      }
-  tags:
-    - hosts
-  when: lib_zk1_host_name != "localhost" and lib_zk2_host_name != "localhost" and lib_zk3_host_name != "localhost"
+- name: Solrcloud | Create Solr directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ solr_user }}"
+    group: "{{ solr_group }}"
+    mode: "0755"
+  with_items:
+    - "{{ solr_data_home }}"
+    - "/var/run/solr"
 
-- name: solrcloud | solr cloud install node
+- name: Solrcloud | solr cloud install node
   ansible.builtin.include_tasks: install.yml
   tags:
     - install
 
-- name: solrcloud | configure solr cloud
+- name: Solrcloud | Configure Solr systemd service
+  ansible.builtin.template:
+    src: solr.service.j2
+    dest: /etc/systemd/system/solr.service
+    mode: "0644"
+
+- name: Solrcloud | configure solr cloud
   ansible.builtin.include_tasks: config.yml
   tags:
     - configure
 
-- name: solrcloud | run solr service
-  ansible.builtin.include_tasks: service.yml
-  tags:
-    - service
+- name: Solrcloud | Start and enable Solr service
+  ansible.builtin.systemd:
+    name: solr
+    state: started
+    enabled: true
+    daemon_reload: true
