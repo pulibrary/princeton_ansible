@@ -1,5 +1,5 @@
 ---
-solr_cloud_version: "{{ solr_cloud_download_version | default('7.7.2') }}"
+solr_cloud_version: "{{ solr_cloud_download_version | default('8.4.1') }}"
 
 ## Service options
 
@@ -17,6 +17,10 @@ solr_log_dir: /solr/logs
 solr_home: /solr
 solr_data_dir: "{{ solr_home }}/data"
 solr_installation: /opt/solr
+solr_base: "{{ solr_home }}"
+solr_data_home: "{{ solr_data_dir }}"
+solr_version: "{{ solr_cloud_download_version }}"
+solr_install_dir: "/opt"
 
 # Ports
 solr_port: 8983
@@ -65,16 +69,17 @@ solr_jetty_http_selectors: -1
 solr_jetty_http_acceptors: -1
 
 # ZOOKEEPER
-solr_zookeeper_client_port: 2181
-lib_zk1_host_name: localhost
-solr_zookeeper_hosts_string_multi: "{{ lib_zk1_host_name }}:{{ solr_zookeeper_client_port }},{{ lib_zk2_host_name }}:{{ solr_zookeeper_client_port }},{{ lib_zk3_host_name }}:{{ solr_zookeeper_client_port }}"
-solr_zookeeper_hosts_string_default: localhost:{{ solr_zookeeper_client_port }}
-solr_zookeeper_hosts_string: '{{ solr_zookeeper_hosts_string_default if lib_zk1_host_name == "localhost" else solr_zookeeper_hosts_string_multi }}'
+# ZooKeeper configuration example
+zookeeper_hosts:
+  - "lib-zk1.example.edu:2181"
+  - "lib-zk2.example.edu:2181"
+  - "lib-zk3.example.edu:2181"
+# Solr nodes example
+solr_nodes:
+  - "lib-solr1.example.edu"
+  - "lib-solr2.example.edu"
+  - "lib-solr3.example.edu"
 
-solr_znode: ""
-solr_znode_path: "/{{ solr_znode }}"
-
-solr_zk_host: '{{ solr_zookeeper_hosts_string }}{{ solr_znode_path if solr_znode else "" }}'
 
 # Orangelight Jar directory
 jardirectory: /opt/solr/contrib/analysis-extras/lib
