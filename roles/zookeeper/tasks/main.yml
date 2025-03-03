@@ -1,9 +1,75 @@
 ---
-- name: Zookeeper | install steps
-  ansible.builtin.include_tasks: install.yml
+# tasks file for roles/zookeeper
+- name: Zookeeper | Install ZooKeeper package
+  ansible.builtin.apt:
+    name:
+      - zookeeper
+      - zookeeperd
+    state: present
+    update_cache: true
 
-- name: Zookeeper | configuration steps
-  ansible.builtin.include_tasks: config.yml
+- name: Zookeeper | Create ZooKeeper directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ zk_user }}"
+    group: "{{ zk_group }}"
+    mode: "0755"
+  with_items:
+    - "{{ zk_data_dir }}"
+    - "{{ zk_log_dir }}"
 
-- name: Zookeeper | set up service
-  ansible.builtin.include_tasks: service.yml
+- name: Zookeeper | Set ZooKeeper ID
+  ansible.builtin.copy:
+    content: "{{ zk_nodes | selectattr('host', 'equalto', inventory_hostname) | map(attribute='id') | first }}"
+    dest: "{{ zk_data_dir }}/myid"
+    owner: "{{ zk_user }}"
+    group: "{{ zk_group }}"
+    mode: "0644"
+  when:
+    - running_on_server
+
+- name: Zookeeper | Configure ZooKeeper
+  ansible.builtin.template:
+    src: zoo.cfg.j2
+    dest: /etc/zookeeper/conf/zoo.cfg
+    owner: "{{ zk_user }}"
+    group: "{{ zk_group }}"
+    mode: "0644"
+  notify: Restart zookeeper
+
+- name: Zookeeper | Install systemd unit file
+  ansible.builtin.template:
+    src: zookeeper.service.j2
+    dest: /etc/systemd/system/zookeeper.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Reload systemd
+    - Restart zookeeper
+
+- name: Zookeeper | Override ZOOMAIN in /etc/default/zookeeper
+  ansible.builtin.lineinfile:
+    path: /etc/default/zookeeper
+    regexp: '^(\s*)ZOOMAIN(\s*=)(.*)$'
+    line: 'ZOOMAIN="org.apache.zookeeper.server.quorum.QuorumPeerMain"'
+    backrefs: true
+    create: true
+    mode: "0644"
+  notify: Restart zookeeper
+
+- name: Zookeeper | Start and enable ZooKeeper service
+  ansible.builtin.systemd:
+    name: zookeeper
+    state: started
+    enabled: true
+
+- name: Zookeeper | Ensure zookeeper is running
+  ansible.builtin.wait_for:
+    port: "{{ zk_client_port }}"
+    host: "{{ inventory_hostname }}"
+    timeout: 30
+    delay: 5
+  when:
+    - running_on_server
