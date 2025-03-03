@@ -22,21 +22,41 @@
         name: chrony
         state: present
 
-    - name: Create /etc/chrony.conf if it does not exist
+    - name: Create /etc/chrony.conf if it does not exist (Rocky Linux)
       ansible.builtin.file:
         path: /etc/chrony.conf
         state: touch
         owner: root
         group: root
         mode: '0644'
+      when: ansible_os_family == "RedHat"
 
-    - name: Configure Chronyd to use pool.ntp.org
-      ansible.builtin.blockinfile:
+    - name: Create /etc/chrony/sources.d directory (Ubuntu)
+      ansible.builtin.file:
+        path: /etc/chrony/sources.d/ntp-server.sources
+        state: touch
+        owner: root
+        group: root
+        mode: '0755'
+      when: ansible_os_family == "Debian"
+
+    - name: Configure Chronyd to use pool.ntp.org (Rocky Linux)
+      blockinfile:
         path: /etc/chrony.conf
         block: |
           pool pool.ntp.org iburst
         marker: "# {mark} ANSIBLE MANAGED CHRONY CONFIG"
       notify: restart_chronyd
+      when: ansible_os_family == "RedHat"
+
+    - name: Configure Chronyd to use pool.ntp.org (Ubuntu)
+      blockinfile:
+        path: /etc/chrony/sources.d/ntp-server.sources
+        block: |
+          pool pool.ntp.org iburst
+        marker: "# {mark} ANSIBLE MANAGED CHRONY CONFIG"
+      notify: restart_chronyd
+      when: ansible_os_family == "Debian"
 
     - name: Ensure Chronyd service is enabled and started
       ansible.builtin.service:
