@@ -43,8 +43,7 @@ job "traefik-wall-staging" {
 
         volumes = [
           "local/traefik.yml:/etc/traefik/traefik.yml",
-          "local/dynamic.toml:/etc/traefik/config.d/dynamic.toml",
-          "local/bot-plugin.yml:/etc/traefik/config.d/bot-plugin.yml",
+          "local/traefik-config:/etc/traefik/config.d",
           "local/challenge.tmpl.html:/challenge.tmpl.html"
         ]
       }
@@ -62,12 +61,11 @@ job "traefik-wall-staging" {
       # Plugin Configuration
       artifact {
         source = "https://raw.githubusercontent.com/pulibrary/princeton_ansible/${ var.branch_or_sha }/nomad/traefik-wall/deploy/bot-plugin.tpl.yml"
-        mode = "file"
       }
 
       template {
         source = "local/bot-plugin.tpl.yml"
-        destination = "local/bot-plugin.yml"
+        destination = "local/traefik-config/bot-plugin.yml"
       }
 
       # Plugin Challenge Template
@@ -77,22 +75,12 @@ job "traefik-wall-staging" {
         mode = "file"
       }
 
-      template {
-        data = <<EOF
-[http.routers]
-  [http.routers.lae-staging]
-    service = "lae-staging"
-    rule = "Header(`X-Forwarded-Host`, `lae-staging.princeton.edu`)"
-    entrypoints = ["http"]
-    middlewares = ["captcha-protect"]
-[http.services]
-  [http.services.lae-staging]
-    [http.services.lae-staging.loadBalancer]
-      [[http.services.lae-staging.loadBalancer.servers]]
-        url = "http://lae-staging2.princeton.edu:80"
-EOF
+      # Site Configuration. Add an artifact per site.
 
-        destination = "local/dynamic.toml"
+      # LAE Configuration
+      artifact {
+        source = "https://raw.githubusercontent.com/pulibrary/princeton_ansible/${ var.branch_or_sha }/nomad/traefik-wall/deploy/sites/lae-staging.yml"
+        destination = "local/traefik-config"
       }
 
       resources {
