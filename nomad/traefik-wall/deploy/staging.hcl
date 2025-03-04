@@ -43,7 +43,7 @@ job "traefik-wall-staging" {
 
         volumes = [
           "local/traefik.yml:/etc/traefik/traefik.yml",
-          "local/dynamic.toml:/etc/traefik/dynamic.toml",
+          "local/dynamic.toml:/etc/traefik/config.d/dynamic.toml",
           "local/challenge.tmpl.html:/challenge.tmpl.html"
         ]
       }
