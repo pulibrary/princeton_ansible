@@ -1,4 +1,14 @@
 ---
+- name: Solrcloud | Check for zookeeper connection variables
+  ansible.builtin.set_fact:
+    solr_zookeeper_hosts_string: "{{ solr_zookeeper_hosts | default('localhost:2181') | join(',') }}"
+  when: solr_zookeeper_hosts_string is not defined
+
+- name: Solrcloud | Set default solr_znode value if not provided
+  ansible.builtin.set_fact:
+    solr_znode: "/solr"
+  when: solr_znode is not defined
+
 - name: Solrcloud | Check for solr znode
   ansible.builtin.command: >
     {{ solr_installation }}/bin/solr zk ls /
@@ -11,19 +21,23 @@
   ansible.builtin.command: >
     {{ solr_installation }}/bin/solr zk mkroot {{ solr_znode }}
     -z {{ solr_zookeeper_hosts_string }}
-  when: solr_znode not in znode_check.stdout_lines and solr_znode != ''
+  when: 
+    - znode_check is succeeded
+    - znode_check.stdout is defined
+    - solr_znode not in znode_check.stdout_lines
+    - solr_znode | length > 0
   changed_when: false
 
 - name: Solrcloud | Configure SolrCloud init script
   ansible.builtin.template:
     src: 'solr.in.sh.j2'
-    dest: '/etc/default/solr.in.sh'
+    dest: '/opt/solr/bin/solr.in.sh'
     owner: '{{ solr_user }}'
     group: '{{ solr_group }}'
     mode: "0644"
     force: true
   changed_when: false
-  notify: restart SolrCloud
+  notify: Restart solr
 
 - name: Solrcloud | Configure high ulimit value for Solr
   ansible.builtin.template:
@@ -31,7 +45,7 @@
     dest: '/etc/security/limits.d/solr.conf'
     mode: "0644"
     force: true
-  notify: restart SolrCloud
+  notify: Restart solr
 
 - name: Solrcloud | Configure SolrCloud properties
   ansible.builtin.template:
@@ -41,8 +55,9 @@
     group: '{{ solr_group }}'
     mode: "0644"
     force: true
-  notify: restart SolrCloud
+  notify: Restart solr
   when:
+    - solr_cloud_download_version is defined
     - '"8" in solr_cloud_download_version'
 
 - name: Solrcloud | Configure SolrCloud 9 properties
@@ -53,8 +68,9 @@
     group: '{{ solr_group }}'
     mode: "0644"
     force: true
-  notify: restart SolrCloud
+  notify: Restart solr
   when:
+    - solr_cloud_download_version is defined
     - '"9" in solr_cloud_download_version'
 
 - name: solrcloud | Configure pre 7.4 logging
@@ -65,7 +81,7 @@
     group: '{{ solr_group }}'
     mode: "0644"
     force: true
-  notify: restart SolrCloud
+  notify: Restart solr
 
 - name: Solrcloud | Configure logging
   ansible.builtin.template:
@@ -75,40 +91,31 @@
     group: '{{ solr_group }}'
     mode: "0644"
     force: true
-  notify: restart SolrCloud
-
-# - name: solrcloud | Copy orangelight plugin jar files
-  # ansible.builtin.copy:
-    # src: files/{{ item }}
-    # dest: "{{ jammy_jardirectory }}/{{ item }}"
-    # mode: 0644
-  # when:
-    # - running_on_server
-  # loop:
-    # - CJKFoldingFilter.jar
-    # - lucene-umich-solr-filters-6.0.0-SNAPSHOT.jar
-  # notify: restart SolrCloud
+  notify: Restart solr
 
 - name: Solrcloud | Copy orangelight plugin jar files
   ansible.builtin.copy:
     src: files/{{ item }}
-    dest: "{{ jardirectory }}/{{ item }}"
+    dest: "{{ jardirectory }}"
     mode: "0644"
   when:
     - running_on_server
+    - jardirectory is defined
   loop:
     - CJKFoldingFilter.jar
     - lucene-umich-solr-filters-6.0.0-SNAPSHOT.jar
-  notify: restart SolrCloud
+  notify: Restart solr
 
 - name: Solrcloud | Copy webapp directory plugin jar files
   ansible.builtin.copy:
     src: files/{{ item }}
     dest: "{{ webapp_jardirectory }}/{{ item }}"
     mode: "0644"
+  when:
+    - webapp_jardirectory is defined
   loop:
     - jts-core-1.15.1.jar
-  notify: restart SolrCloud
+  notify: Restart solr
 
 - name: Solrcloud | Create solr home lib dir
   ansible.builtin.file:
@@ -130,5 +137,5 @@
     - asm-commons-7.3.1.jar
     - asm-tree-7.3.1.jar
     - asm-util-7.3.1.jar
-  notify: restart SolrCloud
+  notify: Restart solr
   tags: scriptplugins
