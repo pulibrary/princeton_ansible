@@ -1,6 +1,5 @@
 ---
 # installation instructions taken from: https://lucene.apache.org/solr/guide/7_2/taking-solr-to-production.html#taking-solr-to-production
-
 - name: solrcloud | create solr dirs
   ansible.builtin.file:
     path: '{{ item }}'
@@ -40,16 +39,55 @@
     mode: 0644
   when: solr_downloaded is failed
 
-- name: solrcloud | Extract SolrCloud installation script
-  ansible.builtin.shell: "tar xzf /tmp/{{ solr_cloud_package }} {{ solr_cloud_build_name }}/bin/install_solr_service.sh --strip-components=2"
-  changed_when: false
-  args:
-    chdir: /tmp
-  when: |
-    service_solrcloud_status is failed
+# Debug step to check if the tar file exists
+- name: solrcloud | Check if tarball exists
+  ansible.builtin.stat:
+    path: "/tmp/{{ solr_cloud_package }}"
+  register: tarball_stat
+  when: service_solrcloud_status is failed
 
-- name: solrcloud | run SolrCloud installation script
-  ansible.builtin.shell: /tmp/install_solr_service.sh /tmp/{{ solr_cloud_package }} -f -u {{ solr_user }} -n
+- name: solrcloud | Debug tarball status
+  ansible.builtin.debug:
+    var: tarball_stat
+  when: service_solrcloud_status is failed
+
+# Try an alternative extraction method using unarchive module
+- name: solrcloud | Create extraction directory
+  ansible.builtin.file:
+    path: "/tmp/solr_extract"
+    state: directory
+    mode: 0755
+  when: service_solrcloud_status is failed
+
+- name: solrcloud | Extract SolrCloud tarball
+  ansible.builtin.unarchive:
+    src: "/tmp/{{ solr_cloud_package }}"
+    dest: "/tmp/solr_extract"
+    remote_src: yes
+  when: service_solrcloud_status is failed
+
+- name: solrcloud | Copy the install script from the extracted files
+  ansible.builtin.copy:
+    src: "/tmp/solr_extract/{{ solr_cloud_build_name }}/bin/install_solr_service.sh"
+    dest: "/tmp/install_solr_service.sh"
+    mode: 0755
+    remote_src: yes
+  when: service_solrcloud_status is failed
+
+# Debug step to check if the script exists and has right permissions
+- name: solrcloud | Check script permissions
+  ansible.builtin.stat:
+    path: "/tmp/install_solr_service.sh"
+  register: script_stat
+  when: service_solrcloud_status is failed
+
+- name: solrcloud | Debug script status
+  ansible.builtin.debug:
+    var: script_stat
+  when: service_solrcloud_status is failed
+
+# Use the script with bash explicitly
+- name: solrcloud | run SolrCloud installation script with bash
+  ansible.builtin.shell: bash /tmp/install_solr_service.sh /tmp/{{ solr_cloud_package }} -f -u {{ solr_user }} -n
   changed_when: false
-  when: |
-    service_solrcloud_status is failed
+  when: service_solrcloud_status is failed
