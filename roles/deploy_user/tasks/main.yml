@@ -73,12 +73,18 @@
   when: running_on_server
 
 - name: deploy_user | install deploy github ssh config
-  ansible.builtin.copy:
-    src: files/ssh_config
-    dest: "/home/{{ deploy_user }}/.ssh/config"
-    owner: "{{ deploy_user }}"
-    group: "{{ deploy_user }}"
+  ansible.builtin.blockinfile:
+    path: "/home/{{ deploy_user }}/.ssh/config"
+    insertbefore: BOF
     mode: 0644
+    create: true
+    marker_begin: BEGIN_GITHUB
+    marker_end: END_GITHUB
+    block: |
+      Host github.com
+        HostName github.com
+        IdentityFile ~/.ssh/id_rsa
+        User git
   register: deploy_ssh_config
 
 - name: deploy_user | set sudo options for {{ deploy_user }}
