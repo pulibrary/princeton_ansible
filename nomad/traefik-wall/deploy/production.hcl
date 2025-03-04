@@ -42,152 +42,45 @@ job "traefik-wall-production" {
         network_mode = "host"
 
         volumes = [
-          "local/traefik.toml:/etc/traefik/traefik.toml",
-          "local/dynamic.toml:/etc/traefik/dynamic.toml",
+          "local/traefik.yml:/etc/traefik/traefik.yml",
+          "local/traefik-config:/etc/traefik/config.d",
           "local/challenge.tmpl.html:/challenge.tmpl.html"
         ]
       }
 
-      template {
-        data = <<EOF
-defaultEntryPoints = ["http"]
-
-[entryPoints]
-   [entryPoints.http]
-     address = ":{{ env "NOMAD_PORT_http" }}"
-   [entryPoints.http.forwardedHeaders]
-     trustedIPs = ["128.112.200.245/32", "128.112.201.34/32"]
-   [entryPoints.traefik]
-     address = ":9091"
-
-[api]
-  dashboard = false
-  insecure  = false
-
-[providers]
-  [providers.file]
-    filename = "/etc/traefik/dynamic.toml"
-[experimental.plugins.captcha-protect]
-modulename = "github.com/libops/captcha-protect"
-version = "v1.5.0"
-EOF
-
-        destination = "local/traefik.toml"
+      # Static Configuration
+      artifact {
+        source = "https://raw.githubusercontent.com/pulibrary/princeton_ansible/${ var.branch_or_sha }/nomad/traefik-wall/deploy/traefik.tpl.yml"
       }
 
       template {
-        data = <<EOF
-<html>
-  <head>
-    <title>Verifying connection</title>
-    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
-    <script src="https://unpkg.com/lux-design-system@5.6.3/dist/lux-styleguidist.iife.js"></script>
-    <link rel="stylesheet" href="https://unpkg.com/lux-design-system@5.6.3/dist/style.css">
-    <script src="{{ "{{" }} .FrontendJS {{ "}}" }}" async defer referrerpolicy="no-referrer"></script>
-    <style>
-      html,body,#app {
-        margin: 0;
-        display: flex;
-        flex-direction: column;
-        min-height: 100vh;
+        source = "local/traefik.tpl.yml"
+        destination = "local/traefik.yml"
       }
-      #content {
-        flex: 1 0 0;
-        width: 1440px;
-        margin: auto;
-        text-align: left;
-        font-family: var(--font-family-heading);
-        font-size: var(--font-size-base);
-        line-height: var(--line-height-base);
-      }
-    </style>
-  </head>
-  <body>
-    <div id="app">
-      <div id="lux-header-container">
-        <lux-library-header app-name="" abbr-name="" app-url="" theme="dark">
-          <lux-menu-bar type="main-menu" :menu-items="[
-                              {name: 'Help', component: 'Help', href: 'https://library.princeton.edu/ask-us'},
-                              {name: 'Your Accounts', component: 'Account', href: 'https://library.princeton.edu/accounts'}
-                              ]"
-                        ></lux-menu-bar>
-        </lux-library-header>
-      </div>
-      <div id="content">
-        <h1>Traffic control and bot detection...</h1>
-        <p>We've recently experienced spikes in traffic. To ensure a positive
-experience for all of our patrons, please wait a moment while we verify your
-connection..</p>
-        <form action="{{ "{{" }} .ChallengeURL {{ "}}" }}" method="post" id="captcha-form" accept-charset="UTF-8">
-          <div
-              data-callback="captchaCallback"
-              class="{{ "{{" }} .FrontendKey {{ "}}" }}"
-              data-sitekey="{{ "{{" }} .SiteKey {{ "}}" }}"
-              data-theme="auto"
-              data-size="normal"
-              data-language="auto"
-              data-retry="auto"
-              interval="8000"
-              data-appearance="always">
-          </div>
-          <input type="hidden" name="destination" value="{{ "{{" }} .Destination {{ "}}" }}">
-        </form>
-        <script type="text/javascript">
-          function captchaCallback(token) {
-            setTimeout(function() {
-              document.getElementById("captcha-form").submit();
-            }, 1000);
-          }
-        </script>
-      </div>
-      <div id="lux-footer-container">
-        <lux-library-footer></lux-library-footer>
-      </div>
-    </div>
-    <script type="text/javascript">
-      const { createApp } = Vue
-      createApp().use(Lux.default).mount('#app')
-    </script>
-  </body>
-</html>
-EOF
 
+      # Plugin Configuration
+      artifact {
+        source = "https://raw.githubusercontent.com/pulibrary/princeton_ansible/${ var.branch_or_sha }/nomad/traefik-wall/deploy/bot-plugin.tpl.yml"
+      }
+
+      template {
+        source = "local/bot-plugin.tpl.yml"
+        destination = "local/traefik-config/bot-plugin.yml"
+      }
+
+      # Plugin Challenge Template
+      artifact {
+        source = "https://raw.githubusercontent.com/pulibrary/princeton_ansible/${ var.branch_or_sha }/nomad/traefik-wall/deploy/challenge.tmpl.html"
         destination = "local/challenge.tmpl.html"
+        mode = "file"
       }
 
-      template {
-        data = <<EOF
-{{- with nomadVar "nomad/jobs/traefik-wall-production" -}}
-[http.routers]
-  [http.routers.lae-production]
-    service = "lae-production"
-    rule = "Header(`X-Forwarded-Host`, `lae.princeton.edu`)"
-    entrypoints = ["http"]
-    middlewares = ["captcha-protect"]
-[http.middlewares.captcha-protect.plugin.captcha-protect]
-  protectRoutes =  "/catalog"
-  captchaProvider =  "turnstile"
-  siteKey =  "{{ .TURNSTILE_SITE_KEY }}"
-  secretKey =  "{{ .TURNSTILE_SECRET_KEY }}"
-  goodBots = "apple.com,archive.org,duckduckgo.com,facebook.com,google.com,googlebot.com,googleusercontent.com,instagram.com,kagibot.org,linkedin.com,msn.com,openalex.org,twitter.com,x.com"
-  persistentStateFile = "/tmp/state.json"
-  ipForwardedHeader = "X-Forwarded-For"
-  rateLimit = 20
-  protectParameters = "true"
-  exemptIps = ["128.112.200.245/32", "128.112.201.34/32"]
-  challengeTmpl = "/challenge.tmpl.html"
-  excludeRoutes = "/catalog/facet"
-[http.services]
-  [http.services.lae-production]
-    [http.services.lae-production.loadBalancer]
-      [[http.services.lae-production.loadBalancer.servers]]
-        url = "http://lae-prod1.princeton.edu:80"
-      [[http.services.lae-production.loadBalancer.servers]]
-        url = "http://lae-prod2.princeton.edu:80"
-{{- end -}}
-EOF
+      # Site Configuration. Add an artifact per site.
 
-        destination = "local/dynamic.toml"
+      # LAE Configuration
+      artifact {
+        source = "https://raw.githubusercontent.com/pulibrary/princeton_ansible/${ var.branch_or_sha }/nomad/traefik-wall/deploy/sites/lae-production.yml"
+        destination = "local/traefik-config"
       }
 
       resources {
