@@ -44,6 +44,7 @@ job "traefik-wall-staging" {
         volumes = [
           "local/traefik.yml:/etc/traefik/traefik.yml",
           "local/dynamic.toml:/etc/traefik/config.d/dynamic.toml",
+          "local/bot-plugin.yml:/etc/traefik/config.d/bot-plugin.yml",
           "local/challenge.tmpl.html:/challenge.tmpl.html"
         ]
       }
@@ -51,8 +52,6 @@ job "traefik-wall-staging" {
       # Static Configuration
       artifact {
         source = "https://raw.githubusercontent.com/pulibrary/princeton_ansible/${ var.branch_or_sha }/nomad/traefik-wall/deploy/traefik.tpl.yml"
-        destination = "local/traefik.tpl.yml"
-        mode = "file"
       }
 
       template {
@@ -60,36 +59,18 @@ job "traefik-wall-staging" {
         destination = "local/traefik.yml"
       }
 
-      template {
-        data = <<EOF
-defaultEntryPoints = ["http"]
-
-[log]
-  level = "DEBUG"
-
-[entryPoints]
-   [entryPoints.http]
-     address = ":{{ env "NOMAD_PORT_http" }}"
-   [entryPoints.http.forwardedHeaders]
-     trustedIPs = ["128.112.200.245/32", "128.112.201.34/32"]
-   [entryPoints.traefik]
-     address = ":9091"
-
-[api]
-  dashboard = false
-  insecure  = false
-
-[providers]
-  [providers.file]
-    filename = "/etc/traefik/dynamic.toml"
-[experimental.plugins.captcha-protect]
-modulename = "github.com/libops/captcha-protect"
-version = "v1.5.0"
-EOF
-
-        destination = "local/traefik.toml"
+      # Plugin Configuration
+      artifact {
+        source = "https://raw.githubusercontent.com/pulibrary/princeton_ansible/${ var.branch_or_sha }/nomad/traefik-wall/deploy/bot-plugin.tpl.yml"
+        mode = "file"
       }
 
+      template {
+        source = "local/bot-plugin.tpl.yml"
+        destination = "local/bot-plugin.yml"
+      }
+
+      # Plugin Challenge Template
       artifact {
         source = "https://raw.githubusercontent.com/pulibrary/princeton_ansible/${ var.branch_or_sha }/nomad/traefik-wall/deploy/challenge.tmpl.html"
         destination = "local/challenge.tmpl.html"
@@ -98,32 +79,17 @@ EOF
 
       template {
         data = <<EOF
-{{- with nomadVar "nomad/jobs/traefik-wall-staging" -}}
 [http.routers]
   [http.routers.lae-staging]
     service = "lae-staging"
     rule = "Header(`X-Forwarded-Host`, `lae-staging.princeton.edu`)"
     entrypoints = ["http"]
     middlewares = ["captcha-protect"]
-[http.middlewares.captcha-protect.plugin.captcha-protect]
-  protectRoutes =  "/catalog"
-  captchaProvider =  "turnstile"
-  siteKey =  "{{ .TURNSTILE_SITE_KEY }}"
-  secretKey =  "{{ .TURNSTILE_SECRET_KEY }}"
-  goodBots = "apple.com,archive.org,duckduckgo.com,facebook.com,google.com,googlebot.com,googleusercontent.com,instagram.com,kagibot.org,linkedin.com,msn.com,openalex.org,twitter.com,x.com"
-  persistentStateFile = "/tmp/state.json"
-  ipForwardedHeader = "X-Forwarded-For"
-  rateLimit = 20
-  protectParameters = "true"
-  exemptIps = ["128.112.200.245/32", "128.112.201.34/32"]
-  challengeTmpl = "/challenge.tmpl.html"
-  excludeRoutes = "/catalog/facet"
 [http.services]
   [http.services.lae-staging]
     [http.services.lae-staging.loadBalancer]
       [[http.services.lae-staging.loadBalancer.servers]]
         url = "http://lae-staging2.princeton.edu:80"
-{{- end -}}
 EOF
 
         destination = "local/dynamic.toml"
