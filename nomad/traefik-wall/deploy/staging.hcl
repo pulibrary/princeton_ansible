@@ -79,7 +79,7 @@ EOF
       }
 
       artifact {
-        source = "https://raw.githubusercontent.com/pulibrary/princeton_ansible/${ var.branch_or_sha }}/nomad/traefik-wall/deploy/challenge.tmpl.html"
+        source = "https://raw.githubusercontent.com/pulibrary/princeton_ansible/${ var.branch_or_sha }/nomad/traefik-wall/deploy/challenge.tmpl.html"
         destination = "local/challenge.tmpl.html"
         mode = "file"
       }
