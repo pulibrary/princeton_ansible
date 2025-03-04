@@ -78,84 +78,10 @@ EOF
         destination = "local/traefik.toml"
       }
 
-      template {
-        data = <<EOF
-<html>
-  <head>
-    <title>Verifying connection</title>
-    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
-    <script src="https://unpkg.com/lux-design-system@5.6.3/dist/lux-styleguidist.iife.js"></script>
-    <link rel="stylesheet" href="https://unpkg.com/lux-design-system@5.6.3/dist/style.css">
-    <script src="{{ "{{" }} .FrontendJS {{ "}}" }}" async defer referrerpolicy="no-referrer"></script>
-    <style>
-      html,body,#app {
-        margin: 0;
-        display: flex;
-        flex-direction: column;
-        min-height: 100vh;
-      }
-      #content {
-        flex: 1 0 0;
-        width: 1440px;
-        margin: auto;
-        text-align: left;
-        font-family: var(--font-family-heading);
-        font-size: var(--font-size-base);
-        line-height: var(--line-height-base);
-      }
-    </style>
-  </head>
-  <body>
-    <div id="app">
-      <div id="lux-header-container">
-        <lux-library-header app-name="" abbr-name="" app-url="" theme="dark">
-          <lux-menu-bar type="main-menu" :menu-items="[
-                              {name: 'Help', component: 'Help', href: 'https://library.princeton.edu/ask-us'},
-                              {name: 'Your Accounts', component: 'Account', href: 'https://library.princeton.edu/accounts'}
-                              ]"
-                        ></lux-menu-bar>
-        </lux-library-header>
-      </div>
-      <div id="content">
-        <h1>Traffic control and bot detection...</h1>
-        <p>We've recently experienced spikes in traffic. To ensure a positive
-experience for all of our patrons, please wait a moment while we verify your
-connection..</p>
-        <form action="{{ "{{" }} .ChallengeURL {{ "}}" }}" method="post" id="captcha-form" accept-charset="UTF-8">
-          <div
-              data-callback="captchaCallback"
-              class="{{ "{{" }} .FrontendKey {{ "}}" }}"
-              data-sitekey="{{ "{{" }} .SiteKey {{ "}}" }}"
-              data-theme="auto"
-              data-size="normal"
-              data-language="auto"
-              data-retry="auto"
-              interval="8000"
-              data-appearance="always">
-          </div>
-          <input type="hidden" name="destination" value="{{ "{{" }} .Destination {{ "}}" }}">
-        </form>
-        <script type="text/javascript">
-          function captchaCallback(token) {
-            setTimeout(function() {
-              document.getElementById("captcha-form").submit();
-            }, 1000);
-          }
-        </script>
-      </div>
-      <div id="lux-footer-container">
-        <lux-library-footer></lux-library-footer>
-      </div>
-    </div>
-    <script type="text/javascript">
-      const { createApp } = Vue
-      createApp().use(Lux.default).mount('#app')
-    </script>
-  </body>
-</html>
-EOF
-
+      artifact {
+        source = "https://raw.githubusercontent.com/pulibrary/princeton_ansible/${ var.branch_or_sha }}/nomad/traefik-wall/deploy/challenge.tmpl.html"
         destination = "local/challenge.tmpl.html"
+        mode = "file"
       }
 
       template {
