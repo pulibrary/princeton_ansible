@@ -42,10 +42,22 @@ job "traefik-wall-staging" {
         network_mode = "host"
 
         volumes = [
-          "local/traefik.toml:/etc/traefik/traefik.toml",
+          "local/traefik.yml:/etc/traefik/traefik.yml",
           "local/dynamic.toml:/etc/traefik/dynamic.toml",
           "local/challenge.tmpl.html:/challenge.tmpl.html"
         ]
+      }
+
+      # Static Configuration
+      artifact {
+        source = "https://raw.githubusercontent.com/pulibrary/princeton_ansible/${ var.branch_or_sha }/nomad/traefik-wall/deploy/traefik.tpl.yml"
+        destination = "local/traefik.tpl.yml"
+        mode = "file"
+      }
+
+      template {
+        source = "local/traefik.tpl.yml"
+        destination = "local/traefik.yml"
       }
 
       template {
