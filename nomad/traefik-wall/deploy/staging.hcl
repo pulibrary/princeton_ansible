@@ -60,11 +60,11 @@ job "traefik-wall-staging" {
 
       # Plugin Configuration
       artifact {
-        source = "https://raw.githubusercontent.com/pulibrary/princeton_ansible/${ var.branch_or_sha }/nomad/traefik-wall/deploy/bot-plugin.tpl.yml"
+        source = "https://raw.githubusercontent.com/pulibrary/princeton_ansible/${ var.branch_or_sha }/nomad/traefik-wall/deploy/bot-plugin-staging.tpl.yml"
       }
 
       template {
-        source = "local/bot-plugin.tpl.yml"
+        source = "local/bot-plugin-staging.tpl.yml"
         destination = "local/traefik-config/bot-plugin.yml"
       }
 
