@@ -48,7 +48,7 @@ job "traefik-wall-staging" {
 
       config {
         image        = "docker.io/library/traefik:v3.3"
-        network_mode = "host"
+        ports = ["http", "traefik"]
 
         volumes = [
           "local/traefik.yml:/etc/traefik/traefik.yml",
@@ -135,7 +135,7 @@ job "traefik-wall-staging" {
 
       config {
         image        = "docker.io/library/traefik:v3.3"
-        network_mode = "host"
+        ports = ["http", "traefik"]
 
         volumes = [
           "local/traefik.yml:/etc/traefik/traefik.yml",
