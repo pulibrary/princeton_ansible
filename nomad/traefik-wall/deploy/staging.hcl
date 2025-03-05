@@ -42,8 +42,9 @@ job "traefik-wall-staging" {
       env {
         # Challenge after only 1 request.
         rate_limit = 1
-        # Track each IP individually
-        subnet_mask = 32
+        # Don't track IPs really, everyone's getting challenged.
+        # This groups by xx.<>.<>.<>.<>
+        subnet_mask = 8
       }
 
       config {
