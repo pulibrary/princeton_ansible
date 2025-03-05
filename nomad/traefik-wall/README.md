@@ -2,7 +2,30 @@
 
 This is a reverse proxy which sits between our load balancer and some of our applications and presents a Cloudflare Turnstile challenge to misbehaved bots.
 
-TODO: Add a diagram.
+```mermaid
+---
+title: "Network Diagram"
+---
+sequenceDiagram
+  actor Bot
+  participant N as nginx
+  participant C as consul
+  participant T as traefik
+  participant P as passenger(rails)
+  Bot->>N: Request /catalog?f[]
+  N-)C: Find Traefik Node IP & Port
+  C--)N: Return Traefik Node IP & Port
+  N->>T: Request /catalog?f[]
+  alt Bot IP range sent 20 requests in the past day
+    T-->>N: Return Challenge Page
+    N-->>Bot: Return Challenge Page
+  else Bot IP range isn't being challenged
+    T->>P: Request /catalog?f[]
+    P-->>T: Return /catalog?f[]
+    T-->>N: Return /catalog?f[]
+    N-->>Bot: Return /catalog?f[]
+  end
+```
 
 ## Deployment
 
