@@ -57,3 +57,9 @@ If a site is under attack then you can uncomment the `highchallenge` line and co
 ## Cloudflare Configuration
 
 To view and modify the Cloudflare Turnstile configuration you can log in to [Cloudflare](https://dash.cloudflare.com/login) using access information found in LastPass.
+
+## Special Thanks
+
+This implementation would only be possible with the support of [joecorall](https://github.com/joecorall) for developing [captcha-protect](https://github.com/libops/captcha-protect) and [jrochkind](https://github.com/jrochkind) for testing a similar implementation for Rails applications.
+
+Thank you.
