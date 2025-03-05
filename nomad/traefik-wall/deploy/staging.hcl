@@ -15,6 +15,7 @@ job "traefik-wall-staging" {
 
     network {
       port "http" { }
+      port "traefik" { }
 
       dns {
         servers = ["10.88.0.1", "128.112.129.209", "8.8.8.8", "8.8.4.4"]
@@ -103,6 +104,7 @@ job "traefik-wall-staging" {
 
     network {
       port "http" { }
+      port "traefik" { }
 
       dns {
         servers = ["10.88.0.1", "128.112.129.209", "8.8.8.8", "8.8.4.4"]
