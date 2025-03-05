@@ -23,8 +23,8 @@ job "traefik-wall-production" {
     }
 
     service {
-      name = "traefik-wall-highchallenge-production"
-      tags = ["node-${NOMAD_ALLOC_INDEX}"]
+      name = "traefik-wall-production"
+      tags = ["highchallenge", "node-${NOMAD_ALLOC_INDEX}"]
       port = "http"
 
       check {
@@ -114,7 +114,7 @@ job "traefik-wall-production" {
 
     service {
       name = "traefik-wall-production"
-      tags = ["node-${NOMAD_ALLOC_INDEX}"]
+      tags = ["lowchallenge", "node-${NOMAD_ALLOC_INDEX}"]
       port = "http"
 
       check {
