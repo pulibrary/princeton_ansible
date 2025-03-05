@@ -11,7 +11,8 @@ job "traefik-wall-production" {
 
   # Configure a Traefik node which will challenge everyone - we only expect this to turn on when under attack.
   group "traefik-high-challenge" {
-    count = 2
+    # Only one high challenge node, otherwise everyone gets captcha'd twice.
+    count = 1
 
     network {
       port "http" { }
