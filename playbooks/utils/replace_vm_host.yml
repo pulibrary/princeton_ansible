@@ -16,6 +16,42 @@
     - ../../group_vars/vsphere/{{ runtime_env | default('staging') }}.yml
 
   tasks:
+    # Informational Warning: Backup Reminder
+    - name: Inform user to backup VM before replacement
+      ansible.builtin.debug:
+        msg: "Warning: You are about to replace the VM. Ensure you have backups before proceeding."
+
+    # Critical Check: Ensure VM exists
+    - name: Check if the VM exists
+      community.vmware.vmware_vm_info:
+        hostname: "{{ vcenter_hostname }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        validate_certs: false
+        vm_name: "{{ replacement_vm }}"
+      register: old_vm_info
+      failed_when: old_vm_info.virtual_machines | length == 0
+      msg: "Critical: The VM {{ replacement_vm }} was not found. Aborting the replacement process."
+
+    # User Confirmation: Pause to confirm the replacement
+    - name: Confirm with user before proceeding
+      pause:
+        prompt: "This operation will replace the VM. Are you sure you want to proceed? (yes/no)"
+      register: user_response
+
+    # Abort if user cancels the operation
+    - name: Fail if user cancels the operation
+      fail:
+        msg: "Aborted by user. VM replacement cancelled."
+      when: user_response.user_input != 'yes'
+
+    # Proceed with VM replacement if user confirms
+    - name: Proceed with VM replacement
+      ansible.builtin.debug:
+        msg: "Proceeding with VM replacement..."
+      when: user_response.user_input == 'yes'
+
+    # Gather info on the VM to replace
     - name: Gather info on VM to replace
       community.vmware.vmware_vm_info:
         hostname: "{{ vcenter_hostname }}"
@@ -29,10 +65,12 @@
         vm_name: "{{ replacement_vm }}"
       register: old_vm_info
 
+    # Print out old VM information
     - name: Print out old VM information
       ansible.builtin.debug:
         var: old_vm_info
 
+    # Set VM network based on the IP address (existing logic)
     - name: set the vm network to the private network if the IP starts with 172.20
       ansible.builtin.set_fact:
         vm_network: "VM Network - ip4-library-servers"
@@ -43,10 +81,12 @@
         vm_network: "Virtual Machine Network"
       when: old_vm_info.virtual_machines[0].ip_address is match("128.112.*")
 
+    # Print out warning message about the VM replacement
     - name: Print out warning
       ansible.builtin.debug:
         msg: Ansible will now move and power off the current {{ old_vm_info.virtual_machines[0].guest_name }} VM, then create a replacement in the {{ vm_network }} network.
 
+    # Move old VM to the ToBeDeleted folder
     - name: Move old VM to the ToBeDeleted folder
       community.vmware.vmware_guest_move:
         hostname: "{{ vcenter_hostname }}"
@@ -57,6 +97,7 @@
         dest_folder: "{{ vm_delete_me_folder }}"
         uuid: "{{ old_vm_info.virtual_machines[0].uuid }}"
 
+    # Power off old VM using UUID    
     - name: Power off old VM using UUID
       community.vmware.vmware_guest_powerstate:
         hostname: "{{ vcenter_hostname }}"
@@ -67,6 +108,7 @@
         uuid: "{{ old_vm_info.virtual_machines[0].uuid }}"
         state: powered-off
 
+    # Create a new virtual machine from a template
     - name: Create a new virtual machine from a template
       community.vmware.vmware_guest:
         hostname: "{{ vcenter_hostname }}"
