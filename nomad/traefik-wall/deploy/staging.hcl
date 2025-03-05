@@ -9,7 +9,7 @@ job "traefik-wall-staging" {
   type        = "service"
   node_pool = "staging"
 
-  # Configure a Traefik node which will challenge everyone - we only expect this to turn on
+  # Configure a Traefik node which will challenge everyone - we only expect this to turn on when under attack.
   group "traefik-high-challenge" {
     count = 2
 
