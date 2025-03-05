@@ -45,7 +45,14 @@ You can see all requests that still get through to an application by looking at 
 
 ## When Bots Attack
 
-TODO: Add documentation here about what to do when bots are causing significant downtime.
+In your load balancer nginx configuration for protected applications you'll see lines like:
+
+```
+server service.consul service=lowchallenge.traefik-wall-production resolve max_fails=0;
+# server service.consul service=highchallenge.traefik-wall-production resolve max_fails=0;
+```
+
+If a site is under attack then you can uncomment the `highchallenge` line and comment the `lowchallenge`, reload the nginx config, and all visits will be challenged, effectively taking all bot traffic off the application servers.
 
 ## Cloudflare Configuration
 
