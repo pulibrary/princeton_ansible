@@ -11,9 +11,9 @@ Secrets for Nomad projects are handled by provisioning the nomad cluster via `an
 Starting in `princeton_ansible`
 
 1. `cd nomad`
-1. `BRANCH=<branchname> ./bin/deploy <app>`
+1. `BRANCH=<branchname> ./bin/deploy <app> <env>`
 
-`<app>` above should be the same name as one of the `.hcl` files in `nomad/deploy/`
+`<app>` above should be the same name as one of the directories in `nomad/` and `<env>` should be the same name as one of the files in `nomad/<app>/deploy/`
 
 ## Logging into Nomad
 
