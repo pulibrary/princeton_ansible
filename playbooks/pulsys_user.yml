@@ -48,10 +48,9 @@
         mode: '0600'
         backup: true
 
-    - name: set fact for hosts matched in the first play
+    - name: set fact if the first play ran
       ansible.builtin.set_fact:
-        first_play_had_hosts: true
-      when: ansible_play_hosts_all is search("princeton.edu")
+        first_play_ran: true
 
 - name: Update pulsys user keys on shared boxes
   hosts: cdh_shared_{{ runtime_env | default('staging') }}
@@ -98,10 +97,9 @@
         mode: '0600'
         backup: true
 
-    - name: set fact for hosts matched in the second play
+    - name: set fact if the second play ran
       ansible.builtin.set_fact:
-        second_play_had_hosts: true
-      when: ansible_play_hosts_all is search("princeton.edu")
+        second_play_ran: true
 
 - name: Fail if neither play ran
   hosts: all
@@ -112,7 +110,7 @@
       ansible.builtin.fail:
          msg: The playbook did not add keys to any hosts, please try again.
       failed_when:
-        - first_play_had_hosts is undefined
-        - second_play_had_hosts is undefined
+        - first_play_ran is undefined
+        - second_play_ran is undefined
       run_once: true
       delegate_to: localhost
