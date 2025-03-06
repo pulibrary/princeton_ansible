@@ -45,4 +45,14 @@
 
     - name: Print out warning
       ansible.builtin.debug:
-        msg: My Network Name is {{ old_vm_net_info.network_info[0].network_name  }} and my MAC Address is {{ old_vm_net_info.network_info[0].mac_address }}
+        msg: Ansible will now move and power off the current {{ old_vm_info.virtual_machines[0].guest_name }} VM, then create a replacement in the {{ old_vm_net_info.network_info[0].network_name }} network.
+
+    - name: Move old VM to the ToBeDeleted folder
+      community.vmware.vmware_guest_move:
+        hostname: "{{ vcenter_hostname }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        validate_certs: false
+        datacenter: "{{ vcenter_datacenter }}"
+        dest_folder: "{{ vm_delete_me_folder }}"
+        uuid: "{{ old_vm_info.virtual_machines[0].uuid }}"
