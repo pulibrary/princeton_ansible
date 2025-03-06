@@ -94,6 +94,13 @@ job "traefik-wall-staging" {
         destination = "local/traefik-config"
       }
 
+      # Finding Aids Configuration
+      artifact {
+        source = "https://raw.githubusercontent.com/pulibrary/princeton_ansible/${ var.branch_or_sha }/nomad/traefik-wall/deploy/sites/pulfalight-staging.yml"
+        destination = "local/traefik-config"
+      }
+
+
       resources {
         cpu    = 1000
         memory = 512
@@ -178,6 +185,12 @@ job "traefik-wall-staging" {
       # LAE Configuration
       artifact {
         source = "https://raw.githubusercontent.com/pulibrary/princeton_ansible/${ var.branch_or_sha }/nomad/traefik-wall/deploy/sites/lae-staging.yml"
+        destination = "local/traefik-config"
+      }
+
+      # Finding Aids Configuration
+      artifact {
+        source = "https://raw.githubusercontent.com/pulibrary/princeton_ansible/${ var.branch_or_sha }/nomad/traefik-wall/deploy/sites/pulfalight-staging.yml"
         destination = "local/traefik-config"
       }
 

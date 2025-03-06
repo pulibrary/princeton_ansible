@@ -1,0 +1,20 @@
+http:
+  routers:
+    # Pulfalight-staging redirects to findingaids-staging.
+    pulfalight-staging:
+      service: findingaids-staging
+      rule: Header(`X-Forwarded-Host`, `pulfalight-staging.princeton.edu`)
+      entrypoints:
+        - http
+    findingaids-staging:
+      service: findingaids-staging
+      rule: Header(`X-Forwarded-Host`, `findingaids-staging.princeton.edu`)
+      entrypoints:
+        - http
+      middlewares:
+        - captcha-protect
+  services:
+    findingaids-staging:
+      loadBalancer:
+        servers:
+          - url: http://pulfalight-staging1.princeton.edu:80

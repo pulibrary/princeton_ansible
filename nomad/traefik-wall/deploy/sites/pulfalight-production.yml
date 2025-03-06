@@ -1,0 +1,26 @@
+http:
+  routers:
+    findingaids-production:
+      service: findingaids-production
+      rule: Header(`X-Forwarded-Host`, `findingaids.princeton.edu`)
+      entrypoints:
+        - http
+      middlewares:
+        - captcha-protect
+    findingaids-qa:
+      service: findingaids-qa
+      rule: Header(`X-Forwarded-Host`, `findingaids-qa.princeton.edu`)
+      entrypoints:
+        - http
+      middlewares:
+        - captcha-protect
+  services:
+    findingaids-production:
+      loadBalancer:
+        servers:
+          - url: http://pulfalight-jammy-prod1.princeton.edu:80
+          - url: http://pulfalight-jammy-prod2.princeton.edu:80
+    findingaids-qa:
+      loadBalancer:
+        servers:
+          - url: http://pulfalight-qa1.princeton.edu:80
