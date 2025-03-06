@@ -87,7 +87,11 @@
     # Print out warning message about the VM replacement
     - name: Print out warning
       ansible.builtin.debug:
-        msg: Ansible will now move and power off the current {{ old_vm_info.virtual_machines[0].guest_name }} VM, then create a replacement in the {{ vm_network }} network.
+        msg: "{% if old_vm_net_info.network_data is defined and '0' in old_vm_net_info.network_data %}
+            Ansible will now move and power off the current {{ old_vm_info.virtual_machines[0].guest_name }} VM, then create a replacement in the {{ old_vm_net_info.network_data['0'].network_name }} network.
+          {% else %}
+            Unable to retrieve network information. Please check the network configuration of the VM.
+          {% endif %}"
 
     # Move old VM to the ToBeDeleted folder
     - name: Move old VM to the ToBeDeleted folder
