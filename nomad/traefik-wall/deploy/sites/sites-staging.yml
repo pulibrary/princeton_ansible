@@ -1,0 +1,32 @@
+http:
+  routers:
+    lae-staging:
+      service: lae-staging
+      rule: Header(`X-Forwarded-Host`, `lae-staging.princeton.edu`)
+      entrypoints:
+        - http
+      middlewares:
+        - captcha-protect
+    # Pulfalight-staging redirects to findingaids-staging.
+    pulfalight-staging:
+      service: findingaids-staging
+      rule: Header(`X-Forwarded-Host`, `pulfalight-staging.princeton.edu`)
+      entrypoints:
+        - http
+    findingaids-staging:
+      service: findingaids-staging
+      rule: Header(`X-Forwarded-Host`, `findingaids-staging.princeton.edu`)
+      entrypoints:
+        - http
+      middlewares:
+        - captcha-protect
+        - append-catalog-regex
+  services:
+    lae-staging:
+      loadBalancer:
+        servers:
+          - url: http://lae-staging2.princeton.edu:80
+    findingaids-staging:
+      loadBalancer:
+        servers:
+          - url: http://pulfalight-staging1.princeton.edu:80

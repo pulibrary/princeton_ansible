@@ -86,11 +86,9 @@ job "traefik-wall-staging" {
         mode = "file"
       }
 
-      # Site Configuration. Add an artifact per site.
-
-      # LAE Configuration
+      # Site Configuration.
       artifact {
-        source = "https://raw.githubusercontent.com/pulibrary/princeton_ansible/${ var.branch_or_sha }/nomad/traefik-wall/deploy/sites/lae-staging.yml"
+        source = "https://raw.githubusercontent.com/pulibrary/princeton_ansible/${ var.branch_or_sha }/nomad/traefik-wall/deploy/sites/sites-staging.yml"
         destination = "local/traefik-config"
       }
 
@@ -173,11 +171,9 @@ job "traefik-wall-staging" {
         mode = "file"
       }
 
-      # Site Configuration. Add an artifact per site.
-
-      # LAE Configuration
+      # Site Configuration.
       artifact {
-        source = "https://raw.githubusercontent.com/pulibrary/princeton_ansible/${ var.branch_or_sha }/nomad/traefik-wall/deploy/sites/lae-staging.yml"
+        source = "https://raw.githubusercontent.com/pulibrary/princeton_ansible/${ var.branch_or_sha }/nomad/traefik-wall/deploy/sites/sites-staging.yml"
         destination = "local/traefik-config"
       }
 
