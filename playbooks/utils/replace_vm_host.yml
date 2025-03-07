@@ -78,7 +78,7 @@
         cluster: "{{ vcenter_cluster }}"
         folder: "{{ old_vm_info.virtual_machines[0].folder }}"
         name: "{{ replacement_vm }}"
-        state: powered-on
+        state: powered-off
         template: "{{ vm_template | default('template_jammy_spring_2024')}}"
         disk:
           - size: "{{ (old_vm_info.virtual_machines[0].allocated.storage / 1024) | int }}kb"
@@ -96,7 +96,7 @@
         cdrom:
           - controller_number: 0
             unit_number: 0
-            state: poweredoff
+            state: present
         networks:
           - connected: true
             device_type: vmxnet3
@@ -104,3 +104,8 @@
             mac: 00:50:56:ac:12:24
             start_connected: true
         wait_for_customization: true
+        register: new_vm_info
+
+    - name: View new vm info
+      ansible.builtin.debug:
+        var: new_vm_info
