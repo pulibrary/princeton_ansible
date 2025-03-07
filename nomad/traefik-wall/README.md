@@ -43,6 +43,10 @@ You can see all requests that still get through to an application by looking at 
 
 [Datadog Passenger Logs](https://app.datadoghq.com/logs?query=source%3Anginx%20%40http.method%3AGET%20-%40http.useragent%3A%28%22nginx%2F1.27.2%20%28health%20check%29%22%20OR%20%22checkmk-active-httpv2%2F2.3.0%22%29%20service%3Alae&agg_m=count&agg_m_source=base&agg_t=count&clustering_pattern_field_path=message&cols=host%2Cservice&messageDisplay=inline&refresh_mode=sliding&storage=hot&stream_sort=desc&viz=stream&from_ts=1741108503749&to_ts=1741194903749&live=true)
 
+You can track successful user turnstile challenges from the logs by finding all requests that hit passenger with a referer from `/challenge`:
+
+[Datadog Challenge Success Logs](https://app.datadoghq.com/logs?query=source%3Anginx%20%40http.method%3AGET%20-%40http.useragent%3A%28%22nginx%2F1.27.2%20%28health%20check%29%22%20OR%20%22checkmk-active-httpv2%2F2.3.0%22%29%20challenge%20%23first_path_part%3A%22%2Fcatalo%22&agg_m=count&agg_m_source=base&agg_t=count&analyticsOptions=%5B%22line%22%2C%22dog_classic%22%2Cnull%2Cnull%2C%22value%22%5D&calculated_fields=first_path_part%3Dleft%28%40http.url_details.path%5C%2C7%29&clustering_pattern_field_path=message&cols=host%2Cservice%2C%23first_path_part&fromUser=true&messageDisplay=inline&refresh_mode=sliding&storage=hot&stream_sort=desc&viz=timeseries&from_ts=1741280267292&to_ts=1741366667292&live=true)
+
 ## When Bots Attack
 
 In your load balancer nginx configuration for protected applications you'll see lines like:
