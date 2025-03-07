@@ -86,17 +86,10 @@ job "traefik-wall-production" {
         mode = "file"
       }
 
-      # Site Configuration. Add an artifact per site.
+      # Site Configuration.
 
-      # LAE Configuration
       artifact {
-        source = "https://raw.githubusercontent.com/pulibrary/princeton_ansible/${ var.branch_or_sha }/nomad/traefik-wall/deploy/sites/lae-production.yml"
-        destination = "local/traefik-config"
-      }
-
-      # Pulfalight Configuration
-      artifact {
-        source = "https://raw.githubusercontent.com/pulibrary/princeton_ansible/${ var.branch_or_sha }/nomad/traefik-wall/deploy/sites/pulfalight-production.yml"
+        source = "https://raw.githubusercontent.com/pulibrary/princeton_ansible/${ var.branch_or_sha }/nomad/traefik-wall/deploy/sites/sites-production.yml"
         destination = "local/traefik-config"
       }
 
@@ -179,17 +172,10 @@ job "traefik-wall-production" {
         mode = "file"
       }
 
-      # Site Configuration. Add an artifact per site.
+      # Site Configuration.
 
-      # LAE Configuration
       artifact {
-        source = "https://raw.githubusercontent.com/pulibrary/princeton_ansible/${ var.branch_or_sha }/nomad/traefik-wall/deploy/sites/lae-production.yml"
-        destination = "local/traefik-config"
-      }
-
-      # Pulfalight Configuration
-      artifact {
-        source = "https://raw.githubusercontent.com/pulibrary/princeton_ansible/${ var.branch_or_sha }/nomad/traefik-wall/deploy/sites/pulfalight-production.yml"
+        source = "https://raw.githubusercontent.com/pulibrary/princeton_ansible/${ var.branch_or_sha }/nomad/traefik-wall/deploy/sites/sites-production.yml"
         destination = "local/traefik-config"
       }
 
