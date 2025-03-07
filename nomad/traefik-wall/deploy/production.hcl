@@ -94,6 +94,12 @@ job "traefik-wall-production" {
         destination = "local/traefik-config"
       }
 
+      # Pulfalight Configuration
+      artifact {
+        source = "https://raw.githubusercontent.com/pulibrary/princeton_ansible/${ var.branch_or_sha }/nomad/traefik-wall/deploy/sites/pulfalight-production.yml"
+        destination = "local/traefik-config"
+      }
+
       resources {
         cpu    = 1000
         memory = 512
@@ -178,6 +184,12 @@ job "traefik-wall-production" {
       # LAE Configuration
       artifact {
         source = "https://raw.githubusercontent.com/pulibrary/princeton_ansible/${ var.branch_or_sha }/nomad/traefik-wall/deploy/sites/lae-production.yml"
+        destination = "local/traefik-config"
+      }
+
+      # Pulfalight Configuration
+      artifact {
+        source = "https://raw.githubusercontent.com/pulibrary/princeton_ansible/${ var.branch_or_sha }/nomad/traefik-wall/deploy/sites/pulfalight-production.yml"
         destination = "local/traefik-config"
       }
 
