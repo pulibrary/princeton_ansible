@@ -78,7 +78,7 @@
         cluster: "{{ vcenter_cluster }}"
         folder: "{{ old_vm_info.virtual_machines[0].folder }}"
         name: "{{ replacement_vm }}"
-        state: powered-off
+        state: powered-on
         template: "{{ vm_template | default('template_jammy_spring_2024')}}"
         disk:
           - size: "{{ (old_vm_info.virtual_machines[0].allocated.storage / 1024) | int }}kb"
@@ -99,11 +99,9 @@
             state: present
         networks:
           - connected: true
-            device_type: vmxnet3
-            name: VM Network - ip4-library-servers
-            mac: 00:50:56:ac:12:24
+            name: "{{ old_vm_net_info.network_info[0].network_name }}"
+            mac: "{{ old_vm_net_info.network_info[0].mac_address }}"
             start_connected: true
-        wait_for_customization: true
       register: new_vm_info
 
     - name: View new vm info
