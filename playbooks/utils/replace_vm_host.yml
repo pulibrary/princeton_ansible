@@ -40,10 +40,6 @@
         gather_network_info: true
       register: old_vm_net_info
 
-    - name: Print out old VM network information
-      ansible.builtin.debug:
-        var: old_vm_net_info
-
     - name: Print out warning
       ansible.builtin.debug:
         msg: Ansible will now move and power off the current {{ old_vm_info.virtual_machines[0].guest_name }} VM, then create a replacement in the {{ old_vm_net_info.network_info[0].network_name }} network.
@@ -113,10 +109,6 @@
         vm_name: "{{ replacement_vm }}"
       register: new_vm_info
 
-    - name: Print out new VM information
-      ansible.builtin.debug:
-        var: new_vm_info
-
     - name: Gather network info on new VM
       community.vmware.vmware_guest_network:
         hostname: "{{ vcenter_hostname }}"
@@ -125,7 +117,7 @@
         name: "{{ replacement_vm }}"
         validate_certs: false
         gather_network_info: true
-        folder: "{{ new_vm_info.virtual_machines[0].folder }}"
+        folder: "{{ new_vm_info.virtual_machines[0].folder }}" 
       register: new_vm_net_info
 
     - name: Print out old VM network information
@@ -142,7 +134,7 @@
              in the {{ old_vm_net_info.network_info[0].network_name }} network
              {{ old_vm_info.virtual_machines[0].allocated.cpu }} CPUs
              {{ (old_vm_info.virtual_machines[0].allocated.memory | int / 1024) }} GB of memory
-             {{ old_vm_info.virtual_machines[0].allocated.storage | human_readable }} of disk allocated
+             {{ old_vm_info.virtual_machines[0].allocated.stora ge | human_readable }} of disk allocated
       ansible.builtin.debug:
         msg: "{{ msg.split('\n') }}"
 
