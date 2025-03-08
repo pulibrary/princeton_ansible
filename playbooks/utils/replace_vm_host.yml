@@ -98,17 +98,6 @@
             name: "{{ old_vm_net_info.network_info[0].network_name }}"
             mac: "{{ old_vm_net_info.network_info[0].mac_address }}"
 
-    - name: Gather details on new VM
-      community.vmware.vmware_vm_info:
-        hostname: "{{ vcenter_hostname }}"
-        username: "{{ vcenter_username }}"
-        password: "{{ vcenter_password }}"
-        validate_certs: false
-        show_allocated: true
-        show_folder: true
-        vm_name: "{{ replacement_vm }}"
-      register: new_vm_info
-
     - name: Print out relevant details of old VM
       vars:
         msg: |
@@ -123,10 +112,17 @@
       ansible.builtin.debug:
         msg: "{{ msg.split('\n') }}"
 
-    - name: Print out relevant details of new VM
-      vars:
-        msg: |
-             The VM you just created has
-             an UUID of {{ new_vm_info.virtual_machines[0].uuid }}
+    - name: Gather details on new VM
+      community.vmware.vmware_vm_info:
+        hostname: "{{ vcenter_hostname }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        validate_certs: false
+        show_allocated: true
+        show_folder: true
+        vm_name: "{{ replacement_vm }}"
+      register: new_vm_info
+
+    - name: Print out old VM information
       ansible.builtin.debug:
-        msg: "{{ msg.split('\n') }}"
+        var: new_vm_info
