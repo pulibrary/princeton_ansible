@@ -111,3 +111,17 @@
              {{ old_vm_info.virtual_machines[0].allocated.storage | human_readable }} of disk allocated
       ansible.builtin.debug:
         msg: "{{ msg.split('\n') }}"
+
+    - name: Gather info on new VM
+      community.vmware.vmware_vm_info:
+        hostname: "{{ vcenter_hostname }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        vm_name: "{{ replacement_vm }}"
+        validate_certs: false
+        show_allocated: true
+      register: new_vm_info
+
+    - name: Print out new VM information
+      ansible.builtin.debug:
+        var: new_vm_info
