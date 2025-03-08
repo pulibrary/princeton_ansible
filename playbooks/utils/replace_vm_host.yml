@@ -101,8 +101,27 @@
           - connected: true
             name: "{{ old_vm_net_info.network_info[0].network_name }}"
             mac: "{{ old_vm_net_info.network_info[0].mac_address }}"
-            start_connected: true
+
+    - name: Gather details on new VM
+      community.vmware.vmware_vm_info:
+        hostname: "{{ vcenter_hostname }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        validate_certs: false
+        show_allocated: true
+        show_folder: true
+        vm_name: "{{ replacement_vm }}"
       register: new_vm_info
+
+    - name: Gather network info on new VM
+      community.vmware.vmware_guest_network:
+        hostname: "{{ vcenter_hostname }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        name: "{{ replacement_vm }}"
+        validate_certs: false
+        gather_network_info: true
+      register: new_vm_net_info
 
     - name: Print out relevant details of old VM
       vars:
@@ -115,5 +134,19 @@
              {{ old_vm_info.virtual_machines[0].allocated.cpu }} CPUs
              {{ (old_vm_info.virtual_machines[0].allocated.memory | int / 1024) }} GB of memory
              {{ old_vm_info.virtual_machines[0].allocated.storage | human_readable }} of disk allocated
+      ansible.builtin.debug:
+        msg: "{{ msg.split('\n') }}"
+
+    - name: Print out relevant details of new VM
+      vars:
+        msg: |
+             The VM you just created has
+             an UUID of {{ new_vm_info.virtual_machines[0].uuid }}
+             a mac address of {{ new_vm_info.virtual_machines[0].mac_address[0] }}
+             in the {{ new_vm_net_info.network_info[0].network_name }} network
+             an IP address of {{ new_vm_info.virtual_machines[0].ip_address }}
+             {{ new_vm_info.virtual_machines[0].allocated.cpu }} CPUs
+             {{ (new_vm_info.virtual_machines[0].allocated.memory | int / 1024) }} GB of memory
+             {{ new_vm_info.virtual_machines[0].allocated.storage | human_readable }} of disk allocated
       ansible.builtin.debug:
         msg: "{{ msg.split('\n') }}"
