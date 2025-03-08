@@ -109,21 +109,6 @@
         vm_name: "{{ replacement_vm }}"
       register: new_vm_info
 
-    - name: Gather network info on new VM
-      community.vmware.vmware_guest_network:
-        hostname: "{{ vcenter_hostname }}"
-        username: "{{ vcenter_username }}"
-        password: "{{ vcenter_password }}"
-        name: "{{ replacement_vm }}"
-        validate_certs: false
-        gather_network_info: true
-        folder: "{{ new_vm_info.virtual_machines[0].folder }}" 
-      register: new_vm_net_info
-
-    - name: Print out old VM network information
-      ansible.builtin.debug:
-        var: old_vm_net_info
-
     - name: Print out relevant details of old VM
       vars:
         msg: |
@@ -144,7 +129,6 @@
              The VM you just created has
              an UUID of {{ new_vm_info.virtual_machines[0].uuid }}
              a mac address of {{ new_vm_info.virtual_machines[0].mac_address[0] }}
-             in the {{ new_vm_net_info.network_info[0].network_name }} network
              an IP address of {{ new_vm_info.virtual_machines[0].ip_address }}
              {{ new_vm_info.virtual_machines[0].allocated.cpu }} CPUs
              {{ (new_vm_info.virtual_machines[0].allocated.memory | int / 1024) }} GB of memory
