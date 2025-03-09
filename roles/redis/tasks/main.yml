@@ -1,14 +1,21 @@
 ---
-- name: Redis | configure redis ppa
-  ansible.builtin.apt_repository:
-    repo: ppa:redislabs/redis
+- name: Redis | Add Redis Labs apt key
+  ansible.builtin.apt_key:
+    url: "https://packages.redis.io/gpg"
+    state: present
 
-- name: redis | install redis packages
+- name: Redis | Add Redis Labs repository
+  ansible.builtin.apt_repository:
+    repo: "deb https://packages.redis.io/deb {{ ansible_distribution_release }} main"
+    state: present
+    filename: redis
+
+- name: Redis | install redis packages
   ansible.builtin.apt:
     name: "{{ redis_packages }}"
     state: present
 
-- name: redis | configure redis
+- name: Redis | configure redis
   ansible.builtin.template:
     src: "redis.conf.j2"
     dest: "/etc/redis/redis.conf"
@@ -19,22 +26,22 @@
   notify:
     - restart redis
 
-- name: redis | ulimit value for redis
+- name: Redis | ulimit value for redis
   ansible.builtin.template:
     src: "redis_ulimit.conf.j2"
     dest: "/etc/security/limits.d/redis.conf"
     force: true
-    mode: 0644
+    mode: "0644"
 
-- name: redis | Set vm.overcommit
-  ansible.builtin.sysctl:
+- name: Redis | Set vm.overcommit
+  ansible.posix.sysctl:
     name: "vm.overcommit_memory"
     value: 1
     sysctl_file: "/etc/sysctl.d/30-redis.conf"
   when: redis__overcommit_memory_enable|bool
 
-- name: redis | ensure Redis Server service enabled
-  service:
+- name: Redis | ensure Redis Server service enabled
+  ansible.builtin.service:
     name: "redis-server"
     state: started
     enabled: true
