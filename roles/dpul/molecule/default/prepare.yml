@@ -1,0 +1,25 @@
+---
+- name: Prepare
+  hosts: all
+  become: true
+  tasks:
+    - name: Create deploy user
+      ansible.builtin.user:
+        name: "{{ deploy_user }}"
+        shell: /bin/bash
+        create_home: true
+        home: /home/{{ deploy_user }}
+      register: user_creation_result
+
+    - name: Show user creation info
+      ansible.builtin.debug:
+        var: user_creation_result
+
+    - name: Ensure .ansible/tmp exists
+      ansible.builtin.file:
+        path: "/home/{{ deploy_user }}/.ansible/tmp"
+        state: directory
+        owner: "{{ deploy_user }}"
+        group: "{{ deploy_user }}"
+        mode: "0700"
+      when: user_creation_result is defined and user_creation_result.changed
