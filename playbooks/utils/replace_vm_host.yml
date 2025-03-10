@@ -23,29 +23,24 @@
         password: "{{ vcenter_password }}"
         validate_certs: false
         show_allocated: true
-        show_folder: true
-        show_datacenter: true
-        show_mac_address: true
         vm_name: "{{ replacement_vm }}"
       register: old_vm_info
 
-    - name: Print out old VM information
-      ansible.builtin.debug:
-        var: old_vm_info
-
-    - name: set the vm network to the private network if the IP starts with 172.20
-      ansible.builtin.set_fact:
-        vm_network: "VM Network - ip4-library-servers"
-      when: old_vm_info.virtual_machines[0].ip_address is match("172.20.*")
-
-    - name: set the vm network to the public network if the IP starts with 128.112
-      ansible.builtin.set_fact:
-        vm_network: "Virtual Machine Network"
-      when: old_vm_info.virtual_machines[0].ip_address is match("128.112.*")
+    - name: Gather network info on VM to replace
+      community.vmware.vmware_guest_network:
+        hostname: "{{ vcenter_hostname }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        name: "{{ replacement_vm }}"
+        validate_certs: false
+        gather_network_info: true
+      register: old_vm_net_info
 
     - name: Print out warning
       ansible.builtin.debug:
-        msg: Ansible will now move and power off the current {{ old_vm_info.virtual_machines[0].guest_name }} VM, then create a replacement in the {{ vm_network }} network.
+        msg: 
+        - Ansible will now move and power off the current {{ old_vm_info.virtual_machines[0].guest_name }} VM. 
+        - Then create a replacement in the {{ old_vm_net_info.network_info[0].network_name }} network.
 
     - name: Move old VM to the ToBeDeleted folder
       community.vmware.vmware_guest_move:
@@ -97,66 +92,11 @@
             unit_number: 0
             state: present
         networks:
-          - name: "{{ vm_network }}"
+          - connected: true
+            name: "{{ old_vm_net_info.network_info[0].network_name }}"
+            mac: "{{ old_vm_net_info.network_info[0].mac_address }}"
         wait_for_ip_address: true
-      register: new_vm_deets
-
-    - name: view new VM details
-      ansible.builtin.debug:
-        var: new_vm_deets
-
-    - name: delete NIC with automatic mac address
-      community.vmware.vmware_guest_network:
-        hostname: "{{ vcenter_hostname }}"
-        username: "{{ vcenter_username }}"
-        password: "{{ vcenter_password }}"
-        validate_certs: false
-        datacenter: "{{ vcenter_datacenter }}"
-        # new VM var does not include UUID; use moid, which is unique in each vCenter instance
-        moid: "{{ new_vm_deets.instance.moid }}"
-        network_name: "{{ vm_network }}"
-        state: absent
-        mac_address: "{{ new_vm_deets.instance.hw_eth0.macaddress }}"
-
-    - name: add NIC with custom mac address
-      community.vmware.vmware_guest_network:
-        hostname: "{{ vcenter_hostname }}"
-        username: "{{ vcenter_username }}"
-        password: "{{ vcenter_password }}"
-        validate_certs: false
-        datacenter: "{{ vcenter_datacenter }}"
-        # new VM var does not include UUID; use moid, which is unique in each vCenter instance
-        moid: "{{ new_vm_deets.instance.moid }}"
-        folder: "{{ old_vm_info.virtual_machines[0].folder }}"
-        network_name: "{{ vm_network }}"
-        device_type: "vmxnet3"
-        connected: true
-        mac_address: "{{ old_vm_info.virtual_machines[0].mac_address[0] }}"
-
-    - name: Power the new VM on
-      community.vmware.vmware_guest_powerstate:
-        hostname: "{{ vcenter_hostname }}"
-        username: "{{ vcenter_username }}"
-        password: "{{ vcenter_password }}"
-        validate_certs: false
-        datacenter: "{{ vcenter_datacenter }}"
-        folder: "{{ old_vm_info.virtual_machines[0].folder }}"
-        # new VM var does not include UUID; use moid, which is unique in each vCenter instance
-        moid: "{{ new_vm_deets.instance.moid }}"
-        state: powered-on
-
-    - name: Gather details on new VM
-      community.vmware.vmware_vm_info:
-        hostname: "{{ vcenter_hostname }}"
-        username: "{{ vcenter_username }}"
-        password: "{{ vcenter_password }}"
-        validate_certs: false
-        show_datacenter: true
-        show_mac_address: true
-        show_allocated: true
-        show_folder: true
-        vm_name: "{{ replacement_vm }}"
-      register: new_vm_info
+        wait_for_ip_address_timeout: 120
 
     - name: Print out relevant details of old VM
       vars:
@@ -165,24 +105,10 @@
              an UUID of {{ old_vm_info.virtual_machines[0].uuid }}
              a mac address of {{ old_vm_info.virtual_machines[0].mac_address[0] }}
              an IP address of {{ old_vm_info.virtual_machines[0].ip_address }}
-             in the {{ vm_network }} network
+             in the {{ old_vm_net_info.network_info[0].network_name }} network
              {{ old_vm_info.virtual_machines[0].allocated.cpu }} CPUs
              {{ (old_vm_info.virtual_machines[0].allocated.memory | int / 1024) }} GB of memory
              {{ old_vm_info.virtual_machines[0].allocated.storage | human_readable }} of disk allocated
-      ansible.builtin.debug:
-        msg: "{{ msg.split('\n') }}"
-
-    - name: Print out relevant details of new VM
-      vars:
-        msg: |
-             The VM you just created has
-             an UUID of {{ new_vm_info.virtual_machines[0].uuid }}
-             a mac address of {{ new_vm_info.virtual_machines[0].mac_address[0] }}
-             in the {{ vm_network }} network
-             an IP address of {{ new_vm_info.virtual_machines[0].ip_address }}
-             {{ new_vm_info.virtual_machines[0].allocated.cpu }} CPUs
-             {{ (new_vm_info.virtual_machines[0].allocated.memory | int / 1024) }} GB of memory
-             {{ new_vm_info.virtual_machines[0].allocated.storage | human_readable }} of disk allocated
       ansible.builtin.debug:
         msg: "{{ msg.split('\n') }}"
 
@@ -199,6 +125,40 @@
         state: absent
         force: true
 
+    - name: Gather details on new VM
+      community.vmware.vmware_vm_info:
+        hostname: "{{ vcenter_hostname }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        validate_certs: false
+        show_allocated: true
+        vm_name: "{{ replacement_vm }}"
+      register: new_vm_info
+
+    - name: Gather network info new VM
+      community.vmware.vmware_guest_network:
+        hostname: "{{ vcenter_hostname }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        name: "{{ replacement_vm }}"
+        validate_certs: false
+        gather_network_info: true
+      register: new_vm_net_info
+
+    - name: Print out relevant details of new VM
+      vars:
+        msg: |
+             The VM you just created has
+             an UUID of {{ new_vm_info.virtual_machines[0].uuid }}
+             a mac address of {{ new_vm_info.virtual_machines[0].mac_address[0] }}
+             in the {{ new_vm_net_info.network_info[0].network_name }} network
+             an IP address of {{ new_vm_info.virtual_machines[0].ip_address }}
+             {{ new_vm_info.virtual_machines[0].allocated.cpu }} CPUs
+             {{ (new_vm_info.virtual_machines[0].allocated.memory | int / 1024) }} GB of memory
+             {{ new_vm_info.virtual_machines[0].allocated.storage | human_readable }} of disk allocated
+      ansible.builtin.debug:
+        msg: "{{ msg.split('\n') }}"
+
     - name: Remove host from TowerDeploy1 known hosts
       ansible.builtin.known_hosts:
         path: /home/deploy/.ssh/known_hosts
@@ -207,8 +167,3 @@
       delegate_to: towerdeploy1.princeton.edu
       become: true
       become_user: deploy
-
-  post_tasks:
-    - name: send information to slack
-      ansible.builtin.include_tasks:
-        file: slack_tasks_end_of_playbook.yml
