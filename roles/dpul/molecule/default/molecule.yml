@@ -11,14 +11,23 @@ lint: |
 platforms:
   - name: instance
     image: "ghcr.io/pulibrary/pul_containers:jammy_multi"
-    command: "/lib/systemd/systemd"
+    command: "sleep infinity"
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
     privileged: true
     pre_build_image: true
+    env:
+      ANSIBLE_REMOTE_TMP: /tmp/ansible
+    connection_options:
+      ansible_user: root
+      ansible_connection: docker
 provisioner:
   name: ansible
   log: true
-  prepare: prepare.yml
+  playbooks:
+    prepare: prepare.yml
+  config_options:
+    defaults:
+      remote_tmp: /tmp/ansible
 verifier:
   name: ansible
