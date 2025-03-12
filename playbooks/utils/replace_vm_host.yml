@@ -62,6 +62,16 @@
         uuid: "{{ old_vm_info.virtual_machines[0].uuid }}"
         state: powered-off
 
+    - name: Rename old VM using moid
+      community.vmware.vmware_object_rename:
+        hostname: "{{ vcenter_hostname }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        validate_certs: false
+        new_name: "{{ old_vm_info.virtual_machines[0].guest_name }}-TO_BE_DELETED"
+        object_moid: "{{ old_vm_info.virtual_machines[0].moid }}"
+        object_type: VirtualMachine
+
     - name: Create a new virtual machine from a template
       community.vmware.vmware_guest:
         hostname: "{{ vcenter_hostname }}"
@@ -112,19 +122,6 @@
       ansible.builtin.debug:
         msg: "{{ msg.split('\n') }}"
 
-    - name: Remove old VM using UUID
-      community.vmware.vmware_guest:
-        hostname: "{{ vcenter_hostname }}"
-        username: "{{ vcenter_username }}"
-        password: "{{ vcenter_password }}"
-        validate_certs: false
-        datacenter: "{{ vcenter_datacenter }}"
-        cluster: "{{ vcenter_cluster }}"
-        folder: "{{ vm_delete_me_folder }}"
-        uuid: "{{ old_vm_info.virtual_machines[0].uuid }}"
-        state: absent
-        force: true
-
     - name: Gather details on new VM
       community.vmware.vmware_vm_info:
         hostname: "{{ vcenter_hostname }}"
@@ -158,6 +155,19 @@
              {{ new_vm_info.virtual_machines[0].allocated.storage | human_readable }} of disk allocated
       ansible.builtin.debug:
         msg: "{{ msg.split('\n') }}"
+
+    - name: Remove old VM using UUID
+      community.vmware.vmware_guest:
+        hostname: "{{ vcenter_hostname }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        validate_certs: false
+        datacenter: "{{ vcenter_datacenter }}"
+        cluster: "{{ vcenter_cluster }}"
+        folder: "{{ vm_delete_me_folder }}"
+        uuid: "{{ old_vm_info.virtual_machines[0].uuid }}"
+        state: absent
+        force: true
 
     - name: Remove host from TowerDeploy1 known hosts
       ansible.builtin.known_hosts:
