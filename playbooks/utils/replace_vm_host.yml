@@ -62,6 +62,16 @@
         uuid: "{{ old_vm_info.virtual_machines[0].uuid }}"
         state: powered-off
 
+    - name: Rename old VM using moid
+      community.vmware.vmware_object_rename:
+        hostname: "{{ vcenter_hostname }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        validate_certs: false
+        new_name: "{{ old_vm_info.virtual_machines[0].guest_name + '-' old_vm_info.virtual_machines[0].moid }}"
+        object_moid: "{{ old_vm_info.virtual_machines[0].moid }}"
+        object_type: VirtualMachine
+
     - name: Create a new virtual machine from a template
       community.vmware.vmware_guest:
         hostname: "{{ vcenter_hostname }}"
