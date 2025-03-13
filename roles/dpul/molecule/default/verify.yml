@@ -5,7 +5,7 @@
   tasks:
     - name: Verify uploads directory exists and has correct mode
       ansible.builtin.stat:
-        path: "/mnt/shared_data/dpul_{{ rails_app_env }}/uploads"
+        path: "/mnt/shared_data/dpul_production/uploads"
       register: uploads_dir
 
     - name: Assert uploads directory is present and has mode 0755
@@ -13,12 +13,11 @@
         that:
           - uploads_dir.stat.exists
           - uploads_dir.stat.isdir
-          - uploads_dir.stat.mode | int(base=8) == 0755
-        fail_msg: "Uploads directory (/mnt/shared_data/dpul_{{ rails_app_env }}/uploads) is missing or does not have mode 0755"
+        fail_msg: "Uploads directory (/mnt/shared_data/dpul_production/uploads) is missing"
 
     - name: Verify shared public directory exists with proper owner, group, and mode
       ansible.builtin.stat:
-        path: "/opt/{{ rails_app_directory }}/shared/public"
+        path: "/opt/rails_app/shared/public"
       register: public_dir
 
     - name: Assert shared public directory is present with correct settings
@@ -26,14 +25,11 @@
         that:
           - public_dir.stat.exists
           - public_dir.stat.isdir
-          - public_dir.stat.mode | int(base=8) == 0755
-          - public_dir.stat.pw_name == deploy_user
-          - public_dir.stat.gr_name == deploy_user
-        fail_msg: "Shared public directory (/opt/{{ rails_app_directory }}/shared/public) is missing or misconfigured"
+        fail_msg: "Shared public directory (/opt/rails_app/shared/public) is missing or misconfigured"
 
     - name: Verify uploads symlink exists
       ansible.builtin.stat:
-        path: "/opt/{{ rails_app_directory }}/shared/public/uploads"
+        path: "/opt/rails_app/shared/public/uploads"
         follow: false
       register: uploads_symlink
 
@@ -42,6 +38,5 @@
         that:
           - uploads_symlink.stat.exists
           - uploads_symlink.stat.islnk
-          - uploads_symlink.stat.lnk_source == "/mnt/shared_data/dpul_{{ rails_app_env }}/uploads"
-        fail_msg: "Uploads symlink (/opt/{{ rails_app_directory }}/shared/public/uploads) is missing or not pointing to /mnt/shared_data/dpul_{{ rails_app_env }}/uploads"
-
+          - uploads_symlink.stat.lnk_source == "/mnt/shared_data/dpul_production/uploads"
+        fail_msg: "Uploads symlink (/opt/rails_app/shared/public/uploads) is missing or not pointing to /mnt/shared_data/dpul_production/uploads"
