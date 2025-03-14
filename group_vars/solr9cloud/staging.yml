@@ -5,129 +5,41 @@ install_zookeeper_from_source: true
 desired_ruby_version: "3.1.0"
 ruby_version_override: "ruby-3.1.0"
 solr_heap_setting: '20g'
+jardirectory: "/opt/solr/modules/analysis-extras/lib"
 # more granular option would be:
 # solr_java_memory: '-Xms16g -Xmx20g'
+# solr version
 solr_cloud_download_version: 9.2.0
+solr_cloud_version: "{{ solr_version }}"
+solr_version: "{{ solr_cloud_download_version }}"
 solr_log4j_path: '/solr/log4j2.xml'
-lib_zk4_host_name: lib-zk-staging4
-lib_zk5_host_name: lib-zk-staging5
-lib_zk6_host_name: lib-zk-staging6
-lib_zk4_host: '{{ vault_lib_zk_staging4_host }}'
-lib_zk5_host: '{{ vault_lib_zk_staging5_host }}'
-lib_zk6_host: '{{ vault_lib_zk_staging6_host }}'
 solr_znode: solr9
-solr_zookeeper_hosts_string_default: localhost:{{ solr_zookeeper_client_port }}
-solr_zookeeper_hosts_string_multi: '{{ lib_zk4_host_name }}:{{ solr_zookeeper_client_port }},{{ lib_zk5_host_name }}:{{ solr_zookeeper_client_port }},{{ lib_zk6_host_name }}:{{ solr_zookeeper_client_port }}'
-solr_zookeeper_hosts_string: '{{ solr_zookeeper_hosts_string_default if lib_zk4_host_name == "localhost" else solr_zookeeper_hosts_string_multi }}'
-zookeeper_env.{{ items }}:
-  - key: ZOO_LOG_DIR
-    value: "{{ zookeeper_log_dir }}"
-  - key: ZOO_LOG4J_PROP
-    value: "INFO,ROLLINGFILE"
-  - key: SERVER_JVMFLAGS
-    value: "-Xms2048m -Xmx2048m -verbose:gc -XX:+PrintGCDetails -Xlog:gc:$ZOO_LOG_DIR/zookeeper_gc.log"
-zookeeper_hosts_dict:
-  - host: '{{ lib_zk5_host_name }}'  # The leader in the Zookeeper ensemble
-    id: 1
-    ip: '{{ lib_zk5_host }}'
-  - host: '{{ lib_zk4_host_name }}'  # The second Zookeeper ensemble member
-    id: 2
-    ip: '{{ lib_zk4_host }}'
-  - host: '{{ lib_zk6_host_name }}'  # The final Zookeeper ensemble member
-    id: 3
-    ip: '{{ lib_zk6_host }}'
-solr_zk_host: '{{ solr_zookeeper_hosts_string }}{{ solr_znode_path if solr_znode else "" }}'
+solr_nodes:
+  #  - "lib-solr-staging1.princeton.edu"
+  #  - "lib-solr-staging2.princeton.edu"
+  #  - "lib-solr-staging3.princeton.edu"
+  - sandbox-solr1.lib.princeton.edu
+  - sandbox-solr2.lib.princeton.edu
+  - sandbox-solr3.lib.princeton.edu
+zookeeper_hosts:
+  #  - "lib-zk-staging4.princeton.edu:2181"
+  #  - "lib-zk-staging5.princeton.edu:2181"
+  #  - "lib-zk-staging6.princeton.edu:2181"
+  - "sandbox-zk1.lib.princeton.edu:2181"
+  - "sandbox-zk2.lib.princeton.edu:2181"
+  - "sandbox-zk3.lib.princeton.edu:2181"
 cjkfoldingfilter: https://github.com/pulibrary/pul_solr/raw/master/solr8_jars/CJKFoldingFilter.jar
-datadog_api_key: "{{ vault_datadog_key }}"
-datadog_config:
-  tags: "solrcloud, environment:staging, role:solr, version:9"
-  apm_enabled: false
-  log_enabled: true
-  dogstatsd_port: 8135
-  process_config:
-    enabled: "true"
-datadog_checks:
-  solrcloud:
-    init_config:
-    logs:
-      - type: file
-        path: /solr/logs/solr.log
-        service: solr
-        source: solr
-        log_processing_rules:
-          - type: multi_line
-            name: new_log_start_with_date
-            pattern: \d{4}\-(0?[1-9]|1[012])\-(0?[1-9]|[12][0-9]|3[01])
-          - type: exclude_at_match
-            name: exclude_solrcloud_distrib_queries
-            pattern: distrib=false
-      - type: file
-        path: /solr/logs/solr_gc.log.0.current
-        service: solr
-        source: solr_gc
-        log_processing_rules:
-          - type: multi_line
-            name: new_log_start_with_date
-            pattern: \d{4}\-(0?[1-9]|1[012])\-(0?[1-9]|[12][0-9]|3[01])
-  http_check:
-    init_config:
-    instances:
-      - name: Geniza Staging
-        url: 'http://localhost:8983/solr/geniza/admin/ping?wt=json&distrib=true&indent=true'
-        skip_event: true
-        tags:
-          - 'http_service:solr'
-          - 'application:geniza'
-          - 'environment:staging'
-  solr:
-    instances:
-      # location of tomcat
-      - host: localhost
-        port: 1099
-        conf:
-          - include:
-              category: CACHE
-              name: filterCache
-              scope:
-                - searcher
-              attribute:
-                cumulative_hitratio:
-                  alias: solr.filter_cache.cumulative_hitratio
-                  metric_type: gauge
-                cumulative_evictions:
-                  alias: solr.filter_cache.cumulative_evictions
-                  metric_type: gauge
-                size:
-                  alias: solr.filter_cache.size
-                  metric_type: gauge
-          - include:
-              category: CACHE
-              name: queryResultCache
-              scope:
-                - searcher
-              attribute:
-                cumulative_hitratio:
-                  alias: solr.query_result_cache.cumulative_hitratio
-                  metric_type: gauge
-                cumulative_evictions:
-                  alias: solr.query_result_cache.cumulative_evictions
-                  metric_type: gauge
-                size:
-                  alias: solr.query_result_cache.size
-                  metric_type: gauge
-          - include:
-              category: CACHE
-              name: documentCache
-              scope:
-                - searcher
-              attribute:
-                cumulative_hitratio:
-                  alias: solr.document_cache.cumulative_hitratio
-                  metric_type: gauge
-                cumulative_evictions:
-                  alias: solr.document_cache.cumulative_evictions
-                  metric_type: gauge
-                size:
-                  alias: solr.document_cache.size
-                  metric_type: gauge
-    init_config:
+# List of ZooKeeper nodes
+zk_nodes:
+  #  - host: "lib-zk-staging4.princeton.edu"
+  #    id: 1
+  #  - host: "lib-zk-staging5.princeton.edu"
+  #    id: 2
+  #  - host: "lib-zk-staging6.princeton.edu"
+  #    id: 3
+  - host: "sandbox-zk1.lib.princeton.edu"
+    id: 1
+  - host: "sandbox-zk2.lib.princeton.edu"
+    id: 2
+  - host: "sandbox-zk3.lib.princeton.edu"
+    id: 3

@@ -21,7 +21,7 @@
   ansible.builtin.command: >
     {{ solr_installation }}/bin/solr zk mkroot {{ solr_znode }}
     -z {{ solr_zookeeper_hosts_string }}
-  when: 
+  when:
     - znode_check is succeeded
     - znode_check.stdout is defined
     - solr_znode not in znode_check.stdout_lines
@@ -60,20 +60,7 @@
     - solr_cloud_download_version is defined
     - '"8" in solr_cloud_download_version'
 
-- name: Solrcloud | Configure SolrCloud 9 properties
-  ansible.builtin.template:
-    src: 'solr9.xml.j2'
-    dest: '{{ solr_data_dir }}/solr.xml'
-    owner: '{{ solr_user }}'
-    group: '{{ solr_group }}'
-    mode: "0644"
-    force: true
-  notify: Restart solr
-  when:
-    - solr_cloud_download_version is defined
-    - '"9" in solr_cloud_download_version'
-
-- name: solrcloud | Configure pre 7.4 logging
+- name: Solrcloud | Configure pre 7.4 logging
   ansible.builtin.template:
     src: 'log4j.properties.j2'
     dest: '/solr/log4j.properties'
