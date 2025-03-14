@@ -1,27 +1,22 @@
 ---
 # tasks file for roles/openjdk
-- name: openjdk | install java (package)
+- name: Openjdk | install java (package)
   ansible.builtin.apt:
     name: "{{ java_openjdk_package }}"
     state: present
-  when:
-    - running_on_server
+    update_cache: true
 
-- name: openjdk | find JAVA_HOME
+- name: Openjdk | find JAVA_HOME
   ansible.builtin.shell: set -o pipefail ; readlink -f /usr/bin/java | sed 's%/bin/java%%'
   args:
     executable: /bin/bash
   changed_when: false
   register: java_home
-  when:
-    - running_on_server
 
-- name: openjdk | set JAVA_HOME in /etc/environment
+- name: Openjdk | set JAVA_HOME in /etc/environment
   ansible.builtin.lineinfile:
     path: /etc/profile.d/java_home.sh
     regexp: '^JAVA_HOME='
     line: 'JAVA_HOME="{{ java_home.stdout }}"'
     create: true
-    mode: 0644
-  when:
-    - running_on_server
+    mode: "0644"
