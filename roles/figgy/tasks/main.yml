@@ -22,7 +22,6 @@
     - figgy_images
     - diglibdata
     - illiad
-    - '{{ figgy_cantaloupe_images_mount }}'
     - 'diglibdata/pudl'
     - 'diglibdata/hydra_binaries'
     - 'illiad/images'
@@ -81,6 +80,8 @@
     state: mounted
   when: running_on_server
 
+  # We don't think we need this anymore but we haven't tested that yet; it was
+  # from when we used cantaloupe for iiif derivatives
 - name: figgy | Ensure figgy derivatives mount directory exists
   ansible.builtin.file:
     path: '{{ figgy_derivatives_mount }}'
@@ -101,15 +102,6 @@
     - archives_bd
     - maplab
     - bitcur-archives
-
-- name: figgy | Create mount to studio (hydra sources)
-  ansible.posix.mount:
-    name: /mnt/hydra_sources/studio
-    src: //libserv64.princeton.edu/studio
-    fstype: cifs
-    opts: 'credentials=/etc/studio.smb.credentials,uid={{ deploy_user_uid }}'
-    state: absent
-  when: running_on_server
 
 - name: figgy | Create mount to studio (hydra sources)
   ansible.posix.mount:
@@ -192,7 +184,7 @@
     - src: '{{ figgy_repository_mount }}'
       link: '/opt/repository/files'
     - src: '{{ figgy_derivatives_mount }}'
-      link: '/opt/repository/derivatives'
+      link: '/opt/repository/derivatives' # probably unused, but configured in figgy so we should make sure it exists
     - src: '{{ figgy_stream_derivatives_mount }}'
       link: '/opt/repository/stream_derivatives'
 
