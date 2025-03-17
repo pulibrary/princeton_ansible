@@ -1,0 +1,24 @@
+---
+# by default this playbook runs in the staging environment
+# to run in production, pass '-e runtime_env=production'
+- name: build the redis servers for research data
+  hosts: pdc_describe_redis_{{ runtime_env | default('staging') }}
+  remote_user: pulsys
+  become: true
+  vars_files:
+    - ../site_vars.yml
+    - ../group_vars/pdc_describe_redis/main.yml
+    - ../group_vars/pdc_describe_redis/{{ runtime_env | default('staging') }}.yml
+    - ../group_vars/pdc_describe_redis/vault.yml
+
+  vars:
+
+  roles:
+    - role: roles/redis
+    - role: roles/datadog
+
+  post_tasks:
+      - name: send information to slack
+        ansible.builtin.include_tasks:
+          file: utils/slack_tasks_end_of_playbook.yml
+          
