@@ -58,6 +58,19 @@ server service.consul service=lowchallenge.traefik-wall-production resolve max_f
 
 If a site is under attack then you can uncomment the `highchallenge` line and comment the `lowchallenge`, reload the nginx config, and all visits will be challenged, effectively taking all bot traffic off the application servers.
 
+## Troubleshooting
+
+If everything is working, you should be able to visit the `/challenge` path for your application and see a cloudflare turnstile widget. If you don't get that, try some of these things:
+
+- deploy traefik wall to nomad
+- check the nginx configs to ensure they're pointing at the correct prod or staging traefik instance
+
+Other things you can use to trace network connections:
+
+- ensure the traefik box can reach the application box via curl (note you may need to install curl like `apk add curl` and include the X-Forwarded-Proto header) or wget
+- ensure the load balancer can reach the application box (note we don't know how to do this right now)
+- look at traefik logs in the nomad UI
+
 ## Cloudflare Configuration
 
 To view and modify the Cloudflare Turnstile configuration you can log in to [Cloudflare](https://dash.cloudflare.com/login) using access information found in LastPass.
