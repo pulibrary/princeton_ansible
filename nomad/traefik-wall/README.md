@@ -62,6 +62,10 @@ If a site is under attack then you can uncomment the `highchallenge` line and co
 
 To view and modify the Cloudflare Turnstile configuration you can log in to [Cloudflare](https://dash.cloudflare.com/login) using access information found in LastPass.
 
+## Traefik middlewares
+
+We're using 2 middlewares. `captcha-protect` protects anything that hits the `/catalog` route or a child thereof. `append-catalog-regex` redirects requests for facet values through the catalog route; you may need this one if you have facet requests coming through the root path like `my-site.princeton.edu/?f=[]`.
+
 ## Special Thanks
 
 This implementation would only be possible with the support of [joecorall](https://github.com/joecorall) for developing [captcha-protect](https://github.com/libops/captcha-protect) and [jrochkind](https://github.com/jrochkind) for testing a similar implementation for Rails applications.
