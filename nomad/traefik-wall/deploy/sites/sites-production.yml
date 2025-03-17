@@ -1,12 +1,13 @@
 http:
   routers:
-    lae-production:
-      service: lae-production
-      rule: Header(`X-Forwarded-Host`, `lae.princeton.edu`)
+    catalog-production:
+      service: catalog-production
+      rule: Header(`X-Forwarded-Host`, `catalog.princeton.edu`)
       entrypoints:
         - http
       middlewares:
         - captcha-protect
+        - append-catalog-regex
     findingaids-production:
       service: findingaids-production
       rule: Header(`X-Forwarded-Host`, `findingaids.princeton.edu`)
@@ -23,12 +24,22 @@ http:
       middlewares:
         - captcha-protect
         - append-catalog-regex
-  services:
     lae-production:
+      service: lae-production
+      rule: Header(`X-Forwarded-Host`, `lae.princeton.edu`)
+      entrypoints:
+        - http
+      middlewares:
+        - captcha-protect
+  services:
+    catalog-production:
       loadBalancer:
         servers:
-          - url: http://lae-prod1.princeton.edu:80
-          - url: http://lae-prod2.princeton.edu:80
+          - url: http://catalog1.princeton.edu:80
+          - url: http://catalog2.princeton.edu:80
+          - url: http://catalog3.princeton.edu:80
+          - url: http://catalog4.princeton.edu:80
+          - url: http://catalog5.princeton.edu:80
     findingaids-production:
       loadBalancer:
         servers:
@@ -38,3 +49,8 @@ http:
       loadBalancer:
         servers:
           - url: http://pulfalight-qa-web1.princeton.edu:80
+    lae-production:
+      loadBalancer:
+        servers:
+          - url: http://lae-prod1.princeton.edu:80
+          - url: http://lae-prod2.princeton.edu:80
