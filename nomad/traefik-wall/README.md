@@ -79,6 +79,17 @@ To view and modify the Cloudflare Turnstile configuration you can log in to [Clo
 
 We're using 2 middlewares. `captcha-protect` protects anything that hits the `/catalog` route or a child thereof. `append-catalog-regex` redirects requests for facet values through the catalog route; you may need this one if you have facet requests coming through the root path like `my-site.princeton.edu/?f=[]`.
 
+## How to allow a partner through the bot wall
+
+Sometimes we have vendors that programmatically access our resources and we want to let them through. To do so there are two options:
+
+1. **BEST** If they have a static IP range, represented by a CIDR (`x.x.x.x/yy`), then you can add them to exemptIps in the [production bot config](https://github.com/pulibrary/princeton_ansible/blob/main/nomad/traefik-wall/deploy/bot-plugin-production.tpl.yml#L18) and the [staging bot config](https://github.com/pulibrary/princeton_ansible/blob/main/nomad/traefik-wall/deploy/bot-plugin-staging.tpl.yml#L18), then deploy.
+
+2. If all of their IPs come from the same domain (you run `nslookup` on their IPs and it resolves to something like `x.them.com`, you can add them to goodBots in the [production bot config](https://github.com/pulibrary/princeton_ansible/blob/main/nomad/traefik-wall/deploy/bot-plugin-production.tpl.yml#L12) and the [staging bot config](https://github.com/pulibrary/princeton_ansible/blob/main/nomad/traefik-wall/deploy/bot-plugin-staging.tpl.yml#L12).
+    * **CAVEAT**: If they append parameters to their requests (like `/catalog/1234?auth_token=???`) their requests will still be blocked. If this is something we need to support we'll have to update the Traefik plugin.
+
+3. We can have a separate path for the APIs they use that isn't related to `/catalog` or `/advanced` - this is the most expensive option, and should be avoided.
+
 ## Special Thanks
 
 This implementation would only be possible with the support of [joecorall](https://github.com/joecorall) for developing [captcha-protect](https://github.com/libops/captcha-protect) and [jrochkind](https://github.com/jrochkind) for testing a similar implementation for Rails applications.
