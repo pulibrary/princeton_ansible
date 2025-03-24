@@ -31,6 +31,9 @@ load_module modules/ngx_http_xslt_filter_module.so;
 {% if nginx_modules.waf and nginx_type == "plus" %}
 load_module modules/ngx_http_app_protect_module.so;
 {% endif %}
+{% if nginx_modules.dos and nginx_type == "plus" %}
+load_module modules/ngx_http_app_protect_dos_module.so;
+{% endif %}
 
 user  nginx;
 worker_processes  auto;
@@ -58,6 +61,7 @@ http {
         '"status": "$status",'
         '"body_bytes_sent": "$body_bytes_sent",'
         '"referer": "$http_referer",'
+        '"host": "$host",'
         '"user_agent": "$http_user_agent"'
     '}';
 
@@ -74,6 +78,8 @@ http {
     app_protect_enable on;
     app_protect_security_log_enable on;
     app_protect_security_log "/etc/app_protect/conf/log_default.json" /var/log/app_protect/security.log;
+    {% elif nginx_modules.dos and nginx_type == "plus" %}
+    app_protect_dos_enable on;
     {% endif %}
 
     # app_protect_security_log log_all;

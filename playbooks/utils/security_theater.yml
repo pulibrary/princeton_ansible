@@ -102,36 +102,55 @@
         ansible.builtin.command: /etc/init.d/besclient start
       #For future maintenance, BigFix block ends here
 
-  - name: Check for rapid7 path
-    ansible.builtin.stat:
-      path: /opt/rapid7
-    register: rapid7_home
-  
-  - name: Install, configure, and start Rapid7
-    when: not rapid7_home.stat.exists
-    block:
-      - name: create new rapid7 directory
-        ansible.builtin.file:
-          path: /opt/rapid7
-          state: directory
+  - name: Download the Rapid7 deb file (Ubuntu)
+    ansible.builtin.get_url:
+      url: "https://isoshare.cpaneldev.princeton.edu/isoShares/Agents/Rapid7/Latest/Linux/rapid7-insight-agent_{{ rapid7_version }}-1_amd64.deb"
+      dest: "/tmp/rapid7-insight-agent_{{ rapid7_version }}-1_amd64.deb"
+      mode: "0644"
+    when:
+      - ansible_os_family == "Debian"
 
-      - name: Copy Rapid7 install script to box
-        ansible.builtin.copy:
-          src: ../../bin/Rapid7_agent_installer.sh
-          dest: /opt/rapid7/
-          owner: pulsys
-          group: pulsys
-          mode: '0744'
-        become: true
+  - name: Download the Rapid7 rpm file (RedHat)
+    ansible.builtin.get_url:
+      url: "https://isoshare.cpaneldev.princeton.edu/isoShares/Agents/Rapid7/Latest/Linux/rapid7-insight-agent-{{ rapid7_version }}-1.x86_64.rpm"
+      dest: "/tmp/rapid7-insight-agent-{{ rapid7_version }}-1.x86_64.rpm"
+      mode: "0644"
+    when:
+      - ansible_os_family == "RedHat"
 
-      - name: Execute Rapid7 install script
-        ansible.builtin.shell: sudo /opt/rapid7/Rapid7_agent_installer.sh install_start --token {{ vault_Rapid7_token }} --attributes="Library Systems"
+  - name: install Rapid7 agent (Ubuntu)
+    ansible.builtin.apt:
+      deb: "/tmp/rapid7-insight-agent_{{ rapid7_version }}-1_amd64.deb"
+    become: true
+    when:
+      - ansible_os_family == "Debian"
 
-      - name: Restart or start rapid7
-        ansible.builtin.service:
-          name: ir_agent
-          state: started
-  #     #For future maintenance, Rapid7 block ends here
+  - name: Verify GPG signature (RedHat)
+    ansible.builtin.rpm_key:
+      state: present
+      key: https://us.storage.endpoint.ingress.rapid7.com/com.rapid7.razor.public/endpoint/agent/latest/linux/x86_64/Rapid7_public_key.pub
+    become: true
+    when:
+      - ansible_os_family == "RedHat"
+
+  - name: install Rapid7 agent (RedHat)
+    ansible.builtin.yum:
+      name: "/tmp/rapid7-insight-agent-{{ rapid7_version }}-1.x86_64.rpm"
+      state: present
+    become: true
+    when:
+      - ansible_os_family == "RedHat"
+
+  - name: Configure the agent with token
+    ansible.builtin.shell:
+      /opt/rapid7/ir_agent/components/insight_agent/{{ rapid7_version }}/configure_agent.sh --token {{ vault_Rapid7_token }} --attributes="Library Systems"
+    become: true
+
+  - name: Restart or start rapid7
+    ansible.builtin.service:
+      name: ir_agent
+      state: restarted
+    become: true
 
   # post_tasks:
   #   - name: send information to slack

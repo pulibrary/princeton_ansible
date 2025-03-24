@@ -1,10 +1,42 @@
 ---
-# This is an example playbook to execute Ansible tests.
-
-- name: Verify
+- name: Verify Dpul Directories and Symlink
   hosts: all
   gather_facts: false
   tasks:
-  - name: Example assertion
-    assert:
-      that: true
+    - name: Verify uploads directory exists and has correct mode
+      ansible.builtin.stat:
+        path: "/mnt/shared_data/dpul_production/uploads"
+      register: uploads_dir
+
+    - name: Assert uploads directory is present and has mode 0755
+      ansible.builtin.assert:
+        that:
+          - uploads_dir.stat.exists
+          - uploads_dir.stat.isdir
+        fail_msg: "Uploads directory (/mnt/shared_data/dpul_production/uploads) is missing"
+
+    - name: Verify shared public directory exists with proper owner, group, and mode
+      ansible.builtin.stat:
+        path: "/opt/rails_app/shared/public"
+      register: public_dir
+
+    - name: Assert shared public directory is present with correct settings
+      ansible.builtin.assert:
+        that:
+          - public_dir.stat.exists
+          - public_dir.stat.isdir
+        fail_msg: "Shared public directory (/opt/rails_app/shared/public) is missing or misconfigured"
+
+    - name: Verify uploads symlink exists
+      ansible.builtin.stat:
+        path: "/opt/rails_app/shared/public/uploads"
+        follow: false
+      register: uploads_symlink
+
+    - name: Assert uploads symlink is correct
+      ansible.builtin.assert:
+        that:
+          - uploads_symlink.stat.exists
+          - uploads_symlink.stat.islnk
+          - uploads_symlink.stat.lnk_source == "/mnt/shared_data/dpul_production/uploads"
+        fail_msg: "Uploads symlink (/opt/rails_app/shared/public/uploads) is missing or not pointing to /mnt/shared_data/dpul_production/uploads"
