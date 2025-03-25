@@ -3,16 +3,9 @@
 #
 If !(auth:issuer eq "https://idp.princeton.edu/idp/shibboleth");
    Deny unaffiliated.html
-If !(auth:employeeType =~ "/^(stf|fac|eme|graduate|undergraduate|depguest|depaffil|exceptiondcu|instforadvstudies|hillel|sps|ugdcu|researchuser|chaplain|chaplainintrn|cas|gradetdc|docent|pup|xundergraduate|ubridge|xfac|puafrica|stp|shortTermAffiliate|chaplainIntrn)$/");
+If !(Any(auth:memberOf, "CN=PU:LIB:electronicaccess:remote,OU=Grouper,DC=pu,DC=win,DC=princeton,DC=edu"));
    Deny unauthorized.html
 Group Default
-Debug
-#If auth:eduPersonPrimaryAffiliation eq "staff";
-#   Admin
-#If Any(auth:eduPersonAffiliation, "employee");
-#   Msg I am employee
-#If Any(auth:eduPersonScopedAffiliation, "member@princeton.edu");
-#   Msg I am member
 {% for item in shib_admin_user %}
 If auth:eduPersonPrincipalName eq "{{ item }}";
    Admin
