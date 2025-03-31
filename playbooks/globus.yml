@@ -118,14 +118,53 @@
 
     - name: Wait for SSH to come up
       ansible.builtin.wait_for_connection:
-        delay: 60
+        delay: 10
         timeout: 320
       delegate_to: "{{ item.public_ip_address }}"
       loop: "{{ ec2.instances }}"
+  
+    - name: setting up public ip
+      set_fact:
+        public_ip: "{{ ec2.instances[0].public_ip_address }}"
 
+    - name: include the host in the cloud file
+      ansible.builtin.lineinfile:
+        path: ../inventory/by_cloud/aws
+        insertafter: '{{ globus_environment }}'
+        line: '{{ globus_instance_name }} ansible_host={{public_ip}}'
+    - meta: refresh_inventory 
+    - name: output the ssh connection information
+      debug:
+        msg: 'to connect to your new machine run `pulsys@{{public_ip}}'
   post_tasks:
     - name: tell everyone on slack you ran an ansible playbook
       community.general.slack:
         token: "{{ vault_pul_slack_token }}"
         msg: "Ansible ran `{{ ansible_play_name }}` on {{ inventory_hostname }}"
         channel: "{{ slack_alerts_channel }}"
+
+- name: build a Globus ec2 instance
+  hosts: "{{ globus_instance_name }}"
+  gather_facts: true
+  vars_files:
+    - ../group_vars/globus/{{ globus_environment }}.yml
+    - ../group_vars/globus/common.yml
+    - ../group_vars/globus/vault.yml
+  tasks:
+    - name: update the apt
+      ansible.builtin.apt:
+        update_cache: 'yes'
+        upgrade: 'full'
+        autoremove: true
+      become: true
+    - name: Unconditionally reboot the machine with all defaults
+      ansible.builtin.reboot:
+      become: true
+    - name: remind user to run a system level upgrade in needed
+      debug:
+        msg: "login to the new server and run `do-release-upgrade -f DistUpgradeViewNonInteractive`"
+  post_tasks:
+    - name: remind user to commit the host file
+      debug:
+        msg: "Do not forget to create a PR for the host file update to include your new machine in the inventory"
+   
