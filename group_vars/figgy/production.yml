@@ -1,25 +1,9 @@
 ---
-sidekiq_worker_name: figgy-workers
 sidekiq_worker_threads: 10
-rails_app_site_config_services:
-  - nginx
-  - "{{ sidekiq_worker_name }}"
-  - figgy-pubsub-worker
-  - figgy-realtime-workers
-passenger_ruby: "/usr/local/bin/ruby"
-passenger_extra_http_config:
-  - "passenger_preload_bundler on;"
-install_ruby_from_source: true
-ruby_version_override: "ruby-3.2.6"
 postgres_host: 'figgy-db-prod1.princeton.edu'
-postgresql_is_local: false
-memcached_listen_ip: 0.0.0.0
-postgres_version: 15
 postgres_admin_user: postgres
 passenger_server_name: "figgy.princeton.edu"
-passenger_app_root: "/opt/figgy/current/public"
 passenger_app_env: "production"
-desired_nodejs_version: "v22.10.0"
 figgy_db_name: 'figgy_production'
 figgy_db_user: '{{vault_figgy_db_user}}'
 figgy_db_password: '{{vault_figgy_db_password}}'
@@ -27,32 +11,15 @@ figgy_db_ro_user: '{{vault_figgy_db_ro_user}}'
 figgy_db_ro_password: '{{vault_figgy_db_ro_password}}'
 figgy_repository_mount: '/mnt/diglibdata/hydra_binaries/figgy_production'
 figgy_derivatives_mount: '/mnt/libimages2/data/jp2s/figgy_prod'
-figgy_stream_derivatives_mount: '/mnt/diglibdata/hydra_binaries/figgy_stream_derivatives'
 figgy_rabbit_user: '{{vault_rabbit_production_user}}'
 figgy_rabbit_password: '{{vault_rabbit_production_password}}'
 figgy_rabbit_server: 'amqp://{{figgy_rabbit_user}}:{{figgy_rabbit_password}}@{{figgy_rabbit_host}}:5672'
-figgy_read_only_mode: 'false'
-figgy_pudl_root: '{{vault_figgy_pudl_root}}'
 figgy_ezid_shoulder: '{{vault_figgy_ezid_shoulder}}'
 figgy_ezid_username: '{{vault_figgy_ezid_username}}'
 figgy_ezid_password: '{{vault_figgy_ezid_password}}'
-rabbitmq_user: '{{figgy_rabbit_user}}'
-rabbitmq_password: '{{figgy_rabbit_password}}'
 rails_app_env: "production"
 figgy_solr_name: figgy-production
-solr_port: "8983"
 figgy_host_name: 'figgy.princeton.edu'
-figgy_honeybadger_key: '{{vault_figgy_honeybadger_key}}'
-application_db_name: '{{figgy_db_name}}'
-application_dbuser_name: '{{figgy_db_user}}'
-application_dbuser_password: '{{figgy_db_password}}'
-application_dbuser_ro_name: '{{figgy_db_ro_user}}'
-application_dbuser_ro_password: '{{figgy_db_ro_password}}'
-application_dbuser_role_attr_flags: 'SUPERUSER'
-application_host: '{{passenger_server_name}}'
-application_host_protocol: 'https'
-project_db_host: '{{postgres_host}}'
-redis_bind_interface: '0.0.0.0'
 figgy_solr_url: 'http://lib-solr8-prod.princeton.edu:{{solr_port}}/solr/{{figgy_solr_name}}'
 rails_app_vars:
   - name: SECRET_KEY_BASE
@@ -159,8 +126,6 @@ rails_app_vars:
     value: '--openssl-legacy-provider'
   - name: PLAUSIBLE_API_KEY
     value: '{{ vault_figgy_plausible_api_key }}'
-passenger_extra_config: "{{ lookup('file', 'roles/figgy/templates/nginx_extra_config')  }}"
-passenger_max_pool_size: '12'
 deploy_ssh_users:
   - name: tpendragon
     key: https://github.com/tpendragon.keys
@@ -223,15 +188,4 @@ figgy_datadog_tls_check:
 imagemagick_max_memory: '8GiB'
 imagemagick_max_map: '8GiB'
 imagemagick_max_disk: '16GiB'
-redis__server_default_configuration:
-  syslog-enabled: "{{ redis__server_syslog | bool }}"
-  syslog-ident: "{{ redis__server_syslog_ident }}"
-  syslog-facility: "{{ redis__server_syslog_facility }}"
-  loglevel: "{{ redis__server_loglevel }}"
-  bind: "{{ redis__server_bind }}"
-  port: "{{ redis__server_port }}"
-  save: "{{ redis__server_save }}"
-  maxmemory: "{{ redis__server_maxmemory }}"
-  maxmemory-policy: "{{ redis__server_maxmemory_policy }}"
-  maxmemory-samples: "{{ redis__server_maxmemory_samples }}"
-figgy_github_package_token: "{{ vault_figgy_github_package_token }}"
+
