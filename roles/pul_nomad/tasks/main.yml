@@ -4,12 +4,14 @@
   ansible.builtin.include_role:
     name: 'ansible-consul'
     public: true
+  tags: consul_acl
 
 # Set up a runner host
 - name: 'pul_nomad | register a host to run unique commands'
   set_fact:
     unique_command_runner: "{{ groups['nomad_servers'][0] }}"
   run_once: true
+  tags: consul_acl
 
 # Output unique_command runner
 - name: 'pul_nomad | output unique_command_runner'
@@ -25,14 +27,17 @@
     CONSUL_HTTP_TOKEN: '{{ consul_acl_master_token }}'
   register: tokens
   changed_when: false
+  tags: consul_acl
 
 - name: 'pul_nomad | Store existing_consul_tokens'
   set_fact:
     existing_consul_tokens: "{{ tokens.stdout | from_json | map(attribute='SecretID') }}"
+  tags: consul_acl
 
 - name: 'nomad-node | Register existing node identities'
   set_fact:
     existing_node_names: "{{ tokens.stdout | from_json | community.general.json_query('[*].NodeIdentities[].NodeName') }}"
+  tags: consul_acl
 
 - name: 'pul_nomad | Create DNS ACL token'
   ansible.builtin.shell:
@@ -42,12 +47,14 @@
   when:
     - "unique_command_runner == inventory_hostname"
     - "consul_dns_token not in existing_consul_tokens"
+  tags: consul_acl
 
 - name: 'pul_nomad | Assign DNS ACL token'
   ansible.builtin.shell:
     cmd: "/usr/local/bin/consul acl set-agent-token dns '{{ consul_dns_token }}'"
   environment:
     CONSUL_HTTP_TOKEN: '{{ consul_acl_master_token }}'
+  tags: consul_acl
 
 # Consul setup for nomad
 
@@ -151,6 +158,15 @@
     dest: "/etc/consul/pul_nomad_client_policy.hcl"
     owner: "{{ consul_user }}"
     group: "{{ consul_group }}"
+  tags: consul_acl
+
+- name: 'pul_nomad | Create Nomad Task Policy to reference'
+  ansible.builtin.copy:
+    src: pul_nomad_client_policy.hcl
+    dest: "/etc/consul/pul_nomad_task_policy.hcl"
+    owner: "{{ consul_user }}"
+    group: "{{ consul_group }}"
+  tags: consul_acl
 
 - name: 'pul_nomad | Create Nomad Server Policy to reference'
   ansible.builtin.copy:
@@ -158,6 +174,7 @@
     dest: "/etc/consul/pul_nomad_server_policy.hcl"
     owner: "{{ consul_user }}"
     group: "{{ consul_group }}"
+  tags: consul_acl
 
 - name: 'pul_nomad | Register existing policies'
   ansible.builtin.shell:
@@ -166,10 +183,12 @@
     CONSUL_HTTP_TOKEN: '{{ consul_acl_master_token }}'
   register: policies
   changed_when: false
+  tags: consul_acl
 
 - name: 'pul_nomad | Store existing_consul_policies'
   set_fact:
     existing_consul_policies: "{{ policies.stdout | from_json | map(attribute='Name') }}"
+  tags: consul_acl
 
 - name: 'pul_nomad | Install Nomad Client Consul Policy'
   ansible.builtin.shell:
@@ -179,6 +198,17 @@
   when:
     - "unique_command_runner == inventory_hostname"
     - "'nomad-client-agents' not in existing_consul_policies"
+  tags: consul_acl
+
+- name: 'pul_nomad | Install Nomad Task Consul Policy'
+  ansible.builtin.shell:
+    cmd: "/usr/local/bin/consul acl policy create -name 'nomad-task-policy' -description 'Policy for Nomad tasks to read Consul' -rules '@/etc/consul/pul_nomad_task_policy.hcl'"
+  environment:
+    CONSUL_HTTP_TOKEN: '{{ consul_acl_master_token }}'
+  when:
+    - "unique_command_runner == inventory_hostname"
+    - "'nomad-task-policy' not in existing_consul_policies"
+  tags: consul_acl
 
 - name: 'pul_nomad | Install Nomad Server Consul Policy'
   ansible.builtin.shell:
@@ -188,6 +218,7 @@
   when:
     - "unique_command_runner == inventory_hostname"
     - "'nomad-server-agents' not in existing_consul_policies"
+  tags: consul_acl
 
 - name: 'pul_nomad | Create nomad client ACL token'
   ansible.builtin.shell:
@@ -197,6 +228,7 @@
   when:
     - "unique_command_runner == inventory_hostname"
     - "nomad_client_consul_token not in existing_consul_tokens"
+  tags: consul_acl
 
 - name: 'pul_nomad | Create nomad server ACL token'
   ansible.builtin.shell:
@@ -206,6 +238,17 @@
   when:
     - "unique_command_runner == inventory_hostname"
     - "nomad_server_consul_token not in existing_consul_tokens"
+  tags: consul_acl
+
+- name: 'pul_nomad | Create nomad task ACL token'
+  ansible.builtin.shell:
+    cmd: "/usr/local/bin/consul acl token create -policy-name 'nomad-task-policy' -secret '{{ nomad_task_consul_token }}'"
+  environment:
+    CONSUL_HTTP_TOKEN: '{{ consul_acl_master_token }}'
+  when:
+    - "unique_command_runner == inventory_hostname"
+    - "nomad_task_consul_token not in existing_consul_tokens"
+  tags: consul_acl
 
 - name: 'nomad-node | Generate Consul Client ACL Agent Token'
   ansible.builtin.shell:
@@ -217,6 +260,7 @@
     CONSUL_HTTP_TOKEN: '{{ consul_acl_master_token }}'
   register: created_agent_token_client
   changed_when: false
+  tags: consul_acl
 
 - name: 'nomad-node | Generate Consul Server ACL Agent Token'
   ansible.builtin.shell:
@@ -228,6 +272,7 @@
     CONSUL_HTTP_TOKEN: '{{ consul_acl_master_token }}'
   register: created_agent_token_server
   changed_when: false
+  tags: consul_acl
 
 - name: 'nomad-node | Set Consul ACL Agent Token'
   ansible.builtin.shell:
@@ -238,6 +283,7 @@
     - "inventory_hostname_short not in existing_node_names"
     - "consul_node_role == 'server'"
     - created_agent_token_server
+  tags: consul_acl
 
 - name: 'nomad-node | Set Consul ACL Agent Token'
   ansible.builtin.shell:
@@ -248,6 +294,7 @@
     - "inventory_hostname_short not in existing_node_names"
     - "consul_node_role == 'client'"
     - created_agent_token_client
+  tags: consul_acl
 
 # We need to get DNSMasq's 127.0.0.1 above the Princeton nameservers, but
 # NetworkManager manages DNS on RedHat machines. This updates the connection to
@@ -293,6 +340,7 @@
   ansible.builtin.include_role:
     name: 'ansible-nomad'
     public: true
+  tags: host_volumes
 
 - name: 'pul_nomad | Register existing nomad acl tokens'
   ansible.builtin.shell:
