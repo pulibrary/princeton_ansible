@@ -7,7 +7,7 @@
 # to run in with the another group, pass '-e rule_group=group_name'
 # by default this playbook runs in the staging environment
 # to run in production, pass '-e runtime_env=production'
-# For example `ansible-playbook playbooks/utils/checkmk_add_local_checks.yml --ask-vault-pass --limit=pdc-describe-staging2.princeton.edu` 
+# For example `ansible-playbook playbooks/utils/checkmk_add_local_checks.yml --ask-vault-pass --limit=pdc-describe-staging2.princeton.edu`
 #  will run with the staging runtime environment and the rails rule group on pdc-describe-staging2
 
 - name: Install CheckMk local check scripts on host
@@ -19,6 +19,9 @@
     - ../../group_vars/all/vault.yml
     - ../../group_vars/checkmk/{{ runtime_env | default('staging') }}.yml
     - ../../group_vars/checkmk/rule_{{ rule_group | default('rails') }}.yml
+    - ../../group_vars/checkmk/agent_common.yml
+    - ../../group_vars/checkmk/vault.yml
+
 
   pre_tasks:
       - name: stop playbook if you didn't use --limit
@@ -43,14 +46,14 @@
         server_url: "{{checkmk_agent_server_protocol}}://{{ checkmk_agent_server }}"
         site: "{{ checkmk_agent_site }}"
         automation_user: "{{ checkmk_agent_user }}"
-        automation_secret: "{{ checkmk_agent_pass }}"
+        automation_secret: "{{ vault_automation_secret }}"
         hosts: "{{ checkmk_agent_host_name }}"
         state: "new"
-      
+
     - name: "Start activation including foreign changes."
       checkmk.general.activation:
         server_url: "{{checkmk_agent_server_protocol}}://{{ checkmk_agent_server }}"
         site: "{{ checkmk_agent_site }}"
         automation_user: "{{ checkmk_agent_user }}"
-        automation_secret: "{{ checkmk_agent_pass }}"
+        automation_secret: "{{ vault_automation_secret }}"
         force_foreign_changes: 'true'
