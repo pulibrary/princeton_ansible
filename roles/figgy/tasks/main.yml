@@ -30,6 +30,27 @@
     - 'hosted_illiad'
     - 'hosted_illiad/ILL_OCR_Scans'
 
+- name: figgy | Create root mounts
+  ansible.builtin.file:
+    path: '/mnt/{{ item }}'
+    state: 'directory'
+  tags: 'mounts'
+  become: yes
+  loop:
+    - 'tigerdata'
+
+- name: figgy | Create tigerdata mount
+  ansible.posix.mount:
+    name: '/mnt/tigerdata'
+    src: 'td-mf-cl2.princeton.edu:/figgy'
+    fstype: nfs
+    opts: 'nfsvers=3,mountport=9015,port=9015,nolock,proto=tcp'
+    state: mounted
+  when:
+    - running_on_server
+    - "rails_app_env == 'staging'"
+  tags: 'mounts'
+
 - name: figgy | Copy smb credentials
   ansible.builtin.copy:
     src: "files/{{ item }}"
