@@ -1,0 +1,40 @@
+{{- with nomadVar "nomad/jobs/traefik-wall-testing" -}}
+http:
+  middlewares:
+    captcha-protect:
+      plugin:
+        captcha-protect:
+          # We're only protecting Blacklight apps for now.
+          # We have to add the DPUL exhibits one at a time right now, until
+          # there's wildcards. These are all the most visited ones by bots.
+          protectRoutes: "/catalog,/advanced,/sae/catalog,/igor-savchenko/catalog,/msstreasures/catalog,/alchemy/catalog,/islamicmss/catalog,/eastasian/catalog,/badakhshan_collection/catalog,/sae_sri_lanka_dissidents/catalog,/marquand-library/catalog,/medieval_manuscripts/catalog"
+          captchaProvider: turnstile
+          siteKey: "{{ .TURNSTILE_SITE_KEY }}"
+          secretKey: "{{ .TURNSTILE_SECRET_KEY }}"
+          goodBots: apple.com,archive.org,duckduckgo.com,facebook.com,google.com,googlebot.com,googleusercontent.com,instagram.com,kagibot.org,linkedin.com,msn.com,openalex.org,twitter.com,x.com,commoncrawl.org
+          persistentStateFile: /tmp/state.json
+          ipForwardedHeader: X-Forwarded-For
+          rateLimit: {{ env "rate_limit" }}
+          ipv4subnetMask: {{ env "subnet_mask" }}
+          protectParameters: "true"
+          exemptIps:
+            # These are our load balancer IPs
+            - 128.112.200.245/32
+            - 128.112.201.34/32
+            # PUL Network, trust these.
+            - 128.112.0.0/16
+            - 140.180.0.0/16
+            - 204.153.48.0/23
+            - 66.180.176.0/24
+            - 66.180.177.0/24
+            - 66.180.180.0/22
+          challengeTmpl: /challenge.tmpl.html
+          # Exclude facet routes - they're an ajax request.
+          excludeRoutes: "/catalog/facet,/catalog/range_limit"
+    append-catalog-regex:
+      redirectRegex:
+        # Matches http://x.x.x.x:yyyy/?f[]=
+        regex: //([^/]*)/\?f(.*)
+        # Converts to http://x.x.x.x:yyyy/catalog?f[]=
+        replacement: //${1}/catalog?f${2}
+{{- end -}}
