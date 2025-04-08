@@ -76,7 +76,7 @@ job "traefik-wall-testing" {
       }
 
       template {
-        source = "local/bot-plugin-production.tpl.yml"
+        source = "local/bot-plugin-testing.tpl.yml"
         destination = "local/traefik-config/bot-plugin.yml"
       }
 
