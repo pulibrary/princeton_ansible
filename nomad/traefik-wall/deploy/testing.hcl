@@ -72,7 +72,7 @@ job "traefik-wall-testing" {
 
       # Plugin Configuration
       artifact {
-        source = "https://raw.githubusercontent.com/pulibrary/princeton_ansible/${ var.branch_or_sha }/nomad/traefik-wall/deploy/bot-plugin-production.tpl.yml"
+        source = "https://raw.githubusercontent.com/pulibrary/princeton_ansible/${ var.branch_or_sha }/nomad/traefik-wall/deploy/bot-plugin-testing.tpl.yml"
       }
 
       template {
