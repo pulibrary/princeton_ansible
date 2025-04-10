@@ -1,4 +1,6 @@
 ---
+# You need the prometheus collection locally to run this:
+# ansible-galaxy collection install prometheus.prometheus
 - name: build or update figgy staging system
   hosts: figgy_staging
   remote_user: pulsys
@@ -20,6 +22,9 @@
     - role: roles/figgy
     - role: roles/figgy_pubsub_worker
     - role: roles/figgy_filewatcher_worker
+    # We need to watch NFS mounts without paying for it, Grafana will let us do
+    # that.
+    - role: prometheus.prometheus.node_exporter
   post_tasks:
     - name: tell everyone on slack you ran an ansible playbook
       slack:
