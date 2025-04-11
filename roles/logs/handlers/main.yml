@@ -1,0 +1,23 @@
+---
+# handlers file for roles/logs
+- name: Restart grafana
+  ansible.builtin.systemd:
+    name: grafana-server
+    state: restarted
+
+- name: Restart loki
+  ansible.builtin.systemd:
+    name: loki
+    state: restarted
+  become: true
+  when:
+    - running_on_server
+
+- name: Reload loki service
+  ansible.builtin.systemd:
+    name: loki
+    daemon_reload: true
+    state: reloaded
+  become: true
+  when:
+    - running_on_server
