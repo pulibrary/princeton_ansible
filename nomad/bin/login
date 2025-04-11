@@ -8,12 +8,14 @@ NOMAD_UI_BASE_URL="https://nomad.lib.princeton.edu"
 # --- VPN Check ---
 # Ensure the Nomad host is resolvable, implying a VPN connection.
 # stderr (2) and stdout (1) are redirected to /dev/null to suppress output.
+echo "Checking VPN connection to ${NOMAD_HOST}..."
 if ! nslookup "$NOMAD_HOST" >/dev/null 2>&1; then
-	# Print error message to stderr
-	echo "Error: Unable to resolve ${NOMAD_HOST}." >&2
-	echo "Please ensure you are connected to the VPN." >&2
-	exit 1 # Exit with a non-zero status indicating an error
+  # Print error message to stderr
+  echo "Error: Unable to resolve ${NOMAD_HOST}." >&2
+  echo "Please ensure you are connected to the VPN." >&2
+  exit 1 # Exit with a non-zero status indicating an error
 fi
+echo "VPN check passed."
 
 # --- Get Nomad Auth Token ---
 echo "Attempting to retrieve Nomad UI authentication token from ${NOMAD_HOST}..."
@@ -21,44 +23,58 @@ echo "Attempting to retrieve Nomad UI authentication token from ${NOMAD_HOST}...
 # Execute command remotely via SSH using a Here Document.
 # Captures the standard output of the remote command into the 'ssh_output' variable.
 ssh_output=$(
-	ssh "${SSH_USER}@${NOMAD_HOST}" <<EOF
+  ssh "${SSH_USER}@${NOMAD_HOST}" <<EOF
 nomad ui -authenticate -show-url
 EOF
 )
 
 # Check if SSH command returned anything
 if [ -z "$ssh_output" ]; then
-	echo "Error: Failed to retrieve output from SSH command on ${NOMAD_HOST}." >&2
-	exit 1
+  echo "Error: Failed to retrieve output from SSH command on ${NOMAD_HOST}." >&2
+  exit 1
 fi
 
 # --- Process Output ---
-# Extract the query string (e.g., "?authtoken=...") from the *last line* of the SSH output.
-# Assumes the output format includes "web UI: " followed potentially by other text and then the token/query part.
+# Extract the query string part (e.g., "?auth..." or "ott=...") from the *last line* of the result
+# Assumes the relevant output is on the last line and contains "web UI: "
 # The sed command captures everything after the non-greedy match '.*?'.
 # Using printf ensures special characters in ssh_output are handled correctly.
+echo "Parsing authentication token from SSH output..."
 auth_token=$(printf "%s" "$ssh_output" | tail -n 1 | sed 's/.*web UI: .*?\(.*\)/\1/')
 
-# Check if the token extraction was successful
+# Check if we successfully extracted the query string
 if [ -z "$auth_token" ]; then
-	echo "Error: Could not parse the authentication token from the SSH output." >&2
-	echo "Received output:" >&2
-	printf "%s\n" "$ssh_output" >&2 # Show what was received
-	exit 1
+  echo "Error: Could not parse the authentication token from the SSH output." >&2
+  echo "Received output:" >&2
+  printf "%s\n" "$ssh_output" >&2 # Show what was received
+  exit 1
 fi
+echo "Auth token part extracted: ${auth_token}" # Added for debugging clarity
 
 # --- Open Nomad UI ---
-# Construct the full URL. Assumes auth_token starts with '?' or similar separator.
-full_url="${NOMAD_UI_BASE_URL}${auth_token}"
+# Construct the full URL, adding '?' separator only if needed.
+
+echo "Constructing final URL..."
+# Check if the extracted token already starts with a '?'
+if [[ "${auth_token}" == \?* ]]; then
+  # Token already includes the '?', use it directly
+  full_url="${NOMAD_UI_BASE_URL}${auth_token}"
+  echo "Auth token already includes '?', constructing URL directly."
+else
+  # Token does NOT include '?', add the separator
+  full_url="${NOMAD_UI_BASE_URL}?${auth_token}"
+  echo "Auth token missing '?', adding separator."
+fi
 
 echo "Opening Nomad UI in default browser: ${full_url}"
 
 # Use the 'open' command (common on macOS) to open the URL.
 # Add error handling in case 'open' fails or is not available.
+# Consider adding alternatives like 'xdg-open' Linux as this fails on my Linux box
 if ! open "${full_url}"; then
-	echo "Error: Failed to open URL using the 'open' command." >&2
-	echo "Please open this URL manually: ${full_url}" >&2
-	exit 1
+  echo "Error: Failed to open URL using the 'open' command." >&2
+  echo "Please open this URL manually: ${full_url}" >&2
+  exit 1
 fi
 
 echo "Nomad UI should be opening."
