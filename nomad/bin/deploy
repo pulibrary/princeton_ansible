@@ -1,30 +1,87 @@
 #!/bin/bash
+
+# --- Configuration ---
+# Read command-line arguments
 APP=$1
 ENV=$2
+
+# Set defaults for environment variables BRANCH and REPO, allowing overrides
+# e.g., BRANCH=develop ./bin/deploy myapp staging
 BRANCH_NAME="${BRANCH:-main}"
 REPOSITORY="${REPO:-princeton_ansible}"
+GITHUB_ORG="pulibrary"
 
-# Make sure we're on VPN
-if ! nslookup nomad-host-prod1.lib.princeton.edu 2>&1 > /dev/null
-then
-  echo "Unable to connect to nomad-host-prod1. Ensure you're on VPN."
+# Define constants for clarity and easier modification
+NOMAD_HOST="nomad-host-prod1.lib.princeton.edu"
+SSH_USER="deploy"
+
+set -e # Exit immediately if a command exits with a non-zero status.
+# set -u # Treat unset variables (after defaults) as an error.
+# set -o pipefail # Causes pipelines to fail if any command fails, not just the last one.
+
+# --- Pre-flight Checks ---
+
+# 1. Validate Arguments
+if [[ -z "${APP}" ]]; then
+  echo "Error: Missing Application argument." >&2 # Send errors to stderr
+  echo "Usage: [BRANCH=<branch>] [REPO=<repo>] $0 <app> <env>" >&2
+  exit 1 # Exit with non-zero status on error
+fi
+
+if [[ -z "${ENV}" ]]; then
+  echo "Error: Missing Environment argument." >&2
+  echo "Usage: [BRANCH=<branch>] [REPO=<repo>] $0 <app> <env>" >&2
   exit 1
 fi
 
-if [[ -z "${APP}" ]];
-then
-  echo "Missing Application. Command: 'BRANCH=main ./bin/deploy <app> <env>'."
-  exit
+# 2. Validate VPN Connection
+# Check if the Nomad host is resolvable via DNS. Suppress command output.
+echo "Checking VPN connection to ${NOMAD_HOST}..."
+if ! nslookup "$NOMAD_HOST" >/dev/null 2>&1; then
+  echo "Error: Unable to resolve ${NOMAD_HOST}." >&2
+  echo "Please ensure you are connected to the VPN." >&2
+  exit 1
 fi
+echo "VPN check passed."
 
-if [[ -z "${APP}" ]];
-then
-  echo "Missing Environment. Command: 'BRANCH=main ./bin/deploy <app> <env>'."
-  exit
+# --- Get Git Commit SHA ---
+GITHUB_REPO_URL="https://github.com/${GITHUB_ORG}/${REPOSITORY}.git"
+echo "Fetching latest commit SHA for branch '${BRANCH_NAME}' from ${GITHUB_REPO_URL}..."
+
+# Use git ls-remote to get the ref, then awk to extract the full SHA.
+SHA=$(git ls-remote "${GITHUB_REPO_URL}" "${BRANCH_NAME}" | awk '{ print $1 }')
+
+# Validate that we got a SHA (should be 40 hex characters)
+if [[ -z "$SHA" || ${#SHA} -ne 40 ]]; then
+  echo "Error: Failed to retrieve a valid commit SHA for branch '${BRANCH_NAME}'." >&2
+  echo "Please check repository name ('${REPOSITORY}'), branch name ('${BRANCH_NAME}'), and network access." >&2
+  exit 1
 fi
+echo "Using commit SHA: ${SHA}"
 
-# Deploy using nomad-host-prod1, which has the nomad management key.
-SHA=$(git ls-remote https://github.com/pulibrary/${REPOSITORY}.git ${BRANCH_NAME} | awk '{ print substr($1,1,40) }')
-ssh deploy@nomad-host-prod1.lib.princeton.edu << EOF
-  curl -s "https://raw.githubusercontent.com/pulibrary/${REPOSITORY}/${SHA}/nomad/${APP}/deploy/${ENV}.hcl" | nomad job run -var "branch_or_sha=${SHA}" -
+# --- Execute Remote Deployment ---
+echo "Deploying app '${APP}' env '${ENV}' using commit '${SHA}' via ${NOMAD_HOST}..."
+
+# Construct the URL to the HCL file for the specific commit
+NOMAD_FILE_URL="https://raw.githubusercontent.com/${GITHUB_ORG}/${REPOSITORY}/${SHA}/nomad/${APP}/deploy/${ENV}.hcl"
+echo "Nomad job file URL: ${NOMAD_FILE_URL}"
+
+# Use SSH with a Here Document to execute the deployment command remotely.
+# curl fetches the HCL file, which is piped directly into 'nomad job run'.
+# The '-' argument tells nomad to read the job specification from standard input.
+# Variables ($NOMAD_FILE_URL, $SHA) are expanded *locally* before the command block is sent via SSH.
+if ! ssh "${SSH_USER}@${NOMAD_HOST}" <<EOF; then
+  echo "Executing on ${NOMAD_HOST}: Downloading job file and running nomad..."
+  # Use curl with -fsSL: fail fast (-f), silent (-s), show errors (-S), follow redirects (-L)
+  curl -fsSL "${NOMAD_FILE_URL}" | nomad job run -var "branch_or_sha=${SHA}" -
 EOF
+  # This block executes if the SSH command itself fails OR if any command within the <<EOF block exits non-zero
+  # (especially if `set -e` or `set -o pipefail` were enabled remotely, or if curl/nomad explicitly fails).
+  echo "Error: SSH command execution failed." >&2
+  echo "Check network connection to ${NOMAD_HOST}, SSH keys, permissions," >&2
+  echo "or review logs on ${NOMAD_HOST} for Nomad job submission errors." >&2
+  exit 1
+fi
+
+echo "Deployment command successfully sent to ${NOMAD_HOST} for ${APP}/${ENV}."
+exit 0 # Explicitly exit with success
