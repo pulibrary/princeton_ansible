@@ -1,0 +1,25 @@
+[Unit]
+Description=orangelight-sneakers
+After=syslog.target network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/orangelight/current
+ExecStart=/bin/bash --login -c "/usr/local/bin/bundle exec rake sneakers:run WORKERS=EventHandler RAILS_ENV=qa > /var/log/sneakers/sneakers.log 2>&1"
+User=deploy
+Group=deploy
+UMask=0002
+
+# if we crash, restart
+RestartSec=1
+Restart=on-failure
+
+# Output will now go to /var/log/sneakers/sneakers.log
+StandardOutput=append:/var/log/sneakers/sneakers.log
+StandardError=append:/var/log/sneakers/sneakers.log
+
+# This will default to "bundler" if we don't specify it
+SyslogIdentifier=sneakers
+
+[Install]
+WantedBy=multi-user.target
