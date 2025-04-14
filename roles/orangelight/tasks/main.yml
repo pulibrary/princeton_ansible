@@ -33,7 +33,7 @@
 - name: Orangelight | re-deploy sneakers systemd unit file
   ansible.builtin.template:
     src: sneakers.service.j2
-    dest: /etc/systemd/system/sneakers.service
+    dest: /etc/systemd/system/orangelight-sneakers.service
     owner: root
     group: root
     mode: '0644'
@@ -42,17 +42,20 @@
 
 - name: Orangelight | enable and start sneakers service
   ansible.builtin.systemd:
-    name: sneakers
+    name: orangelight-sneakers
     enabled: true
     state: started
   become: true
+  when: running_on_server
 
 - name: Orangelight | restart sneakers service (if changed)
   ansible.builtin.systemd:
-    name: sneakers
+    name: orangelight-sneakers
     state: restarted
   become: true
-  when: sneakers_service_changed
+  when:
+    - running_on_server
+    - sneakers_service_changed
 
 - name: Orangelight | create logrotate configuration for sneakers
   ansible.builtin.template:
