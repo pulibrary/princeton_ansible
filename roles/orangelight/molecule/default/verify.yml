@@ -10,4 +10,43 @@
       path: "/usr/local/bin/ruby"
     register: ruby_binary
     failed_when:
-      - not ruby_binary.stat.exists
+        - not ruby_binary.stat.exists
+
+  - name: Check if the sneakers log directory exists
+    ansible.builtin.stat:
+      path: /var/log/sneakers
+    register: sneakers_log_dir
+
+  - name: Check for sneakers log direcoty
+    ansible.builtin.assert:
+      that:
+        - sneakers_log_dir.stat.exists
+        - sneakers_log_dir.stat.isdir
+      msg: "Sneakers log directory is not configured correctly"
+
+  - name: Check if the sneakers systemd unit file exists
+    ansible.builtin.stat:
+      path: /etc/systemd/system/orangelight-sneakers.service
+    register: sneakers_unit_file
+
+  - name: Check for sneakers systemd unit file
+    ansible.builtin.assert:
+      that:
+        - sneakers_unit_file.stat.exists
+      msg: "Sneakers systemd unit file is not configured correctly"
+
+  - name: Check if the sneakers logrorate file exists
+    ansible.builtin.slurp:
+      path: /etc/logrotate.d/sneakers
+    register: sneakers_logrotate_config_content
+
+  - name: Check for sneakers logrotate file
+    ansible.builtin.assert:
+      that:
+        - "'/var/log/sneakers/sneakers.log' in sneakers_logrotate_config_content.content | b64decode"
+        - "'daily' in sneakers_logrotate_config_content.content | b64decode"
+        - "'rotate 7' in sneakers_logrotate_config_content.content | b64decode"
+        - "'compress' in sneakers_logrotate_config_content.content | b64decode"
+        - "'delaycompress' in sneakers_logrotate_config_content.content | b64decode"
+        - "'missingok' in sneakers_logrotate_config_content.content | b64decode"
+        - "'notifempty' in sneakers_logrotate_config_content.content | b64decode"

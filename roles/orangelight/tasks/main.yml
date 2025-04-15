@@ -1,22 +1,93 @@
 ---
 # tasks file for roles/orangelight
 
-- name: orangelight | update rubygems
+- name: Orangelight | update rubygems
   ansible.builtin.command: gem update --system 3.6.1
   become: true
   register: update_rubygems
   changed_when: '"Latest version already installed. Done." not in update_rubygems.stdout'
   tags: rubygems
 
-- name: orangelight | install default bundler
+- name: Orangelight | install default bundler
   ansible.builtin.command: gem install --default bundler:2.6.1
   become: true
   register: install_default_bundler
   changed_when: '"Fetching bundler-2.6.1.gem" in install_default_bundler.stdout'
   tags: rubygems
 
-- name: orangelight | remove old default bundler
+- name: Orangelight | remove old default bundler
   ansible.builtin.file:
     path: /usr/local/lib/ruby/gems/3.1.0/specifications/default/bundler-2.5.10.gemspec
     state: absent
   tags: rubygems
+
+- name: Orangelight | create sneakers log directory
+  ansible.builtin.file:
+    path: /var/log/sneakers
+    state: directory
+    owner: deploy
+    group: deploy
+    mode: '0755'
+  become: true
+
+- name: Orangelight | re-deploy sneakers systemd unit file
+  ansible.builtin.template:
+    src: sneakers.service.j2
+    dest: /etc/systemd/system/orangelight-sneakers.service
+    owner: root
+    group: root
+    mode: '0644'
+  become: true
+  notify: reload_systemd
+  register: sneakers_service_file
+
+- name: Orangelight | check sneakers log file status
+  stat:
+    path: /var/log/sneakers/sneakers.log
+  register: sneakers_log_file_stat
+
+- name: Orangelight | ensure sneakers log file ownership
+  ansible.builtin.file:
+    path: /var/log/sneakers/sneakers.log
+    owner: deploy
+    group: deploy
+    state: touch
+  become: true
+  when: sneakers_log_file_stat.stat.exists and (sneakers_log_file_stat.stat.owner != "deploy" or sneakers_log_file_stat.stat.group != "deploy")
+  register: sneakers_log_file_changed
+
+- name: Orangelight | enable and start sneakers service
+  ansible.builtin.systemd:
+    name: orangelight-sneakers
+    enabled: true
+    state: started
+  become: true
+  when: running_on_server
+
+- name: Orangelight | restart sneakers service (if changed)
+  ansible.builtin.systemd:
+    name: orangelight-sneakers
+    state: restarted
+  become: true
+  when:
+    - running_on_server
+    - sneakers_service_file.changed
+
+- name: Orangelight | create logrotate configuration for sneakers
+  ansible.builtin.template:
+    src: sneakers.logrotate.j2
+    dest: /etc/logrotate.d/sneakers
+    owner: root
+    group: root
+    mode: '0644'
+  become: true
+
+- name: Orangelight | check if sneakers logrotate configuration has changed
+  ansible.builtin.stat:
+    path: /etc/logrotate.d/sneakers
+  register: sneakers_logrotate_file
+
+- name: Orangelight | reload logrotate configuration
+  ansible.builtin.command: logrotate --force /etc/logrotate.conf
+  become: true
+  when: sneakers_logrotate_file.changed
