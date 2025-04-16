@@ -38,6 +38,12 @@ job "traefik-wall-production" {
       }
     }
 
+    service {
+      name = "traefik-wall-production-metrics"
+      tags = ["highchallenge", "production", "metrics"]
+      port = "metrics"
+    }
+
     task "traefik" {
       driver = "podman"
 
@@ -126,6 +132,12 @@ job "traefik-wall-production" {
         interval = "10s"
         timeout  = "2s"
       }
+    }
+
+    service {
+      name = "traefik-wall-production-metrics"
+      tags = ["lowchallenge", "production", "metrics"]
+      port = "metrics"
     }
 
     task "traefik" {

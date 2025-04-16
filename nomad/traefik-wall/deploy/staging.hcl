@@ -37,6 +37,11 @@ job "traefik-wall-staging" {
         timeout  = "2s"
       }
     }
+    service {
+      name = "traefik-wall-staging-metrics"
+      tags = ["highchallenge", "staging", "metrics"]
+      port = "metrics"
+    }
 
     task "traefik" {
       driver = "podman"
@@ -125,6 +130,12 @@ job "traefik-wall-staging" {
         interval = "10s"
         timeout  = "2s"
       }
+    }
+
+    service {
+      name = "traefik-wall-staging-metrics"
+      tags = ["lowchallenge", "staging", "metrics"]
+      port = "metrics"
     }
 
     task "traefik" {
