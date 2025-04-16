@@ -17,6 +17,7 @@ job "traefik-wall-testing" {
     network {
       port "http" { }
       port "traefik" { }
+      port "metrics" { }
 
       dns {
         servers = ["10.88.0.1", "128.112.129.209", "8.8.8.8", "8.8.4.4"]
@@ -51,7 +52,7 @@ job "traefik-wall-testing" {
 
       config {
         image        = "docker.io/library/traefik:v3.3"
-        ports = ["http", "traefik"]
+        ports = ["http", "traefik", "metrics"]
 
         volumes = [
           "local/traefik.yml:/etc/traefik/traefik.yml",
