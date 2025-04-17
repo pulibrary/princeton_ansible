@@ -17,6 +17,7 @@ job "traefik-wall-staging" {
     network {
       port "http" { }
       port "traefik" { }
+      port "metrics" { }
 
       dns {
         servers = ["10.88.0.1", "128.112.129.209", "8.8.8.8", "8.8.4.4"]
@@ -36,6 +37,11 @@ job "traefik-wall-staging" {
         timeout  = "2s"
       }
     }
+    service {
+      name = "traefik-wall-staging-metrics"
+      tags = ["highchallenge", "staging", "metrics"]
+      port = "metrics"
+    }
 
     task "traefik" {
       driver = "podman"
@@ -50,7 +56,7 @@ job "traefik-wall-staging" {
 
       config {
         image        = "docker.io/library/traefik:v3.3"
-        ports = ["http", "traefik"]
+        ports = ["http", "traefik", "metrics"]
 
         volumes = [
           "local/traefik.yml:/etc/traefik/traefik.yml",
@@ -105,6 +111,7 @@ job "traefik-wall-staging" {
     network {
       port "http" { }
       port "traefik" { }
+      port "metrics" { }
 
       dns {
         servers = ["10.88.0.1", "128.112.129.209", "8.8.8.8", "8.8.4.4"]
@@ -125,6 +132,12 @@ job "traefik-wall-staging" {
       }
     }
 
+    service {
+      name = "traefik-wall-staging-metrics"
+      tags = ["lowchallenge", "staging", "metrics"]
+      port = "metrics"
+    }
+
     task "traefik" {
       driver = "podman"
 
@@ -135,7 +148,7 @@ job "traefik-wall-staging" {
 
       config {
         image        = "docker.io/library/traefik:v3.3"
-        ports = ["http", "traefik"]
+        ports = ["http", "traefik", "metrics"]
 
         volumes = [
           "local/traefik.yml:/etc/traefik/traefik.yml",

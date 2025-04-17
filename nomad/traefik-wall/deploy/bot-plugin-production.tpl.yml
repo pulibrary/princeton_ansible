@@ -1,13 +1,19 @@
 {{- with nomadVar "nomad/jobs/traefik-wall-production" -}}
 http:
   middlewares:
+    metricAuth:
+      plugin:
+        traefik-api-key-auth:
+          bearerHeader: true
+          keys:
+            - "{{ .METRICS_AUTH_TOKEN }}"
     captcha-protect:
       plugin:
         captcha-protect:
           # We're only protecting Blacklight apps for now.
           # We have to add the DPUL exhibits one at a time right now, until
           # there's wildcards. These are all the most visited ones by bots.
-          protectRoutes: "/catalog,/advanced,/sae/catalog,/igor-savchenko/catalog,/msstreasures/catalog,/alchemy/catalog,/islamicmss/catalog,/eastasian/catalog,/badakhshan_collection/catalog,/sae_sri_lanka_dissidents/catalog,/marquand-library/catalog,/medieval_manuscripts/catalog"
+          protectRoutes: "/catalog,/advanced,/sae/catalog,/igor-savchenko/catalog,/msstreasures/catalog,/alchemy/catalog,/islamicmss/catalog,/eastasian/catalog,/badakhshan_collection/catalog,/sae_sri_lanka_dissidents/catalog,/marquand-library/catalog,/medieval_manuscripts/catalog,/gnib/catalog,/valva/catalog,/slavic/catalog,/performances/catalog,/pudl0135/catalog,/cotsen-collection/catalog,/pudl0038/catalog,/hellenica/catalog"
           captchaProvider: turnstile
           siteKey: "{{ .TURNSTILE_SITE_KEY }}"
           secretKey: "{{ .TURNSTILE_SECRET_KEY }}"
@@ -32,8 +38,6 @@ http:
             - 57.151.79.172/32
             - 57.151.79.127/32
           challengeTmpl: /challenge.tmpl.html
-          # Exclude facet routes - they're an ajax request.
-          excludeRoutes: "/catalog/facet,/catalog/range_limit"
     append-catalog-regex:
       redirectRegex:
         # Matches http://x.x.x.x:yyyy/?f[]=
