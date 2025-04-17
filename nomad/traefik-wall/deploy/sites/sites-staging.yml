@@ -7,66 +7,131 @@ http:
         - metrics
       middlewares: 
         - metricAuth
-    catalog-staging:
+
+    catalog-staging-skip-all-mw:
       service: catalog-staging
-      rule: Header(`X-Forwarded-Host`, `catalog-staging.princeton.edu`)
+      rule: "Header(`X-Forwarded-Host`, `catalog-staging.princeton.edu`) && Header(`Sec-Fetch-Dest`, `empty`)"
+      entrypoints:
+        - http
+      priority: 11
+    catalog-staging-apply-mw:
+      service: catalog-staging
+      rule: "Header(`X-Forwarded-Host`, `catalog-staging.princeton.edu`)"
       entrypoints:
         - http
       middlewares:
         - captcha-protect
         - append-catalog-regex
-    dpul-staging:
+      priority: 10
+
+    dpul-staging-skip-all-mw:
       service: dpul-staging
-      rule: Header(`X-Forwarded-Host`, `dpul-staging.princeton.edu`)
+      rule: "Header(`X-Forwarded-Host`, `dpul-staging.princeton.edu`) && Header(`Sec-Fetch-Dest`, `empty`)"
+      entrypoints:
+        - http
+      priority: 11
+    dpul-staging-apply-mw:
+      service: dpul-staging
+      rule: "Header(`X-Forwarded-Host`, `dpul-staging.princeton.edu`)"
       entrypoints:
         - http
       middlewares:
         - captcha-protect
-    dss-staging:
+      priority: 10
+
+    dss-staging-skip-all-mw:
       service: dss-staging
-      rule: Header(`X-Forwarded-Host`, `dss-staging.princeton.edu`)
+      rule: "Header(`X-Forwarded-Host`, `dss-staging.princeton.edu`) && Header(`Sec-Fetch-Dest`, `empty`)"
+      entrypoints:
+        - http
+    priority: 11
+    dss-staging-skip-all-mw:
+      service: dss-staging
+      rule: "Header(`X-Forwarded-Host`, `dss-staging.princeton.edu`)"
       entrypoints:
         - http
       middlewares:
         - captcha-protect
         - append-catalog-regex
-    figgy-staging:
+      priority: 10
+
+    figgy-staging-skip-all-mw:
       service: figgy-staging
-      rule: Header(`X-Forwarded-Host`, `figgy-staging.princeton.edu`)
+      rule: "Header(`X-Forwarded-Host`, `figgy-staging.princeton.edu`) && Header(`Sec-Fetch-Dest`, `empty`)"
+      entrypoints:
+        - http
+      priority: 11
+    figgy-staging-apply-mw:
+      service: figgy-staging
+      rule: "Header(`X-Forwarded-Host`, `figgy-staging.princeton.edu`)"
       entrypoints:
         - http
       middlewares:
         - captcha-protect
         - append-catalog-regex
-    findingaids-staging:
+      priority: 10
+
+    findingaids-staging-skip-all-mw:
       service: findingaids-staging
-      rule: Header(`X-Forwarded-Host`, `findingaids-staging.princeton.edu`)
+      rule: "Header(`X-Forwarded-Host`, `findingaids-staging.princeton.edu`) && Header(`Sec-Fetch-Dest`, `empty`)"
+      entrypoints:
+        - http
+      priority: 11
+    findingaids-staging-apply-mw:
+      service: findingaids-staging
+      rule: "Header(`X-Forwarded-Host`, `findingaids-staging.princeton.edu`)"
       entrypoints:
         - http
       middlewares:
         - captcha-protect
         - append-catalog-regex
-    lae-staging:
+      priority: 10
+
+    lae-staging-skip-all-mw:
       service: lae-staging
-      rule: Header(`X-Forwarded-Host`, `lae-staging.princeton.edu`)
+      rule: "Header(`X-Forwarded-Host`, `lae-staging.princeton.edu`) && Header(`Sec-Fetch-Dest`, `empty`)"
+      entrypoints:
+        - http
+      priority: 11
+    lae-staging-apply-mw:
+      service: lae-staging
+      rule: "Header(`X-Forwarded-Host`, `lae-staging.princeton.edu`)"
       entrypoints:
         - http
       middlewares:
         - captcha-protect
-    # Pulfalight-staging redirects to findingaids-staging.
-    pulfalight-staging:
+      priority: 10
+
+    pulfalight-staging-skip-all-mw:
       service: findingaids-staging
-      rule: Header(`X-Forwarded-Host`, `pulfalight-staging.princeton.edu`)
+      rule: "Header(`X-Forwarded-Host`, `pulfalight-staging.princeton.edu`) && Header(`Sec-Fetch-Dest`, `empty`)"
       entrypoints:
         - http
-    pulmap-staging:
+      priority: 11
+    # Pulfalight-staging redirects to findingaids-staging.
+    pulfalight-staging-apply-mw:
+      service: findingaids-staging
+      rule: "Header(`X-Forwarded-Host`, `pulfalight-staging.princeton.edu`)"
+      entrypoints:
+        - http
+      priority: 10
+
+    pulmap-staging-skip-all-mw:
       service: pulmap-staging
-      rule: Header(`X-Forwarded-Host`, `maps-staging.princeton.edu`)
+      rule: "Header(`X-Forwarded-Host`, `maps-staging.princeton.edu`) && Header(`Sec-Fetch-Dest`, `empty`)"
+      entrypoints:
+        - http
+      priority: 11
+    pulmap-staging-apply-mw:
+      service: pulmap-staging
+      rule: "Header(`X-Forwarded-Host`, `maps-staging.princeton.edu`)"
       entrypoints:
         - http
       middlewares:
         - captcha-protect
         - append-catalog-regex
+      priority: 10
+
   services:
     catalog-staging:
       loadBalancer:
