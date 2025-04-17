@@ -4,137 +4,133 @@ variable "branch_or_sha" {
 }
 job "log-shipping" {
   datacenters = ["dc1"]
-  type = "system"
-  node_pool   = "staging"
+  # system job, runs on all nodes
+  type = "system" 
+  node_pool = "staging"
   update {
-    max_parallel      = 1
-    min_healthy_time  = "10s"
-    healthy_deadline  = "3m"
+    min_healthy_time = "10s"
+    healthy_deadline = "5m"
     progress_deadline = "10m"
-    auto_revert       = false
+    auto_revert = true
   }
-  group "log-shipping" {
+  group "vector" {
     count = 1
+    restart {
+      attempts = 3
+      interval = "10m"
+      delay = "30s"
+      mode = "fail"
+    }
     network {
-      port "promtail-healthcheck" {
-        to = 3000
+      port "api" {
+        to = 8686
+      }
+      port "metrics" {
+        to = 9090
       }
     }
-    restart {
-      attempts = 2
-      interval = "30m"
-      delay    = "15s"
-      mode     = "fail"
+    service {
+      port = "metrics"
+      tags = ["metrics"]
+    }
+    volume "podman-socket" {
+      type = "host"
+      source = "podman-socket"
+      read_only = true
     }
     ephemeral_disk {
-      size = 300
+      size    = 500
+      sticky  = true
     }
-    task "nomad-forwarder" {
+    task "vector" {
       driver = "podman"
-      env {
-        VERBOSE    = 4
-        LOG_TAG    = "logging"
-        LOG_FILE   = "${NOMAD_ALLOC_DIR}/nomad-logs.log"
-        # this is the IP of the podman interface
-        NOMAD_ADDR = "http://10.88.0.1:4646"
-      }
-      template {
-        destination = "${NOMAD_SECRETS_DIR}/env.vars"
-        env = true
-        change_mode = "restart"
-        data = <<EOF
-        {{- with nomadVar "nomad/jobs/log-shipping" -}}
-        NOMAD_TOKEN = {{ .NOMAD_TOKEN }}
-        {{- end -}}
-        EOF
-      }
+      user = "root"
       config {
-        image = "docker.io/sofixa/nomad_follower:latest"
-      }
-      # resource limits are a good idea because you don't want your log collection to consume all resources available
-      resources {
-        cpu    = 100
-        memory = 512
-      }
-    }
-    task "promtail" {
-      driver = "podman"
-      config {
-        image = "docker.io/grafana/promtail:2.2.1"
-        args = [
-          "-config.file",
-          "local/config.yaml",
-          "-print-config-stderr",
+        image = "docker.io/timberio/vector:0.46.X-alpine"
+        ports = ["api", "metrics"]
+        selinux_opts = [
+          "disable"
         ]
-        ports = ["promtail-healthcheck"]
       }
-      template {
-        data = <<EOH
-server:
-  http_listen_port: 3000
-  grpc_listen_port: 0
-
-positions:
-  filename: {{ env "NOMAD_ALLOC_DIR" }}/positions.yaml
-
-client:
-  url: http://{{ range service "loki" }}{{ .Address }}:{{ .Port }}{{ end }}/loki/api/v1/push
-scrape_configs:
-- job_name: local
-  static_configs:
-  - targets:
-      - localhost
-    labels:
-      job: nomad
-      __path__: "{{ env "NOMAD_ALLOC_DIR" }}/nomad-logs.log"
-  pipeline_stages:
-    # extract the fields from the JSON logs
-    - json:
-        expressions:
-          alloc_id: alloc_id
-          job_name: job_name
-          job_meta: job_meta
-          node_name: node_name
-          service_name: service_name
-          service_tags: service_tags
-          task_meta: task_meta
-          task_name: task_name
-          message: message
-          data: data
-    # the following fields are used as labels and are indexed:
-    - labels:
-        job_name:
-        task_name:
-        service_name:
-        node_name:
-        service_tags:
-    # use a regex to extract a field called time from within message( which is for non-JSON formatted logs,
-    # so the assumption is that they're in the logfmt format,
-    # and a field time= is present with a timestamp in, which is the actual timestamp of the log)
-    - regex:
-        expression: ".*time=\\\"(?P<timestamp>\\S*)\\\"[ ]"
-        source: "message"
-    - timestamp:
-        source: timestamp
-        format: RFC3339
-EOH
-        destination = "local/config.yaml"
+      volume_mount {
+        volume = "podman-socket"
+        destination = "/var/run/podman/podman.sock"
+        read_only = true
       }
-      # resource limits are a good idea because you don't want your log collection to consume all resources available
+      env {
+        VECTOR_CONFIG = "local/vector.yml"
+        VECTOR_REQUIRE_HEALTHY = "true"
+      }
       resources {
         cpu    = 500
-        memory = 512
+        memory = 256
+      }
+      template {
+        destination = "local/vector.yml"
+        change_mode   = "signal"
+        change_signal = "SIGHUP"
+        # overriding the delimiters to [[ ]] to avoid conflicts with Vector's native templating, which also uses {{ }}
+        left_delimiter = "[["
+        right_delimiter = "]]"
+        data=<<EOH
+          data_dir: "alloc/data/vector/"
+          api:
+            enabled: false
+          # --- Sources ---
+          sources:
+            logs:
+              type: "docker_logs"
+              docker_host: "unix:///var/run/podman/podman.sock"
+            # Added source for Vector's internal metrics
+            internal_metrics:
+              type: "internal_metrics"
+          # --- Sinks ---
+          sinks:
+            out:
+              type: "console"
+              inputs: [ "logs" ]
+              encoding:
+                codec: "json"
+            loki:
+              type: "loki"
+              inputs: ["logs"]
+              endpoint: "http://[[ range service "loki" ]][[ .Address ]]:[[ .Port ]][[ end ]]"
+              encoding:
+                codec: "json"
+              healthcheck:
+                enabled: true
+              buffer:
+                type: "disk"
+                when_full: "block"
+                max_size: 1073741824
+              request:
+                retry_attempts: 5
+                retry_initial_backoff_secs: 1
+                retry_max_duration_secs: 60
+              labels:
+                job_name: "{{ label.com.hashicorp.nomad.job_name }}"
+                task_name: "{{ label.com.hashicorp.nomad.task_name }}"
+                group_name: "{{ label.com.hashicorp.nomad.task_group_name }}"
+                namespace: "{{ label.com.hashicorp.nomad.namespace }}"
+                node_name: "{{ label.com.hashicorp.nomad.node_name }}"
+              remove_label_fields: true
+            prometheus_exporter:
+              type: "prometheus_exporter"
+              inputs: ["internal_metrics"]
+              address: "0.0.0.0:9090"
+              namespace: "vector"
+        EOH
       }
       service {
-        name = "promtail"
-        port = "promtail-healthcheck"
         check {
+          port     = "api"
           type     = "http"
-          path     = "/ready"
-          interval = "10s"
-          timeout  = "2s"
+          path     = "/health"
+          interval = "30s"
+          timeout  = "5s"
         }
       }
+      kill_timeout = "30s"
     }
   }
 }

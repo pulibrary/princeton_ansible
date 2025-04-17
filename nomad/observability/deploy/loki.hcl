@@ -71,11 +71,11 @@ auth_enabled: false
 server:
   http_listen_port: 3100
   grpc_listen_port: 9096
-  log_level: debug
+  log_level: info
   grpc_server_max_concurrent_streams: 1000
 
 common:
-  instance_addr: 127.0.0.1
+  instance_addr: 0.0.0.0
   path_prefix: /loki
   storage:
     filesystem:
@@ -131,8 +131,8 @@ EOH
         destination = "local/loki/local-config.yaml"
       }
       resources {
-        cpu    = 512
-        memory = 256
+        cpu    = 2048
+        memory = 1024
       }
     }
   }
