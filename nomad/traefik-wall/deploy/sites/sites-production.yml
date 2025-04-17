@@ -5,24 +5,47 @@ http:
       service: prometheus@internal
       entryPoints:
         - metrics
-      middlewares: 
+      middlewares:
         - metricAuth
-    catalog-production:
+
+    catalog-production-skip-all-mw:
       service: catalog-production
-      rule: Header(`X-Forwarded-Host`, `catalog.princeton.edu`)
+      rule: "Header(`X-Forwarded-Host`, `catalog.princeton.edu`) && Header(`Sec-Fetch-Dest`, `empty`)"
+      entrypoints:
+        - http
+      priority: 11
+    catalog-production-apply-mw:
+      service: catalog-production
+      rule: "Header(`X-Forwarded-Host`, `catalog.princeton.edu`)"
       entrypoints:
         - http
       middlewares:
         - captcha-protect
         - append-catalog-regex
-    dpul-production:
+      priority: 10
+
+    dpul-production-skip-all-mw:
       service: dpul-production
-      rule: Header(`X-Forwarded-Host`, `dpul.princeton.edu`)
+      rule: "Header(`X-Forwarded-Host`, `dpul.princeton.edu`) && Header(`Sec-Fetch-Dest`, `empty`)"
+      entrypoints:
+        - http
+      priority: 11
+    dpul-production-apply-mw:
+      service: dpul-production
+      rule: "Header(`X-Forwarded-Host`, `dpul.princeton.edu`)"
       entrypoints:
         - http
       middlewares:
         - captcha-protect
-    dss-production:
+      priority: 10
+
+    dss-production-skip-all-mw:
+      service: dss-production
+      rule: "Header(`X-Forwarded-Host`, `dss.princeton.edu`) && Header(`Sec-Fetch-Dest`, `empty`)"
+      entrypoints:
+        - http
+      priority: 10
+    dss-production-apply-mw:
       service: dss-production
       rule: Header(`X-Forwarded-Host`, `dss.princeton.edu`)
       entrypoints:
@@ -30,45 +53,87 @@ http:
       middlewares:
         - captcha-protect
         - append-catalog-regex
-    figgy-production:
+      priority: 10
+
+    figgy-production-skip-all-mw:
       service: figgy-production
-      rule: Header(`X-Forwarded-Host`, `figgy.princeton.edu`)
+      rule: "Header(`X-Forwarded-Host`, `figgy.princeton.edu`) && Header(`Sec-Fetch-Dest`, `empty`)"
+      entrypoints:
+        - http
+      priority: 11
+    figgy-production-apply-mw:
+      service: figgy-production
+      rule: "Header(`X-Forwarded-Host`, `figgy.princeton.edu`)"
       entrypoints:
         - http
       middlewares:
         - captcha-protect
         - append-catalog-regex
-    findingaids-production:
+      priority: 10
+
+    findingaids-production-skip-all-mw:
       service: findingaids-production
-      rule: Header(`X-Forwarded-Host`, `findingaids.princeton.edu`)
+      rule: "Header(`X-Forwarded-Host`, `findingaids.princeton.edu`) && Header(`Sec-Fetch-Dest`, `empty`)"
+      entrypoints:
+        - http
+      priority: 11
+    findingaids-production-apply-mw:
+      service: findingaids-production
+      rule: "Header(`X-Forwarded-Host`, `findingaids.princeton.edu`)"
       entrypoints:
         - http
       middlewares:
         - captcha-protect
         - append-catalog-regex
-    findingaids-qa:
+      priority: 10
+
+    findingaids-qa-skip-all-mw:
       service: findingaids-qa
-      rule: Header(`X-Forwarded-Host`, `findingaids-qa.princeton.edu`)
+      rule: "Header(`X-Forwarded-Host`, `findingaids-qa.princeton.edu`) && Header(`Sec-Fetch-Dest`, `empty`)"
+      entrypoints:
+        - http
+      priority: 11
+    findingaids-qa-apply-mw:
+      service: findingaids-qa
+      rule: "Header(`X-Forwarded-Host`, `findingaids-qa.princeton.edu`)"
       entrypoints:
         - http
       middlewares:
         - captcha-protect
         - append-catalog-regex
-    lae-production:
+      priority: 10
+
+    lae-production-skip-all-mw:
       service: lae-production
-      rule: Header(`X-Forwarded-Host`, `lae.princeton.edu`)
+      rule: "Header(`X-Forwarded-Host`, `lae.princeton.edu`) && Header(`Sec-Fetch-Dest`, `empty`)"
+      entrypoints:
+        - http
+      priority: 11
+    lae-production-apply-mw:
+      service: lae-production
+      rule: "Header(`X-Forwarded-Host`, `lae.princeton.edu`)"
       entrypoints:
         - http
       middlewares:
         - captcha-protect
-    maps-production:
+      priority: 10
+
+    maps-production-skip-all-mw:
       service: maps-production
-      rule: Header(`X-Forwarded-Host`, `maps.princeton.edu`)
+      rule: "Header(`X-Forwarded-Host`, `maps.princeton.edu`) && Header(`Sec-Fetch-Dest`, `empty`)"
+      entrypoints:
+        - http
+      priority: 11
+    maps-production-apply-mw:
+      service: maps-production
+      rule: "Header(`X-Forwarded-Host`, `maps.princeton.edu`)"
       entrypoints:
         - http
       middlewares:
         - captcha-protect
         - append-catalog-regex
+      priority: 10
+
   services:
     catalog-production:
       loadBalancer:
