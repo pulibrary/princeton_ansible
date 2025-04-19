@@ -6,25 +6,29 @@
 #     title: Sandboxes
 # checkmk_agent_server: "{{ server_url }}"
 # SOON TO BE SHARED
-# checkmk_agent_edition: cee
-# checkmk_agent_version: "2.3.0p15" / 2.2.0p9
-# checkmk_agent_update: 'true' / not listed
 # checkmk_server_edition: cee / cre
 # checkmk_server_version: 2.3.0p15 / 2.2.0p9
 
 # These values are shared
-site: "pulmonitor"
 # agent auth
-checkmk_agent_user: troubleshooting
-checkmk_agent_pass: "{{ vault_checkmk_pass }}"
-checkmk_agent_auth: "{{ checkmk_agent_pass }}"
+checkmk_agent_user: automation
+# we will put the secret in the environment-specific files
+# in the agent_common.yml file we had:
+  # checkmk_agent_secret: "{{ vault_ansible_automation_secret }}"
+# and in the remote.yml file we had:
+  # checkmk_agent_secret: "{{ vault_automation_secret }}"
+
 # other agent settings, alphabetized
 checkmk_agent_add_host: 'true'
 checkmk_agent_auto_activate: "true" # set this to 'true' to run the handler
+# checkmk_agent_auto_activate was set to 'false' in the old agent_common.yml file
 checkmk_agent_configure_firewall: 'false'
 checkmk_agent_delegate_api_calls: "{{ inventory_hostname }}"
+checkmk_agent_delegate_download: "{{ inventory_hostname }}"
 checkmk_agent_discover: 'true'
-checkmk_agent_folder: "{{ checkmk_folder }}" # all lowercase, for example: /linux/rdss
+# checkmk_agent_discover was set to 'false' in the old agent_common.yml file
+checkmk_agent_edition: cee
+checkmk_agent_folder: "{{ checkmk_folder | default('main') }}" # all lowercase, for example: linux/rdss
 checkmk_agent_force_foreign_changes: "true"
 # we may want to remove this, I think we override it in the playbook
 # to strip 'princeton.edu' from the hostnames
@@ -34,21 +38,24 @@ checkmk_agent_protocol: http
 checkmk_agent_receiver_port: 8000
 checkmk_agent_registration_server: "{{ checkmk_agent_server }}"
 checkmk_agent_registration_site: "{{ checkmk_agent_site }}"
-checkmk_agent_server_port: 80
+checkmk_agent_server_port: "{% if checkmk_agent_server_protocol == 'https' %}443{% else %}80{% endif %}"
 checkmk_agent_server_protocol: http
 checkmk_agent_server_validate_certs: "true"
-checkmk_agent_site: pulmonitor
 checkmk_agent_tls: 'true'
 checkmk_agent_update: 'true'
+checkmk_agent_version: "2.3.0p15"
+
 
 # Server Role
 checkmk_server_configure_firewall: 'false'
 checkmk_server_download_pass: "{{ vault_checkmk_download_pass }}"
 checkmk_server_download_user: "{{ vault_checkmk_download_user }}"
+checkmk_server_edition: cee
 checkmk_server_verify_setup: 'true'
+checkmk_server_version: 2.3.0p15
 # sites listing
 checkmk_server_sites:
-  - name: pulmonitor
+  - name: production
     version: "{{ checkmk_server_version }}"
     state: started
     admin_pw: "{{ vault_admin_pw }}"
