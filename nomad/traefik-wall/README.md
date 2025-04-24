@@ -27,6 +27,25 @@ sequenceDiagram
   end
 ```
 
+## Add Traefik Bot Coverage to a website
+- Edit `nomad/traefik-wall/deploy/sites/sites-<env>.yml`
+  - add a new `router` entry for the website
+  - add a new `service` entry for the website
+- Edit `roles/nginxplus/files/conf/http/<site>.conf` (or `roles/nginxplus/files/conf/http/dev/<site>.conf` if the site runs on the dev/staging load balancers)
+  - add a new `server` entry for `service.consul`
+  - add a new `resolver` entry for nomad
+  - confirm that all four `proxy_set_header` entries are included, add any that are missing
+  ```
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $remote_addr;
+  ```
+- Confirm that traffic is allowed from the LibNetPvt subnet to all VMs/machines on the firewall (only necessary for VMs with publicly routable IPs)
+  - Update firewall rules if necessary
+- Deploy the changes to the traefik-wall configuration to the correct environment as described in the Deployment section below.
+- Confirm that it's working by visiting <sitename>.princeton.edu/challenge
+
 ## Deployment
 
 From `nomad` directory: `BRANCH=main ./bin/deploy traefik-wall staging`
