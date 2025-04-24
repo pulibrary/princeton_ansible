@@ -15,6 +15,14 @@ http:
         - http
       middlewares:
         - captcha-protect
+    dss-production:
+      service: dss-production
+      rule: Header(`X-Forwarded-Host`, `dss.princeton.edu`)
+      entrypoints:
+        - http
+      middlewares:
+        - captcha-protect
+        - append-catalog-regex
     figgy-production:
       service: figgy-production
       rule: Header(`X-Forwarded-Host`, `figgy.princeton.edu`)
@@ -72,6 +80,11 @@ http:
         servers:
           - url: http://dpul-prod1.princeton.edu:80
           - url: http://dpul-prod2.princeton.edu:80
+    dss-production:
+      loadBalancer:
+        servers:
+          - url: http://dss-prod1.princeton.edu:80
+          - url: http://dss-prod2.princeton.edu:80
     figgy-production:
       loadBalancer:
         healthCheck:
