@@ -1,13 +1,16 @@
 # logrotate configuration for app_protect in {{ ansible_managed | comment }}
 #
 "{{ app_protect_dir }}" {
-    daily
-    rotate 7
     compress
-    missingok
-    notifempty
     copytruncate
-    delaycompress
-    dateext
     create 0640 nginx nginx
+    daily
+    delaycompress
+    notifempty
+    missingok
+    maxsize 5G
+    rotate 14
+    postrotate
+        /bin/systemctl restart nginx-app-protect.service > /dev/null 2>/dev/null || true
+    endscript
 }
