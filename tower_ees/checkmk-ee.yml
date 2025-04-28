@@ -1,0 +1,65 @@
+---
+# EE definition for general PUL automation
+# to build an EE, run `ansible-builder build`
+
+# builder schema version
+version: 3
+
+images:
+  # build a new image based on this image
+  base_image:
+    name: registry.redhat.io/ansible-automation-platform-24/ee-supported-rhel8:1.0.0-543
+    # name: registry.redhat.io/ansible-automation-platform-24/ee-supported-rhel9
+
+dependencies:
+  ansible_core:
+    package_pip: ansible-core==2.15.7
+  ansible_runner:
+    package_pip: ansible-runner
+  python_interpreter:
+    python_path: "/usr/bin/python3"
+  galaxy:
+    # includes all collections used in the prancible repo
+    # versions taken from the Ansible 8 inclusion list:
+    # https://github.com/ansible-community/ansible-build-data/blob/main/8/ansible-8.7.0.yaml
+    collections:
+      - name: ansible.netcommon
+        version: 5.3.0
+      - name: ansible.posix
+        version: 1.5.4
+      - name: ansible.utils
+        version: 2.12.0
+      - name: community.crypto
+        version: 2.16.1
+      - name: community.dns
+        version: 2.6.4
+      - name: community.general
+        version: 7.5.2
+    # these collections are not in Ansible package
+    # latest versions from Galaxy as of Feb. 2024
+      - name: checkmk.general
+        version: 4.3.1
+
+  # python packages, stuff you install with 'pip install'
+  python:
+    - six
+    - psutil
+
+  # system packages, stuff you install with 'apt/yum/dnf install'
+  # ansible-builder writes this list into the 'context/bindep.txt' file
+  system:
+    - git
+    - python3-dnf
+    - python3-pip
+options:
+  # default path is /usr/bin/dnf, which does not exist on the base image
+  package_manager_path: /usr/bin/microdnf
+
+# if you need to run more commands on the EE, use this section:
+# additional_build_steps:
+  # items in the list of append_base steps are expressed
+  # as containerfile directives
+  # prepend_base:
+    # - RUN /usr/bin/apt-get update
+  # append_base:
+    # - RUN /usr/bin/python3 -m pip install --upgrade pip
