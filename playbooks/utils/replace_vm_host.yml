@@ -38,18 +38,18 @@
 
     - name: Print out warning
       ansible.builtin.debug:
-        msg: 
-        - Ansible will now move and power off the current {{ old_vm_info.virtual_machines[0].guest_name }} VM. 
+        msg:
+        - Ansible will now move and power off the current {{ old_vm_info.virtual_machines[0].guest_name }} VM.
         - Then create a replacement in the {{ old_vm_net_info.network_info[0].network_name }} network.
 
-    - name: Move old VM to the ToBeDeleted folder
+    - name: Move old VM to a different folder (ToBeDeleted, Forensics)
       community.vmware.vmware_guest_move:
         hostname: "{{ vcenter_hostname }}"
         username: "{{ vcenter_username }}"
         password: "{{ vcenter_password }}"
         validate_certs: false
         datacenter: "{{ vcenter_datacenter }}"
-        dest_folder: "{{ vm_delete_me_folder }}"
+        dest_folder: "{{ vm_dest_folder }}"
         uuid: "{{ old_vm_info.virtual_machines[0].uuid }}"
 
     - name: Power off old VM using UUID
@@ -68,7 +68,7 @@
         username: "{{ vcenter_username }}"
         password: "{{ vcenter_password }}"
         validate_certs: false
-        new_name: "{{ old_vm_info.virtual_machines[0].guest_name }}-TO_BE_DELETED"
+        new_name: "{{ old_vm_info.virtual_machines[0].guest_name }}-{{ ansible_date_time.iso8601_basic_short }}"
         object_moid: "{{ old_vm_info.virtual_machines[0].moid }}"
         object_type: VirtualMachine
 
@@ -164,10 +164,11 @@
         validate_certs: false
         datacenter: "{{ vcenter_datacenter }}"
         cluster: "{{ vcenter_cluster }}"
-        folder: "{{ vm_delete_me_folder }}"
+        folder: "{{ vm_dest_folder }}"
         uuid: "{{ old_vm_info.virtual_machines[0].uuid }}"
         state: absent
         force: true
+      when: vm_dest_folder is search("ToBeDeleted")
 
     - name: Remove host from TowerDeploy1 known hosts
       ansible.builtin.known_hosts:
