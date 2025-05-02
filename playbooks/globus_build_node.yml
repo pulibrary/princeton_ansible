@@ -1,0 +1,57 @@
+# Ansible expects you to have `~/.aws/credentials` configured
+# you will need to create these on your own
+#
+# This playbook also assumes the node has been created with the globus.yml playbook and the inventory/by_cloud/aws file 
+#    has the host in the correct location for the gloubs_environment you specify
+#
+# It is safe to re-run this playbook on an existing node.  If the globus node is already
+#    configured it will essentially noop
+#
+# NOTE: You must pass a variable for a var file globus_environment and limit to a specific host
+# eg. ansible-playbook playbooks/globus_build_node --limit pdc-globus-staging-embargo -e globus_environment=pdc_staging
+---
+- import_playbook: utils/os_updates.yml
+- name: build a globus node from configuration files
+  hosts: "{{ globus_environment }}"
+  remote_user: pulsys
+  become: true
+  pre_tasks:
+    - name: stop playbook if you didn't use --limit
+      fail:
+        msg: "you must use -l or --limit"
+      when: ansible_limit is not defined
+      run_once: true
+  tasks:
+    - name: globus_build_node | Create app_configs directory if it does not exist
+      ansible.builtin.file:
+        path: /home/pulsys/app_configs
+        state: directory
+        mode: '0755'
+    - name: globus_build_node | copy the node_info to the server
+      ansible.builtin.copy:
+        src: "{{playbook_dir}}/../group_vars/globus/{{ansible_limit}}/node_info.json"
+        dest: /home/pulsys/app_configs/node_info.json
+        owner: pulsys
+        group: pulsys
+        mode: '0644'
+    - name: globus_build_node | copy the deployment-key to the server
+      ansible.builtin.copy:
+        src: "{{playbook_dir}}/../group_vars/globus/{{ansible_limit}}/deployment-key.json"
+        dest: /home/pulsys/app_configs/deployment-key.json
+        owner: pulsys
+        group: pulsys
+        mode: '0644'
+    - name: globus_build_node | setup the node and import node configuration
+      ansible.builtin.command: gcs node setup --import-node node_info.json
+      args:
+        chdir: /home/pulsys/app_configs
+      become: true
+      register: node_setup
+      changed_when: '"To activate the new configuration" in node_setup.stdout'
+      tags: rubygems
+
+
+  post_tasks:
+    - name: send information to slack
+      ansible.builtin.include_tasks:
+        file: utils/slack_tasks_end_of_playbook.yml
