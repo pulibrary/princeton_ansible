@@ -11,8 +11,8 @@
     - ../../group_vars/crowdstrike/vars.yml
     - ../../group_vars/all/vars.yml
     - ../../group_vars/all/vault.yml
-  
-  pre_tasks: 
+
+  pre_tasks:
   - name: Populate service facts
     ansible.builtin.service_facts:
 
@@ -20,8 +20,8 @@
     ansible.builtin.package_facts:
 
   tasks:
-  - name: include falcon_install 
-    ansible.builtin.include_role: 
+  - name: include falcon_install
+    ansible.builtin.include_role:
       name: crowdstrike.falcon.falcon_install
     vars:
       falcon_client_id: "{{ vault_crowdstrike_client_id }}"
@@ -41,14 +41,14 @@
     ansible.builtin.debug:
       var: falcon_configured
 
-  - name: include falcon_configure 
+  - name: include falcon_configure
     ansible.builtin.include_role:
       name: crowdstrike.falcon.falcon_configure
     vars:
       falcon_client_id: "{{ vault_crowdstrike_client_id }}"
       falcon_client_secret: "{{ vault_crowdstrike_secret }}"
     when:
-      - "'falcon-sensor' not in ansible_facts.packages"
+      - not falcon_configured.stat.exists
 
   - name: Install, configure, and start BigFix
     when: "ansible_facts.services['besclient.service'] is not defined"
