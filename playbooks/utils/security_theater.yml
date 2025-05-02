@@ -112,23 +112,23 @@
     block:
       - name: Download the Rapid7 deb file (Ubuntu)
         ansible.builtin.get_url:
-          url: "https://isoshare.cpaneldev.princeton.edu/isoShares/Agents/Rapid7/Latest/Linux/rapid7-insight-agent_{{ rapid7_version }}-1_amd64.deb"
-          dest: "/tmp/rapid7-insight-agent_{{ rapid7_version }}-1_amd64.deb"
+          url: "https://isoshare.cpaneldev.princeton.edu/isoShares/Agents/Rapid7/Latest/Linux/rapid7-insight-agent_latest_amd64.deb"
+          dest: "/tmp/rapid7-insight-agent_latest_amd64.deb"
           mode: "0644"
         when:
           - ansible_os_family == "Debian"
 
       - name: Download the Rapid7 rpm file (RedHat)
         ansible.builtin.get_url:
-          url: "https://isoshare.cpaneldev.princeton.edu/isoShares/Agents/Rapid7/Latest/Linux/rapid7-insight-agent-{{ rapid7_version }}-1.x86_64.rpm"
-          dest: "/tmp/rapid7-insight-agent-{{ rapid7_version }}-1.x86_64.rpm"
+          url: "https://isoshare.cpaneldev.princeton.edu/isoShares/Agents/Rapid7/Latest/Linux/rapid7-insight-agent-latest.x86_64.rpm"
+          dest: "/tmp/rapid7-insight-agent-latest.x86_64.rpm"
           mode: "0644"
         when:
           - ansible_os_family == "RedHat"
 
       - name: install Rapid7 agent (Ubuntu)
         ansible.builtin.apt:
-          deb: "/tmp/rapid7-insight-agent_{{ rapid7_version }}-1_amd64.deb"
+          deb: "/tmp/rapid7-insight-agent_latest_amd64.deb"
         become: true
         when:
           - ansible_os_family == "Debian"
@@ -143,16 +143,16 @@
 
       - name: install Rapid7 agent (RedHat)
         ansible.builtin.yum:
-          name: "/tmp/rapid7-insight-agent-{{ rapid7_version }}-1.x86_64.rpm"
+          name: "/tmp/rapid7-insight-agent-latest.x86_64.rpm"
           state: present
         become: true
         when:
           - ansible_os_family == "RedHat"
 
-      - name: Configure the agent with token
-        ansible.builtin.shell:
-          /opt/rapid7/ir_agent/components/insight_agent/{{ rapid7_version }}/configure_agent.sh --token {{ vault_Rapid7_token }} --attributes="Library Systems"
-        become: true
+      # - name: Configure the agent with token
+      #   ansible.builtin.shell:
+      #     /opt/rapid7/ir_agent/components/insight_agent/{{ rapid7_version }}/configure_agent.sh --token {{ vault_Rapid7_token }} --attributes="Library Systems"
+      #   become: true
 
       - name: Restart or start rapid7
         ansible.builtin.service:
