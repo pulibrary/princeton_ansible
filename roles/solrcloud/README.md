@@ -28,7 +28,8 @@ solr_group: "deploy"
 solr_data_dir: "/solr/data"
 solr_data_home: "/solr"
 solr_log_dir: "/solr/logs"
-solr_installation: "/opt/solr"
+solr_installation: "/opt/solr/solr-{{ solr_version }}"
+solr_bin: "{{ solr_installation }}/bin/solr"
 
 # Set to true on actual servers, false for molecule testing
 running_on_server: true

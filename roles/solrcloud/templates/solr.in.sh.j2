@@ -1,56 +1,28 @@
+{{ ansible_managed | comment }}
+# Local customizations for Solr
+
+# Memory settings
+SOLR_JAVA_MEM="{{ solr_java_mem | default('-Xms2g -Xmx4g') }}"
+
+# GC tuning
+GC_TUNE="{{ solr_gc_tune  | default('-XX:+UseG1GC -XX:+PerfDisableSharedMem -XX:+ParallelRefProcEnabled -XX:MaxGCPauseMillis=250 -XX:+AlwaysPreTouch') }}"
+
+# ZooKeeper connection string
+ZK_HOST="{{ solr_zookeeper_hosts_string }}{{ solr_znode }}"
+
+# Directories
 SOLR_PID_DIR="/var/run/solr"
-{% if solr_cloud_version is version('9.0.0', '<') %}
-SOLR_HOME="{{ solr_data_home }}"
-{% else %}
-SOLR_HOME="{{ solr_base }}"
-SOLR_DATA_HOME="{{ solr_data_home }}"
-{% endif %}
-SOLR_PORT="{{ solr_port }}"
-SOLR_HOST="0.0.0.0"
-SOLR_JETTY_HOST="0.0.0.0"
-SOLR_HOST="{{ ansible_fqdn }}"
+SOLR_HOME="{{ solr_data_dir }}"
+LOG4J_PROPS="{{ solr_installation }}/server/resources/log4j2.xml"
 SOLR_LOGS_DIR="{{ solr_log_dir }}"
+SOLR_PORT="8983"
 
-# Java configuration
-{% if solr_cloud_version is version('9.0.0', '<') %}
-JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64
-{% else %}
-JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
-{% endif %}
+# Enable CORS
+SOLR_OPTS="$SOLR_OPTS -Dsolr.cors.enable=true"
 
-# Solr
-SOLR_OPTS="$SOLR_OPTS -Dsolr.solr.home={{ solr_data_home }}"
-SOLR_OPTS="$SOLR_OPTS -Dsolr.default.confdir={{ solr_install_dir }}/solr/server/solr/configsets/_default/conf"
+# Enable the script engine
+SOLR_OPTS="$SOLR_OPTS -Dscript.engine=nashorn -Dnashorn.args=--no-deprecation-warning"
 
-
-{% if solr_cloud_version is version('8.6.0', '>') %}
-# THIS WILL NEED LOGIC SO IT ONLY GETS INSTALLED ON SOLR9 BOXES
-# on Solr9, set allowPaths for Solr data dir for backups
-SOLR_OPTS="$SOLR_OPTS -Dsolr.allowPaths=/solr/data,/mnt/solr_backup"
-{% endif %}
-
-# ZooKeeper configuration
-ZK_HOST="{{ zookeeper_hosts | join(',') }}"
-
-# Enable verbose GC logging
-GC_LOG_OPTS='{{ solr_gc_log_opts }}'
-
-# Log4J configuration
-LOG4J_PROPS='{{ solr_base }}/log4j2.xml'
-
-# GC tuning options
-GC_TUNE='{{ solr_gc_tune }}'
-
-# Set the ZooKeeper client timeout (for SolrCloud mode)
-ZK_CLIENT_TIMEOUT='60000'
-
-# JMX Settings
-ENABLE_REMOTE_JMX_OPTS='true'
-RMI_PORT=1099
-
-# Additional SOLR_OPTS
-SOLR_OPTS="$SOLR_OPTS -Xss256k"
-SOLR_OPTS="$SOLR_OPTS -Dsolr.jetty.threads.idle.timeout=1800000"
-SOLR_OPTS="$SOLR_OPTS -Dsolr.cloud.client.stallTime=1800000"
-SOLR_OPTS="$SOLR_OPTS -Dlog4j2.formatMsgNoLookups=true"
-
+# Additional security settings
+SOLR_OPTS="$SOLR_OPTS -Dsolr.log.dir=${SOLR_LOGS_DIR} -Djetty.host=0.0.0.0"
+SOLR_SSL_ENABLED=false
