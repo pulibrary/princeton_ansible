@@ -1,23 +1,10 @@
 ---
 # installation instructions taken from: https://lucene.apache.org/solr/guide/7_2/taking-solr-to-production.html#taking-solr-to-production
-- name: Solrcloud | create solr dirs
-  ansible.builtin.file:
-    path: '{{ item }}'
-    state: directory
-    owner: '{{ solr_user }}'
-    group: '{{ solr_group }}'
-    mode: "0755"
-  loop:
-    - '{{ solr_log_dir }}'
-    - '{{ solr_data_dir }}'
-
 - name: Solrcloud | Check for solr service
-  ansible.builtin.command: service solr status
+  ansible.builtin.command: systemctl status solr
   ignore_errors: true
   changed_when: false
   register: service_solrcloud_status
-  args:
-    warn: false  # The service module doesn't appear to have a status state
 
 - name: Solrcloud | Download SolrCloud binaries
   ansible.builtin.get_url:
@@ -86,8 +73,26 @@
     var: script_stat
   when: service_solrcloud_status is failed
 
-# Use the script with bash explicitly
-- name: Solrcloud | run SolrCloud installation script with bash
-  ansible.builtin.shell: bash /tmp/install_solr_service.sh /tmp/{{ solr_cloud_package }} -f -u {{ solr_user }} -n
-  changed_when: false
+  # Use the script with bash explicitly
+- name: Solrcloud | Run SolrCloud installation script
+  ansible.builtin.shell: >
+    bash /tmp/install_solr_service.sh /tmp/{{ solr_cloud_package }}
+    -i {{ solr_installation }}
+    -d {{ solr_data_dir }}
+    -u {{ solr_user }}
+    -s solr
+    -p {{ solr_data_home }}
+    -f
+  args:
+    creates: "{{ solr_installation }}/bin/solr"
+  when: service_solrcloud_status is failed
+
+- name: Solrcloud | Cleanup installation files
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "/tmp/{{ solr_cloud_package }}"
+    - "/tmp/solr_extract"
+    - "/tmp/install_solr_service.sh"
   when: service_solrcloud_status is failed

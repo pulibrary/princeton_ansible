@@ -1,0 +1,27 @@
+---
+# Solr 9.x specific configurations
+- name: Solrcloud | Create security.json for Solr 9.x
+  ansible.builtin.template:
+    src: 'security.json.j2'
+    dest: '{{ solr_data_dir }}/security.json'
+    owner: '{{ solr_user }}'
+    group: '{{ solr_group }}'
+    mode: "0644"
+  notify: Restart solr
+
+- name: Solrcloud | Upload security.json to ZooKeeper
+  ansible.builtin.command: >
+    {{ solr_installation }}/bin/solr zk cp {{ solr_data_dir }}/security.json zk:{{ solr_znode }}/security.json
+    -z {{ solr_zookeeper_hosts_string }}
+  register: security_upload
+  changed_when: security_upload.rc == 0
+  ignore_errors: true
+  notify: Restart solr
+
+- name: Solrcloud | Set Java compatibility version
+  ansible.builtin.lineinfile:
+    path: '/etc/default/solr.in.sh'
+    regexp: '^#?SOLR_OPTS="$SOLR_OPTS -Djava.util.prefs.userRoot'
+    line: 'SOLR_OPTS="$SOLR_OPTS -Djava.util.prefs.userRoot={{ solr_data_home }}/userPrefs"'
+    create: false
+  notify: Restart solr
