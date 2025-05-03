@@ -54,54 +54,24 @@
     owner: '{{ solr_user }}'
     group: '{{ solr_group }}'
     mode: "0644"
-    force: true
   notify: Restart solr
   when:
-    - solr_cloud_download_version is defined
-    - '"8" in solr_cloud_download_version'
+    - solr_cloud_download_version is version('8.6.0', '>=')
 
-- name: Solrcloud | Configure pre 7.4 logging
-  ansible.builtin.template:
-    src: 'log4j.properties.j2'
-    dest: '/solr/log4j.properties'
-    owner: '{{ solr_user }}'
-    group: '{{ solr_group }}'
-    mode: "0644"
-    force: true
-  notify: Restart solr
+- name: Solrcloud | Configure Solr 9.x specific settings
+  ansible.builtin.include_tasks: solr9_config.yml
+  when: solr_cloud_download_version is version('9.0.0', '>=')
 
 - name: Solrcloud | Configure logging
   ansible.builtin.template:
-    src: 'log4j2.xml.j2'
-    dest: '/solr/log4j2.xml'
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
     owner: '{{ solr_user }}'
     group: '{{ solr_group }}'
     mode: "0644"
-    force: true
-  notify: Restart solr
-
-- name: Solrcloud | Copy orangelight plugin jar files
-  ansible.builtin.copy:
-    src: files/{{ item }}
-    dest: "{{ jardirectory }}"
-    mode: "0644"
-  when:
-    - running_on_server
-    - jardirectory is defined
   loop:
-    - CJKFoldingFilter.jar
-    - lucene-umich-solr-filters-6.0.0-SNAPSHOT.jar
-  notify: Restart solr
-
-- name: Solrcloud | Copy webapp directory plugin jar files
-  ansible.builtin.copy:
-    src: files/{{ item }}
-    dest: "{{ webapp_jardirectory }}/{{ item }}"
-    mode: "0644"
-  when:
-    - webapp_jardirectory is defined
-  loop:
-    - jts-core-1.15.1.jar
+    - { src: 'log4j.properties.j2', dest: '{{ solr_installation }}/server/resources/log4j.properties' }
+    - { src: 'log4j2.xml.j2', dest: '{{ solr_installation }}/server/resources/log4j2.xml' }
   notify: Restart solr
 
 - name: Solrcloud | Create solr home lib dir
@@ -111,18 +81,26 @@
     group: '{{ solr_group }}'
     state: directory
     mode: "0755"
-  tags: scriptplugins
+  tags: plugins
 
-- name: Solrcloud | Copy scripting engine jar files
+- name: Solrcloud | Copy plugin jar files
   ansible.builtin.copy:
-    src: files/{{ item }}
-    dest: "{{ solr_data_dir }}/lib/{{ item }}"
+    src: "files/{{ item.src }}"
+    dest: "{{ item.dest }}"
     mode: "0644"
   loop:
-    - nashorn-core-15.4.jar
-    - asm-7.3.1.jar
-    - asm-commons-7.3.1.jar
-    - asm-tree-7.3.1.jar
-    - asm-util-7.3.1.jar
+    - { src: "CJKFoldingFilter.jar", dest: "{{ jardirectory }}/CJKFoldingFilter.jar" }
+    - { src: "lucene-umich-solr-filters-6.0.0-SNAPSHOT.jar", dest: "{{ jardirectory }}/lucene-umich-solr-filters-6.0.0-SNAPSHOT.jar" }
+    - { src: "jts-core-1.15.1.jar", dest: "{{ webapp_jardirectory }}/jts-core-1.15.1.jar" }
+    - { src: "nashorn-core-15.4.jar", dest: "{{ solr_data_dir }}/lib/nashorn-core-15.4.jar" }
+    - { src: "asm-7.3.1.jar", dest: "{{ solr_data_dir }}/lib/asm-7.3.1.jar" }
+    - { src: "asm-commons-7.3.1.jar", dest: "{{ solr_data_dir }}/lib/asm-commons-7.3.1.jar" }
+    - { src: "asm-tree-7.3.1.jar", dest: "{{ solr_data_dir }}/lib/asm-tree-7.3.1.jar" }
+    - { src: "asm-util-7.3.1.jar", dest: "{{ solr_data_dir }}/lib/asm-util-7.3.1.jar" }
+  when:
+    - running_on_server
+    - (jardirectory is defined and item.dest is search("jardirectory")) or
+      (webapp_jardirectory is defined and item.dest is search("webapp_jardirectory")) or
+      (item.dest is search("solr_data_dir"))
   notify: Restart solr
-  tags: scriptplugins
+  tags: plugins

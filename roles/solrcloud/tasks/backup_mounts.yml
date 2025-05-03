@@ -1,0 +1,25 @@
+---
+# Configure backup mounts for SolrCloud
+- name: Solrcloud | Copy smb credentials
+  ansible.builtin.copy:
+    src: "files/{{ item }}"
+    dest: "/etc/{{ item }}"
+    mode: "0600"
+    owner: root
+    group: root
+  loop:
+    - solr.smb.credentials
+  when: running_on_server
+
+- name: Solrcloud | Create mount to diglibdata shares
+  ansible.posix.mount:
+    path: "/mnt/{{ item.path }}"
+    src: "//diglibdata1.princeton.edu/{{ item.src }}"
+    fstype: cifs
+    opts: "credentials=/etc/{{ item.opts }}.smb.credentials,uid={{ solr_user | regex_replace('[^0-9]','') }},gid={{ solr_group | regex_replace('[^0-9]','') }}"
+    state: mounted
+  loop:
+    - {path: "solr_backup", src: "solrbackup", opts: "solr"}
+  when: running_on_server
+  tags:
+    - fix_backups

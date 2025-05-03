@@ -2,55 +2,32 @@
 # tasks file for roles/solrcloud
 - name: Solrcloud | Install dependencies
   ansible.builtin.apt:
-    name: ["cifs-utils"]
+    name:
+      - cifs-utils
+      - lsof
     state: present
 
-- name: Solrcloud | create directories for mounts
+- name: Solrcloud | Create solr data and backup directories
   ansible.builtin.file:
-    path: "/mnt/{{ item }}"
+    path: "{{ item }}"
     state: "directory"
     mode: "0755"
     owner: "{{ solr_user }}"
     group: "{{ solr_group }}"
-  when:
-    - running_on_server
   loop:
-    - solr_backup
-
-- name: Solrcloud | Copy smb credentials
-  ansible.builtin.copy:
-    src: "files/{{ item }}"
-    dest: "/etc/{{ item }}"
-    mode: "0644"
-  when:
-    - running_on_server
-  loop:
-    - solr.smb.credentials
-
-- name: Solrcloud | Create mount to diglibdata shares
-  ansible.posix.mount:
-    path: "/mnt/{{ item.path }}"
-    src: "//diglibdata1.princeton.edu/{{ item.src }}"
-    fstype: cifs
-    opts: "credentials=/etc/{{ item.opts }}.smb.credentials,uid=1001,gid=1001"
-    state: mounted
-  when:
-    - running_on_server
-  loop:
-    - {path: "solr_backup", src: "solrbackup", opts: "solr"}
-  tags:
-    - fix_backups
-
-- name: Solrcloud | Create Solr directories
-  ansible.builtin.file:
-    path: "{{ item }}"
-    state: directory
-    owner: "{{ solr_user }}"
-    group: "{{ solr_group }}"
-    mode: "0755"
-  with_items:
     - "{{ solr_data_home }}"
+    - "{{ solr_data_dir }}"
+    - "{{ solr_log_dir }}"
     - "/var/run/solr"
+    - "/mnt/solr_backup"
+  when: running_on_server
+
+- name: Solrcloud | Configure backup mounts
+  ansible.builtin.include_tasks: backup_mounts.yml
+  when: running_on_server
+  tags:
+    - backup
+    - fix_backups
 
 - name: Solrcloud | solr cloud install node
   ansible.builtin.include_tasks: install.yml
@@ -62,6 +39,7 @@
     src: solr.service.j2
     dest: /etc/systemd/system/solr.service
     mode: "0644"
+  notify: Restart solr
 
 - name: Solrcloud | configure solr cloud
   ansible.builtin.include_tasks: config.yml
