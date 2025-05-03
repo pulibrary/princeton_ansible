@@ -1,10 +1,26 @@
 ---
-# installation instructions taken from: https://lucene.apache.org/solr/guide/7_2/taking-solr-to-production.html#taking-solr-to-production
+# Installation of SolrCloud
 - name: Solrcloud | Check for solr service
   ansible.builtin.command: systemctl status solr
   ignore_errors: true
   changed_when: false
   register: service_solrcloud_status
+
+- name: Solrcloud | Ensure deploy group exists
+  ansible.builtin.group:
+    name: "{{ solr_group }}"
+    state: present
+  when: service_solrcloud_status is failed
+
+- name: Solrcloud | Ensure deploy user exists
+  ansible.builtin.user:
+    name: "{{ solr_user }}"
+    group: "{{ solr_group }}"
+    system: true
+    createhome: true
+    home: "/home/{{ solr_user }}"
+    shell: /bin/bash
+  when: service_solrcloud_status is failed
 
 - name: Solrcloud | Download SolrCloud binaries
   ansible.builtin.get_url:
@@ -13,30 +29,35 @@
     timeout: 300
     mode: "0644"
   register: solr_downloaded
-  when:
-    service_solrcloud_status is failed
+  when: service_solrcloud_status is failed
   retries: 3
   delay: 10
   until: solr_downloaded is succeeded
   ignore_errors: true
 
-- name: Solrcloud | copy local copy if download fails
+- name: Solrcloud | Copy local copy if download fails
   ansible.builtin.copy:
     src: 'local_files/solr/{{ solr_cloud_package }}'
     dest: '/tmp/{{ solr_cloud_package }}'
     mode: "0644"
-  when: solr_downloaded is failed
+  when: 
+    - service_solrcloud_status is failed
+    - solr_downloaded is failed
 
-# Debug step to check if the tar file exists
-- name: Solrcloud | Check if tarball exists
-  ansible.builtin.stat:
-    path: "/tmp/{{ solr_cloud_package }}"
-  register: tarball_stat
-  when: service_solrcloud_status is failed
-
-- name: Solrcloud | Debug tarball status
-  ansible.builtin.debug:
-    var: tarball_stat
+# Create all required installation directories
+- name: Solrcloud | Create installation directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ solr_user }}"
+    group: "{{ solr_group }}"
+    mode: "0755"
+  loop:
+    - "{{ solr_installation }}"        # /opt/solr
+    - "{{ solr_data_dir }}"            # /solr/data
+    - "{{ solr_data_home }}"           # /solr
+    - "{{ solr_log_dir }}"             # /solr/logs
+    - "/var/run/solr"
   when: service_solrcloud_status is failed
 
 - name: Solrcloud | Create extraction directory
@@ -61,31 +82,51 @@
     remote_src: true
   when: service_solrcloud_status is failed
 
-# Debug step to check if the script exists and has right permissions
-- name: Solrcloud | Check script permissions
-  ansible.builtin.stat:
-    path: "/tmp/install_solr_service.sh"
-  register: script_stat
-  when: service_solrcloud_status is failed
-
-- name: Solrcloud | Debug script status
-  ansible.builtin.debug:
-    var: script_stat
-  when: service_solrcloud_status is failed
-
-  # Use the script with bash explicitly
+# Modified to use correct options and paths
 - name: Solrcloud | Run SolrCloud installation script
   ansible.builtin.shell: >
-    bash /tmp/install_solr_service.sh /tmp/{{ solr_cloud_package }}
+    bash /tmp/install_solr_service.sh /tmp/{{ solr_cloud_package }} 
     -i {{ solr_installation }}
     -d {{ solr_data_dir }}
     -u {{ solr_user }}
     -s solr
-    -p {{ solr_data_home }}
     -f
   args:
     creates: "{{ solr_installation }}/bin/solr"
   when: service_solrcloud_status is failed
+  register: solr_install_result
+  ignore_errors: true
+
+# Add verbose debug output to help troubleshoot any further issues
+- name: Solrcloud | Debug installation result
+  ansible.builtin.debug:
+    var: solr_install_result
+  when: 
+    - service_solrcloud_status is failed
+    - solr_install_result is failed
+
+# Fallback manual installation if the script fails
+- name: Solrcloud | Manual installation if script fails
+  block:
+    - name: Solrcloud | Copy extracted Solr files to installation directory
+      ansible.builtin.copy:
+        src: "/tmp/solr_extract/{{ solr_cloud_build_name }}/"
+        dest: "{{ solr_installation }}/"
+        remote_src: true
+        owner: "{{ solr_user }}"
+        group: "{{ solr_group }}"
+        mode: preserve
+    
+    - name: Solrcloud | Create symlink
+      ansible.builtin.file:
+        src: "{{ solr_installation }}"
+        dest: "/opt/solr-{{ solr_cloud_download_version }}"
+        state: link
+        owner: "{{ solr_user }}"
+        group: "{{ solr_group }}"
+  when:
+    - service_solrcloud_status is failed
+    - solr_install_result is failed
 
 - name: Solrcloud | Cleanup installation files
   ansible.builtin.file:

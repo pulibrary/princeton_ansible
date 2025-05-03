@@ -1,32 +1,71 @@
 ---
-- name: Solrcloud | Check for zookeeper connection variables
+# Configure SolrCloud
+- name: Debug Solr variables
+  ansible.builtin.debug:
+    msg:
+      - "solr_installation: {{ solr_installation }}"
+      - "solr_bin: {{ solr_bin }}"
+      - "solr_zookeeper_hosts_string: {{ solr_zookeeper_hosts_string | default('undefined') }}"
+      - "solr_znode: {{ solr_znode | default('undefined') }}"
+      - "solr_java_mem: {{ solr_java_mem | default('undefined') }}"
+      - "solr_gc_tune: {{ solr_gc_tune | default('undefined') }}"
+
+- name: Solrcloud | Set zookeeper connection string
   ansible.builtin.set_fact:
-    solr_zookeeper_hosts_string: "{{ solr_zookeeper_hosts | default('localhost:2181') | join(',') }}"
+    solr_zookeeper_hosts_string: "{{ solr_zookeeper_hosts | join(',') }}"
   when: solr_zookeeper_hosts_string is not defined
 
 - name: Solrcloud | Set default solr_znode value if not provided
   ansible.builtin.set_fact:
-    solr_znode: "/solr"
+    solr_znode: "/solr9"
   when: solr_znode is not defined
+
+- name: Solrcloud | Check for solr executable
+  ansible.builtin.stat:
+    path: "{{ solr_bin }}"
+  register: solr_binary
+
+- name: Solrcloud | Display solr binary status
+  ansible.builtin.debug:
+    var: solr_binary
+  when: not solr_binary.stat.exists
 
 - name: Solrcloud | Check for solr znode
   ansible.builtin.command: >
-    {{ solr_installation }}/bin/solr zk ls /
+    {{ solr_bin }} zk ls {{ solr_znode }}
+    -z {{ solr_zookeeper_hosts_string }}
+  register: znode_exists_check
+  changed_when: false
+  ignore_errors: true
+
+- name: Solrcloud | Check for solr znode (root level)
+  ansible.builtin.command: >
+    {{ solr_bin }} zk ls /
     -z {{ solr_zookeeper_hosts_string }}
   register: znode_check
   ignore_errors: true
   changed_when: false
+  when: znode_exists_check is failed
 
-- name: Solrcloud | Create zk chroot / solr znode using bin/solr
+- name: Solrcloud | Create zk chroot / solr znode
   ansible.builtin.command: >
-    {{ solr_installation }}/bin/solr zk mkroot {{ solr_znode }}
+    {{ solr_bin }} zk mkroot {{ solr_znode }}
     -z {{ solr_zookeeper_hosts_string }}
+  register: create_znode_result
+  ignore_errors: true
+  changed_when: create_znode_result.rc == 0
   when:
+    - znode_check is defined
     - znode_check is succeeded
     - znode_check.stdout is defined
-    - solr_znode not in znode_check.stdout_lines
+    - solr_znode | replace('/', '') not in znode_check.stdout_lines
     - solr_znode | length > 0
-  changed_when: false
+    - znode_exists_check is failed
+
+- name: Solrcloud | Evaluate znode creation result
+  ansible.builtin.debug:
+    msg: "ZNode creation result: {{ create_znode_result.stderr if (create_znode_result is defined and create_znode_result.stderr is defined) else 'not attempted' }}"
+  when: znode_exists_check is failed
 
 - name: Solrcloud | Configure SolrCloud init script
   ansible.builtin.template:
@@ -35,8 +74,6 @@
     owner: '{{ solr_user }}'
     group: '{{ solr_group }}'
     mode: "0644"
-    force: true
-  changed_when: false
   notify: Restart solr
 
 - name: Solrcloud | Configure high ulimit value for Solr
@@ -44,7 +81,6 @@
     src: 'solr.conf.j2'
     dest: '/etc/security/limits.d/solr.conf'
     mode: "0644"
-    force: true
   notify: Restart solr
 
 - name: Solrcloud | Configure SolrCloud properties
@@ -56,7 +92,7 @@
     mode: "0644"
   notify: Restart solr
   when:
-    - solr_cloud_download_version is version('8.6.0', '>=')
+    - solr_cloud_download_version is version('8.0.0', '>=')
 
 - name: Solrcloud | Configure Solr 9.x specific settings
   ansible.builtin.include_tasks: solr9_config.yml
@@ -73,34 +109,3 @@
     - { src: 'log4j.properties.j2', dest: '{{ solr_installation }}/server/resources/log4j.properties' }
     - { src: 'log4j2.xml.j2', dest: '{{ solr_installation }}/server/resources/log4j2.xml' }
   notify: Restart solr
-
-- name: Solrcloud | Create solr home lib dir
-  ansible.builtin.file:
-    path: "{{ solr_data_dir }}/lib"
-    owner: '{{ solr_user }}'
-    group: '{{ solr_group }}'
-    state: directory
-    mode: "0755"
-  tags: plugins
-
-- name: Solrcloud | Copy plugin jar files
-  ansible.builtin.copy:
-    src: "files/{{ item.src }}"
-    dest: "{{ item.dest }}"
-    mode: "0644"
-  loop:
-    - { src: "CJKFoldingFilter.jar", dest: "{{ jardirectory }}/CJKFoldingFilter.jar" }
-    - { src: "lucene-umich-solr-filters-6.0.0-SNAPSHOT.jar", dest: "{{ jardirectory }}/lucene-umich-solr-filters-6.0.0-SNAPSHOT.jar" }
-    - { src: "jts-core-1.15.1.jar", dest: "{{ webapp_jardirectory }}/jts-core-1.15.1.jar" }
-    - { src: "nashorn-core-15.4.jar", dest: "{{ solr_data_dir }}/lib/nashorn-core-15.4.jar" }
-    - { src: "asm-7.3.1.jar", dest: "{{ solr_data_dir }}/lib/asm-7.3.1.jar" }
-    - { src: "asm-commons-7.3.1.jar", dest: "{{ solr_data_dir }}/lib/asm-commons-7.3.1.jar" }
-    - { src: "asm-tree-7.3.1.jar", dest: "{{ solr_data_dir }}/lib/asm-tree-7.3.1.jar" }
-    - { src: "asm-util-7.3.1.jar", dest: "{{ solr_data_dir }}/lib/asm-util-7.3.1.jar" }
-  when:
-    - running_on_server
-    - (jardirectory is defined and item.dest is search("jardirectory")) or
-      (webapp_jardirectory is defined and item.dest is search("webapp_jardirectory")) or
-      (item.dest is search("solr_data_dir"))
-  notify: Restart solr
-  tags: plugins
