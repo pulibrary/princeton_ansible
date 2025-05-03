@@ -1,5 +1,3 @@
-{{ ansible_managed | comment }}
-
 [Unit]
 Description=Apache Solr
 After=network.target
@@ -9,12 +7,12 @@ Type=forking
 User={{ solr_user }}
 Group={{ solr_group }}
 Environment=SOLR_INCLUDE=/etc/default/solr.in.sh
-ExecStart={{ solr_install_dir }}/solr/bin/solr start
-ExecStop={{ solr_install_dir }}/solr/bin/solr stop
+ExecStart={{ solr_installation }}/bin/solr start -cloud -z {{ solr_zookeeper_hosts_string }}{{ solr_znode }}
+ExecStop={{ solr_installation }}/bin/solr stop
 Restart=on-failure
 LimitNOFILE=65000
 LimitNPROC=65000
+TimeoutSec=180
 
 [Install]
 WantedBy=multi-user.target
-
