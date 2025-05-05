@@ -1,18 +1,15 @@
-<?xml version="1.0" encoding="UTF-8" ?>
 <solr>
-
-{% if solr_cloud_version is version_compare('8.6.0', '>') %}
-
+{% if solr_cloud_download_version is version('9.0.0', '<') %}
   <int name="maxBooleanClauses">${solr.max.booleanClauses:1024}</int>
+{% endif %}
+{% if solr_cloud_download_version is version('8.6.0', '>=') %}
   <str name="sharedLib">${solr.sharedLib:}</str>
   <str name="modules">${solr.modules:}</str>
   <str name="allowPaths">${solr.allowPaths:}</str>
-
- {% endif %}
-
+{% endif %}
   <solrcloud>
     <str name="host">${host:}</str>
-    <int name="hostPort">${hostPort:8983}</int>
+    <int name="hostPort">${jetty.port:8983}</int>
     <str name="hostContext">${hostContext:solr}</str>
     <bool name="genericCoreNodeNames">${genericCoreNodeNames:true}</bool>
     <int name="zkClientTimeout">${zkClientTimeout:30000}</int>
@@ -22,11 +19,22 @@
     <str name="zkACLProvider">${zkACLProvider:org.apache.solr.common.cloud.DefaultZkACLProvider}</str>
   </solrcloud>
 
-  <shardHandlerFactory name="shardHandlerFactory" class="HttpShardHandlerFactory">
+  <shardHandlerFactory name="shardHandlerFactory"
+                       class="HttpShardHandlerFactory">
     <int name="socketTimeout">${socketTimeout:600000}</int>
     <int name="connTimeout">${connTimeout:60000}</int>
-    <str name="urlScheme">${urlScheme:}</str>
-    <bool name="diskIoOptimized">${diskIoOptimized:true}</bool>
+{% if solr_cloud_download_version is version('9.0.0', '<') %}
+    <str name="shardsWhitelist">${solr.shardsWhitelist:}</str>
+{% endif %}
   </shardHandlerFactory>
+  
+{% if solr_cloud_download_version is version('9.0.0', '>=') %}
+  <!-- Configure metrics reporting as required for your environment -->
+  <metrics>
+    <reporter name="jmx" class="org.apache.solr.metrics.reporters.SolrJmxReporter">
+      <str name="domain">solr</str>
+      <bool name="enabled">true</bool>
+    </reporter>
+  </metrics>
+{% endif %}
 </solr>
-
