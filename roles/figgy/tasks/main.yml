@@ -30,6 +30,49 @@
     - 'hosted_illiad'
     - 'hosted_illiad/RequestScans'
 
+- name: figgy | Create root mounts
+  ansible.builtin.file:
+    path: '/mnt/{{ item }}'
+    state: 'directory'
+  tags: 'mounts'
+  become: yes
+  loop:
+    - 'tigerdata'
+
+- name: figgy | Create tigerdata mount
+  ansible.posix.mount:
+    name: '/mnt/tigerdata'
+    src: 'td-mf-cl2.princeton.edu:/figgy'
+    fstype: nfs
+    opts: 'nfsvers=3,mountport=9015,port=9015,nolock,proto=tcp'
+    state: mounted
+  when:
+    - running_on_server
+    - "rails_app_env == 'staging'"
+  tags: 'mounts'
+
+- name: figgy | Create staging dir
+  ansible.builtin.file:
+    path: '/mnt/tigerdata/staging'
+    state: 'directory'
+  tags: 'mounts'
+  become: yes
+  become_user: '{{deploy_user}}'
+  when:
+    - running_on_server
+    - "rails_app_env == 'staging'"
+
+- name: figgy | Create stream_derivatives dir
+  ansible.builtin.file:
+    path: '/mnt/tigerdata/stream_derivatives'
+    state: 'directory'
+  tags: 'mounts'
+  become: yes
+  become_user: '{{deploy_user}}'
+  when:
+    - running_on_server
+    - "rails_app_env == 'staging'"
+
 - name: figgy | Copy smb credentials
   ansible.builtin.copy:
     src: "files/{{ item }}"
@@ -187,6 +230,8 @@
       link: '/opt/repository/derivatives' # probably unused, but configured in figgy so we should make sure it exists
     - src: '{{ figgy_stream_derivatives_mount }}'
       link: '/opt/repository/stream_derivatives'
+  tags:
+    - mounts
 
 - name: figgy | add GDAL repository
   ansible.builtin.apt_repository:
