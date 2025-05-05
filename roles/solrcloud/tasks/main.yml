@@ -9,6 +9,32 @@
   ansible.builtin.debug:
     msg: "Configuring Solr {{ 'version 9.x' if is_solr9 else 'version 8.x' }} ({{ solr_cloud_download_version }})"
 
+# Check for actual Solr installation location
+- name: Solrcloud | Check for solr binary location
+  ansible.builtin.stat:
+    path: "/opt/solr/bin/solr"
+  register: solr_bin_check
+
+- name: Solrcloud | Find actual Solr installation path
+  ansible.builtin.find:
+    paths: "/opt/solr"
+    file_type: directory
+    patterns: "solr-*"
+  register: solr_install_path
+  when: solr_bin_check.stat.exists
+
+- name: Solrcloud | Set installation directory fact
+  ansible.builtin.set_fact:
+    solr_installation_dir: "{{ solr_install_path.files[0].path if solr_install_path.matched > 0 else solr_installation }}"
+  when: solr_bin_check.stat.exists and solr_install_path.matched is defined and solr_install_path.matched > 0
+
+- name: Solrcloud | Debug Solr installation paths
+  ansible.builtin.debug:
+    msg: 
+      - "Solr installation: {{ solr_installation }}"
+      - "Solr installation dir: {{ solr_installation_dir | default('Not found') }}"
+      - "Solr binary: {{ solr_bin }}"
+
 - name: Solrcloud | Install dependencies
   ansible.builtin.apt:
     name:
@@ -21,8 +47,8 @@
     path: "{{ item }}"
     state: "directory"
     mode: "0755"
-    owner: "{{ solr_user }}"
-    group: "{{ solr_group }}"
+    owner: "{{ deploy_user | default(solr_user) }}" 
+    group: "{{ deploy_user | default(solr_group) }}"
   loop:
     - "{{ solr_data_home }}"     # /solr
     - "{{ solr_data_dir }}"      # /solr/data
@@ -48,7 +74,12 @@
   args:
     executable: /bin/bash
   changed_when: false
-  register: java_home
+  register: java_home_result
+  when: java_home is not defined
+
+- name: Solrcloud | Set JAVA_HOME fact
+  ansible.builtin.set_fact:
+    java_home: "{{ java_home_result.stdout if java_home_result is defined and java_home_result.stdout is defined else '/usr/lib/jvm/java-' + java_version|string + '-openjdk-amd64' }}"
   when: java_home is not defined
 
 - name: Solrcloud | Configure Solr systemd service
@@ -83,11 +114,10 @@
   ansible.builtin.template:
     src: "{{ item.src }}"
     dest: "{{ item.dest }}"
-    owner: '{{ solr_user }}'
-    group: '{{ solr_group }}'
+    owner: '{{ deploy_user | default(solr_user) }}'
+    group: '{{ deploy_user | default(solr_group) }}'
     mode: "0644"
   loop:
-    - { src: 'log4j.properties.j2', dest: '{{ solr_installation }}/server/resources/log4j.properties' }
     - { src: 'log4j2.xml.j2', dest: '{{ solr_data_home }}/log4j2.xml' }
   notify: Restart solr
 
@@ -97,3 +127,4 @@
     state: started
     enabled: true
     daemon_reload: true
+  ignore_errors: true

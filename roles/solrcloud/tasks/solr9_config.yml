@@ -1,6 +1,5 @@
 ---
 # Solr 9.x specific configurations
-
 - name: Solrcloud | Configure Solr 9 specific settings
   ansible.builtin.debug:
     msg: "Configuring Solr 9.x specific settings"
@@ -10,19 +9,18 @@
   ansible.builtin.file:
     path: "/mnt/solr_backup"
     state: directory
-    owner: "{{ solr_user }}"
-    group: "{{ solr_group }}"
+    owner: "deploy"
+    group: "deploy"
     mode: "0755"
   when: running_on_server
 
-# Example: Set Solr 9 specific configuration files
-- name: Solrcloud | Copy Solr 9 specific configuration files
+# Copy security configuration only if security is enabled
+- name: Solrcloud | Copy Solr 9 security configuration
   ansible.builtin.template:
-    src: "{{ item.src }}"
-    dest: "{{ item.dest }}"
+    src: "solr9_security.json.j2"
+    dest: "{{ solr_data_dir }}/security.json"
     owner: "{{ solr_user }}"
     group: "{{ solr_group }}"
     mode: "0644"
-  loop:
-    - { src: 'solr9_security.json.j2', dest: '{{ solr_data_dir }}/security.json', when: solr_use_security | default(false) }
-  when: item.when | default(true)
+  when: solr_use_security | default(false)
+  ignore_errors: true

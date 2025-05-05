@@ -23,7 +23,15 @@ SOLR_PORT="8983"
 
 # Java configuration
 {% if java_home is defined %}
+  {% if java_home is mapping %}
+    {% if java_home.stdout is defined %}
 JAVA_HOME="{{ java_home.stdout }}"
+    {% else %}
+JAVA_HOME="{{ java_home }}"
+    {% endif %}
+  {% else %}
+JAVA_HOME="{{ java_home }}"
+  {% endif %}
 {% endif %}
 
 # Increase Java Heap as needed to support your indexing / query needs
@@ -31,7 +39,13 @@ JAVA_HOME="{{ java_home.stdout }}"
 SOLR_HEAP="{{ solr_heap_setting }}"
 {% endif %}
 # ZooKeeper configuration
+{% if solr_cloud_download_version is version('9.0.0', '>=') %}
+# Solr 9 format - ZK_HOST and solr_znode are separate
+ZK_HOST="{{ solr_zookeeper_hosts_string }}"
+{% else %}
+# Solr 8 format - ZK_HOST includes solr_znode
 ZK_HOST="{{ solr_zookeeper_hosts_string }}{% if solr_znode and solr_znode.startswith('/') %}{{ solr_znode }}{% elif solr_znode %}/{{ solr_znode }}{% endif %}"
+{% endif %}
 ZK_CLIENT_TIMEOUT="60000"
 
 # Log4J configuration
