@@ -1,0 +1,17 @@
+---
+# Solr 8.x specific configurations
+
+- name: Solrcloud | Configure Solr 8 specific settings
+  ansible.builtin.debug:
+    msg: "Configuring Solr 8.x specific settings"
+
+- name: Solrcloud | Copy Solr 8 specific configuration files
+  ansible.builtin.template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: "{{ solr_user }}"
+    group: "{{ solr_group }}"
+    mode: "0644"
+  loop:
+    - { src: 'solr8_security.json.j2', dest: '{{ solr_data_dir }}/security.json', when: solr_use_security | default(false) }
+  when: item.when | default(true)
