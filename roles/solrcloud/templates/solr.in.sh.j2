@@ -1,43 +1,27 @@
+# roles/solrcloud/templates/solr.in.sh.j2
 {{ ansible_managed | comment }}
 # Local customizations for Solr
 
 # Memory settings
-{% if solr_java_memory is defined %}
-SOLR_JAVA_MEM="{{ solr_java_mem | default('-Xms2g -Xmx4g') }}"
-{% endif %}
-
-
-# GC tuning
-GC_TUNE="{{ solr_gc_tune  | default('-XX:+UseG1GC -XX:+PerfDisableSharedMem -XX:+ParallelRefProcEnabled -XX:MaxGCPauseMillis=250 -XX:+AlwaysPreTouch') }}"
-
-# ZooKeeper connection string
-ZK_HOST="{{ solr_zookeeper_hosts_string }}/{{ solr_znode }}"
-
-# Directories
-SOLR_PID_DIR="/var/run/solr"
-SOLR_HOME="{{ solr_data_dir }}"
-LOG4J_PROPS="{{ solr_installation }}/server/resources/log4j2.xml"
-SOLR_LOGS_DIR="{{ solr_log_dir }}"
-SOLR_HOST="{{ ansible_fqdn }}"
-SOLR_PORT="8983"
-
-# Java configuration
-{% if java_home is defined %}
-  {% if java_home is mapping %}
-    {% if java_home.stdout is defined %}
-JAVA_HOME="{{ java_home.stdout }}"
-    {% else %}
-JAVA_HOME="{{ java_home }}"
-    {% endif %}
-  {% else %}
-JAVA_HOME="{{ java_home }}"
-  {% endif %}
-{% endif %}
-
-# Increase Java Heap as needed to support your indexing / query needs
 {% if solr_heap_setting is defined %}
 SOLR_HEAP="{{ solr_heap_setting }}"
 {% endif %}
+
+# Java configuration
+{% if java_home is defined %}
+JAVA_HOME="{{ java_home }}"
+{% endif %}
+
+# GC tuning
+GC_TUNE="{{ solr_gc_tune }}"
+
+# Directories
+SOLR_PID_DIR="{{ solr_pid_dir }}"
+SOLR_HOME="{{ solr_data_dir }}"
+SOLR_LOGS_DIR="{{ solr_log_dir }}"
+SOLR_PORT="{{ solr_port }}"
+SOLR_HOST="{{ ansible_fqdn }}"
+
 # ZooKeeper configuration
 {% if solr_cloud_download_version is version('9.0.0', '>=') %}
 # Solr 9 format - ZK_HOST and solr_znode are separate
@@ -48,30 +32,12 @@ ZK_HOST="{{ solr_zookeeper_hosts_string }}{% if solr_znode and solr_znode.starts
 {% endif %}
 ZK_CLIENT_TIMEOUT="60000"
 
-# Log4J configuration
-LOG4J_PROPS="{{ solr_log4j_path }}"
-
 # JMX Settings
 ENABLE_REMOTE_JMX_OPTS="true"
 RMI_PORT="1099"
 
-# Set the thread stack size
-SOLR_OPTS="$SOLR_OPTS -Xss256k"
-
-# Set idle timeout
-SOLR_OPTS="$SOLR_OPTS -Dsolr.jetty.threads.idle.timeout=1800000"
-
-# Set client stall time
-SOLR_OPTS="$SOLR_OPTS -Dsolr.cloud.client.stallTime=1800000"
-
-# Log4j2 security 
-SOLR_OPTS="$SOLR_OPTS -Dlog4j2.formatMsgNoLookups=true"
-
-{% if solr_cloud_download_version is version('9.0.0', '>=') %}
-# Solr9 specific configuration - allowPaths for Solr data dir for backups
-SOLR_OPTS="$SOLR_OPTS -Dsolr.allowPaths={{ solr_data_dir }},/mnt/solr_backup"
-{% endif %}
+# All system properties in a single line
+SOLR_OPTS="-Xss256k -Dsolr.solr.home=/solr -Dsolr.solr.home={{ solr_data_dir }} -Dsolr.log.dir={{ solr_log_dir }} -Dsolr.install.symDir={{ solr_installation }} -Dsolr.allowPaths={{ solr_data_dir }},/mnt/solr_backup -Dlog4j.configurationFile={{ solr_data_home }}/log4j2.xml -Dsolr.jetty.host=0.0.0.0 -Djetty.home={{ solr_installation }}/server -Dsolr.jetty.threads.idle.timeout=1800000 -Dsolr.cloud.client.stallTime=1800000 -Dlog4j2.formatMsgNoLookups=true -Djava.security.egd=file:/dev/./urandom"
 
 # Additional security settings
-SOLR_OPTS="$SOLR_OPTS -Dsolr.log.dir=${SOLR_LOGS_DIR} -Djetty.host=0.0.0.0"
 SOLR_SSL_ENABLED=false
