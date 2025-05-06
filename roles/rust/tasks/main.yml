@@ -1,0 +1,22 @@
+---
+- name: rust | ensure wget is installed
+  ansible.builtin.apt:
+    name: wget
+    state: present
+
+- name: rust | check if cargo is installed
+  ansible.builtin.shell: PATH=~/.cargo/bin:$PATH cargo version
+  register: installed_cargo
+  ignore_errors: true
+  changed_when: false
+
+- name: rust | Download rustup
+  when: installed_cargo is failed
+  ansible.builtin.get_url:
+    url: https://sh.rustup.rs
+    dest: /tmp/sh.rustup.rs
+    mode: '0755'
+
+- name: install rust/cargo
+  when: installed_cargo is failed
+  shell: /tmp/sh.rustup.rs -y
