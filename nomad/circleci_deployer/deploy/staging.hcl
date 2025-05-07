@@ -7,11 +7,15 @@ job "circleci-runner" {
   region      = "global"
   datacenters = ["dc1"]
   type        = "service"
-  node_pool = "staging"
+  node_pool = "all"
 
   group "deploy" {
-    # Only one high challenge node, otherwise everyone gets captcha'd twice.
-    count = 1
+    # Let's do two staging/two prod
+    spread {
+      attribute = "${node.pool}"
+      weight    = 100
+    }
+    count = 4
 
     network {
       dns {
