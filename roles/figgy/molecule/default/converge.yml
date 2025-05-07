@@ -5,11 +5,27 @@
     - running_on_server: false
   become: true
   pre_tasks:
-    - name: update cache
-      apt:
+    - name: Update cache
+      ansible.builtin.apt:
         update_cache: true
         cache_valid_time: 600
+
+    - name: Install locales package (so /etc/locale.gen exists)
+      ansible.builtin.apt:
+        name: locales
+        state: present
+
+    - name: Ensure en_US.UTF-8 locale is uncommented in /etc/locale.gen
+      ansible.builtin.lineinfile:
+        path: /etc/locale.gen
+        regexp: '^# en_US.UTF-8 UTF-8'
+        line: 'en_US.UTF-8 UTF-8'
+        state: present
+
+    - name: Generate locales
+      ansible.builtin.command: locale-gen
+      changed_when: false
   tasks:
     - name: "Include figgy"
-      include_role:
+      ansible.builtin.include_role:
         name: figgy
