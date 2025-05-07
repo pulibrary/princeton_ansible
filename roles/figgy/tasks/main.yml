@@ -220,9 +220,15 @@
   tags:
     - mounts
 
+- name: figgy | Gather distribution facts
+  ansible.builtin.setup:
+    filter: ansible_lsb*
+  when: ansible_facts.ansible_lsb is not defined or ansible_facts.ansible_lsb.codename is not defined
+
 - name: figgy | add GDAL repository
   ansible.builtin.apt_repository:
     repo: "ppa:ubuntugis/ppa"
+    codename: "{{ ansible_lsb.codename | default('jammy') }}"
 
 - name: figgy | Install GDAL
   ansible.builtin.apt:
