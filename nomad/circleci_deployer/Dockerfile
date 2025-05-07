@@ -7,7 +7,8 @@ RUN sudo apt-get update -qq && DEBIAN_FRONTEND=noninteractive sudo apt-get insta
   curl \
   git \
   libz-dev \
-  libffi-dev
+  libffi-dev \
+  libssl-dev
 
 # Check out ruby-build and install
 RUN sudo git clone https://github.com/sstephenson/ruby-build.git /usr/local/ruby-build
