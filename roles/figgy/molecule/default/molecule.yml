@@ -3,6 +3,7 @@ scenario:
   name: default
 driver:
   name: docker
+  command_timeout: 60
 lint: |
   set -e
   yamllint .
@@ -15,8 +16,16 @@ platforms:
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
     privileged: true
     pre_build_image: true
+    connection_options:
+      ansible_user: root
+      ansible_connection: docker
 provisioner:
   name: ansible
   log: true
+  playbooks:
+    prepare: prepare.yml
+  config_options:
+    defaults:
+      remote_tmp: /tmp/ansible
 verifier:
   name: ansible
