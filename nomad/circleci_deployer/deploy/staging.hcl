@@ -14,24 +14,8 @@ job "circleci-runner" {
     count = 1
 
     network {
-      port "http" { to=7623 }
-
       dns {
         servers = ["10.88.0.1", "128.112.129.209", "8.8.8.8", "8.8.4.4"]
-      }
-    }
-
-    service {
-      name = "circleci-runner"
-      port = "http"
-
-      check {
-        name     = "ready"
-        type     = "http"
-        port     = "http"
-        interval = "10s"
-        timeout  = "2s"
-        path     = "/ready"
       }
     }
 
@@ -40,7 +24,6 @@ job "circleci-runner" {
 
       config {
         image = "ghcr.io/pulibrary/princeton_ansible-circleci-deployer:sha-${ var.branch_or_sha }"
-        ports = ["http"]
       }
       template {
         destination = "${NOMAD_SECRETS_DIR}/env.vars"
@@ -50,6 +33,8 @@ job "circleci-runner" {
         {{- with nomadVar "nomad/jobs/circleci-runner" -}}
         CIRCLECI_RESOURCE_CLASS = pulibrary/ruby-deploy
         CIRCLECI_API_TOKEN = {{.CIRCLECI_API_TOKEN}}
+        CIRCLECI_RUNNER_API_AUTH_TOKEN = {{.CIRCLECI_API_TOKEN}}
+        CIRCLECI_RUNNER_NAME = "circleci-deployer-{{ env "NOMAD_ALLOC_INDEX" }}"
         {{- end -}}
         EOF
       }
