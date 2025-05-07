@@ -5,7 +5,7 @@
     state: present
 
 - name: rust | check if cargo is installed
-  ansible.builtin.shell: PATH=~/.cargo/bin:$PATH cargo version
+  ansible.builtin.shell: cargo version
   register: installed_cargo
   ignore_errors: true
   changed_when: false
@@ -17,6 +17,12 @@
     dest: /tmp/sh.rustup.rs
     mode: '0755'
 
-- name: install rust/cargo
+- name: rust | install rust/cargo
   when: installed_cargo is failed
-  shell: /tmp/sh.rustup.rs -y
+  shell: CARGO_HOME=/usr/local /tmp/sh.rustup.rs -y
+
+- name: rust | download the latest stable release of Rust and set it as the deploy user's default toolchain
+  ansible.builtin.shell: rustup default stable
+  become: true
+  become_user: deploy
+  changed_when: false
