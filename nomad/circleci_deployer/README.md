@@ -17,3 +17,9 @@ jobs:
     steps:
       - run: echo "Hi I'm on Runners!"
 ```
+
+## Deployment
+
+From `nomad` directory: `BRANCH=main ./bin/deploy circleci_deployer all`
+
+You can track progress and status of nomad apps by looking at the Nomad UI, accessible from `./bin/login`
