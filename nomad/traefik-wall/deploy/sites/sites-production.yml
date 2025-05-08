@@ -24,6 +24,22 @@ http:
         - append-catalog-regex
       priority: 10
 
+    catalog-production-skip-all-mw:
+      service: cicognara-production
+      rule: "Header(`X-Forwarded-Host`, `cicognara.org`) && Header(`Sec-Fetch-Dest`, `empty`)"
+      entrypoints:
+        - http
+      priority: 11
+    catalog-production-apply-mw:
+      service: cicognara-production
+      rule: "Header(`X-Forwarded-Host`, `cicognara.org`)"
+      entrypoints:
+        - http
+      middlewares:
+        - captcha-protect
+        - append-catalog-regex
+      priority: 10
+
     dpul-production-skip-all-mw:
       service: dpul-production
       rule: "Header(`X-Forwarded-Host`, `dpul.princeton.edu`) && Header(`Sec-Fetch-Dest`, `empty`)"
@@ -146,6 +162,12 @@ http:
           - url: http://catalog3.princeton.edu:80
           - url: http://catalog4.princeton.edu:80
           - url: http://catalog5.princeton.edu:80
+    cicognara-production:
+      loadBalancer:
+        servers:
+          - url: http://nomad-host-prod1.lib.princeton.edu:8600
+          - url: http://nomad-host-prod2.lib.princeton.edu:8600
+          - url: http://nomad-host-prod3.lib.princeton.edu:8600
     dpul-production:
       loadBalancer:
         healthCheck:
