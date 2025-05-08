@@ -44,6 +44,26 @@
   register: mount_result
   ignore_errors: true
 
+- name: Solrcloud | Ensure the bind mount is active
+  ansible.posix.mount:
+    src: /mnt/solr_backup/solr9
+    path: "{{ solr_data_dir }}/backups"
+    state: mounted
+    opts: bind
+    fstype: none
+  when: is_solr9
+
+- name: Solrcloud | Ensure the bind mount is configured in /etc/fstab
+  ansible.posix.mount:
+    src: /mnt/solr_backup/solr9
+    path: "{{ solr_data_dir }}/backups"
+    state: present
+    fstype: none
+    opts: bind
+    dump: '0'
+    passno: '0'
+  when: is_solr9
+
 # Fallback method if the standard mount fails
 - name: Solrcloud | Mount fallback (mount command directly)
   ansible.builtin.command: >
