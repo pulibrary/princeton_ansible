@@ -1,0 +1,25 @@
+---
+# Solr 8.x specific configurations
+
+- name: Solrcloud | Configure Solr 8 specific settings
+  ansible.builtin.debug:
+    msg: "Configuring Solr 8.x specific settings"
+
+# Only copy security.json if the file actually exists and security is enabled
+- name: Solrcloud | Check if security template exists
+  ansible.builtin.stat:
+    path: "{{ role_path }}/templates/solr8_security.json.j2"
+  register: security_template
+  delegate_to: localhost
+
+- name: Solrcloud | Copy Solr 8 security configuration
+  ansible.builtin.template:
+    src: "solr8_security.json.j2"
+    dest: "{{ solr_data_dir }}/security.json"
+    owner: "{{ solr_user }}"
+    group: "{{ solr_group }}"
+    mode: "0644"
+  when:
+    - solr_use_security | default(false)
+    - security_template.stat.exists
+  ignore_errors: true
