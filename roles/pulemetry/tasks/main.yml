@@ -1,0 +1,14 @@
+---
+# tasks file for roles/pulemetry
+- name: Pulemetry | Create keyrings directory
+  ansible.builtin.file:
+    path: /etc/apt/keyrings/
+    state: directory
+    mode: '0755'
+
+- name: Pulemetry | download grafana key
+  ansible.builtin.shell: wget -q -O - https://apt.grafana.com/gpg.key | gpg --dearmor > /etc/apt/keyrings/grafana.gpg
+
+- name: Pulemetry | Add grafana repo list
+  ansible.builtin.shell: |
+    echo '"deb [signed-by=/etc/apt/keyrings/grafana.gpg] https://apt.grafana.com stable main" | tee /etc/apt/sources.list.d/grafana.list'
