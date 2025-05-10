@@ -1,0 +1,31 @@
+
+---
+- name: Test Security Tools on a host
+  hosts: all
+  remote_user: pulsys
+  serial: "{{ concurrent_vms | default('5') }}"
+  vars_files:
+    - ../../group_vars/crowdstrike/vault.yml
+    - ../../group_vars/crowdstrike/vars.yml
+    - ../../group_vars/all/vars.yml
+    - ../../group_vars/all/vault.yml
+
+  tasks:
+  - name: Test mkdir on /opt
+    ansible.builtin.file:
+      path: /opt/foo
+      state: directory
+      mode: '0755'
+    become: true
+
+  - name: Test touch file on /opt
+    ansible.builtin.file:
+      path: /opt/foo/bar
+      state: touch
+    become: true
+
+  - name: Test touch file on /opt
+    ansible.builtin.file:
+      path: /opt/foo/bar
+      state: absent
+    become: true
