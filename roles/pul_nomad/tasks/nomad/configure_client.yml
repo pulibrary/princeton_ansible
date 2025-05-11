@@ -1,0 +1,46 @@
+- name: pul_nomad | nomad | Create client config
+  ansible.builtin.template:
+    src: nomad/client.hcl.j2
+    dest: "/etc/nomad.d/client.hcl"
+    mode: '0640'
+  notify: restart nomad
+
+- name: pul_nomad | nomad | Create volume {{ item['name'] }}
+  ansible.builtin.file:
+    path: "{{ item['path'] }}"
+    owner: "root"
+    state: "{{ item['state'] | default('directory') }}"
+    mode: "{{ item['mode'] | default('0755') }}"
+  with_items: "{{ nomad_host_volumes }}"
+  tags: host_volumes
+
+- name: pul_nomad | nomad | Configure Consul ACLs for Nomad
+  environment:
+    CONSUL_HTTP_TOKEN: '{{ consul_acl_management_token }}'
+  block:
+    - name: pul_nomad | nomad | Create nomad client policy
+      community.general.consul_policy:
+        token: '{{ consul_acl_management_token }}'
+        name: nomad-client-agents
+        rules: |
+          agent_prefix "" {
+            policy = "read"
+          }
+
+          node_prefix "" {
+            policy = "write"
+          }
+
+          service_prefix "" {
+            policy = "write"
+          }
+      run_once: true
+    - name: pul_nomad | nomad | Create Nomad Client Token
+      community.general.consul_token:
+        state: present
+        accessor_id: '7ceee5c3-2423-42e0-a834-f69398f58faf' # Consistent ID for idempotency.
+        policies:
+          - name: 'nomad-client-agents'
+        token: '{{ consul_acl_management_token }}'
+      register: generated_nomad_consul_token
+      throttle: 1
