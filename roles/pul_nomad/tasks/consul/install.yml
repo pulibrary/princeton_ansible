@@ -1,0 +1,101 @@
+---
+- name: 'pul_nomad | consul | Create consul user/group'
+  block:
+    # Add group
+    - name: 'pul_nomad | consul | Add Consul group'
+      ansible.builtin.group:
+        name: "consul"
+        state: present
+
+    # Add user
+    - name: 'pul_nomad | consul | Add Consul user'
+      ansible.builtin.user:
+        name: "consul"
+        comment: Consul user
+        group: "consul"
+        system: true
+
+- name: 'pul_nomad | consul | Install Debian OS packages for consul'
+  ansible.builtin.package:
+    name:
+      - iproute2
+      - dmidecode
+      - dnsutils
+      - unzip
+    state: present
+  tags: installation
+  when: ansible_facts['os_family'] == "Debian"
+
+- name: 'pul_nomad | consul | Install RedHat OS packages'
+  ansible.builtin.package:
+    name:
+      - iproute
+      - dmidecode
+      - dnsutils
+      - sudo
+      - unzip
+    state: present
+  tags: installation
+  when: ansible_facts['os_family'] == "RedHat"
+
+- name: 'pul_nomad | consul | Install consul binary'
+  when: consul_installed_version != consul_version
+  block:
+    - name: 'pul_nomad | consul | Create a temporary directory'
+      ansible.builtin.tempfile:
+        state: directory
+        prefix: ansible-consul.
+      register: consul_temp_dir
+
+    - name: 'pul_nomad | consul | Download and unarchive Consul'
+      block:
+        - name: 'pul_nomad | consul | Download Consul package checksum file'
+          ansible.builtin.get_url:
+            url: "https://releases.hashicorp.com/consul/{{ consul_version }}/consul_{{ consul_version }}_SHA256SUMS"
+            dest: "{{ consul_temp_dir.path }}/consul_{{ consul_version }}_SHA256SUMS"
+          tags: installation
+
+        - name: 'pul_nomad | consul | Read Consul package checksum'
+          ansible.builtin.shell: grep consul_{{consul_version}}_linux_{{ nomad_architecture }}.zip {{ consul_temp_dir.path }}/consul_{{ consul_version }}_SHA256SUMS
+          register: consul_sha256
+          changed_when: false
+          tags:
+            - installation
+
+        - name: 'pul_nomad | consul | Download Consul'
+          ansible.builtin.get_url:
+            url: "https://releases.hashicorp.com/consul/{{ consul_version }}/consul_{{ consul_version }}_linux_{{ nomad_architecture }}.zip"
+            dest: "{{ consul_temp_dir.path }}/consul_{{ consul_version }}_linux_{{ nomad_architecture }}.zip"
+            checksum: "sha256:{{ consul_sha256.stdout.split(' ') | first }}"
+            timeout: 42
+          register: consul_download
+          tags: installation
+
+        - name: 'pul_nomad | consul | Unarchive Consul and install binary'
+          ansible.builtin.unarchive:
+            remote_src: true
+            src: "{{ consul_temp_dir.path }}/consul_{{ consul_version }}_linux_{{ nomad_architecture }}.zip"
+            dest: "/usr/local/bin"
+            owner: "consul"
+            group: "consul"
+            mode: "0755"
+          register: consul_install
+          notify:
+            - reload systemd
+            - restart consul
+          when: consul_download is changed
+          tags: installation
+      always:
+        - name: 'pul_nomad | consul | Cleanup'
+          ansible.builtin.file:
+            path: "{{ consul_temp_dir.path }}"
+            state: absent
+          tags: installation
+- name: 'pul_nomad | consul | Install systemd config'
+  ansible.builtin.copy:
+    src: files/consul/consul.service
+    dest: /lib/systemd/system/consul.service
+    owner: root
+    group: root
+    mode: 0644
+  notify: 'reload systemd'
