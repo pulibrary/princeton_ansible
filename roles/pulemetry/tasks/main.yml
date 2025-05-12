@@ -6,9 +6,20 @@
     state: directory
     mode: '0755'
 
-- name: Pulemetry | download grafana key
-  ansible.builtin.shell: wget -q -O - https://apt.grafana.com/gpg.key | gpg --dearmor > /etc/apt/keyrings/grafana.gpg
+- name: Pulemetry | add grafana key 
+  ansible.builtin.apt_key:
+    url: https://apt.grafana.com/gpg.key 
+    keyring: /etc/apt/keyrings/grafana.gpg
+    state: present
 
 - name: Pulemetry | Add grafana repo list
-  ansible.builtin.shell: |
-    echo '"deb [signed-by=/etc/apt/keyrings/grafana.gpg] https://apt.grafana.com stable main" | tee /etc/apt/sources.list.d/grafana.list'
+  ansible.builtin.apt_repository:
+    repo: 'deb [signed-by=/etc/apt/keyrings/grafana.gpg] https://apt.grafana.com stable main'
+    state: present
+    filename: grafana
+
+- name: Pulemetry | install grafana
+  ansible.builtin.apt:
+    name: grafana
+    state: present
+    update_cache: true 
