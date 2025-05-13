@@ -23,47 +23,6 @@ mailcatcher_install_location: "/usr/local/lib/ruby/gems/3.3.0/gems/mailcatcher-{
 
 solr_url: "http://lib-solr8d-staging.princeton.edu:8983/solr/pdc-discovery-staging"
 
-datadog_api_key: "{{ vault_datadog_key }}"
-datadog_config:
-  tags: "application:pdc-discovery, env:staging, type:webserver"
-  apm_enabled: "true"
-  log_enabled: true
-  process_config:
-    enabled: "true"
-  apm_config:
-    analyzed_spans:
-      pdc-discovery|rack.request: 1
-    filter_tags:
-      reject: ["http.useragent:nginx/1.23.4 (health check)", "http.url:/telemetry/proxy/api/v2/apmtelemetry","operation:heartbeat", "operation:job_fetch", "operation:scheduled_push", "operation:scheduled_poller_wait"]
-datadog_typed_checks:
-  - type: process
-    configuration:
-      init_config:
-      instances:
-        -   name: pdc-discovery
-            service: pdc-discovery
-            search_string:
-              - nginx
-  - type: nginx
-    configuration:
-      init_config:
-      instances:
-        - nginx_status_url: http://localhost:80/nginx_status/
-      logs:
-        - type: file
-          path: /var/log/nginx/access.log
-          source: nginx
-          service: pdc-discovery
-        - type: file
-          path: /var/log/nginx/error.log
-          source: nginx
-          service: pdc-discovery
-        - type: file
-          path: /opt/pdc_discovery/current/log/production.log
-          source: rails
-          service: pdc-discovery
-
-
 secret_key_base: '{{ vault_pdc_discovery_staging_secret_key }}'
 rails_master_key: '{{ vault_rails_master_key }}'
 plausible_key: '{{ vault_pdc_discovery_staging_plausible_key }}'
