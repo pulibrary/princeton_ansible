@@ -28,47 +28,6 @@ mailcatcher_group: "pulsys"
 mailcatcher_version: 0.8.2
 mailcatcher_install_location: "/usr/local/lib/ruby/gems/3.1.0/gems/mailcatcher-{{ mailcatcher_version }}/bin/mailcatcher"
 
-datadog_api_key: "{{ vault_datadog_key }}"
-datadog_config:
-  tags: "application:pdc-describe, env:staging, type:webserver"
-  apm_enabled: "true"
-  logs_enabled: "true"
-  dd_hostname: "{{ inventory_hostname }}"
-  process_config:
-    enabled: "true"
-  apm_config:
-    analyzed_spans:
-      pdc-describe|rack.request: 1
-    filter_tags:
-      reject: ["http.useragent:nginx/1.23.4 (health check)", "http.url:/telemetry/proxy/api/v2/apmtelemetry","operation:heartbeat", "operation:job_fetch", "operation:scheduled_push", "operation:scheduled_poller_wait"]
-datadog_typed_checks:
-  - type: process
-    configuration:
-      init_config:
-      instances:
-        -   name: pdc-describe
-            service: pdc-describe
-            search_string:
-              - nginx
-  - type: nginx
-    configuration:
-      init_config:
-      instances:
-        - nginx_status_url: http://localhost:80/nginx_status/
-      logs:
-        - type: file
-          path: /var/log/nginx/access.log
-          source: nginx
-          service: pdc-describe
-        - type: file
-          path: /var/log/nginx/error.log
-          source: nginx
-          service: pdc-describe
-        - type: file
-          path: /opt/pdc_describe/current/log/staging.log
-          source: rails
-          service: pdc-describe
-
 app_pdc_describe__secret_key: '{{ vault_pdc_describe_staging_secret_key }}'
 app_pdc_describe_datacite_user: '{{ vault_pdc_describe_staging_datacite_user }}'
 app_pdc_describe_datacite_password: '{{ vault_pdc_describe_staging_datacite_password }}'
