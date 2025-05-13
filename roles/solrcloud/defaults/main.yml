@@ -1,8 +1,10 @@
 ---
-solr_cloud_version: "{{ solr_cloud_download_version | default('7.7.2') }}"
+solr_cloud_download_version: "{{ solr_version | default('9.2.0') }}"
+solr_cloud_build_name: "solr-{{ solr_cloud_download_version }}"
+solr_cloud_package: "{{ solr_cloud_build_name }}.tgz"
+solr_cloud_url: "https://pulmirror.princeton.edu/mirror/solr/dist/lucene/solr/{{ solr_cloud_download_version }}/{{ solr_cloud_package }}"
 
 ## Service options
-
 # Owner
 solr_user: deploy
 solr_group: deploy
@@ -11,12 +13,21 @@ solr_group: deploy
 solr_service_enabled: true
 solr_service_state: started
 
-# Files & Paths
-solr_log4j: "{{ solr_log4j_path | default('/solr/log4j.properties') }}"
-solr_log_dir: /solr/logs
+# Files & Paths - SIMPLIFIED FOR CONSISTENCY
 solr_home: /solr
 solr_data_dir: "{{ solr_home }}/data"
-solr_installation: /opt/solr
+solr_data_home: "{{ solr_home }}"
+solr_log_dir: "{{ solr_data_home }}/logs"
+solr_log4j_path: '{{ solr_data_home }}/log4j2.xml'
+
+# Installation directories - SIMPLIFIED FOR CONSISTENCY
+solr_install_dir: "/opt"
+solr_versioned_dir: "/opt/solr-{{ solr_cloud_download_version }}"  # Version-specific directory
+solr_installation: "/opt/solr"  # Symlink to versioned directory
+solr_bin: "{{ solr_installation }}/bin/solr"  # Path to solr binary
+
+# PID directory - updated for modern systemd
+solr_pid_dir: "/run/solr"
 
 # Ports
 solr_port: 8983
@@ -24,7 +35,11 @@ solr_jmx_enabled: "true"
 solr_jmx_port: 1099
 solr_host: "{{ inventory_hostname }}"
 
-# garbage collection settings
+# JVM settings
+solr_stack_size: 256k
+solr_heap: "{{ solr_heap_setting | default('20g') }}"
+
+# GC tuning
 solr_gc_tune: "-XX:NewRatio=3 \
   -XX:SurvivorRatio=4 \
   -XX:TargetSurvivorRatio=90 \
@@ -34,61 +49,35 @@ solr_gc_tune: "-XX:NewRatio=3 \
   -XX:PretenureSizeThreshold=64m \
   -XX:+ParallelRefProcEnabled"
 
-# Enable verbose GC logging
-# these are the Java 9 settings
-# GCID and GCCause are always logged
+# GC logging settings
 gc_log_settings: "-verbose:gc \
   -Xlog:gc=debug:file=/solr/logs/gc.txt:time,uptime,pid,tid,level,tags \
   -Xlog:gc+heap=debug \
   -Xlog:gc+age=trace \
   -Xlog:safepoint"
+solr_gc_log_opts: "{{ gc_log_settings }}"
 
-solr_stack_size: 256k
-solr_heap: "{{ solr_heap_setting | default('20g') }}"
-# Consider configuring the min and max separately:
-# solr_java_memory: '-Xms16g -Xmx20g'
-# ^^^ would require changes to both scripts in the templates dir
-solr_jetty_threads_min: 10
-solr_jetty_threads_max: 10000
-solr_jetty_threads_idle_timeout: 30000
-solr_jetty_threads_stop_timeout: 60000
-solr_jetty_secure_port: 8443
-solr_jetty_output_buffer_size: 32768
-solr_jetty_output_aggregation_size: 8192
-solr_jetty_request_header_size: 8192
-solr_jetty_response_header_size: 8192
-solr_jetty_send_server_version: "false"
-solr_jetty_send_date_header: "false"
-solr_jetty_header_cache_size: 512
-solr_jetty_delay_dispatch_until_content: "false"
-solr_jetty_http_selectors: -1
-solr_jetty_http_acceptors: -1
+# ZooKeeper configuration
+solr_zookeeper_hosts:
+  - "sandbox-zk1.lib.princeton.edu:2181"
+  - "sandbox-zk2.lib.princeton.edu:2181"
+  - "sandbox-zk3.lib.princeton.edu:2181"
 
-# ZOOKEEPER
-solr_zookeeper_client_port: 2181
-lib_zk1_host_name: localhost
-solr_zookeeper_hosts_string_multi: "{{ lib_zk1_host_name }}:{{ solr_zookeeper_client_port }},{{ lib_zk2_host_name }}:{{ solr_zookeeper_client_port }},{{ lib_zk3_host_name }}:{{ solr_zookeeper_client_port }}"
-solr_zookeeper_hosts_string_default: localhost:{{ solr_zookeeper_client_port }}
-solr_zookeeper_hosts_string: '{{ solr_zookeeper_hosts_string_default if lib_zk1_host_name == "localhost" else solr_zookeeper_hosts_string_multi }}'
+# Set zookeeper connection string
+solr_zookeeper_hosts_string: "{{ solr_zookeeper_hosts | join(',') }}"
 
-solr_znode: ""
-solr_znode_path: "/{{ solr_znode }}"
+# Set default solr_znode value based on Solr version
+solr_znode: "{% if solr_cloud_download_version is version('9.0.0', '>=') %}solr9{% else %}solr8{% endif %}"
 
-solr_zk_host: '{{ solr_zookeeper_hosts_string }}{{ solr_znode_path if solr_znode else "" }}'
-
-# Orangelight Jar directory
-jardirectory: /opt/solr/contrib/analysis-extras/lib
-jammy_jardirectory: /opt/solr/modules/analysis-extras/lib
-
-# Webapp Jar directory
-webapp_jardirectory: /opt/solr/server/solr-webapp/webapp/WEB-INF/lib
-
-# LOG
+# LOG settings
 log_root_level: WARN
 log_file_size: 500MB
 log_max_backup_index: 9
-
 solr_log_root_level: "{{ log_root_level }}"
 solr_log_file_size: "{{ log_file_size }}"
 solr_log_max_backup_index: "{{ log_max_backup_index }}"
-solr_cloud_url: "https://pulmirror.princeton.edu/mirror/solr/dist/lucene/solr/{{ solr_cloud_version }}/{{ solr_cloud_package }}"
+
+# Security settings
+solr_use_security: false
+solr_block_unknown_users: false
+solr_admin_password: "SolrRocks"

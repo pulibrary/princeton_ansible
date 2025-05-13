@@ -1,55 +1,139 @@
 ---
-# installation instructions taken from: https://lucene.apache.org/solr/guide/7_2/taking-solr-to-production.html#taking-solr-to-production
-
-- name: solrcloud | create solr dirs
-  ansible.builtin.file:
-    path: '{{ item }}'
-    state: directory
-    owner: '{{ solr_user }}'
-    group: '{{ solr_group }}'
-    mode: 0755
-  loop:
-    - '{{ solr_log_dir }}'
-    - '{{ solr_data_dir }}'
-
-- name: solrcloud | Check for solr service
-  ansible.builtin.command: service solr status
+# Installation of SolrCloud
+- name: Solrcloud | Check for solr service
+  ansible.builtin.command: systemctl status solr
   ignore_errors: true
   changed_when: false
   register: service_solrcloud_status
-  args:
-    warn: false  # The service module doesn't appear to have a status state
 
-- name: solrcloud | Download SolrCloud binaries
+- name: Solrcloud | Ensure deploy group exists
+  ansible.builtin.group:
+    name: "{{ solr_group }}"
+    state: present
+  when: service_solrcloud_status is failed
+
+- name: Solrcloud | Ensure deploy user exists
+  ansible.builtin.user:
+    name: "{{ solr_user }}"
+    group: "{{ solr_group }}"
+    system: true
+    createhome: true
+    home: "/home/{{ solr_user }}"
+    shell: /bin/bash
+  when: service_solrcloud_status is failed
+
+- name: Solrcloud | Download SolrCloud binaries
   ansible.builtin.get_url:
     url: "{{ solr_cloud_url }}"
     dest: '/tmp/{{ solr_cloud_package }}'
     timeout: 300
+    mode: "0644"
   register: solr_downloaded
-  when:
-    service_solrcloud_status is failed
+  when: service_solrcloud_status is failed
   retries: 3
   delay: 10
   until: solr_downloaded is succeeded
   ignore_errors: true
 
-- name: solrcloud | copy local copy if download fails
+- name: Solrcloud | Copy local copy if download fails
   ansible.builtin.copy:
     src: 'local_files/solr/{{ solr_cloud_package }}'
     dest: '/tmp/{{ solr_cloud_package }}'
-    mode: 0644
-  when: solr_downloaded is failed
+    mode: "0644"
+  when:
+    - service_solrcloud_status is failed
+    - solr_downloaded is failed
 
-- name: solrcloud | Extract SolrCloud installation script
-  ansible.builtin.shell: "tar xzf /tmp/{{ solr_cloud_package }} {{ solr_cloud_build_name }}/bin/install_solr_service.sh --strip-components=2"
-  changed_when: false
+# Create all required installation directories
+- name: Solrcloud | Create installation directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ solr_user | default('deploy') }}"
+    group: "{{ solr_group | default('deploy') }}"
+    mode: "0755"
+  loop:
+    - "{{ solr_installation }}"        # /opt/solr
+    - "{{ solr_data_dir }}"            # /solr/data
+    - "{{ solr_data_home }}"           # /solr
+    - "{{ solr_log_dir }}"             # /solr/logs
+    - "/var/run/solr"
+  when: service_solrcloud_status is failed
+
+- name: Solrcloud | Create extraction directory
+  ansible.builtin.file:
+    path: "/tmp/solr_extract"
+    state: directory
+    mode: "0755"
+  when: service_solrcloud_status is failed
+
+- name: Solrcloud | Extract SolrCloud tarball
+  ansible.builtin.unarchive:
+    src: "/tmp/{{ solr_cloud_package }}"
+    dest: "/tmp/solr_extract"
+    remote_src: true
+  when: service_solrcloud_status is failed
+
+- name: Solrcloud | Copy the install script from the extracted files
+  ansible.builtin.copy:
+    src: "/tmp/solr_extract/{{ solr_cloud_build_name }}/bin/install_solr_service.sh"
+    dest: "/tmp/install_solr_service.sh"
+    mode: "0755"
+    remote_src: true
+  when: service_solrcloud_status is failed
+
+# Modified to use correct options and paths
+- name: Solrcloud | Run SolrCloud installation script
+  ansible.builtin.shell: >
+    bash /tmp/install_solr_service.sh /tmp/{{ solr_cloud_package }} 
+    -i {{ solr_installation }}
+    -d {{ solr_data_dir }}
+    -u {{ solr_user }}
+    -s solr
+    -f
   args:
-    chdir: /tmp
-  when: |
-    service_solrcloud_status is failed
+    creates: "{{ solr_installation }}/bin/solr"
+  when: service_solrcloud_status is failed
+  register: solr_install_result
+  ignore_errors: true
 
-- name: solrcloud | run SolrCloud installation script
-  ansible.builtin.shell: /tmp/install_solr_service.sh /tmp/{{ solr_cloud_package }} -f -u {{ solr_user }} -n
-  changed_when: false
-  when: |
-    service_solrcloud_status is failed
+# Add verbose debug output to help troubleshoot any further issues
+- name: Solrcloud | Debug installation result
+  ansible.builtin.debug:
+    var: solr_install_result
+  when:
+    - service_solrcloud_status is failed
+    - solr_install_result is failed
+
+# Fallback manual installation if the script fails
+- name: Solrcloud | Manual installation if script fails
+  block:
+    - name: Solrcloud | Copy extracted Solr files to installation directory
+      ansible.builtin.copy:
+        src: "/tmp/solr_extract/{{ solr_cloud_build_name }}/"
+        dest: "{{ solr_installation }}/"
+        remote_src: true
+        owner: "{{ solr_user }}"
+        group: "{{ solr_group }}"
+        mode: preserve
+
+    - name: Solrcloud | Create symlink
+      ansible.builtin.file:
+        src: "{{ solr_installation }}"
+        dest: "/opt/solr-{{ solr_cloud_download_version }}"
+        state: link
+        owner: "{{ solr_user }}"
+        group: "{{ solr_group }}"
+  when:
+    - service_solrcloud_status is failed
+    - solr_install_result is failed
+
+- name: Solrcloud | Cleanup installation files
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "/tmp/{{ solr_cloud_package }}"
+    - "/tmp/solr_extract"
+    - "/tmp/install_solr_service.sh"
+  when: service_solrcloud_status is failed

@@ -1,14 +1,29 @@
+# molecule/default/verify.yml
 ---
 - name: Verify
   hosts: all
-  gather_facts: false
+  become: true
   tasks:
-  - name: find solr logs and data
-    stat:
-      path: "{{ item }}"
-    loop:
-      - /solr/logs
-      - /solr/data
-    register: solr_path
-    failed_when:
-        - solr_path.stat.isdir is not defined
+    - name: Verify cifs-utils is installed
+      ansible.builtin.command: dpkg-query -l cifs-utils
+      register: cifs_utils_check
+      changed_when: false
+      failed_when: cifs_utils_check.rc != 0
+
+    - name: Verify solr.in.sh is configured
+      ansible.builtin.stat:
+        path: /opt/solr/bin/solr.in.sh
+      register: solr_in_sh_check
+      failed_when: solr_in_sh_check.stat.exists == false
+
+    - name: Verify solr.xml is configured
+      ansible.builtin.stat:
+        path: "{{ solr_data_dir }}/solr.xml"
+      register: solr_xml_check
+      failed_when: solr_xml_check.stat.exists == false
+
+    - name: Verify log4j2.xml is configured
+      ansible.builtin.stat:
+        path: /solr/log4j2.xml
+      register: log4j2_check
+      failed_when: log4j2_check.stat.exists == false

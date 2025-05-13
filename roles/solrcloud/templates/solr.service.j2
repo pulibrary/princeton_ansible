@@ -1,0 +1,21 @@
+# roles/solrcloud/templates/solr.service.j2
+[Unit]
+Description=Apache Solr
+After=network.target remote-fs.target
+
+[Service]
+Type=forking
+User={{ solr_user }}
+Group={{ solr_group }}
+EnvironmentFile=/etc/default/solr.in.sh
+ExecStart=/bin/bash -c '{{ solr_installation }}/bin/solr start'
+ExecStop=/bin/bash -c '{{ solr_installation }}/bin/solr stop'
+Restart=on-failure
+TimeoutStartSec=300
+TimeoutStopSec=120
+LimitNOFILE=65000
+LimitNPROC=65000
+PIDFile={{ solr_pid_dir }}/solr-{{ solr_port }}.pid
+
+[Install]
+WantedBy=multi-user.target
