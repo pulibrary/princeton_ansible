@@ -1,0 +1,39 @@
+# roles/solrcloud/templates/solr.in.sh.j2
+{{ ansible_managed | comment }}
+# Local customizations for Solr
+
+# Memory settings
+{% if solr_heap_setting is defined %}
+SOLR_HEAP="{{ solr_heap_setting }}"
+{% endif %}
+
+# GC tuning
+GC_TUNE="{{ solr_gc_tune }}"
+
+# Directories
+SOLR_PID_DIR="{{ solr_pid_dir }}"
+SOLR_HOME="{{ solr_data_dir }}"
+SOLR_LOGS_DIR="{{ solr_log_dir }}"
+SOLR_PORT="{{ solr_port }}"
+SOLR_HOST="{{ inventory_hostname }}"
+
+# ZooKeeper configuration
+{% if solr_cloud_download_version is version('9.0.0', '>=') %}
+# Solr 9 format - ZK_HOST and solr_znode are separate
+ZK_HOST="{{ solr_zookeeper_hosts_string }}"
+{% else %}
+# Solr 8 format - ZK_HOST includes solr_znode
+ZK_HOST="{{ solr_zookeeper_hosts_string }}{% if solr_znode and solr_znode.startswith('/') %}{{ solr_znode }}{% elif solr_znode %}/{{ solr_znode }}{% endif %}"
+{% endif %}
+ZK_CLIENT_TIMEOUT="60000"
+
+# JMX Settings
+ENABLE_REMOTE_JMX_OPTS="true"
+RMI_PORT="1099"
+
+# All system properties in a single line
+SOLR_OPTS="-Xss256k -Dsolr.solr.home=/solr -Dsolr.solr.home={{ solr_data_dir }} -Dsolr.log.dir={{ solr_log_dir }} -Dsolr.install.symDir={{ solr_installation }} -Dsolr.allowPaths={{ solr_data_dir }},/mnt/solr_backup -Dlog4j.configurationFile={{ solr_data_home }}/log4j2.xml -Dsolr.jetty.host=0.0.0.0 -Djetty.home={{ solr_installation }}/server -Dsolr.jetty.threads.idle.timeout=1800000 -Dsolr.cloud.client.stallTime=1800000 -Dlog4j2.formatMsgNoLookups=true -Djava.security.egd=file:/dev/./urandom"
+
+# Additional security settings
+SOLR_SSL_ENABLED=false
+

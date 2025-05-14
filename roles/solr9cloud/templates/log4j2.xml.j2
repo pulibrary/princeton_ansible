@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- roles/solrcloud/templates/log4j2.xml.j2 -->
+<Configuration>
+  <Appenders>
+    <Console name="STDOUT" target="SYSTEM_OUT">
+      <PatternLayout pattern="%d{yyyy-MM-dd HH:mm:ss.SSS} %-5p (%t) [%X{collection} %X{shard} %X{replica} %X{core}] %c{1.} %m%n"/>
+    </Console>
+
+    <RollingFile 
+        name="RollingFile"
+        fileName="{{ solr_log_dir }}/solr.log"
+        filePattern="{{ solr_log_dir }}/solr.log.%i" >
+      <PatternLayout>
+        <Pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %-5p (%t) [%X{collection} %X{shard} %X{replica} %X{core}] %c{1.} %m%n</Pattern>
+      </PatternLayout>
+      <Policies>
+        <SizeBasedTriggeringPolicy size="{{ solr_log_file_size | default('500MB') }}"/>
+      </Policies>
+      <DefaultRolloverStrategy max="{{ solr_log_max_backup_index | default('9') }}"/>
+    </RollingFile>
+
+    <RollingFile 
+        name="SlowFile"
+        fileName="{{ solr_log_dir }}/solr_slow_requests.log"
+        filePattern="{{ solr_log_dir }}/solr_slow_requests.log.%i" >
+      <PatternLayout>
+        <Pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %-5p (%t) [%X{collection} %X{shard} %X{replica} %X{core}] %c{1.} %m%n</Pattern>
+      </PatternLayout>
+      <Policies>
+        <SizeBasedTriggeringPolicy size="{{ solr_log_file_size | default('500MB') }}"/>
+      </Policies>
+      <DefaultRolloverStrategy max="{{ solr_log_max_backup_index | default('9') }}"/>
+    </RollingFile>
+
+  </Appenders>
+  <Loggers>
+    <Logger name="org.apache.zookeeper" level="WARN"/>
+    <Logger name="org.apache.hadoop" level="WARN"/>
+    <Logger name="org.apache.solr.update.LoggingInfoStream" level="OFF"/>
+    <Logger name="org.apache.solr.core.SolrCore.SlowRequest" level="INFO" additivity="false">
+      <AppenderRef ref="SlowFile"/>
+    </Logger>
+
+    <Root level="{{ solr_log_root_level | default('WARN') }}">
+      <AppenderRef ref="RollingFile"/>
+      <AppenderRef ref="STDOUT"/>
+    </Root>
+  </Loggers>
+</Configuration>
+
