@@ -69,6 +69,12 @@
 - name: Solrcloud | Configure backup mounts
   ansible.builtin.include_tasks: backup_mounts.yml
 
+- name: Solrcloud | Check if Solr is already installed
+  ansible.builtin.stat:
+    path: "{{ solr_versioned_dir }}/README.txt"
+  register: solr_install_check
+  tags: [download, install]
+
 # Download SolrCloud package
 - name: Solrcloud | Download SolrCloud archive
   ansible.builtin.get_url:
@@ -81,6 +87,7 @@
   delay: 10
   until: solr_downloaded is succeeded
   ignore_errors: true
+  when: not solr_install_check.stat.exists
   tags: [download]
 
 # Fallback to local copy if download fails
@@ -89,7 +96,9 @@
     src: "local_files/solr/{{ solr_cloud_package }}"
     dest: "/tmp/{{ solr_cloud_package }}"
     mode: "0644"
-  when: solr_downloaded is failed
+  when:
+    - not solr_install_check.stat.exists
+    - solr_downloaded is defined and solr_downloaded is failed
   tags: [download]
 
 # Create extraction directory
@@ -98,6 +107,7 @@
     path: "/tmp/solr_extract"
     state: directory
     mode: "0755"
+  when: not solr_install_check.stat.exists
   tags: [install]
 
 # Extract archive
@@ -106,6 +116,7 @@
     src: "/tmp/{{ solr_cloud_package }}"
     dest: "/tmp/solr_extract"
     remote_src: true
+  when: not solr_install_check.stat.exists
   tags: [install]
 
 # Make sure installation directories exist
@@ -130,6 +141,7 @@
     group: "{{ solr_group }}"
     remote_src: true
     mode: preserve
+  when: not solr_install_check.stat.exists
   tags: [install]
 
 # Create symlink
@@ -140,6 +152,7 @@
     state: link
     owner: "{{ solr_user }}"
     group: "{{ solr_group }}"
+    force: true
   tags: [install]
 
 # Make sure binary is executable
@@ -150,14 +163,15 @@
     state: file
   tags: [install]
 
-# Create systemd service file
-- name: Solrcloud | Configure Solr systemd service
-  ansible.builtin.template:
-    src: solr.service.j2
-    dest: /etc/systemd/system/solr.service
-    mode: "0644"
-  notify: Reload systemd and restart solr
-  tags: [service]
+- name: Solrcloud | Configure solr service
+  ansible.builtin.include_tasks: service.yml
+
+# Configure SolrCloud environment with idempotence check
+- name: Solrcloud | Check if init script exists
+  ansible.builtin.stat:
+    path: /etc/default/solr.in.sh
+  register: init_file_check
+  tags: [configure]
 
 # Configure SolrCloud environment
 - name: Solrcloud | Configure SolrCloud init script
@@ -168,7 +182,15 @@
     group: "{{ solr_group }}"
     mode: "0644"
   notify: Restart solr
+  register: init_script_updated
   tags: [configure]
+
+# Configure system limits with checksum
+- name: Solrcloud | Check if limits file exists
+  ansible.builtin.stat:
+    path: /etc/security/limits.d/solr.conf
+  register: limits_file_check
+  tags: [system]
 
 # Configure system limits
 - name: Solrcloud | Configure high ulimit value for Solr
@@ -177,6 +199,7 @@
     dest: /etc/security/limits.d/solr.conf
     mode: "0644"
   notify: Restart solr
+  register: limits_updated
   tags: [system]
 
 # Configure Solr XML
@@ -212,6 +235,12 @@
   when: not is_solr9
   tags: [configure]
 
+- name: Solrcloud | Check if temp files exist
+  ansible.builtin.stat:
+    path: "/tmp/{{ solr_cloud_package }}"
+  register: solr_temp_files
+  tags: [cleanup]
+
 # Clean up installation files
 - name: Solrcloud | Cleanup installation files
   ansible.builtin.file:
@@ -220,6 +249,7 @@
   loop:
     - "/tmp/{{ solr_cloud_package }}"
     - "/tmp/solr_extract"
+  when: solr_temp_files.stat.exists and not solr_install_check.stat.exists
   tags: [cleanup]
 
 # Start and enable Solr service

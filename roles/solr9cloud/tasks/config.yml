@@ -59,6 +59,7 @@
         -z {{ solr_zookeeper_hosts_string }}
       register: create_znode_result
       changed_when: create_znode_result.rc == 0
+      failed_when: create_znode_result.rc != 0 and "NodeExistsException" not in create_znode_result.stderr
       when:
         - solr_binary.stat.exists
         - znode_check is defined
