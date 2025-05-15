@@ -25,12 +25,12 @@ http:
       priority: 10
 
     datacommons-production-skip-all-mw:
-      service: dss-production
+      service: datacommons-production
       rule: "Header(`X-Forwarded-Host`, `datacommons.princeton.edu`) && Header(`Sec-Fetch-Dest`, `empty`)"
       entrypoints:
         - http
       priority: 11
-    dss-production-apply-mw:
+    datacommons-production-apply-mw:
       service: datacommons-production
       rule: Header(`X-Forwarded-Host`, `datacommons.princeton.edu`)
       entrypoints:
@@ -165,12 +165,12 @@ http:
     datacommons-production:
       loadBalancer:
         healthCheck:
-          path: /health.json
+          path: /discovery/health.json
           timeout: 10
         servers:
-          - url: http://pdc-describe-prod1.princeton.edu:80
-          - url: http://pdc-describe-prod2.princeton.edu:80
-          - url: http://pdc-describe-prod3.princeton.edu:80
+          # Only discovery machines are being routed to traefik so only discovery machines are needed here
+          - url: http://pdc-discovery-prod1.princeton.edu:80
+          - url: http://pdc-discovery-prod2.princeton.edu:80
     dpul-production:
       loadBalancer:
         healthCheck:
