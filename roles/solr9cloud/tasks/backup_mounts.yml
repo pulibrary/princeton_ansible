@@ -1,0 +1,78 @@
+---
+# Configure backup mounts for SolrCloud
+- name: Solrcloud | Copy smb credentials
+  ansible.builtin.copy:
+    src: "files/{{ item }}"
+    dest: "/etc/{{ item }}"
+    mode: "0600"
+    owner: root
+    group: root
+  loop:
+    - solr.smb.credentials
+  when: running_on_server
+
+- name: Solrcloud | Ensure cifs-utils is installed
+  ansible.builtin.apt:
+    name: cifs-utils
+    state: present
+  when: running_on_server
+
+- name: Solrcloud | Check if credentials file exists
+  ansible.builtin.stat:
+    path: "/etc/solr.smb.credentials"
+  register: creds_file
+  when: running_on_server
+
+- name: Solrcloud | Debug credentials file permissions
+  ansible.builtin.debug:
+    var: creds_file
+  when: running_on_server
+
+# Try mounting with explicit options instead of credentials file
+- name: Solrcloud | Create mount to diglibdata shares
+  ansible.posix.mount:
+    path: "/mnt/{{ item.path }}"
+    src: "//diglibdata1.princeton.edu/{{ item.src }}"
+    fstype: cifs
+    opts: "credentials=/etc/solr.smb.credentials,uid=1001,gid=1001,file_mode=0644,dir_mode=0755,vers=3.0"
+    state: mounted
+  when: running_on_server
+  loop:
+    - {path: "solr_backup", src: "solrbackup"}
+  tags:
+    - fix_backups
+  register: mount_result
+  ignore_errors: true
+
+- name: Solrcloud | Ensure the bind mount is active
+  ansible.posix.mount:
+    src: /mnt/solr_backup
+    path: "{{ solr_data_dir }}/backup"
+    state: mounted
+    opts: bind
+    fstype: none
+  when: is_solr9
+
+- name: Solrcloud | Ensure the bind mount is configured in /etc/fstab
+  ansible.posix.mount:
+    src: /mnt/solr_backup
+    path: "{{ solr_data_dir }}/backup"
+    state: present
+    fstype: none
+    opts: bind
+    dump: '0'
+    passno: '0'
+  when: is_solr9
+
+# Fallback method if the standard mount fails
+- name: Solrcloud | Mount fallback (mount command directly)
+  ansible.builtin.command: >
+    mount -t cifs //diglibdata1.princeton.edu/solrbackup
+    /mnt/solr_backup
+    -o credentials=/etc/solr.smb.credentials,uid=1001,gid=1001,file_mode=0644,dir_mode=0755,vers=3.0
+  when:
+    - running_on_server
+    - mount_result is failed
+  tags:
+    - fix_backups
+
