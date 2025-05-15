@@ -1,6 +1,19 @@
 ---
-- name: restart SolrCloud
-  ansible.builtin.service:
+# Handlers for SolrCloud role
+
+- name: Reload systemd
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+- name: Restart solr
+  ansible.builtin.systemd:
     name: solr
     state: restarted
-  when: solr_service_state != 'stopped'
+  ignore_errors: true
+
+- name: Reload systemd and restart solr
+  ansible.builtin.systemd:
+    name: solr
+    state: restarted
+    daemon_reload: true
+  ignore_errors: true

@@ -1,37 +1,73 @@
 ---
-- name: Solrcloud | Check for solr znode
-  ansible.builtin.command: >
-    {{ solr_installation }}/bin/solr zk ls /
-    -z {{ solr_zookeeper_hosts_string }}
-  register: znode_check
-  ignore_errors: true
-  changed_when: false
+# Configure SolrCloud
 
-- name: Solrcloud | Create zk chroot / solr znode using bin/solr
-  ansible.builtin.command: >
-    {{ solr_installation }}/bin/solr zk mkroot {{ solr_znode }}
-    -z {{ solr_zookeeper_hosts_string }}
-  when: solr_znode not in znode_check.stdout_lines and solr_znode != ''
-  changed_when: false
+- name: Solrcloud | Debug Solr variables
+  ansible.builtin.debug:
+    msg:
+      - "solr_installation: {{ solr_installation }}"
+      - "solr_bin: {{ solr_bin }}"
+      - "solr_cloud_download_version: {{ solr_cloud_download_version }}"
+      - "solr_znode: {{ solr_znode | default('undefined') }}"
 
-- name: Solrcloud | Configure SolrCloud init script
-  ansible.builtin.template:
-    src: 'solr.in.sh.j2'
-    dest: '/etc/default/solr.in.sh'
-    owner: '{{ solr_user }}'
-    group: '{{ solr_group }}'
-    mode: "0644"
-    force: true
-  changed_when: false
-  notify: restart SolrCloud
+- name: Solrcloud | Set zookeeper connection string
+  ansible.builtin.set_fact:
+    solr_zookeeper_hosts_string: "{{ solr_zookeeper_hosts | join(',') }}"
+  when: solr_zookeeper_hosts_string is not defined
 
-- name: Solrcloud | Configure high ulimit value for Solr
-  ansible.builtin.template:
-    src: 'solr.conf.j2'
-    dest: '/etc/security/limits.d/solr.conf'
-    mode: "0644"
-    force: true
-  notify: restart SolrCloud
+- name: Solrcloud | Set default solr_znode value based on Solr version
+  ansible.builtin.set_fact:
+    solr_znode: "{% if solr_cloud_download_version is version('9.0.0', '>=') %}solr9{% else %}solr8{% endif %}"
+  when: solr_znode is not defined or solr_znode == ''
+
+# do we have solr already installed?
+- name: Solrcloud | Check for solr executable
+  ansible.builtin.stat:
+    path: "{{ solr_bin }}"
+  register: solr_binary
+
+- name: Solrcloud | Display solr binary status
+  ansible.builtin.debug:
+    var: solr_binary
+  when: not solr_binary.stat.exists
+
+# Different ZK handling for Solr 8 vs Solr 9 which will have no znode
+- name: Solrcloud | Check ZooKeeper setup for Solr 9
+  block:
+    - name: Solrcloud | Check for solr znode
+      ansible.builtin.command: >
+        {{ solr_bin }} zk ls {{ solr_znode if (solr_znode.startswith('/')) else ('/' + solr_znode) }}
+        -z {{ solr_zookeeper_hosts_string }}
+      register: znode_exists_check
+      changed_when: false
+      ignore_errors: true
+      when: solr_binary.stat.exists
+
+    - name: Solrcloud | Check for solr znode (root level)
+      ansible.builtin.command: >
+        {{ solr_bin }} zk ls /
+        -z {{ solr_zookeeper_hosts_string }}
+      register: znode_check
+      ignore_errors: true
+      changed_when: false
+      when:
+        - solr_binary.stat.exists
+        - znode_exists_check is failed
+
+    - name: Solrcloud | Create zk chroot / solr znode
+      ansible.builtin.command: >
+        {{ solr_bin }} zk mkroot {{ solr_znode if (solr_znode.startswith('/')) else ('/' + solr_znode) }}
+        -z {{ solr_zookeeper_hosts_string }}
+      register: create_znode_result
+      changed_when: create_znode_result.rc == 0
+      when:
+        - solr_binary.stat.exists
+        - znode_check is defined
+        - znode_check is succeeded
+        - znode_check.stdout is defined
+        - solr_znode | replace('/', '') not in znode_check.stdout_lines
+        - solr_znode | length > 0
+        - znode_exists_check is failed
+  when: solr_cloud_download_version is version('9.0.0', '>=')
 
 - name: Solrcloud | Configure SolrCloud properties
   ansible.builtin.template:
@@ -40,95 +76,14 @@
     owner: '{{ solr_user }}'
     group: '{{ solr_group }}'
     mode: "0644"
-    force: true
-  notify: restart SolrCloud
-  when:
-    - '"8" in solr_cloud_download_version'
+  notify: Restart solr
 
-- name: Solrcloud | Configure SolrCloud 9 properties
-  ansible.builtin.template:
-    src: 'solr9.xml.j2'
-    dest: '{{ solr_data_dir }}/solr.xml'
-    owner: '{{ solr_user }}'
-    group: '{{ solr_group }}'
-    mode: "0644"
-    force: true
-  notify: restart SolrCloud
-  when:
-    - '"9" in solr_cloud_download_version'
+# Solr 9 specific configuration
+- name: Solrcloud | Configure Solr 9.x specific settings
+  ansible.builtin.include_tasks: solr9_config.yml
+  when: solr_cloud_download_version is version('9.0.0', '>=')
 
-- name: solrcloud | Configure pre 7.4 logging
-  ansible.builtin.template:
-    src: 'log4j.properties.j2'
-    dest: '/solr/log4j.properties'
-    owner: '{{ solr_user }}'
-    group: '{{ solr_group }}'
-    mode: "0644"
-    force: true
-  notify: restart SolrCloud
-
-- name: Solrcloud | Configure logging
-  ansible.builtin.template:
-    src: 'log4j2.xml.j2'
-    dest: '/solr/log4j2.xml'
-    owner: '{{ solr_user }}'
-    group: '{{ solr_group }}'
-    mode: "0644"
-    force: true
-  notify: restart SolrCloud
-
-# - name: solrcloud | Copy orangelight plugin jar files
-  # ansible.builtin.copy:
-    # src: files/{{ item }}
-    # dest: "{{ jammy_jardirectory }}/{{ item }}"
-    # mode: 0644
-  # when:
-    # - running_on_server
-  # loop:
-    # - CJKFoldingFilter.jar
-    # - lucene-umich-solr-filters-6.0.0-SNAPSHOT.jar
-  # notify: restart SolrCloud
-
-- name: Solrcloud | Copy orangelight plugin jar files
-  ansible.builtin.copy:
-    src: files/{{ item }}
-    dest: "{{ jardirectory }}/{{ item }}"
-    mode: "0644"
-  when:
-    - running_on_server
-  loop:
-    - CJKFoldingFilter.jar
-    - lucene-umich-solr-filters-6.0.0-SNAPSHOT.jar
-  notify: restart SolrCloud
-
-- name: Solrcloud | Copy webapp directory plugin jar files
-  ansible.builtin.copy:
-    src: files/{{ item }}
-    dest: "{{ webapp_jardirectory }}/{{ item }}"
-    mode: "0644"
-  loop:
-    - jts-core-1.15.1.jar
-  notify: restart SolrCloud
-
-- name: Solrcloud | Create solr home lib dir
-  ansible.builtin.file:
-    path: "{{ solr_data_dir }}/lib"
-    owner: '{{ solr_user }}'
-    group: '{{ solr_group }}'
-    state: directory
-    mode: "0755"
-  tags: scriptplugins
-
-- name: Solrcloud | Copy scripting engine jar files
-  ansible.builtin.copy:
-    src: files/{{ item }}
-    dest: "{{ solr_data_dir }}/lib/{{ item }}"
-    mode: "0644"
-  loop:
-    - nashorn-core-15.4.jar
-    - asm-7.3.1.jar
-    - asm-commons-7.3.1.jar
-    - asm-tree-7.3.1.jar
-    - asm-util-7.3.1.jar
-  notify: restart SolrCloud
-  tags: scriptplugins
+# Solr 8 specific configuration
+- name: Solrcloud | Configure Solr 8.x specific settings
+  ansible.builtin.include_tasks: solr8_config.yml
+  when: solr_cloud_download_version is version('9.0.0', '<')
