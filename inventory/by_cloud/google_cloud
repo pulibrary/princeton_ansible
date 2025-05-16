@@ -26,7 +26,6 @@ gcp-oar-prod1 ansible_host=10.244.0.3
 gcp_dataspace_staging1 ansible_host=10.132.0.5
 gcp_oar_staging1 ansible_host=10.132.0.4
 
-
 [obsd_httpd_dev]
 dev.pulcloud.io
 
@@ -49,23 +48,26 @@ obsd_httpd_dev
 
 [gcp_dev:vars]
 ansible_ssh_common_args='-o ProxyCommand="ssh -W %h:%p -q pulsys@bastion-dev.pulcloud.io"'
+checkmk_folder=linux/staging
 
 [gcp_production:children]
 dspace_production
 obsd_httpd_production
-pulmirror_production
 sftp_production
 
 [gcp_production:vars]
 ansible_ssh_common_args='-o ProxyCommand="ssh -W %h:%p -q pulsys@bastion-prod.pulcloud.io"'
+checkmk_folder=linux/production
 
 [gcp_staging:children]
+cdhapps_staging
 dspace_staging
 obsd_httpd_staging
 
 [gcp_staging:vars]
 ansible_ssh_common_args='-o ProxyCommand="ssh -W %h:%p -q pulsys@bastion-staging.pulcloud.io"'
 ansible_python_interpreter=/usr/bin/python3
+checkmk_folder=linux/staging
 
 [obsd:children]
 bastion_dev
@@ -79,3 +81,12 @@ sftp_production
 
 [obsd:vars]
 ansible_become_method=doas
+
+[gcp_operations:children]
+bastion_dev
+bastion_production
+bastion_staging
+pulmirror_production
+
+[gcp_operations:vars]
+checkmk_folder=linux/operations
