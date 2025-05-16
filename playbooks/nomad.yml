@@ -1,6 +1,11 @@
 ---
-# by default this playbook runs in the staging environment
-# to run in production, pass '-e runtime_env=production'
+# Extensive documentation our Nomad infrastructure found in
+# roles/pul_nomad/README.md
+#
+# Only apply dpulc application configuration:
+#   ansible-playbook playbooks/nomad.yml --tags dpulc
+# Provision cluster, but skip application configuration:
+#   ansible-playbook playbooks/nomad.yml --skip-tags app_config
 - name: build the nomad cluster
   hosts: nomad_cluster
   remote_user: pulsys
@@ -8,6 +13,7 @@
   vars_files:
     # This will auto include group_vars/nomad_clients.yml for clients
     # This will auto include group_vars/nomad_servers.yml for servers
+    # This will auto include host_vars/<hosthere>.yml for specific clients.
     - ../group_vars/nomad/vault.yml
     - ../group_vars/nomad_cluster.yml
     - ../group_vars/nomad/dpulc/staging.yml
