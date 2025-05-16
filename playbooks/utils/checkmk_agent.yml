@@ -2,8 +2,10 @@
 # To run the playbook:
 # ansible-playbook playbooks/utils/checkmk_agent.yml --limit=<machine/group> -e checkmk_folder=linux/rdss
 # folder names must be all lower case and should not begin with a slash
-# by default this playbook runs in the staging environment
-# to run in production, pass '-e runtime_env=production'
+# by default this playbook runs against inventory from the staging groups
+# to run against production groups, pass '-e runtime_env=production'
+# you must also pass the name of the checkmk site you want
+# as '-e checkmk_sevice=aws' or '-e checkmk_service=production'
 - name: Install CheckMk agent on host
   hosts: "{{ runtime_env | default ('staging') }}"
   remote_user: pulsys
@@ -12,7 +14,9 @@
   vars_files:
     - ../../group_vars/all/vault.yml
     - ../../group_vars/checkmk/shared.yml
-    - ../../group_vars/checkmk/{{ runtime_env | default('staging') }}.yml
+    # the checkmk_service is the checkmk sitename
+    # options are production, staging, aws, gcp
+    - ../../group_vars/checkmk/{{ checkmk_service | default('staging') }}.yml
     - ../../group_vars/checkmk/vault.yml
 
   vars:
