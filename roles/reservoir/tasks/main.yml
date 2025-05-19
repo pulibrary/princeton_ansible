@@ -1,0 +1,45 @@
+---
+# tasks file for roles/reservoir
+- name: Reservoir | Copy reservoir jar file
+  ansible.builtin.copy:
+    src: "files/{{ reservoir_jar_name }}"
+    dest: "/opt/reservoir/{{ reservoir_jar_name }}"
+    mode: "0644"
+
+# Create systemd service file with proper idempotence checks
+- name: Reservoir | Get existing service file
+  ansible.builtin.stat:
+    path: /etc/systemd/system/reservoir.service
+  register: service_file_check
+
+# If the service file doesn't exist, create it
+- name: Reservoir | Create initial Reservoir systemd service file
+  ansible.builtin.template:
+    src: reservoir.service.j2
+    dest: /etc/systemd/system/reservoir.service
+    mode: "0644"
+  notify: Reload systemd and restart reservoir
+  when: not service_file_check.stat.exists
+
+  # Configure reservoir init script
+- name: Reservoir | Check if init script exists
+  ansible.builtin.stat:
+    path: /etc/default/reservoir.in.sh
+  register: init_file_check
+  tags: [configure]
+
+- name: Reservoir | Configure reservoir init script
+  ansible.builtin.template:
+    src: reservoir.in.sh.j2
+    dest: /etc/default/reservoir.in.sh
+    owner: "pulsys"
+    mode: "0644"
+  notify: Restart reservoir
+  tags: [configure]
+  register: init_script_updated
+
+# If the database isn't initialized run the init script
+- name: Reservoir | Initialize the database
+  ansible.builtin.command: java -jar /opt/reservoir/mod-reservoir-client-fat.jar --init
+  become: true
+  tags: init
