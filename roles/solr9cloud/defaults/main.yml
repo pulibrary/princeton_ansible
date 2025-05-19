@@ -1,0 +1,84 @@
+---
+solr_cloud_download_version: "{{ solr_version | default('9.2.0') }}"
+solr_cloud_build_name: "solr-{{ solr_cloud_download_version }}"
+solr_cloud_package: "{{ solr_cloud_build_name }}.tgz"
+solr_cloud_url: "https://pulmirror.princeton.edu/mirror/solr/dist/lucene/solr/{{ solr_cloud_download_version }}/{{ solr_cloud_package }}"
+
+## Service options
+# Owner
+solr_user: deploy
+solr_group: deploy
+
+# start on boot
+solr_service_enabled: true
+solr_service_state: started
+
+# Files & Paths - SIMPLIFIED FOR CONSISTENCY
+solr_home: /solr
+solr_data_dir: "{{ solr_home }}/data"
+solr_data_home: "{{ solr_home }}"
+solr_log_dir: "{{ solr_data_home }}/logs"
+solr_log4j_path: '{{ solr_data_home }}/log4j2.xml'
+
+# Installation directories - SIMPLIFIED FOR CONSISTENCY
+solr_install_dir: "/opt"
+solr_versioned_dir: "/opt/solr-{{ solr_cloud_download_version }}"  # Version-specific directory
+solr_installation: "/opt/solr"  # Symlink to versioned directory
+solr_bin: "{{ solr_installation }}/bin/solr"  # Path to solr binary
+
+# PID directory - updated for modern systemd
+solr_pid_dir: "/run/solr"
+
+# Ports
+solr_port: 8983
+solr_jmx_enabled: "true"
+solr_jmx_port: 1099
+solr_host: "{{ inventory_hostname }}"
+
+# JVM settings
+solr_stack_size: 256k
+solr_heap: "{{ solr_heap_setting | default('20g') }}"
+
+# GC tuning
+solr_gc_tune: "-XX:NewRatio=3 \
+  -XX:SurvivorRatio=4 \
+  -XX:TargetSurvivorRatio=90 \
+  -XX:MaxTenuringThreshold=8 \
+  -XX:ConcGCThreads=4 \
+  -XX:ParallelGCThreads=4 \
+  -XX:PretenureSizeThreshold=64m \
+  -XX:+ParallelRefProcEnabled"
+
+# GC logging settings
+gc_log_settings: "-verbose:gc \
+  -Xlog:gc=debug:file=/solr/logs/gc.txt:time,uptime,pid,tid,level,tags \
+  -Xlog:gc+heap=debug \
+  -Xlog:gc+age=trace \
+  -Xlog:safepoint"
+solr_gc_log_opts: "{{ gc_log_settings }}"
+
+# ZooKeeper configuration
+solr_zookeeper_hosts:
+  - "sandbox-zk1.lib.princeton.edu:2181"
+  - "sandbox-zk2.lib.princeton.edu:2181"
+  - "sandbox-zk3.lib.princeton.edu:2181"
+
+# Set zookeeper connection string
+solr_zookeeper_hosts_string: "{{ solr_zookeeper_hosts | join(',') }}"
+
+# Set default solr_znode value based on Solr version
+solr_znode: "{% if solr_cloud_download_version is version('9.0.0', '>=') %}solr9{% else %}solr8{% endif %}"
+
+# LOG settings
+log_root_level: WARN
+log_file_size: 500MB
+log_max_backup_index: 9
+solr_log_root_level: "{{ log_root_level }}"
+solr_log_file_size: "{{ log_file_size }}"
+solr_log_max_backup_index: "{{ log_max_backup_index }}"
+
+# Security settings
+solr_use_security: false
+solr_block_unknown_users: false
+solr_admin_password: "SolrRocks"
+
