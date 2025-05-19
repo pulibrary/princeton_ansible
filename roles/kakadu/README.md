@@ -1,5 +1,0 @@
-Role Name
-=========
-
-Installs kakadu
-
