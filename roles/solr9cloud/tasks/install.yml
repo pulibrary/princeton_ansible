@@ -1,0 +1,62 @@
+---
+# Create extraction directory
+- name: Solrcloud | Create extraction directory
+  ansible.builtin.file:
+    path: "/tmp/solr_extract"
+    state: directory
+    mode: "0755"
+  when: not solr_install_check.stat.exists
+  tags: [install]
+
+# Extract archive
+- name: Solrcloud | Extract SolrCloud archive
+  ansible.builtin.unarchive:
+    src: "/tmp/{{ solr_cloud_package }}"
+    dest: "/tmp/solr_extract"
+    remote_src: true
+  when: not solr_install_check.stat.exists
+  tags: [install]
+
+# Make sure installation directories exist
+- name: Solrcloud | Create installation directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+    owner: "{{ solr_user }}"
+    group: "{{ solr_group }}"
+  loop:
+    - "{{ solr_install_dir }}"
+    - "{{ solr_versioned_dir }}"
+  tags: [install]
+
+# Direct copy of files
+- name: Solrcloud | Copy Solr files
+  ansible.builtin.copy:
+    src: "/tmp/solr_extract/{{ solr_cloud_build_name }}/"
+    dest: "{{ solr_versioned_dir }}/"
+    owner: "{{ solr_user }}"
+    group: "{{ solr_group }}"
+    remote_src: true
+    mode: preserve
+  when: not solr_install_check.stat.exists
+  tags: [install]
+
+# Create symlink
+- name: Solrcloud | Create symlink
+  ansible.builtin.file:
+    src: "{{ solr_versioned_dir }}"
+    dest: "{{ solr_installation }}"
+    state: link
+    owner: "{{ solr_user }}"
+    group: "{{ solr_group }}"
+    force: true
+  tags: [install]
+
+# Make sure binary is executable
+- name: Solrcloud | Ensure Solr binary is executable
+  ansible.builtin.file:
+    path: "{{ solr_installation }}/bin/solr"
+    mode: "0755"
+    state: file
+  tags: [install]
