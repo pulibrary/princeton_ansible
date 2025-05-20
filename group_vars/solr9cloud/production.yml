@@ -5,38 +5,23 @@ install_zookeeper_from_source: true
 desired_ruby_version: "3.1.0"
 ruby_version_override: "ruby-3.1.0"
 solr_heap_setting: '20g'
+jardirectory: "/opt/solr/modules/analysis-extras/lib"
 # more granular option would be:
 # solr_java_memory: '-Xms16g -Xmx20g'
+# solr version
 solr_cloud_download_version: 9.2.0
+solr_cloud_version: "{{ solr_version }}"
+solr_version: "{{ solr_cloud_download_version }}"
 solr_log4j_path: '/solr/log4j2.xml'
-lib_zk4_host_name: lib-zk4
-lib_zk5_host_name: lib-zk5
-lib_zk6_host_name: lib-zk6
-lib_zk4_host: '{{ vault_lib_zk4_host }}'
-lib_zk5_host: '{{ vault_lib_zk5_host }}'
-lib_zk6_host: '{{ vault_lib_zk6_host }}'
 solr_znode: solr9
-solr_zookeeper_hosts_string_default: localhost:{{ solr_zookeeper_client_port }}
-solr_zookeeper_hosts_string_multi: '{{ lib_zk4_host_name }}:{{ solr_zookeeper_client_port }},{{ lib_zk5_host_name }}:{{ solr_zookeeper_client_port }},{{ lib_zk6_host_name }}:{{ solr_zookeeper_client_port }}'
-solr_zookeeper_hosts_string: '{{ solr_zookeeper_hosts_string_default if lib_zk4_host_name == "localhost" else solr_zookeeper_hosts_string_multi }}'
-zookeeper_env.{{ items }}:
-  - key: ZOO_LOG_DIR
-    value: "{{ zookeeper_log_dir }}"
-  - key: ZOO_LOG4J_PROP
-    value: "INFO,ROLLINGFILE"
-  - key: SERVER_JVMFLAGS
-    value: "-Xms2048m -Xmx2048m -verbose:gc -XX:+PrintGCDetails -Xlog:gc:$ZOO_LOG_DIR/zookeeper_gc.log"
-zookeeper_hosts_dict:
-  - host: '{{ lib_zk5_host_name }}'  # The leader in the Zookeeper ensemble
-    id: 1
-    ip: '{{ lib_zk5_host }}'
-  - host: '{{ lib_zk4_host_name }}'  # The second Zookeeper ensemble member
-    id: 2
-    ip: '{{ lib_zk4_host }}'
-  - host: '{{ lib_zk6_host_name }}'  # The final Zookeeper ensemble member
-    id: 3
-    ip: '{{ lib_zk6_host }}'
-solr_zk_host: '{{ solr_zookeeper_hosts_string }}{{ solr_znode_path if solr_znode else "" }}'
+solr_nodes:
+  - "lib-solr-prod1.princeton.edu"
+  - "lib-solr-prod2.princeton.edu"
+  - "lib-solr-prod3.princeton.edu"
+solr_zookeeper_hosts:
+  - "lib-zk4.princeton.edu:2181"
+  - "lib-zk5.princeton.edu:2181"
+  - "lib-zk6.princeton.edu:2181"
 cjkfoldingfilter: https://github.com/pulibrary/pul_solr/raw/master/solr8_jars/CJKFoldingFilter.jar
 datadog_api_key: "{{ vault_datadog_key }}"
 datadog_config:
