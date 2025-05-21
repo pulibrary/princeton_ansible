@@ -1,10 +1,19 @@
----
 # tasks file for roles/reservoir
+---
+- name: Reservoir | Create directory for jar file
+  ansible.builtin.file:
+    path: "/opt/reservoir"
+    state: directory
+    owner: "root"
+    mode: 0755
+
 - name: Reservoir | Copy reservoir jar file
   ansible.builtin.copy:
     src: "files/{{ reservoir_jar_name }}"
     dest: "/opt/reservoir/{{ reservoir_jar_name }}"
-    mode: "0644"
+    owner: "root"
+    mode: "0755"
+    force: true
 
 # Create systemd service file with proper idempotence checks
 - name: Reservoir | Get existing service file
@@ -40,6 +49,20 @@
 
 # If the database isn't initialized run the init script
 - name: Reservoir | Initialize the database
-  ansible.builtin.command: java -jar /opt/reservoir/mod-reservoir-client-fat.jar --init
+  ansible.builtin.command: "java -jar /opt/reservoir/mod-reservoir-client-fat.jar --init"
   become: true
-  tags: init
+  tags: [never, init]
+  environment:
+    OKAPI_TENANT: pul
+    OKAPI_URL: "http://localhost:8081"
+    DB_HOST: "{{reservoir_db_host}}"
+    DB_PORT: "{{reservoir_db_port}}"
+    DB_USERNAME: "{{reservoir_db_username}}"
+    DB_PASSWORD: "{{reservoir_db_password}}"
+    DB_DATABASE: "{{reservoir_db_database}}"
+
+- name: Reservoir | Restart reservoir
+  ansible.builtin.systemd:
+    name: reservoir
+    state: restarted
+  ignore_errors: true
