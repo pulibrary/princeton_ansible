@@ -72,12 +72,49 @@
     name: '{{ configured_dependencies }}'
     state: present
 
-- name: Common | install dust
+- name: Common | remove dust
   ansible.builtin.apt:
-    deb: "{{ dust_url }}/v{{ dust_version }}/du-dust_{{ dust_version }}-1_amd64.deb"
+    name: dust
+    state: absent
+
+- name: Common | Ensure system installation directory exists (e.g., /usr/local/bin)
+  ansible.builtin.file:
+    path: "{{ system_install_dir }}"
+    state: directory
+    mode: '0755'
   when:
     - running_on_server
-    - ansible_os_family == "Debian"
+
+- name: Common | Check if dua is already installed system-wide
+  ansible.builtin.stat:
+    path: "{{ dua_system_executable }}"
+  register: dua_system_stat_result
+  when:
+    - running_on_server
+
+- name: Common | Install dua-cli system-wide if not already present
+  ansible.builtin.shell: "{{ dua_system_install_command }}"
+  args:
+    creates: "{{ dua_system_executable }}"
+  when:
+    - running_on_server
+    - not dua_system_stat_result.stat.exists
+
+- name: Common | Verify dua installation
+  ansible.builtin.command: "{{ dua_system_executable }} --version"
+  register: dua_version_result
+  changed_when: false
+  when:
+    - running_on_server
+    - not dua_system_stat_result.stat.exists
+  failed_when: dua_version_result.rc != 0
+
+- name: Common | Display dua version if installed/verified
+  ansible.builtin.debug:
+    msg: "dua-cli version: {{ dua_version_result.stdout }}"
+  when:
+    - running_on_server
+    - dua_version_result.stdout is defined and dua_version_result.rc == 0
 
 - name: Common | install vector, but not in testing
   ansible.builtin.include_tasks: vector.yml
