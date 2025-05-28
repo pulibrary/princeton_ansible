@@ -1,0 +1,16 @@
+# roles/reservoir/templates/reservoir.service.j2
+[Unit]
+Description=Reservoir Service
+After=network.target remote-fs.target
+
+[Service]
+Type=simple
+User=pulsys
+EnvironmentFile=/etc/default/reservoir.in.sh
+WorkingDirectory=/opt/reservoir/
+ExecStart=/usr/bin/java -Dport={{reservoir_port}} --module-path=compiler/ --upgrade-module-path=compiler/compiler.jar:compiler/compiler-management.jar -XX:+UnlockExperimentalVMOptions -XX:+EnableJVMCI -jar /opt/reservoir/{{reservoir_jar_name}}
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
