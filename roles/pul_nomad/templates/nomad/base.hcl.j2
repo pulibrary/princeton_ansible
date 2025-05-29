@@ -1,0 +1,43 @@
+name = "{{ inventory_hostname_short }}"
+region = "global"
+datacenter = "dc1"
+
+bind_addr = "0.0.0.0"
+disable_update_check = true
+
+consul {
+    # The address to the Consul agent.
+    address = "127.0.0.1:8500"
+    token = "{{ generated_nomad_consul_token.token.SecretID }}"
+    # The service name to register the server and client with Consul.
+    server_service_name = "nomad-servers"
+    client_service_name = "nomad-clients"
+
+    # Enables automatically registering the services.
+    auto_advertise = true
+
+    # Enabling the server and client to bootstrap using Consul.
+    server_auto_join = true
+    client_auto_join = true
+}
+
+data_dir = "/var/nomad"
+
+log_level = "DEBUG"
+enable_syslog = true
+
+acl {
+    enabled = true
+}
+
+telemetry {
+    disable_hostname = false
+    use_node_name = "false"
+    publish_allocation_metrics = true
+    publish_node_metrics = true
+    prometheus_metrics = true
+}
+
+autopilot {
+    cleanup_dead_servers      = true
+}
