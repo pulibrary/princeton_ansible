@@ -1,0 +1,27 @@
+# Random Syslog-formatted logs
+sources:
+  dummy_logs:
+    type: "demo_logs"
+    format: "syslog"
+    interval: 1
+
+# Parse Syslog logs
+# See the Vector Remap Language reference for more info: https://vrl.dev
+transforms:
+  parse_logs:
+    type: "remap"
+    inputs: ["dummy_logs"]
+    source: |
+      . = parse_syslog!(string!(.message))
+
+sinks:
+  # A temporary sink so that we don't fill our syslog with the dummy_logs entries
+  # We will eventually want to send real logs to pulemetry
+  discard_logs_for_now:
+    type: "file"
+    path: "/dev/null"
+    inputs: ["parse_logs"]
+    encoding:
+      codec: "json"
+      json:
+        pretty: true
