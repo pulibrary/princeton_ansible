@@ -88,6 +88,8 @@
     group: "{{ victorialogs_group }}"
     mode: '0644'
   notify: restart victorialogs
+  when:
+    - running_on_server
 
 - name: Log | Generate VictoriaLogs systemd service
   ansible.builtin.template:
@@ -99,6 +101,8 @@
   notify:
     - reload systemd
     - restart victorialogs
+  when:
+    - running_on_server
 
 - name: Log | Enable and start VictoriaLogs service
   ansible.builtin.systemd:
@@ -106,3 +110,5 @@
     enabled: true
     state: started
     daemon_reload: true
+  when:
+    - running_on_server
