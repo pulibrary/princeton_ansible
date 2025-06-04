@@ -1,0 +1,114 @@
+---
+# tasks file for roles/log
+- name: Log | Create victorialogs system user
+  ansible.builtin.user:
+    name: "{{ victorialogs_user }}"
+    system: true
+    create_home: false
+    shell: /bin/false
+    state: present
+
+- name: Log | Create victorialogs group
+  ansible.builtin.group:
+    name: "{{ victorialogs_group }}"
+    system: true
+    state: present
+
+- name: Log | Create victorialogs directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ victorialogs_user }}"
+    group: "{{ victorialogs_group }}"
+    mode: '0755'
+  loop:
+    - "{{ victorialogs_install_dir }}"
+    - "{{ victorialogs_data_dir }}"
+    - "{{ victorialogs_config_dir }}"
+
+- name: Log | Check if VictoriaLogs binary exists
+  ansible.builtin.stat:
+    path: "{{ victorialogs_binary_path }}"
+  register: victorialogs_binary_stat
+
+- name: Log | Get current VictoriaLogs version
+  ansible.builtin.command: "{{ victorialogs_binary_path }} -version"
+  register: current_version
+  changed_when: false
+  failed_when: false
+  when: victorialogs_binary_stat.stat.exists
+
+- name: Log | Download VictoriaLogs archive
+  ansible.builtin.get_url:
+    url: "{{ victorialogs_download_url }}"
+    dest: "/tmp/victoria-logs-{{ victorialogs_version }}.tar.gz"
+    mode: '0644'
+  when: >
+    not victorialogs_binary_stat.stat.exists or
+    (current_version.stdout is defined and victorialogs_version not in current_version.stdout)
+
+- name: Log | Extract VictoriaLogs archive
+  ansible.builtin.unarchive:
+    src: "/tmp/victoria-logs-{{ victorialogs_version }}.tar.gz"
+    dest: "/tmp"
+    remote_src: true
+    creates: "/tmp/{{ victorialogs_binary_name }}"
+  when: >
+    not victorialogs_binary_stat.stat.exists or
+    (current_version.stdout is defined and victorialogs_version not in current_version.stdout)
+
+- name: Log | Install VictoriaLogs binary
+  ansible.builtin.copy:
+    src: "/tmp/{{ victorialogs_binary_name }}"
+    dest: "{{ victorialogs_binary_path }}"
+    remote_src: true
+    owner: "{{ victorialogs_user }}"
+    group: "{{ victorialogs_group }}"
+    mode: '0755'
+  when: >
+    not victorialogs_binary_stat.stat.exists or
+    (current_version.stdout is defined and victorialogs_version not in current_version.stdout)
+  notify: restart victorialogs
+
+- name: Log | Clean up downloaded archive
+  ansible.builtin.file:
+    path: "/tmp/victoria-logs-{{ victorialogs_version }}.tar.gz"
+    state: absent
+
+- name: Log | Clean up extracted binary
+  ansible.builtin.file:
+    path: "/tmp/{{ victorialogs_binary_name }}"
+    state: absent
+
+- name: Log | Generate VictoriaLogs configuration
+  ansible.builtin.template:
+    src: victoria-logs.conf.j2
+    dest: "{{ victorialogs_config_file }}"
+    owner: "{{ victorialogs_user }}"
+    group: "{{ victorialogs_group }}"
+    mode: '0644'
+  notify: restart victorialogs
+  when:
+    - running_on_server
+
+- name: Log | Generate VictoriaLogs systemd service
+  ansible.builtin.template:
+    src: victorialogs.service.j2
+    dest: "{{ victorialogs_service_file }}"
+    owner: root
+    group: root
+    mode: '0644'
+  notify:
+    - reload systemd
+    - restart victorialogs
+  when:
+    - running_on_server
+
+- name: Log | Enable and start VictoriaLogs service
+  ansible.builtin.systemd:
+    name: "{{ victorialogs_service_name }}"
+    enabled: true
+    state: started
+    daemon_reload: true
+  when:
+    - running_on_server

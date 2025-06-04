@@ -1,0 +1,17 @@
+---
+# by default this playbook runs in the staging environment
+# to run in production, pass '-e runtime_env=production'
+# to run in qa, pass '-e runtime_env=qa'
+- name: build the log servers
+  hosts: kennyloggin_{{ runtime_env | default('staging') }}
+  remote_user: pulsys
+  become: true
+  roles:
+    - role: roles/log
+
+  post_tasks:
+    - name: tell everyone on slack you ran an ansible playbook
+      community.general.slack:
+        token: "{{ vault_pul_slack_token }}"
+        msg: "Ansible ran `{{ ansible_play_name }}` on {{ inventory_hostname }}"
+        channel: "{{ slack_alerts_channel }}"
