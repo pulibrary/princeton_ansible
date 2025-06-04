@@ -1,7 +1,44 @@
-Role Name
-=========
+Pulemetry Role
+==============
 
 A brief description of the role goes here.
+
+Architecture of Pulemetry
+-------------------------
+
+```mermaid
+sequenceDiagram
+    accTitle: Sequence diagram showing how logs are aggregated and queried
+    accDescr {
+      On the application server, an application writes a log to a log file.
+      On the application server, vector reads the log file as a source, performs any necessary transformations, and sends log entries to Victoria Logs as a sink.
+      You search the logs in Grafana at pulemetry.lib.princeton.edu.
+      Grafana searches the Victoria Logs backend, which is on the kennyloggin-1.lib.princeton.edu vm.
+      Victoria Logs responds.
+      Grafana displays the logs in a nice UI for you!
+    }
+    box On application server
+      participant Application
+      participant L as Log File
+      participant Vector
+    end
+    box On kennyloggin-1.lib.princeton.edu
+      participant V as Victoria Logs
+    end
+    box On pulemetry.lib.princeton.edu
+      participant Grafana
+    end
+    actor You
+
+    Application->>L: Writes a log
+    Vector->>L: Reads the log file as a source
+    Vector->>Vector: Performs any necessary transformations
+    Vector->>V: Sends log entries to Victoria Logs as a sink
+    You->>Grafana: Searches the logs
+    Grafana->>V: Searches the Victoria backend
+    V->>Grafana: Responds
+    Grafana->>You: Displays the logs in a nice UI!
+```
 
 Requirements
 ------------
