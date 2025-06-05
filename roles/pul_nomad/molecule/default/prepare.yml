@@ -4,25 +4,25 @@
   tasks:
     - name: prepare | install debian dependencies
       ansible.builtin.package:
-        name: "{{ item }}"
+        name:
+          - iproute2
+          - dmidecode
+          - dnsutils
         state: present
         update_cache: true
-      loop:
-        - "iproute2"
-        - "dmidecode"
-        - "dnsutils"
       when:
         - "ansible_os_family == 'Debian'"
     - name: prepare | install RedHat dependencies
-      ansible.builtin.package:
-        name: "{{ item }}"
+      ansible.builtin.dnf:
+        name:
+          - "iproute"
+          - "dmidecode"
+          - "dnsutils"
+          - "sudo"
+          - "curl"
         state: present
         update_cache: true
-      loop:
-        - "iproute"
-        - "dmidecode"
-        - "dnsutils"
-        - "sudo"
+        allowerasing: true
       when:
         - "ansible_os_family == 'RedHat'"
     # Disable some docker things to let it work in molecule.
