@@ -1,0 +1,67 @@
+# {{ ansible_managed | comment }}
+sources:
+  nginx_access:
+    type: file
+    include:
+      - {{ nginx_access_log_path | default('/var/log/nginx/access.log') }}
+    read_from: beginning
+  nginx_error:
+    type: file
+    include:
+      - {{ nginx_error_log_path | default('/var/log/nginx/error.log') }}
+    read_from: beginning
+
+transforms:
+  parse_nginx_access:
+    type: remap
+    inputs:
+      - nginx_access
+    source: |
+      # Parse the JSON access log
+      . = parse_json!(.message)
+      # Convert time to ISO8601 format
+      .timestamp = parse_timestamp!(.time_local, "%d/%b/%Y:%H:%M:%S %z")
+      ._time = format_timestamp!(.timestamp, format: "%Y-%m-%dT%H:%M:%S.%3fZ")
+      # Simple message - just use the request field
+      ._msg = .request
+      .host = get_hostname!()
+      .log_type = "nginx_access"
+      .status = .status
+      .bytes_sent = .body_bytes_sent
+  parse_nginx_error:
+    type: remap
+    inputs:
+      - nginx_error
+    source: |
+      ._time = format_timestamp!(now(), format: "%Y-%m-%dT%H:%M:%S.%3fZ")
+      ._msg = .message
+      .host = get_hostname!()
+      .log_type = "nginx_error"
+      .level = "error"
+sinks:
+{% if vector_enable_console_debug | default(false) %}
+  console_debug:
+    type: console
+    inputs:
+      - parse_nginx_access
+      - parse_nginx_error
+    encoding:
+      codec: json
+{% endif %}
+  victorialogs:
+    type: http
+    inputs:
+      - parse_nginx_access
+      - parse_nginx_error
+    uri: "{{ victorialogs_uri }}/insert/jsonline?_stream_fields=host"
+    method: post
+    compression: gzip
+    encoding:
+      codec: json
+    framing:
+      method: newline_delimited
+    request:
+      headers:
+        Content-Type: "application/x-ndjson"
+    healthcheck:
+      enabled: {{ vector_healthcheck_enabled | default(false) }}
