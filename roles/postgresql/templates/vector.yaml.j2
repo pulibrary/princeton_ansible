@@ -1,0 +1,87 @@
+# {{ ansible_managed | comment }}
+
+data_dir: "/var/lib/vector"
+
+api:
+  enabled: true
+  address: "127.0.0.1:8686"
+
+sources:
+  postgresql_logs:
+    type: "file"
+    include:
+      - "{{ postgresql_log_path }}"
+    read_from: "beginning"
+
+transforms:
+  add_metadata:
+    type: "remap"
+    inputs: ["postgresql_logs"]
+    source: |
+      # 1. Parse the raw JSON string from the "message" field
+      parsed = parse_json!(string!(.message))
+      # 2. Cast the "timestamp" field to string and strip off " UTC"
+      ts_str = string!(parsed.timestamp)
+      ts_clean = replace(ts_str, " UTC", "")
+      # 3. Inject the local hostname into each event
+      .host = get_hostname!()
+      # 4. Choose format based on presence of a "." (ms) in ts_clean
+      ._time = if contains!(ts_clean, ".") {
+        # ts_clean looks like "2025-06-03 20:03:04.023"
+        format_timestamp!(
+          parse_timestamp!(ts_clean, "%Y-%m-%d %H:%M:%S%.3f"),
+          "%Y-%m-%dT%H:%M:%S%.3fZ"
+        )
+      } else {
+        # ts_clean looks like "2025-06-03 20:03:05"
+        format_timestamp!(
+          parse_timestamp!(ts_clean, "%Y-%m-%d %H:%M:%S"),
+          "%Y-%m-%dT%H:%M:%S.000Z"
+        )
+      }
+      # 4. Map the remaining fields
+      ._msg     = string!(parsed.message)
+      ._stream  = "postgresql"
+      .hostname = get_hostname!()
+      .level    = downcase(string!(parsed.error_severity))
+      .service  = "postgresql"
+      # 5. Retain Postgres‐specific fields
+      .user         = parsed.user
+      .database     = parsed.dbname
+      .pid          = parsed.pid
+      .session_id   = parsed.session_id
+      .backend_type = parsed.backend_type
+      # 6. Clean up unneeded keys
+      del(.message)
+      del(.timestamp)
+      del(.file)
+      del(.source_type)
+      del(.hostname)
+sinks:
+{% if vector_enable_console_debug | default(false) %}
+  console_test:
+    type: "console"
+    inputs: ["add_metadata"]
+    encoding:
+      codec: "json"
+{% endif %}
+
+  victorialogs:
+    type: "http"
+    inputs: ["add_metadata"]
+    uri: "{{ victorialogs_uri }}/insert/jsonline?_stream_fields=host"
+    method: "post"
+    encoding:
+      codec: "json"
+    framing:
+      method: "newline_delimited"
+    batch:
+      max_events: {{ vector_batch_max_events | default(10) }}
+      timeout_secs: {{ vector_batch_timeout | default(2) }}
+    request:
+      headers:
+        Content-Type: "application/x-ndjson"
+    healthcheck:
+      enabled: {{ vector_healthcheck_enabled | default(true) }}
+    acknowledgements:
+      enabled: {{ vector_acknowledgements_enabled | default(false) }}
