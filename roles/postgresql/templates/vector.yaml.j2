@@ -11,65 +11,74 @@ sources:
     type: "file"
     include:
       - "{{ postgresql_log_path }}"
-    read_from: "beginning"
 
 transforms:
-  add_metadata:
+  process_postgres:
     type: "remap"
     inputs: ["postgresql_logs"]
     source: |
-      # 1. Parse the raw JSON string from the "message" field
-      parsed = parse_json!(string!(.message))
-      # 2. Cast the "timestamp" field to string and strip off " UTC"
-      ts_str = string!(parsed.timestamp)
-      ts_clean = replace(ts_str, " UTC", "")
-      # 3. Inject the local hostname into each event
-      .host = get_hostname!()
-      # 4. Choose format based on presence of a "." (ms) in ts_clean
-      ._time = if contains!(ts_clean, ".") {
-        # ts_clean looks like "2025-06-03 20:03:04.023"
-        format_timestamp!(
-          parse_timestamp!(ts_clean, "%Y-%m-%d %H:%M:%S%.3f"),
-          "%Y-%m-%dT%H:%M:%S%.3fZ"
-        )
+      # 1. Parse the entire log line
+      parsed, err = parse_json(.message)
+      if err != null {
+        .error = "Failed to parse PostgreSQL JSON log line: " + err
+        .message = .message
       } else {
-        # ts_clean looks like "2025-06-03 20:03:05"
-        format_timestamp!(
-          parse_timestamp!(ts_clean, "%Y-%m-%d %H:%M:%S"),
-          "%Y-%m-%dT%H:%M:%S.000Z"
-        )
+        # 2. Replace the event with the parsed structure.
+        . = parsed
+
+        # 3. Create a guaranteed-safe string version of the message.
+        #    This is the fix for the validation error.
+        message_str = string!(.message)
+
+        # 4. Add our own metadata and clean up the fields.
+        .host = get_hostname!()
+        .service = "postgresql"
+
+        # 5. Rename fields for consistency.
+        .database = .dbname
+        del(.dbname)
+
+        .level = downcase(string!(.error_severity))
+        del(.error_severity)
+
+        # 6. Create the new 'event_type' label using the safe 'message_str' variable.
+        if contains(message_str, "connection authorized") {
+          .event_type = "authorized"
+        } else if contains(message_str, "connection received") {
+          .event_type = "received"
+        } else if contains(message_str, "disconnection") {
+          .event_type = "disconnection"
+        } else {
+          .event_type = "other"
+        }
+
+        # 7. Rename 'message' to '_msg' and DELETE the original.
+        ._msg = message_str
+        del(.message)
+
+        # 8. Set the official event timestamp.
+        ts_str = string!(.timestamp)
+        ts_clean = replace(ts_str, " UTC", "")
+        if contains(ts_clean, ".") {
+          .timestamp = parse_timestamp!(ts_clean, "%Y-%m-%d %H:%M:%S%.f")
+        } else {
+          .timestamp = parse_timestamp!(ts_clean, "%Y-%m-%d %H:%M:%S")
+        }
       }
-      # 4. Map the remaining fields
-      ._msg     = string!(parsed.message)
-      ._stream  = "postgresql"
-      .hostname = get_hostname!()
-      .level    = downcase(string!(parsed.error_severity))
-      .service  = "postgresql"
-      # 5. Retain Postgres‐specific fields
-      .user         = parsed.user
-      .database     = parsed.dbname
-      .pid          = parsed.pid
-      .session_id   = parsed.session_id
-      .backend_type = parsed.backend_type
-      # 6. Clean up unneeded keys
-      del(.message)
-      del(.timestamp)
-      del(.file)
-      del(.source_type)
+
       del(.hostname)
 sinks:
-{% if vector_enable_console_debug | default(false) %}
-  console_test:
-    type: "console"
-    inputs: ["add_metadata"]
-    encoding:
-      codec: "json"
-{% endif %}
+#  console_test:
+#    type: "console"
+#    inputs: ["add_metadata"]
+#    encoding:
+#      codec: "json"
+#      Uncomment these to allow debugging
 
   victorialogs:
     type: "http"
     inputs: ["add_metadata"]
-    uri: "{{ victorialogs_uri }}/insert/jsonline?_stream_fields=host"
+    uri: "{{ victorialogs_uri }}/insert/jsonline?_stream_fields=host,service,level,database,user,event_type""
     method: "post"
     encoding:
       codec: "json"
