@@ -1,0 +1,26 @@
+# Get things like consul_installed_version.
+- name: pul_nomad | consul | Set consul facts
+  ansible.builtin.import_tasks: consul_facts.yml
+
+# Install servers first.
+# `include_tasks` instead of `import_tasks` makes it safe to use
+# `run_once: true` in child tasks, since they'll only execute for servers.
+- name: pul_nomad | consul | Install & Configure Servers
+  ansible.builtin.include_tasks: server.yml
+  when: pul_nomad_role == 'server'
+
+# Install clients.
+# `include_tasks` instead of `import_tasks` makes it safe to use
+# `run_once: true` in child tasks, since they'll only execute for clients.
+- name: pul_nomad | consul | Install & Configure Clients
+  ansible.builtin.include_tasks: client.yml
+  when: pul_nomad_role == 'client'
+
+# Install ACL Configuration
+- name: pul_nomad | consul | Install ACLs
+  ansible.builtin.import_tasks: acl.yml
+
+# Install DNSMasq
+- name: pul_nomad | consul | Install DNSMasq
+  ansible.builtin.import_tasks: dnsmasq.yml
+  tags: dnsmasq
