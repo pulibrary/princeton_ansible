@@ -1,0 +1,96 @@
+# {{ ansible_managed | comment }}
+
+data_dir: "/var/lib/vector"
+
+api:
+  enabled: true
+  address: "127.0.0.1:8686"
+
+sources:
+  postgresql_logs:
+    type: "file"
+    include:
+      - "{{ postgresql_log_path }}"
+
+transforms:
+  process_postgres:
+    type: "remap"
+    inputs: ["postgresql_logs"]
+    source: |
+      # 1. Parse the entire log line
+      parsed, err = parse_json(.message)
+      if err != null {
+        .error = "Failed to parse PostgreSQL JSON log line: " + err
+        .message = .message
+      } else {
+        # 2. Replace the event with the parsed structure.
+        . = parsed
+
+        # 3. Create a guaranteed-safe string version of the message.
+        #    This is the fix for the validation error.
+        message_str = string!(.message)
+
+        # 4. Add our own metadata and clean up the fields.
+        .host = get_hostname!()
+        .service = "postgresql"
+
+        # 5. Rename fields for consistency.
+        .database = .dbname
+        del(.dbname)
+
+        .level = downcase(string!(.error_severity))
+        del(.error_severity)
+
+        # 6. Create the new 'event_type' label using the safe 'message_str' variable.
+        if contains(message_str, "connection authorized") {
+          .event_type = "authorized"
+        } else if contains(message_str, "connection received") {
+          .event_type = "received"
+        } else if contains(message_str, "disconnection") {
+          .event_type = "disconnection"
+        } else {
+          .event_type = "other"
+        }
+
+        # 7. Rename 'message' to '_msg' and DELETE the original.
+        ._msg = message_str
+        del(.message)
+
+        # 8. Set the official event timestamp.
+        ts_str = string!(.timestamp)
+        ts_clean = replace(ts_str, " UTC", "")
+        if contains(ts_clean, ".") {
+          .timestamp = parse_timestamp!(ts_clean, "%Y-%m-%d %H:%M:%S%.f")
+        } else {
+          .timestamp = parse_timestamp!(ts_clean, "%Y-%m-%d %H:%M:%S")
+        }
+      }
+
+      del(.hostname)
+sinks:
+#  console_test:
+#    type: "console"
+#    inputs: ["add_metadata"]
+#    encoding:
+#      codec: "json"
+#      Uncomment these to allow debugging
+
+  victorialogs:
+    type: "http"
+    inputs: ["add_metadata"]
+    uri: "{{ victorialogs_uri }}/insert/jsonline?_stream_fields=host,service,level,database,user,event_type""
+    method: "post"
+    encoding:
+      codec: "json"
+    framing:
+      method: "newline_delimited"
+    batch:
+      max_events: {{ vector_batch_max_events | default(10) }}
+      timeout_secs: {{ vector_batch_timeout | default(2) }}
+    request:
+      headers:
+        Content-Type: "application/x-ndjson"
+    healthcheck:
+      enabled: {{ vector_healthcheck_enabled | default(true) }}
+    acknowledgements:
+      enabled: {{ vector_acknowledgements_enabled | default(false) }}
