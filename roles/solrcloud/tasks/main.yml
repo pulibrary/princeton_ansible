@@ -1,20 +1,43 @@
 ---
-- name: solrcloud | Install dependencies
+#
+- name: Solrcloud | Configure vector using template
+  ansible.builtin.template:
+    src: vector.yaml.j2
+    dest: /etc/vector/vector.yaml
+    mode: "0644"
+  when:
+    - running_on_server
+  notify:
+    - restart vector
+  tags:
+    - logs
+
+- name: Solrcloud | Ensure Vector is running and enabled
+  ansible.builtin.service:
+    name: vector
+    state: started
+    enabled: true
+  when:
+    - running_on_server
+  tags:
+    - logs
+
+- name: Solrcloud | Install dependencies
   ansible.builtin.apt:
     name: ["cifs-utils"]
     state: present
 
-- name: solrcloud | create directories for mounts
+- name: Solrcloud | create directories for mounts
   ansible.builtin.file:
     path: "/mnt/{{ item }}"
     state: "directory"
-    mode: 0755
+    mode: "0755"
     group: deploy
     owner: deploy
   loop:
     - solr_backup
 
-- name: solrcloud | Copy smb credentials
+- name: Solrcloud | Copy smb credentials
   ansible.builtin.copy:
     src: "files/{{ item }}"
     dest: "/etc/{{ item }}"
@@ -24,7 +47,7 @@
   loop:
     - solr.smb.credentials
 
-- name: solrcloud | Create mount to diglibdata shares
+- name: Solrcloud | Create mount to diglibdata shares
   ansible.posix.mount:
     path: "/mnt/{{ item.path }}"
     src: "//diglibdata1.princeton.edu/{{ item.src }}"
@@ -66,7 +89,7 @@
     dump: '0'
     passno: '0'
 
-- name: solrcloud | update host file
+- name: Solrcloud | update host file
   ansible.builtin.lineinfile:
     dest: /etc/hosts
     regexp: "{{ item.address }}.*{{ item.hostname }}$"
@@ -90,17 +113,17 @@
     - hosts
   when: lib_zk1_host_name != "localhost" and lib_zk2_host_name != "localhost" and lib_zk3_host_name != "localhost"
 
-- name: solrcloud | solr cloud install node
+- name: Solrcloud | solr cloud install node
   ansible.builtin.include_tasks: install.yml
   tags:
     - install
 
-- name: solrcloud | configure solr cloud
+- name: Solrcloud | configure solr cloud
   ansible.builtin.include_tasks: config.yml
   tags:
     - configure
 
-- name: solrcloud | run solr service
+- name: Solrcloud | run solr service
   ansible.builtin.include_tasks: service.yml
   tags:
     - service
