@@ -13,6 +13,7 @@ RUN set -ex; \
       file \
       g++ \
       gcc \
+      gnupg2 \
       imagemagick \
       libbz2-dev \
       libc6-dev \
