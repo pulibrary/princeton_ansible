@@ -3,6 +3,30 @@
   hosts: all
   gather_facts: false
   tasks:
+    - name: Check logrotate configuration was created
+      ansible.builtin.stat:
+        path: "/etc/logrotate.d/test-application"
+      register: logrotate_config
+
+    - name: Verify logrotate config exists
+      ansible.builtin.assert:
+        that:
+          - logrotate_config.stat.exists
+        fail_msg: "Logrotate configuration was not created"
+
+    - name: Read logrotate configuration
+      ansible.builtin.slurp:
+        src: "/etc/logrotate.d/test-application"
+      register: config_content
+
+    - name: Verify configuration content
+      ansible.builtin.assert:
+        that:
+          - "'daily' in config_content.content | b64decode"
+          - "'rotate 5' in config_content.content | b64decode"
+          - "'/var/log/test-app/*.log' in config_content.content | b64decode"
+        fail_msg: "Logrotate configuration content is incorrect"
+
     - name: Test logrotate syntax
       ansible.builtin.command: logrotate -d /etc/logrotate.conf
       register: syntax_test

@@ -1,0 +1,120 @@
+# {{ ansible_managed | comment }}
+# Logrotate configuration for {{ item.name }}
+
+{% for path in item.paths %}
+{{ path }}
+{% endfor %} {
+{% if item.options.daily is defined and item.options.daily %}
+    daily
+{% elif item.options.weekly is defined and item.options.weekly %}
+    weekly
+{% elif item.options.monthly is defined and item.options.monthly %}
+    monthly
+{% elif item.options.yearly is defined and item.options.yearly %}
+    yearly
+{% endif %}
+{% if item.options.rotate is defined %}
+    rotate {{ item.options.rotate }}
+{% endif %}
+{% if item.options.size is defined %}
+    size {{ item.options.size }}
+{% endif %}
+{% if item.options.maxage is defined %}
+    maxage {{ item.options.maxage }}
+{% endif %}
+{% if item.options.compress is defined and item.options.compress %}
+    compress
+{% endif %}
+{% if item.options.nocompress is defined and item.options.nocompress %}
+    nocompress
+{% endif %}
+{% if item.options.delaycompress is defined and item.options.delaycompress %}
+    delaycompress
+{% endif %}
+{% if item.options.missingok is defined and item.options.missingok %}
+    missingok
+{% endif %}
+{% if item.options.nomissingok is defined and item.options.nomissingok %}
+    nomissingok
+{% endif %}
+{% if item.options.notifempty is defined and item.options.notifempty %}
+    notifempty
+{% endif %}
+{% if item.options.ifempty is defined and item.options.ifempty %}
+    ifempty
+{% endif %}
+{% if item.options.copytruncate is defined and item.options.copytruncate %}
+    copytruncate
+{% endif %}
+{% if item.options.nocopytruncate is defined and item.options.nocopytruncate %}
+    nocopytruncate
+{% endif %}
+{% if item.options.create is defined and item.options.create %}
+    create {{ item.options.create_mode | default('0644') }} {{ item.options.create_owner | default('root') }} {{ item.options.create_group | default('root') }}
+{% endif %}
+{% if item.options.nocreate is defined and item.options.nocreate %}
+    nocreate
+{% endif %}
+{% if item.options.sharedscripts is defined and item.options.sharedscripts %}
+    sharedscripts
+{% endif %}
+{% if item.options.nosharedscripts is defined and item.options.nosharedscripts %}
+    nosharedscripts
+{% endif %}
+{% if item.options.dateext is defined and item.options.dateext %}
+    dateext
+{% endif %}
+{% if item.options.nodateext is defined and item.options.nodateext %}
+    nodateext
+{% endif %}
+{% if item.options.dateformat is defined %}
+    dateformat {{ item.options.dateformat }}
+{% endif %}
+{% if item.options.extension is defined %}
+    extension {{ item.options.extension }}
+{% endif %}
+{% if item.options.olddir is defined %}
+    olddir {{ item.options.olddir }}
+{% endif %}
+{% if item.options.noolddir is defined and item.options.noolddir %}
+    noolddir
+{% endif %}
+{% if item.options.mail is defined %}
+    mail {{ item.options.mail }}
+{% endif %}
+{% if item.options.nomail is defined and item.options.nomail %}
+    nomail
+{% endif %}
+{% if item.options.mailfirst is defined and item.options.mailfirst %}
+    mailfirst
+{% endif %}
+{% if item.options.maillast is defined and item.options.maillast %}
+    maillast
+{% endif %}
+{% if item.options.maxsize is defined %}
+    maxsize {{ item.options.maxsize }}
+{% endif %}
+{% if item.options.minsize is defined %}
+    minsize {{ item.options.minsize }}
+{% endif %}
+{% if item.options.prerotate is defined and item.options.prerotate != '' %}
+    prerotate
+{{ item.options.prerotate | indent(8, true) }}
+    endscript
+{% endif %}
+{% if item.options.postrotate is defined and item.options.postrotate != '' %}
+    postrotate
+{{ item.options.postrotate | indent(8, true) }}
+    endscript
+{% endif %}
+{% if item.options.firstaction is defined and item.options.firstaction != '' %}
+    firstaction
+{{ item.options.firstaction | indent(8, true) }}
+    endscript
+{% endif %}
+{% if item.options.lastaction is defined and item.options.lastaction != '' %}
+    lastaction
+{{ item.options.lastaction | indent(8, true) }}
+    endscript
+{% endif %}
+}

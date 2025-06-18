@@ -9,27 +9,16 @@ lint: |
   ansible-lint
 platforms:
   - name: instance
-    image: "ghcr.io/pulibrary/pul_containers:jammy_multi"
-    command: "/lib/systemd/systemd"
-    volumes:
-      - /sys/fs/cgroup:/sys/fs/cgroup:rw
-    tmpfs:
-      - /tmp
-      - /run
-      - /run/lock
-    cgroupns_mode: host
-    privileged: true
+    image: "ubuntu:22.04"
+    command: "sleep infinity"
     pre_build_image: true
-    env:
-      DEBIAN_FRONTEND: noninteractive
-      container: docker
 provisioner:
   name: ansible
   config_options:
     defaults:
       remote_tmp: /tmp/ansible
       host_key_checking: false
-      pipelining: true
+      pipelining: false
       retry_files_enabled: false
     ssh_connection:
       timeout: 30
@@ -37,6 +26,7 @@ provisioner:
   inventory:
     host_vars:
       instance:
+        ansible_connection: docker
         ansible_python_interpreter: /usr/bin/python3
 verifier:
   name: ansible
