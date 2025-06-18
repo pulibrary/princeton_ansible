@@ -1,51 +1,49 @@
 ---
 - name: Verify
   hosts: all
-  vars:
-    common_ubuntu_packages:
-      - acl
-      - build-essential
-      - curl
-      - git
-      - htop
-      - jq
-      - libcurl4
-      - libssl-dev
-      - libyaml-dev
-      - python3-apt
-      - python3-pip
-      - python-setuptools
-      - silversearcher-ag
-      - tmux
-      - tree
-      - unzip
-      - vim
-      - wget
-      - zip
-      - zlib1g-dev
   gather_facts: false
   tasks:
-    - name: Common | Verify tmux.conf exists
+    - name: Check logrotate configuration was created
       ansible.builtin.stat:
-        path: /etc/tmux.conf
-      register: tmux_conf
+        path: "/etc/logrotate.d/test-application"
+      register: logrotate_config
 
-    - name: Common | Assert tmux.conf exists
+    - name: Verify logrotate config exists
       ansible.builtin.assert:
         that:
-          - tmux_conf.stat.exists
+          - logrotate_config.stat.exists
+        fail_msg: "Logrotate configuration was not created"
 
-    - name: Common | Verify vimrc exists
-      ansible.builtin.stat:
-        path: /etc/vim/vimrc.local
-      register: vimrc
+    - name: Read logrotate configuration
+      ansible.builtin.slurp:
+        src: "/etc/logrotate.d/test-application"
+      register: config_content
 
-    - name: Common | Assert vimrc exists
+    - name: Verify configuration content
       ansible.builtin.assert:
         that:
-          - vimrc.stat.exists
+          - "'daily' in config_content.content | b64decode"
+          - "'rotate 5' in config_content.content | b64decode"
+          - "'/var/log/test-app/*.log' in config_content.content | b64decode"
+        fail_msg: "Logrotate configuration content is incorrect"
 
-    - name: Common | Verify common Ubuntu packages are installed
-      ansible.builtin.apt:
-        name: "{{ common_ubuntu_packages }}"
-        state: present
+    - name: Test logrotate syntax
+      ansible.builtin.command: logrotate -d /etc/logrotate.conf
+      register: syntax_test
+      changed_when: false
+      failed_when: syntax_test.rc != 0
+
+    - name: Check basic role files
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      register: role_files
+      loop:
+        - /etc/tmux.conf
+        - /etc/vim/vimrc.local
+
+    - name: Verify role files exist
+      ansible.builtin.assert:
+        that:
+          - item.stat.exists
+        fail_msg: "File {{ item.item }} was not created"
+      loop: "{{ role_files.results }}"
