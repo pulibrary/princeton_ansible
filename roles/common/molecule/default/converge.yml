@@ -3,17 +3,74 @@
   hosts: all
   vars:
     - running_on_server: false
+    - logrotate_rules:
+        - name: "test-application"
+          paths:
+            - "/var/log/test-app/*.log"
+          options:
+            rotate: 5
+            daily: true
+            missingok: true
+            notifempty: true
+            compress: true
+            delaycompress: true
+            create: true
+            create_mode: "0644"
+            create_owner: "root"
+            create_group: "root"
+            postrotate: |
+              echo "Log rotated for test application" >> /var/log/test-rotation.log
+        - name: "system-logs"
+          paths:
+            - "/var/log/syslog"
+            - "/var/log/auth.log"
+          options:
+            rotate: 7
+            weekly: true
+            compress: true
+            missingok: true
+            notifempty: true
+            sharedscripts: true
+            postrotate: |
+              systemctl reload rsyslog || true
   pre_tasks:
+    - name: Wait for systemd to be ready
+      ansible.builtin.wait_for:
+        path: /run/systemd/system
+        timeout: 30
+      
     - name: Update cache
       ansible.builtin.apt:
         update_cache: true
         cache_valid_time: 600
+      
     - name: Ensure /usr/share/man/man1 directory exists
       ansible.builtin.file:
         path: /usr/share/man/man1
         state: directory
         mode: '0755'
+    - name: Create test log directory
+      ansible.builtin.file:
+        path: /var/log/test-app
+        state: directory
+        mode: '0755'
+        owner: root
+        group: root
+    - name: Create test log file
+      ansible.builtin.file:
+        path: /var/log/test-app/application.log
+        state: touch
+        mode: '0644'
+        owner: root
+        group: root
+
   tasks:
     - name: "Include common"
       ansible.builtin.include_role:
         name: "common"
+
+  post_tasks:
+    - name: Verify logrotate is installed
+      ansible.builtin.package:
+        name: logrotate
+        state: present

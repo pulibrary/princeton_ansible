@@ -1,5 +1,6 @@
 ---
 # handlers file for roles/common
+#
 - name: reload logrotate timer settings
   ansible.builtin.command: systemctl daemon-reload
 
@@ -8,3 +9,9 @@
     name: vector
     state: restarted
   when: running_on_server
+
+- name: test logrotate configuration
+  ansible.builtin.command: logrotate -d /etc/logrotate.conf
+  register: logrotate_test
+  failed_when: logrotate_test.rc != 0
+  changed_when: false
