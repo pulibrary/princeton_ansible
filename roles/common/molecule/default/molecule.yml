@@ -3,30 +3,29 @@ scenario:
   name: default
 driver:
   name: docker
+  command_timeout: 60
 lint: |
   set -e
   yamllint .
   ansible-lint
 platforms:
   - name: instance
-    image: "ubuntu:22.04"
+    image: "ghcr.io/pulibrary/pul_containers:jammy_multi"
     command: "sleep infinity"
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    privileged: true
     pre_build_image: true
+    connection_options:
+      ansible_user: root
+      ansible_connection: docker
 provisioner:
   name: ansible
+  log: true
+  playbooks:
+    prepare: prepare.yml
   config_options:
     defaults:
       remote_tmp: /tmp/ansible
-      host_key_checking: false
-      pipelining: false
-      retry_files_enabled: false
-    ssh_connection:
-      timeout: 30
-  log: true
-  inventory:
-    host_vars:
-      instance:
-        ansible_connection: docker
-        ansible_python_interpreter: /usr/bin/python3
 verifier:
   name: ansible
