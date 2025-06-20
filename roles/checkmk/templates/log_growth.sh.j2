@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# {{ ansible_managed | comment }}
+#
+# CheckMK local check for log-growth rate
+
+LOGFILE="{{ log_growth_logfile }}"
+STATEFILE="{{ log_growth_statefile }}"
+INTERVAL={{ log_growth_interval }}
+
+# get current & previous sizes (bytes)
+CUR=$(stat -c '%s' "$LOGFILE" 2>/dev/null || echo 0)
+PREV=$(cat "$STATEFILE" 2>/dev/null || echo $CUR)
+
+# persist current size
+mkdir -p "$(dirname "$STATEFILE")"
+echo "$CUR" > "$STATEFILE"
+
+# calculate growth per hour (bytes/sec * 3600)
+DELTA=$(( CUR - PREV ))
+# avoid negative
+if [ "$DELTA" -lt 0 ]; then
+  DELTA=0
+fi
+
+GROWTH_PER_HOUR=$(awk "BEGIN { printf \"%f\", ($DELTA / $INTERVAL) * 3600 }")
+GROWTH_MB=$(awk "BEGIN { printf \"%.2f\", $GROWTH_PER_HOUR / (1024*1024) }")
+
+# determine status
+if (( $(echo "$GROWTH_MB >= {{ log_growth_crit_mb_per_hour }}" | bc -l) )); then
+  STATUS=2
+  MSG="CRITICAL – ${GROWTH_MB} MB/h ≥ {{ log_growth_crit_mb_per_hour }}"
+elif (( $(echo "$GROWTH_MB >= {{ log_growth_warn_mb_per_hour }}" | bc -l) )); then
+  STATUS=1
+  MSG="WARN – ${GROWTH_MB} MB/h ≥ {{ log_growth_warn_mb_per_hour }}"
+else
+  STATUS=0
+  MSG="OK – ${GROWTH_MB} MB/h"
+fi
+
+# Nagios-style local check: <status> <service_id> <perfdata> <text>
+echo "$STATUS log_growth growth=${GROWTH_MB}MB/h ${MSG}"
+
