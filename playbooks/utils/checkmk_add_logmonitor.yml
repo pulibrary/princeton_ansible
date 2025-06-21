@@ -1,0 +1,34 @@
+---
+# To run the playbook:
+#  will run with the staging runtime environment and the rails rule group on pdc-describe-staging2
+
+- name: Install CheckMk local check scripts on host
+  hosts: "{{ runtime_env | default ('staging') }}"
+  remote_user: pulsys
+  become: true
+  vars_files:
+    - ../../group_vars/all/vault.yml
+    - ../../group_vars/checkmk/{{ runtime_env | default('staging') }}.yml
+    - ../../group_vars/checkmk/agent_common.yml
+    - ../../group_vars/checkmk/vault.yml
+
+  roles:
+    - role: roles/checkmk
+
+  tasks:
+    - name: "Add new local services on hosts."
+      checkmk.general.discovery:
+        server_url: "{{ checkmk_agent_server_protocol }}://{{ checkmk_agent_server }}"
+        site: "{{ checkmk_agent_site }}"
+        automation_user: "{{ checkmk_agent_user }}"
+        automation_secret: "{{ vault_automation_secret }}"
+        hosts: "{{ checkmk_agent_host_name }}"
+        state: "new"
+
+    - name: "Start activation including foreign changes."
+      checkmk.general.activation:
+        server_url: "{{ checkmk_agent_server_protocol }}://{{ checkmk_agent_server }}"
+        site: "{{ checkmk_agent_site }}"
+        automation_user: "{{ checkmk_agent_user }}"
+        automation_secret: "{{ vault_automation_secret }}"
+        force_foreign_changes: 'true'
