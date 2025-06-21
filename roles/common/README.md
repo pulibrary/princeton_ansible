@@ -1,151 +1,94 @@
-# Common Role
+# roles/common
 
-Install all the tools our VMS have in Common
+## Description
 
-## Overview
+The **common** role bootstraps our Linux servers with a standard baseline of tools, configurations, and services used across our infrastructure. It ensures a consistent environment by installing essential packages, setting up shell/editor configs, implementing a flexible, hierarchical log rotation system, and deploying observability tools.
 
-Since we include logrotate in the role, we want other roles to have access to a highly flexible, hierarchical approach to managing log rotation across your infrastructure. It allows you to define logrotate rules at multiple levels of your Ansible inventory, from global defaults to host-specific configurations.
+## Features
 
-## Configuration Structure
+- **Package Installation**
+  - Installs shared packages (`curl`, `git`, `htop`, `jq`, `tmux`, `vim`, etc.) on all hosts.
+  - Installs OS-specific packages for Debian/Ubuntu and RHEL families.
+- **Shell & Editor Configuration**
+  - Deploys a global `tmux` configuration (`/etc/tmux.conf`).
+  - Creates `/etc/vim/vimrc.local` for Vim customizations.
+- **SSH Key Management**
+  - Fetches public keys from GitHub for operations, library, CDH, and EAL teams.
+- **Log Rotation**
+  - Creates a systemd timer override to periodically check log sizes and trigger rotations.
+  - Defines **global defaults** (`logrotate_global_defaults`) and **custom rules** (`logrotate_rules`) for `/etc/logrotate.d/`.
+- **Observability & Utilities**
+  - Installs and configures the [Vector](https://vector.dev/) agent for centralized log forwarding.
+  - Installs [dua-cli](https://github.com/Byron/dua-cli/) for fast disk usage reporting.
 
-### Variable Hierarchy
+## Requirements
 
-Variables can be defined at multiple levels with the following precedence (highest to lowest):
+- Ansible **2.9+**
+- Python **3.x** on target hosts
+- **systemd** for timer management (Debian/RHEL)
 
-1. **Host Variables** (`host_vars/hostname.yml`)
-2. **Group Variables** (`group_vars/group_name.yml`)
-3. **Role Variables** (`roles/role_name/vars/main.yml`)
-4. **Global Variables** (`group_vars/all.yml`)
-5. **Role Defaults** (`roles/role_name/defaults/main.yml`)
+## Role Variables
 
-### Global Defaults
+All defaults can be found in `roles/common/defaults/main.yml`. Override these in your inventory or playbook as needed.
 
-The `logrotate_global_defaults` variable provides base settings that can be referenced throughout your configurations:
+### General Settings
 
-```yaml
-logrotate_global_defaults:
-  rotate: 4
-  weekly: true
-  missingok: true
-  notifempty: true
-  compress: true
-  delaycompress: true
-  copytruncate: false
-  create_mode: "0644"
-  create_owner: "root"
-  create_group: "root"
-  sharedscripts: false
-  postrotate: ""
-  prerotate: ""
-```
+| Variable                  | Default                                  | Description                                       |
+| ------------------------- | ---------------------------------------- | ------------------------------------------------- |
+| `common_shared_packages`  | `[curl, git, htop, jq, tmux, tree, vim]` | Packages installed on **all** hosts.              |
+| `common_ubuntu_packages`  | `[acl, build-essential, python3-pip, …]` | Debian/Ubuntu-specific packages.                  |
+| `common_rhel_packages`    | `[@Development tools, libyaml, …]`       | RHEL/CentOS-specific packages.                    |
+| `configured_dependencies` | `[]`                                     | Additional packages to install.                   |
+| `system_install_dir`      | `/usr/local/bin`                         | Directory to install CLI tools (e.g., `dua-cli`). |
 
-### Logrotate Rules
+### Logrotate Configuration
 
-Rules are defined in the `logrotate_rules` list variable. Each rule contains:
+| Variable                    | Default                              | Description                                            |
+| --------------------------- | ------------------------------------ | ------------------------------------------------------ |
+| `logrotate_global_defaults` | See defaults file                    | Base settings for all logrotate configurations.        |
+| `logrotate_rules`           | `[ - name: "custom-application" … ]` | List of custom logrotate jobs for `/etc/logrotate.d/`. |
 
-- **`name`** - The name of the logrotate configuration file (without .conf extension)
-- **`paths`** - List of log file paths to rotate
-- **`options`** - Dictionary of logrotate options
+Customize logrotate per service or environment by overriding `logrotate_rules` in `group_vars`.
 
-## Supported Logrotate Options
+### Vector Agent Settings
 
-The template supports all major logrotate directives:
+| Variable                      | Default                                      | Description                                      |
+| ----------------------------- | -------------------------------------------- | ------------------------------------------------ |
+| `vector_url`                  | `https://packages.timber.io/vector`          | Repository URL for Vector installation.          |
+| `victorialogs_uri`            | `http://kennyloggin-{{ runtime_env }}1:9428` | Endpoint for VictoriaLogs ingestion.             |
+| `vector_enable_console_debug` | `true`                                       | Enable console debug logs (for troubleshooting). |
+| `vector_api_enabled`          | `true`                                       | Enable Vector's HTTP API endpoint.               |
 
-### Rotation Frequency
+## Dependencies
 
-- `daily`, `weekly`, `monthly`, `yearly`
-- `rotate` - Number of rotations to keep
-- `size` - Rotate when file reaches this size
-- `maxage` - Remove files older than this many days
+*None.* This role can be applied standalone.
 
-### Compression
-
-- `compress` / `nocompress`
-- `delaycompress`
-
-### File Handling
-
-- `missingok` / `nomissingok`
-- `notifempty` / `ifempty`
-- `copytruncate` / `nocopytruncate`
-- `create` - Create new log files with specified permissions
-- `nocreate`
-
-### Advanced Options
-
-- `sharedscripts` / `nosharedscripts`
-- `dateext` / `nodateext`
-- `dateformat`
-- `extension`
-- `olddir` / `noolddir`
-- `mail` / `nomail`
-- `mailfirst` / `maillast`
-- `maxsize` / `minsize`
-
-### Script Hooks
-
-- `prerotate` - Commands to run before rotation
-- `postrotate` - Commands to run after rotation
-- `firstaction` - Commands to run before all files are rotated
-- `lastaction` - Commands to run after all files are rotated
-
-## Usage Examples
-
-### Basic Global Configuration
-
-**`group_vars/app_name/environment.yml`**
+## Example Playbook
 
 ```yaml
-logrotate_rules:
-  - name: "system-logs"
-    paths:
-      - "/var/log/syslog"
-      - "/var/log/auth.log"
-    options:
-      rotate: 7
-      daily: true
-      compress: true
-      missingok: true
-      notifempty: true
-      sharedscripts: true
-      postrotate: |
-        systemctl reload rsyslog || true
+- hosts: all
+  become: true
+  vars:
+    configured_dependencies:
+      - python3-certbot
+    logrotate_rules:
+      - name: nginx
+        paths:
+          - /var/log/nginx/*.log
+        options:
+          rotate: 52
+          daily: true
+          compress: true
+          sharedscripts: true
+          postrotate: |
+            if [ -f /var/run/nginx.pid ]; then
+              kill -USR1 `cat /var/run/nginx.pid`
+            fi
+  roles:
+    - common
 ```
 
-### Service-Specific Configuration
+## Handlers
 
-**`group_vars/webservers.yml`**
-
-```yaml
-logrotate_rules:
-  - name: "nginx"
-    paths:
-      - "/var/log/nginx/*.log"
-    options:
-      rotate: 52
-      daily: true
-      compress: true
-      delaycompress: true
-      sharedscripts: true
-      postrotate: |
-        if [ -f /var/run/nginx.pid ]; then
-          kill -USR1 `cat /var/run/nginx.pid`
-        fi
-```
-
-### Using Global Defaults
-
-You can reference the global defaults in your configurations:
-
-```yaml
-logrotate_rules:
-  - name: "my-service"
-    paths:
-      - "/opt/app_name/current/log/*.log"
-    options:
-      rotate: "{{ logrotate_global_defaults.rotate }}"
-      compress: "{{ logrotate_global_defaults.compress }}"
-      daily: true
-      postrotate: |
-        systemctl reload myservice || true
-```
+- **reload logrotate timer settings**: Reloads the systemd timer for logrotate.
+- **test logrotate configuration**: Validates new logrotate rule templates.
