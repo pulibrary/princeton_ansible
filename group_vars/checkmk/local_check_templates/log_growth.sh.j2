@@ -3,9 +3,9 @@
 #
 # CheckMK local check for log-growth rate
 
-LOGFILE="{{ log_growth_logfile }}"
-STATEFILE="{{ log_growth_statefile }}"
-INTERVAL={{ log_growth_interval }}
+LOGFILE="{{ log_growth_logfile | default('/var/log/myapp/log') }}"
+STATEFILE="{{ log_growth_statefile | default('/var/lib/check_mk_agent/state/app.log.size') }}"
+INTERVAL={{ log_growth_interval | default('300') }}
 
 # get current & previous sizes (bytes)
 CUR=$(stat -c '%s' "$LOGFILE" 2>/dev/null || echo 0)
@@ -26,12 +26,12 @@ GROWTH_PER_HOUR=$(awk "BEGIN { printf \"%f\", ($DELTA / $INTERVAL) * 3600 }")
 GROWTH_MB=$(awk "BEGIN { printf \"%.2f\", $GROWTH_PER_HOUR / (1024*1024) }")
 
 # determine status
-if (( $(echo "$GROWTH_MB >= {{ log_growth_crit_mb_per_hour }}" | bc -l) )); then
+if (( $(echo "$GROWTH_MB >= {{ log_growth_crit_mb_per_hour | default('20') }}" | bc -l) )); then
   STATUS=2
-  MSG="CRITICAL – ${GROWTH_MB} MB/h ≥ {{ log_growth_crit_mb_per_hour }}"
+  MSG="CRITICAL – ${GROWTH_MB} MB/h ≥ {{ log_growth_crit_mb_per_hour | default('20') }}"
 elif (( $(echo "$GROWTH_MB >= {{ log_growth_warn_mb_per_hour }}" | bc -l) )); then
   STATUS=1
-  MSG="WARN – ${GROWTH_MB} MB/h ≥ {{ log_growth_warn_mb_per_hour }}"
+  MSG="WARN – ${GROWTH_MB} MB/h ≥ {{ log_growth_warn_mb_per_hour | default('30') }}"
 else
   STATUS=0
   MSG="OK – ${GROWTH_MB} MB/h"
