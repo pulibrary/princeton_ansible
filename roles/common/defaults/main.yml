@@ -39,19 +39,11 @@ common_rhel_packages:
   - the_silver_searcher
 # Logrotate configuration defaults
 logrotate_global_defaults:
-  rotate: 4
-  weekly: true
-  missingok: true
-  notifempty: true
-  compress: true
-  delaycompress: true
-  copytruncate: false
+  rotate: 7
+  maxsize: "2000M"
   create_mode: "0644"
   create_owner: "root"
   create_group: "root"
-  sharedscripts: false
-  postrotate: ""
-  prerotate: ""
 
 # Default logrotate rules - can be completely overridden
 logrotate_rules:
@@ -60,15 +52,7 @@ logrotate_rules:
       - "/var/log/myapp/*.log"
     options:
       rotate: "{{ logrotate_global_defaults.rotate }}"
-      daily: true
-      missingok: "{{ logrotate_global_defaults.missingok }}"
-      notifempty: "{{ logrotate_global_defaults.notifempty }}"
-      compress: "{{ logrotate_global_defaults.compress }}"
-      delaycompress: "{{ logrotate_global_defaults.delaycompress }}"
-      copytruncate: "{{ logrotate_global_defaults.copytruncate }}"
-      create: true
-      create_mode: "{{ logrotate_global_defaults.create_mode }}"
-      create_owner: "{{ logrotate_global_defaults.create_owner }}"
-      create_group: "{{ logrotate_global_defaults.create_group }}"
-      postrotate: |
-        systemctl reload myapp || true
+      maxsize: "{{ logrotate_global_defaults.maxsize }}"
+      # Optional: add postrotate script if service needs notification
+      # postrotate: |
+      #   systemctl reload myservice || true
