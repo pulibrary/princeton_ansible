@@ -12,9 +12,9 @@
 #   log_growth_crit_mb_per_hour Critical threshold in MB/hour
 #
 # Usage example:
-#   ansible-playbook checkmk_log_growth.yml -i inventory \
-#     -e "log_growth_logfile=/var/log/custom.log \
-#         log_growth_statefile=/var/lib/check_mk_agent/state/custom.size \
+#   ansible-playbook playbooks/utils/checkmk_add_logmonitor.yml --limit adc-dev2.lib.princeton.edu \
+#     -e "log_growth_logfile=/var/log/nginx/access.log \
+#         log_growth_statefile=/var/lib/check_mk_agent/state/nginx_custom.size \
 #         log_growth_interval=600 \
 #         log_growth_warn_mb_per_hour=10 \
 #         log_growth_crit_mb_per_hour=20"
@@ -23,17 +23,17 @@
   hosts: "{{ runtime_env | default ('staging') }}"
   remote_user: pulsys
   become: true
+  vars_files:
+    - ../../group_vars/all/vault.yml
+    - ../../group_vars/checkmk/{{ runtime_env | default('staging') }}.yml
+    - ../../group_vars/checkmk/agent_common.yml
+    - ../../group_vars/checkmk/vault.yml
   vars:
     log_growth_logfile: "/var/log/myapp/app.log"
     log_growth_statefile: "/var/lib/check_mk_agent/state/app.log.size"
     log_growth_interval: 300
     log_growth_warn_mb_per_hour: 20
     log_growth_crit_mb_per_hour: 30
-  vars_files:
-    - ../../group_vars/all/vault.yml
-    - ../../group_vars/checkmk/{{ runtime_env | default('staging') }}.yml
-    - ../../group_vars/checkmk/agent_common.yml
-    - ../../group_vars/checkmk/vault.yml
 
   pre_tasks:
     - name: stop playbook if you didn't use --limit
@@ -59,20 +59,3 @@
         src: "../../group_vars/checkmk/local_check_templates/log_growth.sh.j2"
         dest: "/usr/lib/check_mk_agent/local/log_growth.sh"
         mode: "+x"
-
-    - name: "Add new local services on hosts."
-      checkmk.general.discovery:
-        server_url: "{{ checkmk_agent_server_protocol }}://{{ checkmk_agent_server }}"
-        site: "{{ checkmk_agent_site }}"
-        automation_user: "{{ checkmk_agent_user }}"
-        automation_secret: "{{ vault_automation_secret }}"
-        hosts: "{{ checkmk_agent_host_name }}"
-        state: "new"
-
-    - name: "Start activation including foreign changes."
-      checkmk.general.activation:
-        server_url: "{{ checkmk_agent_server_protocol }}://{{ checkmk_agent_server }}"
-        site: "{{ checkmk_agent_site }}"
-        automation_user: "{{ checkmk_agent_user }}"
-        automation_secret: "{{ vault_automation_secret }}"
-        force_foreign_changes: 'true'
