@@ -69,8 +69,6 @@ Customize logrotate per service or environment by overriding `logrotate_rules` i
 - hosts: all
   become: true
   vars:
-    configured_dependencies:
-      - python3-certbot
     logrotate_rules:
       - name: nginx
         paths:
