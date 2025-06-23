@@ -56,3 +56,50 @@ logrotate_rules:
       # Optional: add postrotate script if service needs notification
       # postrotate: |
       #   systemctl reload myservice || true
+# Example 1: Web server logs (group_vars/bibdata/staging.yml)
+# logrotate_rules:
+#  - name: "nginx-access"
+#    paths:
+#      - "/var/log/nginx/access.log"
+#    options:
+#      rotate: 30                # we add keep 30 days for access logs
+#      maxsize: "5000M"          # Larger size for high-traffic logs
+#      postrotate: |
+#        if [ -f /var/run/nginx.pid ]; then
+#          kill -USR1 `cat /var/run/nginx.pid`
+#        fi
+
+#  - name: "nginx-error"
+#    paths:
+#      - "/var/log/nginx/error.log"
+#    options:
+#      rotate: 14               # we add keep error logs longer
+#      maxsize: "500M"           # Error logs should be smaller
+#      postrotate: |
+#        if [ -f /var/run/nginx.pid ]; then
+#          kill -USR1 `cat /var/run/nginx.pid`
+#        fi
+
+# Example 2: postgresql logs (group_vars/postgresql/staging.yml)
+# logrotate_rules:
+#  - name: "postgresql"
+#    paths:
+#      - "/var/log/postgresql/*.log"
+#    options:
+#      rotate: 14               # Keep 2 weeks of DB logs
+#      maxsize: "5000M"          # Database logs can be larger
+      # Note: No postrotate needed as PostgreSQL handles this internally
+
+# Example 3: Application-specific logs (group_vars/orangelight/staging.yml)
+# logrotate_rules:
+#  - name: "orangelight"
+#    paths:
+#      - "/opt/orangelight/current/log/staging.log"
+#    options:
+#      rotate: 7                # Standard retention
+#      maxsize: "200M"          # Standard size limit
+#      create_owner: "deploy"    # App-specific ownership
+#      create_group: "deploy"
+#      postrotate: |
+#        systemctl reload orangelight || true
+ 
