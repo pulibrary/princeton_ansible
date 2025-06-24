@@ -2,42 +2,52 @@
 - name: Verify
   hosts: all
   gather_facts: false
+
   tasks:
-    - name: Check logrotate configuration was created
+    - name: Check logrotate config file exists
       ansible.builtin.stat:
-        path: "/etc/logrotate.d/test-application"
+        path: /etc/logrotate.d/custom-application
       register: logrotate_config
 
-    - name: Verify logrotate config exists
+    - name: Assert logrotate config was created
       ansible.builtin.assert:
         that:
           - logrotate_config.stat.exists
-        fail_msg: "Logrotate configuration was not created"
+        fail_msg: "Logrotate config /etc/logrotate.d/custom-application not found"
 
-    - name: Read logrotate configuration
+    - name: Read logrotate config content
       ansible.builtin.slurp:
-        src: "/etc/logrotate.d/test-application"
+        src: /etc/logrotate.d/custom-application
       register: config_content
 
-    - name: Verify configuration content
+    - name: Assert config includes the right directives
       ansible.builtin.assert:
         that:
-          - "'daily' in config_content.content | b64decode"
-          - "'rotate 5' in config_content.content | b64decode"
-          - "'/var/log/test-app/*.log' in config_content.content | b64decode"
-        fail_msg: "Logrotate configuration content is incorrect"
+          - "'daily' in (config_content.content | b64decode)"
+          - "'rotate 7' in (config_content.content | b64decode)"
+          - "'/var/log/myapp/*.log' in (config_content.content | b64decode)"
+          - "'create 0644 root root' in (config_content.content | b64decode)"
+        fail_msg: "Logrotate configuration content is missing or incorrect"
 
-    - name: Check basic role files
+    - name: Check /etc/tmux.conf exists
       ansible.builtin.stat:
-        path: "{{ item }}"
-      register: role_files
-      loop:
-        - /etc/tmux.conf
-        - /etc/vim/vimrc.local
+        path: /etc/tmux.conf
+      register: tmux_conf
 
-    - name: Verify role files exist
+    - name: Assert /etc/tmux.conf was created
       ansible.builtin.assert:
         that:
-          - item.stat.exists
-        fail_msg: "File {{ item.item }} was not created"
-      loop: "{{ role_files.results }}"
+          - tmux_conf.stat.exists
+        fail_msg: "/etc/tmux.conf was not created"
+
+    - name: Check /etc/vim/vimrc.local exists
+      ansible.builtin.stat:
+        path: /etc/vim/vimrc.local
+      register: vimrc_conf
+
+    - name: Assert /etc/vim/vimrc.local was created
+      ansible.builtin.assert:
+        that:
+          - vimrc_conf.stat.exists
+        fail_msg: "/etc/vim/vimrc.local was not created"
+
