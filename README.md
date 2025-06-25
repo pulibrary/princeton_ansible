@@ -201,7 +201,7 @@ source princeton_ansible_env.sh
 
 # Patching Dependencies (Dependabot)
 
-When Dependabot opens a PR, update your `pyproject.toml` as needed, then:
+When Dependabot opens a PR, update the `pyproject.toml` as needed, then:
 
 ```bash
 uv lock
