@@ -143,6 +143,45 @@ Currently there's no automation on firewall changes when the box you're provisio
 
 Use `ansible-vault edit` to update secrets (e.g., `group_vars/bibdata/vault.yml`).
 
+If you need to diff an ansible-vault file, run
+
+```
+git config --global diff.ansible-vault.textconv "ansible-vault view"
+git config --local merge.ansible-vault.driver "./ansible-vault-merge %O %A %B %L %P"
+git config --local merge.ansible-vault.name "Ansible Vault merge driver"
+```
+
+after which any `git diff` command should decrypt your ansible-vault files.
+
+If a file is not decrypting with `git diff` you may need to add the file you're trying to diff to `.gitattributes`.
+
+## Troubleshooting lastpass
+
+More information about lastpass-cli can be found here: <https://lastpass.github.io/lastpass-cli/lpass.1.html>
+
+- If you get the message `[WARNING]: Error in vault password file loading (default): Invalid vault password was provided from script`, it's possible you have vault passwords hanging around from previous projects, and they are overriding the lastpass password. If you no longer need those passwords, remove them. For example:
+
+```bash
+rm -rf ~/.vault_pass.txt
+rm -rf ~/.ansible-vaults
+```
+
+- If you get the message `ERROR! Decryption failed (no vault secrets were found that could decrypt)`, you may still need to source the environment for your shell.
+
+```bash
+source princeton_ansible_env.sh
+```
+
+### Rekeying the vault
+
+1. Open the `old_vault_password` server in lastpass.  Replace the old vault password with the current ansible vault password.  Add a note to include today's date.
+1. Run `pwgen -s 48` to create a new password.
+1. Run `ansible-vault rekey --ask-vault-password $(grep -Frl "\$ANSIBLE_VAULT;")`
+1. Enter the old vault password
+1. Enter the new vault password
+1. Run `ansible-vault edit --ask-vault-password` on one of the files you changed (providing the new password), to validate that everything is as it should be.
+1. Add the new vault password to the vault_password in lastpass.
+
 # Upgrading Ansible version
 
 1. Enter your project env:
