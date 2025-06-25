@@ -1,9 +1,4 @@
-<p align="left">
-  <a href="https://github.com/pulibrary/princeton_ansible"><img alt="Princeton Ansible Workflow" src="https://github.com/pulibrary/princeton_ansible/workflows/Molecule%20Tests/badge.svg"></a>
-</p>
-
-Princeton Ansible Playbooks
-===========================
+# Princeton Ansible Playbooks
 
 A collection of roles and playbooks for provisioning and managing the machines that run PUL applications.
 
@@ -15,36 +10,37 @@ Do these things once, after you clone this repo.
 
 ### Mac
 
-1. Install homebrew
-1. Install [Docker Desktop](https://docs.docker.com/desktop/install/mac-install/)
-1. Run `bin/first-time-setup.sh` - this installs all the language and tooling dependencies
-1. Run `bin/setup` - this adds a [pre-commit hook](https://github.com/pulibrary/princeton_ansible/blob/main/.githooks/pre-commit) to your environment that will prevent you from accidentally checking in unencrypted vault files.
-1. follow the steps under "Every time setup"
+1. Install Homebrew
+2. Install [Docker Desktop](https://docs.docker.com/desktop/install/mac-install/)
+3. Run `bin/first-time-setup.sh` – this installs all the language and tooling dependencies
+4. Ensure [`uv`](https://github.com/pypa/uv) is installed (`pipx install uv` or your preferred installer)
+5. Run `bin/setup` – this adds a [pre-commit hook](.githooks/pre-commit) to your environment that prevents checking in unencrypted vault files
+6. Follow the steps under "Every time setup"
 
-### Microsoft Windows/ Ubuntu
+### Windows / Ubuntu (WSL)
 
- 1. Use the [WSL Document](./README_Windows.md)
+1. See the [WSL Document](./README_Windows.md)
 
 ## Every time setup
 
-Run these commands every time you use this repo
+Run these commands every time you use this repo:
 
 ```bash
-pipenv sync
-pipenv shell
+uv sync      # install dependencies into .venv
+uv shell     # spawn a shell inside the .venv
 source princeton_ansible_env.sh
 lpass login <your-netid@princeton.edu>
 ```
 
-Now you can run tests (See "Running molecule tests") or playbooks (See "Usage")
+Now you can run tests (see "Running molecule tests") or playbooks (see "Usage").
 
 ## Validate that everything is installed correctly
 
-Make sure docker is running before you run the following (from inside the `pipenv shell`) to test the installation:
+With Docker running and inside your `uv shell`, run:
 
 ```bash
 cd roles/common
-pip3 install 'molecule-plugins[docker]'
+pip install 'molecule-plugins[docker]'
 molecule test
 ```
 
@@ -52,59 +48,39 @@ molecule test
 
 ## Create a new role
 
-In all the steps below substitute your role name for `your_new_role`
+Replace `your_new_role` with your role name:
 
-1. Initialize the role with [ansible-galaxy](https://www.redhat.com/sysadmin/developing-ansible-role)
-   Run the following command from the root of this repo:
+1. Initialize the role via Ansible Galaxy:
 
    ```bash
-   export your_new_role=<fill in the role name here>
+   export your_new_role=<role_name>
    cd roles/$your_new_role
    molecule init scenario
    cd ../..
    ```
 
-1. Set up to run from github actions `vim .github/workflows/molecule_tests.yml` add for your role at the end matrix of the roles
+2. Add your role to the GitHub Actions matrix in `.github/workflows/molecule_tests.yml`.
+3. Copy example files and update metadata:
 
+   ```bash
+   cp -r roles/example/* $your_new_role
+   vi roles/$your_new_role/meta/main.yml   # add a description
+   vi roles/$your_new_role/molecule/default/converge.yml  # update name
    ```
-       - your_new_role
-   ```
 
-1. Setup the directory to run molecule
+4. Test your role:
 
-   1. copy all molecule and lint files (note you need the `.` in the command
-      below to get the hidden files)
-
-      ```bash
-      cp -r roles/example/* $your_new_role
-      ```
-
-   1. edit `vi roles/$your_new_role/meta/main.yml` and add a description
-
-   1. edit `vi roles/$your_new_role/molecule/default/converge.yml`
-      1. replace `name: Converge` with `name: your_new_role`
-
-1. Test that your role is now working
-   All tests should pass
-
-   ```
+   ```bash
    cd roles/$your_new_role
    molecule test
    ```
 
-1. Push your branch and verify that CI runs and passes on GitHub Actions.
+5. Push your branch and verify CI passes.
+6. If the role supports a new project, add group\_vars and inventory entries as documented.
 
-1. If the role is related to a new project, add group variables and inventory.
-   1. Add a `group_vars/your_new_project` directory and add files with the required variables. Usually this includes `common.yml` for variables that apply in all environments, `vault.yml` for secret values like passwords and keys, and one file per environment (generally at least `production.yml` and `staging.yml`).
-   1. Add an `inventory/all_projects/your_new_project` file and list all VMs and other resources. Group them by environment - see any of the existing files for examples.
-   1. Add your new groups to the relevant files in the `inventory/by_environment/` directory. For example, add `your_new_project_production` to `inventory/by_environment/production`. Try to keep the lists alphabetized.
+# Running Molecule tests
 
-## Running Molecule tests
-
-You can run `molecule test` from either the root directory or the role directory (for example roles/example)
-If you are writing tests we have found it is easier to test just your examples by running from the role directory.
-
-We also recommend instead of running just `molecule test` which takes a very long time your run `molecule converge` to build a docker container with your ansible playbook loaded.  You can run converge and/or verify as many times as needed to get your playbook working.
+You can run `molecule test` from the repository root or role folder. For faster iteration, use:
 
 ```bash
 molecule lint
@@ -112,45 +88,21 @@ molecule converge
 molecule verify
 ```
 
-If you are having issues with your tests passing and have run `molecule converge` you can connect to the running container by running
+To inspect a running container:
 
-```
+```bash
 molecule login
-```
-
-## Troubleshooting a container step
-
-If you have a specific task that is not behaving, utilize the tests to run just that step.  This is especially useful for long running `molecule converge`
-
-You basically copy the failing task into the molecule/verify.yml and run verify over and over instead of needing to run the entire converge over and over.  This makes debugging much faster and joyful!
-
-## Troubleshooting a test run
-
-If you need to ensure you're getting the newest docker image for your local
-test run you can do a dance like this to delete your ansible docker machines,
-volumes, and images:
-
-```
-cd to the role in question
-% molecule destroy
-% docker ps -qaf ancestor=quay.io/pulibrary/jammy-ansible:latest | xargs docker stop
-% docker ps -qaf ancestor=quay.io/pulibrary/jammy-ansible:latest | xargs docker rm
-% docker volume ls -qf dangling=true | xargs docker volume rm
-% docker rmi quay.io/pulibrary/jammy-ansible
-% molecule converge
 ```
 
 # Usage
 
 ## Running a playbook
 
-Run a playbook
-
 ```bash
 ansible-playbook playbooks/example.yml
 ```
 
-Run a playbook from an error or a specific task
+To resume at a specific task:
 
 ```bash
 ansible-playbook playbooks/example.yml --start-at-task="Task Name"
@@ -189,89 +141,31 @@ Currently there's no automation on firewall changes when the box you're provisio
 
 # Vault
 
-Use `ansible-vault edit` to make changes to the `vault.yml` file, for example:
+Use `ansible-vault edit` to update secrets (e.g., `group_vars/bibdata/vault.yml`).
 
-```
-ansible-vault edit group_vars/bibdata/vault.yml
-```
+# Upgrading Ansible version
 
-If you need to diff an ansible-vault file, run
+1. Enter your project env:
 
-```
-git config --global diff.ansible-vault.textconv "ansible-vault view"
-git config --local merge.ansible-vault.driver "./ansible-vault-merge %O %A %B %L %P"
-git config --local merge.ansible-vault.name "Ansible Vault merge driver"
-```
+   ```bash
+   uv sync
+   uv shell
+   ```
 
-after which any `git diff` command should decrypt your ansible-vault files.
+2. Bump the `ansible` version in `pyproject.toml` under `[project.dependencies]`.
+3. Re-lock and sync:
 
-If a file is not decrypting with `git diff` you may need to add the file you're trying to diff to `.gitattributes`.
+   ```bash
+   uv lock
+   uv sync
+   ```
 
-## Troubleshooting lastpass
+# Patching Dependencies (Dependabot)
 
-More information about lastpass-cli can be found here: <https://lastpass.github.io/lastpass-cli/lpass.1.html>
-
-- If you get the message `[WARNING]: Error in vault password file loading (default): Invalid vault password was provided from script`, it's possible you have vault passwords hanging around from previous projects, and they are overriding the lastpass password. If you no longer need those passwords, remove them. For example:
-
-```bash
-rm -rf ~/.vault_pass.txt
-rm -rf ~/.ansible-vaults
-```
-
-- If you get the message `ERROR! Decryption failed (no vault secrets were found that could decrypt)`, you may still need to source the environment for your shell.
+When Dependabot opens a PR, update your `pyproject.toml` as needed, then:
 
 ```bash
-source princeton_ansible_env.sh
+uv lock
+uv sync
+molecule test
 ```
-
-### Rekeying the vault
-
-1. Open the `old_vault_password` server in lastpass.  Replace the old vault password with the current ansible vault password.  Add a note to include today's date.
-1. Run `pwgen -s 48` to create a new password.
-1. Run `ansible-vault rekey --ask-vault-password $(grep -Frl "\$ANSIBLE_VAULT;")`
-1. Enter the old vault password
-1. Enter the new vault password
-1. Run `ansible-vault edit --ask-vault-password` on one of the files you changed (providing the new password), to validate that everything is as it should be.
-1. Add the new vault password to the vault_password in lastpass.
-8. Log into [Ansible Tower](https://ansible-tower.princeton.edu/#/credentials/10/details). To replace it click `Edit` then click on the circular arrow to the left of the Vault Password, paste in the new value, and save. The value is automatically encrypted.
-
-## Upgrading Ansible version
-
-   1. In a pipenv shell
-
-      ```bash
-      pipenv sync
-      pipenv shell
-      ```
-
-   1. Upgrade ansible
-
-      ```
-      pipenv update ansible
-      ```
-
-      If this fails you may need to
-
-      ```
-      pipenv uninstall ansible
-      pipenv install ansible
-      ```
-
-   1. Create the  CI ansible environment
-
-      ```
-      pipenv lock -r > requirements.txt
-      ```
-
-   1. Create a PR and commit
-
-## Patching Dependabots
-
-  1. Make recommended changes from dependabot PR run `pipenv install -r
-     requirements.txt`
-
-  1. Check in changes to Pipfile.lock
-
-  1. Run the entire test suite locally
-
-  1. Re-run `pipenv lock -r > requirements.txt`
