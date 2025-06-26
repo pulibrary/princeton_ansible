@@ -1,19 +1,30 @@
 ---
 - name: Converge
   hosts: all
+  gather_facts: true
   vars:
     - running_on_server: false
+
   pre_tasks:
-    - name: Update cache
-      ansible.builtin.apt:
-        update_cache: true
-        cache_valid_time: 600
-    - name: Ensure /usr/share/man/man1 directory exists
+    - name: Create test directories
       ansible.builtin.file:
-        path: /usr/share/man/man1
+        path: "{{ item }}"
         state: directory
         mode: '0755'
+      loop:
+        - /usr/share/man/man1
+        - /var/log/test-app
+
+    - name: Create test log file
+      ansible.builtin.copy:
+        content: "Test log content\n"
+        dest: /var/log/test-app/application.log
+        mode: '0644'
+        owner: root
+        group: root
+        force: false
+
   tasks:
-    - name: "Include common"
+    - name: "Include common role"
       ansible.builtin.include_role:
         name: "common"

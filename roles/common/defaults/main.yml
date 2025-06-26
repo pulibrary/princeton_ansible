@@ -37,3 +37,71 @@ common_rhel_packages:
   - python3-devel
   - python3-pip
   - the_silver_searcher
+# Logrotate configuration opinionated defaults
+logrotate_global_defaults:
+  rotate: 7
+  maxsize: "2000M"
+  create_mode: "0644"
+  create_owner: "root"
+  create_group: "root"
+
+# Default logrotate rules - can be completely overridden
+logrotate_rules:
+  - name: "falcon-sensor"
+    paths:
+      - "/var/log/falcon-sensor.log"
+    options:
+      rotate: "{{ logrotate_global_defaults.rotate }}"
+      maxsize: "{{ logrotate_global_defaults.maxsize }}"
+      create_mode: "{{ logrotate_global_defaults.create_mode }}"
+      create_owner: "{{ logrotate_global_defaults.create_owner }}"
+      create_group: "{{ logrotate_global_defaults.create_group }}"
+      # Optional: add postrotate script if service needs notification
+      # postrotate: |
+      #   systemctl reload myservice || true
+# Example 1: Web server logs (group_vars/bibdata/staging.yml)
+# logrotate_rules:
+#  - name: "nginx-access"
+#    paths:
+#      - "/var/log/nginx/access.log"
+#    options:
+#      rotate: 30                # we increase the defaults to 30 nginx access logs
+#      maxsize: "5000M"          # we increase size for access logs
+#      postrotate: |
+#        if [ -f /var/run/nginx.pid ]; then
+#          kill -USR1 `cat /var/run/nginx.pid`
+#        fi
+
+#  - name: "nginx-error"
+#    paths:
+#      - "/var/log/nginx/error.log"
+#    options:
+#      rotate: 14               # we increase the defaults to 14 for error logs
+#      maxsize: "500M"           # we decrease the size logs
+#      postrotate: |
+#        if [ -f /var/run/nginx.pid ]; then
+#          kill -USR1 `cat /var/run/nginx.pid`
+#        fi
+
+# Example 2: postgresql logs (group_vars/postgresql/staging.yml)
+# logrotate_rules:
+#  - name: "postgresql"
+#    paths:
+#      - "/var/log/postgresql/*.log"
+#    options:
+#      rotate: 14               # we increase the number of rotated DB logs
+#      maxsize: "5000M"          # Database logs can be larger
+      # Note: No postrotate needed as PostgreSQL handles this internally
+
+# Example 3: Application-specific logs (group_vars/orangelight/staging.yml)
+# logrotate_rules:
+#  - name: "orangelight"
+#    paths:
+#      - "/opt/orangelight/current/log/staging.log"
+#    options:
+#      rotate: 7                # Standard retention
+#      maxsize: "200M"          # Standard size limit
+#      create_owner: "deploy"    # we change the App-specific ownership from root to deploy
+#      create_group: "deploy"
+#      postrotate: |
+#        systemctl reload orangelight || true

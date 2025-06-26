@@ -1,0 +1,47 @@
+# {{ ansible_managed }}
+# Logrotate configuration for {{ item.name }}
+#
+{% for path in item.paths %}
+
+{{ path }}
+
+{% endfor %}
+
+{
+    # Standardized rotation frequency - ALWAYS daily
+    daily
+
+    # Standardized retention - use item setting or fall back to global default
+    rotate {{ item.options.rotate }}
+
+    # ALWAYS enforce maximum size
+    maxsize {{ item.options.maxsize }}
+
+    # Standardized compression settings
+    compress
+    delaycompress
+
+    # Standardized error handling
+    missingok
+    notifempty
+
+    # Standardized file creation (always create new files with consistent permissions)
+    create {{ item.options.create_mode }} {{ item.options.create_owner  }} {{ item.options.create_group  }}
+
+    # Use date extension for clarity  so logs will say application.log-20250623-1719158400
+    dateext
+    dateformat -%Y%m%d-%s
+{% if item.options.sharedscripts is defined and item.options.sharedscripts %}
+
+    # Shared scripts (only when explicitly needed)
+    sharedscripts
+{% endif %}
+
+{% if item.options.postrotate is defined and item.options.postrotate != '' %}
+
+    # Post-rotation commands
+    postrotate
+{{ item.options.postrotate | indent(8, true) }}
+    endscript
+{% endif %}
+}
