@@ -1,51 +1,58 @@
 ---
 - name: Verify
   hosts: all
-  vars:
-    common_ubuntu_packages:
-      - acl
-      - build-essential
-      - curl
-      - git
-      - htop
-      - jq
-      - libcurl4
-      - libssl-dev
-      - libyaml-dev
-      - python3-apt
-      - python3-pip
-      - python-setuptools
-      - silversearcher-ag
-      - tmux
-      - tree
-      - unzip
-      - vim
-      - wget
-      - zip
-      - zlib1g-dev
   gather_facts: false
+
   tasks:
-    - name: Common | Verify tmux.conf exists
+    - name: Check logrotate config file exists
+      ansible.builtin.stat:
+        path: /etc/logrotate.d/custom-application
+      register: logrotate_config
+
+    - name: Assert logrotate config was created
+      ansible.builtin.assert:
+        that:
+          - logrotate_config.stat.exists
+        fail_msg: "Logrotate config /etc/logrotate.d/custom-application not found"
+
+    - name: Read logrotate config content
+      ansible.builtin.slurp:
+        src: /etc/logrotate.d/custom-application
+      register: config_content
+
+    - name: Assert config includes the right directives
+      ansible.builtin.assert:
+        that:
+          - "'daily' in (config_content.content | b64decode)"
+          - "'rotate 7' in (config_content.content | b64decode)"
+          - "'/var/log/myapp/*.log' in (config_content.content | b64decode)"
+          - "'create 0644 root root' in (config_content.content | b64decode)"
+        fail_msg: "Logrotate configuration content is missing or incorrect"
+
+    - name: Check /etc/tmux.conf exists
       ansible.builtin.stat:
         path: /etc/tmux.conf
       register: tmux_conf
 
-    - name: Common | Assert tmux.conf exists
+    - name: Assert /etc/tmux.conf was created
       ansible.builtin.assert:
         that:
           - tmux_conf.stat.exists
+        fail_msg: "/etc/tmux.conf was not created"
 
-    - name: Common | Verify vimrc exists
+    - name: Check /etc/vim/vimrc.local exists
       ansible.builtin.stat:
         path: /etc/vim/vimrc.local
-      register: vimrc
+      register: vimrc_conf
 
-    - name: Common | Assert vimrc exists
+    - name: Assert /etc/vim/vimrc.local was created
       ansible.builtin.assert:
         that:
-          - vimrc.stat.exists
+          - vimrc_conf.stat.exists
+        fail_msg: "/etc/vim/vimrc.local was not created"
 
     - name: Common | Verify common Ubuntu packages are installed
       ansible.builtin.apt:
         name: "{{ common_ubuntu_packages }}"
         state: present
+
