@@ -1,5 +1,19 @@
 ---
 running_on_server: true
+logrotate_rules:
+  - name: "svnserve"
+    paths:
+      - "/var/log/svnserve/*.log"
+    options:
+      rotate: "{{ logrotate_global_defaults.rotate }}"
+      maxsize: "{{ logrotate_global_defaults.maxsize }}"
+      create_mode: "0640"
+      create_owner: "svn" 
+      create_group: "adm"
+      postrotate: |
+        if /bin/systemctl status svnserve > /dev/null ; then \
+            /bin/systemctl restart svnserve > /dev/null; \
+        fi;
 svn_users:
   aa9: "{{ vault_aa9_secret }}"
   aberdini: "{{ vault_aberdini_secret }}"
