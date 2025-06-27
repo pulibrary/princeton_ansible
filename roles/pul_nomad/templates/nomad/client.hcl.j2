@@ -1,0 +1,29 @@
+client {
+  enabled = true
+  node_pool = "{{ nomad_node_pool }}"
+
+  {% for nomad_host_volume in nomad_host_volumes %}
+  host_volume "{{ nomad_host_volume['name'] }}" {
+      path = "{{ nomad_host_volume['path'] }}"
+      read_only = {{ nomad_host_volume['read_only'] | bool | lower }}
+  }
+  {% endfor %}
+
+  {% if nomad_meta -%}
+  meta = {
+    {% for key, value in nomad_meta.items() %}
+    "{{ key }}" = "{{ value }}"
+    {% endfor -%}
+  }
+  {% endif %}
+}
+
+plugin "nomad-driver-podman" {
+  config {
+    volumes {
+      enabled = true
+      selinuxlabel = "z"
+    }
+    extra_labels = ["job_name", "task_group_name", "task_name", "namespace", "node_name"]
+  }
+}
