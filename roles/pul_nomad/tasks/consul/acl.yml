@@ -1,0 +1,62 @@
+# Much of the ACL setup was pulled from here:
+# https://developer.hashicorp.com/nomad/tutorials/integrate-consul/consul-acl
+
+# DNS ACLs control the permissions for what the DNS server uses. We want it to
+# be read only.
+- name: 'pul_nomad | consul | Configure DNS ACL'
+  environment:
+    CONSUL_HTTP_TOKEN: '{{ consul_acl_management_token }}'
+  block:
+    - name: 'pul_nomad | consul | Create DNS Policy'
+      community.general.consul_policy:
+        token: '{{ consul_acl_management_token }}'
+        name: dns-policy
+        # We use a custom policy instead of builtin/dns because idempotence of
+        # this module doesn't work with the builtin one.
+        rules: |
+          node_prefix "" {
+            policy = "read"
+          }
+          service_prefix "" {
+            policy = "read"
+          }
+          query_prefix "" {
+            policy = "read"
+          }
+      run_once: true
+    - name: 'pul_nomad | consul | Create DNS Token'
+      # This makes a secret token and looks it up, which we then register.
+      community.general.consul_token:
+        state: present
+        accessor_id: '19d4d0b7-0734-4e2b-aa97-76e91326ba85' # Consistent ID for idempotency.
+        policies:
+          - name: 'dns-policy'
+        token: '{{ consul_acl_management_token }}'
+      register: dns_token
+      run_once: true
+    - name: 'pul_nomad | consul | Assign DNS ACL token'
+      ansible.builtin.shell:
+        cmd: "/usr/local/bin/consul acl set-agent-token dns '{{ dns_token.token.SecretID }}'"
+      changed_when: false # no way to check, so we always run it.
+
+# Node identities assign consul ACLs depending on who the node is. This
+# restricts the consul client on each node so they can only edit their entries
+# in consul.
+- name: 'pul_nomad | consul | Configure Node Identities'
+  environment:
+    CONSUL_HTTP_TOKEN: '{{ consul_acl_management_token }}'
+  block:
+    - name: 'pul_nomad | consul | Create Node Identity Token'
+      # This makes a secret token and looks it up, which we then register.
+      community.general.consul_token:
+        state: present
+        accessor_id: "{{ ('identity-' ~ inventory_hostname_short) | to_uuid }}" # Consistent ID for idempotency.
+        node_identities:
+          - datacenter: 'dc1'
+            node_name: '{{ inventory_hostname_short }}'
+        token: '{{ consul_acl_management_token }}'
+      register: identity_token
+    - name: 'pul_nomad | consul | Assign Agent token'
+      ansible.builtin.shell:
+        cmd: "/usr/local/bin/consul acl set-agent-token agent '{{ identity_token.token.SecretID }}'"
+      changed_when: false # no way to check, so we always run it.
