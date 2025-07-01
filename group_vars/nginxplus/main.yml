@@ -62,6 +62,21 @@ logrotate_rules:
       su_group: "{{ logrotate_global_defaults.su_group }}"
       postrotate: |
         /bin/systemctl restart nginx-app-protect.service > /dev/null 2>/dev/null || true
+  - name: "nginx"
+    paths:
+      - "/var/log/nginx/*.log"
+    options:
+      rotate: "14"
+      maxsize: "{{ logrotate_global_defaults.maxsize }}"
+      create_mode: "{{ logrotate_global_defaults.create_mode }}"
+      create_owner: "nginx"
+      create_group: "adm"
+      su_user: "{{ logrotate_global_defaults.su_user }}"
+      su_group: "{{ logrotate_global_defaults.su_group }}"
+      postrotate: |
+        if [ -f /var/run/nginx.pid ]; then
+                kill -USR1 `cat /var/run/nginx.pid`
+        fi
 
 # configure datadog log collection
 datadog_api_key: "{{ vault_datadog_key }}"
