@@ -4,3 +4,20 @@ shib_admin_user:
   - kr2@princeton.edu
   - sc9047@princeton.edu
   - vk4273@princeton.edu
+logrotate_rules:
+  - name: "ezproxy"
+    paths:
+      - "/var/local/ezproxy/log/*.log"
+    options:
+      rotate: "{{ logrotate_global_defaults.rotate }}"
+      maxsize: "{{ logrotate_global_defaults.maxsize }}"
+      create_mode: "0640"
+      create_owner: "root"
+      create_group: "ezproxy"
+      su_user: "{{ logrotate_global_defaults.su_user }}"
+      su_group: "{{ logrotate_global_defaults.su_group }}"
+      # Optional: add postrotate script if service needs notification
+      postrotate: |
+        if /usr/sbin/service ezproxy status  > /dev/null ; then \
+          /usr/sbin/service ezproxy restart > /dev/null; \
+        fi;
