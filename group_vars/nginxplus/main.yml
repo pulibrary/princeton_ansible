@@ -47,6 +47,37 @@ nginx_ssl_key_upload_dest: /etc/nginx/conf.d/ssl/private/
 nginx_template_upload_enable: true
 nginx_template_upload_src: conf/http/templates/*.conf
 nginx_template_upload_dest: /etc/nginx/conf.d/templates/
+# logrotation
+logrotate_rules:
+  - name: "app_protect.conf"
+    paths:
+      - "{{ app_protect_dir }}"
+    options:
+      rotate: "14"
+      maxsize: "{{ logrotate_global_defaults.maxsize }}"
+      create_mode: "{{ logrotate_global_defaults.create_mode }}"
+      create_owner: "nginx"
+      create_group: "nginx"
+      su_user: "{{ logrotate_global_defaults.su_user }}"
+      su_group: "{{ logrotate_global_defaults.su_group }}"
+      postrotate: |
+        /bin/systemctl restart nginx-app-protect.service > /dev/null 2>/dev/null || true
+  - name: "nginx"
+    paths:
+      - "/var/log/nginx/*.log"
+    options:
+      rotate: "14"
+      maxsize: "{{ logrotate_global_defaults.maxsize }}"
+      create_mode: "{{ logrotate_global_defaults.create_mode }}"
+      create_owner: "nginx"
+      create_group: "adm"
+      su_user: "{{ logrotate_global_defaults.su_user }}"
+      su_group: "{{ logrotate_global_defaults.su_group }}"
+      postrotate: |
+        if [ -f /var/run/nginx.pid ]; then
+                kill -USR1 `cat /var/run/nginx.pid`
+        fi
+
 # configure datadog log collection
 datadog_api_key: "{{ vault_datadog_key }}"
 datadog_config:
