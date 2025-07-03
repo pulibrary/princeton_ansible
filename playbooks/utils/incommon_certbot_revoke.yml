@@ -1,8 +1,9 @@
 ---
-# you MUST run this playbook on a single host with '--limit' for example `ansible-playbook -v -e domain_name=orcid-prod --limit adc-prod2.princeton.edu playbooks/incommon_certbot_revoke.yml`
-# This playbook will need to be run on both load balancers sequentially
+# you MUST run this playbook on a single host with '--limit' for example `ansible-playbook -e domain_name=orcid-staging --limit adc-dev2.princeton.edu playbooks/utils/incommon_certbot_revoke.yml`
+# to run in production, you must add '-e runtime_env=production'
+# Run the playbook on both load balancers (both dev or both prod) sequentially
 - name: revoke incommon acme for {{ domain_name }}
-  hosts: nginxplus_production # default to staging when we get a staging environment going
+  hosts: nginxplus_{{ runtime_env | default('staging') }}
   remote_user: pulsys
   become: true
   vars_files:
