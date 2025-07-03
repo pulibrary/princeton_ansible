@@ -1,0 +1,41 @@
+---
+# you MUST run this playbook on a host or group with '--limit' for example `ansible-playbook -v ---limit cdh playbooks/utils/tigerdata_nfs_mount.yml`
+#
+- name: Ensure Tigerdata NFS share is mounted
+  hosts: all
+  # hosts: staging:qa:production
+  remote_user: pulsys
+  become: true
+  vars:
+    running_on_server: true
+    nfs_share: "td-mf-cl2.princeton.edu:/cdh"
+    mount_point: "/mnt/tigerdata/cdh"
+    nfs_opts: "nfsvers=3,mountport=9007,port=9007,nolock,proto=tcp"
+
+  pre_tasks:
+    - name: stop playbook if you didn't pass --limit
+      fail:
+        msg: "you must use -l or --limit"
+      when: ansible_limit is not defined
+      run_once: true
+
+  tasks:
+    - name: Check whether {{ mount_point }} is already a mountpoint
+      ansible.builtin.command:
+        cmd: "mountpoint -q {{ mount_point }}"
+      register: mount_check
+      ignore_errors: true
+
+    - name: Remount NFS share if it is not mounted
+      ansible.builtin.mount:
+        path: "{{ mount_point }}"
+        src: "{{ nfs_share }}"
+        fstype: nfs
+        opts: "{{ nfs_opts }}"
+        state: mounted
+      when: mount_check.rc != 0
+
+    - name: Report that the NFS share was already mounted
+      ansible.builtin.debug:
+        msg: "{{ nfs_share }} is already mounted on {{ mount_point }}."
+      when: mount_check.rc == 0
