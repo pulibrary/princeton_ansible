@@ -199,10 +199,9 @@ Every client and server VM in the cluster has Consul installed. Some tokens are 
 
 We don't currently have any special nomad tokens, just the management token. We create that token when we [bootstrap](https://developer.hashicorp.com/nomad/tutorials/access-control/access-control-bootstrap) Nomad's ACL system in [nomad/server.yml](tasks/nomad/server.yml)
 
-# Generating Variables
+# Refreshing the Gossip Encryption Key
 
-Some variables need to be generated and stored in the vault. To generate new
-ones for consul (`consul_gossip_encryption_key`) you can run:
+To refresh the gossip encryption key for consul (`consul_gossip_encryption_key`), generate a new key and save it to the vault. To generate the key, run:
 
 `docker run --rm hashicorp/consul keygen`
 
