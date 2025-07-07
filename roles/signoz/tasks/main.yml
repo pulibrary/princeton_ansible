@@ -1,0 +1,337 @@
+---
+# tasks file for roles/signoz
+- name: SigNoz | Add ClickHouse GPG key
+  ansible.builtin.apt_key:
+    url: "{{ clickhouse_repo_key_url }}"
+    keyring: /usr/share/keyrings/clickhouse-keyring.gpg
+    state: present
+
+- name: SigNoz | Add ClickHouse repository
+  ansible.builtin.apt_repository:
+    repo: "{{ clickhouse_repo }}"
+    filename: clickhouse.list
+    state: present
+    update_cache: true
+
+- block:
+    - name: SigNoz | Install Java for Zookeeper
+      ansible.builtin.apt:
+        name: default-jdk
+        state: present
+  # newer version of zookeeper needed
+    - name: SigNoz | Create Zookeeper directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+      loop:
+        - /opt/zookeeper
+        - /var/lib/zookeeper
+        - /var/log/zookeeper
+
+    - name: Signoz | Download Zookeeper tarball
+      ansible.builtin.get_url:
+        url: "https://dlcdn.apache.org/zookeeper/zookeeper-{{ zookeeper_version }}/apache-zookeeper-{{ zookeeper_version }}-bin.tar.gz"
+        dest: "/tmp/zookeeper-{{ zookeeper_version }}.tar.gz"
+        mode: '0644'
+        checksum: ""
+
+    - name: SigNoz | Extract Zookeeper
+      ansible.builtin.unarchive:
+        src: "/tmp/zookeeper-{{ zookeeper_version }}.tar.gz"
+        dest: /opt/zookeeper
+        remote_src: true
+        extra_opts: ['--strip-components=1']
+
+    - name: SigNoz | Configure zoo.cfg
+      ansible.builtin.template:
+        src: zoo.cfg.j2
+        dest: /opt/zookeeper/conf/zoo.cfg
+        owner: root
+        group: root
+        mode: '0644'
+      notify: Restart Zookeeper
+
+    - name: SigNoz | Configure zoo.env
+      ansible.builtin.template:
+        src: zoo.env.j2
+        dest: /opt/zookeeper/conf/zoo.env
+        owner: root
+        group: root
+        mode: '0644'
+      notify: Restart Zookeeper
+
+    - name: SigNoz | Ensure zookeeper user exists
+      ansible.builtin.user:
+        name: zookeeper
+        system: true
+        home: /opt/zookeeper
+        shell: /sbin/nologin
+
+    - name: SigNoz  | Fix ownership of Zookeeper directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        owner: zookeeper
+        group: zookeeper
+        recurse: true
+      loop:
+        - /opt/zookeeper
+        - /var/lib/zookeeper
+        - /var/log/zookeeper
+
+    - name: SigNoz | Deploy Zookeeper systemd unit
+      ansible.builtin.template:
+        src: zookeeper.service.j2
+        dest: /etc/systemd/system/zookeeper.service
+        owner: root
+        group: root
+        mode: '0644'
+      notify:
+        - Reload systemd
+        - Restart Zookeeper
+
+    - name: SigNoz | Start and enable Zookeeper
+      ansible.builtin.systemd:
+        name: zookeeper
+        state: started
+        enabled: true
+
+  tags: zookeeper
+
+- name: SigNoz | Wait for Zookeeper to be ready
+  ansible.builtin.wait_for:
+    host: 127.0.0.1
+    port: 2181
+    state: started
+    timeout: 60
+
+- block:
+    - name: SigNoz | Install ClickHouse packages
+      ansible.builtin.apt:
+        name:
+          - clickhouse-server
+          - clickhouse-client
+        state: present
+        update_cache: true
+
+    - name: SigNoz | Create ClickHouse config directory
+      ansible.builtin.file:
+        path: /etc/clickhouse-server/config.d
+        state: directory
+        owner: clickhouse
+        group: clickhouse
+        mode: '0755'
+
+    - name: SigNoz | Deploy ClickHouse cluster configuration
+      ansible.builtin.template:
+        src: cluster.xml.j2
+        dest: /etc/clickhouse-server/config.d/cluster.xml
+        owner: clickhouse
+        group: clickhouse
+        mode: '0644'
+      notify: Restart ClickHouse
+
+    - name: SigNoz | Start and enable ClickHouse
+      ansible.builtin.systemd:
+        name: clickhouse-server
+        state: started
+        enabled: true
+
+    - name: SigNoz | Wait for ClickHouse to be ready
+      ansible.builtin.wait_for:
+        host: 127.0.0.1
+        port: 9000
+        state: started
+        timeout: 60
+
+  tags: clickhouse
+
+- block:
+    - name: SigNoz | Download SigNoz Schema Migrator
+      ansible.builtin.get_url:
+        url: "https://github.com/SigNoz/signoz-otel-collector/releases/{{ signoz_version }}/download/signoz-schema-migrator_linux_{{ ansible_architecture | replace('x86_64','amd64') | replace('aarch64','arm64') }}.tar.gz"
+        dest: /tmp/signoz-schema-migrator.tar.gz
+        mode: '0644'
+
+    - name: SigNoz | Create SigNoz Schema Migrator directory
+      file:
+        path: /opt/signoz-schema-migrator
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: SigNoz | Extract SigNoz Schema Migrator
+      ansible.builtin.unarchive:
+        src: /tmp/signoz-schema-migrator.tar.gz
+        dest: /opt/signoz-schema-migrator
+        remote_src: true
+        extra_opts: ['--strip-components=1']
+
+    - name: SigNoz | Run schema migrator (sync)
+      ansible.builtin.command:
+        cmd: "/opt/signoz-schema-migrator/bin/signoz-schema-migrator sync --dsn=\"{{ clickhouse_dsn }}\" --replication=true --up="
+      changed_when: false
+
+    - name: SigNoz | Run schema migrator (async)
+      ansible.builtin.command:
+        cmd: "/opt/signoz-schema-migrator/bin/signoz-schema-migrator async --dsn=\"{{ clickhouse_dsn }}\" --replication=true --up="
+      changed_when: false
+
+  tags: migrator
+
+- block:
+    - name: SigNoz | Download SigNoz
+      ansible.builtin.get_url:
+        url: "https://github.com/SigNoz/signoz/releases/{{ signoz_version }}/download/signoz_linux_{{ ansible_architecture | replace('x86_64','amd64') | replace('aarch64','arm64') }}.tar.gz"
+        dest: /tmp/signoz.tar.gz
+        mode: '0644'
+
+    - name: SigNoz | Ensure SigNoz user exists
+      ansible.builtin.user:
+        name: "{{ signoz_user }}"
+        system: true
+        home: "{{ signoz_install_dir }}"
+        shell: /sbin/nologin
+
+    - name: SigNoz | Fix ownership for SigNoz directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        owner: "{{ signoz_user }}"
+        group: "{{ signoz_user }}"
+        recurse: true
+      loop:
+        - "{{ signoz_install_dir }}"
+        - "{{ signoz_data_dir }}"
+
+    - name: SigNoz | Create SigNoz install directory
+      ansible.builtin.file:
+        path: "{{ signoz_install_dir }}"
+        state: directory
+        owner: "{{ signoz_user }}"
+        group: "{{ signoz_user }}"
+        mode: '0755'
+
+    - name: SigNoz | Extract SigNoz
+      ansible.builtin.unarchive:
+        src: /tmp/signoz.tar.gz
+        dest: "{{ signoz_install_dir }}"
+        remote_src: true
+        extra_opts: ['--strip-components=1']
+
+    - name: SigNoz | Create SigNoz data directory
+      ansible.builtin.file:
+        path: "{{ signoz_data_dir }}"
+        state: directory
+        owner: "{{ signoz_user }}"
+        group: "{{ signoz_user }}"
+        mode: '0755'
+
+
+    - name: SigNoz | Deploy SigNoz environment file
+      ansible.builtin.template:
+        src: systemd.env.j2
+        dest: "{{ signoz_install_dir }}/conf/systemd.env"
+        owner: root
+        group: root
+        mode: '0644'
+      notify: Restart SigNoz
+
+    - name: SigNoz | Deploy SigNoz systemd unit
+      ansible.builtin.template:
+        src: signoz.service.j2
+        dest: /etc/systemd/system/signoz.service
+        owner: root
+        group: root
+        mode: '0644'
+      notify:
+        - Reload systemd
+        - Restart SigNoz
+
+    - name: SigNoz | Start and enable SigNoz
+      ansible.builtin.systemd:
+        name: signoz
+        state: started
+        enabled: true
+
+  tags: signoz
+
+- block:
+    - name: SigNoz | Download SigNoz OTel Collector
+      ansible.builtin.get_url:
+        url: "https://github.com/SigNoz/signoz-otel-collector/releases/{{ signoz_otel_collector_version }}/download/signoz-otel-collector_linux_{{ ansible_architecture | replace('x86_64','amd64') | replace('aarch64','arm64') }}.tar.gz"
+        dest: /tmp/signoz-otel-collector.tar.gz
+        mode: '0644'
+
+    - name: SigNoz | Create SigNoz OTel Collector install directory
+      ansible.builtin.file:
+        path: /opt/signoz-otel-collector
+        state: directory
+        owner: "{{ signoz_user }}"
+        group: "{{ signoz_user }}"
+        mode: '0755'
+
+    - name: SigNoz | Extract OTel Collector
+      ansible.builtin.unarchive:
+        src: /tmp/signoz-otel-collector.tar.gz
+        dest: /opt/signoz-otel-collector
+        remote_src: true
+        extra_opts: ['--strip-components=1']
+
+    - name: SigNoz | Create OTel Collector data directory
+      ansible.builtin.file:
+        path: /var/lib/signoz-otel-collector
+        state: directory
+        owner: "{{ signoz_user }}"
+        group: "{{ signoz_user }}"
+        mode: '0755'
+
+    - name: SigNoz | Fix ownership for OTel Collector
+      ansible.builtin.file:
+        path: /opt/signoz-otel-collector
+        owner: "{{ signoz_user }}"
+        group: "{{ signoz_user }}"
+        recurse: true
+
+    - name: SigNoz | Deploy OTel Collector config
+      ansible.builtin.template:
+        src: collector-config.yaml.j2
+        dest: /opt/signoz-otel-collector/conf/config.yaml
+        owner: root
+        group: root
+        mode: '0644'
+      notify: Restart SigNoz OTel Collector
+
+  #    - name: SigNoz | Deploy OTel Collector opamp config
+  #      ansible.builtin.template:
+  #        src: collector-opamp.yaml.j2
+  #        dest: /opt/signoz-otel-collector/conf/opamp.yaml
+  #        owner: root
+  #        group: root
+  #        mode: '0644'
+    #      notify: Restart SigNoz OTel Collector
+    - name: Remove OpAMP config (we use static config only)
+      ansible.builtin.file:
+        path: /opt/signoz-otel-collector/conf/opamp.yaml
+        state: absent
+
+    - name: SigNoz | Deploy OTel Collector systemd unit
+      ansible.builtin.template:
+        src: signoz-otel-collector.service.j2
+        dest: /etc/systemd/system/signoz-otel-collector.service
+        owner: root
+        group: root
+        mode: '0644'
+      notify:
+        - Reload systemd
+        - Restart SigNoz OTel Collector
+
+    - name: SigNoz | Start and enable SigNoz OTel Collector
+      ansible.builtin.systemd:
+        name: signoz-otel-collector
+        state: started
+        enabled: true
+
+  tags: otel
