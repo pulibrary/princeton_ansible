@@ -97,13 +97,13 @@ We don't run Consul on port 53 because while it can forward DNS requests to
 other Princeton's DNS it  overrides their TTL to be 0, which will quickly overwhelm
 Princeton's DNS server.
 
-#### Configuration
+#### Configuring DNSMasq
 
 DNSMasq's main config file is at `/etc/dnsmasq.conf` which we create from [`files/dnsmasq/dnsmasq.conf`](files/dnsmasq/dnsmasq.conf). The main thing we do there is comment out `bind-interfaces` [#5485](https://github.com/pulibrary/princeton_ansible/pull/5485).
 
 There's a second config file at `/etc/dnsmasq.d/dnsmasq-10-consul` which we create from [`templates/dnsmasq/dnsmasq-10-consul.j2`](templates/dnsmasq/dnsmasq-10-consul.j2). It configures Princeton's DNS servers and the fallback to Consul for `.consul` DNS requests.
 
-#### Debugging
+#### Debugging DNSMasq
 
 To test if DNSMasq is working on a client, run `dig @127.0.0.1 -p 8600 consul.service.consul ANY` and compare it to the results of `dig consul.service.consul ANY`. If they have the same answers, DNSMasq is working.
 
@@ -120,7 +120,7 @@ client goes down it will launch the container on a different client.
 We install Podman on our Nomad client VMs so they can run containers without us
 having to rely on Docker.
 
-### Server Types
+### VM Types
 
 Nomad has "server" and "client" installations and configurations.
 
@@ -155,9 +155,9 @@ service in Consul that we can point to from our load balancers.)
 
 ### Host Volumes
 
-Host volumes are a way for containers to save data to the underlying client. It's a folder on the client which the container maps - if a job requires a certain host volume it will only ever get scheduled on a node which has that volume. Most containers have no need for persistent data on disk - they store that data in a database or something similar, but if we run a database or something like that in Nomad it might need a host volume. In those cases, we must ensure high availability through some other means (e.g "cloud" mode on Solr, clusters in Postgres, HA Mode in Redis, etc.)
+Host volumes are a way for containers to save data to the underlying client VM. Most containers have no need for persistent data on disk - they store that data in a database or something similar, but if we run a database or something like that in Nomad it might need a host volume. A host volume is a folder on the client which the container maps - if a job (service) requires a certain host volume it will only ever get scheduled on a node which has that volume. In those cases, because we are tying the job (service) to a specific node, we must ensure high availability through some other means (e.g "cloud" mode on Solr, clusters in Postgres, HA Mode in Redis, etc.)
 
-Nomad has a useful [tutorial](https://developer.hashicorp.com/nomad/tutorials/stateful-workloads/stateful-workloads-host-volumes) about how they work.
+Nomad has a useful [tutorial](https://developer.hashicorp.com/nomad/tutorials/stateful-workloads/stateful-workloads-host-volumes) about how host volumes work.
 
 More recent versions of Nomad have "dynamic host volumes" which would allow us to create these on the fly, not in Ansible, but we're not upgraded enough for that. Nomad has a [tutorial](https://developer.hashicorp.com/nomad/tutorials/stateful-workloads/stateful-workloads-dynamic-host-volumes) for those.
 
@@ -165,11 +165,11 @@ More recent versions of Nomad have "dynamic host volumes" which would allow us t
 
 Containers deployed to the Nomad cluster may still need external systems provisioned and variables persisted to Nomad. For example an application may need a postgres database set up on our cluster, secrets installed into Nomad (which are currently in Ansible Vault), or other configuration done.
 
-Those things happen in [`tasks/application_configurations.yml`](tasks/application_configurations.yml).
+Those things happen in [`tasks/application_configurations.yml`](tasks/application_configurations.yml). Each application we deploy to Nomad has its own configuration tasks file included here.
 
 This pattern may change in the future. If you want to run a playbook without running these application configurations you can do: `ansible-playbook playbooks/nomad.yml --skip-tags app_config`. You may want to do that if you're just hoping to upgrade a client or server install, change the Nomad/Consul configuration, or other tasks that are about the cluster and not the applications on it.
 
-Similarly, to update a single app's configuration you can do something like `ansible-playbook playbooks/nomad.yml --tags dpulc`
+Similarly, to update a single app's configuration you can do something like `ansible-playbook playbooks/nomad.yml --tags dpulc`, because the include tasks all have tags on them.
 
 ## Permissions & ACLs
 
@@ -192,8 +192,8 @@ Every client and server VM in the cluster has Consul installed. Some tokens are 
 
 1. **DNS Token (global)**: Consul's [DNS service](https://developer.hashicorp.com/consul/docs/discover/dns) uses this token to get service information from the cluster. If this is wrong or unset, `dig @127.0.0.1 -p 8600 consul.service.consul ANY` will return no answers.
 1. **Agent Token (local)**: Consul's agent (the process run via `sudo service consul start`, uses this to communicate with the rest of the cluster and synchronize services. This uses a "[node identity](https://developer.hashicorp.com/consul/docs/secure/acl/role#node-identities)" token, which has a default policy.
-1. **Nomad Server Token (global)**: Allows Nomad's server installs to mesh, manage ACLs, and update Consul services. Every Nomad Server VM has this configured. Defined in [nomad/configure_server.yml](tasks/nomad/configure_server.yml)
-1. **Nomad Client Token (global)**: Allows Nomad's client installs to update Consul services as they're deployed into Nomad. Every Nomad Client VM install has this configured. Defined in [nomad/configure_client.yml](tasks/nomad/configure_client.yml)
+1. **Nomad Server Token (global)**: Nomad's server uses this token to talk to Consul to learn about each other's existence, manage ACLs, and update Consul services. Every Nomad Server VM has this configured. Defined in [nomad/configure_server.yml](tasks/nomad/configure_server.yml)
+1. **Nomad Client Token (global)**: Nomad's client uses this token to update Consul services as they're deployed into Nomad. Every Nomad Client VM install has this configured. Defined in [nomad/configure_client.yml](tasks/nomad/configure_client.yml)
 
 ### Nomad Tokens
 
