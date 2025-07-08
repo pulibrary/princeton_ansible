@@ -1,0 +1,22 @@
+- name: 'pul_nomad | nomad | Get nomad info'
+  block:
+    - name: 'pul_nomad | nomad | Check for existing nomad binary'
+      ansible.builtin.stat:
+        path: "/usr/local/bin/nomad"
+      register: nomad_binary_installed
+    - name: 'pul_nomad | nomad | Get current nomad version'
+      ansible.builtin.command: "/usr/local/bin/nomad version"
+      check_mode: false
+      changed_when: false
+      ignore_errors: true
+      register: nomad_installed_version_string
+      when:
+        - nomad_binary_installed.stat.exists
+    - name: 'pul_nomad | nomad | Save nomad version'
+      ansible.builtin.set_fact:
+        nomad_installed_version: "{{ (nomad_installed_version_string.stdout_lines[0].split('v')[1]) | trim }}"
+      when:
+        - nomad_binary_installed.stat.exists
+    - name: 'pul_nomad | nomad | Gather IPs of nomad_servers'
+      ansible.builtin.set_fact:
+        nomad_server_ips: "{{ groups[nomad_server_group] | map('extract', hostvars, ['ansible_default_ipv4', 'address']) }}"

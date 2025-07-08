@@ -1,0 +1,27 @@
+---
+- name: 'pul_nomad | Install deploy user'
+  ansible.builtin.include_role:
+    name: 'deploy_user'
+    public: true
+  when:
+    - "pul_nomad_role == 'server'"
+
+- name: 'pul_nomad | export NOMAD_TOKEN for deploy user'
+  ansible.builtin.lineinfile:
+    dest: "/home/deploy/.bashrc"
+    state: present
+    regexp: '^export NOMAD_TOKEN'
+    line: "export NOMAD_TOKEN={{ pul_nomad_management_token }}"
+    insertbefore: BOF
+  when:
+    - "pul_nomad_role == 'server'"
+
+- name: 'pul_nomad | export GITHUB_TOKEN for deploy user'
+  ansible.builtin.lineinfile:
+    dest: "/home/deploy/.bashrc"
+    state: present
+    regexp: '^export GITHUB_TOKEN'
+    line: "export GITHUB_TOKEN={{ tower_github_token }}"
+    insertbefore: BOF
+  when:
+    - "pul_nomad_role == 'server'"
