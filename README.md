@@ -233,6 +233,7 @@ source princeton_ansible_env.sh
 1. Enter the new vault password
 1. Run `ansible-vault edit --ask-vault-password` on one of the files you changed (providing the new password), to validate that everything is as it should be.
 1. Add the new vault password to the vault_password in lastpass.
+8. Log into [Ansible Tower](https://ansible-tower.princeton.edu/#/credentials/10/details). To replace it click `Edit` then click on the circular arrow to the left of the Vault Password, paste in the new value, and save. The value is automatically encrypted.
 
 ## Upgrading Ansible version
 
