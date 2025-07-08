@@ -146,9 +146,53 @@
         state: started
         timeout: 60
 
+    - name: SigNoz | Check if ClickHouse has password authentication
+      ansible.builtin.command:
+        cmd: clickhouse-client --query "SELECT 1"
+      register: clickhouse_no_password_test
+      failed_when: false
+      changed_when: false
+
+    - name: SigNoz | Test ClickHouse with configured password
+      ansible.builtin.command:
+        cmd: clickhouse-client --password={{ clickhouse_password | default('') }} --query "SELECT 1"
+      register: clickhouse_with_password_test
+      failed_when: false
+      changed_when: false
+      when: clickhouse_password is defined and clickhouse_password != ''
+
+    - name: SigNoz | Set ClickHouse connection facts
+      ansible.builtin.set_fact:
+        clickhouse_requires_password: "{{ clickhouse_no_password_test.rc != 0 and (clickhouse_with_password_test.rc | default(1)) == 0 }}"
+        clickhouse_no_password: "{{ clickhouse_no_password_test.rc == 0 }}"
+
+    - name: SigNoz | Create ClickHouse password file when password is required
+      ansible.builtin.template:
+        src: clickhouse-password.xml.j2
+        dest: /etc/clickhouse-server/users.d/default-password.xml
+        owner: clickhouse
+        group: clickhouse
+        mode: '0600'
+      when:
+        - clickhouse_password is defined
+        - clickhouse_password != ''
+        - clickhouse_requires_password | default(false)
+      notify: Restart ClickHouse
+
+    - name: SigNoz | Remove ClickHouse password file when no password needed
+      ansible.builtin.file:
+        path: /etc/clickhouse-server/users.d/default-password.xml
+        state: absent
+      when: clickhouse_no_password | default(false)
+      notify: Restart ClickHouse
+
   tags: clickhouse
 
 - block:
+    - name: SigNoz | Set ClickHouse DSN with dynamic password
+      ansible.builtin.set_fact:
+        clickhouse_dsn: "tcp://localhost:9000/{% if clickhouse_password is defined and clickhouse_password != '' and clickhouse_requires_password | default(false) %}?password={{ clickhouse_password }}{% endif %}"
+
     - name: SigNoz | Download SigNoz Schema Migrator
       ansible.builtin.get_url:
         url: "https://github.com/SigNoz/signoz-otel-collector/releases/{{ signoz_version }}/download/signoz-schema-migrator_linux_{{ ansible_architecture | replace('x86_64','amd64') | replace('aarch64','arm64') }}.tar.gz"
@@ -156,7 +200,7 @@
         mode: '0644'
 
     - name: SigNoz | Create SigNoz Schema Migrator directory
-      file:
+      ansible.builtin.file:
         path: /opt/signoz-schema-migrator
         state: directory
         owner: root
@@ -196,19 +240,17 @@
         home: "{{ signoz_install_dir }}"
         shell: /sbin/nologin
 
-    - name: SigNoz | Fix ownership for SigNoz directories
-      ansible.builtin.file:
-        path: "{{ item }}"
-        owner: "{{ signoz_user }}"
-        group: "{{ signoz_user }}"
-        recurse: true
-      loop:
-        - "{{ signoz_install_dir }}"
-        - "{{ signoz_data_dir }}"
-
     - name: SigNoz | Create SigNoz install directory
       ansible.builtin.file:
         path: "{{ signoz_install_dir }}"
+        state: directory
+        owner: "{{ signoz_user }}"
+        group: "{{ signoz_user }}"
+        mode: '0755'
+
+    - name: SigNoz | Create SigNoz data directory
+      ansible.builtin.file:
+        path: "{{ signoz_data_dir }}"
         state: directory
         owner: "{{ signoz_user }}"
         group: "{{ signoz_user }}"
@@ -220,15 +262,18 @@
         dest: "{{ signoz_install_dir }}"
         remote_src: true
         extra_opts: ['--strip-components=1']
-
-    - name: SigNoz | Create SigNoz data directory
-      ansible.builtin.file:
-        path: "{{ signoz_data_dir }}"
-        state: directory
         owner: "{{ signoz_user }}"
         group: "{{ signoz_user }}"
-        mode: '0755'
 
+    - name: SigNoz | Fix ownership for SigNoz directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        owner: "{{ signoz_user }}"
+        group: "{{ signoz_user }}"
+        recurse: true
+      loop:
+        - "{{ signoz_install_dir }}"
+        - "{{ signoz_data_dir }}"
 
     - name: SigNoz | Deploy SigNoz environment file
       ansible.builtin.template:
@@ -295,6 +340,21 @@
         group: "{{ signoz_user }}"
         recurse: true
 
+    - name: SigNoz | Wait for ClickHouse to be accessible
+      ansible.builtin.wait_for:
+        host: 127.0.0.1
+        port: 9000
+        state: started
+        timeout: 60
+
+    - name: SigNoz | Verify ClickHouse connection before starting collector
+      ansible.builtin.command:
+        cmd: clickhouse-client --query "SELECT 1"
+      retries: 3
+      delay: 5
+      register: clickhouse_verify
+      until: clickhouse_verify.rc == 0
+
     - name: SigNoz | Deploy OTel Collector config
       ansible.builtin.template:
         src: collector-config.yaml.j2
@@ -304,15 +364,7 @@
         mode: '0644'
       notify: Restart SigNoz OTel Collector
 
-  #    - name: SigNoz | Deploy OTel Collector opamp config
-  #      ansible.builtin.template:
-  #        src: collector-opamp.yaml.j2
-  #        dest: /opt/signoz-otel-collector/conf/opamp.yaml
-  #        owner: root
-  #        group: root
-  #        mode: '0644'
-    #      notify: Restart SigNoz OTel Collector
-    - name: Remove OpAMP config (we use static config only)
+    - name: SigNoz | Remove OpAMP config (we use static config only)
       ansible.builtin.file:
         path: /opt/signoz-otel-collector/conf/opamp.yaml
         state: absent
