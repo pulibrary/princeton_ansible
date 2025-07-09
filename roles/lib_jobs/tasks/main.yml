@@ -17,6 +17,19 @@
     group: '{{ deploy_user }}'
     mode: 0755
 
+- name: lib_jobs | rotate the logs for the cron job
+  ansible.builtin.template:
+    src: '../../common/templates/logrotate_rules.j2'
+    dest: "/etc/logrotate.d/{{ item.name }}"
+    mode: "0644"
+    owner: deploy
+    group: deploy
+  loop: "{{ logrotate_rules }}"
+  when: 
+    - running_on_server
+    - logrotate_rules is defined
+    - logrotate_rules | length > 0
+
 # SVN
 - name: Install subversion client
   ansible.builtin.apt:
