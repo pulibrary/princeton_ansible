@@ -103,6 +103,23 @@
         - ansible_os_family == "Debian"
         - reboot_required_file.stat.exists == true
 
+    - name: OpenBSD | Perform sysupgrade and reboot
+      block:
+        - name: OpenBSD | sysupgrade to latest snapshot
+          ansible.builtin.command: doas /usr/sbin/sysupgrade -s
+          # sysupgrade will reboot the host when it's done
+          async: 0
+          poll: 0
+
+        - name: OpenBSD | wait for SSH to come back (up to 10m)
+          ansible.builtin.wait_for_connection:
+            timeout: 600
+            delay: 10
+
+        - name: OpenBSD | update installed packages from snapshot
+          ansible.builtin.command: doas /usr/sbin/pkg_add -vuiD'snap'
+      when: ansible_os_family == "OpenBSD"
+
     - name: tell everyone on slack you ran an ansible playbook
       community.general.slack:
         token: "{{ vault_pul_slack_token }}"
