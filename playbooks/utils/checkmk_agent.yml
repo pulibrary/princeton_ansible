@@ -1,11 +1,16 @@
 ---
-# To run the playbook:
-# ansible-playbook playbooks/utils/checkmk_agent.yml --limit=<machine/group> -e checkmk_folder=linux/rdss
-# folder names must be all lower case and should not begin with a slash
-# by default this playbook runs against inventory from the staging groups
-# to run against production groups, pass '-e runtime_env=production'
-# you must also pass the name of the checkmk site you want
-# as '-e checkmk_sevice=aws' or '-e checkmk_service=production'
+# To run the playbook locally:
+# you must have the checkmk.general collection installed in your pipenv
+# to install it: 'ansible-galaxy install checkmk.general'
+# you must limit the playbook to a group or host
+# you must pass at least two variables: checkmk_folder and checkmk_service
+# Here is an example command:
+# ansible-playbook playbooks/utils/checkmk_agent.yml --limit=orcid-staging -e checkmk_folder=linux/rdss -e checkmk_service=staging
+# checkmk folder names must be all lower case and should not begin with a slash
+# checkmk site names are: 'production', 'staging', 'aws', and 'gce'
+#
+# by default this playbook runs against inventory from the staging environment
+# to run against a production group or host, pass '-e runtime_env=production'
 - name: Install CheckMk agent on host
   hosts: "{{ runtime_env | default ('staging') }}"
   remote_user: pulsys
@@ -23,6 +28,11 @@
     checkmk_agent_host_ip: "{{ hostvars[inventory_hostname]['ansible_default_ipv4']['address'] }}"
 
   pre_tasks:
+    - name: stop playbook if you didn't use --limit
+      ansible.builtin.fail:
+        msg: "you must use -l or --limit"
+      when: ansible_limit is not defined
+
     - name: Set stripped agent hostname (only content before the first .) as fact
       ansible.builtin.set_fact:
         checkmk_agent_host_name: "{{ inventory_hostname | regex_search('^[^.]*') }}"
