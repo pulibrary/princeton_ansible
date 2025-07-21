@@ -17,12 +17,6 @@
         name: chrony
         state: present
 
-    - name: Enable and start Chronyd service is enabled and started
-      ansible.builtin.service:
-        name: chronyd
-        state: started
-        enabled: true
-
     - name: Configure Chronyd with chrony.conf file
       ansible.builtin.copy:
         src: chrony.conf
@@ -32,6 +26,12 @@
         mode: '0644'
         backup: true
       notify: restart chronyd
+
+    - name: Ensure Chronyd service is enabled and started
+      ansible.builtin.service:
+        name: chronyd
+        state: started
+        enabled: true
 
     - name: Verify Chronyd sources
       ansible.builtin.command: chronyc sources -v
