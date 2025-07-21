@@ -1,16 +1,18 @@
 ---
+    - name: Populate service facts
+      ansible.builtin.service_facts:
+
     - name: Stop and disable NTP service (if installed)
       ansible.builtin.service:
         name: ntp
         state: stopped
         enabled: false
-      ignore_errors: true
+      when: "'ntp' in ansible_facts.services"
 
     - name: Uninstall NTP package
       ansible.builtin.package:
         name: ntp
         state: absent
-      ignore_errors: true
 
     - name: Install Chronyd package
       ansible.builtin.package:
