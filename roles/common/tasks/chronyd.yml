@@ -1,0 +1,44 @@
+---
+    - name: Stop and disable NTP service (if running)
+      ansible.builtin.service:
+        name: ntpd
+        state: stopped
+        enabled: false
+      ignore_errors: true
+
+    - name: Uninstall NTP package
+      ansible.builtin.package:
+        name: ntp
+        state: absent
+      ignore_errors: true
+
+    - name: Install Chronyd package
+      ansible.builtin.package:
+        name: chrony
+        state: present
+
+    - name: Enable and start Chronyd service is enabled and started
+      ansible.builtin.service:
+        name: chronyd
+        state: started
+        enabled: true
+
+    - name: Configure Chronyd with chrony.conf file
+      ansible.builtin.copy:
+        src: chrony.conf
+        path: /etc/chrony/chrony.conf
+        owner: root
+        group: root
+        mode: '0644'
+        backup: true
+      notify: restart chronyd
+
+    - name: Verify Chronyd sources
+      ansible.builtin.command: chronyc sources -v
+      register: chrony_sources
+      changed_when: false
+      failed_when: "'System clock wrong' in chrony_sources.stderr"
+
+    - name: Display Chronyd sources
+      ansible.builtin.debug:
+        var: chrony_sources.stdout_lines
