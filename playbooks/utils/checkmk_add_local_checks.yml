@@ -34,12 +34,22 @@
           checkmk_agent_host_name: "{{ inventory_hostname | regex_search('^[^.]*') }}"
 
   tasks:
-    - name: write hostname using jinja2
+    # 1) write all local checks except the nginxplus syntax test
+    - name: write Check_MK local check scripts (all except nginxplus)
       ansible.builtin.template:
         src: "../../group_vars/checkmk/local_check_templates/{{ item.template }}"
         dest: "/usr/lib/check_mk_agent/local/{{ item.dest }}"
         mode: "+x"
-      with_items: "{{ checkmk_local_scripts }}"
+      loop: "{{ checkmk_local_scripts }}"
+      when: item.template != 'nginxplus_config_syntax.j2'
+
+    # 2) write the nginxplus syntax test _only_ on adc-* hosts
+    - name: write nginxplus config-syntax check
+      ansible.builtin.template:
+        src: "../../group_vars/checkmk/local_check_templates/nginxplus_config_syntax.j2"
+        dest: "/usr/lib/check_mk_agent/local/nginxplus_config_syntax.sh"
+        mode: "+x"
+      when: inventory_hostname is match('^adc-')
 
     - name: "Add new local services on hosts."
       checkmk.general.discovery:
