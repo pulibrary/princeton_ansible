@@ -19,7 +19,7 @@
         name: chrony
         state: present
 
-    - name: Configure Chronyd with chrony.conf file
+    - name: Configure Ubuntu Chronyd in /etc/chrony/chrony.conf
       ansible.builtin.copy:
         src: chrony.conf
         dest: /etc/chrony/chrony.conf
@@ -28,18 +28,44 @@
         mode: '0644'
         backup: true
       notify: restart chronyd
+      when:
+        - ansible_os_family == "Debian"
 
-    - name: Ensure duplicate chronyd.conf file is gone
+    - name: Configure Rocky Chronyd in /etc/chrony.conf
+      ansible.builtin.copy:
+        src: chrony.conf
+        dest: /etc/chrony.conf
+        owner: root
+        group: root
+        mode: '0644'
+        backup: true
+      notify: restart chronyd
+      when:
+        - ansible_os_family == "RedHat"
+
+    - name: Ubuntu - ensure duplicate chronyd.conf file is gone
       ansible.builtin.file:
         path: /etc/chrony.conf
         state: absent
       notify: restart chronyd
+      when:
+        - ansible_os_family == "Debian"
 
     - name: Ensure Chronyd service is enabled and started
       ansible.builtin.service:
         name: chrony
         state: started
         enabled: true
+      when:
+        - ansible_os_family == "Debian"
+
+    - name: Ensure Chronyd service is enabled and started
+      ansible.builtin.service:
+        name: chronyd
+        state: started
+        enabled: true
+      when:
+        - ansible_os_family == "RedHat"
 
     - name: Verify Chronyd sources
       ansible.builtin.command: chronyc sources -v
