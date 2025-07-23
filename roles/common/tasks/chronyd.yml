@@ -46,6 +46,15 @@
       when:
         - ansible_os_family == "Debian"
 
+    - name: Add sources.d file pointing at pool.ntp.org (Ubuntu)
+      blockinfile:
+        path: /etc/chrony/sources.d/ntp-server.sources
+        block: |
+          pool pool.ntp.org iburst
+        marker: "# {mark} ANSIBLE MANAGED CHRONY CONFIG"
+      notify: restart_chronyd
+      when: ansible_os_family == "Debian"
+
     - name: Ensure Chronyd service is enabled and started
       ansible.builtin.service:
         name: "{{ chrony_service_name }}"
