@@ -1,49 +1,42 @@
 ---
-    - name: Populate service facts
+    - name: Common - chrony - populate service facts
       ansible.builtin.service_facts:
 
-    - name: Stop and disable NTP service (if installed)
-      ansible.builtin.service:
-        name: ntp
-        state: stopped
-        enabled: false
-      when: "'ntp' in ansible_facts.services"
+    - name: Common - set chrony facts Debian
+      ansible.builtin.set_fact:
+        chrony_service_name: chrony
+        chrony_config_path: /etc/chrony
+      when:
+        - ansible_os_family == "Debian"
+
+    - name: Common - set chrony facts RedHat
+      ansible.builtin.set_fact:
+        chrony_service_name: chronyd
+        chrony_config_path: /etc
+      when:
+        - ansible_os_family == "RedHat"
 
     - name: Uninstall NTP package
       ansible.builtin.package:
         name: ntp
         state: absent
 
-    - name: Install Chronyd package
+    - name: Install Chrony package
       ansible.builtin.package:
         name: chrony
         state: present
 
-    - name: Configure Ubuntu Chronyd in /etc/chrony/chrony.conf
+    - name: Configure chronyd in chrony.conf
       ansible.builtin.copy:
         src: chrony.conf
-        dest: /etc/chrony/chrony.conf
+        dest: "{{ chrony_config_path }}/chrony.conf"
         owner: root
         group: root
         mode: '0644'
         backup: true
       notify: restart chronyd
-      when:
-        - ansible_os_family == "Debian"
 
-    - name: Configure Rocky Chronyd in /etc/chrony.conf
-      ansible.builtin.copy:
-        src: chrony.conf
-        dest: /etc/chrony.conf
-        owner: root
-        group: root
-        mode: '0644'
-        backup: true
-      notify: restart chronyd
-      when:
-        - ansible_os_family == "RedHat"
-
-    - name: Ubuntu - ensure duplicate chronyd.conf file is gone
+    - name: Ubuntu - ensure duplicate chrony.conf file is gone
       ansible.builtin.file:
         path: /etc/chrony.conf
         state: absent
@@ -53,19 +46,9 @@
 
     - name: Ensure Chronyd service is enabled and started
       ansible.builtin.service:
-        name: chrony
+        name: "{{ chrony_service_name }}"
         state: started
         enabled: true
-      when:
-        - ansible_os_family == "Debian"
-
-    - name: Ensure Chronyd service is enabled and started
-      ansible.builtin.service:
-        name: chronyd
-        state: started
-        enabled: true
-      when:
-        - ansible_os_family == "RedHat"
 
     - name: Verify Chronyd sources
       ansible.builtin.command: chronyc sources -v
