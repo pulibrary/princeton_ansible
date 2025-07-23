@@ -75,7 +75,7 @@
     owner: root
     group: root
   loop: "{{ logrotate_rules }}"
-  when: 
+  when:
     - logrotate_rules is defined
     - logrotate_rules | length > 0
   notify:
@@ -130,10 +130,6 @@
     - running_on_server
     - dua_version_result.stdout is defined and dua_version_result.rc == 0
 
-- name: Common | install vector, but not in testing
-  ansible.builtin.include_tasks: vector.yml
-  when: running_on_server
-
 - name: Common | install logrotate check
   ansible.builtin.copy:
     src: logrotatecheck.sh
@@ -142,3 +138,11 @@
     owner: root
     group: root
   when: running_on_server
+
+- name: Common | install vector, but not in testing
+  ansible.builtin.include_tasks: vector.yml
+  when: running_on_server
+
+- name: Common | install and update chronyd
+  ansible.builtin.include_tasks: chronyd.yml
+  # when: running_on_server
