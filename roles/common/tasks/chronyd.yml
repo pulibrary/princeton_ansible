@@ -6,6 +6,7 @@
       ansible.builtin.set_fact:
         chrony_service_name: chrony
         chrony_config_path: /etc/chrony
+        chrony_keyfile: /etc/chrony/chrony.keys
       when:
         - ansible_os_family == "Debian"
 
@@ -13,6 +14,7 @@
       ansible.builtin.set_fact:
         chrony_service_name: chronyd
         chrony_config_path: /etc
+        chrony_keyfile: /etc/chrony.keys
       when:
         - ansible_os_family == "RedHat"
 
@@ -27,20 +29,20 @@
         state: present
 
     - name: Configure chronyd in chrony.conf
-      ansible.builtin.copy:
+      ansible.builtin.template:
         src: chrony.conf
         dest: "{{ chrony_config_path }}/chrony.conf"
         owner: root
         group: root
         mode: '0644'
         backup: true
-      notify: restart chronyd
+      notify: restart chrony
 
     - name: Ubuntu - ensure duplicate chrony.conf file is gone
       ansible.builtin.file:
         path: /etc/chrony.conf
         state: absent
-      notify: restart chronyd
+      notify: restart chrony
       when:
         - ansible_os_family == "Debian"
 
