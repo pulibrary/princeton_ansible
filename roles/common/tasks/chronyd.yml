@@ -1,71 +1,85 @@
 ---
-    - name: Common - chrony - populate service facts
-      ansible.builtin.service_facts:
+- name: Common - chrony - populate service facts
+  ansible.builtin.service_facts:
 
-    - name: Common - set chrony facts Debian
-      ansible.builtin.set_fact:
-        chrony_service_name: chrony
-        chrony_config_path: /etc/chrony
-        chrony_keyfile: /etc/chrony/chrony.keys
-      when:
-        - ansible_os_family == "Debian"
+- name: Common - set chrony facts Debian
+  ansible.builtin.set_fact:
+    chrony_service_name: chrony
+    chrony_config_path: /etc/chrony
+    chrony_keyfile: /etc/chrony/chrony.keys
+  when:
+    - ansible_os_family == "Debian"
 
-    - name: Common - set chrony facts RedHat
-      ansible.builtin.set_fact:
-        chrony_service_name: chronyd
-        chrony_config_path: /etc
-        chrony_keyfile: /etc/chrony.keys
-      when:
-        - ansible_os_family == "RedHat"
+- name: Common - set chrony facts RedHat
+  ansible.builtin.set_fact:
+    chrony_service_name: chronyd
+    chrony_config_path: /etc
+    chrony_keyfile: /etc/chrony.keys
+  when:
+    - ansible_os_family == "RedHat"
 
-    - name: Uninstall NTP package
-      ansible.builtin.package:
-        name: ntp
-        state: absent
+- name: Common - Uninstall NTP package
+  ansible.builtin.package:
+    name: ntp
+    state: absent
 
-    - name: Install Chrony package
-      ansible.builtin.package:
-        name: chrony
-        state: present
+- name: Common - Install Chrony package
+  ansible.builtin.package:
+    name: chrony
+    state: present
 
-    - name: Configure chronyd in chrony.conf
-      ansible.builtin.template:
-        src: chrony.conf
-        dest: "{{ chrony_config_path }}/chrony.conf"
-        owner: root
-        group: root
-        mode: '0644'
-        backup: true
-      notify: restart chrony
+- name: Common - ensure chrony sources.d directory exists
+  ansible.builtin.file:
+    path: "{{ chrony_config_path }}/sources.d"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  when:
+    - ansible_os_family == "Debian"
 
-    - name: Ubuntu - ensure duplicate chrony.conf file is gone
-      ansible.builtin.file:
-        path: /etc/chrony.conf
-        state: absent
-      notify: restart chrony
-      when:
-        - ansible_os_family == "Debian"
+- name: Common - configure chronyd in chrony.conf
+  ansible.builtin.template:
+    src: chrony.conf
+    dest: "{{ chrony_config_path }}/chrony.conf"
+    owner: root
+    group: root
+    mode: '0644'
+    backup: true
+  notify: restart chrony
 
-    - name: Add sources.d file pointing at pool.ntp.org (Ubuntu)
-      blockinfile:
-        path: /etc/chrony/sources.d/ntp-server.sources
-        block: |
-          pool pool.ntp.org iburst minpoll 8 maxpoll 9
-        marker: "# {mark} ANSIBLE MANAGED CHRONY CONFIG"
-      notify: restart chrony
-      when: ansible_os_family == "Debian"
+- name: Common - ensure duplicate chrony.conf file is gone (Ubuntu)
+  ansible.builtin.file:
+    path: /etc/chrony.conf
+    state: absent
+  notify: restart chrony
+  when:
+    - ansible_os_family == "Debian"
 
-    - name: Ensure Chronyd service is enabled and started
-      ansible.builtin.service:
-        name: "{{ chrony_service_name }}"
-        state: started
-        enabled: true
+- name: Common - add pool.ntp.org to sources.d (Ubuntu)
+  ansible.builtin.blockinfile:
+    path: "{{ chrony_config_path }}/sources.d/ntp-server.sources"
+    create: true
+    block: |
+      pool pool.ntp.org iburst minpoll 8 maxpoll 9
+    marker: "# {mark} ANSIBLE MANAGED CHRONY CONFIG"
+    mode: "0755"
+  notify: restart chrony
+  when:
+    - ansible_os_family == "Debian"
 
-    - name: Verify Chronyd sources
-      ansible.builtin.command: chronyc sources -v
-      register: chrony_sources
-      changed_when: false
-      failed_when: "'System clock wrong' in chrony_sources.stderr"
+- name: Common - ensure Chronyd service is enabled and started
+  ansible.builtin.service:
+    name: "{{ chrony_service_name }}"
+    state: started
+    enabled: true
+
+- name: Common - verify Chronyd sources
+  ansible.builtin.command:
+    cmd: chronyc sources -v
+  register: chrony_sources
+  changed_when: false
+  failed_when: "'System clock wrong' in chrony_sources.stderr"
 
     # - name: Display Chronyd sources
     #   ansible.builtin.debug:
