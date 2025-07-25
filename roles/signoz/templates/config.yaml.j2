@@ -1,16 +1,122 @@
-# {{ ansible_managed | comment }}
-
+{{ ansible_managed | comment }}
 receivers:
-{{ signoz_otel_receivers | to_nice_yaml(indent=2) | indent(2, true) }}
+{% for receiver_name, receiver_config in signoz_otel_receivers.items() %}
+  {{ receiver_name }}:
+{% if receiver_config.include is defined %}
+    include:
+{% for include_path in receiver_config.include %}
+      - {{ include_path }}
+{% endfor %}
+{% endif %}
+{% if receiver_config.exclude is defined %}
+    exclude:
+{% for exclude_path in receiver_config.exclude %}
+      - {{ exclude_path }}
+{% endfor %}
+{% endif %}
+{% if receiver_config.start_at is defined %}
+    start_at: {{ receiver_config.start_at }}
+{% endif %}
+{% if receiver_config.operators is defined %}
+    operators:
+{% for operator in receiver_config.operators %}
+      - type: {{ operator.type }}
+{% if operator.regex is defined %}
+        regex: '{{ operator.regex }}'
+{% endif %}
+{% if operator.parse_from is defined %}
+        parse_from: {{ operator.parse_from }}
+{% endif %}
+{% if operator.layout_type is defined %}
+        layout_type: {{ operator.layout_type }}
+{% endif %}
+{% if operator.layout is defined %}
+        layout: '{{ operator.layout }}'
+{% endif %}
+{% if operator.mapping is defined %}
+        mapping:
+{% for key, value in operator.mapping.items() %}
+          {{ key }}: {{ value }}
+{% endfor %}
+{% endif %}
+{% if operator.field is defined %}
+        field: {{ operator.field }}
+{% endif %}
+{% if operator.value is defined %}
+        value: "{{ operator.value }}"
+{% endif %}
+{% endfor %}
+{% endif %}
+{% if receiver_config.collection_interval is defined %}
+    collection_interval: {{ receiver_config.collection_interval }}
+{% endif %}
+{% if receiver_config.scrapers is defined %}
+    scrapers:
+{% for scraper_name, scraper_config in receiver_config.scrapers.items() %}
+      {{ scraper_name }}:
+{% if scraper_config %}
+{% for key, value in scraper_config.items() %}
+        {{ key }}: {{ value }}
+{% endfor %}
+{% endif %}
+{% endfor %}
+{% endif %}
+{% endfor %}
 
 processors:
-{{ signoz_otel_processors | to_nice_yaml(indent=2) | indent(2, true) }}
+{% for processor_name, processor_config in signoz_otel_processors.items() %}
+  {{ processor_name }}:
+{% if processor_config.attributes is defined %}
+    attributes:
+{% for attribute in processor_config.attributes %}
+      - key: {{ attribute.key }}
+        value: "{{ attribute.value }}"
+        action: {{ attribute.action }}
+{% endfor %}
+{% endif %}
+{% if processor_config.timeout is defined %}
+    timeout: {{ processor_config.timeout }}
+{% endif %}
+{% if processor_config.send_batch_size is defined %}
+    send_batch_size: {{ processor_config.send_batch_size }}
+{% endif %}
+{% if processor_config.logs is defined %}
+    logs:
+{% if processor_config.logs.exclude is defined %}
+      exclude:
+        match_type: {{ processor_config.logs.exclude.match_type }}
+        bodies: {{ processor_config.logs.exclude.bodies | to_json }}
+{% endif %}
+{% endif %}
+{% endfor %}
 
 exporters:
-{{ signoz_otel_exporters | to_nice_yaml(indent=2) | indent(2, true) }}
+{% for exporter_name, exporter_config in signoz_otel_exporters.items() %}
+  {{ exporter_name }}:
+{% if exporter_config.endpoint is defined %}
+    endpoint: "{{ exporter_config.endpoint }}"
+{% endif %}
+{% if exporter_config.tls is defined %}
+    tls:
+{% for key, value in exporter_config.tls.items() %}
+      {{ key }}: {{ value }}
+{% endfor %}
+{% endif %}
+{% if exporter_config.verbosity is defined %}
+    verbosity: {{ exporter_config.verbosity }}
+{% endif %}
+{% endfor %}
 
 service:
   pipelines:
-{{ signoz_otel_service_pipelines | to_nice_yaml(indent=2) | indent(4, true) }}
-  extensions:
-{{ signoz_otel_service_extensions | to_nice_yaml(indent=2) | indent(4, true) }}
+{% for pipeline_name, pipeline_config in signoz_otel_service_pipelines.items() %}
+    {{ pipeline_name }}:
+      receivers: {{ pipeline_config.receivers | to_json }}
+      processors: {{ pipeline_config.processors | to_json }}
+      exporters: {{ pipeline_config.exporters | to_json }}
+{% endfor %}
+{% if signoz_otel_service_extensions %}
+  extensions: {{ signoz_otel_service_extensions | to_json }}
+{% else %}
+  extensions: []
+{% endif %}
