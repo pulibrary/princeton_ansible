@@ -15,96 +15,109 @@ lib_zk2_host: 128.112.204.146
 lib_zk3_host: 128.112.204.147
 solr_znode: solr8
 cjkfoldingfilter: https://github.com/pulibrary/pul_solr/raw/master/solr8_jars/CJKFoldingFilter.jar
-datadog_api_key: "{{vault_datadog_key}}"
-datadog_config:
-  tags: "solrcloud, environment:staging, role:solr, version:8"
-  apm_enabled: false
-  log_enabled: true
-  dogstatsd_port: 8135
-  process_config:
-    enabled: "true"
-datadog_checks:
-  solrcloud:
-    init_config:
-    logs:
-      - type: file
-        path: /solr/logs/solr.log
-        service: solr
-        source: solr
-        log_processing_rules:
-          - type: multi_line
-            name: new_log_start_with_date
-            pattern: \d{4}\-(0?[1-9]|1[012])\-(0?[1-9]|[12][0-9]|3[01])
-          - type: exclude_at_match
-            name: exclude_solrcloud_distrib_queries
-            pattern: distrib=false
-      - type: file
-        path: /solr/logs/solr_gc.log.0.current
-        service: solr
-        source: solr_gc
-        log_processing_rules:
-          - type: multi_line
-            name: new_log_start_with_date
-            pattern: \d{4}\-(0?[1-9]|1[012])\-(0?[1-9]|[12][0-9]|3[01])
-  http_check:
-    init_config:
-    instances:
-      - name: Catalog Staging
-        url: "http://localhost:8983/solr/catalog-staging/admin/ping?wt=json&distrib=true&indent=true"
-        skip_event: true
-        tags:
-          - "http_service:solr"
-          - "application:orangelight"
-          - "environment:staging"
-  solr:
-    instances:
-      # location of tomcat
-      - host: localhost
-        port: 1099
-        conf:
-          - include:
-              category: CACHE
-              name: filterCache
-              scope:
-                - searcher
-              attribute:
-                cumulative_hitratio:
-                  alias: solr.filter_cache.cumulative_hitratio
-                  metric_type: gauge
-                cumulative_evictions:
-                  alias: solr.filter_cache.cumulative_evictions
-                  metric_type: gauge
-                size:
-                  alias: solr.filter_cache.size
-                  metric_type: gauge
-          - include:
-              category: CACHE
-              name: queryResultCache
-              scope:
-                - searcher
-              attribute:
-                cumulative_hitratio:
-                  alias: solr.query_result_cache.cumulative_hitratio
-                  metric_type: gauge
-                cumulative_evictions:
-                  alias: solr.query_result_cache.cumulative_evictions
-                  metric_type: gauge
-                size:
-                  alias: solr.query_result_cache.size
-                  metric_type: gauge
-          - include:
-              category: CACHE
-              name: documentCache
-              scope:
-                - searcher
-              attribute:
-                cumulative_hitratio:
-                  alias: solr.document_cache.cumulative_hitratio
-                  metric_type: gauge
-                cumulative_evictions:
-                  alias: solr.document_cache.cumulative_evictions
-                  metric_type: gauge
-                size:
-                  alias: solr.document_cache.size
-                  metric_type: gauge
-    init_config:
+# Solr OpenTelemetry Collector Configuration
+signoz_is_local: false
+signoz_otel_receivers:
+  hostmetrics:
+    collection_interval: 30s
+    scrapers:
+      cpu: {}
+      load: {}
+      memory: {}
+      disk: {}
+      network: {}
+      filesystem: {}
+  filelog/solr-main:
+    include:
+      - "/solr/logs/solr.log*"
+    exclude:
+      - "/solr/logs/solr.log.*.gz"
+    start_at: end
+    operators:
+      - type: add
+        field: attributes.log_type
+        value: "solr_application"
+      - type: add
+        field: attributes.service_name
+        value: "solr"
+  filelog/solr-console:
+    include:
+      - "/solr/logs/solr-8983-console.log"
+    start_at: end
+    operators:
+      - type: add
+        field: attributes.log_type
+        value: "solr_console"
+      - type: add
+        field: attributes.service_name
+        value: "solr"
+  filelog/solr-slow:
+    include:
+      - "/solr/logs/solr_slow_requests.log"
+    start_at: end
+    operators:
+      - type: add
+        field: attributes.log_type
+        value: "solr_slow_requests"
+      - type: add
+        field: attributes.service_name
+        value: "solr"
+      - type: add
+        field: attributes.performance_critical
+        value: "true"
+  filelog/solr-gc:
+    include:
+      - "/solr/logs/solr_gc.log*"
+      - "/solr/logs/gc.txt*"
+    exclude:
+      - "/solr/logs/*.gz"
+    start_at: end
+    operators:
+      - type: add
+        field: attributes.log_type
+        value: "solr_gc"
+      - type: add
+        field: attributes.service_name
+        value: "solr"
+      - type: add
+        field: attributes.component
+        value: "garbage_collector"
+
+signoz_otel_processors:
+  resource:
+    attributes:
+      - key: host.name
+        value: "{{ ansible_fqdn }}"
+        action: upsert
+      - key: service.name
+        value: "solr-server"
+        action: upsert
+      - key: service.version
+        value: "staging"
+        action: upsert
+      - key: environment
+        value: "staging"
+        action: upsert
+  batch:
+    timeout: 10s
+    send_batch_size: 1024
+
+signoz_otel_exporters:
+  otlp:
+    endpoint: "http://sandbox-signoz1.lib.princeton.edu:4317"
+    tls:
+      insecure: true
+  debug:
+    verbosity: basic
+
+signoz_otel_service_pipelines:
+  logs:
+    receivers: [filelog/solr-main, filelog/solr-console, filelog/solr-slow, filelog/solr-gc]
+    processors: [resource, batch]
+    exporters: [otlp, debug]
+  metrics:
+    receivers: [hostmetrics]
+    processors: [resource, batch]
+    exporters: [otlp, debug]
+
+signoz_otel_service_extensions: []
