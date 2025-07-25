@@ -35,6 +35,129 @@ deploy_user_local_keys:
   - { name: 'heaven', key: "{{ lookup('file', '../keys/heaven.pub') }}" }
   - { name: 'TowerDeployKey', key: "{{ lookup('file', '../keys/TowerDeployKey.pub') }}" }
   - { name: 'CodeDeployKey', key: "{{ lookup('file', '../keys/CodeDeployKey.pub') }}" }
+# Orangelight OpenTelemetry Collector Configuration
+signoz_otel_receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: "0.0.0.0:4317"
+      http:
+        endpoint: "0.0.0.0:4318"
+  hostmetrics:
+    collection_interval: 30s
+    scrapers:
+      cpu: {}
+      load: {}
+      memory: {}
+      disk: {}
+      network: {}
+      process: {}
+      filesystem: {}
+  filelog/nginx-access:
+    include:
+      - "/var/log/nginx/access.log*"
+    exclude:
+      - "/var/log/nginx/access.log.*.gz"
+    start_at: end
+    operators:
+      - type: regex_parser
+        regex: '^(?P<remote_addr>[^\s]+) \((?P<remote_user>[^)]*)\) - - \[(?P<time_local>[^\]]+)\] "(?P<method>\S+) (?P<path>\S+) (?P<protocol>[^"]+)" (?P<status>\d+) (?P<body_bytes_sent>\d+) "(?P<http_referer>[^"]*)" "(?P<http_user_agent>[^"]*)"'
+        parse_from: body
+      - type: time_parser
+        parse_from: attributes.time_local
+        layout_type: strptime
+        layout: '%d/%b/%Y:%H:%M:%S %z'
+      - type: add
+        field: attributes.log_type
+        value: "nginx_access"
+      - type: add
+        field: attributes.service_name
+        value: "nginx"
+  filelog/nginx-error:
+    include:
+      - "/var/log/nginx/error.log*"
+    exclude:
+      - "/var/log/nginx/error.log.*.gz"
+    start_at: end
+    operators:
+      - type: add
+        field: attributes.log_type
+        value: "nginx_error"
+      - type: add
+        field: attributes.service_name
+        value: "nginx"
+
+signoz_otel_processors:
+  resource:
+    attributes:
+      - key: host.name
+        value: "{{ ansible_fqdn }}"
+        action: upsert
+      - key: service.name
+        value: "orangelight"
+        action: upsert
+      - key: service.version
+        value: "staging"
+        action: upsert
+      - key: environment
+        value: "staging"
+        action: upsert
+      - key: application
+        value: "orangelight"
+        action: upsert
+      - key: type
+        value: "webserver"
+        action: upsert
+  batch:
+    timeout: 10s
+    send_batch_size: 1024
+    send_batch_max_size: 2048
+  memory_limiter:
+    limit_mib: 512
+    spike_limit_mib: 128
+    check_interval: "1s"
+
+signoz_otel_exporters:
+  otlp:
+    endpoint: "http://sandbox-signoz1.lib.princeton.edu:4317"
+    tls:
+      insecure: true
+    sending_queue:
+      num_consumers: 10
+      queue_size: 5000
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+  debug:
+    verbosity: detailed
+    sampling_initial: 5
+    sampling_thereafter: 200
+
+signoz_otel_service_pipelines:
+  traces:
+    receivers: [otlp]
+    processors: [memory_limiter, resource, batch]
+    exporters: [debug, otlp]
+  metrics:
+    receivers: [hostmetrics, otlp]
+    processors: [memory_limiter, resource, batch]
+    exporters: [otlp, debug]
+  logs:
+    receivers: [filelog/nginx-access, filelog/nginx-error, otlp]
+    processors: [memory_limiter, resource, batch]
+    exporters: [otlp, debug]
+
+signoz_otel_service_extensions: []
+
+# Additional service configuration
+# this can be debug
+signoz_otel_service_telemetry:
+  logs:
+    level: "error"
+  metrics:
+    level: "detailed"
 # temporarily add otel collection values
 rails_app_vars:
   - name: ALMA_READ_WRITE
@@ -115,36 +238,3 @@ rails_app_vars:
     value: "http://localhost:4317"
   - name: OTEL_EXPORTER_OTLP_PROTOCOL
     value: grpc
-datadog_api_key: "{{ vault_datadog_key }}"
-datadog_config:
-  tags: "application:orangelight, environment:staging, type:webserver"
-  apm_enabled: "true"
-  log_enabled: true
-  process_config:
-    enabled: "true"
-  apm_config:
-    analyzed_spans:
-      orangelight|rack.request: 1
-    filter_tags:
-      reject: ["http.useragent:nginx/1.23.4 (health check)", "operation:heartbeat", "operation:job_fetch", "operation:scheduled_push", "operation:scheduled_poller_wait"]
-datadog_checks:
-  ruby:
-    init_config:
-    logs:
-      - type: file
-        path: /opt/orangelight/current/log/staging.log
-        service: orangelight
-        source: ruby
-  nginx:
-    init_config:
-    logs:
-      - type: file
-        path: /var/log/nginx/access.log
-        service: orangelight
-        source: nginx
-        sourcecategory: http_web_access
-      - type: file
-        path: /var/log/nginx/error.log
-        service: orangelight
-        source: nginx
-        sourcecategory: http_web_access
