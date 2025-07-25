@@ -1,0 +1,64 @@
+---
+- name: Signoz - download OpenTelemetry Collector archive
+  ansible.builtin.get_url:
+    url: "{{ signoz_otelcol_download_url | trim }}"
+    dest: "{{ signoz_otelcol_archive }}"
+    mode: '0644'
+      # only re-download if changed
+  args:
+    use_etag: true
+    use_last_modified: true
+
+- name: Signoz - ensure installation directory exists
+  ansible.builtin.file:
+    path: "{{ signoz_otelcol_install_dir }}"
+    state: directory
+    mode: '0755'
+
+- name: Signoz - extract Collector binary
+  ansible.builtin.unarchive:
+    src: "{{ signoz_otelcol_archive }}"
+    dest: "/tmp"
+    remote_src: true
+
+- name: Signoz - install Collector binary
+  ansible.builtin.copy:
+    src: "/tmp/{{ signoz_otelcol_binary }}"
+    dest: "{{ signoz_otelcol_install_dir }}/{{ signox_otelcol_binary }}"
+    mode: '0755'
+
+- name: Signoz - ensure config directory exists
+  ansible.builtin.file:
+    path: "{{ signoz_otelcol_config_dir }}"
+    state: directory
+    mode: '0755'
+
+- name: Signoz - deploy otelcol config from template
+  ansible.builtin.template:
+    src: "config.yaml.j2"
+    dest: "{{ signoz_otelcol_config_dir }}/config.yaml"
+    mode: '0644'
+
+- name: Signoz - install systemd unit for otelcol
+  ansible.builtin.copy:
+    dest: "{{ signoz_otelcol_service_path }}"
+    owner: root
+    group: root
+    mode: '0644'
+    content: |
+      [Unit]
+      Description=OpenTelemetry Collector
+      After=network.target
+
+      [Service]
+      Type=simple
+      User=root
+      ExecStart={{ signoz_otelcol_install_dir }}/{{ signoz_otelcol_binary }} --config={{ signoz_otelcol_config_dir }}/config.yaml
+      Restart=always
+      RestartSec=5
+      StandardOutput=journal
+      StandardError=journal
+
+      [Install]
+      WantedBy=multi-user.target
+      notify: Reload systemd
