@@ -6,7 +6,7 @@
 # required vars:
 #  check_mk_health_url - the url to curl for the health page ( for example localhost/health)
 #
-message=$(sudo -u deploy curl {{ check_mk_health_url }} |grep \"status\":\"ok\" | wc -l)
+message=$(sudo -u deploy curl localhost/health.json |grep \"status\":\"ok\" | wc -l)
 if [ $message =  1 ]; then   
    echo "0 \"Rails Health Status\" - Rails is healthy"; 
 else
