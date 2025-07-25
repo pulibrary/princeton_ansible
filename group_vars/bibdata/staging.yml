@@ -145,3 +145,49 @@ postgres_admin_user: "{{ db_clusteradmin_user }}"
 postgres_admin_password: "{{ db_clusteradmin_password }}"
 postgresql_is_local: false
 timezone: "America/New_York"
+# telemetry
+signoz_otel_receivers:
+  filelog/rails-app:
+    include:
+      - "/opt/bibdata/current/log/staging.log"
+      - "/opt/bibdata/current/log/*.log"
+    start_at: end
+    operators:
+      - type: regex_parser
+  hostmetrics:
+    collection_interval: 30s
+    scrapers:
+      cpu: {}
+      load: {}
+signoz_otel_processors:
+  resource:
+    attributes:
+      - key: host.name
+        value: "{{ ansible_fqdn }}"
+        action: upsert
+      - key: service.name
+        value: "rails-bibdata"
+        action: upsert
+  batch:
+    timeout: 10s
+    send_batch_size: 1024
+
+signoz_otel_exporters:
+  otlp:
+    endpoint: "http://sandbox-signoz1.lib.princeton.edu:4317"
+    tls:
+      insecure: true
+  debug:
+    verbosity: basic
+
+signoz_otel_service_pipelines:
+  metrics:
+    receivers: [hostmetrics]
+    processors: [resource, batch]
+    exporters: [otlp, debug]
+  logs:
+    receivers: [filelog/rails-app]
+    processors: [resource, batch]
+    exporters: [otlp, debug]
+
+signoz_otel_service_extensions: []

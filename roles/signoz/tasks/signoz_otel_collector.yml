@@ -1,7 +1,7 @@
 ---
 - name: Signoz - download OpenTelemetry Collector archive
   ansible.builtin.get_url:
-    url: "{{ signoz_otelcol_download_url | trim }}"
+    url: "{{ signoz_otelcol_download_url }}"
     dest: "{{ signoz_otelcol_archive }}"
     mode: '0644'
 
@@ -20,8 +20,9 @@
 - name: Signoz - install Collector binary
   ansible.builtin.copy:
     src: "/tmp/{{ signoz_otelcol_binary }}"
-    dest: "{{ signoz_otelcol_install_dir }}/{{ signox_otelcol_binary }}"
+    dest: "{{ signoz_otelcol_install_dir }}/{{ signoz_otelcol_binary }}"
     mode: '0755'
+    remote_src: true
 
 - name: Signoz - ensure config directory exists
   ansible.builtin.file:
@@ -57,7 +58,7 @@
 
       [Install]
       WantedBy=multi-user.target
-      notify: Reload systemd
+  notify: Reload systemd
 
 - name: Signoz - ensure otelcol service is running and enabled
   ansible.builtin.systemd:
