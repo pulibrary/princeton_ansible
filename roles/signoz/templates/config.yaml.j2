@@ -1,7 +1,15 @@
-{{ ansible_managed | comment }}
 receivers:
 {% for receiver_name, receiver_config in signoz_otel_receivers.items() %}
   {{ receiver_name }}:
+{% if receiver_config.protocols is defined %}
+    protocols:
+{% for protocol_name, protocol_config in receiver_config.protocols.items() %}
+      {{ protocol_name }}:
+{% for key, value in protocol_config.items() %}
+        {{ key }}: "{{ value }}"
+{% endfor %}
+{% endfor %}
+{% endif %}
 {% if receiver_config.include is defined %}
     include:
 {% for include_path in receiver_config.include %}
@@ -80,6 +88,18 @@ processors:
 {% if processor_config.send_batch_size is defined %}
     send_batch_size: {{ processor_config.send_batch_size }}
 {% endif %}
+{% if processor_config.send_batch_max_size is defined %}
+    send_batch_max_size: {{ processor_config.send_batch_max_size }}
+{% endif %}
+{% if processor_config.limit_mib is defined %}
+    limit_mib: {{ processor_config.limit_mib }}
+{% endif %}
+{% if processor_config.spike_limit_mib is defined %}
+    spike_limit_mib: {{ processor_config.spike_limit_mib }}
+{% endif %}
+{% if processor_config.check_interval is defined %}
+    check_interval: "{{ processor_config.check_interval }}"
+{% endif %}
 {% if processor_config.logs is defined %}
     logs:
 {% if processor_config.logs.exclude is defined %}
@@ -102,12 +122,46 @@ exporters:
       {{ key }}: {{ value }}
 {% endfor %}
 {% endif %}
+{% if exporter_config.sending_queue is defined %}
+    sending_queue:
+{% for key, value in exporter_config.sending_queue.items() %}
+      {{ key }}: {{ value }}
+{% endfor %}
+{% endif %}
+{% if exporter_config.retry_on_failure is defined %}
+    retry_on_failure:
+{% for key, value in exporter_config.retry_on_failure.items() %}
+      {{ key }}: {{ value }}
+{% endfor %}
+{% endif %}
 {% if exporter_config.verbosity is defined %}
     verbosity: {{ exporter_config.verbosity }}
+{% endif %}
+{% if exporter_config.sampling_initial is defined %}
+    sampling_initial: {{ exporter_config.sampling_initial }}
+{% endif %}
+{% if exporter_config.sampling_thereafter is defined %}
+    sampling_thereafter: {{ exporter_config.sampling_thereafter }}
 {% endif %}
 {% endfor %}
 
 service:
+{% if signoz_otel_service_telemetry is defined %}
+  telemetry:
+{% if signoz_otel_service_telemetry.logs is defined %}
+    logs:
+{% for key, value in signoz_otel_service_telemetry.logs.items() %}
+      {{ key }}: "{{ value }}"
+{% endfor %}
+{% endif %}
+{% if signoz_otel_service_telemetry.metrics is defined %}
+    metrics:
+{% for key, value in signoz_otel_service_telemetry.metrics.items() %}
+      {{ key }}: "{{ value }}"
+{% endfor %}
+{% endif %}
+
+{% endif %}
   pipelines:
 {% for pipeline_name, pipeline_config in signoz_otel_service_pipelines.items() %}
     {{ pipeline_name }}:
