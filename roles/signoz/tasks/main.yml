@@ -4,6 +4,8 @@
   ansible.builtin.group:
     name: "{{ signoz_group }}"
     system: true
+  when:
+    - signoz_is_local
 
 - name: Signoz - ensure signoz user exists
   ansible.builtin.user:
@@ -12,12 +14,16 @@
     system: true
     create_home: false
     home: "{{ signoz_install_dir }}"
+  when:
+    - signoz_is_local
 
 - name: Signoz - configure Git safe.directory for /opt/signoz
   community.general.git_config:
     scope: global
     name: safe.directory
     value: "{{ signoz_install_dir }}"
+  when:
+    - signoz_is_local
 
 - name: Signoz - clone SigNoz repository
   ansible.builtin.git:
@@ -29,6 +35,8 @@
     accept_hostkey: true
   become: true
   become_user: root
+  when:
+    - signoz_is_local
 
 - name: Signoz - ensure correct ownership of cloned files
   ansible.builtin.file:
@@ -36,6 +44,8 @@
     recurse: true
     owner: "{{ signoz_user }}"
     group: "{{ signoz_group }}"
+  when:
+    - signoz_is_local
 
 - name: Install APT prerequisites
   ansible.builtin.apt:
@@ -46,22 +56,30 @@
       - gnupg-agent
     update_cache: true
     state: present
+  when:
+    - signoz_is_local
 
 - name: Signoz - add Docker GPG key
   ansible.builtin.apt_key:
     url: https://download.docker.com/linux/ubuntu/gpg
     state: present
+  when:
+    - signoz_is_local
 
 - name: Signoz - add Docker apt repository
   ansible.builtin.apt_repository:
     repo: "deb [arch={{ ansible_architecture }}] https://download.docker.com/linux/ubuntu {{ ansible_lsb.codename }} stable"
     state: present
     update_cache: true
+  when:
+    - signoz_is_local
 
 - name: Signoz - check if docker-ce package is available
   ansible.builtin.command: apt-cache policy docker-ce
   register: docker_ce_policy
   changed_when: false
+  when:
+    - signoz_is_local
 
 - name: Install official Docker Engine packages
   ansible.builtin.apt:
@@ -71,7 +89,9 @@
       - containerd.io
     state: present
     update_cache: true
-  when: "docker_ce_policy.stdout.find('Candidate: (none)') == -1"
+  when:
+    - signoz_is_local
+    - "docker_ce_policy.stdout.find('Candidate: (none)') == -1"
 
 - name: Signoz - install distribution Docker package
   ansible.builtin.apt:
@@ -79,19 +99,25 @@
       - docker.io
     state: present
     update_cache: true
-  when: "docker_ce_policy.stdout.find('Candidate: (none)') != -1"
+  when:
+    - signoz_is_local
+    - "docker_ce_policy.stdout.find('Candidate: (none)') != -1"
 
 - name: Signoz - ensure Docker service is running
   ansible.builtin.service:
     name: docker
     state: started
     enabled: true
+  when:
+    - signoz_is_local
 
 - name: Signoz - ensure Docker Compose is installed
   ansible.builtin.apt:
     name: docker-compose
     state: present
     update_cache: true
+  when:
+    - signoz_is_local
 
 - name: Signoz - start SigNoz services
   community.docker.docker_compose:
@@ -100,8 +126,12 @@
       - docker-compose.yaml
     state: present
     remove_orphans: true
+  when:
+    - signoz_is_local
 
 - name: Signoz - wait for SigNoz health endpoint
   ansible.builtin.uri:
     url: http://localhost:8080/api/v1/health?live=1
     status_code: 200
+  when:
+    - signoz_is_local
