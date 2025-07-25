@@ -126,3 +126,109 @@ datadog_checks:
                   alias: solr.document_cache.size
                   metric_type: gauge
     init_config:
+# Solr OpenTelemetry Collector Configuration
+signoz_is_local: false
+signoz_otel_receivers:
+  hostmetrics:
+    collection_interval: 30s
+    scrapers:
+      cpu: {}
+      load: {}
+      memory: {}
+      disk: {}
+      network: {}
+      filesystem: {}
+  filelog/solr-main:
+    include:
+      - "/solr/logs/solr.log*"
+    exclude:
+      - "/solr/logs/solr.log.*.gz"
+    start_at: end
+    operators:
+      - type: add
+        field: attributes.log_type
+        value: "solr_application"
+      - type: add
+        field: attributes.service_name
+        value: "solr"
+  filelog/solr-console:
+    include:
+      - "/solr/logs/solr-8983-console.log"
+    start_at: end
+    operators:
+      - type: add
+        field: attributes.log_type
+        value: "solr_console"
+      - type: add
+        field: attributes.service_name
+        value: "solr"
+  filelog/solr-slow:
+    include:
+      - "/solr/logs/solr_slow_requests.log"
+    start_at: end
+    operators:
+      - type: add
+        field: attributes.log_type
+        value: "solr_slow_requests"
+      - type: add
+        field: attributes.service_name
+        value: "solr"
+      - type: add
+        field: attributes.performance_critical
+        value: "true"
+  filelog/solr-gc:
+    include:
+      - "/solr/logs/solr_gc.log*"
+      - "/solr/logs/gc.txt*"
+    exclude:
+      - "/solr/logs/*.gz"
+    start_at: end
+    operators:
+      - type: add
+        field: attributes.log_type
+        value: "solr_gc"
+      - type: add
+        field: attributes.service_name
+        value: "solr"
+      - type: add
+        field: attributes.component
+        value: "garbage_collector"
+
+signoz_otel_processors:
+  resource:
+    attributes:
+      - key: host.name
+        value: "{{ ansible_fqdn }}"
+        action: upsert
+      - key: service.name
+        value: "solr-server"
+        action: upsert
+      - key: service.version
+        value: "staging"
+        action: upsert
+      - key: environment
+        value: "staging"
+        action: upsert
+  batch:
+    timeout: 10s
+    send_batch_size: 1024
+
+signoz_otel_exporters:
+  otlp:
+    endpoint: "http://sandbox-signoz1.lib.princeton.edu:4317"
+    tls:
+      insecure: true
+  debug:
+    verbosity: basic
+
+signoz_otel_service_pipelines:
+  logs:
+    receivers: [filelog/solr-main, filelog/solr-console, filelog/solr-slow, filelog/solr-gc]
+    processors: [resource, batch]
+    exporters: [otlp, debug]
+  metrics:
+    receivers: [hostmetrics]
+    processors: [resource, batch]
+    exporters: [otlp, debug]
+
+signoz_otel_service_extensions: []
