@@ -1,0 +1,26 @@
+# {{ ansible_managed | comment }}
+receivers:
+  hostmetrics:
+    collection_interval: {{ signoz_hostmetrics_interval }}
+    scrapers:
+      cpu: {}
+      load: {}
+      memory: {}
+      disk: {}
+      network: {}
+      filesystem: {}
+
+exporters:
+  otlp:
+    endpoint: "{{ signoz_otlp_endpoint }}"
+    insecure: true
+
+processors:
+  batch:
+
+service:
+  pipelines:
+    metrics:
+      receivers: [hostmetrics]
+      processors: [batch]
+      exporters: [otlp]
