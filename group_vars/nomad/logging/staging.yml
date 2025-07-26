@@ -1,3 +1,4 @@
+---
 logging_gh_secret: '{{ vault_logging_gh_secret }}'
 logging_gh_client_id: '{{ vault_logging_gh_client_id }}'
 logging_nomad_token: '{{ vault_pul_nomad_management_token }}'
@@ -10,3 +11,63 @@ logging_prometheus_nomad_env_vars:
   CONSUL_ACL_TOKEN: '{{ nomad_task_consul_token }}'
   METRICS_AUTH_TOKEN: '{{ vault_metrics_auth_token }}'
   METRICS_BASIC_PASSWORD: '{{ vault_metrics_basic_password }}'
+# Nomad OpenTelemetry Collector Configuration
+signoz_is_local: false
+signoz_otel_receivers:
+  hostmetrics:
+    collection_interval: 30s
+    scrapers:
+      cpu: {}
+      load: {}
+      memory: {}
+      disk: {}
+      network: {}
+      process: {}
+      filesystem: {}
+  filelog/system:
+    include:
+      - "/var/log/messages"
+    start_at: end
+    operators:
+      - type: add
+        field: attributes.log_type
+        value: "system"
+
+signoz_otel_processors:
+  resource:
+    attributes:
+      - key: host.name
+        value: "{{ ansible_fqdn }}"
+        action: upsert
+      - key: service.name
+        value: "consul"
+        action: upsert
+      - key: service.version
+        value: "staging"
+        action: upsert
+      - key: environment
+        value: "staging"
+        action: upsert
+  batch:
+    timeout: 10s
+    send_batch_size: 1024
+
+signoz_otel_exporters:
+  otlp:
+    endpoint: "http://sandbox-signoz1.lib.princeton.edu:4317"
+    tls:
+      insecure: true
+  debug:
+    verbosity: basic
+
+signoz_otel_service_pipelines:
+  metrics:
+    receivers: [hostmetrics]
+    processors: [resource, batch]
+    exporters: [otlp, debug]
+  logs:
+    receivers: [filelog/system]
+    processors: [resource, batch]
+    exporters: [otlp, debug]
+
+signoz_otel_service_extensions: []
