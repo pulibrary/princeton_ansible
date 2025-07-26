@@ -35,3 +35,79 @@ postgresql_logrotate_rules:
       create_group: postgres
       su_user: "{{ logrotate_global_defaults.su_user }}"
       su_group: "{{ logrotate_global_defaults.su_group }}"
+
+# PostgreSQL OpenTelemetry Collector Configuration
+signoz_is_local: false
+signoz_otel_receivers:
+  hostmetrics:
+    collection_interval: 30s
+    scrapers:
+      cpu: {}
+      load: {}
+      memory: {}
+      disk: {}
+      network: {}
+      filesystem: {}
+  filelog/postgresql:
+    include:
+      - "/var/lib/postgresql/15/main/pg_log/pg.json"
+    start_at: end
+    operators:
+      - type: add
+        field: attributes.log_source
+        value: "postgresql-server"
+  postgresql:
+    endpoint: "localhost:5432"
+    transport: tcp
+    username: "monitoring"
+    password: "{{ vault_signoz_monitoring_user }}"
+    databases:
+      - postgres
+    collection_interval: 300s
+    metrics:
+      postgresql.database.locks:
+        enabled: true
+      postgresql.deadlocks:
+        enabled: true
+      postgresql.sequential_scans:
+        enabled: true
+
+signoz_otel_processors:
+  resource:
+    attributes:
+      - key: host.name
+        value: "{{ ansible_fqdn }}"
+        action: upsert
+      - key: service.name
+        value: "postgresql-server"
+        action: upsert
+      - key: service.version
+        value: "staging"
+        action: upsert
+      - key: environment
+        value: "staging"
+        action: upsert
+  batch:
+    timeout: 30s
+    send_batch_size: 512
+    send_batch_max_size: 1024
+
+signoz_otel_exporters:
+  otlp:
+    endpoint: "http://sandbox-signoz1.lib.princeton.edu:4317"
+    tls:
+      insecure: true
+  debug:
+    verbosity: basic
+
+signoz_otel_service_pipelines:
+  metrics:
+    receivers: [hostmetrics, postgresql]
+    processors: [resource, batch]
+    exporters: [otlp, debug]
+  logs:
+    receivers: [filelog/postgresql]
+    processors: [resource, batch]
+    exporters: [otlp, debug]
+
+signoz_otel_service_extensions: []
