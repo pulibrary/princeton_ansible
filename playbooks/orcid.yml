@@ -18,40 +18,41 @@
 
   roles:
     - role: roles/ruby_app
+    - role: signoz
 
   post_tasks:
       # tasks file for roles/hr_share
-      - name: Create mount directories
-        ansible.builtin.file:
-          path: '/mnt/peoplesoft/{{ peoplesoft_share }}'
-          state: 'directory'
-          mode: 0755
-      - name: Copy smb credentials
-        ansible.builtin.copy:
-          src: ../group_vars/orcid/files/peoplesoft.smb.credentials
-          dest: /etc/peoplesoft.smb.credentials
-          mode: 0644
-        when: running_on_server
-      - name: Check mount for hr shared files
-        ansible.posix.mount:
-          path: '/mnt/peoplesoft/{{ peoplesoft_share }}'
-          src: '//{{ peoplesoft_host }}/{{ peoplesoft_share }}'
-          fstype: cifs
-          opts: 'defaults,uid={{ deploy_user_uid }},gid={{ deploy_user_uid }},credentials=/etc/peoplesoft.smb.credentials'
-          state: present
-        register: mount_info
-        when: running_on_server
-        become: true
-      - name: Create mount for hr shared files
-        ansible.posix.mount:
-          path: '/mnt/peoplesoft/{{ peoplesoft_share }}'
-          src: '//{{ peoplesoft_host }}/{{ peoplesoft_share }}'
-          fstype: cifs
-          opts: 'defaults,uid={{ deploy_user_uid }},gid={{ deploy_user_uid }},credentials=/etc/peoplesoft.smb.credentials'
-          state: mounted
-        when: running_on_server # and mount_info.changed
-        become: true
+    - name: Create mount directories
+      ansible.builtin.file:
+        path: '/mnt/peoplesoft/{{ peoplesoft_share }}'
+        state: 'directory'
+        mode: "0755"
+    - name: Copy smb credentials
+      ansible.builtin.copy:
+        src: ../group_vars/orcid/files/peoplesoft.smb.credentials
+        dest: /etc/peoplesoft.smb.credentials
+        mode: "0644"
+      when: running_on_server
+    - name: Check mount for hr shared files
+      ansible.posix.mount:
+        path: '/mnt/peoplesoft/{{ peoplesoft_share }}'
+        src: '//{{ peoplesoft_host }}/{{ peoplesoft_share }}'
+        fstype: cifs
+        opts: 'defaults,uid={{ deploy_user_uid }},gid={{ deploy_user_uid }},credentials=/etc/peoplesoft.smb.credentials'
+        state: present
+      register: mount_info
+      when: running_on_server
+      become: true
+    - name: Create mount for hr shared files
+      ansible.posix.mount:
+        path: '/mnt/peoplesoft/{{ peoplesoft_share }}'
+        src: '//{{ peoplesoft_host }}/{{ peoplesoft_share }}'
+        fstype: cifs
+        opts: 'defaults,uid={{ deploy_user_uid }},gid={{ deploy_user_uid }},credentials=/etc/peoplesoft.smb.credentials'
+        state: mounted
+      when: running_on_server # and mount_info.changed
+      become: true
 
-      - name: send information to slack
-        ansible.builtin.include_tasks:
-          file: utils/slack_tasks_end_of_playbook.yml
+    - name: send information to slack
+      ansible.builtin.include_tasks:
+        file: utils/slack_tasks_end_of_playbook.yml
