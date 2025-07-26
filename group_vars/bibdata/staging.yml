@@ -145,42 +145,14 @@ postgres_admin_user: "{{ db_clusteradmin_user }}"
 postgres_admin_password: "{{ db_clusteradmin_password }}"
 postgresql_is_local: false
 timezone: "America/New_York"
-# telemetry
+# Bibdata OpenTelemetry Collector Configuration
 signoz_otel_receivers:
-  filelog/rails-app:
-    include:
-      - "/opt/bibdata/current/log/staging.log"
-      - "/opt/bibdata/current/log/*.log"
-    exclude:
-      - "/opt/bibdata/current/log/*.log.*.gz"
-    start_at: beginning
-    operators:
-      - type: regex_parser
-        regex: '^(?P<log_level>[A-Z]), \[(?P<timestamp>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}) #(?P<pid>\d+)\]\s+(?P<json_message>.*)'
-        parse_from: body
-      - type: json_parser
-        parse_from: attributes.json_message
-      - type: time_parser
-        parse_from: attributes.timestamp
-        layout_type: gotime
-        layout: '2006-01-02T15:04:05.000000'
-      - type: severity_parser
-        parse_from: attributes.level
-        mapping:
-          DEBUG: debug
-          INFO: info
-          WARN: warn
-          ERROR: error
-          FATAL: fatal
-      - type: add
-        field: attributes.log_type
-        value: "rails_application"
-      - type: add
-        field: attributes.service_name
-        value: "bibdata"
-      - type: add
-        field: attributes.framework
-        value: "rails"
+  otlp:
+    protocols:
+      grpc:
+        endpoint: "0.0.0.0:4317"
+      http:
+        endpoint: "0.0.0.0:4318"
   hostmetrics:
     collection_interval: 30s
     scrapers:
@@ -191,6 +163,39 @@ signoz_otel_receivers:
       network: {}
       process: {}
       filesystem: {}
+  filelog/nginx-access:
+    include:
+      - "/var/log/nginx/access.log*"
+    exclude:
+      - "/var/log/nginx/access.log.*.gz"
+    start_at: end
+    operators:
+      - type: regex_parser
+        regex: '^(?P<remote_addr>[^\s]+) \((?P<remote_user>[^)]*)\) - - \[(?P<time_local>[^\]]+)\] "(?P<method>\S+) (?P<path>\S+) (?P<protocol>[^"]+)" (?P<status>\d+) (?P<body_bytes_sent>\d+) "(?P<http_referer>[^"]*)" "(?P<http_user_agent>[^"]*)"'
+        parse_from: body
+      - type: time_parser
+        parse_from: attributes.time_local
+        layout_type: strptime
+        layout: '%d/%b/%Y:%H:%M:%S %z'
+      - type: add
+        field: attributes.log_type
+        value: "nginx_access"
+      - type: add
+        field: attributes.service_name
+        value: "nginx"
+  filelog/nginx-error:
+    include:
+      - "/var/log/nginx/error.log*"
+    exclude:
+      - "/var/log/nginx/error.log.*.gz"
+    start_at: end
+    operators:
+      - type: add
+        field: attributes.log_type
+        value: "nginx_error"
+      - type: add
+        field: attributes.service_name
+        value: "nginx"
 
 signoz_otel_processors:
   resource:
@@ -199,7 +204,7 @@ signoz_otel_processors:
         value: "{{ ansible_fqdn }}"
         action: upsert
       - key: service.name
-        value: "rails-bibdata"
+        value: "bibdata"
         action: upsert
       - key: service.version
         value: "staging"
@@ -207,31 +212,61 @@ signoz_otel_processors:
       - key: environment
         value: "staging"
         action: upsert
+      - key: application
+        value: "bibdata"
+        action: upsert
+      - key: type
+        value: "webserver"
+        action: upsert
+      - key: deployment.environment
+        value: "staging"
+        action: upsert
   batch:
     timeout: 10s
     send_batch_size: 1024
-  filter/reduce-health-checks:
-    logs:
-      exclude:
-        match_type: regexp
-        bodies: [".*GET /health.json.*"]
+    send_batch_max_size: 2048
+  memory_limiter:
+    limit_mib: 512
+    spike_limit_mib: 128
+    check_interval: "1s"
 
 signoz_otel_exporters:
   otlp:
     endpoint: "http://sandbox-signoz1.lib.princeton.edu:4317"
     tls:
       insecure: true
+    sending_queue:
+      num_consumers: 10
+      queue_size: 5000
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
   debug:
-    verbosity: basic
+    verbosity: detailed
+    sampling_initial: 5
+    sampling_thereafter: 200
 
 signoz_otel_service_pipelines:
+  traces:
+    receivers: [otlp]
+    processors: [memory_limiter, resource, batch]
+    exporters: [debug, otlp]
   metrics:
-    receivers: [hostmetrics]
-    processors: [resource, batch]
+    receivers: [hostmetrics, otlp]
+    processors: [memory_limiter, resource, batch]
     exporters: [otlp, debug]
   logs:
-    receivers: [filelog/rails-app]
-    processors: [resource, filter/reduce-health-checks, batch]
+    receivers: [filelog/nginx-access, filelog/nginx-error, otlp]
+    processors: [memory_limiter, resource, batch]
     exporters: [otlp, debug]
 
 signoz_otel_service_extensions: []
+
+# Additional service configuration
+signoz_otel_service_telemetry:
+  logs:
+    level: "error"
+  metrics:
+    level: "detailed"
