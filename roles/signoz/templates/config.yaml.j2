@@ -1,4 +1,7 @@
 {{ ansible_managed | comment }}
+{% if signoz_otel_config is defined %}
+{{ signoz_otel_config | to_nice_yaml }}
+{% else %}
 receivers:
 {% for receiver_name, receiver_config in signoz_otel_receivers.items() %}
   {{ receiver_name }}:
@@ -57,6 +60,9 @@ receivers:
 {% if operator.value is defined %}
         value: "{{ operator.value }}"
 {% endif %}
+{% if operator.if is defined %}
+        if: '{{ operator.if }}'
+{% endif %}
 {% endfor %}
 {% endif %}
 {% if receiver_config.collection_interval is defined %}
@@ -64,14 +70,27 @@ receivers:
 {% endif %}
 {% if receiver_config.scrapers is defined %}
     scrapers:
-{% for scraper_name, scraper_config in receiver_config.scrapers.items() %}
-      {{ scraper_name }}:
-{% if scraper_config %}
-{% for key, value in scraper_config.items() %}
-        {{ key }}: {{ value }}
-{% endfor %}
+{% if receiver_config.scrapers.cpu is defined %}
+      cpu:
 {% endif %}
-{% endfor %}
+{% if receiver_config.scrapers.load is defined %}
+      load:
+{% endif %}
+{% if receiver_config.scrapers.memory is defined %}
+      memory:
+{% endif %}
+{% if receiver_config.scrapers.disk is defined %}
+      disk:
+{% endif %}
+{% if receiver_config.scrapers.network is defined %}
+      network:
+{% endif %}
+{% if receiver_config.scrapers.process is defined %}
+      process:
+{% endif %}
+{% if receiver_config.scrapers.filesystem is defined %}
+      filesystem:
+{% endif %}
 {% endif %}
 {% endfor %}
 
@@ -112,6 +131,12 @@ processors:
         bodies: {{ processor_config.logs.exclude.bodies | to_json }}
 {% endif %}
 {% endif %}
+{% if processor_config.keys is defined %}
+    keys:
+{% for key in processor_config.keys %}
+      - {{ key }}
+{% endfor %}
+{% endif %}
 {% endfor %}
 
 exporters:
@@ -122,21 +147,33 @@ exporters:
 {% endif %}
 {% if exporter_config.tls is defined %}
     tls:
-{% for key, value in exporter_config.tls.items() %}
-      {{ key }}: {{ value }}
-{% endfor %}
+{% if exporter_config.tls.insecure is defined %}
+      insecure: {{ exporter_config.tls.insecure }}
+{% endif %}
 {% endif %}
 {% if exporter_config.sending_queue is defined %}
     sending_queue:
-{% for key, value in exporter_config.sending_queue.items() %}
-      {{ key }}: {{ value }}
-{% endfor %}
+{% if exporter_config.sending_queue.num_consumers is defined %}
+      num_consumers: {{ exporter_config.sending_queue.num_consumers }}
+{% endif %}
+{% if exporter_config.sending_queue.queue_size is defined %}
+      queue_size: {{ exporter_config.sending_queue.queue_size }}
+{% endif %}
 {% endif %}
 {% if exporter_config.retry_on_failure is defined %}
     retry_on_failure:
-{% for key, value in exporter_config.retry_on_failure.items() %}
-      {{ key }}: {{ value }}
-{% endfor %}
+{% if exporter_config.retry_on_failure.enabled is defined %}
+      enabled: {{ exporter_config.retry_on_failure.enabled }}
+{% endif %}
+{% if exporter_config.retry_on_failure.initial_interval is defined %}
+      initial_interval: {{ exporter_config.retry_on_failure.initial_interval }}
+{% endif %}
+{% if exporter_config.retry_on_failure.max_interval is defined %}
+      max_interval: {{ exporter_config.retry_on_failure.max_interval }}
+{% endif %}
+{% if exporter_config.retry_on_failure.max_elapsed_time is defined %}
+      max_elapsed_time: {{ exporter_config.retry_on_failure.max_elapsed_time }}
+{% endif %}
 {% endif %}
 {% if exporter_config.verbosity is defined %}
     verbosity: {{ exporter_config.verbosity }}
@@ -154,15 +191,15 @@ service:
   telemetry:
 {% if signoz_otel_service_telemetry.logs is defined %}
     logs:
-{% for key, value in signoz_otel_service_telemetry.logs.items() %}
-      {{ key }}: "{{ value }}"
-{% endfor %}
+{% if signoz_otel_service_telemetry.logs.level is defined %}
+      level: "{{ signoz_otel_service_telemetry.logs.level }}"
+{% endif %}
 {% endif %}
 {% if signoz_otel_service_telemetry.metrics is defined %}
     metrics:
-{% for key, value in signoz_otel_service_telemetry.metrics.items() %}
-      {{ key }}: "{{ value }}"
-{% endfor %}
+{% if signoz_otel_service_telemetry.metrics.level is defined %}
+      level: "{{ signoz_otel_service_telemetry.metrics.level }}"
+{% endif %}
 {% endif %}
 
 {% endif %}
@@ -177,4 +214,5 @@ service:
   extensions: {{ signoz_otel_service_extensions | to_json }}
 {% else %}
   extensions: []
+{% endif %}
 {% endif %}
