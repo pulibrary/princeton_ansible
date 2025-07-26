@@ -16,10 +16,9 @@ nginx_modules:
 app_protect_dir: "/var/log/app_protect/*.log"
 # NGINX Plus OpenTelemetry Collector Configuration
 signoz_is_local: false
+# NGINX Plus OpenTelemetry Collector Configuration
+signoz_is_local: false
 signoz_otel_receivers:
-  nginx:
-    endpoint: "http://localhost:8080/api"
-    collection_interval: 30s
   hostmetrics:
     collection_interval: 30s
     scrapers:
@@ -28,21 +27,23 @@ signoz_otel_receivers:
       memory: {}
       disk: {}
       network: {}
-      process: {}
       filesystem: {}
+      # Removed process scraper to avoid kernel thread errors
   filelog/nginx-access:
     include:
       - "/var/log/nginx/access.log"
     start_at: end
     operators:
-      - type: regex_parser
-        regex: '^(?P<remote_addr>[^ ]*) - (?P<remote_user>[^ ]*) \[(?P<time_local>[^\]]*)\] "(?P<request>[^"]*)" (?P<status>[^ ]*) (?P<body_bytes_sent>[^ ]*) "(?P<http_referer>[^"]*)" "(?P<http_user_agent>[^"]*)"'
+      # Simple approach - just add metadata without parsing
       - type: add
         field: attributes.log_type
         value: "nginx_access"
       - type: add
         field: attributes.service_name
         value: "nginx-plus"
+      - type: add
+        field: attributes.log_format
+        value: "combined"
   filelog/nginx-error:
     include:
       - "/var/log/nginx/error.log"
@@ -84,7 +85,7 @@ signoz_otel_exporters:
 
 signoz_otel_service_pipelines:
   metrics:
-    receivers: [hostmetrics, nginx]
+    receivers: [hostmetrics]
     processors: [resource, batch]
     exporters: [otlp, debug]
   logs:
