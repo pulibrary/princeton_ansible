@@ -1,28 +1,16 @@
 ---
 # by default this playbook runs in the staging environment
+# to run in qa, pass '-e runtime_env=qa'
 # to run in production, pass '-e runtime_env=production'
-- name: build the Absence and Travel Requests site
-  hosts: approvals_{{ runtime_env | default('staging') }}
+- name: Build Datadog infrastructure
+  hosts: sandbox-signoz1.lib.princeton.edu
   remote_user: pulsys
   become: true
   vars_files:
-    - ../group_vars/approvals/common.yml
-    - ../group_vars/approvals/{{ runtime_env | default('staging') }}.yml
-    - ../group_vars/approvals/vault.yml
-
+    - ../group_vars/signoz/common.yml
   roles:
-    - role: approvals
-    # samba must be before hr_share
-    - role: samba
-    - role: hr_share
     - role: signoz
-
   post_tasks:
-    - name: restart nginx
-      service:
-        name: nginx
-        state: restarted
-
     - name: tell everyone on slack you ran an ansible playbook
       community.general.slack:
         token: "{{ vault_pul_slack_token }}"
