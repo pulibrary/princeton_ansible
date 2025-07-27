@@ -13,9 +13,8 @@ Do these things once, after you clone this repo.
 1. Install Homebrew
 2. Install [Docker Desktop](https://docs.docker.com/desktop/install/mac-install/)
 3. Run `bin/first-time-setup.sh` – this installs all the language and tooling dependencies
-4. Ensure [`uv`](https://github.com/pypa/uv) is installed (`pipx install uv` or your preferred installer)
-5. Run `bin/setup` – this adds a [pre-commit hook](.githooks/pre-commit) to your environment that prevents checking in unencrypted vault files
-6. Follow the steps under "Every time setup"
+4. Run `bin/setup` – this adds a [pre-commit hook](.githooks/pre-commit) to your environment that prevents checking in unencrypted vault files
+5. Follow the steps under "Every time setup"
 
 ### Windows / Ubuntu (WSL)
 
