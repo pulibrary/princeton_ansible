@@ -10,3 +10,98 @@ redis__server_default_configuration:
   maxmemory: "{{ redis__server_maxmemory }}"
   maxmemory-policy: "{{ redis__server_maxmemory_policy }}"
   maxmemory-samples: "{{ redis__server_maxmemory_samples }}"
+# Redis OpenTelemetry Collector Configuration
+signoz_is_local: false
+signoz_otel_receivers:
+  hostmetrics:
+    collection_interval: 30s
+    scrapers:
+      cpu: {}
+      load: {}
+      memory: {}
+      disk: {}
+      network: {}
+      filesystem: {}
+  filelog/redis:
+    include:
+      - /var/log/redis/redis-server.log
+    operators:
+      - type: regex_parser
+        regex: '^(?P<pid>\d+):(?P<role>\w+) (?P<ts>\d{2} \w+ \d{4} \d{2}:\d{2}:\d{2}\.\d+) (?P<log_level>[.\-*#]) (?P<message>.*)$'
+        parse_from: body
+        timestamp:
+          parse_from: attributes.ts
+          layout: '02 Jan 2006 15:04:05.000'
+          layout_type: gotime
+        severity:
+          parse_from: attributes.log_level
+          overwrite_text: true
+          mapping:
+            debug: '.'
+            info:
+              - '-'
+              - '*'
+            warn: '#'
+        on_error: send
+      - type: move
+        if: attributes.message != nil
+        from: attributes.message
+        to: body
+      - type: remove
+        if: attributes.log_level != nil
+        field: attributes.log_level
+      - type: remove
+        if: attributes.ts != nil
+        field: attributes.ts
+      - type: add
+        field: attributes.source
+        value: redis
+  redis:
+    endpoint: 127.0.0.1:6379
+    collection_interval: 60s
+    password: ""
+    metrics:
+      redis.maxmemory:
+        enabled: true
+      redis.cmd.latency:
+        enabled: true
+
+signoz_otel_processors:
+  resource:
+    attributes:
+      - key: host.name
+        value: "{{ ansible_fqdn }}"
+        action: upsert
+      - key: service.name
+        value: "redis-server"
+        action: upsert
+      - key: service.version
+        value: "staging"
+        action: upsert
+      - key: environment
+        value: "staging"
+        action: upsert
+  batch:
+    timeout: 30s
+    send_batch_size: 512
+    send_batch_max_size: 1024
+
+signoz_otel_exporters:
+  otlp:
+    endpoint: "http://sandbox-signoz1.lib.princeton.edu:4317"
+    tls:
+      insecure: true
+  debug:
+    verbosity: basic
+
+signoz_otel_service_pipelines:
+  metrics:
+    receivers: [hostmetrics, redis]
+    processors: [resource, batch]
+    exporters: [otlp, debug]
+  logs:
+    receivers: [filelog/redis]
+    processors: [resource, batch]
+    exporters: [otlp, debug]
+
+signoz_otel_service_extensions: []
