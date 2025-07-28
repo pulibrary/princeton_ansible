@@ -6,7 +6,7 @@ This Ansible role installs and configures SigNoz, an open-source observability p
 
  2. Client Collector Mode: Installs and configures only the OpenTelemetry Collector (otelcol-contrib) to act as a client, sending telemetry data from a host to a remote SigNoz server (or any OTLP-compatible backend).
 
-The mode is determined by the `signoz_is_local` boolean variable.
+The mode is determined by the `signoz_is_server` boolean variable.
 
 ### Requirements
 This role requires the following Ansible collections to be installed on your control node:
@@ -26,9 +26,9 @@ This variable is mandatory and dictates the role's entire behavior.
 
 |**Variable**  | **Type** | **Default** | **Description **|
 |--|--|-:|-:|
-|  `signoz_is_local`| boolean | `undefined` |(Required) Set to true to perform a full local SigNoz installation. Set to false to configure the host as a client with the OpenTelemetry Collector.  |
+|  `signoz_is_server`| boolean | `undefined` |(Required) Set to true to perform a full local SigNoz installation. Set to false to configure the host as a client with the OpenTelemetry Collector.  |
 
-**Local Server Mode Variables** (`signoz_is_local: true`)
+**Local Server Mode Variables** (`signoz_is_server: true`)
 
 These variables are used when deploying a full SigNoz instance.
 
@@ -40,7 +40,7 @@ These variables are used when deploying a full SigNoz instance.
 |`signoz_repo_url`  | `https://github.com/SigNoz/signoz.git` | The URL of the SigNoz Git repository. |
 | `signoz_repo_version` | `main` | The git branch, tag, or commit to check out for the installation. |
 
-**Client Collector Mode Variables** (`signoz_is_local: false`)
+**Client Collector Mode Variables** (`signoz_is_server: false`)
 
 These variables control the setup of the standalone OpenTelemetry Collector.
 
@@ -80,7 +80,7 @@ This playbook will install Docker and deploy the full SigNoz platform on the tar
   roles:
     - role: signoz
       vars:
-        signoz_is_local: true
+        signoz_is_server: true
 ```
 
 2. Configure a Client Node to Send Host Metrics
@@ -140,7 +140,7 @@ This playbook installs the OpenTelemetry Collector on a client and configures it
     - role: signoz
       vars:
         # Set to client mode
-        signoz_is_local: false
+        signoz_is_server: false
         # Specify the remote SigNoz server endpoint
         signoz_otlp_endpoint: "sandbox-signoz1.lib.princeton.edu:4317"
 ```
