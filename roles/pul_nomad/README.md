@@ -64,20 +64,19 @@ Variables have defaults in [`defaults/main.yml`](defaults/main.yml) and may be d
 
 Consul is a service registration system with a DNS API.
 
-What this means is that you can register services in it, like
-`128.4.1.2 on port 8216 is a postgres database`, and then other services can
-configure their DB host to `postgres-database.service.consul` and consul will
-route it to `128.4.1.2:8216`.
+Nomad uses it to register services. This means when you deploy an application like Figgy and it starts a container on port 94182, Nomad tells Consul "Figgy is running on port 94182 on machine nomad-client-staging1.lib.princeton.edu, call it figgy-staging", which lets other machines in the cluster contact any instance it has registered as "figgy-staging" by contacting "figgy-staging.consul.service" as if it was a URL.
 
 Multiple services can be registered to the same name and Consul will load
 balance them, and consul can health check the services to make sure it doesn't
-route anything to services that are broken.
+route anything to services that are broken. For example, if one figgy container broke, then Consul won't forward figgy-staging.consul.service to it.
+
+We use Consul with Nomad, because our nginx load balancer can query Consul for machines for a specific service and automatically adjust when Nomad scales a service without reconfiguring nginx.
 
 ### Server Types
 
 Consul has "server" software and "client" software.
 
-A cluster consists of 3 server instances, one on each `nomad-host-*.lib.princeton.edu` VM, and a client software install on every client VM (`nomad-client-*.lib.princeton.edu`)
+Our cluster consists of 3 server instances, one on each `nomad-host-*.lib.princeton.edu` VM, and a client software install on every client VM (`nomad-client-*.lib.princeton.edu`)
 
 ### Configuration
 
