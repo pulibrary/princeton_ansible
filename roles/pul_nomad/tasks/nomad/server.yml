@@ -1,0 +1,45 @@
+---
+- name: pul_nomad | nomad | Install Nomad
+  ansible.builtin.import_tasks: install.yml
+
+# We configure_server first because it registers and sets all the Consul
+# keys/policies, which configure.yml needs.
+- name: pul_nomad | nomad | Configure Nomad Server
+  ansible.builtin.import_tasks: configure_server.yml
+
+- name: pul_nomad | nomad | Configure Nomad
+  ansible.builtin.import_tasks: configure.yml
+
+- name: pul_nomad | nomad | Start Nomad service
+  become: true
+  ansible.builtin.service:
+    name: nomad
+    state: started
+    enabled: true
+  # Make sure it's healthy before we continue, so there's a leader.
+  register: nomadServiceDetails
+  until: nomadServiceDetails.status.ActiveState == "active"
+  retries: 15
+  delay: 5
+
+# Bootstrap ACL
+# We have to do check/register/act here for idempotence because the nomad_token
+# module can't assign a known secret ID, and we want to know the management
+# token.
+- name: 'pul_nomad | nomad | Register existing nomad acl tokens'
+  ansible.builtin.shell:
+    cmd: "/usr/local/bin/nomad acl token list || true"
+  environment:
+    NOMAD_TOKEN: '{{ pul_nomad_management_token }}'
+  register: nomad_acl_tokens
+  run_once: true
+  changed_when: false
+- name: 'pul_nomad | nomad | Bootstrap nomad'
+  ansible.builtin.command:
+    cmd: /usr/local/bin/nomad acl bootstrap -
+    stdin: '{{ pul_nomad_management_token }}'
+  run_once: true
+  retries: 15
+  delay: 5
+  when:
+    - "'Bootstrap Token' not in nomad_acl_tokens.stdout "

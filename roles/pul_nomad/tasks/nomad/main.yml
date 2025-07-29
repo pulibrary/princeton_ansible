@@ -1,0 +1,17 @@
+---
+# Get things like nomad_installed_version.
+- name: pul_nomad | nomad | Set nomad facts
+  ansible.builtin.import_tasks: nomad_facts.yml
+
+# Install servers first.
+# `include_tasks` instead of `import_tasks` makes it safe to use
+# `run_once: true` in child tasks, since they'll only execute for servers.
+- name: pul_nomad | nomad | Install & Configure Servers
+  ansible.builtin.include_tasks: server.yml
+  when: pul_nomad_role == 'server'
+
+# `include_tasks` instead of `import_tasks` makes it safe to use
+# `run_once: true` in child tasks, since they'll only execute for clients.
+- name: pul_nomad | nomad | Install & Configure Clients
+  ansible.builtin.include_tasks: client.yml
+  when: pul_nomad_role == 'client'

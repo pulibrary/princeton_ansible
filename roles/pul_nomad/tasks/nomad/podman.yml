@@ -1,0 +1,122 @@
+---
+# Podman is a container runtime that Nomad uses to run containers.
+# We only install it on Rocky because it has the most up to date version of
+# podman.
+- name: 'pul_nomad | nomad | podman | Install & Configure Podman'
+  when:
+    - "ansible_os_family == 'RedHat'"
+  block:
+    - name: 'pul_nomad | nomad | podman | Install Podman'
+      ansible.builtin.dnf:
+        name: podman
+        state: latest
+
+    # DMIDecode is needed for Rocky boxes, it makes cpu fingerprinting work.
+    - name: 'pul_nomad | nomad | podman | Install dmidecode'
+      ansible.builtin.dnf:
+        name: dmidecode
+        state: latest
+
+    - name: 'pul_nomad | nomad | podman | Keep Podman up'
+      ansible.builtin.service:
+        name: "podman.socket"
+        state: "started"
+        enabled: true
+
+    # Prune images with podman every night so we don't fill the disk with
+    # unused container images.
+    - name: 'pul_nomad | nomad | podman | Create podman update override dir'
+      ansible.builtin.file:
+        path: /etc/systemd/system/podman-auto-update.service.d
+        state: directory
+    - name: 'pul_nomad | nomad | podman | Prune podman containers nightly'
+      ansible.builtin.copy:
+        src: 'podman/auto_update_override.conf'
+        dest: /etc/systemd/system/podman-auto-update.service.d/override.conf
+      notify:
+        - reload systemd
+    - name: 'pul_nomad | nomad | podman | Configure nightly prune timer'
+      ansible.builtin.service:
+        name: "podman-auto-update.timer"
+        state: "started"
+        enabled: true
+# When we install the nomad podman driver we record the version we installed in
+# /var/nomad/.podman-plugin-version. There isn't really another way to get it,
+# so we check for that version to see if we need to install a newer version.
+- name: 'pul_nomad | nomad | podman | Check for existing podman driver'
+  ansible.builtin.stat:
+    path: "/var/nomad/plugins/nomad-driver-podman"
+  register: podman_plugin_installed
+- name: 'pul_nomad | nomad | podman | Check for existing podman driver version'
+  ansible.builtin.stat:
+    path: "/var/nomad/.podman-plugin-version"
+  when: podman_plugin_installed.stat.exists
+  register: podman_driver_version
+- name: 'pul_nomad | nomad | podman | Get installed podman version'
+  ansible.builtin.command:
+    cmd: cat /var/nomad/.podman-plugin-version
+  register: installed_nomad_podman_version
+  when:
+    - podman_plugin_installed.stat.exists
+    - podman_driver_version.stat.exists
+  changed_when: false
+- name: 'pul_nomad | nomad | podman | Install Nomad Podman plugin'
+  when:
+    - (not podman_plugin_installed.stat.exists) or (not podman_driver_version.stat.exists) or (installed_nomad_podman_version.stdout != nomad_podman_version)
+  block:
+    - name: 'pul_nomad | nomad | podman | Create a temporary directory'
+      ansible.builtin.tempfile:
+        state: directory
+        prefix: ansible-nomad.
+      register: nomad_temp_dir
+
+    - name: 'pul_nomad | nomad | podman | Download and unarchive Nomad'
+      block:
+        - name: 'pul_nomad | nomad | podman | Download package checksum file'
+          ansible.builtin.get_url:
+            url: "https://releases.hashicorp.com/nomad-driver-podman/{{ nomad_podman_version }}/nomad-driver-podman_{{ nomad_podman_version }}_SHA256SUMS"
+            dest: "{{ nomad_temp_dir.path }}/nomad-driver-podman_{{ nomad_podman_version }}_SHA256SUMS"
+          tags: installation
+
+        - name: 'pul_nomad | nomad | podman | Read package checksum'
+          ansible.builtin.shell: grep nomad-driver-podman_{{nomad_podman_version}}_linux_{{ nomad_architecture }}.zip {{ nomad_temp_dir.path }}/nomad-driver-podman_{{ nomad_podman_version }}_SHA256SUMS
+          register: nomad_sha256
+          changed_when: false
+          tags:
+            - installation
+
+        - name: 'pul_nomad | nomad | podman | Download Nomad Podman'
+          ansible.builtin.get_url:
+            url: "https://releases.hashicorp.com/nomad-driver-podman/{{ nomad_podman_version }}/nomad-driver-podman_{{ nomad_podman_version }}_linux_{{ nomad_architecture }}.zip"
+            dest: "{{ nomad_temp_dir.path }}/nomad-driver-podman_{{ nomad_podman_version }}_linux_{{ nomad_architecture }}.zip"
+            checksum: "sha256:{{ nomad_sha256.stdout.split(' ') | first }}"
+            timeout: 42
+          register: nomad_download
+          tags: installation
+
+        - name: 'pul_nomad | nomad | podman | Unarchive Nomad Podman and install binary'
+          ansible.builtin.unarchive:
+            remote_src: true
+            src: "{{ nomad_temp_dir.path }}/nomad-driver-podman_{{ nomad_podman_version }}_linux_{{ nomad_architecture }}.zip"
+            dest: "/var/nomad/plugins/"
+            creates: "/var/nomad/plugins/nomad-driver-podman"
+            mode: "0755"
+          register: nomad_install
+          notify:
+            - reload systemd
+            - restart nomad
+          when: nomad_download is changed
+          tags: installation
+
+        - name: 'pul_nomad | nomad | podman | Record version'
+          ansible.builtin.copy:
+            content: "{{ nomad_podman_version }}"
+            dest: "/var/nomad/.podman-plugin-version"
+          when: nomad_download is changed
+          tags: installation
+      always:
+        - name: 'pul_nomad | nomad | podman | Cleanup'
+          ansible.builtin.file:
+            path: "{{ nomad_temp_dir.path }}"
+            state: absent
+          tags: installation

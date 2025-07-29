@@ -1,0 +1,21 @@
+---
+- name: pul_nomad | consul | Install Consul
+  ansible.builtin.import_tasks: install.yml
+
+- name: pul_nomad | consul | Configure Consul
+  ansible.builtin.import_tasks: configure.yml
+
+- name: pul_nomad | consul | Server Configuration
+  ansible.builtin.import_tasks: configure_server.yml
+
+- name: pul_nomad | consul | Start Consul service
+  become: true
+  ansible.builtin.service:
+    name: consul
+    state: started
+    enabled: true
+  # Make sure it's healthy before we continue, so there's a leader.
+  register: consulServiceDetails
+  until: consulServiceDetails.status.ActiveState == "active"
+  retries: 15
+  delay: 5
