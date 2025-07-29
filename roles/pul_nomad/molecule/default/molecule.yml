@@ -9,11 +9,18 @@ scenario:
     - create
     - prepare
     - converge
-    # - idempotence
+    - idempotence
     - side_effect
     - verify
     - cleanup
     - destroy
+dependency:
+  name: galaxy
+  options:
+    ignore-certs: True
+    ignore-errors: True
+    role-file: requirements.yml
+    requirements-file: collections.yml
 driver:
   name: docker
 lint: |
@@ -22,8 +29,8 @@ lint: |
   ansible-lint
 platforms:
   - name: nomadserver1
-    image: "quay.io/pulibrary/jammy-ansible:latest"
-    command: ""
+    image: "ghcr.io/pulibrary/pul_containers:jammy_multi_systemd"
+    command: "/sbin/init"
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
     privileged: true
@@ -46,8 +53,8 @@ platforms:
       - 127.0.0.1:4646:4646 # Nomad port
   # Debian box to ensure it can build a client on either.
   - name: nomadserver2
-    image: "quay.io/pulibrary/jammy-ansible:latest"
-    command: ""
+    image: "ghcr.io/pulibrary/pul_containers:jammy_multi_systemd"
+    command: "/sbin/init"
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
     privileged: true
@@ -66,8 +73,8 @@ platforms:
     networks:
       - name: "nomad"
   - name: nomadserver3
-    image: "quay.io/pulibrary/jammy-ansible:latest"
-    command: ""
+    image: "ghcr.io/pulibrary/pul_containers:jammy_multi_systemd"
+    command: "/sbin/init"
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
     privileged: true
@@ -86,8 +93,8 @@ platforms:
     networks:
       - name: "nomad"
   - name: nomadclient1
-    image: "eniocarboni/docker-rockylinux-systemd:latest"
-    command: "/sbin/init"
+    image: "ghcr.io/pulibrary/pul_containers:rocky_multi"
+    command: "/usr/sbin/init"
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
     privileged: true
@@ -111,5 +118,7 @@ platforms:
 provisioner:
   name: ansible
   log: true
+  env:
+    ANSIBLE_PIPELINING: "True"
 verifier:
   name: ansible
