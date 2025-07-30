@@ -48,10 +48,9 @@
     state: mounted
   when:
     - running_on_server
-    - "rails_app_env == 'staging'"
   tags: 'mounts'
 
-- name: Figgy | Create staging directories in mount
+- name: Figgy | Create repository directories in mount
   ansible.builtin.file:
     path: '{{item}}'
     state: 'directory'
@@ -62,11 +61,13 @@
   become_user: '{{deploy_user}}'
   when:
     - running_on_server
-    - "rails_app_env == 'staging'"
   with_items:
     - '{{figgy_repository_mount}}'
     - '{{figgy_stream_derivatives_mount}}'
     - '{{figgy_derivatives_mount}}'
+    - '{{figgy_fallback_repository_mount}}'
+    - '{{figgy_fallback_stream_derivatives_mount}}'
+    - '{{figgy_fallback_derivatives_mount}}'
 
 - name: Figgy | Copy smb credentials
   ansible.builtin.copy:
@@ -235,7 +236,6 @@
     - mounts
   when:
     - running_on_server
-    - "rails_app_env == 'staging'"
 
 - name: Figgy | Gather distribution facts
   ansible.builtin.setup:
