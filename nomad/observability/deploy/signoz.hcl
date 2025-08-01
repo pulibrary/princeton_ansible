@@ -1,3 +1,7 @@
+variable "branch_or_sha" {
+  type = string
+  default = "main"
+}
 job "signoz-collector" {
   # Set priority over 50 - it's important we can send traces.
   priority = 60
