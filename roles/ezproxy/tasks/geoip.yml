@@ -1,0 +1,27 @@
+---
+- name: Ezproxy | add geoip ppa
+  ansible.builtin.apt_repository:
+    repo: "ppa:maxmind/ppa"
+    state: present
+
+- name: Ezproxy | install geoupdate
+  ansible.builtin.apt:
+    name: geoipupdate
+    state: present
+
+- name: Ezproxy | add geoip configuration file
+  ansible.builtin.template:
+    src: geoip_conf.j2
+    dest: "/etc/GeoIP.conf"
+    mode: "0644"
+  when:
+    - running_on_server
+
+- name: Ezproxy | run a cronjob to update
+  ansible.builtin.cron:
+    name: "run the update"
+    minute: 49
+    hour: 8
+    job: "/usr/bin/geoipupdate"
+  when:
+    - running_on_server
