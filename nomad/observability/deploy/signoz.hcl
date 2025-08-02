@@ -2,6 +2,8 @@ variable "branch_or_sha" {
   type = string
   default = "main"
 }
+# This automatically runs a signoz collector on every client and binds a receive
+# interface on Podman's loopback network.
 job "signoz-collector" {
   # Set priority over 50 - it's important we can send traces.
   priority = 60
@@ -48,6 +50,7 @@ receivers:
   otlp:
     protocols:
       grpc:
+        endpoint: "0.0.0.0:4317"
 processors:
   resource:
     attributes:
@@ -93,6 +96,14 @@ service:
       receivers: [otlp]
       processors: [memory_limiter, resource, batch]
       exporters: [otlp]
+  telemetry:
+    metrics:
+      readers:
+        - pull:
+            exporter:
+              prometheus:
+                host: 127.0.0.1
+                port: 9998
 EOF
 
         destination = "local/config/otel-collector-config.yaml"
