@@ -1,22 +1,22 @@
 ---
 # File: dnsmasq.yml - Dnsmasq tasks for Consul
-- name: 'pul_nomad | dnsmasq | Create dnsmasq user/group'
+- name: Pul_nomad | dnsmasq | Create dnsmasq user/group
   block:
     # Add group
-    - name: 'pul_nomad | dnsmasq | Add dnsmasq group'
+    - name: Pul_nomad | dnsmasq | Add dnsmasq group
       ansible.builtin.group:
         name: "dnsmasq"
         state: present
 
     # Add user
-    - name: 'pul_nomad | dnsmasq | Add dnsmasq user'
+    - name: Pul_nomad | dnsmasq | Add dnsmasq user
       ansible.builtin.user:
         name: "dnsmasq"
         comment: Consul user
         group: "dnsmasq"
         system: true
 
-- name: 'pul_nomad | dnsmasq | Install Dnsmasq package'
+- name: Pul_nomad | dnsmasq | Install Dnsmasq package
   ansible.builtin.package:
     name: "dnsmasq"
     state: present
@@ -26,15 +26,15 @@
 # We need to get DNSMasq's 127.0.0.1 above the Princeton nameservers, but
 # NetworkManager manages DNS on RedHat machines. This updates the connection to
 # prepend the DNS server.
-- name: 'pul_nomad | dnsmasq | Configure DNS for consul'
+- name: Pul_nomad | dnsmasq | Configure DNS for consul
   become: true
-  ansible.builtin.shell: '/bin/nmcli connection modify {{ ansible_default_ipv4.interface }} ipv4.dns "127.0.0.1" && /bin/nmcli connection up {{ ansible_default_ipv4.interface }}'
+  ansible.builtin.shell: '/bin/nmcli connection modify {{ network_connection_name | default(ansible_default_ipv4.interface) }} ipv4.dns "127.0.0.1" && /bin/nmcli connection up {{ network_connection_name | default(ansible_default_ipv4.interface) }}'
   when:
     - "ansible_os_family == 'RedHat'"
   changed_when: false
   tags:
     - notest
-- name: 'pul_nomad | dnsmasq | Create Dnsmasq configuration'
+- name: Pul_nomad | dnsmasq | Create Dnsmasq configuration
   ansible.builtin.copy:
     src: dnsmasq/dnsmasq.conf
     dest: "/etc/dnsmasq.conf"
@@ -43,7 +43,8 @@
     mode: "0644"
   become: true
   notify: restart dnsmasq
-- name: 'pul_nomad | dnsmasq | Create Dnsmasq configuration' # noqa no-jinja-when
+
+- name: Pul_nomad | dnsmasq | Create Dnsmasq configuration # noqa no-jinja-when
   ansible.builtin.template:
     src: dnsmasq/dnsmasq-10-consul.j2
     dest: "/etc/dnsmasq.d/10-consul"
@@ -53,15 +54,15 @@
   become: true
   notify: restart dnsmasq
 
-- name: 'pul_nomad | dnsmasq | Disable systemd-resolved'
+- name: Pul_nomad | dnsmasq | Disable systemd-resolved
   when: ansible_service_mgr == "systemd"
   block:
-    - name: 'pul_nomad | dnsmasq | Check if systemd-resolved service exists'
+    - name: Pul_nomad | dnsmasq | Check if systemd-resolved service exists
       ansible.builtin.stat:
         path: /lib/systemd/system/systemd-resolved.service
       register: systemd_resolved_service
 
-    - name: 'pul_nomad | dnsmasq | Disable systemd-resolved service'
+    - name: Pul_nomad | dnsmasq | Disable systemd-resolved service
       ansible.builtin.service:
         name: systemd-resolved
         enabled: false
@@ -69,24 +70,24 @@
       become: true
       when: systemd_resolved_service.stat.exists
 
-    - name: 'pul_nomad | dnsmasq | Check if resolv.conf is pointing to systemd-resolved'
+    - name: Pul_nomad | dnsmasq | Check if resolv.conf is pointing to systemd-resolved
       ansible.builtin.stat:
         path: /etc/resolv.conf
       register: resolv_dot_conf
 
-    - name: 'pul_nomad | dnsmasq | Configure resolv.conf for dnsmasq'
+    - name: Pul_nomad | dnsmasq | Configure resolv.conf for dnsmasq
       when:
         - resolv_dot_conf.stat.exists
         - resolv_dot_conf.stat.islnk
         - resolv_dot_conf.stat.lnk_source == "/run/systemd/resolve/stub-resolv.conf"
       become: true
       block:
-        - name: 'pul_nomad | dnsmasq | Remove resolv.conf association with systemd-resolved'
+        - name: Pul_nomad | dnsmasq | Remove resolv.conf association with systemd-resolved
           ansible.builtin.file:
             path: /etc/resolv.conf
             state: absent
 
-        - name: 'pul_nomad | dnsmasq | Add a nameserver entry poining to localhost for dnsmasq'
+        - name: Pul_nomad | dnsmasq | Add a nameserver entry poining to localhost for dnsmasq
           ansible.builtin.lineinfile:
             path: /etc/resolv.conf
             regexp: ^nameserver 127.0.0.1
@@ -95,7 +96,8 @@
             owner: root
             group: root
             mode: u=rw,g=r,o=r
-- name: "pul_nomad | dnsmasq | Enable DNSMasq"
+
+- name: Pul_nomad | dnsmasq | Enable DNSMasq
   ansible.builtin.service:
     name: dnsmasq
     state: started
