@@ -13,7 +13,7 @@ job "signoz-collector" {
   group "otel-agent" {
     count = 1
     network {
-      port "otlp_receive" { to = 4320 }
+      port "otlp_receive" { static = 4320 }
       # Add the consul DNS loopback, so we can use consul queries.
       dns {
         servers = ["10.88.0.1", "128.112.129.209"]
