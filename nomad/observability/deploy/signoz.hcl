@@ -2,8 +2,7 @@ variable "branch_or_sha" {
   type = string
   default = "main"
 }
-# This automatically runs a signoz collector on every client and binds a receive
-# interface on Podman's loopback network.
+# This automatically runs a signoz collector on every client.
 job "signoz-collector" {
   # Set priority over 50 - it's important we can send traces.
   priority = 60
@@ -14,7 +13,7 @@ job "signoz-collector" {
   group "otel-agent" {
     count = 1
     network {
-      port "otlp_receive" { to = 4317 }
+      port "otlp_receive" { to = 4320 }
       # Add the consul DNS loopback, so we can use consul queries.
       dns {
         servers = ["10.88.0.1", "128.112.129.209"]
@@ -50,7 +49,7 @@ receivers:
   otlp:
     protocols:
       grpc:
-        endpoint: "0.0.0.0:4317"
+        endpoint: "0.0.0.0:4320"
 processors:
   resource:
     attributes:
