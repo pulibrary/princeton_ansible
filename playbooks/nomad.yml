@@ -6,8 +6,10 @@
 #   ansible-playbook playbooks/nomad.yml --tags dpulc
 # Provision cluster, but skip application configuration:
 #   ansible-playbook playbooks/nomad.yml -e runtime_env=production --skip-tags app_config
+# Target specific environment:
+#   ansible-playbook playbooks/nomad.yml -e runtime_env=sandbox
 - name: build the nomad cluster
-  hosts: nomad_cluster
+  hosts: "nomad_{{ runtime_env | default('staging') }}"
   remote_user: pulsys
   become: true
   vars_files:
@@ -36,7 +38,6 @@
     - ../group_vars/nomad/analytics/vault.yml
   roles:
     - role: pul_nomad
-
   post_tasks:
     - name: tell everyone on slack you ran an ansible playbook
       community.general.slack:
