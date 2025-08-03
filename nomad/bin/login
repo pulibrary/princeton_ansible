@@ -1,16 +1,40 @@
 #!/bin/bash
+ENV="${1:-sandbox}"
+
+# Set the appropriate nomad host and URL based on environment
+case "${ENV}" in
+  "production")
+    NOMAD_HOST="nomad-host-prod1.lib.princeton.edu"
+    NOMAD_UI_URL="https://nomad.lib.princeton.edu"
+    ;;
+  "staging")
+    NOMAD_HOST="nomad-host-staging1.lib.princeton.edu"
+    NOMAD_UI_URL="https://nomad-staging.lib.princeton.edu"
+    ;;
+  "sandbox")
+    NOMAD_HOST="nomad-host-sandbox1.lib.princeton.edu"
+    NOMAD_UI_URL="https://nomad-sandbox.lib.princeton.edu"
+    ;;
+  *)
+    echo "Unknown environment: ${ENV}"
+    echo "Usage: ./bin/login [production|staging|sandbox]"
+    echo "Defaults to sandbox if no environment specified."
+    exit 1
+    ;;
+esac
 
 # Make sure we're on VPN
-if ! nslookup nomad-host-prod1.lib.princeton.edu 2>&1 > /dev/null
-then
-  echo "Unable to connect to nomad-host-prod1. Ensure you're on VPN."
+if ! nslookup ${NOMAD_HOST} 2>&1 > /dev/null; then
+  echo "Unable to connect to ${NOMAD_HOST}. Ensure you're on VPN."
   exit 1
 fi
 
-result=$(ssh deploy@nomad-host-prod1.lib.princeton.edu << EOF
-  nomad ui -authenticate -show-url
-EOF)
+echo "Getting authentication token for ${ENV} environment..."
 
+result=$(ssh deploy@${NOMAD_HOST} << 'EOF'
+  nomad ui -authenticate -show-url
+EOF
+)
 result=$(echo $result | tail -1 | sed 's/.*web UI: .*?\(.*\)/\1/')
-echo "Opening Nomad UI..."
-open "https://nomad.lib.princeton.edu?${result}"
+echo "Opening Nomad ${ENV} UI..."
+open "${NOMAD_UI_URL}?${result}"
