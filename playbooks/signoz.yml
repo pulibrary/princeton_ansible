@@ -2,20 +2,14 @@
 # by default this playbook runs in the staging environment
 # to run in qa, pass '-e runtime_env=qa'
 # to run in production, pass '-e runtime_env=production'
-- name: Build the postgresql project
-  hosts: postgresql_{{ runtime_env | default('staging') }}
+- name: Build Datadog infrastructure
+  hosts: sandbox-signoz1.lib.princeton.edu
   remote_user: pulsys
   become: true
   vars_files:
-    - ../group_vars/postgresql/{{ runtime_env | default('staging') }}.yml
-    - ../host_vars/lib-postgres-staging3.princeton.edu.yml
-    - ../group_vars/postgresql/vault.yml
-    - ../group_vars/figgy/vault.yml # Figgy vault vars for replication user/password
+    - ../group_vars/signoz/common.yml
   roles:
-    - role: common
-    - role: postgresql
     - role: signoz
-
   post_tasks:
     - name: tell everyone on slack you ran an ansible playbook
       community.general.slack:
