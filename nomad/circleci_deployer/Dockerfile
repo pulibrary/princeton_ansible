@@ -66,4 +66,9 @@ RUN sudo /usr/local/ruby-build/install.sh
 RUN sudo ruby-build ${RUBY_VERSION} /usr/local/ruby
 ENV PATH="/usr/local/ruby/bin:${PATH}"
 
+# Install podman rootless dependencies.
+RUN sudo apt-get update -qq && DEBIAN_FRONTEND=noninteractive sudo apt-get install -yq --no-install-recommends \
+uidmap \
+slirp4netns
+
 RUN echo "$(ruby --version)"
