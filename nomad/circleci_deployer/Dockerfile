@@ -47,6 +47,7 @@ RUN set -ex; \
       unzip \
       xz-utils \
       zlib1g-dev \
+      podman \
       ; \
       sudo rm -rf /var/lib/apt/lists/*
 # Install packages needed for ruby-build
