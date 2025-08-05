@@ -14,6 +14,12 @@ job "traefik-wall-production" {
     # Only one high challenge node, otherwise everyone gets captcha'd twice.
     count = 1
 
+    update {
+      canary = 1
+      auto_promote = true
+      auto_revert = true
+    }
+
     network {
       port "http" { }
       port "traefik" { }
@@ -27,12 +33,13 @@ job "traefik-wall-production" {
     service {
       name = "traefik-wall-production"
       tags = ["highchallenge", "node-${NOMAD_ALLOC_INDEX}"]
+      canary_tags = ["canary"]
       port = "http"
 
       check {
-        name     = "alive"
-        type     = "tcp"
-        port     = "http"
+        type = "http"
+        port = "traefik"
+        path = "/ping"
         interval = "10s"
         timeout  = "2s"
       }
@@ -123,6 +130,12 @@ job "traefik-wall-production" {
     # Only one high challenge node, otherwise everyone gets captcha'd twice.
     count = 1
 
+    update {
+      canary = 1
+      auto_promote = true
+      auto_revert = true
+    }
+
     network {
       port "http" { }
       port "traefik" { }
@@ -136,12 +149,13 @@ job "traefik-wall-production" {
     service {
       name = "traefik-wall-production"
       tags = ["dpulchallenge", "node-${NOMAD_ALLOC_INDEX}"]
+      canary_tags = ["canary"]
       port = "http"
 
       check {
-        name     = "alive"
-        type     = "tcp"
-        port     = "http"
+        type = "http"
+        port = "traefik"
+        path = "/ping"
         interval = "10s"
         timeout  = "2s"
       }
@@ -230,6 +244,12 @@ job "traefik-wall-production" {
   group "traefik" {
     count = 2
 
+    update {
+      canary = 1
+      auto_promote = true
+      auto_revert = true
+    }
+
     network {
       port "http" { }
       port "traefik" { }
@@ -243,12 +263,13 @@ job "traefik-wall-production" {
     service {
       name = "traefik-wall-production"
       tags = ["lowchallenge", "node-${NOMAD_ALLOC_INDEX}"]
+      canary_tags = ["canary"]
       port = "http"
 
       check {
-        name     = "alive"
-        type     = "tcp"
-        port     = "http"
+        type = "http"
+        port = "traefik"
+        path = "/ping"
         interval = "10s"
         timeout  = "2s"
       }
