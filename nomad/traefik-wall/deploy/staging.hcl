@@ -82,6 +82,17 @@ job "traefik-wall-staging" {
         destination = "local/traefik.yml"
       }
 
+      template {
+        destination = "${NOMAD_SECRETS_DIR}/env.vars"
+        env = true
+        change_mode = "restart"
+        data = <<EOF
+        {{- with nomadVar "nomad/jobs/traefik-wall-staging" -}}
+        CONSUL_HTTP_TOKEN = {{ .CONSUL_ACL_TOKEN }}
+        {{- end -}}
+        EOF
+      }
+
       # Plugin Configuration
       artifact {
         source = "https://raw.githubusercontent.com/pulibrary/princeton_ansible/${ var.branch_or_sha }/nomad/traefik-wall/deploy/bot-plugin-staging.tpl.yml"
@@ -169,6 +180,17 @@ job "traefik-wall-staging" {
           "local/traefik-config:/etc/traefik/config.d",
           "local/challenge.tmpl.html:/challenge.tmpl.html"
         ]
+      }
+
+      template {
+        destination = "${NOMAD_SECRETS_DIR}/env.vars"
+        env = true
+        change_mode = "restart"
+        data = <<EOF
+        {{- with nomadVar "nomad/jobs/traefik-wall-staging" -}}
+        CONSUL_HTTP_TOKEN = {{ .CONSUL_ACL_TOKEN }}
+        {{- end -}}
+        EOF
       }
 
       # Static Configuration
