@@ -66,6 +66,17 @@ job "traefik-wall-production" {
         ]
       }
 
+      template {
+        destination = "${NOMAD_SECRETS_DIR}/env.vars"
+        env = true
+        change_mode = "restart"
+        data = <<EOF
+        {{- with nomadVar "nomad/jobs/traefik-wall-production" -}}
+        CONSUL_HTTP_TOKEN = {{ .CONSUL_ACL_TOKEN }}
+        {{- end -}}
+        EOF
+      }
+
       # Static Configuration
       artifact {
         source = "https://raw.githubusercontent.com/pulibrary/princeton_ansible/${ var.branch_or_sha }/nomad/traefik-wall/deploy/traefik.tpl.yml"
@@ -164,6 +175,17 @@ job "traefik-wall-production" {
         ]
       }
 
+      template {
+        destination = "${NOMAD_SECRETS_DIR}/env.vars"
+        env = true
+        change_mode = "restart"
+        data = <<EOF
+        {{- with nomadVar "nomad/jobs/traefik-wall-production" -}}
+        CONSUL_HTTP_TOKEN = {{ .CONSUL_ACL_TOKEN }}
+        {{- end -}}
+        EOF
+      }
+
       # Static Configuration
       artifact {
         source = "https://raw.githubusercontent.com/pulibrary/princeton_ansible/${ var.branch_or_sha }/nomad/traefik-wall/deploy/traefik.tpl.yml"
@@ -255,6 +277,17 @@ job "traefik-wall-production" {
           "local/traefik-config:/etc/traefik/config.d",
           "local/challenge.tmpl.html:/challenge.tmpl.html"
         ]
+      }
+
+      template {
+        destination = "${NOMAD_SECRETS_DIR}/env.vars"
+        env = true
+        change_mode = "restart"
+        data = <<EOF
+        {{- with nomadVar "nomad/jobs/traefik-wall-production" -}}
+        CONSUL_HTTP_TOKEN = {{ .CONSUL_ACL_TOKEN }}
+        {{- end -}}
+        EOF
       }
 
       # Static Configuration
