@@ -8,10 +8,19 @@
 
   tasks:
 
-    - name: Uninstall crowdstrike
+    - name: Uninstall crowdstrike (ubuntu)
       ansible.builtin.apt:
         name: falcon-sensor
         state: absent
+      when:
+        - ansible_os_family == "Debian"
+
+    - name: Uninstall crowdstrike (RHEL/Rocky)
+      ansible.builtin.dnf:
+        name: falcon-sensor
+        state: absent
+      when:
+        - ansible_os_family == "RedHat"
 
     - name: Wipe out directory for crowdstrike
       ansible.builtin.file:
