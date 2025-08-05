@@ -14,6 +14,11 @@ job "traefik-wall-staging" {
     # Only one high challenge node, otherwise everyone gets captcha'd twice.
     count = 1
 
+    update {
+      canary = 1
+      auto_promote = true
+    }
+
     network {
       port "http" { }
       port "traefik" { }
@@ -27,14 +32,15 @@ job "traefik-wall-staging" {
     service {
       name = "traefik-wall-staging"
       tags = ["highchallenge", "node-${NOMAD_ALLOC_INDEX}"]
+      canary_tags = ["canary"]
       port = "http"
 
       check {
-        name     = "alive"
-        type     = "tcp"
-        port     = "http"
+        type     = "http"
+        port     = "traefik"
         interval = "10s"
         timeout  = "2s"
+        path = "/ping"
       }
     }
     service {
@@ -108,6 +114,11 @@ job "traefik-wall-staging" {
   group "traefik" {
     count = 2
 
+    update {
+      canary = 1
+      auto_promote = true
+    }
+
     network {
       port "http" { }
       port "traefik" { }
@@ -121,14 +132,15 @@ job "traefik-wall-staging" {
     service {
       name = "traefik-wall-staging"
       tags = ["lowchallenge", "node-${NOMAD_ALLOC_INDEX}"]
+      canary_tags = ["canary"]
       port = "http"
 
       check {
-        name     = "alive"
-        type     = "tcp"
-        port     = "http"
+        type     = "http"
+        port     = "traefik"
         interval = "10s"
         timeout  = "2s"
+        path = "/ping"
       }
     }
 
