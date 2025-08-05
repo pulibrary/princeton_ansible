@@ -17,6 +17,7 @@ job "traefik-wall-staging" {
     update {
       canary = 1
       auto_promote = true
+      auto_revert = true
     }
 
     network {
@@ -117,6 +118,7 @@ job "traefik-wall-staging" {
     update {
       canary = 1
       auto_promote = true
+      auto_revert = true
     }
 
     network {
