@@ -6,7 +6,7 @@ This role installs and configures OpenPubKey SSH (opkssh) on Linux systems.
 
 - Ansible 2.9 or higher
 - Root access on target systems
-- Supported OS: Debian/Ubuntu, RHEL/CentOS/Fedora, Arch Linux, SUSE
+- Supported OS: Debian/Ubuntu, RHEL/CentOS/Fedora
 
 ## Role Variables
 
