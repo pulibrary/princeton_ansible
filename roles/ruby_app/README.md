@@ -1,6 +1,6 @@
 # Ruby App
 
-Installs a generic ruby app (Hanami or Rails running on puma have been tested)
+Installs components needed to serve generic ruby app (Hanami or Rails running on puma have been tested)
 
 ## Requirements
 
@@ -21,20 +21,21 @@ To update the ruby app env vars in your application but nothing else, run your
 playbook with --tags=site_config
 
 ## Role Variables
+For backwards compatibility any ruby_ var can also be set by rails_
 
 Available variables are listed below, along with default values (see `defaults/main.yml`):
 
-    rails_app_name: rails_app
+    ruby_app_name: ruby_app
 
 The name of the application
 
-    rails_app_directory: rails_app
+    ruby_app_directory: ruby_app
 
 The directory of your the application application
 
-    rails_app_symlinks: []
-    rails_app_dependencies: []
-    rails_app_vars: []
+    ruby_app_symlinks: []
+    ruby_app_dependencies: []
+    ruby_app_vars: []
 
 A python dictionary of found in `group_vars/lae_production.yml`
 
