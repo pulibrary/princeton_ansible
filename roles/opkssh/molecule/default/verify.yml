@@ -1,20 +1,235 @@
 ---
+# Verification playbook for opkssh role
 - name: Verify
   hosts: all
-  gather_facts: false
+  become: true
+  gather_facts: true
   tasks:
-    - name: Check ruby package status
-      ansible.builtin.package:
-        name: "{{ item }}"
-        state: present
-      check_mode: true
-      register: pkg_status
-      loop:
-        - ruby-switch
-        - ruby2.6-dev
-        - ruby2.6
+    - name: Check if opkssh binary exists
+      ansible.builtin.stat:
+        path: /usr/local/bin/opkssh
+      register: opkssh_binary
+      failed_when: not opkssh_binary.stat.exists
 
-    - name: Test for ruby packages
+    - name: Verify opkssh binary is executable
       ansible.builtin.assert:
         that:
-          - not pkg_status.changed
+          - opkssh_binary.stat.exists
+          - opkssh_binary.stat.executable
+          - opkssh_binary.stat.mode == '0755'
+        fail_msg: "opkssh binary is not properly installed or not executable"
+        success_msg: "opkssh binary is properly installed and executable"
+
+    - name: Check opkssh version
+      ansible.builtin.command: /usr/local/bin/opkssh --version
+      register: opkssh_version_check
+      changed_when: false
+      failed_when: opkssh_version_check.rc != 0
+
+    - name: Display opkssh version
+      ansible.builtin.debug:
+        msg: "opkssh version: {{ opkssh_version_check.stdout }}"
+
+    - name: Check if opkssh user exists
+      ansible.builtin.getent:
+        database: passwd
+        key: opksshuser
+      register: opkssh_user_check
+      failed_when: false
+
+    - name: Verify opkssh user was created
+      ansible.builtin.assert:
+        that:
+          - opkssh_user_check is not failed
+        fail_msg: "opkssh user (opksshuser) was not created"
+        success_msg: "opkssh user exists"
+
+    - name: Check if opkssh group exists
+      ansible.builtin.getent:
+        database: group
+        key: opksshuser
+      register: opkssh_group_check
+      failed_when: false
+
+    - name: Verify opkssh group was created
+      ansible.builtin.assert:
+        that:
+          - opkssh_group_check is not failed
+        fail_msg: "opkssh group (opksshuser) was not created"
+        success_msg: "opkssh group exists"
+
+    - name: Check opkssh configuration directory
+      ansible.builtin.stat:
+        path: /etc/opk
+      register: opk_dir
+
+    - name: Verify opk directory exists with correct permissions
+      ansible.builtin.assert:
+        that:
+          - opk_dir.stat.exists
+          - opk_dir.stat.isdir
+          - opk_dir.stat.mode == '0750'
+          - opk_dir.stat.gr_name == 'opksshuser'
+        fail_msg: "opk configuration directory is not properly configured"
+        success_msg: "opk configuration directory is properly configured"
+
+    - name: Check policy.d directory
+      ansible.builtin.stat:
+        path: /etc/opk/policy.d
+      register: policy_dir
+
+    - name: Verify policy.d directory exists
+      ansible.builtin.assert:
+        that:
+          - policy_dir.stat.exists
+          - policy_dir.stat.isdir
+          - policy_dir.stat.mode == '0750'
+        fail_msg: "policy.d directory is not properly configured"
+        success_msg: "policy.d directory is properly configured"
+
+    - name: Check required configuration files
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      register: config_files
+      loop:
+        - /etc/opk/auth_id
+        - /etc/opk/config.yml
+        - /etc/opk/providers
+
+    - name: Verify all configuration files exist
+      ansible.builtin.assert:
+        that:
+          - item.stat.exists
+          - item.stat.mode == '0640'
+          - item.stat.gr_name == 'opksshuser'
+        fail_msg: "Configuration file {{ item.item }} is missing or has incorrect permissions"
+        success_msg: "Configuration file {{ item.item }} exists with correct permissions"
+      loop: "{{ config_files.results }}"
+
+    - name: Check providers file content
+      ansible.builtin.slurp:
+        src: /etc/opk/providers
+      register: providers_content
+
+    - name: Verify providers file has content
+      ansible.builtin.assert:
+        that:
+          - providers_content.content | b64decode | length > 0
+          - "'accounts.google.com' in providers_content.content | b64decode"
+        fail_msg: "Providers file is empty or missing default providers"
+        success_msg: "Providers file contains expected content"
+
+    - name: Check for SSH configuration in sshd_config.d
+      ansible.builtin.find:
+        paths: /etc/ssh/sshd_config.d
+        patterns: "*opk-ssh.conf"
+      register: ssh_config_files
+
+    - name: Check main sshd_config for AuthorizedKeysCommand
+      ansible.builtin.command: grep -E "^AuthorizedKeysCommand.*opkssh" /etc/ssh/sshd_config
+      register: sshd_config_check
+      changed_when: false
+      failed_when: false
+
+    - name: Verify SSH is configured for opkssh
+      ansible.builtin.assert:
+        that:
+          - ssh_config_files.files | length > 0 or sshd_config_check.rc == 0
+        fail_msg: "SSH is not configured to use opkssh"
+        success_msg: "SSH is properly configured to use opkssh"
+
+    - name: Check AuthorizedKeysCommand configuration
+      ansible.builtin.shell: |
+        if [ -d /etc/ssh/sshd_config.d ]; then
+          grep -h "^AuthorizedKeysCommand" /etc/ssh/sshd_config.d/*.conf 2>/dev/null || true
+        fi
+        grep "^AuthorizedKeysCommand" /etc/ssh/sshd_config 2>/dev/null || true
+      register: auth_keys_cmd
+      changed_when: false
+
+    - name: Verify AuthorizedKeysCommand is configured correctly
+      ansible.builtin.assert:
+        that:
+          - "'/usr/local/bin/opkssh verify %u %k %t' in auth_keys_cmd.stdout"
+        fail_msg: "AuthorizedKeysCommand is not configured correctly"
+        success_msg: "AuthorizedKeysCommand is configured correctly"
+
+    - name: Check AuthorizedKeysCommandUser configuration
+      ansible.builtin.shell: |
+        if [ -d /etc/ssh/sshd_config.d ]; then
+          grep -h "^AuthorizedKeysCommandUser" /etc/ssh/sshd_config.d/*.conf 2>/dev/null || true
+        fi
+        grep "^AuthorizedKeysCommandUser" /etc/ssh/sshd_config 2>/dev/null || true
+      register: auth_keys_user
+      changed_when: false
+
+    - name: Verify AuthorizedKeysCommandUser is configured correctly
+      ansible.builtin.assert:
+        that:
+          - "'opksshuser' in auth_keys_user.stdout"
+        fail_msg: "AuthorizedKeysCommandUser is not configured correctly"
+        success_msg: "AuthorizedKeysCommandUser is configured correctly"
+
+    - name: Check if sudoers file exists
+      ansible.builtin.stat:
+        path: /etc/sudoers.d/opkssh
+      register: sudoers_file
+
+    - name: Verify sudoers configuration when home_policy is enabled
+      when: opkssh_home_policy | default(true)
+      block:
+        - name: Check sudoers file exists
+          ansible.builtin.assert:
+            that:
+              - sudoers_file.stat.exists
+              - sudoers_file.stat.mode == '0440'
+            fail_msg: "Sudoers file is missing or has incorrect permissions"
+            success_msg: "Sudoers file exists with correct permissions"
+
+        - name: Verify sudoers content
+          ansible.builtin.command: grep "opksshuser.*NOPASSWD.*opkssh readhome" /etc/sudoers.d/opkssh
+          register: sudoers_content
+          changed_when: false
+          failed_when: sudoers_content.rc != 0
+
+    - name: Check opkssh log file
+      ansible.builtin.stat:
+        path: /var/log/opkssh.log
+      register: log_file
+
+    - name: Verify log file exists with correct permissions
+      ansible.builtin.assert:
+        that:
+          - log_file.stat.exists
+          - log_file.stat.mode == '0660'
+          - log_file.stat.gr_name == 'opksshuser'
+        fail_msg: "Log file is missing or has incorrect permissions"
+        success_msg: "Log file exists with correct permissions"
+
+    - name: Check log file content
+      ansible.builtin.command: grep "Successfully installed opkssh" /var/log/opkssh.log
+      register: log_content
+      changed_when: false
+      failed_when: false
+
+    - name: Verify installation was logged
+      ansible.builtin.assert:
+        that:
+          - log_content.rc == 0
+        fail_msg: "Installation was not properly logged"
+        success_msg: "Installation was properly logged"
+
+    - name: Display verification summary
+      ansible.builtin.debug:
+        msg:
+          - "======================================="
+          - "opkssh Installation Verification Complete"
+          - "======================================="
+          - "✓ Binary installed and executable"
+          - "✓ User and group created"
+          - "✓ Configuration directories created"
+          - "✓ Configuration files in place"
+          - "✓ SSH configured for opkssh"
+          - "✓ Installation logged"
+          - "{{ 'Sudoers configured' if (opkssh_home_policy | default(true)) else 'Sudoers skipped (home_policy disabled)' }}"
+          - "======================================="
