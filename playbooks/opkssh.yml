@@ -1,0 +1,20 @@
+---
+# by default this playbook runs in the staging environment
+# to run in production, pass '-e runtime_env=production'
+
+- name: install opkssh on {{ inventory_hostname }}
+  hosts: staging:qa:production
+  remote_user: pulsys
+  become: true
+  # vars_files:
+    # - ../group_vars/opkssh/{{ runtime_env | default('staging') }}.yml
+    # - ../group_vars/opkssh/vault.yml
+  roles:
+    - role: opkssh
+
+  post_tasks:
+    - name: tell everyone on slack you ran an ansible playbook
+      community.general.slack:
+        token: "{{ vault_pul_slack_token }}"
+        msg: "Ansible ran `{{ ansible_play_name }}` on {{ inventory_hostname }}"
+        channel: "{{ slack_alerts_channel }}"
