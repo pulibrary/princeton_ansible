@@ -1,5 +1,5 @@
 ---
-- name: Rails_app | Install dependencies
+- name: Ruby_app | Install dependencies
   ansible.builtin.apt:
     name: '{{ item }}'
     state: present
@@ -7,7 +7,7 @@
   tags: rails-dependencies
   changed_when: false
 
-- name: Rails_app | create app_configs directory
+- name: Ruby_app | create app_configs directory
   ansible.builtin.file:
     path: '/home/{{ deploy_user }}/app_configs'
     state: 'directory'
@@ -15,7 +15,7 @@
     group: '{{ deploy_user }}'
     mode: '0744'
 
-- name: Rails_app | Install site configuration into app_configs
+- name: Ruby_app | Install site configuration into app_configs
   ansible.builtin.template:
     src: 'rails_app_config'
     dest: '/home/{{ deploy_user }}/app_configs/{{ rails_app_name }}'
@@ -26,7 +26,7 @@
     - site_config
   notify: restart rails app services
 
-- name: Rails_app | load envvars from app_configs directory
+- name: Ruby_app | load envvars from app_configs directory
   ansible.builtin.lineinfile:
     dest: "/home/{{ deploy_user }}/.bashrc"
     state: present
@@ -34,7 +34,7 @@
     line: "for f in ~/app_configs/*; do source $f; done"
     insertbefore: BOF
 
-- name: Rails_app | Create app directory structure
+- name: Ruby_app | Create app directory structure
   ansible.builtin.file:
     path: '/opt/{{ item }}'
     state: 'directory'
@@ -47,7 +47,7 @@
     - '{{ rails_app_directory }}/shared/tmp'
 
 # todo should we remove this since it is not being used
-- name: Rails_app | Create symlinks
+- name: Ruby_app | Create symlinks
   ansible.builtin.file:
     src: '{{ item.src }}'
     dest: '{{ item.link }}'
@@ -57,35 +57,35 @@
     force: true
   with_items: '{{ rails_app_symlinks }}'
 
-- name: Rails_app | Allow deploy to restart, stop, start nginx (service)
+- name: Ruby_app | Allow deploy to restart, stop, start nginx (service)
   ansible.builtin.lineinfile:
     dest: "/etc/sudoers"
     state: "present"
     line: "{{ deploy_user }} ALL=(ALL) NOPASSWD: /usr/sbin/service nginx *"
     validate: "visudo -cf %s"
 
-- name: Rails_app | Allow deploy to restart nginx (systemctl)
+- name: Ruby_app | Allow deploy to restart nginx (systemctl)
   ansible.builtin.lineinfile:
     dest: "/etc/sudoers"
     state: "present"
     line: "{{ deploy_user }} ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart nginx"
     validate: "visudo -cf %s"
 
-- name: Rails_app | Allow deploy to stop nginx (systemctl)
+- name: Ruby_app | Allow deploy to stop nginx (systemctl)
   ansible.builtin.lineinfile:
     dest: "/etc/sudoers"
     state: "present"
     line: "{{ deploy_user }} ALL=(ALL) NOPASSWD: /usr/bin/systemctl stop nginx"
     validate: "visudo -cf %s"
 
-- name: Rails_app | Allow deploy to start nginx (systemctl)
+- name: Ruby_app | Allow deploy to start nginx (systemctl)
   ansible.builtin.lineinfile:
     dest: "/etc/sudoers"
     state: "present"
     line: "{{ deploy_user }} ALL=(ALL) NOPASSWD: /usr/bin/systemctl start nginx"
     validate: "visudo -cf %s"
 
-- name: Rails_app | Allow deploy to status nginx (systemctl)
+- name: Ruby_app | Allow deploy to status nginx (systemctl)
   ansible.builtin.lineinfile:
     dest: "/etc/sudoers"
     state: "present"
@@ -94,12 +94,12 @@
 
 
 # need to populate this for use in the handler
-- name: Rails_app | populate service facts
+- name: Ruby_app | populate service facts
   ansible.builtin.service_facts:
   tags:
     - site_config
 
-- name: Rails_app | add local checkmk check
+- name: Ruby_app | add local checkmk check
   ansible.builtin.copy:
     src: rails_health_check.sh
     dest: "/usr/lib/check_mk_agent/local/rails_health_check.sh"
