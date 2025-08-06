@@ -1,0 +1,23 @@
+---
+- name: Verify
+  hosts: all
+  gather_facts: false
+  tasks:
+  - name: test for ruby_app directory
+    stat:
+      path: "{{ item }}"
+    loop:
+      - /opt/ruby_app/shared/tmp
+    register: ruby_app_path
+    failed_when:
+      - ruby_app_path.stat.isdir is not defined
+
+  - name: test for ruby_app files
+    stat:
+      path: "{{ item }}"
+    loop:
+      - /etc/logrotate.d/ruby_app
+      - /home/deploy/app_configs/ruby_app
+    register: ruby_app_file_path
+    failed_when:
+      - ruby_app_file_path.stat.isreg is not defined
