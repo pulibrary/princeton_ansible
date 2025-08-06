@@ -1,0 +1,56 @@
+---
+# OpenSSH configuration tasks
+- name: Opkssh - check for existing AuthorizedKeysCommand configuration
+  shell: |
+    grep -l '^AuthorizedKeysCommand\|^AuthorizedKeysCommandUser' /etc/ssh/sshd_config.d/*.conf 2>/dev/null | sort -V | head -n 1
+  register: existing_config
+  changed_when: false
+  failed_when: false
+
+- name: Opkssh - determine configuration file to use
+  ansible.builtin.set_fact:
+    sshd_config_file: "{{ '/etc/ssh/sshd_config.d/' + opkssh_sshd_config_priority|string + '-opk-ssh.conf' }}"
+  when: existing_config.stdout == "" or opkssh_overwrite_active_config
+
+- name: Opkssh - set configuration file to existing if found
+  ansible.builtin.set_fact:
+    sshd_config_file: "{{ existing_config.stdout }}"
+  when: existing_config.stdout != "" and not opkssh_overwrite_active_config and existing_config.stdout.endswith('opk-ssh.conf')
+
+- name: Opkssh - deploy SSH configuration
+  ansible.builtin.template:
+    src: opk-ssh.conf.j2
+    dest: "{{ sshd_config_file }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: restart ssh
+  when: sshd_config_file is defined
+
+- name: Opkssh - update main sshd_config if needed
+  block:
+    - name: Opkssh - comment out existing AuthorizedKeysCommand
+      ansible.builtin.lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^AuthorizedKeysCommand '
+        line: '#AuthorizedKeysCommand '
+        backrefs: true
+
+    - name: Opkssh - comment out existing AuthorizedKeysCommandUser
+      ansible.builtin.lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^AuthorizedKeysCommandUser '
+        line: '#AuthorizedKeysCommandUser '
+        backrefs: true
+
+    - name: Opkssh - add new AuthorizedKeysCommand
+      ansible.builtin.lineinfile:
+        path: /etc/ssh/sshd_config
+        line: "AuthorizedKeysCommand {{ opkssh_install_dir }}/{{ opkssh_binary_name }} verify %u %k %t"
+
+    - name: Opkssh - add new AuthorizedKeysCommandUser
+      ansible.builtin.lineinfile:
+        path: /etc/ssh/sshd_config
+        line: "AuthorizedKeysCommandUser {{ opkssh_auth_cmd_user }}"
+      notify: restart ssh
+  when: sshd_config_file is not defined

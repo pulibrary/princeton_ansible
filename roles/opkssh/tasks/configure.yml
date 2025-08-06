@@ -1,0 +1,61 @@
+---
+# Configuration tasks
+- name: Opkssh - create opk configuration directory
+  ansible.builtin.file:
+    path: "{{ opkssh_config_dir }}"
+    state: directory
+    owner: root
+    group: "{{ opkssh_auth_cmd_group }}"
+    mode: "0750"
+
+- name: Opkssh - create policy.d directory
+  ansible.builtin.file:
+    path: "{{ opkssh_config_dir }}/policy.d"
+    state: directory
+    owner: root
+    group: "{{ opkssh_auth_cmd_group }}"
+    mode: "0750"
+
+- name: Opkssh - create auth_id file
+  ansible.builtin.file:
+    path: "{{ opkssh_config_dir }}/auth_id"
+    state: touch
+    owner: root
+    group: "{{ opkssh_auth_cmd_group }}"
+    mode: "0640"
+    modification_time: preserve
+    access_time: preserve
+
+- name: Opkssh - create config.yml file
+  ansible.builtin.file:
+    path: "{{ opkssh_config_dir }}/config.yml"
+    state: touch
+    owner: root
+    group: "{{ opkssh_auth_cmd_group }}"
+    mode: "0640"
+    modification_time: preserve
+    access_time: preserve
+
+- name: Opkssh - check if providers file exists and has content
+  ansible.builtin.stat:
+    path: "{{ opkssh_config_dir }}/providers"
+  register: providers_stat
+
+- name: Opkssh - configure providers file
+  ansible.builtin.template:
+    src: providers.j2
+    dest: "{{ opkssh_config_dir }}/providers"
+    owner: root
+    group: "{{ opkssh_auth_cmd_group }}"
+    mode: "0640"
+  when: not providers_stat.stat.exists or providers_stat.stat.size == 0
+
+- name: Opkssh - configure sudo for home policy
+  ansible.builtin.template:
+    src: sudoers-opkssh.j2
+    dest: "{{ opkssh_sudoers_path }}"
+    owner: root
+    group: root
+    mode: "0440"
+    validate: 'visudo -cf %s'
+  when: opkssh_home_policy

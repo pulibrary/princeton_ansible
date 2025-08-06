@@ -1,0 +1,42 @@
+---
+# Prerequisite tasks
+- name: Opkssh - install required packages
+  ansible.builtin.package:
+    name:
+      - wget
+      - "{{ 'sudo' if opkssh_home_policy else omit }}"
+    state: present
+
+- name: Opkssh - ensure OpenSSH server is installed
+  ansible.builtin.package:
+    name: "{{ opkssh_os_packages[opkssh_os_type].ssh_package }}"
+    state: present
+
+- name: Opkssh - check for SSH configuration files
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  register: ssh_config_check
+  loop:
+    - /etc/ssh/sshd_config
+    - /etc/ssh/sshd_config.d
+
+- name: Opkssh - fail if SSH configuration doesn't exist
+  ansible.builtin.fail:
+    msg: "Neither /etc/ssh/sshd_config nor /etc/ssh/sshd_config.d exists"
+  when: not ssh_config_check.results[0].stat.exists and not ssh_config_check.results[1].stat.isdir | default(false)
+
+- name: Opkssh - create opkssh group
+  ansible.builtin.group:
+    name: "{{ opkssh_auth_cmd_group }}"
+    system: true
+    state: present
+
+- name: Opkssh - create opkssh user
+  ansible.builtin.user:
+    name: "{{ opkssh_auth_cmd_user }}"
+    group: "{{ opkssh_auth_cmd_group }}"
+    system: true
+    shell: /sbin/nologin
+    home: /nonexistent
+    create_home: false
+    state: present

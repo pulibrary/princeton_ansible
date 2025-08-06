@@ -1,0 +1,57 @@
+---
+# tasks file for roles/opkssh
+# Main tasks file for opkssh role
+- name: Opkssh - check if running as root
+  ansible.builtin.fail:
+    msg: "This role must be run as root"
+  when: ansible_user_id != "root"
+
+- name: Opkssh - Determine OS family
+  ansible.builtin.set_fact:
+    opkssh_os_type: >-
+      {%- if ansible_os_family == "RedHat" -%}
+        redhat
+      {%- elif ansible_os_family == "Debian" -%}
+        debian
+      {%- else -%}
+        unsupported
+      {%- endif -%}
+
+- name: Opkssh - fail if OS is not supported
+  ansible.builtin.fail:
+    msg: "Unsupported OS family: {{ ansible_os_family }}"
+  when: opkssh_os_type == "unsupported"
+
+- name: Opkssh - set architecture
+  ansible.builtin.set_fact:
+    opkssh_cpu_arch: "{{ opkssh_arch_mapping[ansible_architecture] | default('unsupported') }}"
+
+- name: Opkssh - fail if architecture is not supported
+  ansible.builtin.fail:
+    msg: "Unsupported architecture: {{ ansible_architecture }}"
+  when: opkssh_cpu_arch == "unsupported"
+
+- name: Opkssh - include prerequisite tasks
+  ansible.builtin.include_tasks: prerequisites.yml
+
+- name: Opkssh - include installation tasks
+  ansible.builtin.include_tasks: install.yml
+
+- name: Opkssh - include configuration tasks
+  ansible.builtin.include_tasks: configure.yml
+
+- name: Opkssh - include SELinux tasks
+  ansible.builtin.include_tasks: selinux.yml
+  when: ansible_selinux.status is defined and ansible_selinux.status == "enabled"
+
+- name: Opkssh - include OpenSSH configuration tasks
+  ansible.builtin.include_tasks: openssh.yml
+
+- name: Opkssh - create log entry for installation
+  ansible.builtin.lineinfile:
+    path: "{{ opkssh_log_file }}"
+    line: "Successfully installed opkssh (INSTALLED_ON: {{ ansible_date_time.iso8601 }}, VERSION_INSTALLED: {{ opkssh_version.stdout | default('unknown') }}, INSTALL_VERSION: {{ opkssh_install_version }}, HOME_POLICY: {{ opkssh_home_policy }}, RESTART_SSH: {{ opkssh_restart_ssh }})"
+    create: true
+    owner: root
+    group: "{{ opkssh_auth_cmd_group }}"
+    mode: "0660"
