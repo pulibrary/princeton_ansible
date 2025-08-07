@@ -47,6 +47,25 @@
 - name: Opkssh - include OpenSSH configuration tasks
   ansible.builtin.include_tasks: openssh.yml
 
+- name: Opkssh - ensure log file exists
+  ansible.builtin.file:
+    path: "{{ opkssh_log_file }}"
+    state: touch
+    owner: root
+    group: "{{ opkssh_auth_cmd_group }}"
+    mode: "0660"
+    modification_time: preserve
+    access_time: preserve
+
+- name: Opkssh - check if installation is already logged
+  ansible.builtin.lineinfile:
+    path: "{{ opkssh_log_file }}"
+    line: "Successfully installed opkssh"
+    state: absent
+  check_mode: true
+  register: opkssh_install_logged
+  changed_when: false
+
 - name: Opkssh - create log entry for installation
   ansible.builtin.lineinfile:
     path: "{{ opkssh_log_file }}"
@@ -55,3 +74,4 @@
     owner: root
     group: "{{ opkssh_auth_cmd_group }}"
     mode: "0660"
+  when: opkssh_enable_logging
