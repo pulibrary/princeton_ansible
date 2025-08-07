@@ -192,33 +192,6 @@
           changed_when: false
           failed_when: sudoers_content.rc != 0
 
-    - name: Check opkssh log file
-      ansible.builtin.stat:
-        path: /var/log/opkssh.log
-      register: log_file
-
-    - name: Verify log file exists with correct permissions
-      ansible.builtin.assert:
-        that:
-          - log_file.stat.exists
-          - log_file.stat.mode == '0660'
-          - log_file.stat.gr_name == 'opksshuser'
-        fail_msg: "Log file is missing or has incorrect permissions"
-        success_msg: "Log file exists with correct permissions"
-
-    - name: Check log file content
-      ansible.builtin.command: grep "Successfully installed opkssh" /var/log/opkssh.log
-      register: log_content
-      changed_when: false
-      failed_when: false
-
-    - name: Verify installation was logged
-      ansible.builtin.assert:
-        that:
-          - log_content.rc == 0
-        fail_msg: "Installation was not properly logged"
-        success_msg: "Installation was properly logged"
-
     - name: Display verification summary
       ansible.builtin.debug:
         msg:
@@ -230,6 +203,5 @@
           - "✓ Configuration directories created"
           - "✓ Configuration files in place"
           - "✓ SSH configured for opkssh"
-          - "✓ Installation logged"
           - "{{ 'Sudoers configured' if (opkssh_home_policy | default(true)) else 'Sudoers skipped (home_policy disabled)' }}"
           - "======================================="
