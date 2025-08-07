@@ -4,7 +4,7 @@ Nomad is our container orchestration infrastructure. This directory contains ser
 
 ## Environments
 
-We have three Nomad environments available:
+We have two Nomad environments available:
 
 - **Production** (`production`) - Live production services
 - **Sandbox** (`sandbox`) - Development and experimental environment
