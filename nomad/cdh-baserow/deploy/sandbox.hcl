@@ -2,6 +2,11 @@
 # Nomad Job: CDH Baserow (sandbox)
 #############################
 
+variable "branch_or_sha" {
+  type    = string
+  default = ""
+}
+
 # --- Image pinning (release tags) ---
 variable "backend_image_repo" {
   type    = string
