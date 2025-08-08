@@ -1,71 +1,45 @@
 #############################
-# Nomad Job: CDH Baserow       #
+# Nomad Job: CDH Baserow    #
 #############################
-# used nomad `raw_exec`
-# to convert
-# https://gitlab.com/baserow/baserow/-/raw/develop/docker-compose.yml
 
 # Variables for Baserow environment
-variable "SECRET_KEY" {
-  type = string
-}
+variable "branch_or_sha" { type = string default = "main" }
 
-variable "BASEROW_JWT_SIGNING_KEY" {
-  type    = string
-  default = ""
-}
+variable "SECRET_KEY" { type = string }
+variable "BASEROW_JWT_SIGNING_KEY" { type = string default = "" }
+variable "DATABASE_PASSWORD" { type = string }
+variable "REDIS_PASSWORD" { type = string }
 
-variable "DATABASE_PASSWORD" {
-  type = string
-}
+variable "REDIS_HOST" { type = string default = "lib-redis-sandbox1.princeton.edu" }
+variable "REDIS_PORT" { type = number default = 6379 }
 
-variable "REDIS_PASSWORD" {
-  type = string
-}
+variable "BASEROW_PUBLIC_URL" { type = string default = "" }
 
-variable "REDIS_HOST" {
-  type    = string
-  default = "lib-redis-staging1.princeton.edu"
-}
+variable "DATABASE_HOST" { type = string default = "lib-postgres-sandbox1.princeton.edu" }
+variable "DATABASE_USER" { type = string default = "baserow" }
+variable "DATABASE_NAME" { type = string default = "baserow" }
 
-variable "REDIS_PORT" {
-  type    = number
-  default = 6379
-}
+variable "PRIVATE_BACKEND_URL" { type = string default = "http://localhost:8000" }
 
-variable "BASEROW_PUBLIC_URL" {
-  type    = string
-  default = ""
-}
-
-variable "DATABASE_HOST" {
-  type    = string
-  default = "lib-postgres-staging1.princeton.edu"
-}
-
-variable "DATABASE_USER" {
-  type    = string
-  default = "baserow"
-}
-
-variable "DATABASE_NAME" {
-  type    = string
-  default = "baserow"
-}
-
-variable "PRIVATE_BACKEND_URL" {
-  type    = string
-  default = "http://localhost:8000"
-}
+variable "backend_image" { type = string default = "docker.io/baserow/backend:sha-${ var.branch_or_sha }" }
+variable "web_image"     { type = string default = "docker.io/baserow/web-frontend:sha-${ var.branch_or_sha }" }
 
 job "cdh-baserow" {
+  region      = "global"
   datacenters = ["dc1"]
   type        = "service"
+  node_pool   = "sandbox"
 
-  # Host-backed volumes
   volume "media" {
-    type   = "host"
-    source = "media"
+    type      = "host"
+    source    = "media"
+    read_only = false
+  }
+
+  update {
+    canary       = 1
+    auto_promote = true
+    auto_revert  = true
   }
 
   group "services" {
@@ -73,151 +47,180 @@ job "cdh-baserow" {
 
     network {
       mode = "bridge"
-      port "web" { static = 3000 }
-      port "api" { static = 8000 }
+      port "web" { to = 3000 }
+      port "api" { to = 8000 }
+
+      dns {
+        servers = ["10.88.0.1", "128.112.129.209", "8.8.8.8", "8.8.4.4"]
+      }
     }
 
-    ## Baserow Backend API
-    task "backend" {
-      driver = "docker"
+    service {
+      name = "cdh-baserow-web"
+      port = "web"
+      check {
+        type     = "http"
+        port     = "web"
+        path     = "/"
+        interval = "10s"
+        timeout  = "2s"
+      }
+    }
+    service {
+      name = "cdh-baserow-backend"
+      port = "api"
+      check {
+        type     = "http"
+        port     = "api"
+        path     = "/healthz"
+        interval = "10s"
+        timeout  = "2s"
+      }
+    }
+
+    template {
+      destination = "${NOMAD_SECRETS_DIR}/env.vars"
+      env         = true
+      change_mode = "restart"
+      data = <<EOF
+      {{- with nomadVar "nomad/jobs/cdh-baserow" -}}
+      SECRET_KEY = {{ .SECRET_KEY }}
+      BASEROW_JWT_SIGNING_KEY = {{ .BASEROW_JWT_SIGNING_KEY }}
+      DATABASE_PASSWORD = {{ .DATABASE_PASSWORD }}
+      REDIS_PASSWORD = {{ .REDIS_PASSWORD }}
+      {{- end -}}
+      EOF
+    }
+
+    task "volume-permissions-fixer" {
+      driver = "podman"
+      user   = "root"
       config {
-        image = "baserow/backend:1.34.5"
+        image = "docker.io/library/bash:4.4"
+        command = "chown"
+        args    = ["9999:9999", "-R", "/baserow/media"]
+      }
+      volume_mount {
+        volume      = "media"
+        destination = "/baserow/media"
+        read_only   = false
+      }
+      lifecycle { hook = "prestart" sidecar = false }
+      resources { cpu = 100 memory = 64 }
+    }
+
+    task "backend" {
+      driver = "podman"
+      config {
+        image = var.backend_image
         ports = ["api"]
-        volumes = ["local/media:/baserow/media"]
       }
       env = {
+        BASEROW_PUBLIC_URL      = var.BASEROW_PUBLIC_URL
         SECRET_KEY              = var.SECRET_KEY
         BASEROW_JWT_SIGNING_KEY = var.BASEROW_JWT_SIGNING_KEY
-        DATABASE_PASSWORD       = var.DATABASE_PASSWORD
         DATABASE_HOST           = var.DATABASE_HOST
         DATABASE_USER           = var.DATABASE_USER
         DATABASE_NAME           = var.DATABASE_NAME
-        REDIS_PASSWORD          = var.REDIS_PASSWORD
+        DATABASE_PASSWORD       = var.DATABASE_PASSWORD
         REDIS_HOST              = var.REDIS_HOST
         REDIS_PORT              = tostring(var.REDIS_PORT)
-        BASEROW_PUBLIC_URL      = var.BASEROW_PUBLIC_URL
+        REDIS_PASSWORD          = var.REDIS_PASSWORD
       }
-      service {
-        name = "cdh-baserow-backend"
-        port = "api"
-        check {
-          type     = "http"
-          path     = "/healthz"
-          interval = "10s"
-          timeout  = "2s"
-        }
+      volume_mount {
+        volume      = "media"
+        destination = "/baserow/media"
+        read_only   = false
       }
+      resources { cpu = 1000 memory = 1024 }
     }
 
-    ## Web Frontend
     task "web-frontend" {
-      driver = "docker"
+      driver = "podman"
       config {
-        image = "baserow/web-frontend:1.34.5"
+        image = var.web_image
         ports = ["web"]
       }
       env = {
         BASEROW_PUBLIC_URL  = var.BASEROW_PUBLIC_URL
         PRIVATE_BACKEND_URL = var.PRIVATE_BACKEND_URL
       }
-      service {
-        name = "cdh-baserow-web"
-        port = "web"
-        check {
-          type     = "http"
-          path     = "/"
-          interval = "10s"
-          timeout  = "2s"
-        }
-      }
+      resources { cpu = 500 memory = 512 }
     }
 
-    ## Celery Worker
     task "celery-worker" {
-      driver = "docker"
+      driver = "podman"
       config {
-        image   = "baserow/backend:1.34.5"
+        image   = var.backend_image
         command = ["celery-worker"]
-        volumes = ["local/media:/baserow/media"]
       }
       env = {
         SECRET_KEY              = var.SECRET_KEY
         BASEROW_JWT_SIGNING_KEY = var.BASEROW_JWT_SIGNING_KEY
-        DATABASE_PASSWORD       = var.DATABASE_PASSWORD
         DATABASE_HOST           = var.DATABASE_HOST
         DATABASE_USER           = var.DATABASE_USER
         DATABASE_NAME           = var.DATABASE_NAME
-        REDIS_PASSWORD          = var.REDIS_PASSWORD
+        DATABASE_PASSWORD       = var.DATABASE_PASSWORD
         REDIS_HOST              = var.REDIS_HOST
         REDIS_PORT              = tostring(var.REDIS_PORT)
+        REDIS_PASSWORD          = var.REDIS_PASSWORD
       }
-      healthcheck {
-        test     = ["CMD-SHELL", "/baserow/backend/docker/docker-entrypoint.sh celery-worker-healthcheck"]
-        interval = "10s"
-        timeout  = "2s"
+      volume_mount {
+        volume      = "media"
+        destination = "/baserow/media"
+        read_only   = false
       }
+      resources { cpu = 500 memory = 512 }
     }
 
-    ## Celery Export Worker
     task "celery-export" {
-      driver = "docker"
+      driver = "podman"
       config {
-        image   = "baserow/backend:1.34.5"
+        image   = var.backend_image
         command = ["celery-exportworker"]
-        volumes = ["local/media:/baserow/media"]
       }
       env = {
         SECRET_KEY              = var.SECRET_KEY
         BASEROW_JWT_SIGNING_KEY = var.BASEROW_JWT_SIGNING_KEY
-        DATABASE_PASSWORD       = var.DATABASE_PASSWORD
         DATABASE_HOST           = var.DATABASE_HOST
         DATABASE_USER           = var.DATABASE_USER
         DATABASE_NAME           = var.DATABASE_NAME
-        REDIS_PASSWORD          = var.REDIS_PASSWORD
+        DATABASE_PASSWORD       = var.DATABASE_PASSWORD
         REDIS_HOST              = var.REDIS_HOST
         REDIS_PORT              = tostring(var.REDIS_PORT)
+        REDIS_PASSWORD          = var.REDIS_PASSWORD
       }
-      healthcheck {
-        test     = ["CMD-SHELL", "/baserow/backend/docker/docker-entrypoint.sh celery-exportworker-healthcheck"]
-        interval = "10s"
-        timeout  = "2s"
+      volume_mount {
+        volume      = "media"
+        destination = "/baserow/media"
+        read_only   = false
       }
+      resources { cpu = 500 memory = 512 }
     }
 
-    ## Celery Beat Scheduler
     task "celery-beat" {
-      driver = "docker"
+      driver = "podman"
       config {
-        image       = "baserow/backend:1.34.5"
+        image       = var.backend_image
         command     = ["celery-beat"]
-        stop_signal = "SIGQUIT"
-        volumes     = ["local/media:/baserow/media"]
       }
       env = {
         SECRET_KEY              = var.SECRET_KEY
         BASEROW_JWT_SIGNING_KEY = var.BASEROW_JWT_SIGNING_KEY
-        DATABASE_PASSWORD       = var.DATABASE_PASSWORD
         DATABASE_HOST           = var.DATABASE_HOST
         DATABASE_USER           = var.DATABASE_USER
         DATABASE_NAME           = var.DATABASE_NAME
-        REDIS_PASSWORD          = var.REDIS_PASSWORD
+        DATABASE_PASSWORD       = var.DATABASE_PASSWORD
         REDIS_HOST              = var.REDIS_HOST
         REDIS_PORT              = tostring(var.REDIS_PORT)
+        REDIS_PASSWORD          = var.REDIS_PASSWORD
       }
-    }
-
-    ## Fix Media Volume Permissions
-    task "volume-permissions-fixer" {
-      driver = "docker"
-      config {
-        image   = "bash:4.4"
-        command = ["chown", "9999:9999", "-R", "/baserow/media"]
-        volumes = ["local/media:/baserow/media"]
+      volume_mount {
+        volume      = "media"
+        destination = "/baserow/media"
+        read_only   = false
       }
-      lifecycle {
-        hook    = "prestart"
-        sidecar = false
-      }
+      resources { cpu = 200 memory = 256 }
     }
   }
 }
