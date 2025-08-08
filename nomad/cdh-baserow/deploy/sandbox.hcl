@@ -8,23 +8,53 @@ variable "branch_or_sha" {
   default = "main"
 }
 
-variable "SECRET_KEY" { type = string }
-variable "BASEROW_JWT_SIGNING_KEY" { type = string default = "" }
-variable "DATABASE_PASSWORD" { type = string }
-variable "REDIS_PASSWORD" { type = string }
+variable "SECRET_KEY" {
+  type = string
+}
+variable "BASEROW_JWT_SIGNING_KEY" {
+  type    = string
+  default = ""
+}
+variable "DATABASE_PASSWORD" {
+  type = string
+}
+variable "REDIS_PASSWORD" {
+  type = string
+}
 
-variable "REDIS_HOST" { type = string default = "lib-redis-sandbox1.princeton.edu" }
+variable "REDIS_HOST" {
+  type    = string
+  default = "lib-redis-sandbox1.princeton.edu"
+}
 variable "REDIS_PORT" { type = number default = 6379 }
 
-variable "BASEROW_PUBLIC_URL" { type = string default = "" }
+variable "BASEROW_PUBLIC_URL" {
+  type    = string
+  default = ""
+}
 
-variable "DATABASE_HOST" { type = string default = "lib-postgres-sandbox1.princeton.edu" }
-variable "DATABASE_USER" { type = string default = "baserow" }
-variable "DATABASE_NAME" { type = string default = "baserow" }
+variable "DATABASE_HOST" {
+  type    = string
+  default = "lib-postgres-sandbox1.princeton.edu"
+}
+variable "DATABASE_USER" {
+  type    = string
+  default = "baserow"
+}
+variable "DATABASE_NAME" {
+  type    = string
+  default = "baserow"
+}
 
-variable "PRIVATE_BACKEND_URL" { type = string default = "http://localhost:8000" }
+variable "PRIVATE_BACKEND_URL" {
+  type    = string
+  default = "http://localhost:8000"
+}
 
-variable "backend_image_repo" { type = string default = "docker.io/baserow/backend" }
+variable "backend_image_repo" {
+  type    = string
+  default = "docker.io/baserow/backend"
+}
 variable "web_image_repo"     { type = string default = "docker.io/baserow/web-frontend" }
 
 job "cdh-baserow" {
