@@ -19,6 +19,7 @@ variable "web_image_tag" {
   default = "1.34.5"
 }
 
+# Dummy to satisfy -var branch_or_sha=…
 variable "branch_or_sha" {
   type    = string
   default = ""
@@ -95,6 +96,8 @@ job "cdh-baserow" {
       }
     }
 
+    # Prepare the media directory using Podman only:
+    # mount the PARENT at /host, then mkdir/chown the child dir inside it.
     task "prepare-media-dir" {
       driver = "podman"
       user   = "root"
