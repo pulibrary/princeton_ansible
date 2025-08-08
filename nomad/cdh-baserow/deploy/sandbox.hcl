@@ -1,13 +1,16 @@
 #############################
-# Nomad Job: CDH Baserow (staging)
+# Nomad Job: CDH Baserow (sandbox)
 #############################
 
+# --- Image selection (branch/SHA style) ---
 variable "branch_or_sha" {
   type    = string
   default = "main"
 }
 
 variable "image_tag_prefix" {
+  # Set to "sha-" if your images are tagged like sha-<shortsha>.
+  # Leave empty "" if your tags are just <shortsha> or branch names.
   type    = string
   default = ""
 }
@@ -22,26 +25,10 @@ variable "web_image_repo" {
   default = "docker.io/baserow/web-frontend"
 }
 
-variable "SECRET_KEY" {
-  type = string
-}
-
-variable "BASEROW_JWT_SIGNING_KEY" {
-  type    = string
-  default = ""
-}
-
-variable "DATABASE_PASSWORD" {
-  type = string
-}
-
-variable "REDIS_PASSWORD" {
-  type = string
-}
-
+# --- Non-secret app config variables (secrets come via template) ---
 variable "REDIS_HOST" {
   type    = string
-  default = "lib-redis-staging1.princeton.edu"
+  default = "lib-redis-sandbox1.princeton.edu"
 }
 
 variable "REDIS_PORT" {
@@ -56,7 +43,7 @@ variable "BASEROW_PUBLIC_URL" {
 
 variable "DATABASE_HOST" {
   type    = string
-  default = "lib-postgres-staging1.princeton.edu"
+  default = "lib-postgres-sandbox1.princeton.edu"
 }
 
 variable "DATABASE_USER" {
@@ -74,12 +61,13 @@ variable "PRIVATE_BACKEND_URL" {
   default = "http://localhost:8000"
 }
 
-job "cdh-baserow-staging" {
+job "cdh-baserow" {
   region      = "global"
   datacenters = ["dc1"]
   type        = "service"
-  node_pool   = "staging"
+  node_pool   = "sandbox"
 
+  # Host-backed volume for user-uploaded media
   volume "media" {
     type      = "host"
     source    = "media"
@@ -98,7 +86,7 @@ job "cdh-baserow-staging" {
     network {
       mode = "bridge"
 
-      # loadbalancers will hit these
+      # Reverse proxy will hit these
       port "web" { to = 3000 }
       port "api" { to = 8000 }
 
@@ -109,7 +97,7 @@ job "cdh-baserow-staging" {
 
     # Service registrations (group-level)
     service {
-      name = "cdh-baserow-sandbox-web"
+      name = "cdh-baserow-web"
       port = "web"
       check {
         type     = "http"
@@ -121,7 +109,7 @@ job "cdh-baserow-staging" {
     }
 
     service {
-      name = "cdh-baserow-sandbox-backend"
+      name = "cdh-baserow-backend"
       port = "api"
       check {
         type     = "http"
@@ -130,21 +118,6 @@ job "cdh-baserow-staging" {
         interval = "10s"
         timeout  = "2s"
       }
-    }
-
-    # Secrets from Nomad variables (staging scope)
-    template {
-      destination = "${NOMAD_SECRETS_DIR}/env.vars"
-      env         = true
-      change_mode = "restart"
-      data = <<EOF
-      {{- with nomadVar "nomad/jobs/cdh-baserow-sandbox" -}}
-      SECRET_KEY = {{ .SECRET_KEY }}
-      BASEROW_JWT_SIGNING_KEY = {{ .BASEROW_JWT_SIGNING_KEY }}
-      DATABASE_PASSWORD = {{ .DATABASE_PASSWORD }}
-      REDIS_PASSWORD = {{ .REDIS_PASSWORD }}
-      {{- end -}}
-      EOF
     }
 
     # Prestart: fix media volume permissions for Django UID 9999
@@ -184,19 +157,29 @@ job "cdh-baserow-staging" {
         ports = ["api"]
       }
 
+      # Secrets injected from Nomad Variables KV: nomad/jobs/cdh-baserow-sandbox
+      template {
+        destination = "${NOMAD_SECRETS_DIR}/env.vars"
+        env         = true
+        change_mode = "restart"
+        data = <<EOF
+        {{- with nomadVar "nomad/jobs/cdh-baserow-sandbox" -}}
+        SECRET_KEY = {{ .SECRET_KEY }}
+        BASEROW_JWT_SIGNING_KEY = {{ .BASEROW_JWT_SIGNING_KEY }}
+        DATABASE_PASSWORD = {{ .DATABASE_PASSWORD }}
+        REDIS_PASSWORD = {{ .REDIS_PASSWORD }}
+        {{- end -}}
+        EOF
+      }
+
+      # Non-secrets from variables
       env = {
-        BASEROW_PUBLIC_URL      = var.BASEROW_PUBLIC_URL
-        SECRET_KEY              = var.SECRET_KEY
-        BASEROW_JWT_SIGNING_KEY = var.BASEROW_JWT_SIGNING_KEY
-
-        DATABASE_HOST           = var.DATABASE_HOST
-        DATABASE_USER           = var.DATABASE_USER
-        DATABASE_NAME           = var.DATABASE_NAME
-        DATABASE_PASSWORD       = var.DATABASE_PASSWORD
-
-        REDIS_HOST              = var.REDIS_HOST
-        REDIS_PORT              = tostring(var.REDIS_PORT)
-        REDIS_PASSWORD          = var.REDIS_PASSWORD
+        BASEROW_PUBLIC_URL = var.BASEROW_PUBLIC_URL
+        DATABASE_HOST      = var.DATABASE_HOST
+        DATABASE_USER      = var.DATABASE_USER
+        DATABASE_NAME      = var.DATABASE_NAME
+        REDIS_HOST         = var.REDIS_HOST
+        REDIS_PORT         = tostring(var.REDIS_PORT)
       }
 
       volume_mount {
@@ -220,6 +203,7 @@ job "cdh-baserow-staging" {
         ports = ["web"]
       }
 
+      # Frontend usually doesn't need secrets — just URLs.
       env = {
         BASEROW_PUBLIC_URL  = var.BASEROW_PUBLIC_URL
         PRIVATE_BACKEND_URL = var.PRIVATE_BACKEND_URL
@@ -240,18 +224,26 @@ job "cdh-baserow-staging" {
         command = ["celery-worker"]
       }
 
+      template {
+        destination = "${NOMAD_SECRETS_DIR}/env.vars"
+        env         = true
+        change_mode = "restart"
+        data = <<EOF
+        {{- with nomadVar "nomad/jobs/cdh-baserow-sandbox" -}}
+        SECRET_KEY = {{ .SECRET_KEY }}
+        BASEROW_JWT_SIGNING_KEY = {{ .BASEROW_JWT_SIGNING_KEY }}
+        DATABASE_PASSWORD = {{ .DATABASE_PASSWORD }}
+        REDIS_PASSWORD = {{ .REDIS_PASSWORD }}
+        {{- end -}}
+        EOF
+      }
+
       env = {
-        SECRET_KEY              = var.SECRET_KEY
-        BASEROW_JWT_SIGNING_KEY = var.BASEROW_JWT_SIGNING_KEY
-
-        DATABASE_HOST           = var.DATABASE_HOST
-        DATABASE_USER           = var.DATABASE_USER
-        DATABASE_NAME           = var.DATABASE_NAME
-        DATABASE_PASSWORD       = var.DATABASE_PASSWORD
-
-        REDIS_HOST              = var.REDIS_HOST
-        REDIS_PORT              = tostring(var.REDIS_PORT)
-        REDIS_PASSWORD          = var.REDIS_PASSWORD
+        DATABASE_HOST = var.DATABASE_HOST
+        DATABASE_USER = var.DATABASE_USER
+        DATABASE_NAME = var.DATABASE_NAME
+        REDIS_HOST    = var.REDIS_HOST
+        REDIS_PORT    = tostring(var.REDIS_PORT)
       }
 
       volume_mount {
@@ -275,18 +267,26 @@ job "cdh-baserow-staging" {
         command = ["celery-exportworker"]
       }
 
+      template {
+        destination = "${NOMAD_SECRETS_DIR}/env.vars"
+        env         = true
+        change_mode = "restart"
+        data = <<EOF
+        {{- with nomadVar "nomad/jobs/cdh-baserow-sandbox" -}}
+        SECRET_KEY = {{ .SECRET_KEY }}
+        BASEROW_JWT_SIGNING_KEY = {{ .BASEROW_JWT_SIGNING_KEY }}
+        DATABASE_PASSWORD = {{ .DATABASE_PASSWORD }}
+        REDIS_PASSWORD = {{ .REDIS_PASSWORD }}
+        {{- end -}}
+        EOF
+      }
+
       env = {
-        SECRET_KEY              = var.SECRET_KEY
-        BASEROW_JWT_SIGNING_KEY = var.BASEROW_JWT_SIGNING_KEY
-
-        DATABASE_HOST           = var.DATABASE_HOST
-        DATABASE_USER           = var.DATABASE_USER
-        DATABASE_NAME           = var.DATABASE_NAME
-        DATABASE_PASSWORD       = var.DATABASE_PASSWORD
-
-        REDIS_HOST              = var.REDIS_HOST
-        REDIS_PORT              = tostring(var.REDIS_PORT)
-        REDIS_PASSWORD          = var.REDIS_PASSWORD
+        DATABASE_HOST = var.DATABASE_HOST
+        DATABASE_USER = var.DATABASE_USER
+        DATABASE_NAME = var.DATABASE_NAME
+        REDIS_HOST    = var.REDIS_HOST
+        REDIS_PORT    = tostring(var.REDIS_PORT)
       }
 
       volume_mount {
@@ -310,18 +310,26 @@ job "cdh-baserow-staging" {
         command = ["celery-beat"]
       }
 
+      template {
+        destination = "${NOMAD_SECRETS_DIR}/env.vars"
+        env         = true
+        change_mode = "restart"
+        data = <<EOF
+        {{- with nomadVar "nomad/jobs/cdh-baserow-sandbox" -}}
+        SECRET_KEY = {{ .SECRET_KEY }}
+        BASEROW_JWT_SIGNING_KEY = {{ .BASEROW_JWT_SIGNING_KEY }}
+        DATABASE_PASSWORD = {{ .DATABASE_PASSWORD }}
+        REDIS_PASSWORD = {{ .REDIS_PASSWORD }}
+        {{- end -}}
+        EOF
+      }
+
       env = {
-        SECRET_KEY              = var.SECRET_KEY
-        BASEROW_JWT_SIGNING_KEY = var.BASEROW_JWT_SIGNING_KEY
-
-        DATABASE_HOST           = var.DATABASE_HOST
-        DATABASE_USER           = var.DATABASE_USER
-        DATABASE_NAME           = var.DATABASE_NAME
-        DATABASE_PASSWORD       = var.DATABASE_PASSWORD
-
-        REDIS_HOST              = var.REDIS_HOST
-        REDIS_PORT              = tostring(var.REDIS_PORT)
-        REDIS_PASSWORD          = var.REDIS_PASSWORD
+        DATABASE_HOST = var.DATABASE_HOST
+        DATABASE_USER = var.DATABASE_USER
+        DATABASE_NAME = var.DATABASE_NAME
+        REDIS_HOST    = var.REDIS_HOST
+        REDIS_PORT    = tostring(var.REDIS_PORT)
       }
 
       volume_mount {
