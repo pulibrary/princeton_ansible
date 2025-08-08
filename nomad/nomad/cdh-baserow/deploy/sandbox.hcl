@@ -9,6 +9,8 @@ variable "branch_or_sha" {
 }
 
 variable "image_tag_prefix" {
+  # Set to "sha-" if your images are tagged like sha-<shortsha>.
+  # Leave empty "" if your tags are just <shortsha> or branch names.
   type    = string
   default = ""
 }
@@ -23,12 +25,13 @@ variable "web_image_repo" {
   default = "docker.io/baserow/web-frontend"
 }
 
+# --- Non-secret app config variables (secrets come via template) ---
 variable "REDIS_HOST" {
   type    = string
   default = "lib-redis-sandbox1.princeton.edu"
 }
 
-# Make it a string to avoid tostring() needs in env maps
+# Keep as string to avoid tostring()
 variable "REDIS_PORT" {
   type    = string
   default = "6379"
@@ -59,6 +62,13 @@ variable "PRIVATE_BACKEND_URL" {
   default = "http://localhost:8000"
 }
 
+# Host path for persistent uploads (bind-mounted into the tasks)
+variable "HOST_MEDIA_PATH" {
+  type    = string
+  # Change if your hosts use a different path
+  default = "/srv/nomad/host_volumes/cdh-baserow-media"
+}
+
 job "cdh-baserow" {
   region      = "global"
   datacenters = ["dc1"]
@@ -75,22 +85,13 @@ job "cdh-baserow" {
     }
 
     network {
-      mode = "bridge"
-
-      # Reverse proxy will hit these
+      # (Podman driver) no need to specify mode here
       port "web" { to = 3000 }
       port "api" { to = 8000 }
 
       dns {
         servers = ["10.88.0.1", "128.112.129.209", "8.8.8.8", "8.8.4.4"]
       }
-    }
-
-    # Declare host-backed volume INSIDE the group
-    volume "media" {
-      type      = "host"
-      source    = "media"
-      read_only = false
     }
 
     # Service registrations (group-level)
@@ -127,12 +128,7 @@ job "cdh-baserow" {
         image   = "docker.io/library/bash:4.4"
         command = "chown"
         args    = ["9999:9999", "-R", "/baserow/media"]
-      }
-
-      volume_mount {
-        volume      = "media"
-        destination = "/baserow/media"
-        read_only   = false
+        volumes = ["${var.HOST_MEDIA_PATH}:/baserow/media"]
       }
 
       lifecycle {
@@ -151,8 +147,9 @@ job "cdh-baserow" {
       driver = "podman"
 
       config {
-        image = "${var.backend_image_repo}:${var.image_tag_prefix}${var.branch_or_sha}"
-        ports = ["api"]
+        image   = "${var.backend_image_repo}:${var.image_tag_prefix}${var.branch_or_sha}"
+        ports   = ["api"]
+        volumes = ["${var.HOST_MEDIA_PATH}:/baserow/media"]
       }
 
       # Secrets injected from Nomad Variables KV: nomad/jobs/cdh-baserow-sandbox
@@ -170,7 +167,6 @@ job "cdh-baserow" {
         EOF
       }
 
-      # Non-secrets from variables
       env = {
         BASEROW_PUBLIC_URL = var.BASEROW_PUBLIC_URL
         DATABASE_HOST      = var.DATABASE_HOST
@@ -178,12 +174,6 @@ job "cdh-baserow" {
         DATABASE_NAME      = var.DATABASE_NAME
         REDIS_HOST         = var.REDIS_HOST
         REDIS_PORT         = var.REDIS_PORT
-      }
-
-      volume_mount {
-        volume      = "media"
-        destination = "/baserow/media"
-        read_only   = false
       }
 
       resources {
@@ -197,8 +187,9 @@ job "cdh-baserow" {
       driver = "podman"
 
       config {
-        image = "${var.web_image_repo}:${var.image_tag_prefix}${var.branch_or_sha}"
-        ports = ["web"]
+        image   = "${var.web_image_repo}:${var.image_tag_prefix}${var.branch_or_sha}"
+        ports   = ["web"]
+        # Frontend doesn't write to media, so no mount here
       }
 
       env = {
@@ -219,6 +210,7 @@ job "cdh-baserow" {
       config {
         image   = "${var.backend_image_repo}:${var.image_tag_prefix}${var.branch_or_sha}"
         command = ["celery-worker"]
+        volumes = ["${var.HOST_MEDIA_PATH}:/baserow/media"]
       }
 
       template {
@@ -241,12 +233,6 @@ job "cdh-baserow" {
         DATABASE_NAME = var.DATABASE_NAME
         REDIS_HOST    = var.REDIS_HOST
         REDIS_PORT    = var.REDIS_PORT
-      }
-
-      volume_mount {
-        volume      = "media"
-        destination = "/baserow/media"
-        read_only   = false
       }
 
       resources {
@@ -262,6 +248,7 @@ job "cdh-baserow" {
       config {
         image   = "${var.backend_image_repo}:${var.image_tag_prefix}${var.branch_or_sha}"
         command = ["celery-exportworker"]
+        volumes = ["${var.HOST_MEDIA_PATH}:/baserow/media"]
       }
 
       template {
@@ -284,12 +271,6 @@ job "cdh-baserow" {
         DATABASE_NAME = var.DATABASE_NAME
         REDIS_HOST    = var.REDIS_HOST
         REDIS_PORT    = var.REDIS_PORT
-      }
-
-      volume_mount {
-        volume      = "media"
-        destination = "/baserow/media"
-        read_only   = false
       }
 
       resources {
@@ -305,6 +286,7 @@ job "cdh-baserow" {
       config {
         image   = "${var.backend_image_repo}:${var.image_tag_prefix}${var.branch_or_sha}"
         command = ["celery-beat"]
+        volumes = ["${var.HOST_MEDIA_PATH}:/baserow/media"]
       }
 
       template {
@@ -329,12 +311,6 @@ job "cdh-baserow" {
         REDIS_PORT    = var.REDIS_PORT
       }
 
-      volume_mount {
-        volume      = "media"
-        destination = "/baserow/media"
-        read_only   = false
-      }
-
       resources {
         cpu    = 200
         memory = 256
@@ -342,4 +318,3 @@ job "cdh-baserow" {
     }
   }
 }
-
