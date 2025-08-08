@@ -21,6 +21,16 @@
   become_user: '{{ cdh_baserow_sandbox_postgres_admin_user }}'
   run_once: true
 
+- name: Pul_nomad_cdh_baserow - ensure baserow media dir exists on clients
+  ansible.builtin.file:
+    path: /srv/nomad/host_volumes/cdh-baserow-media
+    state: directory
+    owner: 9999
+    group: 9999
+    mode: "0755"
+  when: pul_nomad_role == 'client'
+
+
 - name: Pul_nomad_cdh_baserow | ensure access to postgres server for client connections
   ansible.builtin.lineinfile:
     path: '/etc/postgresql/{{ cdh_baserow_sandbox_postgres_version }}/main/pg_hba.conf'
