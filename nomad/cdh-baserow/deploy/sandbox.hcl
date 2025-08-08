@@ -19,7 +19,7 @@ variable "web_image_tag" {
   default = "1.34.5"
 }
 
-# Dummy to satisfy -var branch_or_sha=…
+# we seem to expect -var branch_or_sha=…
 variable "branch_or_sha" {
   type    = string
   default = ""
