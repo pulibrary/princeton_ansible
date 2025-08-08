@@ -3,7 +3,10 @@
 #############################
 
 # Variables for Baserow environment
-variable "branch_or_sha" { type = string default = "main" }
+variable "branch_or_sha" {
+  type    = string
+  default = "main"
+}
 
 variable "SECRET_KEY" { type = string }
 variable "BASEROW_JWT_SIGNING_KEY" { type = string default = "" }
@@ -21,8 +24,8 @@ variable "DATABASE_NAME" { type = string default = "baserow" }
 
 variable "PRIVATE_BACKEND_URL" { type = string default = "http://localhost:8000" }
 
-variable "backend_image" { type = string default = "docker.io/baserow/backend:sha-${ var.branch_or_sha }" }
-variable "web_image"     { type = string default = "docker.io/baserow/web-frontend:sha-${ var.branch_or_sha }" }
+variable "backend_image_repo" { type = string default = "docker.io/baserow/backend" }
+variable "web_image_repo"     { type = string default = "docker.io/baserow/web-frontend" }
 
 job "cdh-baserow" {
   region      = "global"
@@ -112,7 +115,7 @@ job "cdh-baserow" {
     task "backend" {
       driver = "podman"
       config {
-        image = var.backend_image
+        image = "${var.backend_image_repo}:sha-${var.branch_or_sha}"
         ports = ["api"]
       }
       env = {
@@ -138,7 +141,7 @@ job "cdh-baserow" {
     task "web-frontend" {
       driver = "podman"
       config {
-        image = var.web_image
+        image = "${var.web_image_repo}:sha-${var.branch_or_sha}"
         ports = ["web"]
       }
       env = {
@@ -151,7 +154,7 @@ job "cdh-baserow" {
     task "celery-worker" {
       driver = "podman"
       config {
-        image   = var.backend_image
+        image   = "${var.backend_image_repo}:sha-${var.branch_or_sha}"
         command = ["celery-worker"]
       }
       env = {
@@ -176,7 +179,7 @@ job "cdh-baserow" {
     task "celery-export" {
       driver = "podman"
       config {
-        image   = var.backend_image
+        image   = "${var.backend_image_repo}:sha-${var.branch_or_sha}"
         command = ["celery-exportworker"]
       }
       env = {
@@ -201,7 +204,7 @@ job "cdh-baserow" {
     task "celery-beat" {
       driver = "podman"
       config {
-        image       = var.backend_image
+        image       = "${var.backend_image_repo}:sha-${var.branch_or_sha}"
         command     = ["celery-beat"]
       }
       env = {
@@ -224,3 +227,4 @@ job "cdh-baserow" {
     }
   }
 }
+
