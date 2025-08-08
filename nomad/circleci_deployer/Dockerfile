@@ -47,6 +47,7 @@ RUN set -ex; \
       unzip \
       xz-utils \
       zlib1g-dev \
+      podman \
       ; \
       sudo rm -rf /var/lib/apt/lists/*
 # Install packages needed for ruby-build
@@ -64,5 +65,10 @@ RUN sudo /usr/local/ruby-build/install.sh
 # Install the version of Ruby we want and add to the path
 RUN sudo ruby-build ${RUBY_VERSION} /usr/local/ruby
 ENV PATH="/usr/local/ruby/bin:${PATH}"
+
+# Install podman rootless dependencies.
+RUN sudo apt-get update -qq && DEBIAN_FRONTEND=noninteractive sudo apt-get install -yq --no-install-recommends \
+uidmap \
+slirp4netns
 
 RUN echo "$(ruby --version)"
