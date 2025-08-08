@@ -1,32 +1,53 @@
 #############################
-# Nomad Job: CDH Baserow    #
+# Nomad Job: CDH Baserow (staging)
 #############################
 
-# Variables for Baserow environment
 variable "branch_or_sha" {
   type    = string
   default = "main"
 }
 
+variable "image_tag_prefix" {
+  type    = string
+  default = ""
+}
+
+variable "backend_image_repo" {
+  type    = string
+  default = "docker.io/baserow/backend"
+}
+
+variable "web_image_repo" {
+  type    = string
+  default = "docker.io/baserow/web-frontend"
+}
+
 variable "SECRET_KEY" {
   type = string
 }
+
 variable "BASEROW_JWT_SIGNING_KEY" {
   type    = string
   default = ""
 }
+
 variable "DATABASE_PASSWORD" {
   type = string
 }
+
 variable "REDIS_PASSWORD" {
   type = string
 }
 
 variable "REDIS_HOST" {
   type    = string
-  default = "lib-redis-sandbox1.princeton.edu"
+  default = "lib-redis-staging1.princeton.edu"
 }
-variable "REDIS_PORT" { type = number default = 6379 }
+
+variable "REDIS_PORT" {
+  type    = number
+  default = 6379
+}
 
 variable "BASEROW_PUBLIC_URL" {
   type    = string
@@ -35,12 +56,14 @@ variable "BASEROW_PUBLIC_URL" {
 
 variable "DATABASE_HOST" {
   type    = string
-  default = "lib-postgres-sandbox1.princeton.edu"
+  default = "lib-postgres-staging1.princeton.edu"
 }
+
 variable "DATABASE_USER" {
   type    = string
   default = "baserow"
 }
+
 variable "DATABASE_NAME" {
   type    = string
   default = "baserow"
@@ -51,17 +74,11 @@ variable "PRIVATE_BACKEND_URL" {
   default = "http://localhost:8000"
 }
 
-variable "backend_image_repo" {
-  type    = string
-  default = "docker.io/baserow/backend"
-}
-variable "web_image_repo"     { type = string default = "docker.io/baserow/web-frontend" }
-
-job "cdh-baserow" {
+job "cdh-baserow-staging" {
   region      = "global"
   datacenters = ["dc1"]
   type        = "service"
-  node_pool   = "sandbox"
+  node_pool   = "staging"
 
   volume "media" {
     type      = "host"
@@ -69,17 +86,19 @@ job "cdh-baserow" {
     read_only = false
   }
 
-  update {
-    canary       = 1
-    auto_promote = true
-    auto_revert  = true
-  }
-
   group "services" {
     count = 1
 
+    update {
+      canary       = 1
+      auto_promote = true
+      auto_revert  = true
+    }
+
     network {
       mode = "bridge"
+
+      # loadbalancers will hit these
       port "web" { to = 3000 }
       port "api" { to = 8000 }
 
@@ -88,8 +107,9 @@ job "cdh-baserow" {
       }
     }
 
+    # Service registrations (group-level)
     service {
-      name = "cdh-baserow-web"
+      name = "cdh-baserow-sandbox-web"
       port = "web"
       check {
         type     = "http"
@@ -99,8 +119,9 @@ job "cdh-baserow" {
         timeout  = "2s"
       }
     }
+
     service {
-      name = "cdh-baserow-backend"
+      name = "cdh-baserow-sandbox-backend"
       port = "api"
       check {
         type     = "http"
@@ -111,12 +132,13 @@ job "cdh-baserow" {
       }
     }
 
+    # Secrets from Nomad variables (staging scope)
     template {
       destination = "${NOMAD_SECRETS_DIR}/env.vars"
       env         = true
       change_mode = "restart"
       data = <<EOF
-      {{- with nomadVar "nomad/jobs/cdh-baserow" -}}
+      {{- with nomadVar "nomad/jobs/cdh-baserow-sandbox" -}}
       SECRET_KEY = {{ .SECRET_KEY }}
       BASEROW_JWT_SIGNING_KEY = {{ .BASEROW_JWT_SIGNING_KEY }}
       DATABASE_PASSWORD = {{ .DATABASE_PASSWORD }}
@@ -125,136 +147,193 @@ job "cdh-baserow" {
       EOF
     }
 
+    # Prestart: fix media volume permissions for Django UID 9999
     task "volume-permissions-fixer" {
       driver = "podman"
       user   = "root"
+
       config {
-        image = "docker.io/library/bash:4.4"
+        image   = "docker.io/library/bash:4.4"
         command = "chown"
         args    = ["9999:9999", "-R", "/baserow/media"]
       }
+
       volume_mount {
         volume      = "media"
         destination = "/baserow/media"
         read_only   = false
       }
-      lifecycle { hook = "prestart" sidecar = false }
-      resources { cpu = 100 memory = 64 }
+
+      lifecycle {
+        hook    = "prestart"
+        sidecar = false
+      }
+
+      resources {
+        cpu    = 100
+        memory = 64
+      }
     }
 
+    # --- Backend (Django/ASGI) ---
     task "backend" {
       driver = "podman"
+
       config {
-        image = "${var.backend_image_repo}:sha-${var.branch_or_sha}"
+        image = "${var.backend_image_repo}:${var.image_tag_prefix}${var.branch_or_sha}"
         ports = ["api"]
       }
+
       env = {
         BASEROW_PUBLIC_URL      = var.BASEROW_PUBLIC_URL
         SECRET_KEY              = var.SECRET_KEY
         BASEROW_JWT_SIGNING_KEY = var.BASEROW_JWT_SIGNING_KEY
+
         DATABASE_HOST           = var.DATABASE_HOST
         DATABASE_USER           = var.DATABASE_USER
         DATABASE_NAME           = var.DATABASE_NAME
         DATABASE_PASSWORD       = var.DATABASE_PASSWORD
+
         REDIS_HOST              = var.REDIS_HOST
         REDIS_PORT              = tostring(var.REDIS_PORT)
         REDIS_PASSWORD          = var.REDIS_PASSWORD
       }
+
       volume_mount {
         volume      = "media"
         destination = "/baserow/media"
         read_only   = false
       }
-      resources { cpu = 1000 memory = 1024 }
+
+      resources {
+        cpu    = 1000
+        memory = 1024
+      }
     }
 
+    # --- Web frontend ---
     task "web-frontend" {
       driver = "podman"
+
       config {
-        image = "${var.web_image_repo}:sha-${var.branch_or_sha}"
+        image = "${var.web_image_repo}:${var.image_tag_prefix}${var.branch_or_sha}"
         ports = ["web"]
       }
+
       env = {
         BASEROW_PUBLIC_URL  = var.BASEROW_PUBLIC_URL
         PRIVATE_BACKEND_URL = var.PRIVATE_BACKEND_URL
       }
-      resources { cpu = 500 memory = 512 }
+
+      resources {
+        cpu    = 500
+        memory = 512
+      }
     }
 
+    # --- Celery worker ---
     task "celery-worker" {
       driver = "podman"
+
       config {
-        image   = "${var.backend_image_repo}:sha-${var.branch_or_sha}"
+        image   = "${var.backend_image_repo}:${var.image_tag_prefix}${var.branch_or_sha}"
         command = ["celery-worker"]
       }
+
       env = {
         SECRET_KEY              = var.SECRET_KEY
         BASEROW_JWT_SIGNING_KEY = var.BASEROW_JWT_SIGNING_KEY
+
         DATABASE_HOST           = var.DATABASE_HOST
         DATABASE_USER           = var.DATABASE_USER
         DATABASE_NAME           = var.DATABASE_NAME
         DATABASE_PASSWORD       = var.DATABASE_PASSWORD
+
         REDIS_HOST              = var.REDIS_HOST
         REDIS_PORT              = tostring(var.REDIS_PORT)
         REDIS_PASSWORD          = var.REDIS_PASSWORD
       }
+
       volume_mount {
         volume      = "media"
         destination = "/baserow/media"
         read_only   = false
       }
-      resources { cpu = 500 memory = 512 }
+
+      resources {
+        cpu    = 500
+        memory = 512
+      }
     }
 
+    # --- Celery export worker ---
     task "celery-export" {
       driver = "podman"
+
       config {
-        image   = "${var.backend_image_repo}:sha-${var.branch_or_sha}"
+        image   = "${var.backend_image_repo}:${var.image_tag_prefix}${var.branch_or_sha}"
         command = ["celery-exportworker"]
       }
+
       env = {
         SECRET_KEY              = var.SECRET_KEY
         BASEROW_JWT_SIGNING_KEY = var.BASEROW_JWT_SIGNING_KEY
+
         DATABASE_HOST           = var.DATABASE_HOST
         DATABASE_USER           = var.DATABASE_USER
         DATABASE_NAME           = var.DATABASE_NAME
         DATABASE_PASSWORD       = var.DATABASE_PASSWORD
+
         REDIS_HOST              = var.REDIS_HOST
         REDIS_PORT              = tostring(var.REDIS_PORT)
         REDIS_PASSWORD          = var.REDIS_PASSWORD
       }
+
       volume_mount {
         volume      = "media"
         destination = "/baserow/media"
         read_only   = false
       }
-      resources { cpu = 500 memory = 512 }
+
+      resources {
+        cpu    = 500
+        memory = 512
+      }
     }
 
+    # --- Celery beat ---
     task "celery-beat" {
       driver = "podman"
+
       config {
-        image       = "${var.backend_image_repo}:sha-${var.branch_or_sha}"
-        command     = ["celery-beat"]
+        image   = "${var.backend_image_repo}:${var.image_tag_prefix}${var.branch_or_sha}"
+        command = ["celery-beat"]
       }
+
       env = {
         SECRET_KEY              = var.SECRET_KEY
         BASEROW_JWT_SIGNING_KEY = var.BASEROW_JWT_SIGNING_KEY
+
         DATABASE_HOST           = var.DATABASE_HOST
         DATABASE_USER           = var.DATABASE_USER
         DATABASE_NAME           = var.DATABASE_NAME
         DATABASE_PASSWORD       = var.DATABASE_PASSWORD
+
         REDIS_HOST              = var.REDIS_HOST
         REDIS_PORT              = tostring(var.REDIS_PORT)
         REDIS_PASSWORD          = var.REDIS_PASSWORD
       }
+
       volume_mount {
         volume      = "media"
         destination = "/baserow/media"
         read_only   = false
       }
-      resources { cpu = 200 memory = 256 }
+
+      resources {
+        cpu    = 200
+        memory = 256
+      }
     }
   }
 }
-
