@@ -9,8 +9,6 @@ variable "branch_or_sha" {
 }
 
 variable "image_tag_prefix" {
-  # Set to "sha-" if your images are tagged like sha-<shortsha>.
-  # Leave empty "" if your tags are just <shortsha> or branch names.
   type    = string
   default = ""
 }
@@ -25,15 +23,15 @@ variable "web_image_repo" {
   default = "docker.io/baserow/web-frontend"
 }
 
-# --- Non-secret app config variables (secrets come via template) ---
+# --- Non-secret app config variables ---
 variable "REDIS_HOST" {
   type    = string
-  default = "lib-redis-sandbox1.princeton.edu"
+  default = "lib-redis-staging1.princeton.edu"
 }
 
 variable "REDIS_PORT" {
-  type    = number
-  default = 6379
+  type    = string
+  default = "6379"
 }
 
 variable "BASEROW_PUBLIC_URL" {
@@ -43,7 +41,7 @@ variable "BASEROW_PUBLIC_URL" {
 
 variable "DATABASE_HOST" {
   type    = string
-  default = "lib-postgres-sandbox1.princeton.edu"
+  default = "lib-postgres-staging1.princeton.edu"
 }
 
 variable "DATABASE_USER" {
@@ -61,18 +59,16 @@ variable "PRIVATE_BACKEND_URL" {
   default = "http://localhost:8000"
 }
 
+variable "HOST_MEDIA_PATH" {
+  type    = string
+  default = "/srv/nomad/host_volumes/cdh-baserow-media"
+}
+
 job "cdh-baserow" {
   region      = "global"
   datacenters = ["dc1"]
   type        = "service"
   node_pool   = "sandbox"
-
-  # Host-backed volume for user-uploaded media
-  volume "media" {
-    type      = "host"
-    source    = "media"
-    read_only = false
-  }
 
   group "services" {
     count = 1
@@ -84,9 +80,6 @@ job "cdh-baserow" {
     }
 
     network {
-      mode = "bridge"
-
-      # Reverse proxy will hit these
       port "web" { to = 3000 }
       port "api" { to = 8000 }
 
@@ -95,7 +88,6 @@ job "cdh-baserow" {
       }
     }
 
-    # Service registrations (group-level)
     service {
       name = "cdh-baserow-web"
       port = "web"
@@ -120,7 +112,6 @@ job "cdh-baserow" {
       }
     }
 
-    # Prestart: fix media volume permissions for Django UID 9999
     task "volume-permissions-fixer" {
       driver = "podman"
       user   = "root"
@@ -129,12 +120,7 @@ job "cdh-baserow" {
         image   = "docker.io/library/bash:4.4"
         command = "chown"
         args    = ["9999:9999", "-R", "/baserow/media"]
-      }
-
-      volume_mount {
-        volume      = "media"
-        destination = "/baserow/media"
-        read_only   = false
+        volumes = ["${var.HOST_MEDIA_PATH}:/baserow/media"]
       }
 
       lifecycle {
@@ -148,44 +134,36 @@ job "cdh-baserow" {
       }
     }
 
-    # --- Backend (Django/ASGI) ---
     task "backend" {
       driver = "podman"
 
       config {
-        image = "${var.backend_image_repo}:${var.image_tag_prefix}${var.branch_or_sha}"
-        ports = ["api"]
+        image   = "${var.backend_image_repo}:${var.image_tag_prefix}${var.branch_or_sha}"
+        ports   = ["api"]
+        volumes = ["${var.HOST_MEDIA_PATH}:/baserow/media"]
       }
 
-      # Secrets injected from Nomad Variables KV: nomad/jobs/cdh-baserow-sandbox
       template {
         destination = "${NOMAD_SECRETS_DIR}/env.vars"
         env         = true
         change_mode = "restart"
         data = <<EOF
-        {{- with nomadVar "nomad/jobs/cdh-baserow-sandbox" -}}
-        SECRET_KEY = {{ .SECRET_KEY }}
-        BASEROW_JWT_SIGNING_KEY = {{ .BASEROW_JWT_SIGNING_KEY }}
-        DATABASE_PASSWORD = {{ .DATABASE_PASSWORD }}
-        REDIS_PASSWORD = {{ .REDIS_PASSWORD }}
-        {{- end -}}
-        EOF
+{{- with nomadVar "nomad/jobs/cdh-baserow-sandbox" -}}
+SECRET_KEY = {{ .SECRET_KEY }}
+BASEROW_JWT_SIGNING_KEY = {{ .BASEROW_JWT_SIGNING_KEY }}
+DATABASE_PASSWORD = {{ .DATABASE_PASSWORD }}
+REDIS_PASSWORD = {{ .REDIS_PASSWORD }}
+{{- end -}}
+EOF
       }
 
-      # Non-secrets from variables
       env = {
         BASEROW_PUBLIC_URL = var.BASEROW_PUBLIC_URL
         DATABASE_HOST      = var.DATABASE_HOST
         DATABASE_USER      = var.DATABASE_USER
         DATABASE_NAME      = var.DATABASE_NAME
         REDIS_HOST         = var.REDIS_HOST
-        REDIS_PORT         = tostring(var.REDIS_PORT)
-      }
-
-      volume_mount {
-        volume      = "media"
-        destination = "/baserow/media"
-        read_only   = false
+        REDIS_PORT         = var.REDIS_PORT
       }
 
       resources {
@@ -194,16 +172,14 @@ job "cdh-baserow" {
       }
     }
 
-    # --- Web frontend ---
     task "web-frontend" {
       driver = "podman"
 
       config {
-        image = "${var.web_image_repo}:${var.image_tag_prefix}${var.branch_or_sha}"
-        ports = ["web"]
+        image   = "${var.web_image_repo}:${var.image_tag_prefix}${var.branch_or_sha}"
+        ports   = ["web"]
       }
 
-      # Frontend usually doesn't need secrets — just URLs.
       env = {
         BASEROW_PUBLIC_URL  = var.BASEROW_PUBLIC_URL
         PRIVATE_BACKEND_URL = var.PRIVATE_BACKEND_URL
@@ -215,13 +191,13 @@ job "cdh-baserow" {
       }
     }
 
-    # --- Celery worker ---
     task "celery-worker" {
       driver = "podman"
 
       config {
         image   = "${var.backend_image_repo}:${var.image_tag_prefix}${var.branch_or_sha}"
         command = ["celery-worker"]
+        volumes = ["${var.HOST_MEDIA_PATH}:/baserow/media"]
       }
 
       template {
@@ -229,13 +205,13 @@ job "cdh-baserow" {
         env         = true
         change_mode = "restart"
         data = <<EOF
-        {{- with nomadVar "nomad/jobs/cdh-baserow-sandbox" -}}
-        SECRET_KEY = {{ .SECRET_KEY }}
-        BASEROW_JWT_SIGNING_KEY = {{ .BASEROW_JWT_SIGNING_KEY }}
-        DATABASE_PASSWORD = {{ .DATABASE_PASSWORD }}
-        REDIS_PASSWORD = {{ .REDIS_PASSWORD }}
-        {{- end -}}
-        EOF
+{{- with nomadVar "nomad/jobs/cdh-baserow-sandbox" -}}
+SECRET_KEY = {{ .SECRET_KEY }}
+BASEROW_JWT_SIGNING_KEY = {{ .BASEROW_JWT_SIGNING_KEY }}
+DATABASE_PASSWORD = {{ .DATABASE_PASSWORD }}
+REDIS_PASSWORD = {{ .REDIS_PASSWORD }}
+{{- end -}}
+EOF
       }
 
       env = {
@@ -243,13 +219,7 @@ job "cdh-baserow" {
         DATABASE_USER = var.DATABASE_USER
         DATABASE_NAME = var.DATABASE_NAME
         REDIS_HOST    = var.REDIS_HOST
-        REDIS_PORT    = tostring(var.REDIS_PORT)
-      }
-
-      volume_mount {
-        volume      = "media"
-        destination = "/baserow/media"
-        read_only   = false
+        REDIS_PORT    = var.REDIS_PORT
       }
 
       resources {
@@ -258,13 +228,13 @@ job "cdh-baserow" {
       }
     }
 
-    # --- Celery export worker ---
     task "celery-export" {
       driver = "podman"
 
       config {
         image   = "${var.backend_image_repo}:${var.image_tag_prefix}${var.branch_or_sha}"
         command = ["celery-exportworker"]
+        volumes = ["${var.HOST_MEDIA_PATH}:/baserow/media"]
       }
 
       template {
@@ -272,13 +242,13 @@ job "cdh-baserow" {
         env         = true
         change_mode = "restart"
         data = <<EOF
-        {{- with nomadVar "nomad/jobs/cdh-baserow-sandbox" -}}
-        SECRET_KEY = {{ .SECRET_KEY }}
-        BASEROW_JWT_SIGNING_KEY = {{ .BASEROW_JWT_SIGNING_KEY }}
-        DATABASE_PASSWORD = {{ .DATABASE_PASSWORD }}
-        REDIS_PASSWORD = {{ .REDIS_PASSWORD }}
-        {{- end -}}
-        EOF
+{{- with nomadVar "nomad/jobs/cdh-baserow-sandbox" -}}
+SECRET_KEY = {{ .SECRET_KEY }}
+BASEROW_JWT_SIGNING_KEY = {{ .BASEROW_JWT_SIGNING_KEY }}
+DATABASE_PASSWORD = {{ .DATABASE_PASSWORD }}
+REDIS_PASSWORD = {{ .REDIS_PASSWORD }}
+{{- end -}}
+EOF
       }
 
       env = {
@@ -286,13 +256,7 @@ job "cdh-baserow" {
         DATABASE_USER = var.DATABASE_USER
         DATABASE_NAME = var.DATABASE_NAME
         REDIS_HOST    = var.REDIS_HOST
-        REDIS_PORT    = tostring(var.REDIS_PORT)
-      }
-
-      volume_mount {
-        volume      = "media"
-        destination = "/baserow/media"
-        read_only   = false
+        REDIS_PORT    = var.REDIS_PORT
       }
 
       resources {
@@ -301,13 +265,13 @@ job "cdh-baserow" {
       }
     }
 
-    # --- Celery beat ---
     task "celery-beat" {
       driver = "podman"
 
       config {
         image   = "${var.backend_image_repo}:${var.image_tag_prefix}${var.branch_or_sha}"
         command = ["celery-beat"]
+        volumes = ["${var.HOST_MEDIA_PATH}:/baserow/media"]
       }
 
       template {
@@ -315,13 +279,13 @@ job "cdh-baserow" {
         env         = true
         change_mode = "restart"
         data = <<EOF
-        {{- with nomadVar "nomad/jobs/cdh-baserow-sandbox" -}}
-        SECRET_KEY = {{ .SECRET_KEY }}
-        BASEROW_JWT_SIGNING_KEY = {{ .BASEROW_JWT_SIGNING_KEY }}
-        DATABASE_PASSWORD = {{ .DATABASE_PASSWORD }}
-        REDIS_PASSWORD = {{ .REDIS_PASSWORD }}
-        {{- end -}}
-        EOF
+{{- with nomadVar "nomad/jobs/cdh-baserow-sandbox" -}}
+SECRET_KEY = {{ .SECRET_KEY }}
+BASEROW_JWT_SIGNING_KEY = {{ .BASEROW_JWT_SIGNING_KEY }}
+DATABASE_PASSWORD = {{ .DATABASE_PASSWORD }}
+REDIS_PASSWORD = {{ .REDIS_PASSWORD }}
+{{- end -}}
+EOF
       }
 
       env = {
@@ -329,13 +293,7 @@ job "cdh-baserow" {
         DATABASE_USER = var.DATABASE_USER
         DATABASE_NAME = var.DATABASE_NAME
         REDIS_HOST    = var.REDIS_HOST
-        REDIS_PORT    = tostring(var.REDIS_PORT)
-      }
-
-      volume_mount {
-        volume      = "media"
-        destination = "/baserow/media"
-        read_only   = false
+        REDIS_PORT    = var.REDIS_PORT
       }
 
       resources {
@@ -345,3 +303,4 @@ job "cdh-baserow" {
     }
   }
 }
+
