@@ -2,44 +2,22 @@
 # Nomad Job: CDH Baserow (sandbox)
 #############################
 
-variable "branch_or_sha" {
-  type    = string
-  default = ""
-}
+# Pin to a known-good Baserow release
+variable "backend_image_repo" { type = string default = "docker.io/baserow/backend" }
+variable "backend_image_tag"  { type = string default = "1.34.5" }
+variable "web_image_repo"     { type = string default = "docker.io/baserow/web-frontend" }
+variable "web_image_tag"      { type = string default = "1.34.5" }
 
-# --- Image pinning (release tags) ---
-variable "backend_image_repo" {
-  type    = string
-  default = "docker.io/baserow/backend"
-}
-variable "backend_image_tag" {
-  type    = string
-  default = "1.34.5"
-}
-variable "web_image_repo" {
-  type    = string
-  default = "docker.io/baserow/web-frontend"
-}
-variable "web_image_tag" {
-  type    = string
-  default = "1.34.5"
-}
+# Dummy to satisfy your deploy script's -var branch_or_sha=...
+variable "branch_or_sha" { type = string default = "" }
 
-# --- App config (non-secrets) ---
-variable "BASEROW_PUBLIC_URL" {
-  type    = string
-  default = ""
-}
-variable "PRIVATE_BACKEND_URL" {
-  type    = string
-  default = "http://localhost:8000"
-}
+# App (non-secret) vars
+variable "BASEROW_PUBLIC_URL"   { type = string default = "" }
+variable "PRIVATE_BACKEND_URL"  { type = string default = "http://localhost:8000" }
 
-# Host path for persistent uploads (bind-mounted into tasks)
-variable "HOST_MEDIA_PATH" {
-  type    = string
-  default = "/srv/nomad/host_volumes/cdh-baserow-media"
-}
+# Media bind mount parts (parent must exist on host; set to a known path)
+variable "HOST_MEDIA_PARENT" { type = string default = "/srv/nomad/host_volumes" }
+variable "HOST_MEDIA_DIR"    { type = string default = "cdh-baserow-media" }
 
 job "cdh-baserow" {
   region      = "global"
@@ -50,80 +28,39 @@ job "cdh-baserow" {
   group "services" {
     count = 1
 
-    update {
-      canary       = 1
-      auto_promote = true
-      auto_revert  = true
-    }
+    update { canary = 1 auto_promote = true auto_revert = true }
 
     network {
       port "web" { to = 3000 }
       port "api" { to = 8000 }
-
-      dns {
-        servers = ["10.88.0.1", "128.112.129.209", "8.8.8.8", "8.8.4.4"]
-      }
+      dns { servers = ["10.88.0.1","128.112.129.209","8.8.8.8","8.8.4.4"] }
     }
 
-    # Register services (group-level) for Consul
     service {
       name = "cdh-baserow-web"
       port = "web"
-      check {
-        type     = "http"
-        port     = "web"
-        path     = "/"
-        interval = "10s"
-        timeout  = "2s"
-      }
+      check { type = "http" port = "web" path = "/" interval = "10s" timeout = "2s" }
     }
+
     service {
       name = "cdh-baserow-backend"
       port = "api"
-      check {
-        type     = "http"
-        port     = "api"
-        path     = "/healthz"
-        interval = "10s"
-        timeout  = "2s"
-      }
+      check { type = "http" port = "api" path = "/healthz" interval = "10s" timeout = "2s" }
     }
 
-    # Ensure host media directory exists before we bind-mount it
-    task "ensure-media-dir" {
-      driver = "raw_exec"
-      config {
-        command = "/bin/mkdir"
-        args    = ["-p", "${var.HOST_MEDIA_PATH}"]
-      }
-      lifecycle {
-        hook    = "prestart"
-        sidecar = false
-      }
-      resources {
-        cpu    = 50
-        memory = 16
-      }
-    }
-
-    # Fix media volume permissions for Django UID 9999
-    task "volume-permissions-fixer" {
+    # Prepare the media directory using Podman only:
+    # mount the PARENT at /host, then mkdir/chown the child dir inside it.
+    task "prepare-media-dir" {
       driver = "podman"
       user   = "root"
       config {
         image   = "docker.io/library/bash:4.4"
-        command = "chown"
-        args    = ["9999:9999", "-R", "/baserow/media"]
-        volumes = ["${var.HOST_MEDIA_PATH}:/baserow/media"]
+        command = "bash"
+        args    = ["-lc", "mkdir -p /host/${var.HOST_MEDIA_DIR} && chown 9999:9999 -R /host/${var.HOST_MEDIA_DIR}"]
+        volumes = ["${var.HOST_MEDIA_PARENT}:/host"]
       }
-      lifecycle {
-        hook    = "prestart"
-        sidecar = false
-      }
-      resources {
-        cpu    = 100
-        memory = 64
-      }
+      lifecycle { hook = "prestart" sidecar = false }
+      resources { cpu = 50 memory = 64 }
     }
 
     # --- Backend (Django/ASGI) ---
@@ -132,42 +69,29 @@ job "cdh-baserow" {
       config {
         image   = "${var.backend_image_repo}:${var.backend_image_tag}"
         ports   = ["api"]
-        volumes = ["${var.HOST_MEDIA_PATH}:/baserow/media"]
+        volumes = ["${var.HOST_MEDIA_PARENT}/${var.HOST_MEDIA_DIR}:/baserow/media"]
       }
-
-      # Secrets + DB/Redis from Nomad KV (underscore path!)
+      # Secrets + DB/Redis from Nomad vars (underscore path)
       template {
         destination = "${NOMAD_SECRETS_DIR}/env.vars"
-        env         = true
+        env = true
         change_mode = "restart"
         data = <<EOF
 {{- with nomadVar "nomad/jobs/cdh_baserow-sandbox" -}}
 SECRET_KEY = {{ .SECRET_KEY }}
 BASEROW_JWT_SIGNING_KEY = {{ .BASEROW_JWT_SIGNING_KEY }}
-
-# Database
 DATABASE_HOST = {{ .POSTGRES_HOST }}
 DATABASE_USER = {{ .DB_USER }}
 DATABASE_NAME = {{ .DB_NAME }}
 DATABASE_PASSWORD = {{ .DB_PASSWORD }}
-
-# Redis
 REDIS_HOST = {{ .REDIS_HOST }}
 REDIS_PORT = {{ .REDIS_PORT }}
 REDIS_PASSWORD = {{ .REDIS_PASSWORD }}
 {{- end -}}
 EOF
       }
-
-      # Stable non-secrets here
-      env = {
-        BASEROW_PUBLIC_URL = var.BASEROW_PUBLIC_URL
-      }
-
-      resources {
-        cpu    = 1000
-        memory = 1024
-      }
+      env = { BASEROW_PUBLIC_URL = var.BASEROW_PUBLIC_URL }
+      resources { cpu = 1000 memory = 1024 }
     }
 
     # --- Web frontend ---
@@ -181,10 +105,7 @@ EOF
         BASEROW_PUBLIC_URL  = var.BASEROW_PUBLIC_URL
         PRIVATE_BACKEND_URL = var.PRIVATE_BACKEND_URL
       }
-      resources {
-        cpu    = 500
-        memory = 512
-      }
+      resources { cpu = 500 memory = 512 }
     }
 
     # --- Celery worker ---
@@ -193,11 +114,11 @@ EOF
       config {
         image   = "${var.backend_image_repo}:${var.backend_image_tag}"
         command = ["celery-worker"]
-        volumes = ["${var.HOST_MEDIA_PATH}:/baserow/media"]
+        volumes = ["${var.HOST_MEDIA_PARENT}/${var.HOST_MEDIA_DIR}:/baserow/media"]
       }
       template {
         destination = "${NOMAD_SECRETS_DIR}/env.vars"
-        env         = true
+        env = true
         change_mode = "restart"
         data = <<EOF
 {{- with nomadVar "nomad/jobs/cdh_baserow-sandbox" -}}
@@ -213,10 +134,7 @@ REDIS_PASSWORD = {{ .REDIS_PASSWORD }}
 {{- end -}}
 EOF
       }
-      resources {
-        cpu    = 500
-        memory = 512
-      }
+      resources { cpu = 500 memory = 512 }
     }
 
     # --- Celery export worker ---
@@ -225,11 +143,11 @@ EOF
       config {
         image   = "${var.backend_image_repo}:${var.backend_image_tag}"
         command = ["celery-exportworker"]
-        volumes = ["${var.HOST_MEDIA_PATH}:/baserow/media"]
+        volumes = ["${var.HOST_MEDIA_PARENT}/${var.HOST_MEDIA_DIR}:/baserow/media"]
       }
       template {
         destination = "${NOMAD_SECRETS_DIR}/env.vars"
-        env         = true
+        env = true
         change_mode = "restart"
         data = <<EOF
 {{- with nomadVar "nomad/jobs/cdh_baserow-sandbox" -}}
@@ -245,10 +163,7 @@ REDIS_PASSWORD = {{ .REDIS_PASSWORD }}
 {{- end -}}
 EOF
       }
-      resources {
-        cpu    = 500
-        memory = 512
-      }
+      resources { cpu = 500 memory = 512 }
     }
 
     # --- Celery beat ---
@@ -257,11 +172,11 @@ EOF
       config {
         image   = "${var.backend_image_repo}:${var.backend_image_tag}"
         command = ["celery-beat"]
-        volumes = ["${var.HOST_MEDIA_PATH}:/baserow/media"]
+        volumes = ["${var.HOST_MEDIA_PARENT}/${var.HOST_MEDIA_DIR}:/baserow/media"]
       }
       template {
         destination = "${NOMAD_SECRETS_DIR}/env.vars"
-        env         = true
+        env = true
         change_mode = "restart"
         data = <<EOF
 {{- with nomadVar "nomad/jobs/cdh_baserow-sandbox" -}}
@@ -277,10 +192,8 @@ REDIS_PASSWORD = {{ .REDIS_PASSWORD }}
 {{- end -}}
 EOF
       }
-      resources {
-        cpu    = 200
-        memory = 256
-      }
+      resources { cpu = 200 memory = 256 }
     }
   }
 }
+
