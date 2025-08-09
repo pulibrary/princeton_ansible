@@ -1,54 +1,74 @@
 ---
 # Installation tasks
-- name: Opkssh - check if local install file is specified
+# wherever we land on latest v/s version the URL from will be determined from version
+- name: Opkssh - set download URL for latest
   ansible.builtin.set_fact:
-    opkssh_use_local_install: "{{ opkssh_local_install_file | length > 0 }}"
+    opkssh_binary_url: "https://github.com/{{ opkssh_github_repo }}/releases/latest/download/opkssh-linux-{{ opkssh_cpu_arch }}"
+  when: opkssh_install_version == "latest"
 
-- name: Opkssh - install from local file
-  block:
-    - name: Opkssh - Check if local file exists
-      ansible.builtin.stat:
-        path: "{{ opkssh_local_install_file }}"
-      register: local_file_stat
+- name: Opkssh - set download URL for specific version
+  ansible.builtin.set_fact:
+    opkssh_binary_url: "https://github.com/{{ opkssh_github_repo }}/releases/download/{{ opkssh_install_version }}/opkssh-linux-{{ opkssh_cpu_arch }}"
+  when: opkssh_install_version != "latest"
 
-    - name: Opkssh - fail if local file doesn't exist
-      ansible.builtin.fail:
-        msg: "Specified local file does not exist: {{ opkssh_local_install_file }}"
-      when: not local_file_stat.stat.exists
+# Check current state
+- name: Opkssh - check if binary exists
+  ansible.builtin.stat:
+    path: "{{ opkssh_install_dir }}/{{ opkssh_binary_name }}"
+  register: opkssh_bin_stat
 
-    - name: Opkssh - copy local binary to installation directory
-      ansible.builtin.copy:
-        src: "{{ opkssh_local_install_file }}"
-        dest: "{{ opkssh_install_dir }}/{{ opkssh_binary_name }}"
-        owner: root
-        group: "{{ opkssh_auth_cmd_group }}"
-        mode: "0755"
-        remote_src: true
-  when: opkssh_use_local_install
-
-- name: Opkssh - download and install from GitHub
-  block:
-    - name: Opkssh - set download URL for latest version
-      ansible.builtin.set_fact:
-        opkssh_binary_url: "https://github.com/{{ opkssh_github_repo }}/releases/latest/download/opkssh-linux-{{ opkssh_cpu_arch }}"
-      when: opkssh_install_version == "latest"
-
-    - name: Opkssh - set download URL for specific version
-      ansible.builtin.set_fact:
-        opkssh_binary_url: "https://github.com/{{ opkssh_github_repo }}/releases/download/{{ opkssh_install_version }}/opkssh-linux-{{ opkssh_cpu_arch }}"
-      when: opkssh_install_version != "latest"
-
-    - name: Opkssh - download opkssh binary
-      ansible.builtin.get_url:
-        url: "{{ opkssh_binary_url }}"
-        dest: "{{ opkssh_install_dir }}/{{ opkssh_binary_name }}"
-        owner: root
-        group: "{{ opkssh_auth_cmd_group }}"
-        mode: "0755"
-        force: true
-  when: not opkssh_use_local_install
-
-- name: Opkssh - get installed version
+- name: Opkssh - get installed version (if present)
   ansible.builtin.command: "{{ opkssh_install_dir }}/{{ opkssh_binary_name }} --version"
   register: opkssh_version
   changed_when: false
+  failed_when: false
+  when: opkssh_bin_stat.stat.exists
+
+# Decide whether we need to (re)install
+- name: Opkssh - compute need_install (latest)
+  ansible.builtin.set_fact:
+    opkssh_need_install: "{{ not opkssh_bin_stat.stat.exists }}"
+  when: opkssh_install_version == "latest"
+
+- name: Opkssh - compute need_install (pinned version)
+  ansible.builtin.set_fact:
+    opkssh_need_install: "{{ (opkssh_version.stdout | default('')) is not search(opkssh_install_version) }}"
+  when: opkssh_install_version != "latest"
+
+# Download to a temp path only when needed
+- name: Opkssh - download binary from GitHub (temp)
+  ansible.builtin.get_url:
+    url: "{{ opkssh_binary_url }}"
+    dest: "/tmp/opkssh-linux-{{ opkssh_cpu_arch }}"
+    mode: "0755"
+    owner: root
+    group: "{{ opkssh_auth_cmd_group }}"
+    force: true
+  when: opkssh_need_install
+
+# Install/replace the binary atomically
+- name: Opkssh - install binary
+  ansible.builtin.copy:
+    src: "/tmp/opkssh-linux-{{ opkssh_cpu_arch }}"
+    dest: "{{ opkssh_install_dir }}/{{ opkssh_binary_name }}"
+    owner: root
+    group: "{{ opkssh_auth_cmd_group }}"
+    mode: "0755"
+    remote_src: true
+    backup: false
+  when: opkssh_need_install
+  notify: restart ssh
+
+# Clean temp
+- name: Opkssh - remove temp binary
+  ansible.builtin.file:
+    path: "/tmp/opkssh-linux-{{ opkssh_cpu_arch }}"
+    state: absent
+  when: opkssh_need_install
+
+# Refresh version fact post-install (or initial install)
+- name: Opkssh - get installed version (final)
+  ansible.builtin.command: "{{ opkssh_install_dir }}/{{ opkssh_binary_name }} --version"
+  register: opkssh_version
+  changed_when: false
+  failed_when: false
