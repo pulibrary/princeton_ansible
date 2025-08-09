@@ -99,12 +99,6 @@ opkssh_providers:
     ttl: "12h"
 ```
 
-### Overwriting Existing Configuration
-
-If you have conflicts with existing SSH configurations. Isn't a new VM a better option :wink: ?
-
-```yaml
-opkssh_overwrite_active_config: true
 ```
 
 Created based on the opkssh installation script from https://github.com/openpubkey/opkssh
