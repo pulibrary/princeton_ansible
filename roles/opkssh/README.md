@@ -101,7 +101,7 @@ opkssh_providers:
 
 ### Overwriting Existing Configuration
 
-If you have conflicts with existing SSH configurations:
+If you have conflicts with existing SSH configurations. Isn't a new VM a better option :wink: ?
 
 ```yaml
 opkssh_overwrite_active_config: true
