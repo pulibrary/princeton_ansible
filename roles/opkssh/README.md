@@ -24,7 +24,7 @@ opkssh_github_repo: openpubkey/opkssh
 opkssh_install_version: latest
 
 # Feature flags
-opkssh_home_policy: true
+opkssh_home_policy: false
 opkssh_restart_ssh: true
 opkssh_overwrite_active_config: false
 
