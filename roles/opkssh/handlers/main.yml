@@ -1,8 +1,17 @@
 ---
 # handlers file for roles/opkssh
-- name: restart ssh
-  ansible.builtin.systemd:
-    name: "{{ opkssh_os_packages[opkssh_os_type].ssh_service }}"
+- name: Restart ssh (RedHat)
+  listen: "restart ssh"
+  ansible.builtin.service:
+    name: sshd
     state: restarted
-    daemon_reload: true
-  when: opkssh_restart_ssh
+  become: true
+  when: ansible_os_family == "RedHat"
+
+- name: Restart ssh (Debian)
+  listen: "restart ssh"
+  ansible.builtin.service:
+    name: ssh
+    state: restarted
+  become: true
+  when: ansible_os_family == "Debian"
