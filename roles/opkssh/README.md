@@ -28,9 +28,6 @@ opkssh_home_policy: false
 opkssh_restart_ssh: true
 opkssh_overwrite_active_config: false
 
-# Local installation file (optional)
-opkssh_local_install_file: ""
-
 # OpenID Providers
 opkssh_providers:
   - url: "https://accounts.google.com"
