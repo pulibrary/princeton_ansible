@@ -1,0 +1,67 @@
+---
+# you MUST run this playbook on a single host with '--limit' for example `ansible-playbook -v --limit adc-prod2.princeton.edu playbooks/nginxplus.yml`
+# to update the second load-balancer, switch which adc# host is currently active, then run the playbook on the second (formerly active, now inactive) host
+# to update configuration for existing sites, run with '-t update_conf' for example `ansible-playbook -v --limit adc-prod2.princeton.edu playbooks/nginxplus.yml -t update_conf`
+# to remove obsolete config files, you cannot use the update_conf tag AND you must pass '-e nginx_cleanup_config=true'
+# note that this will delete the entire config directory, this is why you must run the full playbook and not use tags
+# To find the active load-balancer ssh onto a machine and run `ip a |grep 146` the active one will display `inet 128.112.203.146/32 scope global eno1`
+
+- name: update loadbalancer configuration
+  hosts: nginxplus_production # default to staging when we get a staging environment going
+  remote_user: pulsys
+  strategy: linear
+  become: true
+  vars_files:
+    - ../group_vars/nginxplus/main.yml
+    - ../group_vars/nginxplus/production.yml # when we merge the playbook this can have the environment
+
+  pre_tasks:
+    - name: prepare to update loadbalancer config
+      block:
+      - name: find the git branch
+        local_action: ansible.builtin.command git rev-parse --abbrev-ref HEAD
+        run_once: true
+        register: git_branch
+
+      - name: stop playbook if you didn't use --limit
+        fail:
+          msg: "you must use -l or --limit"
+        when: ansible_limit is not defined
+        run_once: true
+
+      - name: tell infrastructure and ansible-alerts the playbook is starting
+        community.general.slack:
+          token: "{{ vault_tower_slack_token }}"
+          msg: "Ansible is now running `{{ ansible_play_name }}` from the `{{ git_branch.stdout }}` branch with the `{{ ansible_run_tags }}` tag on {{ inventory_hostname }}"
+          channel: "{{ item }}"
+        loop: "{{ slack_alerts_channel }}"
+      tags: always
+      become: false
+
+  tasks:
+    - name: Nginxplus | add custom error pages
+      ansible.builtin.copy:
+        src: "roles/nginxplus/files/{{item}}"
+        dest: "/var/local/www/default/{{item}}"
+        owner: nginx
+        group: nginx
+        mode: "0644"
+      when: running_on_server
+      tags:
+        - error_pages
+      loop:
+        - "error.html"
+        - "error.json"
+        - "forbidden.json"
+        - "ratelimit.json"
+        - "too_large.json"
+        - "tigerdata-error.html"
+
+- name: restart nginx, load new config
+  hosts: nginxplus_production
+  remote_user: pulsys
+  strategy: linear
+  become: true
+  vars_files:
+    - ../group_vars/nginxplus/main.yml
+    - ../group_vars/nginxplus/production.yml # when we merge the playbook this can have the environment
