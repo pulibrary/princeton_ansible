@@ -3,7 +3,7 @@
   ansible.builtin.apt:
     name: '{{ item }}'
     state: present
-  loop: '{{ rails_app_dependencies }}'
+  loop: '{{ app_dependencies }}'
   tags: rails-dependencies
   changed_when: false
 
@@ -18,7 +18,7 @@
 - name: Ruby_app | Install site configuration into app_configs
   ansible.builtin.template:
     src: 'rails_app_config'
-    dest: '/home/{{ deploy_user }}/app_configs/{{ rails_app_name }}'
+    dest: '/home/{{ deploy_user }}/app_configs/{{ app_name }}'
     owner: '{{ deploy_user }}'
     group: '{{ deploy_user }}'
     mode: "0644"
@@ -42,9 +42,9 @@
     group: '{{ deploy_user }}'
     mode: "0755"
   with_items:
-    - '{{ rails_app_directory }}'
-    - '{{ rails_app_directory }}/shared'
-    - '{{ rails_app_directory }}/shared/tmp'
+    - '{{ app_directory }}'
+    - '{{ app_directory }}/shared'
+    - '{{ app_directory }}/shared/tmp'
 
 # todo should we remove this since it is not being used
 - name: Ruby_app | Create symlinks
@@ -55,7 +55,7 @@
     group: '{{ deploy_user }}'
     state: 'link'
     force: true
-  with_items: '{{ rails_app_symlinks }}'
+  with_items: '{{ app_symlinks }}'
 
 - name: Ruby_app | Allow deploy to restart, stop, start nginx (service)
   ansible.builtin.lineinfile:
