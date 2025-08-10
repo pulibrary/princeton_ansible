@@ -24,6 +24,33 @@
         state: present
       become: true
 
+    - name: Retrieve all objects
+      paloaltonetworks.panos.panos_address_object:
+        provider: "{{ panos_provider }}"
+        state: gathered
+        gathered_filter: "*"
+      register: all_objects
+
+    - name: View all objects
+      ansible.builtin.debug:
+        var: all_objects
+
+    - name: Retrieve a specific object
+      paloaltonetworks.panos.panos_address_object:
+        provider: "{{ panos_provider }}"
+        state: gathered
+        gathered_filter: "destination_ip contains {{ test_object.gathered[0].name }}"
+      register: specific_object
+
+    - name: View a specific object
+      ansible.builtin.debug:
+        var: specific_object
+
+    - name: Update an object IP
+      paloaltonetworks.panos.panos_address_object: 
+        provider: "{{ panos_provider }}"
+        state: change state here
+
     - name: Get IP from 'host' command
       ansible.builtin.shell:
         cmd: host {{ VM_host_name }}
@@ -47,6 +74,10 @@
         state: gathered
         gathered_filter: "{{ filter_input }}"
       register: test_object
+
+    - name: gives us all the results
+      ansible.builtin.debug:
+        var: test_object
 
     - name: Display the object address
       ansible.builtin.debug:
