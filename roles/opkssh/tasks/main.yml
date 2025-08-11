@@ -1,6 +1,5 @@
 ---
 # tasks file for roles/opkssh
-# Main tasks file for opkssh role
 - name: Opkssh - check if running as root
   ansible.builtin.fail:
     msg: "This role must be run as root"
@@ -42,7 +41,7 @@
 
 - name: Opkssh - include SELinux tasks
   ansible.builtin.include_tasks: selinux.yml
-  when: ansible_selinux.status is defined and ansible_selinux.status == "enabled"
+  when: ansible_selinux is defined and ansible_selinux.status is defined and ansible_selinux.status == "enabled"
 
 - name: Opkssh - include OpenSSH configuration tasks
   ansible.builtin.include_tasks: openssh.yml
@@ -56,22 +55,20 @@
     mode: "0660"
     modification_time: preserve
     access_time: preserve
+  when: opkssh_enable_logging | default(false) | bool
 
-- name: Opkssh - check if installation is already logged
+- name: Opkssh - create log entry for (re)installation
   ansible.builtin.lineinfile:
     path: "{{ opkssh_log_file }}"
-    line: "Successfully installed opkssh"
-    state: absent
-  check_mode: true
-  register: opkssh_install_logged
-  changed_when: false
-
-- name: Opkssh - create log entry for installation
-  ansible.builtin.lineinfile:
-    path: "{{ opkssh_log_file }}"
-    line: "Successfully installed opkssh (INSTALLED_ON: {{ ansible_date_time.iso8601 }}, VERSION_INSTALLED: {{ opkssh_version.stdout | default('unknown') }}, INSTALL_VERSION: {{ opkssh_install_version }}, HOME_POLICY: {{ opkssh_home_policy }}, RESTART_SSH: {{ opkssh_restart_ssh }})"
+    line: "Successfully installed opkssh (VERSION_INSTALLED: {{ opkssh_version.stdout | default('unknown') }}, INSTALL_VERSION: {{ opkssh_install_version }})"
     create: true
     owner: root
     group: "{{ opkssh_auth_cmd_group }}"
     mode: "0660"
-  when: opkssh_install_logged
+    insertafter: EOF
+    state: present
+  when:
+    - opkssh_enable_logging | default(false) | bool
+    - opkssh_copy_result is defined
+    - opkssh_copy_result.changed
+
