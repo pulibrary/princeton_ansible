@@ -28,7 +28,7 @@ variable "branch_or_sha" {
 # App (non-secret) vars
 variable "BASEROW_PUBLIC_URL" {
   type    = string
-  default = ""
+  default = "http://localhost"
 }
 variable "PRIVATE_BACKEND_URL" {
   type    = string
