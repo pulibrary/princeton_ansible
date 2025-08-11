@@ -171,8 +171,13 @@ job "cdh-baserow" {
         volumes = ["${var.HOST_MEDIA_PARENT}:/host"]
       }
 
-      lifecycle { hook = "prestart" }
-      resources { cpu = 50 memory = 64 }
+      lifecycle {
+        hook = "prestart"
+      }
+      resources {
+        cpu    = 50
+        memory = 64
+      }
     }
 
     # Prepare host dirs for Caddy state
@@ -187,8 +192,13 @@ job "cdh-baserow" {
         volumes = ["${var.HOST_CADDY_PARENT}:/host"]
       }
 
-      lifecycle { hook = "prestart" }
-      resources { cpu = 50 memory = 64 }
+      lifecycle {
+        hook = "prestart"
+      }
+      resources {
+        cpu    = 50
+        memory = 64
+      }
     }
 
     # --- Backend (Django/ASGI) ---
@@ -221,12 +231,15 @@ REDIS_PASSWORD = {{ .REDIS_PASSWORD }}
 EOF
       }
 
-      env = {
+      env {
         BASEROW_PUBLIC_URL                      = var.BASEROW_PUBLIC_URL
         BASEROW_ENABLE_SECURE_PROXY_SSL_HEADER  = "yes"
       }
 
-      resources { cpu = 1000 memory = 1024 }
+      resources {
+        cpu    = 1000
+        memory = 1024
+      }
     }
 
     # --- Web frontend ---
@@ -238,12 +251,15 @@ EOF
         ports = ["web"]
       }
 
-      env = {
+      env {
         BASEROW_PUBLIC_URL  = var.BASEROW_PUBLIC_URL
         PRIVATE_BACKEND_URL = var.PRIVATE_BACKEND_URL
       }
 
-      resources { cpu = 500 memory = 512 }
+      resources {
+        cpu    = 500
+        memory = 512
+      }
     }
 
     # --- Celery worker ---
@@ -275,7 +291,10 @@ REDIS_PASSWORD = {{ .REDIS_PASSWORD }}
 EOF
       }
 
-      resources { cpu = 500 memory = 512 }
+      resources {
+        cpu    = 500
+        memory = 512
+      }
     }
 
     # --- Celery export worker ---
@@ -307,7 +326,10 @@ REDIS_PASSWORD = {{ .REDIS_PASSWORD }}
 EOF
       }
 
-      resources { cpu = 500 memory = 512 }
+      resources {
+        cpu    = 500
+        memory = 512
+      }
     }
 
     # --- Celery beat ---
@@ -340,7 +362,10 @@ REDIS_PASSWORD = {{ .REDIS_PASSWORD }}
 EOF
       }
 
-      resources { cpu = 200 memory = 256 }
+      resources {
+        cpu    = 200
+        memory = 256
+      }
     }
 
     # --- Caddy reverse proxy (HTTP-only; NGINX Plus handles TLS & LB) ---
@@ -358,7 +383,7 @@ EOF
         ]
       }
 
-      env = {
+      env {
         BASEROW_CADDY_ADDRESSES     = var.BASEROW_CADDY_ADDRESSES
         BASEROW_CADDY_GLOBAL_CONF   = var.BASEROW_CADDY_GLOBAL_CONF
         BASEROW_PUBLIC_URL          = var.BASEROW_PUBLIC_URL
@@ -381,12 +406,20 @@ EOF
   }
 
   handle @is_baserow_host {
-    handle /api/* { reverse_proxy {$PRIVATE_BACKEND_URL:localhost:8000} }
-    handle /ws/*  { reverse_proxy {$PRIVATE_BACKEND_URL:localhost:8000} }
-    handle /mcp/* { reverse_proxy {$PRIVATE_BACKEND_URL:localhost:8000} }
+    handle /api/* {
+      reverse_proxy {$PRIVATE_BACKEND_URL:localhost:8000}
+    }
+    handle /ws/* {
+      reverse_proxy {$PRIVATE_BACKEND_URL:localhost:8000}
+    }
+    handle /mcp/* {
+      reverse_proxy {$PRIVATE_BACKEND_URL:localhost:8000}
+    }
 
     handle_path /media/* {
-      @downloads { query dl=* }
+      @downloads {
+        query dl=*
+      }
       header @downloads Content-disposition "attachment; filename={query.dl}"
       header {
         # allow HEAD/GET from the public host
@@ -395,11 +428,15 @@ EOF
         Access-Control-Allow-Headers "*"
         Access-Control-Expose-Headers "Content-Length, Content-Type"
       }
-      file_server { root {$MEDIA_ROOT:/baserow/media/} }
+      file_server {
+        root {$MEDIA_ROOT:/baserow/media/}
+      }
     }
 
     handle_path /static/* {
-      file_server { root {$STATIC_ROOT:/baserow/static/} }
+      file_server {
+        root {$STATIC_ROOT:/baserow/static/}
+      }
     }
   }
 
@@ -409,7 +446,10 @@ EOF
 EOT
       }
 
-      resources { cpu = 200 memory = 256 }
+      resources {
+        cpu    = 200
+        memory = 256
+      }
     }
   }
 }
