@@ -75,7 +75,7 @@ variable "HOST_CADDY_DATA_DIR" {
 # Caddy (HTTP-only behind NGINX Plus)
 variable "BASEROW_CADDY_ADDRESSES" {
   type    = string
-  default = ":80"
+  default = ":80" # no TLS here
 }
 
 variable "BASEROW_CADDY_GLOBAL_CONF" {
@@ -110,9 +110,9 @@ job "cdh-baserow" {
 
     network {
       # Web-frontend (Nuxt)
-      port "web" { to = 3000 }
+      port "web"  { to = 3000 }
       # Backend (Django/ASGI)
-      port "api" { to = 8000 }
+      port "api"  { to = 8000 }
       # Public listener that NGINX Plus will hit
       port "http" { to = 80 }
 
@@ -222,8 +222,8 @@ EOF
       }
 
       env = {
-        BASEROW_PUBLIC_URL                      = var.BASEROW_PUBLIC_URL
-        BASEROW_ENABLE_SECURE_PROXY_SSL_HEADER  = "yes"
+        BASEROW_PUBLIC_URL                     = var.BASEROW_PUBLIC_URL
+        BASEROW_ENABLE_SECURE_PROXY_SSL_HEADER = "yes"
       }
 
       resources { cpu = 1000 memory = 1024 }
@@ -348,8 +348,8 @@ EOF
       driver = "podman"
 
       config {
-        image = "docker.io/library/caddy:2"
-        ports = ["http"] # only port 80
+        image  = "docker.io/library/caddy:2"
+        ports  = ["http"] # only port 80
         volumes = [
           "${NOMAD_TASK_DIR}/Caddyfile:/etc/caddy/Caddyfile",
           "${var.HOST_MEDIA_PARENT}/${var.HOST_MEDIA_DIR}:/baserow/media",
@@ -359,13 +359,13 @@ EOF
       }
 
       env = {
-        BASEROW_CADDY_ADDRESSES     = var.BASEROW_CADDY_ADDRESSES
-        BASEROW_CADDY_GLOBAL_CONF   = var.BASEROW_CADDY_GLOBAL_CONF
-        BASEROW_PUBLIC_URL          = var.BASEROW_PUBLIC_URL
-        PRIVATE_BACKEND_URL         = var.PRIVATE_BACKEND_URL
-        PRIVATE_WEB_FRONTEND_URL    = var.PRIVATE_WEB_FRONTEND_URL
-        MEDIA_ROOT                  = var.MEDIA_ROOT
-        STATIC_ROOT                 = var.STATIC_ROOT
+        BASEROW_CADDY_ADDRESSES   = var.BASEROW_CADDY_ADDRESSES
+        BASEROW_CADDY_GLOBAL_CONF = var.BASEROW_CADDY_GLOBAL_CONF
+        BASEROW_PUBLIC_URL        = var.BASEROW_PUBLIC_URL
+        PRIVATE_BACKEND_URL       = var.PRIVATE_BACKEND_URL
+        PRIVATE_WEB_FRONTEND_URL  = var.PRIVATE_WEB_FRONTEND_URL
+        MEDIA_ROOT                = var.MEDIA_ROOT
+        STATIC_ROOT               = var.STATIC_ROOT
       }
 
       template {
@@ -413,3 +413,4 @@ EOT
     }
   }
 }
+
