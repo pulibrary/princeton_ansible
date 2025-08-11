@@ -1,6 +1,6 @@
 ---
 # Installation tasks
-# wherever we land on latest v/s version the URL from will be determined from version
+# Determine download URL based on version selection
 - name: Opkssh - set download URL for latest
   ansible.builtin.set_fact:
     opkssh_binary_url: "https://github.com/{{ opkssh_github_repo }}/releases/latest/download/opkssh-linux-{{ opkssh_cpu_arch }}"
@@ -24,15 +24,28 @@
   failed_when: false
   when: opkssh_bin_stat.stat.exists
 
-# Decide whether we need to (re)install
+# Compute whether installation is needed
 - name: Opkssh - compute need_install (latest)
   ansible.builtin.set_fact:
     opkssh_need_install: "{{ not opkssh_bin_stat.stat.exists }}"
   when: opkssh_install_version == "latest"
 
+- name: Opkssh - parse installed version (if present)
+  ansible.builtin.set_fact:
+    opkssh_installed_version: >-
+      {{ (opkssh_version.stdout | default('') | regex_search('v?\\d+\\.\\d+\\.\\d+', '\\0')) | default('') }}
+  when: opkssh_bin_stat.stat.exists
+
+- name: Opkssh - normalize target version (when pinned)
+  ansible.builtin.set_fact:
+    opkssh_target_version: "{{ opkssh_install_version | regex_replace('^v','') }}"
+  when: opkssh_install_version != "latest"
+
 - name: Opkssh - compute need_install (pinned version)
   ansible.builtin.set_fact:
-    opkssh_need_install: "{{ (opkssh_version.stdout | default('')) is not search(opkssh_install_version) }}"
+    opkssh_need_install: >-
+      {{ (not opkssh_bin_stat.stat.exists) or
+         ((opkssh_installed_version | regex_replace('^v','')) != opkssh_target_version) }}
   when: opkssh_install_version != "latest"
 
 # Download to a temp path only when needed
@@ -43,7 +56,8 @@
     mode: "0755"
     owner: root
     group: "{{ opkssh_auth_cmd_group }}"
-    force: true
+    force: false
+    checksum: "{{ opkssh_binary_checksum | default(omit) }}"
   when: opkssh_need_install
 
 # Install/replace the binary atomically
@@ -57,9 +71,11 @@
     remote_src: true
     backup: false
   when: opkssh_need_install
+  register: opkssh_copy_result
   notify: restart ssh
 
-# Clean temp
+  # Clean temp (only if we downloaded/replaced)
+  # useful for upgrades
 - name: Opkssh - remove temp binary
   ansible.builtin.file:
     path: "/tmp/opkssh-linux-{{ opkssh_cpu_arch }}"
