@@ -349,7 +349,7 @@ EOF
 
       config {
         image = "docker.io/library/caddy:2"
-        ports = ["http"] # only port 80
+        ports = ["http"]
         volumes = [
           "${NOMAD_TASK_DIR}/Caddyfile:/etc/caddy/Caddyfile",
           "${var.HOST_MEDIA_PARENT}/${var.HOST_MEDIA_DIR}:/baserow/media",
