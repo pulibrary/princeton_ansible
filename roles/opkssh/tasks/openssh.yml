@@ -1,32 +1,55 @@
 ---
 # OpenSSH configuration tasks
+# Allow skipping sshd config management if a caller wants to own it
+- name: Opkssh - set manage_sshd_config flag (default true)
+  ansible.builtin.set_fact:
+    opkssh_manage_sshd_config_effective: "{{ opkssh_manage_sshd_config | default(true) | bool }}"
+
 - name: Opkssh - check for existing AuthorizedKeysCommand configuration
   ansible.builtin.shell: |
-    grep -l '^AuthorizedKeysCommand\|^AuthorizedKeysCommandUser' /etc/ssh/sshd_config.d/*.conf 2>/dev/null | sort -V | head -n 1
+    grep -lE '^(AuthorizedKeysCommand|AuthorizedKeysCommandUser)\b' /etc/ssh/sshd_config.d/*.conf 2>/dev/null | sort -V | head -n 1
   register: existing_config
   changed_when: false
   failed_when: false
+  when: opkssh_manage_sshd_config_effective
 
+# Choose destination file:
+# - If an existing opk-ssh.conf is present and we are NOT overwriting, use it
+# - Otherwise, write our own priority drop-in path
 - name: Opkssh - determine configuration file to use
   ansible.builtin.set_fact:
-    sshd_config_file: "{{ '/etc/ssh/sshd_config.d/' + opkssh_sshd_config_priority|string + '-opk-ssh.conf' }}"
-  when:
-    - running_on_server
-    - existing_config.stdout == "" or opkssh_overwrite_active_config
+    sshd_config_file: >-
+      {{ '/etc/ssh/sshd_config.d/' ~ (opkssh_sshd_config_priority | default(50) | string) ~ '-opk-ssh.conf' }}
+  when: opkssh_manage_sshd_config_effective
 
-- name: Opkssh - set configuration file to existing if found
+- name: Opkssh - reuse existing opk-ssh.conf if not overwriting
   ansible.builtin.set_fact:
     sshd_config_file: "{{ existing_config.stdout }}"
   when:
-    - running_on_server
-    - existing_config.stdout != "" and not opkssh_overwrite_active_config and existing_config.stdout.endswith('opk-ssh.conf')
+    - opkssh_manage_sshd_config_effective
+    - existing_config.stdout is defined
+    - existing_config.stdout | length > 0
+    - not (opkssh_overwrite_active_config | default(false) | bool)
+    - existing_config.stdout.endswith('opk-ssh.conf')
 
+- name: Opkssh - ensure sshd_config.d exists
+  ansible.builtin.file:
+    path: /etc/ssh/sshd_config.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: opkssh_manage_sshd_config_effective
+
+# Deploy our configuration
 - name: Opkssh - deploy SSH configuration
   ansible.builtin.template:
     src: opk-ssh.conf.j2
     dest: "{{ sshd_config_file }}"
     owner: root
     group: root
-    mode: '0644'
+    mode: "0644"
+  when:
+    - opkssh_manage_sshd_config_effective
+    - sshd_config_file is defined
   notify: restart ssh
-  when: sshd_config_file is defined

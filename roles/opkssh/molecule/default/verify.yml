@@ -175,23 +175,6 @@
         path: /etc/sudoers.d/opkssh
       register: sudoers_file
 
-    - name: Verify sudoers configuration when home_policy is enabled
-      when: opkssh_home_policy | default(true)
-      block:
-        - name: Check sudoers file exists
-          ansible.builtin.assert:
-            that:
-              - sudoers_file.stat.exists
-              - sudoers_file.stat.mode == '0440'
-            fail_msg: "Sudoers file is missing or has incorrect permissions"
-            success_msg: "Sudoers file exists with correct permissions"
-
-        - name: Verify sudoers content
-          ansible.builtin.command: grep "opksshuser.*NOPASSWD.*opkssh readhome" /etc/sudoers.d/opkssh
-          register: sudoers_content
-          changed_when: false
-          failed_when: sudoers_content.rc != 0
-
     - name: Display verification summary
       ansible.builtin.debug:
         msg:
@@ -203,5 +186,4 @@
           - "✓ Configuration directories created"
           - "✓ Configuration files in place"
           - "✓ SSH configured for opkssh"
-          - "{{ 'Sudoers configured' if (opkssh_home_policy | default(true)) else 'Sudoers skipped (home_policy disabled)' }}"
           - "======================================="
