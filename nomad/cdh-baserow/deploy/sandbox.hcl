@@ -2,35 +2,96 @@
 # Nomad Job: CDH Baserow (sandbox) — behind NGINX Plus
 #############################
 
-variable "backend_image_repo"  { type = string default = "docker.io/baserow/backend" }
-variable "backend_image_tag"   { type = string default = "1.34.5" }
-variable "web_image_repo"      { type = string default = "docker.io/baserow/web-frontend" }
-variable "web_image_tag"       { type = string default = "1.34.5" }
+variable "backend_image_repo" {
+  type    = string
+  default = "docker.io/baserow/backend"
+}
+
+variable "backend_image_tag" {
+  type    = string
+  default = "1.34.5"
+}
+
+variable "web_image_repo" {
+  type    = string
+  default = "docker.io/baserow/web-frontend"
+}
+
+variable "web_image_tag" {
+  type    = string
+  default = "1.34.5"
+}
 
 # we seem to expect -var branch_or_sha=…
-variable "branch_or_sha" { type = string default = "" }
+variable "branch_or_sha" {
+  type    = string
+  default = ""
+}
 
 # Public URL seen by users (set to your HTTPS host)
-variable "BASEROW_PUBLIC_URL" { type = string default = "http://localhost" }
+variable "BASEROW_PUBLIC_URL" {
+  type    = string
+  default = "http://localhost"
+}
 
 # Internal URLs used by Caddy to reach the app containers
-variable "PRIVATE_BACKEND_URL"      { type = string default = "http://localhost:8000" }
-variable "PRIVATE_WEB_FRONTEND_URL" { type = string default = "http://localhost:3000" }
+variable "PRIVATE_BACKEND_URL" {
+  type    = string
+  default = "http://localhost:8000"
+}
+
+variable "PRIVATE_WEB_FRONTEND_URL" {
+  type    = string
+  default = "http://localhost:3000"
+}
 
 # Media bind mount parts (parent must exist on host; set to a known path)
-variable "HOST_MEDIA_PARENT" { type = string default = "/srv/nomad/host_volumes" }
-variable "HOST_MEDIA_DIR"    { type = string default = "cdh-baserow-media" }
+variable "HOST_MEDIA_PARENT" {
+  type    = string
+  default = "/srv/nomad/host_volumes"
+}
+
+variable "HOST_MEDIA_DIR" {
+  type    = string
+  default = "cdh-baserow-media"
+}
 
 # Caddy host storage (for /config and /data)
-variable "HOST_CADDY_PARENT"     { type = string default = "/srv/nomad/host_volumes" }
-variable "HOST_CADDY_CONFIG_DIR" { type = string default = "cdh-baserow-caddy-config" }
-variable "HOST_CADDY_DATA_DIR"   { type = string default = "cdh-baserow-caddy-data" }
+variable "HOST_CADDY_PARENT" {
+  type    = string
+  default = "/srv/nomad/host_volumes"
+}
+
+variable "HOST_CADDY_CONFIG_DIR" {
+  type    = string
+  default = "cdh-baserow-caddy-config"
+}
+
+variable "HOST_CADDY_DATA_DIR" {
+  type    = string
+  default = "cdh-baserow-caddy-data"
+}
 
 # Caddy (HTTP-only behind NGINX Plus)
-variable "BASEROW_CADDY_ADDRESSES"   { type = string default = ":80" } # no TLS here
-variable "BASEROW_CADDY_GLOBAL_CONF" { type = string default = "" }
-variable "MEDIA_ROOT"                { type = string default = "/baserow/media/" }
-variable "STATIC_ROOT"               { type = string default = "/baserow/static/" }
+variable "BASEROW_CADDY_ADDRESSES" {
+  type    = string
+  default = ":80"
+}
+
+variable "BASEROW_CADDY_GLOBAL_CONF" {
+  type    = string
+  default = ""
+}
+
+variable "MEDIA_ROOT" {
+  type    = string
+  default = "/baserow/media/"
+}
+
+variable "STATIC_ROOT" {
+  type    = string
+  default = "/baserow/static/"
+}
 
 job "cdh-baserow" {
   region      = "global"
@@ -352,4 +413,3 @@ EOT
     }
   }
 }
-
