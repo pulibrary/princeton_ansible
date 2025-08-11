@@ -383,17 +383,17 @@ EOF
         destination = "local/Caddyfile"
         change_mode = "restart"
         data = <<EOT
-{$BASEROW_CADDY_GLOBAL_CONF}
+{{ env "BASEROW_CADDY_GLOBAL_CONF" }}
 
-{$BASEROW_CADDY_ADDRESSES} {
+{{ env "BASEROW_CADDY_ADDRESSES" }} {
   # No TLS here; NGINX Plus terminates HTTPS and forwards headers
   
   handle /api/* {
-    reverse_proxy ${NOMAD_ADDR_api}
+    reverse_proxy {{ env "NOMAD_ADDR_api" }}
   }
   
   handle /ws/* {
-    reverse_proxy ${NOMAD_ADDR_api}
+    reverse_proxy {{ env "NOMAD_ADDR_api" }}
   }
   
   handle_path /media/* {
@@ -402,18 +402,18 @@ EOF
     }
     header @downloads Content-disposition "attachment; filename={query.dl}"
     file_server {
-      root {$MEDIA_ROOT}
+      root {{ env "MEDIA_ROOT" }}
     }
   }
 
   handle_path /static/* {
     file_server {
-      root {$STATIC_ROOT}
+      root {{ env "STATIC_ROOT" }}
     }
   }
   
   # everything else -> web-frontend
-  reverse_proxy ${NOMAD_ADDR_web}
+  reverse_proxy {{ env "NOMAD_ADDR_web" }}
 }
 EOT
       }
