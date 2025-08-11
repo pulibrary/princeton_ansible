@@ -354,7 +354,7 @@ EOF
           "${NOMAD_TASK_DIR}/Caddyfile:/etc/caddy/Caddyfile",
           "${var.HOST_MEDIA_PARENT}/${var.HOST_MEDIA_DIR}:/baserow/media",
           "${var.HOST_CADDY_PARENT}/${var.HOST_CADDY_CONFIG_DIR}:/config",
-          "${var.HOST_CADDY_PARENT}/${var.HOST_CADDY_DATA_DIR}:/data"
+          "${var.HOST_CADDY_PARENT}/${var.HOST_CADDY_DATA_DIR}:/data",
         ]
       }
 
