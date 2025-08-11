@@ -7,9 +7,10 @@ variable "backend_image_tag"   { type = string default = "1.34.5" }
 variable "web_image_repo"      { type = string default = "docker.io/baserow/web-frontend" }
 variable "web_image_tag"       { type = string default = "1.34.5" }
 
+# we seem to expect -var branch_or_sha=…
 variable "branch_or_sha" { type = string default = "" }
 
-# Public URL seen by users (pass -var to set your host)
+# Public URL seen by users (set to your HTTPS host)
 variable "BASEROW_PUBLIC_URL" { type = string default = "http://localhost" }
 
 # Internal URLs used by Caddy to reach the app containers
@@ -63,31 +64,52 @@ job "cdh-baserow" {
     service {
       name = "cdh-baserow-web"
       port = "web"
-      check { type = "http" port = "web" path = "/" interval = "10s" timeout = "2s" }
+      check {
+        type     = "http"
+        port     = "web"
+        path     = "/"
+        interval = "10s"
+        timeout  = "2s"
+      }
     }
+
     service {
       name = "cdh-baserow-backend"
       port = "api"
-      check { type = "http" port = "api" path = "/healthz" interval = "10s" timeout = "2s" }
+      check {
+        type     = "http"
+        port     = "api"
+        path     = "/healthz"
+        interval = "10s"
+        timeout  = "2s"
+      }
     }
 
-    # Public service loadbalancer: single HTTP endpoint
+    # Public service *for NGINX Plus*: single HTTP endpoint
     service {
       name = "cdh-baserow-sandbox"
       port = "http"
-      check { type = "http" port = "http" path = "/" interval = "10s" timeout = "2s" }
+      check {
+        type     = "http"
+        port     = "http"
+        path     = "/"
+        interval = "10s"
+        timeout  = "2s"
+      }
     }
 
     # Prepare host dirs for media (owned by Django uid/gid 9999)
     task "prepare-media-dir" {
       driver = "podman"
       user   = "root"
+
       config {
         image   = "docker.io/library/bash:4.4"
         command = "bash"
         args    = ["-lc", "mkdir -p /host/${var.HOST_MEDIA_DIR} && chown 9999:9999 -R /host/${var.HOST_MEDIA_DIR}"]
         volumes = ["${var.HOST_MEDIA_PARENT}:/host"]
       }
+
       lifecycle { hook = "prestart" }
       resources { cpu = 50 memory = 64 }
     }
@@ -96,12 +118,14 @@ job "cdh-baserow" {
     task "prepare-caddy-dirs" {
       driver = "podman"
       user   = "root"
+
       config {
         image   = "docker.io/library/bash:4.4"
         command = "bash"
         args    = ["-lc", "mkdir -p /host/${var.HOST_CADDY_CONFIG_DIR} /host/${var.HOST_CADDY_DATA_DIR}"]
         volumes = ["${var.HOST_CADDY_PARENT}:/host"]
       }
+
       lifecycle { hook = "prestart" }
       resources { cpu = 50 memory = 64 }
     }
@@ -109,13 +133,14 @@ job "cdh-baserow" {
     # --- Backend (Django/ASGI) ---
     task "backend" {
       driver = "podman"
+
       config {
         image   = "${var.backend_image_repo}:${var.backend_image_tag}"
         ports   = ["api"]
         volumes = ["${var.HOST_MEDIA_PARENT}/${var.HOST_MEDIA_DIR}:/baserow/media"]
       }
 
-      # Secrets + DB/Redis from Nomad vars
+      # Secrets + DB/Redis from Nomad vars (underscore path)
       template {
         destination = "${NOMAD_SECRETS_DIR}/env.vars"
         env         = true
@@ -136,8 +161,8 @@ EOF
       }
 
       env = {
-        BASEROW_PUBLIC_URL                   = var.BASEROW_PUBLIC_URL
-        BASEROW_ENABLE_SECURE_PROXY_SSL_HEADER = "yes"
+        BASEROW_PUBLIC_URL                      = var.BASEROW_PUBLIC_URL
+        BASEROW_ENABLE_SECURE_PROXY_SSL_HEADER  = "yes"
       }
 
       resources { cpu = 1000 memory = 1024 }
@@ -146,25 +171,30 @@ EOF
     # --- Web frontend ---
     task "web-frontend" {
       driver = "podman"
+
       config {
         image = "${var.web_image_repo}:${var.web_image_tag}"
         ports = ["web"]
       }
+
       env = {
         BASEROW_PUBLIC_URL  = var.BASEROW_PUBLIC_URL
         PRIVATE_BACKEND_URL = var.PRIVATE_BACKEND_URL
       }
+
       resources { cpu = 500 memory = 512 }
     }
 
     # --- Celery worker ---
     task "celery-worker" {
       driver = "podman"
+
       config {
         image   = "${var.backend_image_repo}:${var.backend_image_tag}"
-        command = ["celery-worker"]
+        args    = ["celery-worker"]
         volumes = ["${var.HOST_MEDIA_PARENT}/${var.HOST_MEDIA_DIR}:/baserow/media"]
       }
+
       template {
         destination = "${NOMAD_SECRETS_DIR}/env.vars"
         env         = true
@@ -183,18 +213,20 @@ REDIS_PASSWORD = {{ .REDIS_PASSWORD }}
 {{- end -}}
 EOF
       }
-      # (Doesn't need SECURE_PROXY var)
+
       resources { cpu = 500 memory = 512 }
     }
 
     # --- Celery export worker ---
     task "celery-export" {
       driver = "podman"
+
       config {
         image   = "${var.backend_image_repo}:${var.backend_image_tag}"
-        command = ["celery-exportworker"]
+        args    = ["celery-exportworker"]
         volumes = ["${var.HOST_MEDIA_PARENT}/${var.HOST_MEDIA_DIR}:/baserow/media"]
       }
+
       template {
         destination = "${NOMAD_SECRETS_DIR}/env.vars"
         env         = true
@@ -213,17 +245,21 @@ REDIS_PASSWORD = {{ .REDIS_PASSWORD }}
 {{- end -}}
 EOF
       }
+
       resources { cpu = 500 memory = 512 }
     }
 
     # --- Celery beat ---
     task "celery-beat" {
-      driver = "podman"
+      driver      = "podman"
+      kill_signal = "SIGQUIT"
+
       config {
         image   = "${var.backend_image_repo}:${var.backend_image_tag}"
-        command = ["celery-beat"]
+        args    = ["celery-beat"]
         volumes = ["${var.HOST_MEDIA_PARENT}/${var.HOST_MEDIA_DIR}:/baserow/media"]
       }
+
       template {
         destination = "${NOMAD_SECRETS_DIR}/env.vars"
         env         = true
@@ -242,12 +278,14 @@ REDIS_PASSWORD = {{ .REDIS_PASSWORD }}
 {{- end -}}
 EOF
       }
+
       resources { cpu = 200 memory = 256 }
     }
 
     # --- Caddy reverse proxy (HTTP-only; NGINX Plus handles TLS & LB) ---
     task "caddy" {
       driver = "podman"
+
       config {
         image = "docker.io/library/caddy:2"
         ports = ["http"] # only port 80
@@ -258,6 +296,7 @@ EOF
           "${var.HOST_CADDY_PARENT}/${var.HOST_CADDY_DATA_DIR}:/data"
         ]
       }
+
       env = {
         BASEROW_CADDY_ADDRESSES     = var.BASEROW_CADDY_ADDRESSES
         BASEROW_CADDY_GLOBAL_CONF   = var.BASEROW_CADDY_GLOBAL_CONF
@@ -267,10 +306,11 @@ EOF
         MEDIA_ROOT                  = var.MEDIA_ROOT
         STATIC_ROOT                 = var.STATIC_ROOT
       }
+
       template {
         destination = "${NOMAD_TASK_DIR}/Caddyfile"
         change_mode = "restart"
-        data = <<'EOT'
+        data = <<EOT
 {$BASEROW_CADDY_GLOBAL_CONF}
 
 {$BASEROW_CADDY_ADDRESSES} {
@@ -307,6 +347,7 @@ EOF
 }
 EOT
       }
+
       resources { cpu = 200 memory = 256 }
     }
   }
