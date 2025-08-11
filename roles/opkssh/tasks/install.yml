@@ -1,5 +1,6 @@
 ---
 # Installation tasks
+
 # Determine download URL based on version selection
 - name: Opkssh - set download URL for latest
   ansible.builtin.set_fact:
@@ -30,22 +31,23 @@
     opkssh_need_install: "{{ not opkssh_bin_stat.stat.exists }}"
   when: opkssh_install_version == "latest"
 
-- name: Opkssh - parse installed version (if present)
+- name: Opkssh - extract installed version (pinned)
   ansible.builtin.set_fact:
     opkssh_installed_version: >-
-      {{ (opkssh_version.stdout | default('') | regex_search('v?\\d+\\.\\d+\\.\\d+', '\\0')) | default('') }}
+      {{ ((opkssh_version.stdout | default('')) | regex_findall('v?\\d+\\.\\d+\\.\\d+')
+          | first | default('')) | regex_replace('^v','') }}
   when: opkssh_bin_stat.stat.exists
 
-- name: Opkssh - normalize target version (when pinned)
+- name: Opkssh - normalize target version (pinned)
   ansible.builtin.set_fact:
     opkssh_target_version: "{{ opkssh_install_version | regex_replace('^v','') }}"
   when: opkssh_install_version != "latest"
 
-- name: Opkssh - compute need_install (pinned version)
+- name: Opkssh - compute need_install (pinned)
   ansible.builtin.set_fact:
     opkssh_need_install: >-
       {{ (not opkssh_bin_stat.stat.exists) or
-         ((opkssh_installed_version | regex_replace('^v','')) != opkssh_target_version) }}
+         ((opkssh_installed_version | default('')) != opkssh_target_version) }}
   when: opkssh_install_version != "latest"
 
 # Download to a temp path only when needed
@@ -74,8 +76,7 @@
   register: opkssh_copy_result
   notify: restart ssh
 
-  # Clean temp (only if we downloaded/replaced)
-  # useful for upgrades
+# Clean temp (only if we downloaded/replaced)
 - name: Opkssh - remove temp binary
   ansible.builtin.file:
     path: "/tmp/opkssh-linux-{{ opkssh_cpu_arch }}"
