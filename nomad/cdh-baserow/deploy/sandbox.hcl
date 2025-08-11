@@ -1,49 +1,35 @@
 #############################
-# Nomad Job: CDH Baserow (sandbox)
+# Nomad Job: CDH Baserow (sandbox) — behind NGINX Plus
 #############################
 
-variable "backend_image_repo" {
-  type    = string
-  default = "docker.io/baserow/backend"
-}
-variable "backend_image_tag" {
-  type    = string
-  default = "1.34.5"
-}
-variable "web_image_repo" {
-  type    = string
-  default = "docker.io/baserow/web-frontend"
-}
-variable "web_image_tag" {
-  type    = string
-  default = "1.34.5"
-}
+variable "backend_image_repo"  { type = string default = "docker.io/baserow/backend" }
+variable "backend_image_tag"   { type = string default = "1.34.5" }
+variable "web_image_repo"      { type = string default = "docker.io/baserow/web-frontend" }
+variable "web_image_tag"       { type = string default = "1.34.5" }
 
-# we seem to expect -var branch_or_sha=…
-variable "branch_or_sha" {
-  type    = string
-  default = ""
-}
+variable "branch_or_sha" { type = string default = "" }
 
-# App (non-secret) vars
-variable "BASEROW_PUBLIC_URL" {
-  type    = string
-  default = "http://localhost"
-}
-variable "PRIVATE_BACKEND_URL" {
-  type    = string
-  default = "http://localhost:8000"
-}
+# Public URL seen by users (pass -var to set your host)
+variable "BASEROW_PUBLIC_URL" { type = string default = "http://localhost" }
+
+# Internal URLs used by Caddy to reach the app containers
+variable "PRIVATE_BACKEND_URL"      { type = string default = "http://localhost:8000" }
+variable "PRIVATE_WEB_FRONTEND_URL" { type = string default = "http://localhost:3000" }
 
 # Media bind mount parts (parent must exist on host; set to a known path)
-variable "HOST_MEDIA_PARENT" {
-  type    = string
-  default = "/srv/nomad/host_volumes"
-}
-variable "HOST_MEDIA_DIR" {
-  type    = string
-  default = "cdh-baserow-media"
-}
+variable "HOST_MEDIA_PARENT" { type = string default = "/srv/nomad/host_volumes" }
+variable "HOST_MEDIA_DIR"    { type = string default = "cdh-baserow-media" }
+
+# Caddy host storage (for /config and /data)
+variable "HOST_CADDY_PARENT"     { type = string default = "/srv/nomad/host_volumes" }
+variable "HOST_CADDY_CONFIG_DIR" { type = string default = "cdh-baserow-caddy-config" }
+variable "HOST_CADDY_DATA_DIR"   { type = string default = "cdh-baserow-caddy-data" }
+
+# Caddy (HTTP-only behind NGINX Plus)
+variable "BASEROW_CADDY_ADDRESSES"   { type = string default = ":80" } # no TLS here
+variable "BASEROW_CADDY_GLOBAL_CONF" { type = string default = "" }
+variable "MEDIA_ROOT"                { type = string default = "/baserow/media/" }
+variable "STATIC_ROOT"               { type = string default = "/baserow/static/" }
 
 job "cdh-baserow" {
   region      = "global"
@@ -61,79 +47,75 @@ job "cdh-baserow" {
     }
 
     network {
-      port "web" {
-        to = 3000
-      }
-      port "api" {
-        to = 8000
-      }
+      # Web-frontend (Nuxt)
+      port "web" { to = 3000 }
+      # Backend (Django/ASGI)
+      port "api" { to = 8000 }
+      # Public listener that NGINX Plus will hit
+      port "http" { to = 80 }
+
       dns {
         servers = ["10.88.0.1", "128.112.129.209", "8.8.8.8", "8.8.4.4"]
       }
     }
 
+    # Internal health services
     service {
       name = "cdh-baserow-web"
       port = "web"
-      check {
-        type     = "http"
-        port     = "web"
-        path     = "/"
-        interval = "10s"
-        timeout  = "2s"
-      }
+      check { type = "http" port = "web" path = "/" interval = "10s" timeout = "2s" }
     }
-
     service {
       name = "cdh-baserow-backend"
       port = "api"
-      check {
-        type     = "http"
-        port     = "api"
-        path     = "/healthz"
-        interval = "10s"
-        timeout  = "2s"
-      }
+      check { type = "http" port = "api" path = "/healthz" interval = "10s" timeout = "2s" }
     }
 
-    # Prepare the media directory using Podman only:
-    # mount the PARENT at /host, then mkdir/chown the child dir inside it.
+    # Public service loadbalancer: single HTTP endpoint
+    service {
+      name = "cdh-baserow-sandbox"
+      port = "http"
+      check { type = "http" port = "http" path = "/" interval = "10s" timeout = "2s" }
+    }
+
+    # Prepare host dirs for media (owned by Django uid/gid 9999)
     task "prepare-media-dir" {
       driver = "podman"
       user   = "root"
-
       config {
         image   = "docker.io/library/bash:4.4"
         command = "bash"
-        args    = [
-          "-lc",
-          "mkdir -p /host/${var.HOST_MEDIA_DIR} && chown 9999:9999 -R /host/${var.HOST_MEDIA_DIR}"
-        ]
+        args    = ["-lc", "mkdir -p /host/${var.HOST_MEDIA_DIR} && chown 9999:9999 -R /host/${var.HOST_MEDIA_DIR}"]
         volumes = ["${var.HOST_MEDIA_PARENT}:/host"]
       }
+      lifecycle { hook = "prestart" }
+      resources { cpu = 50 memory = 64 }
+    }
 
-      lifecycle {
-        hook    = "prestart"
-        sidecar = false
+    # Prepare host dirs for Caddy state
+    task "prepare-caddy-dirs" {
+      driver = "podman"
+      user   = "root"
+      config {
+        image   = "docker.io/library/bash:4.4"
+        command = "bash"
+        args    = ["-lc", "mkdir -p /host/${var.HOST_CADDY_CONFIG_DIR} /host/${var.HOST_CADDY_DATA_DIR}"]
+        volumes = ["${var.HOST_CADDY_PARENT}:/host"]
       }
-
-      resources {
-        cpu    = 50
-        memory = 64
-      }
+      lifecycle { hook = "prestart" }
+      resources { cpu = 50 memory = 64 }
     }
 
     # --- Backend (Django/ASGI) ---
     task "backend" {
       driver = "podman"
-
       config {
         image   = "${var.backend_image_repo}:${var.backend_image_tag}"
         ports   = ["api"]
         volumes = ["${var.HOST_MEDIA_PARENT}/${var.HOST_MEDIA_DIR}:/baserow/media"]
       }
 
-      # Secrets + DB/Redis from Nomad vars (underscore path)
+      # Secrets + DB/Redis from Nomad vars
       template {
         destination = "${NOMAD_SECRETS_DIR}/env.vars"
         env         = true
@@ -154,45 +136,35 @@ EOF
       }
 
       env = {
-        BASEROW_PUBLIC_URL = var.BASEROW_PUBLIC_URL
+        BASEROW_PUBLIC_URL                   = var.BASEROW_PUBLIC_URL
+        BASEROW_ENABLE_SECURE_PROXY_SSL_HEADER = "yes"
       }
 
-      resources {
-        cpu    = 1000
-        memory = 1024
-      }
+      resources { cpu = 1000 memory = 1024 }
     }
 
     # --- Web frontend ---
     task "web-frontend" {
       driver = "podman"
-
       config {
         image = "${var.web_image_repo}:${var.web_image_tag}"
         ports = ["web"]
       }
-
       env = {
         BASEROW_PUBLIC_URL  = var.BASEROW_PUBLIC_URL
         PRIVATE_BACKEND_URL = var.PRIVATE_BACKEND_URL
       }
-
-      resources {
-        cpu    = 500
-        memory = 512
-      }
+      resources { cpu = 500 memory = 512 }
     }
 
     # --- Celery worker ---
     task "celery-worker" {
       driver = "podman"
-
       config {
         image   = "${var.backend_image_repo}:${var.backend_image_tag}"
         command = ["celery-worker"]
         volumes = ["${var.HOST_MEDIA_PARENT}/${var.HOST_MEDIA_DIR}:/baserow/media"]
       }
-
       template {
         destination = "${NOMAD_SECRETS_DIR}/env.vars"
         env         = true
@@ -211,23 +183,18 @@ REDIS_PASSWORD = {{ .REDIS_PASSWORD }}
 {{- end -}}
 EOF
       }
-
-      resources {
-        cpu    = 500
-        memory = 512
-      }
+      # (Doesn't need SECURE_PROXY var)
+      resources { cpu = 500 memory = 512 }
     }
 
     # --- Celery export worker ---
     task "celery-export" {
       driver = "podman"
-
       config {
         image   = "${var.backend_image_repo}:${var.backend_image_tag}"
         command = ["celery-exportworker"]
         volumes = ["${var.HOST_MEDIA_PARENT}/${var.HOST_MEDIA_DIR}:/baserow/media"]
       }
-
       template {
         destination = "${NOMAD_SECRETS_DIR}/env.vars"
         env         = true
@@ -246,23 +213,17 @@ REDIS_PASSWORD = {{ .REDIS_PASSWORD }}
 {{- end -}}
 EOF
       }
-
-      resources {
-        cpu    = 500
-        memory = 512
-      }
+      resources { cpu = 500 memory = 512 }
     }
 
     # --- Celery beat ---
     task "celery-beat" {
       driver = "podman"
-
       config {
         image   = "${var.backend_image_repo}:${var.backend_image_tag}"
         command = ["celery-beat"]
         volumes = ["${var.HOST_MEDIA_PARENT}/${var.HOST_MEDIA_DIR}:/baserow/media"]
       }
-
       template {
         destination = "${NOMAD_SECRETS_DIR}/env.vars"
         env         = true
@@ -281,11 +242,73 @@ REDIS_PASSWORD = {{ .REDIS_PASSWORD }}
 {{- end -}}
 EOF
       }
+      resources { cpu = 200 memory = 256 }
+    }
 
-      resources {
-        cpu    = 200
-        memory = 256
+    # --- Caddy reverse proxy (HTTP-only; NGINX Plus handles TLS & LB) ---
+    task "caddy" {
+      driver = "podman"
+      config {
+        image = "docker.io/library/caddy:2"
+        ports = ["http"] # only port 80
+        volumes = [
+          "${NOMAD_TASK_DIR}/Caddyfile:/etc/caddy/Caddyfile",
+          "${var.HOST_MEDIA_PARENT}/${var.HOST_MEDIA_DIR}:/baserow/media",
+          "${var.HOST_CADDY_PARENT}/${var.HOST_CADDY_CONFIG_DIR}:/config",
+          "${var.HOST_CADDY_PARENT}/${var.HOST_CADDY_DATA_DIR}:/data"
+        ]
       }
+      env = {
+        BASEROW_CADDY_ADDRESSES     = var.BASEROW_CADDY_ADDRESSES
+        BASEROW_CADDY_GLOBAL_CONF   = var.BASEROW_CADDY_GLOBAL_CONF
+        BASEROW_PUBLIC_URL          = var.BASEROW_PUBLIC_URL
+        PRIVATE_BACKEND_URL         = var.PRIVATE_BACKEND_URL
+        PRIVATE_WEB_FRONTEND_URL    = var.PRIVATE_WEB_FRONTEND_URL
+        MEDIA_ROOT                  = var.MEDIA_ROOT
+        STATIC_ROOT                 = var.STATIC_ROOT
+      }
+      template {
+        destination = "${NOMAD_TASK_DIR}/Caddyfile"
+        change_mode = "restart"
+        data = <<'EOT'
+{$BASEROW_CADDY_GLOBAL_CONF}
+
+{$BASEROW_CADDY_ADDRESSES} {
+  # No TLS here; NGINX Plus terminates HTTPS and forwards headers
+  @is_baserow_host {
+    expression "{$BASEROW_PUBLIC_URL}".contains({http.request.host})
+  }
+
+  handle @is_baserow_host {
+    handle /api/* { reverse_proxy {$PRIVATE_BACKEND_URL:localhost:8000} }
+    handle /ws/*  { reverse_proxy {$PRIVATE_BACKEND_URL:localhost:8000} }
+    handle /mcp/* { reverse_proxy {$PRIVATE_BACKEND_URL:localhost:8000} }
+
+    handle_path /media/* {
+      @downloads { query dl=* }
+      header @downloads Content-disposition "attachment; filename={query.dl}"
+      header {
+        # allow HEAD/GET from the public host
+        Access-Control-Allow-Origin {$BASEROW_PUBLIC_URL:http://localhost}
+        Access-Control-Allow-Methods "GET, HEAD, OPTIONS"
+        Access-Control-Allow-Headers "*"
+        Access-Control-Expose-Headers "Content-Length, Content-Type"
+      }
+      file_server { root {$MEDIA_ROOT:/baserow/media/} }
+    }
+
+    handle_path /static/* {
+      file_server { root {$STATIC_ROOT:/baserow/static/} }
+    }
+  }
+
+  # everything else -> web-frontend
+  reverse_proxy {$PRIVATE_WEB_FRONTEND_URL:localhost:3000}
+}
+EOT
+      }
+      resources { cpu = 200 memory = 256 }
     }
   }
 }
+
