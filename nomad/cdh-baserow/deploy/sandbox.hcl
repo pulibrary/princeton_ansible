@@ -31,18 +31,7 @@ variable "branch_or_sha" {
 # Public URL seen by users (set to your HTTPS host)
 variable "BASEROW_PUBLIC_URL" {
   type    = string
-  default = "http://localhost"
-}
-
-# Internal URLs used by Caddy to reach the app containers
-variable "PRIVATE_BACKEND_URL" {
-  type    = string
-  default = "http://localhost:8000"
-}
-
-variable "PRIVATE_WEB_FRONTEND_URL" {
-  type    = string
-  default = "http://localhost:3000"
+  default = "https://cdh-baserow-sandbox.lib.princeton.edu"
 }
 
 # Media bind mount parts (parent must exist on host; set to a known path)
@@ -85,12 +74,12 @@ variable "BASEROW_CADDY_GLOBAL_CONF" {
 
 variable "MEDIA_ROOT" {
   type    = string
-  default = "/baserow/media/"
+  default = "/baserow/media"
 }
 
 variable "STATIC_ROOT" {
   type    = string
-  default = "/baserow/static/"
+  default = "/baserow/static"
 }
 
 job "cdh-baserow" {
@@ -109,40 +98,11 @@ job "cdh-baserow" {
     }
 
     network {
-      # Web-frontend (Nuxt)
-      port "web" { to = 3000 }
-      # Backend (Django/ASGI)
-      port "api" { to = 8000 }
+      mode = "bridge"
+      
       # Public listener that NGINX Plus will hit
-      port "http" { to = 80 }
-
-      dns {
-        servers = ["10.88.0.1", "128.112.129.209", "8.8.8.8", "8.8.4.4"]
-      }
-    }
-
-    # Internal health services
-    service {
-      name = "cdh-baserow-web"
-      port = "web"
-      check {
-        type     = "http"
-        port     = "web"
-        path     = "/"
-        interval = "10s"
-        timeout  = "2s"
-      }
-    }
-
-    service {
-      name = "cdh-baserow-backend"
-      port = "api"
-      check {
-        type     = "http"
-        port     = "api"
-        path     = "/healthz"
-        interval = "10s"
-        timeout  = "2s"
+      port "http" {
+        to = 80
       }
     }
 
@@ -150,6 +110,11 @@ job "cdh-baserow" {
     service {
       name = "cdh-baserow-sandbox"
       port = "http"
+      
+      connect {
+        sidecar_service {}
+      }
+      
       check {
         type     = "http"
         port     = "http"
@@ -167,13 +132,14 @@ job "cdh-baserow" {
       config {
         image   = "docker.io/library/bash:4.4"
         command = "bash"
-        args    = ["-lc", "mkdir -p /host/${var.HOST_MEDIA_DIR} && chown 9999:9999 -R /host/${var.HOST_MEDIA_DIR}"]
+        args    = ["-c", "mkdir -p /host/${var.HOST_MEDIA_DIR} && chown 9999:9999 -R /host/${var.HOST_MEDIA_DIR}"]
         volumes = ["${var.HOST_MEDIA_PARENT}:/host"]
       }
 
       lifecycle {
         hook = "prestart"
       }
+      
       resources {
         cpu    = 50
         memory = 64
@@ -188,13 +154,14 @@ job "cdh-baserow" {
       config {
         image   = "docker.io/library/bash:4.4"
         command = "bash"
-        args    = ["-lc", "mkdir -p /host/${var.HOST_CADDY_CONFIG_DIR} /host/${var.HOST_CADDY_DATA_DIR}"]
+        args    = ["-c", "mkdir -p /host/${var.HOST_CADDY_CONFIG_DIR} /host/${var.HOST_CADDY_DATA_DIR}"]
         volumes = ["${var.HOST_CADDY_PARENT}:/host"]
       }
 
       lifecycle {
         hook = "prestart"
       }
+      
       resources {
         cpu    = 50
         memory = 64
@@ -207,7 +174,7 @@ job "cdh-baserow" {
 
       config {
         image   = "${var.backend_image_repo}:${var.backend_image_tag}"
-        ports   = ["api"]
+        network_mode = "task"
         volumes = ["${var.HOST_MEDIA_PARENT}/${var.HOST_MEDIA_DIR}:/baserow/media"]
       }
 
@@ -234,6 +201,11 @@ EOF
       env {
         BASEROW_PUBLIC_URL                      = var.BASEROW_PUBLIC_URL
         BASEROW_ENABLE_SECURE_PROXY_SSL_HEADER  = "yes"
+        FROM_EMAIL                               = "cdh-baserow@princeton.edu"
+        EMAIL_SMTP                              = "smtp.princeton.edu"
+        EMAIL_SMTP_HOST                          = "smtp.princeton.edu"
+        EMAIL_SMTP_PORT                          = "587"
+        EMAIL_SMTP_USE_TLS                       = "true"
       }
 
       resources {
@@ -248,12 +220,12 @@ EOF
 
       config {
         image = "${var.web_image_repo}:${var.web_image_tag}"
-        ports = ["web"]
+        network_mode = "task"
       }
 
       env {
         BASEROW_PUBLIC_URL  = var.BASEROW_PUBLIC_URL
-        PRIVATE_BACKEND_URL = var.PRIVATE_BACKEND_URL
+        PRIVATE_BACKEND_URL = "http://localhost:8000"
       }
 
       resources {
@@ -269,6 +241,7 @@ EOF
       config {
         image   = "${var.backend_image_repo}:${var.backend_image_tag}"
         args    = ["celery-worker"]
+        network_mode = "task"
         volumes = ["${var.HOST_MEDIA_PARENT}/${var.HOST_MEDIA_DIR}:/baserow/media"]
       }
 
@@ -304,6 +277,7 @@ EOF
       config {
         image   = "${var.backend_image_repo}:${var.backend_image_tag}"
         args    = ["celery-exportworker"]
+        network_mode = "task"
         volumes = ["${var.HOST_MEDIA_PARENT}/${var.HOST_MEDIA_DIR}:/baserow/media"]
       }
 
@@ -340,6 +314,7 @@ EOF
       config {
         image   = "${var.backend_image_repo}:${var.backend_image_tag}"
         args    = ["celery-beat"]
+        network_mode = "task"
         volumes = ["${var.HOST_MEDIA_PARENT}/${var.HOST_MEDIA_DIR}:/baserow/media"]
       }
 
@@ -374,6 +349,7 @@ EOF
 
       config {
         image = "docker.io/library/caddy:2"
+        network_mode = "task"
         ports = ["http"]
         volumes = [
           "local:/etc/caddy",
@@ -381,16 +357,6 @@ EOF
           "${var.HOST_CADDY_PARENT}/${var.HOST_CADDY_CONFIG_DIR}:/config",
           "${var.HOST_CADDY_PARENT}/${var.HOST_CADDY_DATA_DIR}:/data",
         ]
-      }
-
-      env {
-        BASEROW_CADDY_ADDRESSES     = var.BASEROW_CADDY_ADDRESSES
-        BASEROW_CADDY_GLOBAL_CONF   = var.BASEROW_CADDY_GLOBAL_CONF
-        BASEROW_PUBLIC_URL          = var.BASEROW_PUBLIC_URL
-        PRIVATE_BACKEND_URL         = var.PRIVATE_BACKEND_URL
-        PRIVATE_WEB_FRONTEND_URL    = var.PRIVATE_WEB_FRONTEND_URL
-        MEDIA_ROOT                  = var.MEDIA_ROOT
-        STATIC_ROOT                 = var.STATIC_ROOT
       }
 
       template {
@@ -401,49 +367,42 @@ EOF
 
 {$BASEROW_CADDY_ADDRESSES} {
   # No TLS here; NGINX Plus terminates HTTPS and forwards headers
-  @is_baserow_host {
-    expression "{$BASEROW_PUBLIC_URL}".contains({http.request.host})
+  
+  handle /api/* {
+    reverse_proxy localhost:8000
   }
-
-  handle @is_baserow_host {
-    handle /api/* {
-      reverse_proxy {$PRIVATE_BACKEND_URL:localhost:8000}
+  
+  handle /ws/* {
+    reverse_proxy localhost:8000
+  }
+  
+  handle_path /media/* {
+    @downloads {
+      query dl=*
     }
-    handle /ws/* {
-      reverse_proxy {$PRIVATE_BACKEND_URL:localhost:8000}
-    }
-    handle /mcp/* {
-      reverse_proxy {$PRIVATE_BACKEND_URL:localhost:8000}
-    }
-
-    handle_path /media/* {
-      @downloads {
-        query dl=*
-      }
-      header @downloads Content-disposition "attachment; filename={query.dl}"
-      header {
-        # allow HEAD/GET from the public host
-        Access-Control-Allow-Origin {$BASEROW_PUBLIC_URL:http://localhost}
-        Access-Control-Allow-Methods "GET, HEAD, OPTIONS"
-        Access-Control-Allow-Headers "*"
-        Access-Control-Expose-Headers "Content-Length, Content-Type"
-      }
-      file_server {
-        root {$MEDIA_ROOT:/baserow/media/}
-      }
-    }
-
-    handle_path /static/* {
-      file_server {
-        root {$STATIC_ROOT:/baserow/static/}
-      }
+    header @downloads Content-disposition "attachment; filename={query.dl}"
+    file_server {
+      root {$MEDIA_ROOT}
     }
   }
 
+  handle_path /static/* {
+    file_server {
+      root {$STATIC_ROOT}
+    }
+  }
+  
   # everything else -> web-frontend
-  reverse_proxy {$PRIVATE_WEB_FRONTEND_URL:localhost:3000}
+  reverse_proxy localhost:3000
 }
 EOT
+      }
+
+      env {
+        BASEROW_CADDY_ADDRESSES   = var.BASEROW_CADDY_ADDRESSES
+        BASEROW_CADDY_GLOBAL_CONF = var.BASEROW_CADDY_GLOBAL_CONF
+        MEDIA_ROOT                = var.MEDIA_ROOT
+        STATIC_ROOT               = var.STATIC_ROOT
       }
 
       resources {
