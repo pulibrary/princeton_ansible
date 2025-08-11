@@ -98,11 +98,40 @@ job "cdh-baserow" {
     }
 
     network {
-      mode = "bridge"
-      
+      # Web-frontend (Nuxt)
+      port "web" { to = 3000 }
+      # Backend (Django/ASGI)
+      port "api" { to = 8000 }
       # Public listener that NGINX Plus will hit
-      port "http" {
-        to = 80
+      port "http" { to = 80 }
+
+      dns {
+        servers = ["10.88.0.1", "128.112.129.209", "8.8.8.8", "8.8.4.4"]
+      }
+    }
+
+    # Internal health services
+    service {
+      name = "cdh-baserow-web"
+      port = "web"
+      check {
+        type     = "http"
+        port     = "web"
+        path     = "/"
+        interval = "10s"
+        timeout  = "2s"
+      }
+    }
+
+    service {
+      name = "cdh-baserow-backend"
+      port = "api"
+      check {
+        type     = "http"
+        port     = "api"
+        path     = "/healthz"
+        interval = "10s"
+        timeout  = "2s"
       }
     }
 
@@ -110,11 +139,6 @@ job "cdh-baserow" {
     service {
       name = "cdh-baserow-sandbox"
       port = "http"
-      
-      connect {
-        sidecar_service {}
-      }
-      
       check {
         type     = "http"
         port     = "http"
@@ -174,7 +198,7 @@ job "cdh-baserow" {
 
       config {
         image   = "${var.backend_image_repo}:${var.backend_image_tag}"
-        network_mode = "task"
+        ports   = ["api"]
         volumes = ["${var.HOST_MEDIA_PARENT}/${var.HOST_MEDIA_DIR}:/baserow/media"]
       }
 
@@ -220,12 +244,12 @@ EOF
 
       config {
         image = "${var.web_image_repo}:${var.web_image_tag}"
-        network_mode = "task"
+        ports = ["web"]
       }
 
       env {
         BASEROW_PUBLIC_URL  = var.BASEROW_PUBLIC_URL
-        PRIVATE_BACKEND_URL = "http://localhost:8000"
+        PRIVATE_BACKEND_URL = "http://${NOMAD_ADDR_api}"
       }
 
       resources {
@@ -241,7 +265,6 @@ EOF
       config {
         image   = "${var.backend_image_repo}:${var.backend_image_tag}"
         args    = ["celery-worker"]
-        network_mode = "task"
         volumes = ["${var.HOST_MEDIA_PARENT}/${var.HOST_MEDIA_DIR}:/baserow/media"]
       }
 
@@ -277,7 +300,6 @@ EOF
       config {
         image   = "${var.backend_image_repo}:${var.backend_image_tag}"
         args    = ["celery-exportworker"]
-        network_mode = "task"
         volumes = ["${var.HOST_MEDIA_PARENT}/${var.HOST_MEDIA_DIR}:/baserow/media"]
       }
 
@@ -314,7 +336,6 @@ EOF
       config {
         image   = "${var.backend_image_repo}:${var.backend_image_tag}"
         args    = ["celery-beat"]
-        network_mode = "task"
         volumes = ["${var.HOST_MEDIA_PARENT}/${var.HOST_MEDIA_DIR}:/baserow/media"]
       }
 
@@ -349,7 +370,6 @@ EOF
 
       config {
         image = "docker.io/library/caddy:2"
-        network_mode = "task"
         ports = ["http"]
         volumes = [
           "local:/etc/caddy",
@@ -369,11 +389,11 @@ EOF
   # No TLS here; NGINX Plus terminates HTTPS and forwards headers
   
   handle /api/* {
-    reverse_proxy localhost:8000
+    reverse_proxy ${NOMAD_ADDR_api}
   }
   
   handle /ws/* {
-    reverse_proxy localhost:8000
+    reverse_proxy ${NOMAD_ADDR_api}
   }
   
   handle_path /media/* {
@@ -393,7 +413,7 @@ EOF
   }
   
   # everything else -> web-frontend
-  reverse_proxy localhost:3000
+  reverse_proxy ${NOMAD_ADDR_web}
 }
 EOT
       }
