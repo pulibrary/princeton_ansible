@@ -376,7 +376,7 @@ EOF
         image = "docker.io/library/caddy:2"
         ports = ["http"]
         volumes = [
-          "${NOMAD_TASK_DIR}/Caddyfile:/etc/caddy/Caddyfile",
+          "local:/etc/caddy",
           "${var.HOST_MEDIA_PARENT}/${var.HOST_MEDIA_DIR}:/baserow/media",
           "${var.HOST_CADDY_PARENT}/${var.HOST_CADDY_CONFIG_DIR}:/config",
           "${var.HOST_CADDY_PARENT}/${var.HOST_CADDY_DATA_DIR}:/data",
@@ -394,7 +394,7 @@ EOF
       }
 
       template {
-        destination = "${NOMAD_TASK_DIR}/Caddyfile"
+        destination = "local/Caddyfile"
         change_mode = "restart"
         data = <<EOT
 {$BASEROW_CADDY_GLOBAL_CONF}
