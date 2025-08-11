@@ -36,16 +36,18 @@
     modification_time: preserve
     access_time: preserve
 
+    # Providers guard: only (re)write if file missing or empty
+    # useful for upgrades
 - name: Opkssh - check if providers file exists and has content
   ansible.builtin.stat:
     path: "{{ opkssh_config_dir }}/providers"
   register: providers_stat
 
-- name: Opkssh - configure providers file
+- name: Opkssh - configure providers file (only if missing or empty)
   ansible.builtin.template:
     src: providers.j2
     dest: "{{ opkssh_config_dir }}/providers"
     owner: root
     group: "{{ opkssh_auth_cmd_group }}"
     mode: "0640"
-  when: not providers_stat.stat.exists or providers_stat.stat.size == 0
+  when: not providers_stat.stat.exists or (providers_stat.stat.size | default(0)) == 0

@@ -17,7 +17,17 @@
 - name: Opkssh - fail if SSH configuration doesn't exist
   ansible.builtin.fail:
     msg: "Neither /etc/ssh/sshd_config nor /etc/ssh/sshd_config.d exists"
-  when: not ssh_config_check.results[0].stat.exists and not ssh_config_check.results[1].stat.isdir | default(false)
+  when:
+    - not ssh_config_check.results[0].stat.exists
+    - not (ssh_config_check.results[1].stat.isdir | default(false))
+
+- name: Opkssh - ensure install dir exists
+  ansible.builtin.file:
+    path: "{{ opkssh_install_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
 
 - name: Opkssh - create opkssh group
   ansible.builtin.group:
@@ -25,12 +35,35 @@
     system: true
     state: present
 
+# Find a suitable nologin shell path
+- name: Opkssh - define nologin shell candidates
+  ansible.builtin.set_fact:
+    opkssh_nologin_shell_candidates:
+      - /sbin/nologin
+      - /usr/sbin/nologin
+      - /bin/false
+
+- name: Opkssh - stat nologin shell candidates
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop: "{{ opkssh_nologin_shell_candidates }}"
+  register: nologin_stats
+
+- name: Opkssh - choose nologin shell
+  ansible.builtin.set_fact:
+    opkssh_nologin_shell: >-
+      {{ (nologin_stats.results
+          | selectattr('stat.exists')
+          | map(attribute='stat.path')
+          | list
+          | first) | default('/bin/false') }}
+
 - name: Opkssh - create opkssh user
   ansible.builtin.user:
     name: "{{ opkssh_auth_cmd_user }}"
     group: "{{ opkssh_auth_cmd_group }}"
     system: true
-    shell: /sbin/nologin
+    shell: "{{ opkssh_nologin_shell }}"
     home: /nonexistent
     create_home: false
     state: present
