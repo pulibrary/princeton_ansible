@@ -30,7 +30,6 @@ job "circleci-runner" {
         image = "ghcr.io/pulibrary/princeton_ansible-circleci-deployer:sha-${ var.branch_or_sha }"
         # privileged = true
         devices = ["/dev/net/tun"]
-        shm_size = "1g"
       }
       template {
         destination = "${NOMAD_SECRETS_DIR}/env.vars"
