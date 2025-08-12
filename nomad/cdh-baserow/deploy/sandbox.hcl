@@ -230,6 +230,11 @@ EOF
         EMAIL_SMTP_HOST                          = "smtp.princeton.edu"
         EMAIL_SMTP_PORT                          = "587"
         EMAIL_SMTP_USE_TLS                       = "true"
+        DJANGO_SETTINGS_MODULE                   = "baserow.config.settings.base"
+        BASEROW_AMOUNT_OF_WORKERS                = "1"
+        BASEROW_WEB_FRONTEND_PORT                = "3000"
+        BASEROW_BACKEND_PORT                     = "8000"
+        GUNICORN_BIND                           = "0.0.0.0:8000"
       }
 
       resources {
@@ -250,6 +255,8 @@ EOF
       env {
         BASEROW_PUBLIC_URL  = var.BASEROW_PUBLIC_URL
         PRIVATE_BACKEND_URL = "http://${NOMAD_ADDR_api}"
+        NUXT_HOST          = "0.0.0.0"
+        NUXT_PORT          = "3000"
       }
 
       resources {
