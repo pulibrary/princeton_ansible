@@ -1,19 +1,64 @@
 ---
-- name: Pul_nomad_nodemation - ensure nodemation data and file dir exists on clients
+# roles/pul_nomad/tasks/apps/nodemation.yml
+
+- name: Pul_nomad_nodemation - ensure base directories exist
+  become: true
   ansible.builtin.file:
-    path: /srv/nomad/host_volumes/nodemation-sandbox-{{ item }}
+    path: "{{ item }}"
     state: directory
-    owner: 9999
-    group: 9999
+    owner: root
+    group: root
     mode: "0755"
   loop:
-    - data
-    - files
+    - /srv/nomad
+    - "{{ nodemation_base }}"
   when: pul_nomad_role == 'client'
+  tags: [nodemation]
+
+- name: Pul_nomad_nodemation - ensure nodemation data and files exist with container ownership
+  become: true
+  ansible.builtin.file:
+    path: "{{ nodemation_base }}/{{ item }}"
+    state: directory
+    owner: "{{ nodemation_uid }}"
+    group: "{{ nodemation_gid }}"
+    mode: "0750"
+  loop: "{{ nodemation_dirs }}"
+  when: pul_nomad_role == 'client'
+  tags: [nodemation]
+
+- name: Pul_nomad_nodemation - set SELinux fcontext for container dirs
+  become: true
+  community.general.sefcontext:
+    target: "{{ nodemation_base }}/{{ item }}(/.*)?"
+    setype: container_file_t
+    state: present
+  loop: "{{ nodemation_dirs }}"
+  when:
+    - pul_nomad_role == 'client'
+    - ansible_selinux is defined
+    - ansible_selinux.status == "enabled"
+  tags: [nodemation]
+
+- name: Pul_nomad_nodemation - restore SELinux context
+  become: true
+  ansible.builtin.command: "restorecon -Rv {{ nodemation_base }}/{{ item }}"
+  register: restorecon_out
+  changed_when: "'restored' in restorecon_out.stdout or 'labeled' in restorecon_out.stdout"
+  loop: "{{ nodemation_dirs }}"
+  when:
+    - pul_nomad_role == 'client'
+    - ansible_selinux is defined
+    - ansible_selinux.status == "enabled"
+  tags: [nodemation]
 
 - name: Pul_nomad_nodemation | add the application environment variables
-  ansible.builtin.shell:
-    cmd: '/usr/local/bin/nomad var put -force nomad/jobs/nodemation-sandbox {{ nodemation_sandbox_nomad_env_vars.keys() | zip(nodemation_sandbox_nomad_env_vars.values()) | map("join", "=") | join(" ") }}'
-  environment:
-    NOMAD_TOKEN: '{{ pul_nomad_management_token }}'
   run_once: true
+  environment:
+    NOMAD_TOKEN: "{{ pul_nomad_management_token }}"
+  ansible.builtin.shell:
+    cmd: >-
+      /usr/local/bin/nomad var put -force nomad/jobs/nodemation-sandbox
+      {{ nodemation_sandbox_nomad_env_vars.keys() | zip(nodemation_sandbox_nomad_env_vars.values()) | map('join', '=') | join(' ') }}
+  tags: [nodemation]
+
