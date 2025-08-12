@@ -250,13 +250,13 @@ EOF
       config {
         image = "${var.web_image_repo}:${var.web_image_tag}"
         ports = ["web"]
+        command = "docker-entrypoint.sh"
+        args = ["nuxt", "start", "--hostname", "0.0.0.0", "--port", "3000"]
       }
 
       env {
         BASEROW_PUBLIC_URL  = var.BASEROW_PUBLIC_URL
         PRIVATE_BACKEND_URL = "http://${NOMAD_ADDR_api}"
-        NUXT_HOST          = "0.0.0.0"
-        NUXT_PORT          = "3000"
       }
 
       resources {
