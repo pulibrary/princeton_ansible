@@ -3,13 +3,12 @@ variable "branch_or_sha" {
   default = "main"
 }
 
-# Pin the Baserow image version.
 variable "baserow_image_tag" {
   type    = string
   default = "1.34.5"
 }
 
-job "cdh-baserow-staging" {
+job "cdh-baserow-sandbox" {
   region      = "global"
   datacenters = ["dc1"]
   node_pool   = "all"
@@ -26,9 +25,8 @@ job "cdh-baserow-staging" {
       mode     = "delay"
     }
 
-    # Bridge mode so Consul advertises the node IP + mapped host port.
+    # No explicit mode -> avoids CNI bridge version constraint.
     network {
-      mode = "bridge"
       port "http" { to = 80 }  # Caddy listens on 80 inside the container
     }
 
@@ -40,14 +38,13 @@ job "cdh-baserow-staging" {
         ports  = ["http"]
 
         volumes = [
-          "/srv/nomad/host_volumes/cdh-baserow-staging:/baserow/data"
+          "/srv/nomad/host_volumes/cdh-baserow-sandbox:/baserow/data"
         ]
       }
 
       env {
-        # Public URL (TLS terminated at NGINX Plus).
-        BASEROW_PUBLIC_URL = "https://cdh-baserow-staging.lib.princeton.edu"
-        # Leave Caddy on default :80; no BASEROW_CADDY_ADDRESSES needed.
+        BASEROW_PUBLIC_URL = "https://cdh-baserow-sandbox.lib.princeton.edu"
+        # Caddy stays on :80 (no BASEROW_CADDY_ADDRESSES needed)
       }
 
       resources {
@@ -56,10 +53,10 @@ job "cdh-baserow-staging" {
       }
 
       service {
-        name         = "cdh-baserow-staging"
+        name         = "cdh-baserow-sandbox"
         port         = "http"
 
-        # Register node IP + mapped port in Consul (not container IP).
+        # Register node IP + mapped host port in Consul
         address_mode = "host"
 
         check {
@@ -68,9 +65,7 @@ job "cdh-baserow-staging" {
           path         = "/"
           interval     = "10s"
           timeout      = "2s"
-          header { Host = ["cdh-baserow-staging.lib.princeton.edu"] }
-
-          # Health check should also use node IP + mapped port.
+          header { Host = ["cdh-baserow-sandbox.lib.princeton.edu"] }
           address_mode = "host"
         }
       }
