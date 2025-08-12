@@ -1,8 +1,10 @@
+# Passed by deploy script; unused but for consistency.
 variable "branch_or_sha" {
   type    = string
   default = "main"
 }
 
+# Pin the Baserow image version.
 variable "baserow_image_tag" {
   type    = string
   default = "1.34.5"
@@ -25,8 +27,10 @@ job "cdh-baserow-sandbox" {
     }
 
     network {
-      # Internal HTTP only; NGINX Plus terminates TLS
-      port "http" { to = 8080 }
+      # Expose an internal HTTP port; map to container port 80.
+      port "http" {
+        to = 80
+      }
     }
 
     task "baserow" {
@@ -37,35 +41,36 @@ job "cdh-baserow-sandbox" {
         ports = ["http"]
 
         volumes = [
-          "/srv/nomad/host_volumes/cdh-baserow-sandbox:/baserow/data"
+          "/srv/nomad/baserow/cdh-baserow-sandbox:/baserow/data"
         ]
-
-        network_mode = "bridge"
       }
 
       env {
-        BASEROW_PUBLIC_URL      = "https://cdh-baserow-sandbox.lib.princeton.edu"
-        BASEROW_CADDY_ADDRESSES = ":8080"
+        # Must match the public URL (TLS is terminated at NGINX Plus).
+        BASEROW_PUBLIC_URL = "https://cdh-baserow-sandbox.lib.princeton.edu"
       }
 
       resources {
-        cpu    = 1000
-        memory = 2048
+        cpu    = 1000   # ~1 vCPU
+        memory = 2048   # 2 GiB
       }
 
       service {
+        # Must match the NGINX Plus upstream name.
         name = "cdh-baserow-sandbox"
         port = "http"
 
+        # Health check hitting "/" (what your Consul check was using).
         check {
-          name     = "baserow-health"
+          name     = "http-root"
           type     = "http"
-          path     = "/api/_health/"
+          path     = "/"
           interval = "10s"
           timeout  = "2s"
+          # Make Host header match the public hostname.
+          header { Host = ["cdh-baserow-sandbox.lib.princeton.edu"] }
         }
       }
     }
   }
 }
-
