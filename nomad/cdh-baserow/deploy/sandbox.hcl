@@ -25,9 +25,14 @@ job "cdh-baserow-sandbox" {
       mode     = "delay"
     }
 
-    # No explicit mode -> avoids CNI bridge version constraint.
+    # No explicit CNI mode to avoid bridge version constraints
     network {
       port "http" { to = 80 }  # Caddy listens on 80 inside the container
+    }
+
+    # Give the alloc some scratch space for logs/tmp
+    ephemeral_disk {
+      size = 1024  # MB
     }
 
     task "baserow" {
@@ -48,8 +53,8 @@ job "cdh-baserow-sandbox" {
       }
 
       resources {
-        cpu    = 1000
-        memory = 2048
+        cpu    = 2000   # 2 vCPU
+        memory = 4096   # 4 GiB
       }
 
       service {
@@ -72,4 +77,3 @@ job "cdh-baserow-sandbox" {
     }
   }
 }
-
