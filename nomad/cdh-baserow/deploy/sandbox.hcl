@@ -1,10 +1,8 @@
-# Passed by deploy script; unused but for consistency.
 variable "branch_or_sha" {
   type    = string
   default = "main"
 }
 
-# Pin the Baserow image version.
 variable "baserow_image_tag" {
   type    = string
   default = "1.34.5"
@@ -13,6 +11,7 @@ variable "baserow_image_tag" {
 job "cdh-baserow-sandbox" {
   region      = "global"
   datacenters = ["dc1"]
+  node_pool   = "all"
   type        = "service"
   priority    = 50
 
@@ -27,7 +26,7 @@ job "cdh-baserow-sandbox" {
     }
 
     network {
-      # Expose an internal HTTP port; map to container port 80.
+      # Internal HTTP only; NGINX Plus terminates TLS.
       port "http" {
         to = 80
       }
@@ -37,8 +36,8 @@ job "cdh-baserow-sandbox" {
       driver = "podman"
 
       config {
-        image = "docker.io/baserow/baserow:${var.baserow_image_tag}"
-        ports = ["http"]
+        image  = "docker.io/baserow/baserow:${var.baserow_image_tag}"
+        ports  = ["http"]
 
         volumes = [
           "/srv/nomad/baserow/cdh-baserow-sandbox:/baserow/data"
@@ -46,31 +45,30 @@ job "cdh-baserow-sandbox" {
       }
 
       env {
-        # Must match the public URL (TLS is terminated at NGINX Plus).
+        # Must be the public URL users hit (TLS ends at NGINX Plus).
         BASEROW_PUBLIC_URL = "https://cdh-baserow-sandbox.lib.princeton.edu"
+        # Leave Caddy on its default :80 (no BASEROW_CADDY_ADDRESSES).
       }
 
       resources {
-        cpu    = 1000   # ~1 vCPU
-        memory = 2048   # 2 GiB
+        cpu    = 1000
+        memory = 2048
       }
 
       service {
-        # Must match the NGINX Plus upstream name.
         name = "cdh-baserow-sandbox"
         port = "http"
 
-        # Health check hitting "/" (what your Consul check was using).
         check {
           name     = "http-root"
           type     = "http"
           path     = "/"
           interval = "10s"
           timeout  = "2s"
-          # Make Host header match the public hostname.
           header { Host = ["cdh-baserow-sandbox.lib.princeton.edu"] }
         }
       }
     }
   }
 }
+
