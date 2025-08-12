@@ -3,12 +3,13 @@ variable "branch_or_sha" {
   default = "main"
 }
 
+# Pin the Baserow image version.
 variable "baserow_image_tag" {
   type    = string
   default = "1.34.5"
 }
 
-job "cdh-baserow-sandbox" {
+job "cdh-baserow-staging" {
   region      = "global"
   datacenters = ["dc1"]
   node_pool   = "all"
@@ -25,11 +26,10 @@ job "cdh-baserow-sandbox" {
       mode     = "delay"
     }
 
+    # Bridge mode so Consul advertises the node IP + mapped host port.
     network {
-      # Internal HTTP only; NGINX Plus terminates TLS.
-      port "http" {
-        to = 80
-      }
+      mode = "bridge"
+      port "http" { to = 80 }  # Caddy listens on 80 inside the container
     }
 
     task "baserow" {
@@ -40,14 +40,14 @@ job "cdh-baserow-sandbox" {
         ports  = ["http"]
 
         volumes = [
-          "/srv/nomad/host_volumes/cdh-baserow-sandbox:/baserow/data"
+          "/srv/nomad/host_volumes/cdh-baserow-staging:/baserow/data"
         ]
       }
 
       env {
-        # Must be the public URL users hit (TLS ends at NGINX Plus).
-        BASEROW_PUBLIC_URL = "https://cdh-baserow-sandbox.lib.princeton.edu"
-        # Leave Caddy on its default :80 (no BASEROW_CADDY_ADDRESSES).
+        # Public URL (TLS terminated at NGINX Plus).
+        BASEROW_PUBLIC_URL = "https://cdh-baserow-staging.lib.princeton.edu"
+        # Leave Caddy on default :80; no BASEROW_CADDY_ADDRESSES needed.
       }
 
       resources {
@@ -56,16 +56,22 @@ job "cdh-baserow-sandbox" {
       }
 
       service {
-        name = "cdh-baserow-sandbox"
-        port = "http"
+        name         = "cdh-baserow-staging"
+        port         = "http"
+
+        # Register node IP + mapped port in Consul (not container IP).
+        address_mode = "host"
 
         check {
-          name     = "http-root"
-          type     = "http"
-          path     = "/"
-          interval = "10s"
-          timeout  = "2s"
-          header { Host = ["cdh-baserow-sandbox.lib.princeton.edu"] }
+          name         = "http-root"
+          type         = "http"
+          path         = "/"
+          interval     = "10s"
+          timeout      = "2s"
+          header { Host = ["cdh-baserow-staging.lib.princeton.edu"] }
+
+          # Health check should also use node IP + mapped port.
+          address_mode = "host"
         }
       }
     }
