@@ -40,7 +40,7 @@ job "cdh-baserow-sandbox" {
         ports  = ["http"]
 
         volumes = [
-          "/srv/nomad/baserow/cdh-baserow-sandbox:/baserow/data"
+          "/srv/nomad/host_volumes/cdh-baserow-sandbox:/baserow/data"
         ]
       }
 
