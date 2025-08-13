@@ -71,4 +71,7 @@ RUN sudo apt-get update -qq && DEBIAN_FRONTEND=noninteractive sudo apt-get insta
 uidmap \
 slirp4netns
 
+# Enabling back support for SHA1 signed certificates
+RUN update-crypto-policies --set DEFAULT:SHA1
+
 RUN echo "$(ruby --version)"
