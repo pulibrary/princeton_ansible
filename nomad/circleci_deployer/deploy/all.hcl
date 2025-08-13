@@ -19,7 +19,7 @@ job "circleci-runner" {
 
     network {
       dns {
-        servers = ["10.88.0.1", "128.112.129.209", "8.8.8.8", "8.8.4.4"]
+        servers = ["127.0.0.1", "8.8.8.8", "8.8.4.4"]
       }
     }
 
@@ -28,6 +28,7 @@ job "circleci-runner" {
 
       config {
         image = "ghcr.io/pulibrary/princeton_ansible-circleci-deployer:sha-${ var.branch_or_sha }"
+        privileged = true
       }
       template {
         destination = "${NOMAD_SECRETS_DIR}/env.vars"
