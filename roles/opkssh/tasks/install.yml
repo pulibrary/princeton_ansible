@@ -5,16 +5,9 @@
   ansible.builtin.set_fact:
     opkssh_need_install: false
 
-# Determine download URL based on version selection
-- name: Opkssh - set download URL for latest
-  ansible.builtin.set_fact:
-    opkssh_binary_url: "https://github.com/{{ opkssh_github_repo }}/releases/latest/download/opkssh-linux-{{ opkssh_cpu_arch }}"
-  when: opkssh_install_version == "latest"
-
 - name: Opkssh - set download URL for specific version
   ansible.builtin.set_fact:
     opkssh_binary_url: "https://github.com/{{ opkssh_github_repo }}/releases/download/{{ opkssh_install_version }}/opkssh-linux-{{ opkssh_cpu_arch }}"
-  when: opkssh_install_version != "latest"
 
 # Current state
 - name: Opkssh - check if binary exists
@@ -29,23 +22,13 @@
   failed_when: false
   when: opkssh_bin_stat.stat.exists
 
-# ===== Decide whether we need to (re)install =====
-# Case A: "latest" → install only if not present
-- name: Opkssh - compute need_install for latest
-  ansible.builtin.set_fact:
-    opkssh_need_install: true
-  when:
-    - opkssh_install_version == "latest"
-    - not opkssh_bin_stat.stat.exists
-
-# Case B: pinned + checksum -> compare checksums
+# pinned + checksum -> compare checksums
 - name: Opkssh - compute local checksum (when pinned checksum provided)
   ansible.builtin.stat:
     path: "{{ opkssh_install_dir }}/{{ opkssh_binary_name }}"
     checksum_algorithm: sha256
   register: opkssh_local_stat
   when:
-    - opkssh_install_version != "latest"
     - opkssh_bin_stat.stat.exists
     - (opkssh_binary_checksum is defined) and (opkssh_binary_checksum | length > 0)
 
@@ -55,33 +38,28 @@
       {{ (not opkssh_bin_stat.stat.exists) or
          ((opkssh_binary_checksum | regex_replace('^sha256:', '')) != (opkssh_local_stat.stat.checksum | default(''))) }}
   when:
-    - opkssh_install_version != "latest"
     - (opkssh_binary_checksum is defined) and (opkssh_binary_checksum | length > 0)
 
-    # Case C: pinned without checksum -> try version compare
-    # finding checksums took me longer than I'd like and I will forget this on upgrade time
+    # pinned without checksum -> try version compare
 - name: Opkssh - extract installed version (safe)
   ansible.builtin.set_fact:
     opkssh_installed_version: >-
       {{ ((opkssh_version.stdout | default('')) | regex_findall('v?\\d+\\.\\d+\\.\\d+')
           | first | default('')) | regex_replace('^v','') }}
   when:
-    - opkssh_install_version != "latest"
     - (opkssh_binary_checksum is not defined) or (opkssh_binary_checksum | length == 0)
     - opkssh_bin_stat.stat.exists
 
-- name: Opkssh - normalize target version (when pinned)
+- name: Opkssh - normalize target version
   ansible.builtin.set_fact:
     opkssh_target_version: "{{ opkssh_install_version | regex_replace('^v','') }}"
   when:
-    - opkssh_install_version != "latest"
     - (opkssh_binary_checksum is not defined) or (opkssh_binary_checksum | length == 0)
 
 - name: Opkssh - compute need_install (pinned, no checksum, parsed OK)
   ansible.builtin.set_fact:
     opkssh_need_install: true
   when:
-    - opkssh_install_version != "latest"
     - (opkssh_binary_checksum is not defined) or (opkssh_binary_checksum | length == 0)
     - (not opkssh_bin_stat.stat.exists) or
       (
@@ -96,7 +74,6 @@
       opkssh: unable to parse installed version from '{{ opkssh_version.stdout | default('') }}'.
       Skipping reinstall to preserve idempotence. Provide `opkssh_binary_checksum` to enforce upgrades.
   when:
-    - opkssh_install_version != "latest"
     - (opkssh_binary_checksum is not defined) or (opkssh_binary_checksum | length == 0)
     - opkssh_bin_stat.stat.exists
     - (opkssh_installed_version | default('')) == ''
