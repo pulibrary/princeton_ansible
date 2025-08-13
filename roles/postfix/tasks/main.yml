@@ -1,5 +1,11 @@
 ---
 # tasks file for roles/postfix
+- name: Postfix | Install postfix
+  ansible.builtin.apt:
+    name: postfix
+    state: present
+    update_cache: true
+
 - name: Postfix | add mailname
   ansible.builtin.copy:
     dest: "/etc/mailname"
@@ -15,14 +21,6 @@
     path: "{{ postfix_main_cf }}"
     regexp: "^(smtpd_tls_cert_file|smtpd_tls_key_file) = /etc/ssl/certs/ssl-cert-snakeoil.(pem|key)$"
     state: absent
-
-- name: Postfix - ensure postfix directory
-  ansible.builtin.file:
-    path: /etc/postfix
-    owner: root
-    group: root
-    mode: '0600'
-    state: directory
 
 - name: Postfix | create networks file
   ansible.builtin.template:
