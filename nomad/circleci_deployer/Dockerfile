@@ -72,6 +72,7 @@ uidmap \
 slirp4netns
 
 # Enabling back support for SHA1 signed certificates
+RUN sudo apt-get crypto-policies
 RUN update-crypto-policies --set DEFAULT:SHA1
 
 RUN echo "$(ruby --version)"
