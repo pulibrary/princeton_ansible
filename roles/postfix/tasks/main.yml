@@ -1,5 +1,11 @@
 ---
 # tasks file for roles/postfix
+- name: Postfix | Install postfix
+  ansible.builtin.apt:
+    name: postfix
+    state: present
+    update_cache: true
+
 - name: Postfix | add mailname
   ansible.builtin.copy:
     dest: "/etc/mailname"
@@ -15,15 +21,6 @@
     path: "{{ postfix_main_cf }}"
     regexp: "^(smtpd_tls_cert_file|smtpd_tls_key_file) = /etc/ssl/certs/ssl-cert-snakeoil.(pem|key)$"
     state: absent
-
-- name: Postfix | Install Postfix and certbot
-  ansible.builtin.apt:
-    name: "{{ item }}"
-    state: present
-    update_cache: true
-  loop:
-    - postfix
-    - certbot
 
 - name: Postfix | create networks file
   ansible.builtin.template:
@@ -64,47 +61,6 @@
   changed_when: false
   when: running_on_server
   notify: restart postfix
-
-- name: Postfix | update acme certificates for {{ domain_name }}
-  ansible.builtin.command: /usr/bin/certbot certonly --standalone --non-interactive --agree-tos --email lsupport@princeton.edu --server https://acme.sectigo.com/v2/InCommonRSAOV --eab-kid {{ vault_acme_eab_kid }} --eab-hmac-key {{ vault_acme_eab_hmac_key }} --domain {{ domain_name }} --cert-name {{ domain_name }}
-  changed_when: false
-  when: running_on_server
-
-- name: Postfix | Configure TLS in main.cf
-  ansible.builtin.blockinfile:
-    path: "{{ postfix_main_cf }}"
-    block: |
-      smtpd_tls_cert_file = /etc/letsencrypt/live/{{ domain_name }}/fullchain.pem
-      smtpd_tls_key_file = /etc/letsencrypt/live/{{ domain_name }}/privkey.pem
-      smtpd_use_tls = yes
-      smtpd_tls_session_cache_database = btree:${data_directory}/smtpd_scache
-      smtp_tls_session_cache_database = btree:${data_directory}/smtp_scache
-
-  notify: restart postfix
-  when: running_on_server
-
-- name: Postfix | Update master.cf for submission service
-  ansible.builtin.blockinfile:
-    path: "/etc/postfix/master.cf"
-    block: |
-      # Enable the SMTP service on port 25
-      smtp      inet  n       -       n       -       -       smtpd
-      # Enable the submission service on port 587
-      submission inet n - n - - smtpd
-        -o syslog_name=postfix/submission
-        -o smtpd_tls_wrappermode=no
-        -o smtpd_tls_security_level=encrypt
-        -o smtpd_sasl_auth_enable=yes
-        -o smtpd_reject_unlisted_recipient=no
-        -o smtpd_client_restrictions=permit_sasl_authenticated,reject
-        -o smtpd_sender_restrictions=permit_sasl_authenticated,reject
-        -o smtpd_recipient_restrictions=permit_mynetworks,permit_sasl_authenticated,reject
-        -o smtpd_relay_restrictions=permit_sasl_authenticated,reject_unauth_destination
-    owner: root
-    group: root
-    mode: "0644"
-  notify: restart postfix
-  when: running_on_server
 
 - name: Postfix | Add relay host
   ansible.builtin.include_tasks: update_config.yml
