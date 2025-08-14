@@ -51,3 +51,12 @@
     group: "{{ opkssh_auth_cmd_group }}"
     mode: "0640"
   when: not providers_stat.stat.exists or (providers_stat.stat.size | default(0)) == 0
+
+- name: Opkssh - deploy opkssh configuration
+  ansible.builtin.template:
+    src: opk-ssh.conf.j2
+    dest: "/etc/ssh/sshd_config.d/60-opk-ssh.conf"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: restart ssh
