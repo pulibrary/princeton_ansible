@@ -1,0 +1,94 @@
+#!/usr/bin/env bash
+{{ ansible_managed | comment }}
+# States: 0=OK, 1=WARN, 2=CRIT, 3=UNKNOWN
+set -uo pipefail
+
+URL="{{ scsb_export_datadump_url | default('https://scsb.recaplib.org:9093/swagger-ui/index.html#/dataDump/exportDataDump') }}"
+TIMEOUT={{ scsb_export_datadump_timeout | default(10) }}
+REQUIRE_JSON={{ scsb_export_datadump_require_json | default(false) | ternary(1,0) }}
+WARN_MS={{ scsb_export_datadump_warn_ms | default(1500) }}
+CRIT_MS={{ scsb_export_datadump_crit_ms | default(5000) }}
+VERIFY_TLS={{ scsb_export_datadump_verify_tls | default(true) | ternary(1,0) }}
+SERVICE_NAME="{{ scsb_export_datadump_service_name | default('SCSB exportDataDump') }}"
+SECRETS_FILE="/etc/check_mk/scsb_export_datadump.env"
+
+# Load API key from root-only env file
+if [[ -r "$SECRETS_FILE" ]]; then
+  # shellcheck disable=SC1090
+  source "$SECRETS_FILE"
+fi
+SCSB_API_KEY="${SCSB_API_KEY:-}"
+
+tmpdir="$(mktemp -d)"
+body="$tmpdir/body"
+hdr="$tmpdir/headers"
+trap 'rm -rf "$tmpdir"' EXIT
+
+curl_opts=(-sS --max-time "$TIMEOUT" -o "$body" -D "$hdr" \
+  -H "Accept: application/json, */*;q=0.1" \
+  -H "User-Agent: checkmk-local-scsb/1.0")
+
+# TLS verification control
+if [ "$VERIFY_TLS" -eq 0 ]; then
+  curl_opts+=(-k)
+fi
+
+# Require API key
+if [[ -z "$SCSB_API_KEY" ]]; then
+  echo "2 $SERVICE_NAME | rta_ms=0;${WARN_MS};${CRIT_MS};0; Missing API token in $SECRETS_FILE (SCSB_API_KEY)"
+  exit 0
+fi
+curl_opts+=(-H "api_key: ${SCSB_API_KEY}")
+
+# Make request; capture status code & total time
+out="$(curl "${curl_opts[@]}" "$URL" -w '%{http_code} %{time_total}' 2>/dev/null || true)"
+code="${out%% *}"
+t_total="${out#* }"
+
+# Convert time->ms
+ms="$(awk -v t="$t_total" 'BEGIN{ if (t=="") t=0; printf("%.0f", t*1000) }')"
+ctype="$(awk -F': *' 'tolower($1)=="content-type"{ct=$2} END{print ct}' "$hdr" 2>/dev/null)"
+
+cmk_print() {
+  local state="$1"; shift
+  local msg="$*"
+  echo "$state $SERVICE_NAME | rta_ms=${ms};${WARN_MS};${CRIT_MS};0; $msg"
+}
+
+# If curl failed to give a code
+if ! [[ "$code" =~ ^[0-9]+$ ]]; then
+  cmk_print 3 "Unknown response; curl_output=$out"
+  exit 0
+fi
+
+# Non-200 → CRIT, include small snippet
+if [ "$code" -ne 200 ]; then
+  snippet="$(head -c 300 "$body" | tr '\n' ' ')"
+  cmk_print 2 "HTTP ${code}; ct=${ctype:-n/a}; ${snippet}"
+  exit 0
+fi
+
+# Optional JSON validation for real API endpoints
+if [ "$REQUIRE_JSON" -eq 1 ]; then
+  if ! command -v jq >/dev/null 2>&1; then
+    cmk_print 2 "jq not installed; cannot validate JSON; ct=${ctype:-n/a}"
+    exit 0
+  fi
+  if ! jq -e . < "$body" >/dev/null 2>&1; then
+    snippet="$(head -c 300 "$body" | tr '\n' ' ')"
+    cmk_print 2 "Invalid JSON; ct=${ctype:-n/a}; body=${snippet}"
+    exit 0
+  fi
+  base_msg="HTTP 200; JSON OK; ct=${ctype:-n/a}"
+else
+  base_msg="HTTP 200; ct=${ctype:-n/a}"
+fi
+
+state=0; msg="$base_msg; ${ms}ms"
+if [ "$ms" -ge "$CRIT_MS" ]; then
+  state=2; msg="$base_msg; slow response ${ms}ms"
+elif [ "$ms" -ge "$WARN_MS" ]; then
+  state=1; msg="$base_msg; high latency ${ms}ms"
+fi
+
+cmk_print "$state" "$msg"
