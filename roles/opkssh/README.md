@@ -19,8 +19,7 @@ Installs and configures **OpenPubKey SSH (opkssh)** on Linux in an idempotent, v
 ## How it works
 
 - **Binary** is downloaded to `/tmp` and copied to `{{ opkssh_install_dir }}/{{ opkssh_binary_name }}`.
-- If `opkssh_install_version: latest`: installs once (no auto-upgrade).
-- If **pinned** (e.g. `v0.8.0`): compares installed version (or checksum if provided) and replaces only when different.
+- We pin the value of `opkssh_install_version` (e.g. `v0.8.0`) so the role compares installed version (or checksum if provided) and replaces only when different.
 - **Providers file** `/etc/opk/providers` is created **only** if missing or empty (your manual edits are preserved).
 - Drops an sshd **drop-in**: `/etc/ssh/sshd_config.d/{{ opkssh_sshd_config_priority }}-opk-ssh.conf`.
 - **SELinux** (if enabled) restores context and loads a tiny module allowing `AuthorizedKeysCommand`.
