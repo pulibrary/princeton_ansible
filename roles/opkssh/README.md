@@ -59,6 +59,7 @@ opkssh_log_file: /var/log/opkssh.log
 opkssh_enable_logging: true         # Writes a single line only when the binary actually changes
 
 # Providers (written only if /etc/opk/providers is missing/empty)
+# These are the generic values
 opkssh_providers:
   - url: "https://accounts.google.com"
     client_id: "206584157355-7cbe4s640tvm7naoludob4ut1emii7sf.apps.googleusercontent.com"
