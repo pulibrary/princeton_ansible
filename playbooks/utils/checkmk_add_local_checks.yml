@@ -22,6 +22,11 @@
     - ../../group_vars/checkmk/agent_common.yml
     - ../../group_vars/checkmk/vault.yml
 
+  vars:
+    cmk_local_dir: /usr/lib/check_mk_agent/local
+    cmk_secret_dir: /etc/check_mk
+    secret_env_path: "{{ cmk_secret_dir }}/scsb_export_datadump.env"
+    in_recap_group: "{{ (group_names | select('search', 'recap_') | list | length) > 0 }}"
 
   pre_tasks:
       - name: stop playbook if you didn't use --limit
@@ -34,6 +39,63 @@
           checkmk_agent_host_name: "{{ inventory_hostname | regex_search('^[^.]*') }}"
 
   tasks:
+    - name: Fail early if token missing (only on recap_* hosts)
+      ansible.builtin.assert:
+        that:
+          - scsb_api_key is defined
+          - scsb_api_key | length > 0
+        fail_msg: "scsb_api_key is undefined/empty. Put it in group_vars/checkmk/vault.yml (vault)."
+      when: in_recap_group
+      no_log: true
+
+    - name: Ensure Checkmk dirs exist (recap_* only)
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+      loop:
+        - "{{ cmk_local_dir }}"
+        - "{{ cmk_secret_dir }}"
+      when: in_recap_group
+
+    - name: Install secret env file with API key (root-only) (recap_* only)
+      ansible.builtin.copy:
+        dest: "{{ secret_env_path }}"
+        owner: root
+        group: root
+        mode: "0600"
+        content: |
+          # SCSB local check secrets
+          SCSB_API_KEY={{ scsb_api_key }}
+      when: in_recap_group
+      no_log: true  # do not leak secret
+
+    - name: Install SCSB local check (shell) (recap_* only)
+      ansible.builtin.template:
+        src: "group_vars/checkmk/local_check_templates/scsb_export_datadump.sh.j2"
+        dest: "{{ cmk_local_dir }}/scsb_export_datadump"
+        owner: root
+        group: root
+        mode: "0755"
+      when: in_recap_group
+
+    - name: Ensure curl present (recap_* only)
+      ansible.builtin.package:
+        name: curl
+        state: present
+      when: in_recap_group
+
+    - name: Remove check and secret from non-recap hosts
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - "{{ cmk_local_dir }}/scsb_export_datadump"
+        - "{{ secret_env_path }}"
+      when: not in_recap_group
+
     - name: write hostname using jinja2
       ansible.builtin.template:
         src: "../../group_vars/checkmk/local_check_templates/{{ item.template }}"
