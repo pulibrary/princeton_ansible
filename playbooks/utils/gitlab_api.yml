@@ -4,28 +4,28 @@
   vars_files:
     - ../../group_vars/gitlab/vault.yml
   tasks:
-    - name: call issue API
+    - name: call issue API for team handbook
       ansible.builtin.uri:
-        url: "https://gitlab.lib.princeton.edu/api/v4/issues?scope=all&project_id=5&per_page=100&state=opened&access_token={{ vault_gitlab_issue_access_token }}"
+        url: "https://gitlab.lib.princeton.edu/api/v4/projects/5/issues?per_page=100&state=opened&access_token={{ vault_gitlab_issue_access_token }}"
         method: GET
         # 'scope=all' pulls issues created by all users
-      register: api_output
+      register: team_handbook_issues
 
-    - name: write CSV headers
+    - name: write CSV headers for team handbook
       ansible.builtin.lineinfile:
         create: true
-        dest: /opt/gitlab_issues/gitlabissues.csv
+        dest: /opt/gitlab_issues/team_handbook_issues.csv
         line: Source,Title,Issue ID,State,Assignee,Created At (UTC),Labels,URL
         insertbefore: BOF
         state: present
 
-    - name: write selected output to CSV
+    - name: write selected output to CSV for team handbook
       ansible.builtin.lineinfile:
-        dest: /opt/gitlab_issues/gitlabissues.csv
+        dest: /opt/gitlab_issues/team_handbook_issues.csv
         line: GitLab,"{{ item.title }}",{{ item.iid }},{{ item.state }},{{ item.assignee.name | default('') }},{{ item.created_at }},{{ item.labels | default('') }},{{ item.web_url }}
         insertafter: EOF
         state: present
-      loop: "{{ api_output | community.general.json_query('json[*]') }}"
+      loop: "{{ team_handbook_issues | community.general.json_query('json[*]') }}"
       # we assume every issue will have a title, an issue ID, a state, a created_at timestamp, and a URL
       # we allow null values for assignee and labels
 
@@ -34,10 +34,48 @@
       # TODO: fill in TLS and other
         host: lib-ponyexpr-prod.princeton.edu
         port: 25
-        subject: GitLab Issue report
+        subject: Team Handbook Issue report
         body: Issues from the ops-team-handbook repo
         from: ac2754@princeton.edu
-        to: "{{ vault_gitlab_airtable_email }}"
+        to: "{{ vault_team_handbook_airtable_email }}"
         # cc: ops@princeton.edu # do we have something like this?
         attach:
-          - /opt/gitlab_issues/gitlabissues.csv
+          - /opt/gitlab_issues/team_handbook_issues.csv
+
+    - name: call issue API for ReCAP LAS
+      ansible.builtin.uri:
+        url: "https://gitlab.lib.princeton.edu/api/v4/projects/12/issues?per_page=100&state=opened&access_token={{ vault_gitlab_issue_access_token }}"
+        method: GET
+        # 'scope=all' pulls issues created by all users
+      register: recap_las_issues
+
+    - name: write CSV headers for ReCAP LAS
+      ansible.builtin.lineinfile:
+        create: true
+        dest: /opt/gitlab_issues/recap_las_issues.csv
+        line: Source,Title,Issue ID,State,Assignee,Created At (UTC),Labels,URL
+        insertbefore: BOF
+        state: present
+
+    - name: write selected output to CSV for ReCAP LAS
+      ansible.builtin.lineinfile:
+        dest: /opt/gitlab_issues/recap_las_issues.csv
+        line: GitLab,"{{ item.title }}",{{ item.iid }},{{ item.state }},{{ item.assignee.name | default('') }},{{ item.created_at }},{{ item.labels | default('') }},{{ item.web_url }}
+        insertafter: EOF
+        state: present
+      loop: "{{ recap_las_issues | community.general.json_query('json[*]') }}"
+      # we assume every issue will have a title, an issue ID, a state, a created_at timestamp, and a URL
+      # we allow null values for assignee and labels
+
+    - name: Send e-mail with CSV attached
+      community.general.mail:
+      # TODO: fill in TLS and other
+        host: lib-ponyexpr-prod.princeton.edu
+        port: 25
+        subject: ReCAP LAS Issue report
+        body: Issues from the ops-team-handbook repo
+        from: ac2754@princeton.edu
+        to: "{{ vault_recap_las_airtable_email }}"
+        # cc: ops@princeton.edu # do we have something like this?
+        attach:
+          - /opt/gitlab_issues/recap_las_issues.csv
