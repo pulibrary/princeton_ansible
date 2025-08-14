@@ -15,38 +15,95 @@ Do these things once, after you clone this repo.
 
 ### Mac
 
-1. Install homebrew
 1. Install [Docker Desktop](https://docs.docker.com/desktop/install/mac-install/)
-1. Run `bin/first-time-setup.sh` - this installs all the language and tooling dependencies
-1. Run `bin/setup` - this adds a [pre-commit hook](https://github.com/pulibrary/princeton_ansible/blob/main/.githooks/pre-commit) to your environment that will prevent you from accidentally checking in unencrypted vault files.
-1. follow the steps under "Every time setup"
+2. Run `bin/first-time-setup.sh` - this installs Devbox and all language/tooling dependencies
+3. If you encounter Nix build user errors, run: `./fix-nix-build-users.sh`
+4. Follow the steps under "Every time setup"
 
 ### Microsoft Windows/ Ubuntu
 
- 1. Use the [WSL Document](./README_Windows.md)
+1. Use the [WSL Document](./README_Windows.md)
+
+### Linux
+
+1. Install Docker
+2. Run `bin/first-time-setup.sh` - this installs Devbox and all dependencies
+3. Follow the steps under "Every time setup"
 
 ## Every time setup
 
-Run these commands every time you use this repo
+Run these commands every time you use this repo:
 
 ```bash
-pipenv sync
-pipenv shell
-source princeton_ansible_env.sh
+# Enter the Devbox development environment
+devbox shell
+
+# Login to LastPass (the environment is already configured)
 lpass login <your-netid@princeton.edu>
 ```
+
+The Devbox shell automatically:
+- Activates the Python virtual environment with all Ansible tools
+- Sets up `ANSIBLE_VAULT_PASSWORD_FILE` to use lastpass-ansible
+- Configures git hooks to prevent committing unencrypted vault files
+- Sets `LPASS_AGENT_TIMEOUT` to 9 hours
 
 Now you can run tests (See "Running molecule tests") or playbooks (See "Usage")
 
 ## Validate that everything is installed correctly
 
-Make sure docker is running before you run the following (from inside the `pipenv shell`) to test the installation:
+Make sure Docker is running, then from inside the Devbox shell:
 
 ```bash
+# Verify tools are available
+ansible --version
+molecule --version
+
+# Run a test
 cd roles/common
-pip3 install 'molecule-plugins[docker]'
 molecule test
 ```
+
+## Troubleshooting Setup
+
+### Ansible Command Not Found
+If `ansible` or other Python tools aren't found in your Devbox shell:
+
+**For Fish shell users:**
+```fish
+# Add venv to PATH
+set -gx PATH .venv/bin $PATH
+```
+
+**For Bash/Zsh users:**
+```bash
+# Should be automatic, but you can manually activate:
+source .venv/bin/activate
+```
+
+**Force reinstall Python packages:**
+```bash
+rm -f .venv/.requirements_installed
+exit
+devbox shell  # This will reinstall everything
+```
+
+### Nix Build Users Error (macOS)
+If you see an error about `_nixbld1` user not existing:
+```bash
+./fix-nix-build-users.sh
+```
+
+## Available Helper Scripts
+
+Inside the Devbox shell, you can run:
+
+| Command | Description |
+|---------|-------------|
+| `devbox run update-deps` | Update Python dependencies from requirements.txt |
+| `devbox run clean` | Remove virtual environment and Devbox cache |
+| `devbox run test` | Verify Ansible tools installation |
+| `devbox run env-info` | Display current environment configuration |
 
 # Developing
 
@@ -218,10 +275,10 @@ rm -rf ~/.vault_pass.txt
 rm -rf ~/.ansible-vaults
 ```
 
-- If you get the message `ERROR! Decryption failed (no vault secrets were found that could decrypt)`, you may still need to source the environment for your shell.
+- If you get the message `ERROR! Decryption failed (no vault secrets were found that could decrypt)`, you may still need to source the environment for your shell. In Devbox, this should be automatic, but you can verify:
 
 ```bash
-source princeton_ansible_env.sh
+echo $ANSIBLE_VAULT_PASSWORD_FILE  # Should show path to lastpass-ansible
 ```
 
 ### Rekeying the vault
@@ -237,41 +294,34 @@ source princeton_ansible_env.sh
 
 ## Upgrading Ansible version
 
-   1. In a pipenv shell
+1. Edit `requirements.txt` to update the ansible version
+2. In Devbox shell, update the dependencies:
+   ```bash
+   devbox run update-deps
+   ```
+3. Verify the new version:
+   ```bash
+   ansible --version
+   ```
+4. Run the test suite to ensure compatibility
+5. Commit the updated `requirements.txt`
 
-      ```bash
-      pipenv sync
-      pipenv shell
-      ```
+## Migration from Pipenv to Devbox
 
-   1. Upgrade ansible
+This project has been migrated from Pipenv to Devbox for better reproducibility and cross-platform support. Key changes:
 
-      ```
-      pipenv update ansible
-      ```
+| Feature | Old (Pipenv/ASDF) | New (Devbox) |
+|---------|-------------------|--------------|
+| **Config File** | `Pipfile`, `.tool-versions` | `devbox.json` |
+| **Python Deps** | `Pipfile.lock` | `requirements.txt` + venv |
+| **Environment Setup** | `pipenv shell` + source script | `devbox shell` (automatic) |
+| **Version Management** | ASDF plugins | Nix packages |
+| **LastPass CLI** | Homebrew (macOS only) | Nix package (cross-platform) |
 
-      If this fails you may need to
+### Files Changed
+- **Added**: `devbox.json`, `devbox.lock`, `.devbox_init.sh`
+- **Removed**: `Pipfile`, `Pipfile.lock`, `.mise.local.toml`
+- **Updated**: `bin/first-time-setup.sh`, this README
 
-      ```
-      pipenv uninstall ansible
-      pipenv install ansible
-      ```
-
-   1. Create the  CI ansible environment
-
-      ```
-      pipenv lock -r > requirements.txt
-      ```
-
-   1. Create a PR and commit
-
-## Patching Dependabots
-
-  1. Make recommended changes from dependabot PR run `pipenv install -r
-     requirements.txt`
-
-  1. Check in changes to Pipfile.lock
-
-  1. Run the entire test suite locally
-
-  1. Re-run `pipenv lock -r > requirements.txt`
+### For CI/CD
+The `requirements.txt` file is maintained for CI/CD compatibility and contains all Python dependencies.
