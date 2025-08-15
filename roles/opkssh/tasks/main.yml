@@ -43,8 +43,8 @@
   ansible.builtin.include_tasks: selinux.yml
   when: ansible_selinux is defined and ansible_selinux.status is defined and ansible_selinux.status == "enabled"
 
-#- name: Opkssh - include OpenSSH configuration tasks
-#  ansible.builtin.include_tasks: openssh.yml
+# - name: Opkssh - include OpenSSH configuration tasks
+#   ansible.builtin.include_tasks: openssh.yml
 #
 - name: Opkssh - ensure log file exists
   ansible.builtin.file:
@@ -53,7 +53,7 @@
     owner: root
     group: "{{ opkssh_auth_cmd_group }}"
     mode: "0660"
-  when: opkssh_enable_logging | default(false) | bool
+  when: opkssh_enable_logging | default(true) | bool
 
 - name: Opkssh - create log entry for (re)installation
   ansible.builtin.lineinfile:
@@ -66,6 +66,6 @@
     insertafter: EOF
     state: present
   when:
-    - opkssh_enable_logging | default(false) | bool
+    - opkssh_enable_logging | default(true) | bool
     - opkssh_copy_result is defined
     - opkssh_copy_result.changed
