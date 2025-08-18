@@ -9,18 +9,15 @@ echo "Node: $(node --version 2>&1)"
 echo ""
 
 # Create Python virtual environment if it doesn't exist
-if [ ! -d .venv ]; then
-  echo 'Creating Python virtual environment...'
-  python -m venv .venv
-fi
+. $VENV_DIR/bin/activate
 
 # Install Python dependencies if requirements.txt exists
 # Note: We install in the venv directly without activation
-if [ -f requirements.txt ] && [ ! -f .venv/.requirements_installed ]; then
+if [ -f requirements.txt ] && [ ! -f $VENV_DIR/.requirements_installed ]; then
   echo 'Installing Python requirements (this may take a few minutes)...'
-  .venv/bin/pip install --upgrade pip
-  .venv/bin/pip install -r requirements.txt
-  touch .venv/.requirements_installed
+  pip install --upgrade pip
+  pip install -r requirements.txt
+  touch $VENV_DIR/.requirements_installed
   echo 'Python requirements installed successfully!'
 fi
 
@@ -42,7 +39,7 @@ echo 'Environment configured:'
 echo "  ANSIBLE_VAULT_PASSWORD_FILE: $(which lastpass-ansible)"
 echo "  LPASS_AGENT_TIMEOUT: $LPASS_AGENT_TIMEOUT (9 hours)"
 echo ''
-echo 'Python packages location: .venv/bin/'
+echo "Python packages location: $VENV_DIR/bin/"
 echo ''
 
 # Check if ansible is installed
@@ -50,6 +47,6 @@ if [ -f .venv/bin/ansible ]; then
   echo "Ansible is installed: $(.venv/bin/ansible --version | head -n1)"
 else
   echo "Ansible not yet installed. Installing now..."
-  .venv/bin/pip install -r requirements.txt
-  touch .venv/.requirements_installed
+  pip install -r requirements.txt
+  touch $VENV_DIR/.requirements_installed
 fi
