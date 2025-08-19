@@ -56,7 +56,7 @@ job "analytics-production" {
         {{- with nomadVar "nomad/jobs/analytics-production" -}}
         DATABASE_TYPE = 'postgresql'
         APP_SECRET = '{{ .SECRET_KEY_BASE }}'
-        DATABASE_URL = 'postgresql://{{ .DB_USER }}:{{ .DB_PASSWORD }}@{{ .POSTGRES_HOST }}:5432/{{ DB_NAME }}'
+        DATABASE_URL = 'postgresql://{{ .DB_USER }}:{{ .DB_PASSWORD }}@{{ .POSTGRES_HOST }}:5432/{{ .DB_NAME }}'
         {{- end -}}
         EOF
       }
