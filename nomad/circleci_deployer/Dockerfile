@@ -73,7 +73,3 @@ RUN echo "$(ruby --version)"
 # Copy podman's podman-in-podman compatible configuration files
 # Pulled from https://quay.io/repository/podman/stable/manifest/sha256:b83bf5b82d8d02a49dfa7f8b5c35e6ffc826e6dfb1592b7ec2e17100dd47c810
 COPY --from=podman --chown=circleci /etc/containers/storage.conf /etc/containers/storage.conf
-COPY --from=podman --chown=circleci /home/podman/.config/containers/containers.conf /home/circleci/.config/containers/containers.conf
-COPY --from=podman --chown=circleci /etc/containers/containers.conf /etc/containers/containers.conf
-RUN /bin/sh -c "mkdir -p /home/circleci/.local/share/containers"
-
