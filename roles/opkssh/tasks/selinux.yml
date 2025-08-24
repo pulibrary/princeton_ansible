@@ -1,0 +1,35 @@
+---
+# SELinux configuration tasks
+- name: Opkssh - restore SELinux context for opkssh binary
+  ansible.builtin.command: "restorecon {{ opkssh_install_dir }}/{{ opkssh_binary_name }}"
+  changed_when: false
+
+- name: Opkssh - create SELinux module
+  ansible.builtin.template:
+    src: selinux-opkssh.te.j2
+    dest: /tmp/opkssh.te
+    mode: "0644"
+  register: selinux_module
+
+- name: Opkssh - compile SELinux module
+  ansible.builtin.command: checkmodule -M -m -o /tmp/opkssh.mod /tmp/opkssh.te
+  when: selinux_module.changed
+
+- name: Opkssh - package SELinux module
+  ansible.builtin.command: semodule_package -o /tmp/opkssh.pp -m /tmp/opkssh.mod
+  when: selinux_module.changed
+
+- name: Opkssh - install SELinux module
+  ansible.builtin.command: semodule -i /tmp/opkssh.pp
+  when: selinux_module.changed
+  notify: restart ssh
+
+- name: Opkssh - clean up SELinux temporary files
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /tmp/opkssh.te
+    - /tmp/opkssh.mod
+    - /tmp/opkssh.pp
+  when: selinux_module.changed
