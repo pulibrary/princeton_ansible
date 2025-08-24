@@ -1,5 +1,6 @@
 ---
 # tasks file for roles/opkssh
+
 - name: Opkssh - check if running as root
   ansible.builtin.fail:
     msg: "This role must be run as root"
@@ -15,6 +16,7 @@
       {%- else -%}
         unsupported
       {%- endif -%}
+  changed_when: false
 
 - name: Opkssh - fail if OS is not supported
   ansible.builtin.fail:
@@ -24,6 +26,7 @@
 - name: Opkssh - set architecture
   ansible.builtin.set_fact:
     opkssh_cpu_arch: "{{ opkssh_arch_mapping[ansible_architecture] | default('unsupported') }}"
+  changed_when: false
 
 - name: Opkssh - fail if architecture is not supported
   ansible.builtin.fail:
@@ -41,15 +44,44 @@
 
 - name: Opkssh - include SELinux tasks
   ansible.builtin.include_tasks: selinux.yml
-  when: ansible_selinux is defined and ansible_selinux.status is defined and ansible_selinux.status == "enabled"
+  when: ansible_selinux is defined and
+        ansible_selinux.status is defined and
+        ansible_selinux.status == "enabled"
 
 # - name: Opkssh - include OpenSSH configuration tasks
 #   ansible.builtin.include_tasks: openssh.yml
-#
-- name: Opkssh - ensure log file exists
+
+- name: Opkssh - ensure log directory exists
+  ansible.builtin.file:
+    path: "{{ opkssh_log_file | dirname }}"
+    state: directory
+    owner: root
+    group: "{{ opkssh_auth_cmd_group }}"
+    mode: "0770"
+  when: opkssh_enable_logging | default(true) | bool
+
+- name: Opkssh - stat log file
+  ansible.builtin.stat:
+    path: "{{ opkssh_log_file }}"
+  register: opkssh_log_stat
+  when: opkssh_enable_logging | default(true) | bool
+
+- name: Opkssh - create log file if missing
+  ansible.builtin.copy:
+    dest: "{{ opkssh_log_file }}"
+    content: ""
+    owner: root
+    group: "{{ opkssh_auth_cmd_group }}"
+    mode: "0660"
+    force: false
+  when:
+    - opkssh_enable_logging | default(true) | bool
+    - not opkssh_log_stat.stat.exists
+
+- name: Opkssh - enforce log file attributes
   ansible.builtin.file:
     path: "{{ opkssh_log_file }}"
-    state: touch
+    state: file
     owner: root
     group: "{{ opkssh_auth_cmd_group }}"
     mode: "0660"
