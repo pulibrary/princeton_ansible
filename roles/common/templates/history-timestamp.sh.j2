@@ -1,0 +1,21 @@
+{{ ansible_managed | comment  }}
+# Global bash history timestamps behavior
+
+# Only act in interactive shells
+case "$-" in *i*) : ;; *) return ;; esac
+
+# Write and show timestamps for each history entry
+# Example: 2025-08-25 14:22:03  ls -la
+export HISTTIMEFORMAT='%F %T '
+
+# Keep the history and append rather than overwrite
+export HISTSIZE="${HISTSIZE:-100000}"
+export HISTFILESIZE="${HISTFILESIZE:-200000}"
+export HISTCONTROL="${HISTCONTROL:-ignoredups:erasedups}"
+
+if [ -n "$BASH_VERSION" ]; then
+  shopt -s histappend cmdhist
+  # Append the current session's command to the history file immediately.
+  # This helps when correlating in multi-session incidents.
+  PROMPT_COMMAND="history -a${PROMPT_COMMAND:+; $PROMPT_COMMAND}"
+fi
