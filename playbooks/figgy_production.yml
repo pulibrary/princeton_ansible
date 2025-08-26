@@ -3,7 +3,6 @@
   hosts: figgy_production_webservers
   remote_user: pulsys
   become: true
-  strategy: free
   vars_files:
     - ../site_vars.yml
     - ../group_vars/figgy/vault.yml
@@ -36,7 +35,6 @@
   hosts: figgy_production_workers
   remote_user: pulsys
   become: true
-  strategy: free
   vars_files:
     - ../site_vars.yml
     - ../group_vars/figgy/vault.yml
@@ -51,6 +49,11 @@
       sidekiq_worker_threads: 1
       sidekiq_worker_queues:
         - realtime
+    - role: roles/sidekiq_worker
+      sidekiq_worker_name: "figgy-bulk-workers"
+      sidekiq_worker_threads: 1
+      sidekiq_worker_queues:
+        - bulk
     - role: roles/figgy
     - {role: roles/figgy_filewatcher_worker, when: inventory_hostname == 'figgy-worker-prod1.princeton.edu' }
     - role: roles/figgy_pubsub_worker

@@ -14,6 +14,12 @@ job "traefik-wall-staging" {
     # Only one high challenge node, otherwise everyone gets captcha'd twice.
     count = 1
 
+    update {
+      canary = 1
+      auto_promote = true
+      auto_revert = true
+    }
+
     network {
       port "http" { }
       port "traefik" { }
@@ -27,14 +33,15 @@ job "traefik-wall-staging" {
     service {
       name = "traefik-wall-staging"
       tags = ["highchallenge", "node-${NOMAD_ALLOC_INDEX}"]
+      canary_tags = ["canary"]
       port = "http"
 
       check {
-        name     = "alive"
-        type     = "tcp"
-        port     = "http"
+        type     = "http"
+        port     = "traefik"
         interval = "10s"
         timeout  = "2s"
+        path = "/ping"
       }
     }
     service {
@@ -75,6 +82,17 @@ job "traefik-wall-staging" {
         destination = "local/traefik.yml"
       }
 
+      template {
+        destination = "${NOMAD_SECRETS_DIR}/env.vars"
+        env = true
+        change_mode = "restart"
+        data = <<EOF
+        {{- with nomadVar "nomad/jobs/traefik-wall-staging" -}}
+        CONSUL_HTTP_TOKEN = {{ .CONSUL_ACL_TOKEN }}
+        {{- end -}}
+        EOF
+      }
+
       # Plugin Configuration
       artifact {
         source = "https://raw.githubusercontent.com/pulibrary/princeton_ansible/${ var.branch_or_sha }/nomad/traefik-wall/deploy/bot-plugin-staging.tpl.yml"
@@ -108,6 +126,12 @@ job "traefik-wall-staging" {
   group "traefik" {
     count = 2
 
+    update {
+      canary = 1
+      auto_promote = true
+      auto_revert = true
+    }
+
     network {
       port "http" { }
       port "traefik" { }
@@ -121,14 +145,15 @@ job "traefik-wall-staging" {
     service {
       name = "traefik-wall-staging"
       tags = ["lowchallenge", "node-${NOMAD_ALLOC_INDEX}"]
+      canary_tags = ["canary"]
       port = "http"
 
       check {
-        name     = "alive"
-        type     = "tcp"
-        port     = "http"
+        type     = "http"
+        port     = "traefik"
         interval = "10s"
         timeout  = "2s"
+        path = "/ping"
       }
     }
 
@@ -155,6 +180,17 @@ job "traefik-wall-staging" {
           "local/traefik-config:/etc/traefik/config.d",
           "local/challenge.tmpl.html:/challenge.tmpl.html"
         ]
+      }
+
+      template {
+        destination = "${NOMAD_SECRETS_DIR}/env.vars"
+        env = true
+        change_mode = "restart"
+        data = <<EOF
+        {{- with nomadVar "nomad/jobs/traefik-wall-staging" -}}
+        CONSUL_HTTP_TOKEN = {{ .CONSUL_ACL_TOKEN }}
+        {{- end -}}
+        EOF
       }
 
       # Static Configuration

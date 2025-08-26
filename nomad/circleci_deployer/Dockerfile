@@ -1,3 +1,4 @@
+FROM quay.io/podman/stable:latest AS podman
 FROM circleci/runner-agent:machine-3
 ARG RUBY_VERSION=3.4.3
 # Install dependencies - pulled from build-pack-deps:
@@ -47,15 +48,17 @@ RUN set -ex; \
       unzip \
       xz-utils \
       zlib1g-dev \
+      podman \
+      fuse-overlayfs \
+      uidmap \
+      slirp4netns \
+      build-essential \
+      ca-certificates \
+      curl \
+      git \
+      libz-dev \
       ; \
       sudo rm -rf /var/lib/apt/lists/*
-# Install packages needed for ruby-build
-RUN sudo apt-get update -qq && DEBIAN_FRONTEND=noninteractive sudo apt-get install -yq --no-install-recommends \
-build-essential \
-ca-certificates \
-curl \
-git \
-libz-dev
 
 # Check out ruby-build and install
 RUN sudo git clone https://github.com/sstephenson/ruby-build.git /usr/local/ruby-build
@@ -66,3 +69,7 @@ RUN sudo ruby-build ${RUBY_VERSION} /usr/local/ruby
 ENV PATH="/usr/local/ruby/bin:${PATH}"
 
 RUN echo "$(ruby --version)"
+
+# Copy podman's podman-in-podman compatible configuration files
+# Pulled from https://quay.io/repository/podman/stable/manifest/sha256:b83bf5b82d8d02a49dfa7f8b5c35e6ffc826e6dfb1592b7ec2e17100dd47c810
+COPY --from=podman --chown=circleci /etc/containers/storage.conf /etc/containers/storage.conf

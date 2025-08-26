@@ -79,7 +79,7 @@
     - postgresql_is_local
     - ansible_os_family == "RedHat"
 
-#- name: PostgreSQL | Ensure PostgreSQL is enabled and started
+# - name: PostgreSQL | Ensure PostgreSQL is enabled and started
 #  ansible.builtin.service:
 #    name: postgresql
 #    state: started
@@ -105,6 +105,18 @@
     - ansible_os_family == "RedHat"
     - not pgsql_data_install.stat.exists
     - postgresql_is_local
+
+- name: PostgreSQL | add a logrotation
+  ansible.builtin.template:
+    src: "../../common/templates/logrotate_rules.j2"
+    dest: "/etc/logrotate.d/{{ item.name }}"
+    mode: "0644"
+    owner: root
+    group: root
+  loop: "{{ postgresql_logrotate_rules }}"
+  when:
+    - postgresql_logrotate_rules is defined
+    - postgresql_logrotate_rules | length > 0
 
 - name: PostgreSQL | install postgresql client packages (Ubuntu)
   ansible.builtin.apt:
