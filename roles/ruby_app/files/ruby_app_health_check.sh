@@ -1,0 +1,16 @@
+#!/bin/bash
+# This script check to see if the health page is ok
+#   This can either be a health-moitor-rails (https://github.com/lbeder/health-monitor-rails) or 
+#   some other page that conforms to the same json output where `"status":"ok"` is part of the json output 
+#   If all the items monitored are ok the status is ok
+#   If any items are not ok the status is critical
+#
+# required vars:
+#  check_mk_health_url - the url to curl for the health page ( for example localhost/health)
+#
+message=$(sudo -u deploy curl localhost/health.json |grep \"status\":\"ok\" | wc -l)
+if [ $message =  1 ]; then   
+   echo "0 \"Ruby App Health Status\" - Ruby App is healthy"; 
+else
+   echo "2 \"Ruby App Health Status\" - Check the Ruby App health page {{ check_mk_health_url }} for details";
+fi
