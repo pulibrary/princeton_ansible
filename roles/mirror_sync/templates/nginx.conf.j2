@@ -19,30 +19,39 @@ http {
     {% if nginx_server_tokens_off %}server_tokens off;{% endif %}
     keepalive_timeout {{ nginx_keepalive_timeout }};
 
-    # HTTP (optionally keep; remove block if you want HTTPS-only)
+    # HTTP
     server {
         listen {{ nginx_listen_ipv4 }};
         {% if nginx_listen_ipv6 %}listen [::]:{{ nginx_listen_ipv4 }};{% endif %}
         server_name {{ nginx_server_name }};
         root {{ nginx_root }};
 
+        # Directory browsing for the mirror
         location {{ nginx_mirror_uri_prefix }} {
             autoindex on;
-            autoindex_exact_size off;   # human-readable
+            autoindex_exact_size off;   # human-readable sizes
             autoindex_localtime on;     # local time
         }
 
+        # Legacy Solr paths → archive or current
+        # Matches: /mirror/solr/dist/lucene/solr/<ver>/<file>
+        # <ver> examples: 4.10.4, 9.2.0, 4.0.0-BETA
+        location ~ ^/mirror/solr/dist/lucene/solr/(?<ver>[0-9]+\.[0-9]+(?:\.[0-9]+)?(?:-[A-Za-z0-9.-]+)?)/(?<file>.+)$ {
+            # Prefer the "current" tree if the file exists there
+            if (-f $document_root/mirror/apache/solr/$ver/$file) {
+                return 302 /mirror/apache/solr/$ver/$file;
+            }
+            # Otherwise route by version family
+            if ($ver ~ '^9\.') {
+                return 302 /mirror/apache/solr/archive/9x/$ver/$file;
+            }
+            return 302 /mirror/apache/solr/archive/legacy/$ver/$file;  # 1.x–8.x
+        }
+
         location = /50x.html { root {{ nginx_root }}; }
-        # old solr paths redirect
-        location ~ ^/mirror/solr/dist/lucene/solr/9\.(.*)$ {
-            return 302 /mirror/apache/solr/archive/9x/9.$1;
-        }
-        location ~ ^/mirror/solr/dist/lucene/solr/([0-8].*)$ {
-            return 302 /mirror/apache/solr/archive/legacy/$1;
-        }
     }
 
-    # HTTPS (TLS mandatory)
+    # HTTPS
     server {
         listen {{ nginx_tls_port }} ssl;
         server_name {{ nginx_server_name }};
@@ -55,10 +64,24 @@ http {
         ssl_ciphers '{{ nginx_ssl_ciphers | replace("\n","") | trim }}';
         {% if nginx_ssl_prefer_server_ciphers %}ssl_prefer_server_ciphers on;{% endif %}
 
+        # Directory browsing for the mirror (HTTPS)
         location {{ nginx_mirror_uri_prefix }} {
             autoindex on;
             autoindex_exact_size off;
             autoindex_localtime on;
         }
+
+        # Legacy Solr paths → archive or current (HTTPS too)
+        location ~ ^/mirror/solr/dist/lucene/solr/(?<ver>[0-9]+\.[0-9]+(?:\.[0-9]+)?(?:-[A-Za-z0-9.-]+)?)/(?<file>.+)$ {
+            if (-f $document_root/mirror/apache/solr/$ver/$file) {
+                return 302 /mirror/apache/solr/$ver/$file;
+            }
+            if ($ver ~ '^9\.') {
+                return 302 /mirror/apache/solr/archive/9x/$ver/$file;
+            }
+            return 302 /mirror/apache/solr/archive/legacy/$ver/$file;
+        }
+
+        location = /50x.html { root {{ nginx_root }}; }
     }
 }
