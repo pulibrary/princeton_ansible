@@ -1,0 +1,57 @@
+# /etc/nginx/nginx.conf
+# Take note of http://wiki.nginx.org/Pitfalls
+
+#user  www;
+worker_processes {{ nginx_worker_processes }};
+worker_rlimit_nofile {{ nginx_worker_rlimit_nofile }};
+
+events {
+    worker_connections 1024;  # Increased worker connections
+}
+
+http {
+    include       mime.types;
+    default_type  application/octet-stream;
+
+    index  index.html index.htm;
+
+    {% if nginx_gzip %}gzip on;{% else %}gzip off;{% endif %}
+    {% if nginx_server_tokens_off %}server_tokens off;{% endif %}
+    keepalive_timeout {{ nginx_keepalive_timeout }};
+
+    # HTTP (optionally keep; remove block if you want HTTPS-only)
+    server {
+        listen {{ nginx_listen_ipv4 }};
+        {% if nginx_listen_ipv6 %}listen [::]:{{ nginx_listen_ipv4 }};{% endif %}
+        server_name {{ nginx_server_name }};
+        root {{ nginx_root }};
+
+        location {{ nginx_mirror_uri_prefix }} {
+            autoindex on;
+            autoindex_exact_size off;   # human-readable
+            autoindex_localtime on;     # local time
+        }
+
+        location = /50x.html { root {{ nginx_root }}; }
+    }
+
+    # HTTPS (TLS mandatory)
+    server {
+        listen {{ nginx_tls_port }} ssl;
+        server_name {{ nginx_server_name }};
+        root {{ nginx_root }};
+
+        ssl_certificate      {{ nginx_ssl_certificate }};
+        ssl_certificate_key  {{ nginx_ssl_certificate_key }};
+        ssl_session_timeout  {{ nginx_ssl_session_timeout }};
+        ssl_session_cache    {{ nginx_ssl_session_cache }};
+        ssl_ciphers '{{ nginx_ssl_ciphers | replace("\n","") | trim }}';
+        {% if nginx_ssl_prefer_server_ciphers %}ssl_prefer_server_ciphers on;{% endif %}
+
+        location {{ nginx_mirror_uri_prefix }} {
+            autoindex on;
+            autoindex_exact_size off;
+            autoindex_localtime on;
+        }
+    }
+}
