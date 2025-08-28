@@ -8,7 +8,7 @@
 #   Target sandbox:                        ansible-playbook playbooks/nomad.yml -e runtime_env=sandbox
 
 - name: build the nomad cluster
-  hosts: "nomad_{{ runtime_env | default('cluster') }}"
+  hosts: "nomad_{{ runtime_env | default('sandbox') }}"
   remote_user: pulsys
   become: true
 
@@ -27,7 +27,13 @@
 
   # Vault files (env-agnostic secrets or per-env keys within)
   vars_files:
+    # This will auto include group_vars/nomad_clients.yml for clients
+    # This will auto include group_vars/nomad_servers.yml for servers
+    # This will auto include group_vars/nomad_[clients/servers]_[env].yml
+    # This will auto include host_vars/<hosthere>.yml for specific clients.
     - ../group_vars/nomad/vault.yml
+    - ../group_vars/nomad/dpulc/staging.yml
+    - ../group_vars/nomad/dpulc/production.yml
     - ../group_vars/nomad/dpulc/vault.yml
     - ../group_vars/nomad/imagecat/vault.yml
     - ../group_vars/nomad/abid/vault.yml
@@ -38,38 +44,8 @@
     - ../group_vars/nomad/cdh_baserow/sandbox.yml
     - ../group_vars/nomad/cdh_baserow/vault.yml
     - ../group_vars/nomad/nodemation/vault.yml
-
-  pre_tasks:
-    # Default (cluster): load BOTH staging and production app var files,
-    # preserving current mixed behavior (prod servers + staging clients).
-    - name: "Load app vars (cluster default): staging then production"
-      when: nomad_effective_env == 'cluster'
-      block:
-        - ansible.builtin.include_vars:
-            file: "../group_vars/nomad/{{ item }}/staging.yml"
-          loop: "{{ app_folders }}"
-          ignore_errors: true
-        - ansible.builtin.include_vars:
-            file: "../group_vars/nomad/{{ item }}/production.yml"
-          loop: "{{ app_folders }}"
-          ignore_errors: true
-
-    # Explicit env: try exact env, then fallback to staging, then production
-    - name: "Load app vars for {{ nomad_effective_env }} with fallback"
-      when: nomad_effective_env != 'cluster'
-      vars:
-        candidates:
-          - "../group_vars/nomad/{{ item }}/{{ nomad_effective_env }}.yml"
-          - "../group_vars/nomad/{{ item }}/staging.yml"
-          - "../group_vars/nomad/{{ item }}/production.yml"
-      ansible.builtin.include_vars:
-        file: "{{ lookup('ansible.builtin.first_found', {'files': candidates}) }}"
-      loop: "{{ app_folders }}"
-      ignore_errors: true
-
   roles:
     - role: pul_nomad
-
   post_tasks:
     - name: tell everyone on slack you ran an ansible playbook (controller-only)
       community.general.slack:
@@ -80,5 +56,4 @@
       run_once: true
       when:
         - (notify_slack | default(true))            # allow per-env override
-        - nomad_effective_env != 'sandbox'          # default: skip sandbox
       tags: [notify]
