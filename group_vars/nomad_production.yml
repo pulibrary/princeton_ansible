@@ -1,8 +1,8 @@
 ---
+nomad_server_group: "nomad_servers_production"
 consul_version: '1.20.3'
 consul_gossip_encryption_key: '{{ vault_consul_gossip_encryption_key }}'
 consul_acl_management_token: "{{ vault_consul_acl_management_token }}"
-nomad_server_group: "nomad_servers_{{ runtime_env | default('cluster') | ternary('production' if runtime_env=='cluster' else runtime_env) }}"
 pul_nomad_management_token: "{{ vault_pul_nomad_management_token }}"
 tower_github_token: "{{ vault_tower_github_token }}"
 ## Don't install common packages, this just runs containers.
@@ -11,14 +11,10 @@ deploy_user_uid: 1004
 # Use latest nomad podman plugin
 nomad_podman_version: '0.5.2'
 nomad_task_consul_token: "{{ vault_nomad_task_consul_token }}"
-# Map env -> server group.
-# Default is the mixed "cluster" which uses PRODUCTION servers
-nomad_server_group_map:
-  production: nomad_servers_production
-  staging:    nomad_servers_staging
-  sandbox:    nomad_servers_sandbox
-  cluster:    nomad_servers_production   # <— mixed default uses prod servers
-
-# If runtime_env is omitted, treat it as "cluster"
-nomad_effective_env: "{{ runtime_env | default('cluster') }}"
-nomad_server_group: "{{ nomad_server_group_map[nomad_effective_env] }}"
+nomad_enabled_apps:
+  - dpulc
+  - imagecat
+  - abid
+  - logging
+  - traefik_wall
+  - circleci_deployer
