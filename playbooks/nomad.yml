@@ -12,19 +12,6 @@
   remote_user: pulsys
   become: true
 
-  vars:
-    # Which env are we effectively targeting?
-    nomad_effective_env: "{{ runtime_env | default('cluster') }}"
-    app_folders:
-      - dpulc
-      - imagecat
-      - abid
-      - logging
-      - traefik_wall
-      - circleci_deployer
-      - cdh_baserow
-      - nodemation
-
   # Vault files (env-agnostic secrets or per-env keys within)
   vars_files:
     # This will auto include group_vars/nomad_clients.yml for clients
@@ -50,7 +37,7 @@
     - name: tell everyone on slack you ran an ansible playbook (controller-only)
       community.general.slack:
         token: "{{ vault_pul_slack_token }}"
-        msg: "Ansible ran `{{ ansible_play_name }}` for {{ nomad_effective_env }} on {{ groups['nomad_' ~ nomad_effective_env] | length }} hosts"
+        msg: "Ansible ran `{{ ansible_play_name }}` for {{ runtime_env | default('sandbox') }} on {{ groups['nomad_' ~ (runtime_env | default('sandbox')) ] | length }} hosts"
         channel: "{{ slack_alerts_channel }}"
       delegate_to: localhost
       run_once: true
