@@ -19,16 +19,21 @@
     # This will auto include group_vars/nomad_[clients/servers]_[env].yml
     # This will auto include host_vars/<hosthere>.yml for specific clients.
     - ../group_vars/nomad/vault.yml
-    - ../group_vars/nomad/dpulc/staging.yml
-    - ../group_vars/nomad/dpulc/production.yml
-    - ../group_vars/nomad/dpulc/vault.yml
-    - ../group_vars/nomad/imagecat/vault.yml
-    - ../group_vars/nomad/abid/vault.yml
-    - ../group_vars/nomad/logging/vault.yml
-    - ../group_vars/nomad/traefik_wall/vault.yml
-    - ../group_vars/nomad/circleci_deployer/vault.yml
-    - ../group_vars/nomad/cdh_baserow/vault.yml
-    - ../group_vars/nomad/nodemation/vault.yml
+
+  pre_tasks:
+    - name: "Load app vars: staging then production"
+      block:
+        - ansible.builtin.include_vars:
+            file: "../group_vars/nomad/{{ item }}/staging.yml"
+          loop: "{{ nomad_enabled_apps }}"
+        - ansible.builtin.include_vars:
+            file: "../group_vars/nomad/{{ item }}/production.yml"
+          loop: "{{ nomad_enabled_apps }}"
+        - ansible.builtin.include_vars:
+            file: "../group_vars/nomad/{{ item }}/vault.yml"
+          loop: "{{ nomad_enabled_apps }}"
+      tags:
+        - always
   roles:
     - role: pul_nomad
   post_tasks:
