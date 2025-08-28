@@ -8,19 +8,32 @@ nomad-client-prod1.lib.princeton.edu
 nomad-client-prod2.lib.princeton.edu
 nomad-client-prod3.lib.princeton.edu
 nomad-client-prod4.lib.princeton.edu
-
-[nomad_servers_staging]
-nomad-host-staging1.lib.princeton.edu
-nomad-host-staging2.lib.princeton.edu
-nomad-host-staging3.lib.princeton.edu
-
-[nomad_clients_staging]
+# These are staging VMs, but are in the production nomad cluster for staging
+# applications.
 dpul-collections-staging1.lib.princeton.edu
 dpul-collections-staging2.lib.princeton.edu
 nomad-client-staging1.lib.princeton.edu
 nomad-client-staging2.lib.princeton.edu
 nomad-client-staging3.lib.princeton.edu
 
+[nomad_production:children]
+nomad_servers_production
+nomad_clients_production
+
+# We might want to move staging VMs to their own cluster someday, but for now
+# these are unused.
+[nomad_servers_staging]
+nomad-host-staging1.lib.princeton.edu
+nomad-host-staging2.lib.princeton.edu
+nomad-host-staging3.lib.princeton.edu
+
+[nomad_clients_staging]
+
+[nomad_staging:children]
+nomad_servers_staging
+nomad_clients_staging
+
+# The sandbox cluster is for experimenting on Nomad installs
 [nomad_servers_sandbox]
 nomad-host-sandbox1.lib.princeton.edu
 nomad-host-sandbox2.lib.princeton.edu
@@ -31,6 +44,11 @@ nomad-client-sandbox1.lib.princeton.edu
 nomad-client-sandbox2.lib.princeton.edu
 cdh-baserow-sandbox1.lib.princeton.edu
 
+[nomad_sandbox:children]
+nomad_servers_sandbox
+nomad_clients_sandbox
+
+# Grouped together for common group variables.
 [nomad_clients:children]
 nomad_clients_staging
 nomad_clients_production
@@ -40,22 +58,11 @@ nomad_servers_production
 nomad_servers_staging
 nomad_servers_sandbox
 
-[nomad_production:children]
-nomad_servers_production
-nomad_clients_production
-
-# [nomad_staging:children]
-# nomad_servers_staging
-# nomad_clients_staging
-
-[nomad_sandbox:children]
-nomad_servers_sandbox
-nomad_clients_sandbox
-
 # Environment-specific cluster groups
 [nomad_cluster:children]
 nomad_production
 nomad_sandbox
 
+# This one has some special nomad metadata.
 [nomad_clients_workers]
 nomad-client-staging1.lib.princeton.edu
