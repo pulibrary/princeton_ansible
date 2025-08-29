@@ -23,7 +23,6 @@ http {
     server {
         listen {{ nginx_listen_ipv4 }};
         {% if nginx_listen_ipv6 %}listen [::]:{{ nginx_listen_ipv4 }};{% endif %}
-        return 308 https://$host$request_uri;
         server_name {{ nginx_server_name }};
         root {{ nginx_root }};
 
@@ -39,14 +38,14 @@ http {
         # <ver> examples: 4.10.4, 9.2.0, 4.0.0-BETA
         location ~ ^/mirror/solr/dist/lucene/solr/(?<ver>[0-9]+\.[0-9]+(?:\.[0-9]+)?(?:-[A-Za-z0-9.-]+)?)/(?<file>.+)$ {
             # Prefer the "current" tree if the file exists there
-            if (-f $document_root/mirror/apache/solr/$ver/$file) {
-                return 302 /mirror/apache/solr/$ver/$file;
+            if (-f $document_root/mirror/archive/solr/$ver/$file) {
+                return 302 /mirror/archive/solr/$ver/$file;
             }
             # Otherwise route by version family
             if ($ver ~ '^9\.') {
-                return 302 /mirror/apache/solr/archive/9x/$ver/$file;
+                return 302 /mirror/archive/solr/9x/$ver/$file;
             }
-            return 302 /mirror/apache/solr/archive/legacy/$ver/$file;  # 1.x–8.x
+            return 302 /mirror/archive/solr/legacy/$ver/$file;  # 1.x–8.x
         }
 
         location = /50x.html { root {{ nginx_root }}; }
@@ -74,13 +73,13 @@ http {
 
         # Legacy Solr paths → archive or current (HTTPS too)
         location ~ ^/mirror/solr/dist/lucene/solr/(?<ver>[0-9]+\.[0-9]+(?:\.[0-9]+)?(?:-[A-Za-z0-9.-]+)?)/(?<file>.+)$ {
-            if (-f $document_root/mirror/apache/solr/$ver/$file) {
-                return 302 /mirror/apache/solr/$ver/$file;
+            if (-f $document_root/mirror/archive/solr/$ver/$file) {
+                return 302 /mirror/archive/solr/$ver/$file;
             }
             if ($ver ~ '^9\.') {
-                return 302 /mirror/apache/solr/archive/9x/$ver/$file;
+                return 302 /mirror/archive/solr/9x/$ver/$file;
             }
-            return 302 /mirror/apache/solr/archive/legacy/$ver/$file;
+            return 302 /mirror/archive/solr/legacy/$ver/$file;
         }
 
         location = /50x.html { root {{ nginx_root }}; }
