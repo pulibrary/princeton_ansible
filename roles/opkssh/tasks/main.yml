@@ -6,33 +6,6 @@
     msg: "This role must be run as root"
   when: ansible_user_id != "root"
 
-- name: Opkssh - Determine OS family
-  ansible.builtin.set_fact:
-    opkssh_os_type: >-
-      {%- if ansible_os_family == "RedHat" -%}
-        redhat
-      {%- elif ansible_os_family == "Debian" -%}
-        debian
-      {%- else -%}
-        unsupported
-      {%- endif -%}
-  changed_when: false
-
-- name: Opkssh - fail if OS is not supported
-  ansible.builtin.fail:
-    msg: "Unsupported OS family: {{ ansible_os_family }}"
-  when: opkssh_os_type == "unsupported"
-
-- name: Opkssh - set architecture
-  ansible.builtin.set_fact:
-    opkssh_cpu_arch: "{{ opkssh_arch_mapping[ansible_architecture] | default('unsupported') }}"
-  changed_when: false
-
-- name: Opkssh - fail if architecture is not supported
-  ansible.builtin.fail:
-    msg: "Unsupported architecture: {{ ansible_architecture }}"
-  when: opkssh_cpu_arch == "unsupported"
-
 - name: Opkssh - include prerequisite tasks
   ansible.builtin.include_tasks: prerequisites.yml
 
