@@ -41,6 +41,7 @@ job "circleci-runner" {
         CIRCLECI_RUNNER_API_AUTH_TOKEN = {{.CIRCLECI_API_TOKEN}}
         CIRCLECI_RUNNER_NAME = "circleci-deployer-{{ env "NOMAD_ALLOC_INDEX" }}"
         CIRCLECI_RUNNER_CLEANUP_WORK_DIR = true
+        CIRCLECI_RUNNER_MODE = "single-task"
         {{- end -}}
         EOF
       }
