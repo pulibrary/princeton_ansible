@@ -2,7 +2,18 @@
 solr_cloud_download_version: "{{ solr_version | default('9.2.0') }}"
 solr_cloud_build_name: "solr-{{ solr_cloud_download_version }}"
 solr_cloud_package: "{{ solr_cloud_build_name }}.tgz"
-solr_cloud_url: "https://pulmirror.princeton.edu/mirror/solr/dist/lucene/solr/{{ solr_cloud_download_version }}/{{ solr_cloud_package }}"
+
+# Choose canonical base (no redirects). Use regex_search FILTER, not "is match".
+solr_cloud_base: >-
+  {%- if solr_cloud_download_version | regex_search('^[0-8]\\.') -%}
+    https://pulmirror.princeton.edu/mirror/apache/solr/archive/legacy
+  {%- elif (solr_cloud_download_version | regex_search('^9\\.')) and (solr_cloud_download_version != solr_current_version) -%}
+    https://pulmirror.princeton.edu/mirror/apache/solr/archive/9x
+  {%- else -%}
+    https://pulmirror.princeton.edu/mirror/apache/solr
+  {%- endif -%}
+
+solr_cloud_url: "{{ solr_cloud_base }}/{{ solr_cloud_download_version }}/{{ solr_cloud_package }}"
 
 ## Service options
 # Owner

@@ -97,6 +97,35 @@
   register: solr_install_check
   tags: [download, install]
 
+- name: Solrcloud - Build candidate URLs for this version
+  ansible.builtin.set_fact:
+    solr_candidate_urls:
+      - "https://pulmirror.princeton.edu/mirror/apache/solr/{{ solr_cloud_download_version }}/{{ solr_cloud_package }}"
+      - "https://pulmirror.princeton.edu/mirror/apache/solr/archive/9x/{{ solr_cloud_download_version }}/{{ solr_cloud_package }}"
+      - "https://pulmirror.princeton.edu/mirror/apache/solr/archive/legacy/{{ solr_cloud_download_version }}/{{ solr_cloud_package }}"
+
+- name: Solrcloud - Probe candidates (HEAD)
+  ansible.builtin.uri:
+    url: "{{ item }}"
+    method: HEAD
+    return_content: no
+    status_code: 200
+    validate_certs: true
+  loop: "{{ solr_candidate_urls }}"
+  register: solr_head
+  failed_when: false
+  changed_when: false
+
+- name: Solrcloud - Pick the first working URL
+  ansible.builtin.set_fact:
+    solr_cloud_url: "{{ (solr_head.results | selectattr('status','defined') | selectattr('status','equalto',200) | map(attribute='item') | list).0 }}"
+  when: (solr_head.results | selectattr('status','defined') | selectattr('status','equalto',200) | list) | length > 0
+
+- name: Solrcloud - Fail if no URL works
+  ansible.builtin.fail:
+    msg: "Could not locate Solr {{ solr_cloud_download_version }} at any mirror path."
+  when: solr_cloud_url is not defined
+
 # Download SolrCloud package
 - name: Solrcloud | Download SolrCloud archive
   ansible.builtin.get_url:
@@ -104,6 +133,7 @@
     dest: "/tmp/{{ solr_cloud_package }}"
     timeout: 300
     mode: "0644"
+    validate_certs: true
   register: solr_downloaded
   retries: 3
   delay: 10
