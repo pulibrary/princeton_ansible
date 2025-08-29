@@ -1,94 +1,15 @@
 ---
-# Installation tasks
-# Always start "do nothing" and opt-in to install only when we know we must.
-- name: Opkssh - default need_install to false
-  ansible.builtin.set_fact:
-    opkssh_need_install: false
-
-- name: Opkssh - set download URL for specific version
-  ansible.builtin.set_fact:
-    opkssh_binary_url: "https://github.com/{{ opkssh_github_repo }}/releases/download/{{ opkssh_install_version }}/opkssh-linux-{{ opkssh_cpu_arch }}"
-
-# Current state
-- name: Opkssh - check if binary exists
-  ansible.builtin.stat:
-    path: "{{ opkssh_install_dir }}/{{ opkssh_binary_name }}"
-  register: opkssh_bin_stat
-
-- name: Opkssh - get installed version (if present)
-  ansible.builtin.command: "{{ opkssh_install_dir }}/{{ opkssh_binary_name }} --version"
-  register: opkssh_version
-  changed_when: false
-  failed_when: false
-  when: opkssh_bin_stat.stat.exists
-
-# pinned + checksum -> compare checksums
-- name: Opkssh - compute local checksum (when pinned checksum provided)
-  ansible.builtin.stat:
-    path: "{{ opkssh_install_dir }}/{{ opkssh_binary_name }}"
-    checksum_algorithm: sha256
-  register: opkssh_local_stat
-  when:
-    - opkssh_bin_stat.stat.exists
-    - (opkssh_binary_checksum is defined) and (opkssh_binary_checksum | length > 0)
-
-- name: Opkssh - compute need_install (pinned + checksum)
-  ansible.builtin.set_fact:
-    opkssh_need_install: >-
-      {{ (not opkssh_bin_stat.stat.exists) or
-         ((opkssh_binary_checksum | regex_replace('^sha256:', '')) != (opkssh_local_stat.stat.checksum | default(''))) }}
-  when:
-    - (opkssh_binary_checksum is defined) and (opkssh_binary_checksum | length > 0)
-
-    # pinned without checksum -> try version compare
-- name: Opkssh - extract installed version (safe)
-  ansible.builtin.set_fact:
-    opkssh_installed_version: >-
-      {{ ((opkssh_version.stdout | default('')) | regex_findall('v?\\d+\\.\\d+\\.\\d+')
-          | first | default('')) | regex_replace('^v','') }}
-  when:
-    - (opkssh_binary_checksum is not defined) or (opkssh_binary_checksum | length == 0)
-    - opkssh_bin_stat.stat.exists
-
-- name: Opkssh - normalize target version
-  ansible.builtin.set_fact:
-    opkssh_target_version: "{{ opkssh_install_version | regex_replace('^v','') }}"
-  when:
-    - (opkssh_binary_checksum is not defined) or (opkssh_binary_checksum | length == 0)
-
-- name: Opkssh - compute need_install (pinned, no checksum, parsed OK)
-  ansible.builtin.set_fact:
-    opkssh_need_install: true
-  when:
-    - (opkssh_binary_checksum is not defined) or (opkssh_binary_checksum | length == 0)
-    - (not opkssh_bin_stat.stat.exists) or
-      (
-        (opkssh_installed_version | default('')) != '' and
-        (opkssh_installed_version | default('')) != (opkssh_target_version | default(''))
-      )
-
-# If we couldn't parse a version and no checksum is provided, avoid loops (don’t reinstall).
-- name: Opkssh - warn when version parsing failed and no checksum provided
-  ansible.builtin.debug:
-    msg: >-
-      opkssh: unable to parse installed version from '{{ opkssh_version.stdout | default('') }}'.
-      Skipping reinstall to preserve idempotence. Provide `opkssh_binary_checksum` to enforce upgrades.
-  when:
-    - (opkssh_binary_checksum is not defined) or (opkssh_binary_checksum | length == 0)
-    - opkssh_bin_stat.stat.exists
-    - (opkssh_installed_version | default('')) == ''
-
 # Download / Install
 - name: Opkssh - download binary from GitHub (temp)
   ansible.builtin.get_url:
-    url: "{{ opkssh_binary_url }}"
-    dest: "/tmp/opkssh-linux-{{ opkssh_cpu_arch }}"
+    url: "https://github.com/{{ opkssh_github_repo }}/releases/download/{{ opkssh_install_version }}/opkssh-linux-{{ ansible_architecture }}"
+    dest: "/tmp/opkssh-linux-{{ ansible_architecture }}"
+    # "ansible_architecture": "x86_64",
     mode: "0755"
     owner: root
     group: "{{ opkssh_auth_cmd_group }}"
     force: false
-    checksum: "{{ opkssh_binary_checksum | default(omit) }}"
-  when: opkssh_need_install
+    checksum: "{{ opkssh_binary_checksum }}"
 
 - name: Opkssh - install binary
   ansible.builtin.copy:
@@ -99,15 +20,13 @@
     mode: "0755"
     remote_src: true
     backup: false
-  when: opkssh_need_install
   register: opkssh_copy_result
   notify: restart ssh
 
 - name: Opkssh - remove temp binary
   ansible.builtin.file:
-    path: "/tmp/opkssh-linux-{{ opkssh_cpu_arch }}"
+    path: "/tmp/opkssh-linux-{{ ansible_architecture }}"
     state: absent
-  when: opkssh_need_install
 
 # Refresh version fact post-install (or initial install)
 - name: Opkssh - get installed version (final)
