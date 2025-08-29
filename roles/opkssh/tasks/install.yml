@@ -1,10 +1,16 @@
 ---
 # Download / Install
+- name: Opkssh - map ansible architecture names
+  ansible.builtin.set_fact:
+    # ansible_architecture returns "x86_64"
+    # URLs use "AMD64"
+    opkssh_cpu_arch: "{{ opkssh_arch_mapping[ansible_architecture] }}"
+  changed_when: false
+
 - name: Opkssh - download binary from GitHub (temp)
   ansible.builtin.get_url:
-    url: "https://github.com/{{ opkssh_github_repo }}/releases/download/{{ opkssh_install_version }}/opkssh-linux-{{ ansible_architecture }}"
-    dest: "/tmp/opkssh-linux-{{ ansible_architecture }}"
-    # "ansible_architecture": "x86_64",
+    url: "https://github.com/{{ opkssh_github_repo }}/releases/download/{{ opkssh_install_version }}/opkssh-linux-{{ opkssh_cpu_arch }}"
+    dest: "/tmp/opkssh-linux-{{ opkssh_cpu_arch }}"
     mode: "0755"
     owner: root
     group: "{{ opkssh_auth_cmd_group }}"
@@ -25,7 +31,7 @@
 
 - name: Opkssh - remove temp binary
   ansible.builtin.file:
-    path: "/tmp/opkssh-linux-{{ ansible_architecture }}"
+    path: "/tmp/opkssh-linux-{{ opkssh_cpu_arch }}"
     state: absent
 
 # Refresh version fact post-install (or initial install)
