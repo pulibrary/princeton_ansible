@@ -26,12 +26,12 @@ Installs and configures **OpenPubKey SSH (opkssh)** on Linux in an idempotent, v
 
 ---
 
-## Defaults (key variables)
+## Key variables
 
 ```yaml
 # Auth command user/group
-opkssh_auth_cmd_user: opksshuser
-opkssh_auth_cmd_group: opksshuser
+# opkssh_auth_cmd_user: the only user that can run whatever command 
+# opkssh_auth_cmd_group: the group for the opkssh_auth_cmd_user
 
 # Arch mapping (ansible_architecture -> release suffix)
 opkssh_arch_mapping:
