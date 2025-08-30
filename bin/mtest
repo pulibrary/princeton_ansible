@@ -1,0 +1,29 @@
+#!/usr/bin/env sh
+# Run Molecule conveniently from repo root or a role dir, without vault env.
+# Usage:
+#   bin/mtest                      # run `molecule test` in current dir
+#   bin/mtest roles/approvals      # cd then run test
+#   bin/mtest roles/approvals converge  # cd then run `molecule converge`
+
+set -e
+
+TARGET_DIR="."
+if [ -n "$1" ] && [ -d "$1" ]; then
+  TARGET_DIR="$1"
+  shift
+fi
+
+cd "$TARGET_DIR"
+
+if [ ! -f "molecule/default/molecule.yml" ]; then
+  echo "ERROR: No molecule/default/molecule.yml in $(pwd)"
+  exit 1
+fi
+
+SUBCMD="${1:-test}"
+if [ -n "$1" ]; then
+  shift
+fi
+
+# Ensure vault is not injected during Molecule runs
+env -u ANSIBLE_VAULT_PASSWORD_FILE molecule "$SUBCMD" "$@"
