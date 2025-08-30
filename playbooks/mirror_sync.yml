@@ -1,0 +1,13 @@
+---
+- name: manage our mirror
+  hosts: pulmirror.princeton.edu
+  remote_user: pulsys
+  become: true
+  roles:
+    - role: roles/mirror_sync
+  post_tasks:
+    - name: tell everyone on slack you ran an ansible playbook
+      community.general.slack:
+        token: "{{ vault_pul_slack_token }}"
+        msg: "Ansible ran `{{ ansible_play_name }}` on {{ inventory_hostname }}"
+        channel: "{{ slack_alerts_channel }}"
