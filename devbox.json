@@ -16,13 +16,25 @@
     "NODE_VERSION": "20",
     "LPASS_AGENT_TIMEOUT": "32400",
     "PATH": "$DEVBOX_PROJECT_ROOT/.venv/bin:$PATH",
-    "VIRTUAL_ENV": "$DEVBOX_PROJECT_ROOT/.venv"
+    "VIRTUAL_ENV": "$DEVBOX_PROJECT_ROOT/.venv",
+    "ANSIBLE_VAULT_PASSWORD_FILE": "$DEVBOX_PROJECT_ROOT/bin/lastpass-ansible",
+    "ANSIBLE_VAULT_IDENTITY_LIST": "pul@$DEVBOX_PROJECT_ROOT/bin/lastpass-ansible,princeton@$DEVBOX_PROJECT_ROOT/bin/lastpass-ansible,ansible@$DEVBOX_PROJECT_ROOT/bin/lastpass-ansible,default@$DEVBOX_PROJECT_ROOT/bin/lastpass-ansible"
   },
   "shell": {
     "init_hook": [
-      "./bin/devbox-init"
+      "echo 'Welcome to the Devbox shell!'",
+      "echo 'Run \"devbox run init\" to set up the Python environment'"
     ],
     "scripts": {
+      "init": [
+        "test -d .venv || python -m venv .venv",
+        "test -d .venv && echo 'Virtual environment ready' || echo 'Failed to create virtual environment'",
+        "./.venv/bin/python -m pip install --upgrade pip",
+        "./.venv/bin/python -m pip install -r requirements.txt",
+        "touch .venv/.requirements_installed",
+        "command -v lastpass-ansible || gem install --no-document lastpass-ansible",
+        "echo 'Setup complete!'"
+      ],
       "setup": [
         "git config core.hooksPath .githooks",
         "echo 'Git hooks configured: .githooks'"
@@ -42,16 +54,18 @@
         "molecule --version"
       ],
       "env-info": [
-        "echo 'ANSIBLE_VAULT_PASSWORD_FILE: '\"${ANSIBLE_VAULT_PASSWORD_FILE:-<unset>}\"",
-        "echo 'LPASS_AGENT_TIMEOUT: '\"$LPASS_AGENT_TIMEOUT\"' (9 hours)'",
-        "echo 'LastPass CLI: '$(lpass --version)",
-        "echo 'lastpass-ansible: '$(command -v lastpass-ansible || echo 'not found')"
+        "echo \"ANSIBLE_VAULT_IDENTITY_LIST: ${ANSIBLE_VAULT_IDENTITY_LIST:-<unset>}\"",
+        "echo \"ANSIBLE_VAULT_PASSWORD_FILE: ${ANSIBLE_VAULT_PASSWORD_FILE:-<unset>}\"",
+        "echo \"LPASS_AGENT_TIMEOUT: ${LPASS_AGENT_TIMEOUT} (9 hours)\"",
+        "command -v lpass && lpass --version || echo 'LastPass CLI: not installed'",
+        "command -v lastpass-ansible && echo \"lastpass-ansible: $(command -v lastpass-ansible)\" || echo 'lastpass-ansible: not found'",
+        "command -v ansible && ansible --version | head -n1 || echo 'Ansible: not installed'"
       ],
       "mtest": [
-        "./bin/mtest"
+        "env -u ANSIBLE_VAULT_IDENTITY_LIST -u ANSIBLE_VAULT_PASSWORD_FILE molecule test"
       ],
       "mconverge": [
-        "./bin/mtest converge"
+        "env -u ANSIBLE_VAULT_IDENTITY_LIST -u ANSIBLE_VAULT_PASSWORD_FILE molecule converge"
       ]
     }
   }
