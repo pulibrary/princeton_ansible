@@ -38,18 +38,18 @@ Run these commands every time you use this repo:
 # Enter the Devbox development environment
 devbox shell
 
-# Login to LastPass (the environment is already configured)
+# Initialize the Python environment (first time in new shell)
+devbox run init
+
+# Login to LastPass
 lpass login <your-netid@princeton.edu>
+```
 
-The Devbox shell automatically:
-
-Creates/uses a Python virtual environment with all Ansible tools
-
-Sets up ANSIBLE_VAULT_PASSWORD_FILE to use lastpass-ansible
-
-Configures git hooks to prevent committing unencrypted vault files
-
-Sets LPASS_AGENT_TIMEOUT to 9 hours
+The Devbox environment provides:
+- Python virtual environment with all Ansible tools
+- ANSIBLE_VAULT_PASSWORD_FILE configured to use lastpass-ansible
+- Git hooks to prevent committing unencrypted vault files
+- LPASS_AGENT_TIMEOUT set to 9 hours
 
 Now you can run tests (See "Running molecule tests") or playbooks (See "Usage")
 
@@ -62,30 +62,53 @@ Make sure Docker is running, then from inside the Devbox shell:
 ansible --version
 molecule --version
 
+# Check environment configuration
+devbox run env-info
+
 # Run a test
 cd roles/common
-molecule test
+env -u ANSIBLE_VAULT_IDENTITY_LIST -u ANSIBLE_VAULT_PASSWORD_FILE molecule test
 ```
 
-
 ## Troubleshooting Setup
+
 ### Ansible Command Not Found / Reinstall deps
 
 If `ansible` or other Python tools aren't found in your Devbox shell (e.g. a fresh clone):
 
 ```bash
-rm -f .venv/.requirements_installed
+# Exit and re-enter devbox shell
 exit
-devbox shell  # This will reinstall everything
+devbox shell
+devbox run init
 ```
+
+### LastPass Authentication Issues
+
+If you get vault password errors when running playbooks:
+
+1. Ensure you're logged into LastPass:
+   ```bash
+   lpass status
+   ```
+   
+2. If not logged in:
+   ```bash
+   lpass login <your-netid@princeton.edu>
+   ```
+
+3. Verify the vault configuration is set:
+   ```bash
+   devbox run env-info
+   ```
 
 ## Available Helper Scripts
 
 Inside the Devbox shell, you can run:
 
-
 | Command | Description |
 |---------|-------------|
+| `devbox run init` | Initialize Python environment and dependencies |
 | `devbox run update-deps` | Update Python dependencies from requirements.txt |
 | `devbox run clean` | Remove virtual environment and Devbox cache |
 | `devbox run test` | Verify Ansible tools installation |
@@ -132,7 +155,7 @@ In all the steps below substitute your role name for `your_new_role`
 
    ```
    cd roles/$your_new_role
-   molecule test
+   env -u ANSIBLE_VAULT_IDENTITY_LIST -u ANSIBLE_VAULT_PASSWORD_FILE molecule test
    ```
 
 1. Push your branch and verify that CI runs and passes on GitHub Actions.
@@ -144,28 +167,33 @@ In all the steps below substitute your role name for `your_new_role`
 
 ## Running Molecule tests
 
-You can run `molecule test` from either the root directory or the role directory (for example roles/example)
-If you are writing tests we have found it is easier to test just your examples by running from the role directory.
-
-We also recommend instead of running just `molecule test` which takes a very long time your run `molecule converge` to build a docker container with your ansible playbook loaded.  You can run converge and/or verify as many times as needed to get your playbook working.
+Molecule tests should be run without vault configuration to avoid requiring production passwords for testing. Always unset the vault environment variables when running molecule:
 
 ```bash
-molecule lint
-molecule converge
-molecule verify
+cd roles/example
+env -u ANSIBLE_VAULT_IDENTITY_LIST -u ANSIBLE_VAULT_PASSWORD_FILE molecule test
 ```
 
-If you are having issues with your tests passing and have run `molecule converge` you can connect to the running container by running
+You can run individual molecule commands for faster development:
+
+```bash
+# Run these with vault variables unset
+env -u ANSIBLE_VAULT_IDENTITY_LIST -u ANSIBLE_VAULT_PASSWORD_FILE molecule lint
+env -u ANSIBLE_VAULT_IDENTITY_LIST -u ANSIBLE_VAULT_PASSWORD_FILE molecule converge
+env -u ANSIBLE_VAULT_IDENTITY_LIST -u ANSIBLE_VAULT_PASSWORD_FILE molecule verify
+```
+
+If you are having issues with your tests passing and have run `molecule converge` you can connect to the running container by running:
 
 ```
-molecule login
+env -u ANSIBLE_VAULT_IDENTITY_LIST -u ANSIBLE_VAULT_PASSWORD_FILE molecule login
 ```
 
 ## Troubleshooting a container step
 
-If you have a specific task that is not behaving, utilize the tests to run just that step.  This is especially useful for long running `molecule converge`
+If you have a specific task that is not behaving, utilize the tests to run just that step. This is especially useful for long running `molecule converge`
 
-You basically copy the failing task into the molecule/verify.yml and run verify over and over instead of needing to run the entire converge over and over.  This makes debugging much faster and joyful!
+You basically copy the failing task into the molecule/verify.yml and run verify over and over instead of needing to run the entire converge over and over. This makes debugging much faster and joyful!
 
 ## Troubleshooting a test run
 
@@ -175,25 +203,25 @@ volumes, and images:
 
 ```
 cd to the role in question
-% molecule destroy
+% env -u ANSIBLE_VAULT_IDENTITY_LIST -u ANSIBLE_VAULT_PASSWORD_FILE molecule destroy
 % docker ps -qaf ancestor=quay.io/pulibrary/jammy-ansible:latest | xargs docker stop
 % docker ps -qaf ancestor=quay.io/pulibrary/jammy-ansible:latest | xargs docker rm
 % docker volume ls -qf dangling=true | xargs docker volume rm
 % docker rmi quay.io/pulibrary/jammy-ansible
-% molecule converge
+% env -u ANSIBLE_VAULT_IDENTITY_LIST -u ANSIBLE_VAULT_PASSWORD_FILE molecule converge
 ```
 
 # Usage
 
 ## Running a playbook
 
-Run a playbook
+Run a playbook (requires LastPass login for vault access):
 
 ```bash
 ansible-playbook playbooks/example.yml
 ```
 
-Run a playbook from an error or a specific task
+Run a playbook from an error or a specific task:
 
 ```bash
 ansible-playbook playbooks/example.yml --start-at-task="Task Name"
@@ -261,15 +289,16 @@ rm -rf ~/.vault_pass.txt
 rm -rf ~/.ansible-vaults
 ```
 
-- If you get the message `ERROR! Decryption failed (no vault secrets were found that could decrypt)`, you may still need to source the environment for your shell. In Devbox, this should be automatic, but you can verify:
+- If you get the message `ERROR! Decryption failed (no vault secrets were found that could decrypt)`, verify that you're logged into LastPass and the environment is configured:
 
 ```bash
-echo $ANSIBLE_VAULT_PASSWORD_FILE  # Should show path to lastpass-ansible
+lpass status  # Should show logged in
+devbox run env-info  # Should show ANSIBLE_VAULT_PASSWORD_FILE set
 ```
 
 ### Rekeying the vault
 
-1. Open the `old_vault_password` server in lastpass.  Replace the old vault password with the current ansible vault password.  Add a note to include today's date.
+1. Open the `old_vault_password` server in lastpass. Replace the old vault password with the current ansible vault password. Add a note to include today's date.
 1. Run `pwgen -s 48` to create a new password.
 1. Run `ansible-vault rekey --ask-vault-password $(grep -Frl "\$ANSIBLE_VAULT;")`
 1. Enter the old vault password
@@ -279,7 +308,6 @@ echo $ANSIBLE_VAULT_PASSWORD_FILE  # Should show path to lastpass-ansible
 8. Log into [Ansible Tower](https://ansible-tower.princeton.edu/#/credentials/10/details). To replace it click `Edit` then click on the circular arrow to the left of the Vault Password, paste in the new value, and save. The value is automatically encrypted.
 
 ## Upgrading Ansible version
-
 
 1. Edit `requirements.txt` to update the ansible version
 2. In Devbox shell, update the dependencies:
@@ -301,15 +329,14 @@ This project has been migrated from Pipenv to Devbox for better reproducibility 
 |---------|-------------------|--------------|
 | **Config File** | `Pipfile`, `.tool-versions` | `devbox.json` |
 | **Python Deps** | `Pipfile.lock` | `requirements.txt` + venv |
-| **Environment Setup** | `pipenv shell` + source script | `devbox shell` (automatic) |
+| **Environment Setup** | `pipenv shell` + source script | `devbox shell` + `devbox run init` |
 | **Version Management** | ASDF plugins | Nix packages |
 | **LastPass CLI** | Homebrew (macOS only) | Nix package (cross-platform) |
 
 ### Files Changed
-- **Added**: `devbox.json`, `devbox.lock`, `bin/devbox-init`
+- **Added**: `devbox.json`, `devbox.lock`, `bin/lastpass-ansible`
 - **Removed**: `Pipfile`, `Pipfile.lock`, `.mise.local.toml`
 - **Updated**: `bin/first-time-setup.sh`, this README
-
 
 ### For CI/CD
 The `requirements.txt` file is maintained for CI/CD compatibility and contains all Python dependencies.
