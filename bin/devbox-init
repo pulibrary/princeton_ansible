@@ -27,8 +27,17 @@ fi
 # Ensure lastpass-ansible is available in the Ruby virtenv
 if ! command -v lastpass-ansible >/dev/null 2>&1; then
   echo "Installing lastpass-ansible gem..."
-  # --no-document keeps output quiet; installation goes to Devbox Ruby virtenv
   gem install --no-document lastpass-ansible || true
+fi
+
+# Export vault password file ONLY when logged into LastPass
+if command -v lpass >/dev/null 2>&1 && lpass status --quiet 2>/dev/null; then
+  if command -v lastpass-ansible >/dev/null 2>&1; then
+    export ANSIBLE_VAULT_PASSWORD_FILE="$(command -v lastpass-ansible)"
+  fi
+else
+  echo "Note: Not logged into LastPass; skipping ANSIBLE_VAULT_PASSWORD_FILE export."
+  echo "      Run: lpass login <your-netid@princeton.edu>"
 fi
 
 # Configure git hooks (idempotent)
@@ -45,6 +54,6 @@ fi
 
 echo ""
 echo "Environment hints:"
-echo "  ANSIBLE_VAULT_PASSWORD_FILE: ${ANSIBLE_VAULT_PASSWORD_FILE:-(set via devbox.json)}"
+echo "  ANSIBLE_VAULT_PASSWORD_FILE: ${ANSIBLE_VAULT_PASSWORD_FILE:-<unset>}"
 echo "  LPASS_AGENT_TIMEOUT: ${LPASS_AGENT_TIMEOUT:-(set via devbox.json)}"
 echo ""
