@@ -40,13 +40,16 @@ devbox shell
 
 # Login to LastPass (the environment is already configured)
 lpass login <your-netid@princeton.edu>
-```
 
 The Devbox shell automatically:
-- Activates the Python virtual environment with all Ansible tools
-- Sets up `ANSIBLE_VAULT_PASSWORD_FILE` to use lastpass-ansible
-- Configures git hooks to prevent committing unencrypted vault files
-- Sets `LPASS_AGENT_TIMEOUT` to 9 hours
+
+Creates/uses a Python virtual environment with all Ansible tools
+
+Sets up ANSIBLE_VAULT_PASSWORD_FILE to use lastpass-ansible
+
+Configures git hooks to prevent committing unencrypted vault files
+
+Sets LPASS_AGENT_TIMEOUT to 9 hours
 
 Now you can run tests (See "Running molecule tests") or playbooks (See "Usage")
 
@@ -64,39 +67,22 @@ cd roles/common
 molecule test
 ```
 
+
 ## Troubleshooting Setup
+### Ansible Command Not Found / Reinstall deps
 
-### Ansible Command Not Found
-If `ansible` or other Python tools aren't found in your Devbox shell:
+If `ansible` or other Python tools aren't found in your Devbox shell (e.g. a fresh clone):
 
-**For Fish shell users:**
-```fish
-# Add venv to PATH
-set -gx PATH .venv/bin $PATH
-```
-
-**For Bash/Zsh users:**
-```bash
-# Should be automatic, but you can manually activate:
-source .venv/bin/activate
-```
-
-**Force reinstall Python packages:**
 ```bash
 rm -f .venv/.requirements_installed
 exit
 devbox shell  # This will reinstall everything
 ```
 
-### Nix Build Users Error (macOS)
-If you see an error about `_nixbld1` user not existing:
-```bash
-./fix-nix-build-users.sh
-```
-
 ## Available Helper Scripts
 
 Inside the Devbox shell, you can run:
+
 
 | Command | Description |
 |---------|-------------|
@@ -294,6 +280,7 @@ echo $ANSIBLE_VAULT_PASSWORD_FILE  # Should show path to lastpass-ansible
 
 ## Upgrading Ansible version
 
+
 1. Edit `requirements.txt` to update the ansible version
 2. In Devbox shell, update the dependencies:
    ```bash
@@ -319,9 +306,10 @@ This project has been migrated from Pipenv to Devbox for better reproducibility 
 | **LastPass CLI** | Homebrew (macOS only) | Nix package (cross-platform) |
 
 ### Files Changed
-- **Added**: `devbox.json`, `devbox.lock`, `.devbox_init.sh`
+- **Added**: `devbox.json`, `devbox.lock`, `bin/devbox-init`
 - **Removed**: `Pipfile`, `Pipfile.lock`, `.mise.local.toml`
 - **Updated**: `bin/first-time-setup.sh`, this README
+
 
 ### For CI/CD
 The `requirements.txt` file is maintained for CI/CD compatibility and contains all Python dependencies.
