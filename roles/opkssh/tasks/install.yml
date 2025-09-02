@@ -16,6 +16,7 @@
     group: "{{ opkssh_auth_cmd_group }}"
     force: false
     checksum: "{{ opkssh_binary_checksum }}"
+  when: running_on_server
 
 - name: Opkssh - install binary
   ansible.builtin.copy:
@@ -27,16 +28,19 @@
     remote_src: true
     backup: false
   register: opkssh_copy_result
+  when: running_on_server
   notify: restart ssh
 
 - name: Opkssh - remove temp binary
   ansible.builtin.file:
     path: "/tmp/opkssh-linux-{{ opkssh_cpu_arch }}"
     state: absent
+  when: running_on_server
 
 # Refresh version fact post-install (or initial install)
 - name: Opkssh - get installed version (final)
   ansible.builtin.command: "{{ opkssh_install_dir }}/{{ opkssh_binary_name }} --version"
   register: opkssh_version
+  when: running_on_server
   changed_when: false
   failed_when: false
