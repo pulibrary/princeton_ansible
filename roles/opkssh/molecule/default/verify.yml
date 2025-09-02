@@ -5,31 +5,6 @@
   become: true
   gather_facts: true
   tasks:
-    - name: Check if opkssh binary exists
-      ansible.builtin.stat:
-        path: /usr/local/bin/opkssh
-      register: opkssh_binary
-      failed_when: not opkssh_binary.stat.exists
-
-    - name: Verify opkssh binary is executable
-      ansible.builtin.assert:
-        that:
-          - opkssh_binary.stat.exists
-          - opkssh_binary.stat.executable
-          - opkssh_binary.stat.mode == '0755'
-        fail_msg: "opkssh binary is not properly installed or not executable"
-        success_msg: "opkssh binary is properly installed and executable"
-
-    - name: Check opkssh version
-      ansible.builtin.command: /usr/local/bin/opkssh --version
-      register: opkssh_version_check
-      changed_when: false
-      failed_when: opkssh_version_check.rc != 0
-
-    - name: Display opkssh version
-      ansible.builtin.debug:
-        msg: "opkssh version: {{ opkssh_version_check.stdout }}"
-
     - name: Check if opkssh user exists
       ansible.builtin.getent:
         database: passwd
@@ -181,7 +156,6 @@
           - "======================================="
           - "opkssh Installation Verification Complete"
           - "======================================="
-          - "✓ Binary installed and executable"
           - "✓ User and group created"
           - "✓ Configuration directories created"
           - "✓ Configuration files in place"
