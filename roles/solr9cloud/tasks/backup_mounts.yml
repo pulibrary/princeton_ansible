@@ -62,18 +62,18 @@
     - fix_backups
 
 # Bind mount from CIFS share into Solr data home
-- name: Solrcloud | Bind mount backup directory into Solr data home
-  ansible.posix.mount:
-    path: "/solr/data/backup"
-    src: "/mnt/solr_backup"
-    fstype: none
-    opts: "bind"
-    state: mounted
-    dump: 0
-    passno: 0
-  when: running_on_server
-  tags:
-    - fix_backups
+# - name: Solrcloud | Bind mount backup directory into Solr data home
+#   ansible.posix.mount:
+#     path: "/solr/data/backup"
+#     src: "/mnt/solr_backup"
+#     fstype: none
+#     opts: "bind"
+#     state: mounted
+#     dump: 0
+#     passno: 0
+#   when: running_on_server
+#   tags:
+#     - fix_backups
 
 # Ensure fstab entries for both mounts
 - name: Solrcloud | Ensure fstab entry for CIFS share
@@ -89,15 +89,11 @@
   tags:
     - fix_backups
 
-- name: Solrcloud | Ensure fstab entry for bind mount
-  ansible.builtin.mount:
-    path: "/solr/data/backup"
-    src: "/mnt/solr_backup"
-    fstype: none
-    opts: "bind"
-    state: present
-    dump: 0
-    passno: 0
-  when: running_on_server
-  tags:
-    - fix_backups
+- name: Configure security to allow Solr 9 to write to backup dir
+  ansible.builtin.blockinfile:
+    path: "{{ solr_install_dir }}/{{ solr_cloud_build_name }}/server/etc/security.policy"
+    backup: yes
+    block: | 
+      permission java.io.FilePermission "${solr.allowPaths}", "read,write,delete,readlink";
+      permission java.io.FilePermission "${solr.allowPaths}${/}-", "read,write,delete,readlink";
+
