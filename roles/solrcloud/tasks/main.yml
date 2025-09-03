@@ -27,7 +27,7 @@
   loop:
     - solr.smb.credentials
 
-- name: solrcloud | Create mount to diglibdata shares
+- name: Solrcloud | Create mount to diglibdata shares
   ansible.posix.mount:
     path: "/mnt/{{ item.path }}"
     src: "//diglibdata1.princeton.edu/{{ item.src }}"
@@ -74,7 +74,7 @@
   tags:
     - google_cloud
 
-- name: solrcloud | update host file
+- name: Solrcloud | update host file
   ansible.builtin.lineinfile:
     dest: /etc/hosts
     regexp: "{{ item.address }}.*{{ item.hostname }}$"
@@ -83,32 +83,32 @@
   become: true
   loop:
     - {
-        hostname: "{{ lib_zk1_host_name }}.princeton.edu",
-        address: "{{ lib_zk1_host }}",
-      }
+      hostname: "{{ lib_zk1_host_name }}.princeton.edu",
+      address: "{{ lib_zk1_host }}",
+    }
     - {
-        hostname: "{{ lib_zk2_host_name }}.princeton.edu",
-        address: "{{ lib_zk2_host }}",
-      }
+      hostname: "{{ lib_zk2_host_name }}.princeton.edu",
+      address: "{{ lib_zk2_host }}",
+    }
     - {
-        hostname: "{{ lib_zk3_host_name }}.princeton.edu",
-        address: "{{ lib_zk3_host }}",
-      }
+      hostname: "{{ lib_zk3_host_name }}.princeton.edu",
+      address: "{{ lib_zk3_host }}",
+    }
   tags:
     - hosts
   when: lib_zk1_host_name != "localhost" and lib_zk2_host_name != "localhost" and lib_zk3_host_name != "localhost"
 
-- name: solrcloud | solr cloud install node
+- name: Solrcloud | solr cloud install node
   ansible.builtin.include_tasks: install.yml
   tags:
     - install
 
-- name: solrcloud | configure solr cloud
+- name: Solrcloud | configure solr cloud
   ansible.builtin.include_tasks: config.yml
   tags:
     - configure
 
-- name: solrcloud | run solr service
+- name: Solrcloud | run solr service
   ansible.builtin.include_tasks: service.yml
   tags:
     - service
