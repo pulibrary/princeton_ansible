@@ -6,19 +6,18 @@
       - gnupg
       - lsb-release
       - curl
+      - acl
     state: present
     update_cache: true
   when: running_on_server
-  tags:
-    - google_cloud
+  tags: [google_cloud]
 
 - name: Solrcloud | Add gcsfuse apt key
   ansible.builtin.apt_key:
     url: https://packages.cloud.google.com/apt/doc/apt-key.gpg
     state: present
   when: running_on_server
-  tags:
-    - google_cloud
+  tags: [google_cloud]
 
 - name: Solrcloud | Add gcsfuse apt repository
   ansible.builtin.apt_repository:
@@ -26,8 +25,7 @@
     state: present
     filename: gcsfuse
   when: running_on_server
-  tags:
-    - google_cloud
+  tags: [google_cloud]
 
 - name: Solrcloud | Install gcsfuse
   ansible.builtin.apt:
@@ -35,8 +33,7 @@
     state: present
     update_cache: true
   when: running_on_server
-  tags:
-    - google_cloud
+  tags: [google_cloud]
 
 # Copy GCS service account key
 - name: Solrcloud | Copy GCS service account key
@@ -47,8 +44,41 @@
     owner: root
     group: root
   when: running_on_server
-  tags:
-    - google_cloud
+  tags: [google_cloud]
+
+# Allow deploy to read the key without changing ownership/mode
+- name: Solrcloud | Grant deploy read access to SA key
+  ansible.posix.acl:
+    path: /etc/solr-backup-account-key.json
+    entity: "{{ solr_user | default('deploy') }}"
+    etype: user
+    permissions: r
+    state: present
+  when: running_on_server
+  tags: [google_cloud]
+
+# Ensure FUSE allows -o allow_other
+- name: Solrcloud | Ensure fuse allows allow_other
+  ansible.builtin.lineinfile:
+    path: /etc/fuse.conf
+    regexp: '^\s*#?\s*user_allow_other\s*$'
+    line: 'user_allow_other'
+    state: present
+    create: true
+    mode: '0644'
+  when: running_on_server
+  notify: reload systemd
+  tags: [google_cloud]
+
+- name: Solrcloud | Ensure gcsfuse log dir exists
+  ansible.builtin.file:
+    path: "{{ gcsfuse_directory | default('/var/log/gcsfuse') }}"
+    state: directory
+    owner: "{{ solr_user | default('deploy') }}"
+    group: "{{ solr_group | default('deploy') }}"
+    mode: "0755"
+  when: running_on_server
+  tags: [google_cloud]
 
 # Create systemd service for gcsfuse mount
 - name: Solrcloud | Create gcsfuse systemd service
@@ -61,12 +91,11 @@
 
       [Service]
       Type=simple
-      User=deploy
-      Group=deploy
+      User={{ solr_user | default('deploy') }}
+      Group={{ solr_group | default('deploy') }}
       Environment="GOOGLE_APPLICATION_CREDENTIALS=/etc/solr-backup-account-key.json"
-      # Ensure mountpoint exists & ownership is correct
       ExecStartPre=/usr/bin/mkdir -p /solr/data/cloud_backup
-      ExecStartPre=/bin/chown deploy:deploy /solr/data/cloud_backup
+      ExecStartPre=/bin/chown {{ solr_user | default('deploy') }}:{{ solr_group | default('deploy') }} /solr/data/cloud_backup
       ExecStart=/usr/bin/gcsfuse \
         --foreground \
         --uid=1001 \
@@ -74,10 +103,10 @@
         --file-mode=0644 \
         --dir-mode=0755 \
         --implicit-dirs \
-        --log-file={{ gcsfuse_directory }}/gcsfuse.log \
+        --metadata-cache-ttl-secs=60 \
         --max-retry-sleep=30s \
-        --stat-cache-ttl=60s \
-        --type-cache-ttl=60s \
+        --log-file={{ gcsfuse_directory | default('/var/log/gcsfuse') }}/gcsfuse.log \
+        --log-severity=info \
         --key-file=/etc/solr-backup-account-key.json \
         -o allow_other \
         {{ gcs_bucket_name | default('solr-backups') }} \
@@ -94,21 +123,7 @@
     group: root
   when: running_on_server
   notify: reload systemd
-  tags:
-    - google_cloud
-
-- name: Solrcloud | Ensure fuse allows allow_other
-  ansible.builtin.lineinfile:
-    path: /etc/fuse.conf
-    regexp: '^\s*#?\s*user_allow_other\s*$'
-    line: 'user_allow_other'
-    state: present
-    create: yes
-    mode: '0644'
-  when: running_on_server
-  notify: reload systemd
-  tags:
-    - google_cloud
+  tags: [google_cloud]
 
 - name: Solrcloud | Enable and start gcsfuse service
   ansible.builtin.systemd:
@@ -117,9 +132,7 @@
     state: started
     daemon_reload: yes
   when: running_on_server
-  tags:
-    - google_cloud
-    - fix_backups
+  tags: [google_cloud, fix_backups]
 
 # Verify mount is working
 - name: Solrcloud | Wait for GCS mount to be available
@@ -128,9 +141,7 @@
     state: present
     timeout: 30
   when: running_on_server
-  tags:
-    - google_cloud
-    - fix_backups
+  tags: [google_cloud, fix_backups]
 
 - name: Solrcloud | Verify GCS mount is active
   ansible.builtin.command: mountpoint -q /solr/data/cloud_backup
@@ -138,31 +149,25 @@
   changed_when: false
   failed_when: false
   when: running_on_server
-  tags:
-    - google_cloud
-    - fix_backups
+  tags: [google_cloud, fix_backups]
 
 - name: Solrcloud | Display mount status
   ansible.builtin.debug:
     msg: "GCS mount is {{ 'active' if mount_check.rc == 0 else 'not active' }}"
   when: running_on_server
-  tags:
-    - google_cloud
-    - fix_backups
+  tags: [google_cloud, fix_backups]
 
 # Set up log rotation for gcsfuse logs
 - name: Solrcloud | Configure gcsfuse log rotation
   ansible.builtin.template:
     src: '../../common/templates/logrotate_rules.j2'
-    dest: "/etc/logrotate.d/{{ item.name }}"
+    dest: "/etc/logrotate.d/{{ item.name | basename }}"
     mode: "0644"
     owner: root
     group: root
   loop: "{{ solr9_gcsfuse_logrotate_rules }}"
-  when: 
+  when:
     - running_on_server
     - solr9_gcsfuse_logrotate_rules is defined
     - solr9_gcsfuse_logrotate_rules | length > 0
-  tags:
-    - google_cloud
-    - fix_backups
+  tags: [google_cloud, fix_backups]
