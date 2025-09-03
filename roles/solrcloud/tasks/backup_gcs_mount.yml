@@ -50,20 +50,24 @@
       Wants=network-online.target
 
       [Service]
-      Type=forking
+      Type=simple
       User=deploy
       Group=deploy
       Environment="GOOGLE_APPLICATION_CREDENTIALS=/etc/solr-backup-account-key.json"
+      # Ensure mountpoint exists & ownership is correct
+      ExecStartPre=/usr/bin/mkdir -p /solr/data/cloud_backup
+      ExecStartPre=/bin/chown deploy:deploy /solr/data/cloud_backup
       ExecStart=/usr/bin/gcsfuse \
+        --foreground \
         --uid=1001 \
         --gid=1001 \
         --file-mode=0644 \
         --dir-mode=0755 \
         --implicit-dirs \
-        --max-retry-sleep=30 \
+        --max-retry-sleep=30s \
         --stat-cache-ttl=60s \
         --type-cache-ttl=60s \
-      --key-file=/etc/solr-backup-account-key.json \
+        --key-file=/etc/solr-backup-account-key.json \
         -o allow_other \
         {{ gcs_bucket_name | default('solr-backups') }} \
         /solr/data/cloud_backup
@@ -77,6 +81,17 @@
     mode: '0644'
     owner: root
     group: root
+  when: running_on_server
+  notify: reload systemd
+
+- name: Solrcloud | Ensure fuse allows allow_other
+  ansible.builtin.lineinfile:
+    path: /etc/fuse.conf
+    regexp: '^\s*#?\s*user_allow_other\s*$'
+    line: 'user_allow_other'
+    state: present
+    create: yes
+    mode: '0644'
   when: running_on_server
   notify: reload systemd
 
