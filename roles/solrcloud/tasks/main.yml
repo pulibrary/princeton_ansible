@@ -6,13 +6,16 @@
 
 - name: solrcloud | create directories for mounts
   ansible.builtin.file:
-    path: "/solr/data/backup"
+    path: "/mnt/{{ item }}"
     state: "directory"
     mode: 0755
     group: deploy
     owner: deploy
+  loop:
+    - solr_backup
+    - "/solr/data/cloud_backup" # google cloud
   tags:
-    - fix_backups
+    - google_cloud
 
 - name: solrcloud | Copy smb credentials
   ansible.builtin.copy:
@@ -23,20 +26,53 @@
     - running_on_server
   loop:
     - solr.smb.credentials
-  tags:
-    - fix_backups
 
 - name: solrcloud | Create mount to diglibdata shares
   ansible.posix.mount:
-    path: "/solr/data/backup"
-    src: "//diglibdata1.princeton.edu/solrbackup"
+    path: "/mnt/{{ item.path }}"
+    src: "//diglibdata1.princeton.edu/{{ item.src }}"
     fstype: cifs
-    opts: "credentials=/etc/solr.smb.credentials,uid=1001,gid=1001"
+    opts: "credentials=/etc/{{ item.opts }}.smb.credentials,uid=1001,gid=1001"
     state: mounted
   when:
     - running_on_server
+  loop:
+    - { path: "solr_backup", src: "solrbackup", opts: "solr" }
   tags:
     - fix_backups
+
+- name: Solrcloud | Ensure the bind mount is active
+  ansible.posix.mount:
+    src: /mnt/solr_backup
+    path: "{{ solr_data_dir }}/backup"
+    state: mounted
+    opts: bind
+    fstype: none
+
+- name: Solrcloud | Create Solr bind mount directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+    owner: "{{ solr_user }}"
+    group: "{{ solr_group }}"
+  loop:
+    - "{{ solr_data_dir }}/backup" # /solr/data
+
+- name: Solrcloud | Ensure the bind mount is configured in /etc/fstab
+  ansible.posix.mount:
+    src: /mnt/solr_backup
+    path: "{{ solr_data_dir }}/backup"
+    state: present
+    fstype: none
+    opts: bind
+    dump: "0"
+    passno: "0"
+
+- name: Solrcloud | Configure cloud backup mounts
+  ansible.builtin.include_tasks: backup_gcs_mount.yml
+  tags:
+    - google_cloud
 
 - name: solrcloud | update host file
   ansible.builtin.lineinfile:
