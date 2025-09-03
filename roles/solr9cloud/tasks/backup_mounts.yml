@@ -31,15 +31,6 @@
 # Ensure mount points exist
 - name: Solrcloud | Ensure CIFS mount point exists
   ansible.builtin.file:
-    path: "/mnt/solr_backup"
-    state: directory
-    owner: deploy
-    group: deploy
-    mode: '0755'
-  when: running_on_server
-
-- name: Solrcloud | Ensure bind mount point exists under Solr data
-  ansible.builtin.file:
     path: "/solr/data/backup"
     state: directory
     owner: deploy
@@ -47,10 +38,10 @@
     mode: '0755'
   when: running_on_server
 
-# Mount the CIFS share at /mnt/solr_backup
+# Mount the CIFS share at /solr/data/backup
 - name: Solrcloud | Mount CIFS share for backups
   ansible.posix.mount:
-    path: "/mnt/solr_backup"
+    path: "/solr/data/backup"
     src: "//diglibdata1.princeton.edu/solrbackup"
     fstype: cifs
     opts: "credentials=/etc/solr.smb.credentials,uid=1001,gid=1001,file_mode=0644,dir_mode=0755,vers=3.0,_netdev,nofail,x-systemd.automount"
@@ -61,24 +52,9 @@
   tags:
     - fix_backups
 
-# Bind mount from CIFS share into Solr data home
-# - name: Solrcloud | Bind mount backup directory into Solr data home
-#   ansible.posix.mount:
-#     path: "/solr/data/backup"
-#     src: "/mnt/solr_backup"
-#     fstype: none
-#     opts: "bind"
-#     state: mounted
-#     dump: 0
-#     passno: 0
-#   when: running_on_server
-#   tags:
-#     - fix_backups
-
-# Ensure fstab entries for both mounts
 - name: Solrcloud | Ensure fstab entry for CIFS share
   ansible.builtin.mount:
-    path: "/mnt/solr_backup"
+    path: "/solr/data/backup"
     src: "//diglibdata1.princeton.edu/solrbackup"
     fstype: cifs
     opts: "credentials=/etc/solr.smb.credentials,uid=1001,gid=1001,file_mode=0644,dir_mode=0755,vers=3.0,_netdev,nofail,x-systemd.automount"
@@ -88,12 +64,3 @@
   when: running_on_server
   tags:
     - fix_backups
-
-- name: Configure security to allow Solr 9 to write to backup dir
-  ansible.builtin.blockinfile:
-    path: "{{ solr_install_dir }}/{{ solr_cloud_build_name }}/server/etc/security.policy"
-    backup: yes
-    block: | 
-      permission java.io.FilePermission "${solr.allowPaths}", "read,write,delete,readlink";
-      permission java.io.FilePermission "${solr.allowPaths}${/}-", "read,write,delete,readlink";
-

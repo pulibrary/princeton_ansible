@@ -8,7 +8,7 @@
 # Add Solr allowPaths option for backups in Solr 9
 - name: Solrcloud | Ensure backup directory has correct permissions for Solr 9
   ansible.builtin.file:
-    path: "/mnt/solr_backup"
+    path: "/solr/data/backup"
     state: directory
     owner: "{{ solr_user }}"
     group: "{{ solr_group }}"
@@ -25,3 +25,13 @@
   when: solr_use_security | default(false)
   ignore_errors: true
 
+- name: Configure security to allow Solr 9 to write to backup dir
+  ansible.builtin.blockinfile:
+    path: "{{ solr_install_dir }}/{{ solr_cloud_build_name }}/server/etc/security.policy"
+    backup: yes
+    insertbefore: "permission java.io.FilePermission"
+    block: |
+      permission java.io.FilePermission "${solr.allowPaths}", "read,write,delete,readlink";
+      permission java.io.FilePermission "${solr.allowPaths}${/}-", "read,write,delete,readlink";
+  tags:
+    - security_config
