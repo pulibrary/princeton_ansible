@@ -1,91 +1,72 @@
 ---
 # Configure SolrCloud
+# Current not used - we are using the solr8_config and solr9_config files instead
 
-- name: Solrcloud | Debug Solr variables
-  ansible.builtin.debug:
-    msg:
-      - "solr_installation: {{ solr_installation }}"
-      - "solr_bin: {{ solr_bin }}"
-      - "solr_cloud_download_version: {{ solr_cloud_download_version }}"
-      - "solr_znode: {{ solr_znode | default('undefined') }}"
+# - name: Solrcloud | Debug Solr variables
+#   ansible.builtin.debug:
+#     msg:
+#       - "solr_installation: {{ solr_installation }}"
+#       - "solr_bin: {{ solr_bin }}"
+#       - "solr_cloud_download_version: {{ solr_cloud_download_version }}"
+#       - "solr_znode: {{ solr_znode | default('undefined') }}"
 
-- name: Solrcloud | Set zookeeper connection string
-  ansible.builtin.set_fact:
-    solr_zookeeper_hosts_string: "{{ solr_zookeeper_hosts | join(',') }}"
-  when: solr_zookeeper_hosts_string is not defined
+# - name: Solrcloud | Set zookeeper connection string
+#   ansible.builtin.set_fact:
+#     solr_zookeeper_hosts_string: "{{ solr_zookeeper_hosts | join(',') }}"
+#   when: solr_zookeeper_hosts_string is not defined
 
-- name: Solrcloud | Set default solr_znode value based on Solr version
-  ansible.builtin.set_fact:
-    solr_znode: "{% if solr_cloud_download_version is version('9.0.0', '>=') %}solr9{% else %}solr8{% endif %}"
-  when: solr_znode is not defined or solr_znode == ''
+# - name: Solrcloud | Set default solr_znode value based on Solr version
+#   ansible.builtin.set_fact:
+#     solr_znode: "{% if solr_cloud_download_version is version('9.0.0', '>=') %}solr9{% else %}solr8{% endif %}"
+#   when: solr_znode is not defined or solr_znode == ''
 
-# do we have solr already installed?
-- name: Solrcloud | Check for solr executable
-  ansible.builtin.stat:
-    path: "{{ solr_bin }}"
-  register: solr_binary
+# # do we have solr already installed?
+# - name: Solrcloud | Check for solr executable
+#   ansible.builtin.stat:
+#     path: "{{ solr_bin }}"
+#   register: solr_binary
 
-- name: Solrcloud | Display solr binary status
-  ansible.builtin.debug:
-    var: solr_binary
-  when: not solr_binary.stat.exists
+# - name: Solrcloud | Display solr binary status
+#   ansible.builtin.debug:
+#     var: solr_binary
+#   when: not solr_binary.stat.exists
 
-# Different ZK handling for Solr 8 vs Solr 9 which will have no znode
-- name: Solrcloud | Check ZooKeeper setup for Solr 9
-  block:
-    - name: Solrcloud | Check for solr znode
-      ansible.builtin.command: >
-        {{ solr_bin }} zk ls {{ solr_znode if (solr_znode.startswith('/')) else ('/' + solr_znode) }}
-        -z {{ solr_zookeeper_hosts_string }}
-      register: znode_exists_check
-      changed_when: false
-      ignore_errors: true
-      when: solr_binary.stat.exists
+# # Different ZK handling for Solr 8 vs Solr 9 which will have no znode
+# - name: Solrcloud | Check ZooKeeper setup for Solr 9
+#   block:
+#     - name: Solrcloud | Check for solr znode
+#       ansible.builtin.command: >
+#         {{ solr_bin }} zk ls {{ solr_znode if (solr_znode.startswith('/')) else ('/' + solr_znode) }}
+#         -z {{ solr_zookeeper_hosts_string }}
+#       register: znode_exists_check
+#       changed_when: false
+#       ignore_errors: true
+#       when: solr_binary.stat.exists
 
-    - name: Solrcloud | Check for solr znode (root level)
-      ansible.builtin.command: >
-        {{ solr_bin }} zk ls /
-        -z {{ solr_zookeeper_hosts_string }}
-      register: znode_check
-      ignore_errors: true
-      changed_when: false
-      when:
-        - solr_binary.stat.exists
-        - znode_exists_check is failed
+#     - name: Solrcloud | Check for solr znode (root level)
+#       ansible.builtin.command: >
+#         {{ solr_bin }} zk ls /
+#         -z {{ solr_zookeeper_hosts_string }}
+#       register: znode_check
+#       ignore_errors: true
+#       changed_when: false
+#       when:
+#         - solr_binary.stat.exists
+#         - znode_exists_check is failed
 
-    - name: Solrcloud | Create zk chroot / solr znode
-      ansible.builtin.command: >
-        {{ solr_bin }} zk mkroot {{ solr_znode if (solr_znode.startswith('/')) else ('/' + solr_znode) }}
-        -z {{ solr_zookeeper_hosts_string }}
-      register: create_znode_result
-      changed_when: create_znode_result.rc == 0
-      failed_when: create_znode_result.rc != 0 and "NodeExistsException" not in create_znode_result.stderr
-      when:
-        - solr_binary.stat.exists
-        - znode_check is defined
-        - znode_check is succeeded
-        - znode_check.stdout is defined
-        - solr_znode | replace('/', '') not in znode_check.stdout_lines
-        - solr_znode | length > 0
-        - znode_exists_check is failed
-  when: solr_cloud_download_version is version('9.0.0', '>=')
-
-- name: Solrcloud | Configure SolrCloud properties
-  ansible.builtin.template:
-    src: 'solr.xml.j2'
-    dest: '{{ solr_data_dir }}/solr.xml'
-    owner: '{{ solr_user }}'
-    group: '{{ solr_group }}'
-    mode: "0644"
-  notify: Restart solr
-
-# Solr 9 specific configuration
-- name: Solrcloud | Configure Solr 9.x specific settings
-  ansible.builtin.include_tasks: solr9_config.yml
-  when: solr_cloud_download_version is version('9.0.0', '>=')
-
-# Solr 8 specific configuration
-- name: Solrcloud | Configure Solr 8.x specific settings
-  ansible.builtin.include_tasks: solr8_config.yml
-  when: solr_cloud_download_version is version('9.0.0', '<')
-
+#     - name: Solrcloud | Create zk chroot / solr znode
+#       ansible.builtin.command: >
+#         {{ solr_bin }} zk mkroot {{ solr_znode if (solr_znode.startswith('/')) else ('/' + solr_znode) }}
+#         -z {{ solr_zookeeper_hosts_string }}
+#       register: create_znode_result
+#       changed_when: create_znode_result.rc == 0
+#       failed_when: create_znode_result.rc != 0 and "NodeExistsException" not in create_znode_result.stderr
+#       when:
+#         - solr_binary.stat.exists
+#         - znode_check is defined
+#         - znode_check is succeeded
+#         - znode_check.stdout is defined
+#         - solr_znode | replace('/', '') not in znode_check.stdout_lines
+#         - solr_znode | length > 0
+#         - znode_exists_check is failed
+#   when: solr_cloud_download_version is version('9.0.0', '>=')
