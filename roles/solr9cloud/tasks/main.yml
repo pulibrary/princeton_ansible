@@ -71,10 +71,14 @@
   loop:
     - "/solr"
     - "/solr/data"
+    - "/solr/data/cloud_backup"      # google cloud
+    - "/var/log/gcsfuse"      # gcsfuse
     - "/solr/logs"
     - "/run/solr"
     - "/mnt/solr_backup"             # For CIFS mounted backups
-  tags: [directories]
+  tags:
+    - google_cloud
+    - [directories]
 
 - name: Solrcloud | Create Solr directories solr9
   ansible.builtin.file:
@@ -90,6 +94,11 @@
 
 - name: Solrcloud | Configure backup mounts
   ansible.builtin.include_tasks: backup_mounts.yml
+
+- name: Solrcloud | Configure cloud backup mounts
+  ansible.builtin.include_tasks: backup_gcs_mount.yml
+  tags:
+    - google_cloud
 
 - name: Solrcloud | Check if Solr is already installed
   ansible.builtin.stat:
