@@ -25,12 +25,13 @@
   when: solr_use_security | default(false)
   ignore_errors: true
 
-- name: Configure security to allow Solr 9 to write to backup dir
+- name: Configure security to allow Solr 9.2 to write to backup dir
+  # we can remove this when we upgrade to Solr >=9.4
   ansible.builtin.blockinfile:
     path: "{{ solr_install_dir }}/{{ solr_cloud_build_name }}/server/etc/security.policy"
     backup: yes
-    insertbefore: "permission java.io.FilePermission"
-    marker: "// {mark} ANSIBLE MANAGED BLOCK"
+    insertafter: "// 3rd party jar resources (where symlinks are not supported), test-files/ resources"
+    marker: "// ANSIBLE MANAGED BLOCK"
     block: |
-      permission java.io.FilePermission "${solr.allowPaths}", "read,write,delete,readlink";
-      permission java.io.FilePermission "${solr.allowPaths}${/}-", "read,write,delete,readlink";
+        permission java.io.FilePermission "${solr.allowPaths}", "read,write,delete,readlink";
+        permission java.io.FilePermission "${solr.allowPaths}${/}-", "read,write,delete,readlink";
