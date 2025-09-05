@@ -26,6 +26,10 @@
         vm_name: "{{ replacement_vm }}"
       register: old_vm_info
 
+    - name: Debug vm_var
+      ansible.builtin.debug:
+        var: old_vm_info
+
     - name: Gather network info on VM to replace
       community.vmware.vmware_guest_network:
         hostname: "{{ vcenter_hostname }}"
@@ -48,151 +52,150 @@
     - name: Debug Disk_var
       ansible.builtin.debug:
         var: old_vm_disk_info
-
-    - name: Print out warning
-      ansible.builtin.debug:
-        msg:
-          - Ansible will now move and power off the current {{ old_vm_info.virtual_machines[0].guest_name }} VM.
-          - Then create a replacement in the {{ old_vm_net_info.network_info[0].network_name }} network.
-
-    - name: Move old VM to a different folder (ToBeDeleted, Forensics)
-      community.vmware.vmware_guest_move:
-        hostname: "{{ vcenter_hostname }}"
-        username: "{{ vcenter_username }}"
-        password: "{{ vcenter_password }}"
-        validate_certs: false
-        datacenter: "{{ vcenter_datacenter }}"
-        dest_folder: "{{ vm_dest_folder }}"
-        uuid: "{{ old_vm_info.virtual_machines[0].uuid }}"
-
-    - name: Power off old VM using UUID
-      community.vmware.vmware_guest_powerstate:
-        hostname: "{{ vcenter_hostname }}"
-        username: "{{ vcenter_username }}"
-        password: "{{ vcenter_password }}"
-        validate_certs: false
-        datacenter: "{{ vcenter_datacenter }}"
-        uuid: "{{ old_vm_info.virtual_machines[0].uuid }}"
-        state: powered-off
-
-    - name: Rename old VM using moid
-      community.vmware.vmware_object_rename:
-        hostname: "{{ vcenter_hostname }}"
-        username: "{{ vcenter_username }}"
-        password: "{{ vcenter_password }}"
-        validate_certs: false
-        new_name: "{{ old_vm_info.virtual_machines[0].guest_name }}-{{ ansible_date_time.iso8601_basic_short }}"
-        object_moid: "{{ old_vm_info.virtual_machines[0].moid }}"
-        object_type: VirtualMachine
-
-    - name: Create a new virtual machine from a template
-      community.vmware.vmware_guest:
-        hostname: "{{ vcenter_hostname }}"
-        username: "{{ vcenter_username }}"
-        password: "{{ vcenter_password }}"
-        validate_certs: false
-        datacenter: "{{ vcenter_datacenter }}"
-        cluster: "{{ vcenter_cluster }}"
-        folder: "{{ old_vm_info.virtual_machines[0].folder }}"
-        name: "{{ replacement_vm }}"
-        state: powered-off
-        template: "{{ vm_template | default('template_jammy_spring_2024')}}"
-        disk:
-          - size: "{{ (old_vm_info.virtual_machines[0].allocated.storage / 1024) | int }}kb"
-            # we are not able to use 'type: thin' with our fall 2024 templates
-            # type: thin
-            datastore: "{{ old_vm_info.virtual_machines[0].datastore_url }}"
-        # TODO: Add another disk from an existing VMDK
-        hardware:
-          memory_mb: "{{ old_vm_info.virtual_machines[0].allocated.memory | int | default('16384') }}"
-          num_cpus: "{{ old_vm_info.virtual_machines[0].allocated.cpu | int | default('2') }}"
-          num_cpu_cores_per_socket: "{{ vm_cpu_cores | default('1') }}"
-          scsi: paravirtual
-          version: latest # Hardware version of virtual machine
-          boot_firmware: "efi"
-        cdrom:
-          - controller_number: 0
-            unit_number: 0
-            state: present
-        networks:
-          - connected: true
-            name: "{{ old_vm_net_info.network_info[0].network_name }}"
-            mac: "{{ old_vm_net_info.network_info[0].mac_address }}"
-        wait_for_ip_address: true
-        wait_for_ip_address_timeout: 120
-
-    - name: Print out relevant details of old VM
-      vars:
-        msg: |
-          The VM you replaced had
-          an UUID of {{ old_vm_info.virtual_machines[0].uuid }}
-          a mac address of {{ old_vm_info.virtual_machines[0].mac_address[0] }}
-          an IP address of {{ old_vm_info.virtual_machines[0].ip_address }}
-          in the {{ old_vm_net_info.network_info[0].network_name }} network
-          {{ old_vm_info.virtual_machines[0].allocated.cpu }} CPUs
-          {{ (old_vm_info.virtual_machines[0].allocated.memory | int / 1024) }} GB of memory
-          {{ old_vm_info.virtual_machines[0].allocated.storage | human_readable }} of disk allocated
-      ansible.builtin.debug:
-        msg: "{{ msg.split('\n') }}"
-
-    - name: Gather details on new VM
-      community.vmware.vmware_vm_info:
-        hostname: "{{ vcenter_hostname }}"
-        username: "{{ vcenter_username }}"
-        password: "{{ vcenter_password }}"
-        validate_certs: false
-        show_allocated: true
-        vm_name: "{{ replacement_vm }}"
-      register: new_vm_info
-
-    - name: Gather network info new VM
-      community.vmware.vmware_guest_network:
-        hostname: "{{ vcenter_hostname }}"
-        username: "{{ vcenter_username }}"
-        password: "{{ vcenter_password }}"
-        name: "{{ replacement_vm }}"
-        validate_certs: false
-        gather_network_info: true
-      register: new_vm_net_info
-
-    - name: Print out relevant details of new VM
-      vars:
-        msg: |
-          The VM you just created has
-          an UUID of {{ new_vm_info.virtual_machines[0].uuid }}
-          a mac address of {{ new_vm_info.virtual_machines[0].mac_address[0] }}
-          in the {{ new_vm_net_info.network_info[0].network_name }} network
-          an IP address of {{ new_vm_info.virtual_machines[0].ip_address }}
-          {{ new_vm_info.virtual_machines[0].allocated.cpu }} CPUs
-          {{ (new_vm_info.virtual_machines[0].allocated.memory | int / 1024) }} GB of memory
-          {{ new_vm_info.virtual_machines[0].allocated.storage | human_readable }} of disk allocated
-      ansible.builtin.debug:
-        msg: "{{ msg.split('\n') }}"
-
-    - name: Remove old VM using UUID
-      community.vmware.vmware_guest:
-        hostname: "{{ vcenter_hostname }}"
-        username: "{{ vcenter_username }}"
-        password: "{{ vcenter_password }}"
-        validate_certs: false
-        datacenter: "{{ vcenter_datacenter }}"
-        cluster: "{{ vcenter_cluster }}"
-        folder: "{{ vm_dest_folder }}"
-        uuid: "{{ old_vm_info.virtual_machines[0].uuid }}"
-        state: absent
-        force: true
-      when: vm_dest_folder is search("ToBeDeleted")
-
-    - name: Remove host from TowerDeploy1 known hosts
-      ansible.builtin.known_hosts:
-        path: /home/deploy/.ssh/known_hosts
-        name: "{{ replacement_vm }}.princeton.edu"
-        state: "absent"
-      delegate_to: towerdeploy1.princeton.edu
-      become: true
-      become_user: deploy
-
-  post_tasks:
-    - name: send information to slack
-      ansible.builtin.include_tasks:
-        file: slack_tasks_end_of_playbook.yml
+#    - name: Print out warning
+#      ansible.builtin.debug:
+#        msg:
+#          - Ansible will now move and power off the current {{ old_vm_info.virtual_machines[0].guest_name }} VM.
+#          - Then create a replacement in the {{ old_vm_net_info.network_info[0].network_name }} network.
+#
+#    - name: Move old VM to a different folder (ToBeDeleted, Forensics)
+#      community.vmware.vmware_guest_move:
+#        hostname: "{{ vcenter_hostname }}"
+#        username: "{{ vcenter_username }}"
+#        password: "{{ vcenter_password }}"
+#        validate_certs: false
+#        datacenter: "{{ vcenter_datacenter }}"
+#        dest_folder: "{{ vm_dest_folder }}"
+#        uuid: "{{ old_vm_info.virtual_machines[0].uuid }}"
+#
+#    - name: Power off old VM using UUID
+#      community.vmware.vmware_guest_powerstate:
+#        hostname: "{{ vcenter_hostname }}"
+#        username: "{{ vcenter_username }}"
+#        password: "{{ vcenter_password }}"
+#        validate_certs: false
+#        datacenter: "{{ vcenter_datacenter }}"
+#        uuid: "{{ old_vm_info.virtual_machines[0].uuid }}"
+#        state: powered-off
+#
+#    - name: Rename old VM using moid
+#      community.vmware.vmware_object_rename:
+#        hostname: "{{ vcenter_hostname }}"
+#        username: "{{ vcenter_username }}"
+#        password: "{{ vcenter_password }}"
+#        validate_certs: false
+#        new_name: "{{ old_vm_info.virtual_machines[0].guest_name }}-{{ ansible_date_time.iso8601_basic_short }}"
+#        object_moid: "{{ old_vm_info.virtual_machines[0].moid }}"
+#        object_type: VirtualMachine
+#
+#    - name: Create a new virtual machine from a template
+#      community.vmware.vmware_guest:
+#        hostname: "{{ vcenter_hostname }}"
+#        username: "{{ vcenter_username }}"
+#        password: "{{ vcenter_password }}"
+#        validate_certs: false
+#        datacenter: "{{ vcenter_datacenter }}"
+#        cluster: "{{ vcenter_cluster }}"
+#        folder: "{{ old_vm_info.virtual_machines[0].folder }}"
+#        name: "{{ replacement_vm }}"
+#        state: powered-off
+#        template: "{{ vm_template | default('template_jammy_spring_2024')}}"
+#        disk:
+#          - size: "{{ (old_vm_info.virtual_machines[0].allocated.storage / 1024) | int }}kb"
+#            # we are not able to use 'type: thin' with our fall 2024 templates
+#            # type: thin
+#            datastore: "{{ old_vm_info.virtual_machines[0].datastore_url }}"
+#        # TODO: Add another disk from an existing VMDK
+#        hardware:
+#          memory_mb: "{{ old_vm_info.virtual_machines[0].allocated.memory | int | default('16384') }}"
+#          num_cpus: "{{ old_vm_info.virtual_machines[0].allocated.cpu | int | default('2') }}"
+#          num_cpu_cores_per_socket: "{{ vm_cpu_cores | default('1') }}"
+#          scsi: paravirtual
+#          version: latest # Hardware version of virtual machine
+#          boot_firmware: "efi"
+#        cdrom:
+#          - controller_number: 0
+#            unit_number: 0
+#            state: present
+#        networks:
+#          - connected: true
+#            name: "{{ old_vm_net_info.network_info[0].network_name }}"
+#            mac: "{{ old_vm_net_info.network_info[0].mac_address }}"
+#        wait_for_ip_address: true
+#        wait_for_ip_address_timeout: 120
+#
+#    - name: Print out relevant details of old VM
+#      vars:
+#        msg: |
+#          The VM you replaced had
+#          an UUID of {{ old_vm_info.virtual_machines[0].uuid }}
+#          a mac address of {{ old_vm_info.virtual_machines[0].mac_address[0] }}
+#          an IP address of {{ old_vm_info.virtual_machines[0].ip_address }}
+#          in the {{ old_vm_net_info.network_info[0].network_name }} network
+#          {{ old_vm_info.virtual_machines[0].allocated.cpu }} CPUs
+#          {{ (old_vm_info.virtual_machines[0].allocated.memory | int / 1024) }} GB of memory
+#          {{ old_vm_info.virtual_machines[0].allocated.storage | human_readable }} of disk allocated
+#      ansible.builtin.debug:
+#        msg: "{{ msg.split('\n') }}"
+#
+#    - name: Gather details on new VM
+#      community.vmware.vmware_vm_info:
+#        hostname: "{{ vcenter_hostname }}"
+#        username: "{{ vcenter_username }}"
+#        password: "{{ vcenter_password }}"
+#        validate_certs: false
+#        show_allocated: true
+#        vm_name: "{{ replacement_vm }}"
+#      register: new_vm_info
+#
+#    - name: Gather network info new VM
+#      community.vmware.vmware_guest_network:
+#        hostname: "{{ vcenter_hostname }}"
+#        username: "{{ vcenter_username }}"
+#        password: "{{ vcenter_password }}"
+#        name: "{{ replacement_vm }}"
+#        validate_certs: false
+#        gather_network_info: true
+#      register: new_vm_net_info
+#
+#    - name: Print out relevant details of new VM
+#      vars:
+#        msg: |
+#          The VM you just created has
+#          an UUID of {{ new_vm_info.virtual_machines[0].uuid }}
+#          a mac address of {{ new_vm_info.virtual_machines[0].mac_address[0] }}
+#          in the {{ new_vm_net_info.network_info[0].network_name }} network
+#          an IP address of {{ new_vm_info.virtual_machines[0].ip_address }}
+#          {{ new_vm_info.virtual_machines[0].allocated.cpu }} CPUs
+#          {{ (new_vm_info.virtual_machines[0].allocated.memory | int / 1024) }} GB of memory
+#          {{ new_vm_info.virtual_machines[0].allocated.storage | human_readable }} of disk allocated
+#      ansible.builtin.debug:
+#        msg: "{{ msg.split('\n') }}"
+#
+#    - name: Remove old VM using UUID
+#      community.vmware.vmware_guest:
+#        hostname: "{{ vcenter_hostname }}"
+#        username: "{{ vcenter_username }}"
+#        password: "{{ vcenter_password }}"
+#        validate_certs: false
+#        datacenter: "{{ vcenter_datacenter }}"
+#        cluster: "{{ vcenter_cluster }}"
+#        folder: "{{ vm_dest_folder }}"
+#        uuid: "{{ old_vm_info.virtual_machines[0].uuid }}"
+#        state: absent
+#        force: true
+#      when: vm_dest_folder is search("ToBeDeleted")
+#
+#    - name: Remove host from TowerDeploy1 known hosts
+#      ansible.builtin.known_hosts:
+#        path: /home/deploy/.ssh/known_hosts
+#        name: "{{ replacement_vm }}.princeton.edu"
+#        state: "absent"
+#      delegate_to: towerdeploy1.princeton.edu
+#      become: true
+#      become_user: deploy
+#
+#  post_tasks:
+#    - name: send information to slack
+#      ansible.builtin.include_tasks:
+#        file: slack_tasks_end_of_playbook.yml
