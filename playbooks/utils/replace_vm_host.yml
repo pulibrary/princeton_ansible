@@ -36,7 +36,8 @@
         gather_network_info: true
       register: old_vm_net_info
 
-    - name: Gather disk info on VM to replace
+    # Kept for visibility only; not used for disk shape
+    - name: Gather disk info on VM to replace (optional)
       community.vmware.vmware_guest_disk:
         hostname: "{{ vcenter_hostname }}"
         username: "{{ vcenter_username }}"
@@ -47,31 +48,74 @@
       register: old_vm_disk_info
       ignore_errors: yes
 
-    - name: Debug disk info structure
+    - name: Debug disk info structure (optional)
       debug:
         var: old_vm_disk_info
       when: old_vm_disk_info is defined
 
-    - name: Build disk configuration dynamically
+    - name: Compute datastore name robustly
+      set_fact:
+        vm_datastore_name: >-
+          {%- set vm = old_vm_info.virtual_machines[0] -%}
+          {%- if vm.datastore is defined -%}
+            {%- if vm.datastore is string -%}
+              {{ vm.datastore }}
+            {%- elif vm.datastore is sequence -%}
+              {{ (vm.datastore | first) }}
+            {%- elif vm.datastore is mapping and 'name' in vm.datastore -%}
+              {{ vm.datastore.name }}
+            {%- else -%}
+              datastore1
+            {%- endif -%}
+          {%- elif vm.datastore_url is defined -%}
+            {%- set dsu = (vm.datastore_url | first) if (vm.datastore_url is sequence) else vm.datastore_url -%}
+            {%- if dsu is mapping and 'name' in dsu -%}
+              {{ dsu.name }}
+            {%- elif dsu is string -%}
+              {%- if ']' in dsu -%}{{ dsu.split('] ')[1] }}{%- else -%}{{ dsu }}{%- endif -%}
+            {%- else -%}
+              datastore1
+            {%- endif -%}
+          {%- else -%}
+            datastore1
+          {%- endif -%}
+
+    # ---------- build from hardware devices ----------
+    - name: Get VM guest info with hardware details
+      community.vmware.vmware_guest_info:
+        hostname: "{{ vcenter_hostname }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        validate_certs: false
+        datacenter: "{{ vcenter_datacenter }}"
+        name: "{{ replacement_vm }}"
+        schema: vsphere
+        properties:
+          - config.hardware.device
+          - config.hardware.numCPU
+          - config.hardware.memoryMB
+      register: vm_hardware_info
+
+    - name: Build disk config from hardware info
       set_fact:
         vm_disk_config: >-
           {%- set disks = [] -%}
-          {%- if old_vm_disk_info is defined and old_vm_disk_info.guest_disk_info is defined -%}
-            {%- set disk_keys = old_vm_disk_info.guest_disk_info.keys() | list | sort -%}
-            {%- for disk_key in disk_keys -%}
-              {%- set disk = old_vm_disk_info.guest_disk_info[disk_key] -%}
-              {%- set disk_size_gb = ((disk.capacity_in_kb | int) / 1024 / 1024) | round(0, 'ceil') | int -%}
-              {%- set unit_num = disk.unit_number | default(loop.index0) -%}
-              {%- set controller_type = 'nvme' if 'nvme' in (disk.controller_type | default('') | lower) else 'paravirtual' -%}
+          {%- set devices = vm_hardware_info.instance.config.hardware.device | default([]) -%}
+          {%- for device in devices -%}
+            {%- if device._vimtype == 'vim.vm.device.VirtualDisk' -%}
+              {%- set disk_size_gb = (device.capacityInKB / 1024 / 1024) | round(0, 'ceil') | int -%}
+              {%- set unit_num = device.unitNumber | default(loop.index0) -%}
+              {%- set controller_type = 'nvme' if 'nvme' in (device.backing._vimtype | default('') | lower) else 'paravirtual' -%}
               {%- set _ = disks.append({
                 'size_gb': disk_size_gb,
                 'controller_type': controller_type,
-                'controller_number': disk.controller_key | default(0) | int,
+                'controller_number': 0,
                 'unit_number': unit_num,
-                'datastore': old_vm_info.virtual_machines[0].datastore_url[0].split('] ')[1]
+                'datastore': vm_datastore_name
               }) -%}
-            {%- endfor -%}
-          {%- else -%}
+            {%- endif -%}
+          {%- endfor -%}
+          {%- if disks | length == 0 -%}
             {%- set total_storage_kb = (old_vm_info.virtual_machines[0].allocated.storage / 1024) | int -%}
             {%- set disk_size_gb = (total_storage_kb / 1024 / 1024) | round(0, 'ceil') | int -%}
             {%- set _ = disks.append({
@@ -79,69 +123,14 @@
               'controller_type': 'paravirtual',
               'controller_number': 0,
               'unit_number': 0,
-              'datastore': old_vm_info.virtual_machines[0].datastore_url[0].split('] ')[1]
+              'datastore': vm_datastore_name
             }) -%}
           {%- endif -%}
           {{ disks | sort(attribute='unit_number') }}
 
-    - name: Alternative disk config using VM hardware info
-      when: vm_disk_config | length == 0 or (old_vm_disk_info.failed | default(false))
-      block:
-        - name: Get VM guest info with hardware details
-          community.vmware.vmware_guest_info:
-            hostname: "{{ vcenter_hostname }}"
-            username: "{{ vcenter_username }}"
-            password: "{{ vcenter_password }}"
-            validate_certs: false
-            datacenter: "{{ vcenter_datacenter }}"
-            name: "{{ replacement_vm }}"
-            schema: vsphere
-            properties:
-              - config.hardware.device
-              - config.hardware.numCPU
-              - config.hardware.memoryMB
-          register: vm_hardware_info
-
-        - name: Build disk config from hardware info
-          set_fact:
-            vm_disk_config: >-
-              {%- set disks = [] -%}
-              {%- set devices = vm_hardware_info.instance.config.hardware.device | default([]) -%}
-              {%- if old_vm_info.virtual_machines[0].datastore is defined -%}
-                {%- set datastore_name = old_vm_info.virtual_machines[0].datastore[0] if old_vm_info.virtual_machines[0].datastore is sequence else old_vm_info.virtual_machines[0].datastore -%}
-              {%- else -%}
-                {%- set datastore_name = 'datastore1' -%}
-              {%- endif -%}
-              {%- for device in devices -%}
-                {%- if device._vimtype == 'vim.vm.device.VirtualDisk' -%}
-                  {%- set disk_size_gb = (device.capacityInKB / 1024 / 1024) | round(0, 'ceil') | int -%}
-                  {%- set unit_num = device.unitNumber | default(loop.index0) -%}
-                  {%- set controller_type = 'nvme' if 'nvme' in (device.backing._vimtype | default('') | lower) else 'paravirtual' -%}
-                  {%- set _ = disks.append({
-                    'size_gb': disk_size_gb,
-                    'controller_type': controller_type,
-                    'controller_number': 0,
-                    'unit_number': unit_num,
-                    'datastore': datastore_name
-                  }) -%}
-                {%- endif -%}
-              {%- endfor -%}
-              {%- if disks | length == 0 -%}
-                {%- set total_storage_kb = (old_vm_info.virtual_machines[0].allocated.storage / 1024) | int -%}
-                {%- set disk_size_gb = (total_storage_kb / 1024 / 1024) | round(0, 'ceil') | int -%}
-                {%- set _ = disks.append({
-                  'size_gb': disk_size_gb,
-                  'controller_type': 'paravirtual',
-                  'controller_number': 0,
-                  'unit_number': 0,
-                  'datastore': datastore_name
-                }) -%}
-              {%- endif -%}
-              {{ disks | sort(attribute='unit_number') }}
-
     - name: Print disk configuration to be created
       ansible.builtin.debug:
-        msg: 
+        msg:
           - "Number of disks to create: {{ vm_disk_config | length }}"
           - "Disk configuration:"
           - "{% for disk in vm_disk_config %}  Disk {{ loop.index }}: {{ disk.size_gb }}GB on unit {{ disk.unit_number }} ({{ disk.controller_type }}){% endfor %}"
@@ -197,9 +186,9 @@
         template: "{{ vm_template | default('template_jammy_spring_2024')}}"
         disk: "{{ vm_disk_config }}"
         hardware:
-          memory_mb: "{{ old_vm_info.virtual_machines[0].allocated.memory | int | default('16384') }}"
-          num_cpus: "{{ old_vm_info.virtual_machines[0].allocated.cpu | int | default('2') }}"
-          num_cpu_cores_per_socket: "{{ vm_cpu_cores | default('1') }}"
+          memory_mb: "{{ old_vm_info.virtual_machines[0].allocated.memory | int | default(16384) }}"
+          num_cpus: "{{ old_vm_info.virtual_machines[0].allocated.cpu | int | default(2) }}"
+          num_cpu_cores_per_socket: "{{ vm_cpu_cores | default(1) }}"
           scsi: paravirtual
           version: latest # Hardware version of virtual machine
           boot_firmware: "efi"
@@ -316,7 +305,7 @@
         lsblk -d -o NAME,SIZE,TYPE,MODEL 2>/dev/null || echo "lsblk not available"
         echo ""
         echo "=== Detailed Disk Information ==="
-        
+
         # Check for NVMe disks
         for disk in /dev/nvme[0-9]n[0-9]; do
           if [ -e "$disk" ]; then
@@ -325,7 +314,7 @@
             echo ""
           fi
         done
-        
+
         # Check for SCSI/SATA disks
         for disk in /dev/sd[a-z]; do
           if [ -e "$disk" ]; then
@@ -334,7 +323,7 @@
             echo ""
           fi
         done
-        
+
         echo "=== LVM Information ==="
         pvs 2>/dev/null || echo "No LVM physical volumes found"
         echo ""
@@ -354,7 +343,7 @@
       become: true
       shell: |
         disks_needing_init=""
-        
+
         # Check NVMe disks (skip the first one as it's usually the OS disk)
         nvme_count=0
         for disk in /dev/nvme[0-9]n[0-9]; do
@@ -368,7 +357,7 @@
             fi
           fi
         done
-        
+
         # Check SCSI/SATA disks (all of them if NVMe is present for OS, otherwise skip sda)
         for disk in /dev/sd[a-z]; do
           if [ -e "$disk" ]; then
@@ -382,17 +371,17 @@
             fi
           fi
         done
-        
+
         echo "$disks_needing_init"
       register: disks_to_initialize
       ignore_errors: yes
 
     - name: Report disks that may need initialization
       debug:
-        msg: 
+        msg:
           - "The following disks appear to be uninitialized and may need setup:"
           - "{{ disks_to_initialize.stdout }}"
-      when: 
+      when:
         - disks_to_initialize is defined
         - disks_to_initialize.stdout is defined
         - disks_to_initialize.stdout | length > 0
@@ -412,18 +401,18 @@
           #!/bin/bash
           # Script to initialize additional disks for LVM
           # This script is created but NOT automatically executed
-          
+
           echo "This script will initialize the following disks for LVM:"
           echo "{{ disks_to_initialize.stdout | default('') }}"
           echo ""
           echo "WARNING: This will destroy all data on these disks!"
           read -p "Are you sure you want to continue? (yes/no): " confirm
-          
+
           if [ "$confirm" != "yes" ]; then
               echo "Aborted."
               exit 1
           fi
-          
+
           # Detect OS and set appropriate VG name
           if [ -f /etc/os-release ]; then
               . /etc/os-release
@@ -435,33 +424,33 @@
           else
               VG_NAME="ubuntu-vg"
           fi
-          
+
           echo "Using volume group: $VG_NAME"
-          
+
           for disk in {{ disks_to_initialize.stdout | default('') }}; do
               echo "Initializing $disk..."
-              
+
               # Create partition table
               parted -s "$disk" mklabel msdos
               parted -s "$disk" mkpart primary 1MiB 100%
               parted -s "$disk" set 1 lvm on
-              
+
               # Determine partition name (different for NVMe vs SCSI)
               if [[ "$disk" == /dev/nvme* ]]; then
                   partition="${disk}p1"
               else
                   partition="${disk}1"
               fi
-              
+
               # Create PV
               pvcreate "$partition"
-              
+
               # Optional: Add to VG (uncomment if needed)
               # vgextend "$VG_NAME" "$partition"
-              
+
               echo "Disk $disk initialized with partition $partition"
           done
-          
+
           echo ""
           echo "Disk initialization complete. You may need to:"
           echo "1. Add the PVs to your volume group: vgextend $VG_NAME /dev/[disk]1"
@@ -469,7 +458,7 @@
           echo "3. Resize your filesystem:"
           echo "   - For ext4: resize2fs /dev/$VG_NAME/root"
           echo "   - For xfs: xfs_growfs /dev/$VG_NAME/root"
-      when: 
+      when:
         - disks_to_initialize is defined
         - disks_to_initialize.stdout is defined
         - disks_to_initialize.stdout | length > 0
@@ -531,11 +520,11 @@
           VM Name: {{ replacement_vm }}
           Environment: {{ runtime_env | default('staging') }}
           OS Type: {{ os_type.stdout | default('unknown') | upper }}
-          
+
           OLD VM:
           - UUID: {{ old_vm_info.virtual_machines[0].uuid }}
           - Status: {% if vm_dest_folder is search("ToBeDeleted") %}Deleted{% else %}Moved to {{ vm_dest_folder }}{% endif %}
-          
+
           NEW VM:
           - UUID: {{ new_vm_info.virtual_machines[0].uuid }}
           - IP: {{ new_vm_info.virtual_machines[0].ip_address | default('Not yet assigned') }}
@@ -545,7 +534,7 @@
           {% for disk in vm_disk_config %}
             - Disk {{ loop.index }}: {{ disk.size_gb }}GB ({{ disk.controller_type }})
           {% endfor %}
-          
+
           POST-CREATION TASKS:
           {% if disks_to_initialize is defined and disks_to_initialize.stdout is defined and disks_to_initialize.stdout | length > 0 %}
           - Additional disks may need initialization: {{ disks_to_initialize.stdout }}
