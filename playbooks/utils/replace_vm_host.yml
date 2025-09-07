@@ -36,7 +36,7 @@
         gather_network_info: true
       register: old_vm_net_info
 
-    # Kept for visibility only; not used for disk shape
+    # Optional; not used for disk shape, but can be helpful for visibility
     - name: Gather disk info on VM to replace (optional)
       community.vmware.vmware_guest_disk:
         hostname: "{{ vcenter_hostname }}"
@@ -53,6 +53,26 @@
         var: old_vm_disk_info
       when: old_vm_disk_info is defined
 
+    # ---------- Compute DNS domain / FQDN ----------
+    - name: Derive DNS domain from old guest_name (fallback to lib.princeton.edu)
+      set_fact:
+        dns_domain: >-
+          {%- set guest = old_vm_info.virtual_machines[0].guest_name | default('') -%}
+          {%- if '.' in guest -%}
+            {{ guest.split('.', 1)[1] }}
+          {%- else -%}
+            lib.princeton.edu
+          {%- endif -%}
+    - name: Allow override via vm_dns_domain if provided
+      set_fact:
+        dns_domain: "{{ vm_dns_domain }}"
+      when: vm_dns_domain is defined and vm_dns_domain|length > 0
+
+    - name: Build VM FQDN
+      set_fact:
+        vm_fqdn: "{{ replacement_vm }}.{{ dns_domain }}"
+
+    # ---------- Robust datastore name ----------
     - name: Compute datastore name robustly
       set_fact:
         vm_datastore_name: >-
@@ -80,7 +100,7 @@
             datastore1
           {%- endif -%}
 
-    # ---------- build from hardware devices ----------
+    # ---------- Build disks from hardware devices (Alternative B) ----------
     - name: Get VM guest info with hardware details
       community.vmware.vmware_guest_info:
         hostname: "{{ vcenter_hostname }}"
@@ -275,9 +295,24 @@
         state: powered-on
       register: vm_power_on
 
-    - name: Wait for VM to be reachable via SSH
+    # --- Clean local known_hosts for the new FQDN to avoid host key mismatch ---
+    - name: Remove host from LOCAL known_hosts (~/.ssh/known_hosts)
+      ansible.builtin.known_hosts:
+        path: "{{ lookup('env', 'HOME') + '/.ssh/known_hosts' }}"
+        name: "{{ vm_fqdn }}"
+        state: "absent"
+
+    # (Optional) If you also keep a system-wide known hosts file
+    - name: Remove host from system ssh_known_hosts (if present)
+      ansible.builtin.known_hosts:
+        path: /etc/ssh/ssh_known_hosts
+        name: "{{ vm_fqdn }}"
+        state: "absent"
+      ignore_errors: yes
+
+    - name: Wait for VM to be reachable via SSH on derived FQDN
       wait_for:
-        host: "{{ replacement_vm }}.princeton.edu"
+        host: "{{ vm_fqdn }}"
         port: 22
         delay: 30
         timeout: 300
@@ -285,7 +320,7 @@
       ignore_errors: yes
 
     - name: Detect OS type on new VM
-      delegate_to: "{{ replacement_vm }}.princeton.edu"
+      delegate_to: "{{ vm_fqdn }}"
       become: true
       shell: |
         if [ -f /etc/os-release ]; then
@@ -298,7 +333,7 @@
       ignore_errors: yes
 
     - name: Gather disk information from new VM
-      delegate_to: "{{ replacement_vm }}.princeton.edu"
+      delegate_to: "{{ vm_fqdn }}"
       become: true
       shell: |
         echo "=== Disk Layout ==="
@@ -339,7 +374,7 @@
       when: new_vm_disk_layout is defined and new_vm_disk_layout.stdout_lines is defined
 
     - name: Check if additional disks need initialization
-      delegate_to: "{{ replacement_vm }}.princeton.edu"
+      delegate_to: "{{ vm_fqdn }}"
       become: true
       shell: |
         disks_needing_init=""
@@ -392,7 +427,7 @@
       when: os_type is defined
 
     - name: Create initialization script for additional disks
-      delegate_to: "{{ replacement_vm }}.princeton.edu"
+      delegate_to: "{{ vm_fqdn }}"
       become: true
       copy:
         dest: /tmp/initialize_disks.sh
@@ -410,7 +445,7 @@
 
           if [ "$confirm" != "yes" ]; then
               echo "Aborted."
-              exit 1
+              exit 1.
           fi
 
           # Detect OS and set appropriate VG name
@@ -457,7 +492,7 @@
           echo "2. Extend your logical volumes: lvextend -L +SIZEg /dev/$VG_NAME/root"
           echo "3. Resize your filesystem:"
           echo "   - For ext4: resize2fs /dev/$VG_NAME/root"
-          echo "   - For xfs: xfs_growfs /dev/$VG_NAME/root"
+          echo "   - For xfs: xfs_growfs /dev/$VG_NAME/root
       when:
         - disks_to_initialize is defined
         - disks_to_initialize.stdout is defined
@@ -472,7 +507,7 @@
           - "OS Type detected: {{ os_type.stdout | default('unknown') }}"
           - ""
           - "If additional disks need initialization:"
-          - "1. SSH to {{ replacement_vm }}.princeton.edu"
+          - "1. SSH to {{ vm_fqdn }}"
           - "2. Review the script at /tmp/initialize_disks.sh"
           - "3. Run it if needed: sudo /tmp/initialize_disks.sh"
           - ""
@@ -501,10 +536,11 @@
         force: true
       when: vm_dest_folder is search("ToBeDeleted")
 
+    # Update Tower known_hosts cleanup to use vm_fqdn
     - name: Remove host from TowerDeploy1 known hosts
       ansible.builtin.known_hosts:
         path: /home/deploy/.ssh/known_hosts
-        name: "{{ replacement_vm }}.princeton.edu"
+        name: "{{ vm_fqdn }}"
         state: "absent"
       delegate_to: towerdeploy1.princeton.edu
       become: true
@@ -518,6 +554,7 @@
           VM REPLACEMENT SUMMARY
           ========================================
           VM Name: {{ replacement_vm }}
+          FQDN: {{ vm_fqdn }}
           Environment: {{ runtime_env | default('staging') }}
           OS Type: {{ os_type.stdout | default('unknown') | upper }}
 
@@ -538,7 +575,7 @@
           POST-CREATION TASKS:
           {% if disks_to_initialize is defined and disks_to_initialize.stdout is defined and disks_to_initialize.stdout | length > 0 %}
           - Additional disks may need initialization: {{ disks_to_initialize.stdout }}
-          - Script created at /tmp/initialize_disks.sh on {{ replacement_vm }}
+          - Script created at /tmp/initialize_disks.sh on {{ vm_fqdn }}
           {% else %}
           - All disks appear to be properly configured
           {% endif %}
@@ -551,3 +588,4 @@
     - name: send information to slack
       ansible.builtin.include_tasks:
         file: slack_tasks_end_of_playbook.yml
+
