@@ -107,6 +107,13 @@
             vm_disk_config: >-
               {%- set disks = [] -%}
               {%- set devices = vm_hardware_info.instance.config.hardware.device | default([]) -%}
+              {%- if old_vm_info.virtual_machines[0].datastore_url is string -%}
+                {%- set datastore_name = old_vm_info.virtual_machines[0].datastore_url.split('] ')[1] -%}
+              {%- elif old_vm_info.virtual_machines[0].datastore_url is sequence and old_vm_info.virtual_machines[0].datastore_url | length > 0 -%}
+                {%- set datastore_name = old_vm_info.virtual_machines[0].datastore_url[0].split('] ')[1] -%}
+              {%- else -%}
+                {%- set datastore_name = old_vm_info.virtual_machines[0].datastore[0] -%}
+              {%- endif -%}
               {%- for device in devices -%}
                 {%- if device._vimtype == 'vim.vm.device.VirtualDisk' -%}
                   {%- set disk_size_gb = (device.capacityInKB / 1024 / 1024) | round(0, 'ceil') | int -%}
@@ -117,7 +124,7 @@
                     'controller_type': controller_type,
                     'controller_number': 0,
                     'unit_number': unit_num,
-                    'datastore': old_vm_info.virtual_machines[0].datastore_url[0].split('] ')[1]
+                    'datastore': datastore_name
                   }) -%}
                 {%- endif -%}
               {%- endfor -%}
@@ -129,7 +136,7 @@
                   'controller_type': 'paravirtual',
                   'controller_number': 0,
                   'unit_number': 0,
-                  'datastore': old_vm_info.virtual_machines[0].datastore_url[0].split('] ')[1]
+                  'datastore': datastore_name
                 }) -%}
               {%- endif -%}
               {{ disks | sort(attribute='unit_number') }}
