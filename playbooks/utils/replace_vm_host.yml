@@ -107,12 +107,10 @@
             vm_disk_config: >-
               {%- set disks = [] -%}
               {%- set devices = vm_hardware_info.instance.config.hardware.device | default([]) -%}
-              {%- if old_vm_info.virtual_machines[0].datastore_url is string -%}
-                {%- set datastore_name = old_vm_info.virtual_machines[0].datastore_url.split('] ')[1] -%}
-              {%- elif old_vm_info.virtual_machines[0].datastore_url is sequence and old_vm_info.virtual_machines[0].datastore_url | length > 0 -%}
-                {%- set datastore_name = old_vm_info.virtual_machines[0].datastore_url[0].split('] ')[1] -%}
+              {%- if old_vm_info.virtual_machines[0].datastore is defined -%}
+                {%- set datastore_name = old_vm_info.virtual_machines[0].datastore[0] if old_vm_info.virtual_machines[0].datastore is sequence else old_vm_info.virtual_machines[0].datastore -%}
               {%- else -%}
-                {%- set datastore_name = old_vm_info.virtual_machines[0].datastore[0] -%}
+                {%- set datastore_name = 'datastore1' -%}
               {%- endif -%}
               {%- for device in devices -%}
                 {%- if device._vimtype == 'vim.vm.device.VirtualDisk' -%}
