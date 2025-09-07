@@ -26,10 +26,6 @@
         vm_name: "{{ replacement_vm }}"
       register: old_vm_info
 
-    - name: Debug vm_var
-      ansible.builtin.debug:
-        var: old_vm_info
-
     - name: Gather network info on VM to replace
       community.vmware.vmware_guest_network:
         hostname: "{{ vcenter_hostname }}"
@@ -41,162 +37,452 @@
       register: old_vm_net_info
 
     - name: Gather disk info on VM to replace
-      community.vmware.vmware_host_disk_info:
+      community.vmware.vmware_guest_disk:
         hostname: "{{ vcenter_hostname }}"
         username: "{{ vcenter_username }}"
         password: "{{ vcenter_password }}"
-        cluster_name: "{{ old_vm_info.virtual_machines[0].cluster }}"
-        # name: "{{ replacement_vm }}"
         validate_certs: false
+        datacenter: "{{ vcenter_datacenter }}"
+        name: "{{ replacement_vm }}"
       register: old_vm_disk_info
 
-    - name: Debug Disk_var
+    - name: Build disk configuration dynamically
+      set_fact:
+        vm_disk_config: >-
+          {%- set disks = [] -%}
+          {%- set disk_keys = old_vm_disk_info.guest_disk_info.keys() | list | sort -%}
+          {%- for disk_key in disk_keys -%}
+            {%- set disk = old_vm_disk_info.guest_disk_info[disk_key] -%}
+            {%- set disk_size_gb = ((disk.capacity_in_kb | int) / 1024 / 1024) | round(0, 'ceil') | int -%}
+            {%- set unit_num = disk.unit_number | default(loop.index0) -%}
+            {%- set controller_type = 'nvme' if 'nvme' in (disk.controller_type | default('') | lower) else 'paravirtual' -%}
+            {%- set _ = disks.append({
+              'size_gb': disk_size_gb,
+              'controller_type': controller_type,
+              'controller_number': disk.controller_key | default(0) | int,
+              'unit_number': unit_num,
+              'datastore': old_vm_info.virtual_machines[0].datastore_url[0].split('] ')[1]
+            }) -%}
+          {%- endfor -%}
+          {{ disks | sort(attribute='unit_number') }}
+
+    - name: Print disk configuration to be created
       ansible.builtin.debug:
-        var: old_vm_disk_info
-#    - name: Print out warning
-#      ansible.builtin.debug:
-#        msg:
-#          - Ansible will now move and power off the current {{ old_vm_info.virtual_machines[0].guest_name }} VM.
-#          - Then create a replacement in the {{ old_vm_net_info.network_info[0].network_name }} network.
-#
-#    - name: Move old VM to a different folder (ToBeDeleted, Forensics)
-#      community.vmware.vmware_guest_move:
-#        hostname: "{{ vcenter_hostname }}"
-#        username: "{{ vcenter_username }}"
-#        password: "{{ vcenter_password }}"
-#        validate_certs: false
-#        datacenter: "{{ vcenter_datacenter }}"
-#        dest_folder: "{{ vm_dest_folder }}"
-#        uuid: "{{ old_vm_info.virtual_machines[0].uuid }}"
-#
-#    - name: Power off old VM using UUID
-#      community.vmware.vmware_guest_powerstate:
-#        hostname: "{{ vcenter_hostname }}"
-#        username: "{{ vcenter_username }}"
-#        password: "{{ vcenter_password }}"
-#        validate_certs: false
-#        datacenter: "{{ vcenter_datacenter }}"
-#        uuid: "{{ old_vm_info.virtual_machines[0].uuid }}"
-#        state: powered-off
-#
-#    - name: Rename old VM using moid
-#      community.vmware.vmware_object_rename:
-#        hostname: "{{ vcenter_hostname }}"
-#        username: "{{ vcenter_username }}"
-#        password: "{{ vcenter_password }}"
-#        validate_certs: false
-#        new_name: "{{ old_vm_info.virtual_machines[0].guest_name }}-{{ ansible_date_time.iso8601_basic_short }}"
-#        object_moid: "{{ old_vm_info.virtual_machines[0].moid }}"
-#        object_type: VirtualMachine
-#
-#    - name: Create a new virtual machine from a template
-#      community.vmware.vmware_guest:
-#        hostname: "{{ vcenter_hostname }}"
-#        username: "{{ vcenter_username }}"
-#        password: "{{ vcenter_password }}"
-#        validate_certs: false
-#        datacenter: "{{ vcenter_datacenter }}"
-#        cluster: "{{ vcenter_cluster }}"
-#        folder: "{{ old_vm_info.virtual_machines[0].folder }}"
-#        name: "{{ replacement_vm }}"
-#        state: powered-off
-#        template: "{{ vm_template | default('template_jammy_spring_2024')}}"
-#        disk:
-#          - size: "{{ (old_vm_info.virtual_machines[0].allocated.storage / 1024) | int }}kb"
-#            # we are not able to use 'type: thin' with our fall 2024 templates
-#            # type: thin
-#            datastore: "{{ old_vm_info.virtual_machines[0].datastore_url }}"
-#        # TODO: Add another disk from an existing VMDK
-#        hardware:
-#          memory_mb: "{{ old_vm_info.virtual_machines[0].allocated.memory | int | default('16384') }}"
-#          num_cpus: "{{ old_vm_info.virtual_machines[0].allocated.cpu | int | default('2') }}"
-#          num_cpu_cores_per_socket: "{{ vm_cpu_cores | default('1') }}"
-#          scsi: paravirtual
-#          version: latest # Hardware version of virtual machine
-#          boot_firmware: "efi"
-#        cdrom:
-#          - controller_number: 0
-#            unit_number: 0
-#            state: present
-#        networks:
-#          - connected: true
-#            name: "{{ old_vm_net_info.network_info[0].network_name }}"
-#            mac: "{{ old_vm_net_info.network_info[0].mac_address }}"
-#        wait_for_ip_address: true
-#        wait_for_ip_address_timeout: 120
-#
-#    - name: Print out relevant details of old VM
-#      vars:
-#        msg: |
-#          The VM you replaced had
-#          an UUID of {{ old_vm_info.virtual_machines[0].uuid }}
-#          a mac address of {{ old_vm_info.virtual_machines[0].mac_address[0] }}
-#          an IP address of {{ old_vm_info.virtual_machines[0].ip_address }}
-#          in the {{ old_vm_net_info.network_info[0].network_name }} network
-#          {{ old_vm_info.virtual_machines[0].allocated.cpu }} CPUs
-#          {{ (old_vm_info.virtual_machines[0].allocated.memory | int / 1024) }} GB of memory
-#          {{ old_vm_info.virtual_machines[0].allocated.storage | human_readable }} of disk allocated
-#      ansible.builtin.debug:
-#        msg: "{{ msg.split('\n') }}"
-#
-#    - name: Gather details on new VM
-#      community.vmware.vmware_vm_info:
-#        hostname: "{{ vcenter_hostname }}"
-#        username: "{{ vcenter_username }}"
-#        password: "{{ vcenter_password }}"
-#        validate_certs: false
-#        show_allocated: true
-#        vm_name: "{{ replacement_vm }}"
-#      register: new_vm_info
-#
-#    - name: Gather network info new VM
-#      community.vmware.vmware_guest_network:
-#        hostname: "{{ vcenter_hostname }}"
-#        username: "{{ vcenter_username }}"
-#        password: "{{ vcenter_password }}"
-#        name: "{{ replacement_vm }}"
-#        validate_certs: false
-#        gather_network_info: true
-#      register: new_vm_net_info
-#
-#    - name: Print out relevant details of new VM
-#      vars:
-#        msg: |
-#          The VM you just created has
-#          an UUID of {{ new_vm_info.virtual_machines[0].uuid }}
-#          a mac address of {{ new_vm_info.virtual_machines[0].mac_address[0] }}
-#          in the {{ new_vm_net_info.network_info[0].network_name }} network
-#          an IP address of {{ new_vm_info.virtual_machines[0].ip_address }}
-#          {{ new_vm_info.virtual_machines[0].allocated.cpu }} CPUs
-#          {{ (new_vm_info.virtual_machines[0].allocated.memory | int / 1024) }} GB of memory
-#          {{ new_vm_info.virtual_machines[0].allocated.storage | human_readable }} of disk allocated
-#      ansible.builtin.debug:
-#        msg: "{{ msg.split('\n') }}"
-#
-#    - name: Remove old VM using UUID
-#      community.vmware.vmware_guest:
-#        hostname: "{{ vcenter_hostname }}"
-#        username: "{{ vcenter_username }}"
-#        password: "{{ vcenter_password }}"
-#        validate_certs: false
-#        datacenter: "{{ vcenter_datacenter }}"
-#        cluster: "{{ vcenter_cluster }}"
-#        folder: "{{ vm_dest_folder }}"
-#        uuid: "{{ old_vm_info.virtual_machines[0].uuid }}"
-#        state: absent
-#        force: true
-#      when: vm_dest_folder is search("ToBeDeleted")
-#
-#    - name: Remove host from TowerDeploy1 known hosts
-#      ansible.builtin.known_hosts:
-#        path: /home/deploy/.ssh/known_hosts
-#        name: "{{ replacement_vm }}.princeton.edu"
-#        state: "absent"
-#      delegate_to: towerdeploy1.princeton.edu
-#      become: true
-#      become_user: deploy
-#
-#  post_tasks:
-#    - name: send information to slack
-#      ansible.builtin.include_tasks:
-#        file: slack_tasks_end_of_playbook.yml
+        msg: 
+          - "Number of disks to create: {{ vm_disk_config | length }}"
+          - "Disk configuration:"
+          - "{% for disk in vm_disk_config %}  Disk {{ loop.index }}: {{ disk.size_gb }}GB on unit {{ disk.unit_number }} ({{ disk.controller_type }}){% endfor %}"
+
+    - name: Print out warning
+      ansible.builtin.debug:
+        msg:
+        - Ansible will now move and power off the current {{ old_vm_info.virtual_machines[0].guest_name }} VM.
+        - Then create a replacement in the {{ old_vm_net_info.network_info[0].network_name }} network.
+        - The new VM will have {{ vm_disk_config | length }} disk(s) matching the original configuration.
+
+    - name: Move old VM to a different folder (ToBeDeleted, Forensics)
+      community.vmware.vmware_guest_move:
+        hostname: "{{ vcenter_hostname }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        validate_certs: false
+        datacenter: "{{ vcenter_datacenter }}"
+        dest_folder: "{{ vm_dest_folder }}"
+        uuid: "{{ old_vm_info.virtual_machines[0].uuid }}"
+
+    - name: Power off old VM using UUID
+      community.vmware.vmware_guest_powerstate:
+        hostname: "{{ vcenter_hostname }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        validate_certs: false
+        datacenter: "{{ vcenter_datacenter }}"
+        uuid: "{{ old_vm_info.virtual_machines[0].uuid }}"
+        state: powered-off
+
+    - name: Rename old VM using moid
+      community.vmware.vmware_object_rename:
+        hostname: "{{ vcenter_hostname }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        validate_certs: false
+        new_name: "{{ old_vm_info.virtual_machines[0].guest_name }}-{{ ansible_date_time.iso8601_basic_short }}"
+        object_moid: "{{ old_vm_info.virtual_machines[0].moid }}"
+        object_type: VirtualMachine
+
+    - name: Create a new virtual machine from a template
+      community.vmware.vmware_guest:
+        hostname: "{{ vcenter_hostname }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        validate_certs: false
+        datacenter: "{{ vcenter_datacenter }}"
+        cluster: "{{ vcenter_cluster }}"
+        folder: "{{ old_vm_info.virtual_machines[0].folder }}"
+        name: "{{ replacement_vm }}"
+        state: powered-off
+        template: "{{ vm_template | default('template_jammy_spring_2024')}}"
+        disk: "{{ vm_disk_config }}"
+        hardware:
+          memory_mb: "{{ old_vm_info.virtual_machines[0].allocated.memory | int | default('16384') }}"
+          num_cpus: "{{ old_vm_info.virtual_machines[0].allocated.cpu | int | default('2') }}"
+          num_cpu_cores_per_socket: "{{ vm_cpu_cores | default('1') }}"
+          scsi: paravirtual
+          version: latest # Hardware version of virtual machine
+          boot_firmware: "efi"
+        cdrom:
+          - controller_number: 0
+            unit_number: 0
+            state: present
+        networks:
+          - connected: true
+            name: "{{ old_vm_net_info.network_info[0].network_name }}"
+            mac: "{{ old_vm_net_info.network_info[0].mac_address }}"
+        wait_for_ip_address: true
+        wait_for_ip_address_timeout: 120
+
+    - name: Print out relevant details of old VM
+      vars:
+        msg: |
+             The VM you replaced had
+             an UUID of {{ old_vm_info.virtual_machines[0].uuid }}
+             a mac address of {{ old_vm_info.virtual_machines[0].mac_address[0] }}
+             an IP address of {{ old_vm_info.virtual_machines[0].ip_address }}
+             in the {{ old_vm_net_info.network_info[0].network_name }} network
+             {{ old_vm_info.virtual_machines[0].allocated.cpu }} CPUs
+             {{ (old_vm_info.virtual_machines[0].allocated.memory | int / 1024) }} GB of memory
+             {{ old_vm_info.virtual_machines[0].allocated.storage | human_readable }} of disk allocated
+             {{ vm_disk_config | length }} disk(s)
+      ansible.builtin.debug:
+        msg: "{{ msg.split('\n') }}"
+
+    - name: Gather details on new VM
+      community.vmware.vmware_vm_info:
+        hostname: "{{ vcenter_hostname }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        validate_certs: false
+        show_allocated: true
+        vm_name: "{{ replacement_vm }}"
+      register: new_vm_info
+
+    - name: Gather network info new VM
+      community.vmware.vmware_guest_network:
+        hostname: "{{ vcenter_hostname }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        name: "{{ replacement_vm }}"
+        validate_certs: false
+        gather_network_info: true
+      register: new_vm_net_info
+
+    - name: Gather disk info on new VM
+      community.vmware.vmware_guest_disk:
+        hostname: "{{ vcenter_hostname }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        validate_certs: false
+        datacenter: "{{ vcenter_datacenter }}"
+        name: "{{ replacement_vm }}"
+      register: new_vm_disk_info
+
+    - name: Print out relevant details of new VM
+      vars:
+        msg: |
+             The VM you just created has
+             an UUID of {{ new_vm_info.virtual_machines[0].uuid }}
+             a mac address of {{ new_vm_info.virtual_machines[0].mac_address[0] }}
+             in the {{ new_vm_net_info.network_info[0].network_name }} network
+             an IP address of {{ new_vm_info.virtual_machines[0].ip_address }}
+             {{ new_vm_info.virtual_machines[0].allocated.cpu }} CPUs
+             {{ (new_vm_info.virtual_machines[0].allocated.memory | int / 1024) }} GB of memory
+             {{ new_vm_info.virtual_machines[0].allocated.storage | human_readable }} of disk allocated
+             {{ new_vm_disk_info.guest_disk_info.keys() | list | length }} disk(s) configured
+      ansible.builtin.debug:
+        msg: "{{ msg.split('\n') }}"
+
+    - name: Power on new VM for disk verification
+      community.vmware.vmware_guest_powerstate:
+        hostname: "{{ vcenter_hostname }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        validate_certs: false
+        datacenter: "{{ vcenter_datacenter }}"
+        name: "{{ replacement_vm }}"
+        state: powered-on
+      register: vm_power_on
+
+    - name: Wait for VM to be reachable via SSH
+      wait_for:
+        host: "{{ replacement_vm }}.princeton.edu"
+        port: 22
+        delay: 30
+        timeout: 300
+        state: started
+      ignore_errors: yes
+
+    - name: Detect OS type on new VM
+      delegate_to: "{{ replacement_vm }}.princeton.edu"
+      become: true
+      shell: |
+        if [ -f /etc/os-release ]; then
+          . /etc/os-release
+          echo "$ID"
+        else
+          echo "unknown"
+        fi
+      register: os_type
+      ignore_errors: yes
+
+    - name: Gather disk information from new VM
+      delegate_to: "{{ replacement_vm }}.princeton.edu"
+      become: true
+      shell: |
+        echo "=== Disk Layout ==="
+        lsblk -d -o NAME,SIZE,TYPE,MODEL
+        echo ""
+        echo "=== Detailed Disk Information ==="
+        
+        # Check for NVMe disks
+        for disk in /dev/nvme[0-9]n[0-9]; do
+          if [ -e "$disk" ]; then
+            echo "NVMe Disk: $disk"
+            fdisk -l "$disk" 2>/dev/null | grep "^Disk /dev/"
+            echo ""
+          fi
+        done
+        
+        # Check for SCSI/SATA disks
+        for disk in /dev/sd[a-z]; do
+          if [ -e "$disk" ]; then
+            echo "SCSI/SATA Disk: $disk"
+            fdisk -l "$disk" 2>/dev/null | grep "^Disk /dev/"
+            echo ""
+          fi
+        done
+        
+        echo "=== LVM Information ==="
+        pvs 2>/dev/null || echo "No LVM physical volumes found"
+        echo ""
+        vgs 2>/dev/null || echo "No LVM volume groups found"
+        echo ""
+        lvs 2>/dev/null || echo "No LVM logical volumes found"
+      register: new_vm_disk_layout
+      ignore_errors: yes
+
+    - name: Display new VM disk layout
+      debug:
+        msg: "{{ new_vm_disk_layout.stdout_lines }}"
+      when: new_vm_disk_layout is defined and new_vm_disk_layout.stdout_lines is defined
+
+    - name: Check if additional disks need initialization
+      delegate_to: "{{ replacement_vm }}.princeton.edu"
+      become: true
+      shell: |
+        disks_needing_init=""
+        
+        # Check NVMe disks (skip the first one as it's usually the OS disk)
+        nvme_count=0
+        for disk in /dev/nvme[0-9]n[0-9]; do
+          if [ -e "$disk" ]; then
+            nvme_count=$((nvme_count + 1))
+            if [ $nvme_count -gt 1 ]; then
+              # Check if disk has any partitions
+              if ! fdisk -l "$disk" 2>/dev/null | grep -q "^/dev/"; then
+                disks_needing_init="$disks_needing_init $disk"
+              fi
+            fi
+          fi
+        done
+        
+        # Check SCSI/SATA disks (all of them if NVMe is present for OS, otherwise skip sda)
+        for disk in /dev/sd[a-z]; do
+          if [ -e "$disk" ]; then
+            # If we have NVMe disks, all SCSI disks might be data disks
+            # If no NVMe, skip sda as it's likely the OS disk
+            if [ $nvme_count -gt 0 ] || [ "$disk" != "/dev/sda" ]; then
+              # Check if disk has any partitions
+              if ! fdisk -l "$disk" 2>/dev/null | grep -q "^/dev/"; then
+                disks_needing_init="$disks_needing_init $disk"
+              fi
+            fi
+          fi
+        done
+        
+        echo "$disks_needing_init"
+      register: disks_to_initialize
+      ignore_errors: yes
+
+    - name: Report disks that may need initialization
+      debug:
+        msg: 
+          - "The following disks appear to be uninitialized and may need setup:"
+          - "{{ disks_to_initialize.stdout }}"
+      when: 
+        - disks_to_initialize is defined
+        - disks_to_initialize.stdout | length > 0
+
+    - name: Determine VG name based on OS type
+      set_fact:
+        vg_name: "{{ 'rl' if os_type.stdout == 'rocky' else 'ubuntu-vg' }}"
+      when: os_type is defined and os_type.stdout is defined
+
+    - name: Create initialization script for additional disks
+      delegate_to: "{{ replacement_vm }}.princeton.edu"
+      become: true
+      copy:
+        dest: /tmp/initialize_disks.sh
+        mode: '0755'
+        content: |
+          #!/bin/bash
+          # Script to initialize additional disks for LVM
+          # This script is created but NOT automatically executed
+          
+          echo "This script will initialize the following disks for LVM:"
+          echo "{{ disks_to_initialize.stdout }}"
+          echo ""
+          echo "WARNING: This will destroy all data on these disks!"
+          read -p "Are you sure you want to continue? (yes/no): " confirm
+          
+          if [ "$confirm" != "yes" ]; then
+              echo "Aborted."
+              exit 1
+          fi
+          
+          # Detect OS and set appropriate VG name
+          if [ -f /etc/os-release ]; then
+              . /etc/os-release
+              if [ "$ID" = "rocky" ]; then
+                  VG_NAME="rl"
+              else
+                  VG_NAME="ubuntu-vg"
+              fi
+          else
+              VG_NAME="ubuntu-vg"
+          fi
+          
+          echo "Using volume group: $VG_NAME"
+          
+          for disk in {{ disks_to_initialize.stdout }}; do
+              echo "Initializing $disk..."
+              
+              # Create partition table
+              parted -s "$disk" mklabel msdos
+              parted -s "$disk" mkpart primary 1MiB 100%
+              parted -s "$disk" set 1 lvm on
+              
+              # Determine partition name (different for NVMe vs SCSI)
+              if [[ "$disk" == /dev/nvme* ]]; then
+                  partition="${disk}p1"
+              else
+                  partition="${disk}1"
+              fi
+              
+              # Create PV
+              pvcreate "$partition"
+              
+              # Optional: Add to VG (uncomment if needed)
+              # vgextend "$VG_NAME" "$partition"
+              
+              echo "Disk $disk initialized with partition $partition"
+          done
+          
+          echo ""
+          echo "Disk initialization complete. You may need to:"
+          echo "1. Add the PVs to your volume group: vgextend $VG_NAME /dev/[disk]1"
+          echo "2. Extend your logical volumes: lvextend -L +SIZEg /dev/$VG_NAME/root"
+          echo "3. Resize your filesystem:"
+          echo "   - For ext4: resize2fs /dev/$VG_NAME/root"
+          echo "   - For xfs: xfs_growfs /dev/$VG_NAME/root"
+      when: 
+        - disks_to_initialize is defined
+        - disks_to_initialize.stdout | length > 0
+      ignore_errors: yes
+
+    - name: Provide disk initialization instructions
+      debug:
+        msg:
+          - "===== POST-CREATION DISK VERIFICATION COMPLETE ====="
+          - "The new VM has been created with {{ vm_disk_config | length }} disk(s)"
+          - "OS Type detected: {{ os_type.stdout | default('unknown') }}"
+          - ""
+          - "If additional disks need initialization:"
+          - "1. SSH to {{ replacement_vm }}.princeton.edu"
+          - "2. Review the script at /tmp/initialize_disks.sh"
+          - "3. Run it if needed: sudo /tmp/initialize_disks.sh"
+          - ""
+          - "For manual setup on {{ os_type.stdout | default('Linux') }} systems:"
+          - "  sudo parted /dev/[disk] mklabel msdos"
+          - "  sudo parted /dev/[disk] mkpart primary 1MiB 100%"
+          - "  sudo parted /dev/[disk] set 1 lvm on"
+          - "  sudo pvcreate /dev/[disk]1  # or /dev/nvme0n1p1 for NVMe"
+          - "  sudo vgextend {{ vg_name | default('vg-name') }} /dev/[disk]1"
+          - "  sudo lvextend -l +100%FREE /dev/{{ vg_name | default('vg-name') }}/root"
+          - "  sudo resize2fs /dev/{{ vg_name | default('vg-name') }}/root  # for ext4"
+          - "  sudo xfs_growfs /dev/{{ vg_name | default('vg-name') }}/root  # for xfs"
+      when: vm_disk_config | length > 1
+
+    - name: Remove old VM using UUID
+      community.vmware.vmware_guest:
+        hostname: "{{ vcenter_hostname }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        validate_certs: false
+        datacenter: "{{ vcenter_datacenter }}"
+        cluster: "{{ vcenter_cluster }}"
+        folder: "{{ vm_dest_folder }}"
+        uuid: "{{ old_vm_info.virtual_machines[0].uuid }}"
+        state: absent
+        force: true
+      when: vm_dest_folder is search("ToBeDeleted")
+
+    - name: Remove host from TowerDeploy1 known hosts
+      ansible.builtin.known_hosts:
+        path: /home/deploy/.ssh/known_hosts
+        name: "{{ replacement_vm }}.princeton.edu"
+        state: "absent"
+      delegate_to: towerdeploy1.princeton.edu
+      become: true
+      become_user: deploy
+
+  post_tasks:
+    - name: Create summary report
+      set_fact:
+        replacement_summary: |
+          ========================================
+          VM REPLACEMENT SUMMARY
+          ========================================
+          VM Name: {{ replacement_vm }}
+          Environment: {{ runtime_env | default('staging') }}
+          OS Type: {{ os_type.stdout | default('unknown') | upper }}
+          
+          OLD VM:
+          - UUID: {{ old_vm_info.virtual_machines[0].uuid }}
+          - Status: {% if vm_dest_folder is search("ToBeDeleted") %}Deleted{% else %}Moved to {{ vm_dest_folder }}{% endif %}
+          
+          NEW VM:
+          - UUID: {{ new_vm_info.virtual_machines[0].uuid }}
+          - IP: {{ new_vm_info.virtual_machines[0].ip_address }}
+          - CPUs: {{ new_vm_info.virtual_machines[0].allocated.cpu }}
+          - Memory: {{ (new_vm_info.virtual_machines[0].allocated.memory | int / 1024) }}GB
+          - Disks: {{ vm_disk_config | length }}
+          {% for disk in vm_disk_config %}
+            - Disk {{ loop.index }}: {{ disk.size_gb }}GB ({{ disk.controller_type }})
+          {% endfor %}
+          
+          POST-CREATION TASKS:
+          {% if disks_to_initialize is defined and disks_to_initialize.stdout | length > 0 %}
+          - Additional disks may need initialization: {{ disks_to_initialize.stdout }}
+          - Script created at /tmp/initialize_disks.sh on {{ replacement_vm }}
+          {% else %}
+          - All disks appear to be properly configured
+          {% endif %}
+          ========================================
+
+    - name: Display final summary
+      debug:
+        msg: "{{ replacement_summary.split('\n') }}"
+
+    - name: send information to slack
+      ansible.builtin.include_tasks:
+        file: slack_tasks_end_of_playbook.yml
