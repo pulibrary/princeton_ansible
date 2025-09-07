@@ -45,26 +45,95 @@
         datacenter: "{{ vcenter_datacenter }}"
         name: "{{ replacement_vm }}"
       register: old_vm_disk_info
+      ignore_errors: yes
+
+    - name: Debug disk info structure
+      debug:
+        var: old_vm_disk_info
+      when: old_vm_disk_info is defined
 
     - name: Build disk configuration dynamically
       set_fact:
         vm_disk_config: >-
           {%- set disks = [] -%}
-          {%- set disk_keys = old_vm_disk_info.guest_disk_info.keys() | list | sort -%}
-          {%- for disk_key in disk_keys -%}
-            {%- set disk = old_vm_disk_info.guest_disk_info[disk_key] -%}
-            {%- set disk_size_gb = ((disk.capacity_in_kb | int) / 1024 / 1024) | round(0, 'ceil') | int -%}
-            {%- set unit_num = disk.unit_number | default(loop.index0) -%}
-            {%- set controller_type = 'nvme' if 'nvme' in (disk.controller_type | default('') | lower) else 'paravirtual' -%}
+          {%- if old_vm_disk_info is defined and old_vm_disk_info.guest_disk_info is defined -%}
+            {%- set disk_keys = old_vm_disk_info.guest_disk_info.keys() | list | sort -%}
+            {%- for disk_key in disk_keys -%}
+              {%- set disk = old_vm_disk_info.guest_disk_info[disk_key] -%}
+              {%- set disk_size_gb = ((disk.capacity_in_kb | int) / 1024 / 1024) | round(0, 'ceil') | int -%}
+              {%- set unit_num = disk.unit_number | default(loop.index0) -%}
+              {%- set controller_type = 'nvme' if 'nvme' in (disk.controller_type | default('') | lower) else 'paravirtual' -%}
+              {%- set _ = disks.append({
+                'size_gb': disk_size_gb,
+                'controller_type': controller_type,
+                'controller_number': disk.controller_key | default(0) | int,
+                'unit_number': unit_num,
+                'datastore': old_vm_info.virtual_machines[0].datastore_url[0].split('] ')[1]
+              }) -%}
+            {%- endfor -%}
+          {%- else -%}
+            {%- comment -%}Fallback: use total storage from VM info and create single disk{%- endcomment -%}
+            {%- set total_storage_kb = (old_vm_info.virtual_machines[0].allocated.storage / 1024) | int -%}
+            {%- set disk_size_gb = (total_storage_kb / 1024 / 1024) | round(0, 'ceil') | int -%}
             {%- set _ = disks.append({
               'size_gb': disk_size_gb,
-              'controller_type': controller_type,
-              'controller_number': disk.controller_key | default(0) | int,
-              'unit_number': unit_num,
+              'controller_type': 'paravirtual',
+              'controller_number': 0,
+              'unit_number': 0,
               'datastore': old_vm_info.virtual_machines[0].datastore_url[0].split('] ')[1]
             }) -%}
-          {%- endfor -%}
+          {%- endif -%}
           {{ disks | sort(attribute='unit_number') }}
+
+    - name: Alternative disk config using VM hardware info
+      when: vm_disk_config | length == 0 or (old_vm_disk_info.failed | default(false))
+      block:
+        - name: Get VM guest info with hardware details
+          community.vmware.vmware_guest_info:
+            hostname: "{{ vcenter_hostname }}"
+            username: "{{ vcenter_username }}"
+            password: "{{ vcenter_password }}"
+            validate_certs: false
+            datacenter: "{{ vcenter_datacenter }}"
+            name: "{{ replacement_vm }}"
+            schema: vsphere
+            properties:
+              - config.hardware.device
+              - config.hardware.numCPU
+              - config.hardware.memoryMB
+          register: vm_hardware_info
+
+        - name: Build disk config from hardware info
+          set_fact:
+            vm_disk_config: >-
+              {%- set disks = [] -%}
+              {%- set devices = vm_hardware_info.instance.config.hardware.device | default([]) -%}
+              {%- for device in devices -%}
+                {%- if device._vimtype == 'vim.vm.device.VirtualDisk' -%}
+                  {%- set disk_size_gb = (device.capacityInKB / 1024 / 1024) | round(0, 'ceil') | int -%}
+                  {%- set unit_num = device.unitNumber | default(loop.index0) -%}
+                  {%- set controller_type = 'nvme' if 'nvme' in (device.backing._vimtype | default('') | lower) else 'paravirtual' -%}
+                  {%- set _ = disks.append({
+                    'size_gb': disk_size_gb,
+                    'controller_type': controller_type,
+                    'controller_number': 0,
+                    'unit_number': unit_num,
+                    'datastore': old_vm_info.virtual_machines[0].datastore_url[0].split('] ')[1]
+                  }) -%}
+                {%- endif -%}
+              {%- endfor -%}
+              {%- if disks | length == 0 -%}
+                {%- set total_storage_kb = (old_vm_info.virtual_machines[0].allocated.storage / 1024) | int -%}
+                {%- set disk_size_gb = (total_storage_kb / 1024 / 1024) | round(0, 'ceil') | int -%}
+                {%- set _ = disks.append({
+                  'size_gb': disk_size_gb,
+                  'controller_type': 'paravirtual',
+                  'controller_number': 0,
+                  'unit_number': 0,
+                  'datastore': old_vm_info.virtual_machines[0].datastore_url[0].split('] ')[1]
+                }) -%}
+              {%- endif -%}
+              {{ disks | sort(attribute='unit_number') }}
 
     - name: Print disk configuration to be created
       ansible.builtin.debug:
@@ -185,6 +254,7 @@
         datacenter: "{{ vcenter_datacenter }}"
         name: "{{ replacement_vm }}"
       register: new_vm_disk_info
+      ignore_errors: yes
 
     - name: Print out relevant details of new VM
       vars:
@@ -197,7 +267,7 @@
              {{ new_vm_info.virtual_machines[0].allocated.cpu }} CPUs
              {{ (new_vm_info.virtual_machines[0].allocated.memory | int / 1024) }} GB of memory
              {{ new_vm_info.virtual_machines[0].allocated.storage | human_readable }} of disk allocated
-             {{ new_vm_disk_info.guest_disk_info.keys() | list | length }} disk(s) configured
+             {{ (new_vm_disk_info.guest_disk_info.keys() | list | length) if (new_vm_disk_info.guest_disk_info is defined) else vm_disk_config | length }} disk(s) configured
       ansible.builtin.debug:
         msg: "{{ msg.split('\n') }}"
 
@@ -239,7 +309,7 @@
       become: true
       shell: |
         echo "=== Disk Layout ==="
-        lsblk -d -o NAME,SIZE,TYPE,MODEL
+        lsblk -d -o NAME,SIZE,TYPE,MODEL 2>/dev/null || echo "lsblk not available"
         echo ""
         echo "=== Detailed Disk Information ==="
         
@@ -320,12 +390,13 @@
           - "{{ disks_to_initialize.stdout }}"
       when: 
         - disks_to_initialize is defined
+        - disks_to_initialize.stdout is defined
         - disks_to_initialize.stdout | length > 0
 
     - name: Determine VG name based on OS type
       set_fact:
-        vg_name: "{{ 'rl' if os_type.stdout == 'rocky' else 'ubuntu-vg' }}"
-      when: os_type is defined and os_type.stdout is defined
+        vg_name: "{{ 'rl' if (os_type.stdout | default('') == 'rocky') else 'ubuntu-vg' }}"
+      when: os_type is defined
 
     - name: Create initialization script for additional disks
       delegate_to: "{{ replacement_vm }}.princeton.edu"
@@ -339,7 +410,7 @@
           # This script is created but NOT automatically executed
           
           echo "This script will initialize the following disks for LVM:"
-          echo "{{ disks_to_initialize.stdout }}"
+          echo "{{ disks_to_initialize.stdout | default('') }}"
           echo ""
           echo "WARNING: This will destroy all data on these disks!"
           read -p "Are you sure you want to continue? (yes/no): " confirm
@@ -363,7 +434,7 @@
           
           echo "Using volume group: $VG_NAME"
           
-          for disk in {{ disks_to_initialize.stdout }}; do
+          for disk in {{ disks_to_initialize.stdout | default('') }}; do
               echo "Initializing $disk..."
               
               # Create partition table
@@ -396,6 +467,7 @@
           echo "   - For xfs: xfs_growfs /dev/$VG_NAME/root"
       when: 
         - disks_to_initialize is defined
+        - disks_to_initialize.stdout is defined
         - disks_to_initialize.stdout | length > 0
       ignore_errors: yes
 
@@ -462,7 +534,7 @@
           
           NEW VM:
           - UUID: {{ new_vm_info.virtual_machines[0].uuid }}
-          - IP: {{ new_vm_info.virtual_machines[0].ip_address }}
+          - IP: {{ new_vm_info.virtual_machines[0].ip_address | default('Not yet assigned') }}
           - CPUs: {{ new_vm_info.virtual_machines[0].allocated.cpu }}
           - Memory: {{ (new_vm_info.virtual_machines[0].allocated.memory | int / 1024) }}GB
           - Disks: {{ vm_disk_config | length }}
@@ -471,7 +543,7 @@
           {% endfor %}
           
           POST-CREATION TASKS:
-          {% if disks_to_initialize is defined and disks_to_initialize.stdout | length > 0 %}
+          {% if disks_to_initialize is defined and disks_to_initialize.stdout is defined and disks_to_initialize.stdout | length > 0 %}
           - Additional disks may need initialization: {{ disks_to_initialize.stdout }}
           - Script created at /tmp/initialize_disks.sh on {{ replacement_vm }}
           {% else %}
