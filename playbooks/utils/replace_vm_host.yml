@@ -434,38 +434,37 @@
         mode: '0755'
         content: |
           #!/bin/bash
-          # Script to initialize additional disks for LVM
-          # This script is created but NOT automatically executed
+          set -euo pipefail
 
           echo "This script will initialize the following disks for LVM:"
-          echo "{{ disks_to_initialize.stdout | default('') }}"
+          echo "{{ (disks_to_initialize.stdout | default('') ) }}"
           echo ""
           echo "WARNING: This will destroy all data on these disks!"
-          read -p "Are you sure you want to continue? (yes/no): " confirm
+          read -r -p "Are you sure you want to continue? (yes/no): " confirm
 
-          if [ "$confirm" != "yes" ]; then
+          if [[ "$confirm" != "yes" ]]; then
               echo "Aborted."
-              exit 1.
+              exit 1
           fi
 
           # Detect OS and set appropriate VG name
-          if [ -f /etc/os-release ]; then
+          VG_NAME="ubuntu-vg"
+          if [[ -f /etc/os-release ]]; then
               . /etc/os-release
-              if [ "$ID" = "rocky" ]; then
+              if [[ "${ID:-}" == "rocky" ]]; then
                   VG_NAME="rl"
-              else
-                  VG_NAME="ubuntu-vg"
               fi
-          else
-              VG_NAME="ubuntu-vg"
           fi
 
           echo "Using volume group: $VG_NAME"
 
-          for disk in {{ disks_to_initialize.stdout | default('') }}; do
+          # Initialize each disk
+          for disk in {{ (disks_to_initialize.stdout | default('')) }}; do
+              [[ -b "$disk" ]] || { echo "Skipping non-block device $disk"; continue; }
+
               echo "Initializing $disk..."
 
-              # Create partition table
+              # Create partition table and LVM partition
               parted -s "$disk" mklabel msdos
               parted -s "$disk" mkpart primary 1MiB 100%
               parted -s "$disk" set 1 lvm on
@@ -477,22 +476,22 @@
                   partition="${disk}1"
               fi
 
-              # Create PV
-              pvcreate "$partition"
+              # Create PV (non-interactive)
+              pvcreate -y "$partition"
 
-              # Optional: Add to VG (uncomment if needed)
+              # Optional: Add to VG (uncomment if you want the script to do it)
               # vgextend "$VG_NAME" "$partition"
-
+    
               echo "Disk $disk initialized with partition $partition"
           done
 
           echo ""
           echo "Disk initialization complete. You may need to:"
           echo "1. Add the PVs to your volume group: vgextend $VG_NAME /dev/[disk]1"
-          echo "2. Extend your logical volumes: lvextend -L +SIZEg /dev/$VG_NAME/root"
+          echo "2. Extend your logical volumes:       lvextend -l +100%FREE /dev/$VG_NAME/root"
           echo "3. Resize your filesystem:"
           echo "   - For ext4: resize2fs /dev/$VG_NAME/root"
-          echo "   - For xfs: xfs_growfs /dev/$VG_NAME/root
+          echo "   - For xfs:  xfs_growfs /dev/$VG_NAME/root"
       when:
         - disks_to_initialize is defined
         - disks_to_initialize.stdout is defined
