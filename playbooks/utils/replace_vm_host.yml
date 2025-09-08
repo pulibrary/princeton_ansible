@@ -37,6 +37,7 @@
       register: old_vm_net_info
 
     # Optional; not used for disk shape, but can be helpful for visibility
+    # since we have different sizes and controllers it helps with output
     - name: Gather disk info on VM to replace (optional)
       community.vmware.vmware_guest_disk:
         hostname: "{{ vcenter_hostname }}"
@@ -53,7 +54,7 @@
         var: old_vm_disk_info
       when: old_vm_disk_info is defined
 
-    # ---------- Compute DNS domain / FQDN ----------
+    # Compute DNS domain / FQDN
     - name: Derive DNS domain from old guest_name (fallback to lib.princeton.edu)
       set_fact:
         dns_domain: >-
@@ -72,7 +73,10 @@
       set_fact:
         vm_fqdn: "{{ replacement_vm }}.{{ dns_domain }}"
 
-    # ---------- Robust datastore name ----------
+    # Robust datastore name, the VSphere's API is not consistent here
+    # it didn't always return a simple string like `datastore1`
+    # we got strings, list of strings (if VM has disks on multiple stores), a dictionary containing a `name` key
+    # A URL-formatted string ([datastore1] VMWARE/VMNAME.vmx)
     - name: Compute datastore name robustly
       set_fact:
         vm_datastore_name: >-
@@ -100,7 +104,8 @@
             datastore1
           {%- endif -%}
 
-    # ---------- Build disks from hardware devices (Alternative B) ----------
+    # Build disks from hardware devices
+    # we should probably stick with this. `config.hardware.device` returns a list of raw virtual hardware
     - name: Get VM guest info with hardware details
       community.vmware.vmware_guest_info:
         hostname: "{{ vcenter_hostname }}"
@@ -295,20 +300,12 @@
         state: powered-on
       register: vm_power_on
 
-    # --- Clean local known_hosts for the new FQDN to avoid host key mismatch ---
+    # Clean local known_hosts for the new FQDN to avoid host key mismatch
     - name: Remove host from LOCAL known_hosts (~/.ssh/known_hosts)
       ansible.builtin.known_hosts:
         path: "{{ lookup('env', 'HOME') + '/.ssh/known_hosts' }}"
         name: "{{ vm_fqdn }}"
         state: "absent"
-
-    # (Optional) If you also keep a system-wide known hosts file
-    - name: Remove host from system ssh_known_hosts (if present)
-      ansible.builtin.known_hosts:
-        path: /etc/ssh/ssh_known_hosts
-        name: "{{ vm_fqdn }}"
-        state: "absent"
-      ignore_errors: yes
 
     - name: Wait for VM to be reachable via SSH on derived FQDN
       wait_for:
@@ -478,15 +475,27 @@
 
               # Create PV (non-interactive)
               pvcreate -y "$partition"
-
-              # Optional: Add to VG (uncomment if you want the script to do it)
-              # vgextend "$VG_NAME" "$partition"
     
               echo "Disk $disk initialized with partition $partition"
           done
 
           echo ""
-          echo "Disk initialization complete. You may need to:"
+          echo "Disk initialization complete."
+
+          # ---------------------------------------------------------------
+          # Ubuntu-only: auto-extend the default root LV and filesystem
+          # ---------------------------------------------------------------
+          if [[ -f /etc/os-release ]]; then
+            . /etc/os-release
+            if [[ "${ID:-}" == "ubuntu" ]]; then
+              echo "Ubuntu detected: extending /dev/ubuntu-vg/ubuntu-lv to 100%FREE and resizing filesystem"
+              sudo lvextend -l +100%FREE /dev/ubuntu-vg/ubuntu-lv || echo "lvextend failed or no free space; continuing"
+              sudo resize2fs /dev/ubuntu-vg/ubuntu-lv || echo "resize2fs failed (non-ext4?); continuing"
+            fi
+          fi
+
+          echo ""
+          echo "Manual follow-ups (if needed):"
           echo "1. Add the PVs to your volume group: vgextend $VG_NAME /dev/[disk]1"
           echo "2. Extend your logical volumes:       lvextend -l +100%FREE /dev/$VG_NAME/root"
           echo "3. Resize your filesystem:"
