@@ -91,7 +91,7 @@ The role creates the following directory structure for a clean, maintainable ins
 /solr/data/                      # Solr data directory
 /solr/data/backup                # Solr backup directory
 /solr/logs/                      # Solr logs
-/run                             # PID directory - non-ephemeral
+/run/solr/                             # PID directory - non-ephemeral
 ```
 
 ## Example Playbook
