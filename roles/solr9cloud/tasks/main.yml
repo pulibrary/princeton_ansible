@@ -71,21 +71,8 @@
   loop:
     - "/solr"
     - "/solr/data"
+    - "/solr/data/backup"
     - "/solr/logs"
-    - "/run/solr"
-    - "/mnt/solr_backup"             # For CIFS mounted backups
-  tags: [directories]
-
-- name: Solrcloud | Create Solr directories solr9
-  ansible.builtin.file:
-    path: "{{ item }}"
-    state: directory
-    mode: "0755"
-    owner: "{{ solr_user }}"
-    group: "{{ solr_group }}"
-  loop:
-    - "/solr/data/backup"           # for bind-mount
-  when: is_solr9
   tags: [directories]
 
 - name: Solrcloud | Configure backup mounts
@@ -194,12 +181,6 @@
 - name: Solrcloud | Configure Solr 9.x specific settings
   ansible.builtin.include_tasks: solr9_config.yml
   when: is_solr9
-  tags: [configure]
-
-- name: Solrcloud | Configure Solr 8.x specific settings
-  ansible.builtin.include_tasks: solr8_config.yml
-  when: not is_solr9
-  tags: [configure]
 
 - name: Solrcloud | Check if temp files exist
   ansible.builtin.stat:
@@ -228,4 +209,3 @@
   when:
     - running_on_server
   tags: [service]
-
