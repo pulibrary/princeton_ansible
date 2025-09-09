@@ -1,4 +1,12 @@
 ---
+# Central switchboard for app configuration. Each app is only included
+# when it's present in `nomad_enabled_apps` (a list). This lets us bring
+# up new clusters (e.g., sandbox) without running any app tasks until ready.
+
+- name: "pul_nomad | app_config | set default enable list"
+  ansible.builtin.set_fact:
+    nomad_enabled_apps: "{{ nomad_enabled_apps | default([], true) }}"
+
 # This isn't my favorite, but we don't have a way to split these right now and
 # not duplicate tasks.
 # Maybe application configs should be a different playbook.
@@ -18,6 +26,7 @@
     dpul_c_basic_auth_username: "{{ dpul_c_staging_basic_auth_username }}"
     dpul_c_basic_auth_password: "{{ dpul_c_staging_basic_auth_password }}"
     dpul_c_nomad_env_vars: "{{ dpul_c_staging_nomad_env_vars }}"
+  when: "'dpulc' in nomad_enabled_apps"
   tags:
     - dpulc
     - dpulc_staging
@@ -38,30 +47,64 @@
     dpul_c_basic_auth_username: "{{ dpul_c_production_basic_auth_username }}"
     dpul_c_basic_auth_password: "{{ dpul_c_production_basic_auth_password }}"
     dpul_c_nomad_env_vars: "{{ dpul_c_production_nomad_env_vars }}"
+  when: "'dpulc' in nomad_enabled_apps"
   tags:
     - dpulc
     - dpulc_production
 
-- import_tasks: apps/imagecat_staging.yml
-  tags: imagecat
+# Imagecat
+- name: "pul_nomad | app_config | imagecat"
+  ansible.builtin.import_tasks: "apps/imagecat_production.yml"
+  when: "'imagecat' in nomad_enabled_apps"
+  tags: [app_config, imagecat]
+- name: "pul_nomad | app_config | imagecat"
+  ansible.builtin.import_tasks: "apps/imagecat_staging.yml"
+  when: "'imagecat' in nomad_enabled_apps"
+  tags: [app_config, imagecat]
 
-- import_tasks: apps/imagecat_production.yml
-  tags: imagecat
+# ABID
+- name: "pul_nomad | app_config | abid"
+  ansible.builtin.import_tasks: "apps/abid_staging.yml"
+  when: "'abid' in nomad_enabled_apps"
+  tags: [app_config, abid]
 
-- import_tasks: apps/abid_staging.yml
-  tags: abid
+- name: "pul_nomad | app_config | abid"
+  ansible.builtin.import_tasks: "apps/abid_production.yml"
+  when: "'abid' in nomad_enabled_apps"
+  tags: [app_config, abid]
 
-- import_tasks: apps/abid_production.yml
-  tags: abid
+# Logging
+- name: "pul_nomad | app_config | logging"
+  ansible.builtin.import_tasks: "apps/logging.yml"
+  when: "'logging' in nomad_enabled_apps"
+  tags: [app_config, logging]
 
-- import_tasks: apps/logging.yml
-  tags: logging
+# Traefik wall
+- name: "pul_nomad | app_config | traefik_wall"
+  ansible.builtin.import_tasks: "apps/traefik_wall.yml"
+  when: "'traefik_wall' in nomad_enabled_apps"
+  tags: [app_config, traefik_wall]
 
-- import_tasks: apps/traefik_wall.yml
-  tags: traefik_wall
+# CircleCI deployer
+- name: "pul_nomad | app_config | circleci_deployer"
+  ansible.builtin.import_tasks: "apps/circleci_deployer.yml"
+  when: "'circleci_deployer' in nomad_enabled_apps"
+  tags: [app_config, circleci_deployer]
 
-- import_tasks: apps/circleci_deployer.yml
-  tags: circleci_deployer
 
-- import_tasks: apps/analytics.yml
-  tags: analytics
+- name: "pul_nomad | app_config | analytics"
+  ansible.builtin.import_tasks: "apps/analytics.yml"
+  when: "'analytics' in nomad_enabled_apps"
+  tags: [app_config, analytics]
+
+# CDH Baserow
+- name: "pul_nomad | app_config | cdh_baserow"
+  ansible.builtin.import_tasks: "apps/cdh_baserow.yml"
+  when: "'cdh_baserow' in nomad_enabled_apps"
+  tags: [app_config, cdh_baserow]
+
+# Nodemation
+- name: "pul_nomad | app_config | nodemation"
+  ansible.builtin.import_tasks: "apps/nodemation.yml"
+  when: "'nodemation' in nomad_enabled_apps"
+  tags: [app_config, nodemation]
