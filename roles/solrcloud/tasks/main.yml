@@ -1,24 +1,29 @@
 ---
-- name: solrcloud | Install dependencies
+- name: Solrcloud | Install dependencies
   ansible.builtin.apt:
     name: ["cifs-utils"]
     state: present
 
-- name: solrcloud | create directories for mounts
+- name: Solrcloud | create directories for mounts
   ansible.builtin.file:
-    path: "/solr/data/backup"
+    path: "{{ item }}"
     state: "directory"
-    mode: 0755
+    mode: "0755"
     group: deploy
     owner: deploy
+  loop:
+    - "/solr/data/backup"
+    - "/solr/data/cloud_backup"
+    - "/var/log/gcsfuse"
   tags:
+    - google_cloud
     - fix_backups
 
-- name: solrcloud | Copy smb credentials
+- name: Solrcloud | Copy smb credentials
   ansible.builtin.copy:
     src: "files/{{ item }}"
     dest: "/etc/{{ item }}"
-    mode: 0644
+    mode: "0644"
   when:
     - running_on_server
   loop:
@@ -26,7 +31,7 @@
   tags:
     - fix_backups
 
-- name: solrcloud | Create mount to diglibdata shares
+- name: Solrcloud | Create mount to diglibdata1 shares
   ansible.posix.mount:
     path: "/solr/data/backup"
     src: "//diglibdata1.princeton.edu/solrbackup"
@@ -38,7 +43,7 @@
   tags:
     - fix_backups
 
-- name: solrcloud | update host file
+- name: Solrcloud | update host file
   ansible.builtin.lineinfile:
     dest: /etc/hosts
     regexp: "{{ item.address }}.*{{ item.hostname }}$"
@@ -47,32 +52,32 @@
   become: true
   loop:
     - {
-        hostname: "{{ lib_zk1_host_name }}.princeton.edu",
-        address: "{{ lib_zk1_host }}",
-      }
+      hostname: "{{ lib_zk1_host_name }}.princeton.edu",
+      address: "{{ lib_zk1_host }}",
+    }
     - {
-        hostname: "{{ lib_zk2_host_name }}.princeton.edu",
-        address: "{{ lib_zk2_host }}",
-      }
+      hostname: "{{ lib_zk2_host_name }}.princeton.edu",
+      address: "{{ lib_zk2_host }}",
+    }
     - {
-        hostname: "{{ lib_zk3_host_name }}.princeton.edu",
-        address: "{{ lib_zk3_host }}",
-      }
+      hostname: "{{ lib_zk3_host_name }}.princeton.edu",
+      address: "{{ lib_zk3_host }}",
+    }
   tags:
     - hosts
   when: lib_zk1_host_name != "localhost" and lib_zk2_host_name != "localhost" and lib_zk3_host_name != "localhost"
 
-- name: solrcloud | solr cloud install node
+- name: Solrcloud | solr cloud install node
   ansible.builtin.include_tasks: install.yml
   tags:
     - install
 
-- name: solrcloud | configure solr cloud
+- name: Solrcloud | configure solr cloud
   ansible.builtin.include_tasks: config.yml
   tags:
     - configure
 
-- name: solrcloud | run solr service
+- name: Solrcloud | run solr service
   ansible.builtin.include_tasks: service.yml
   tags:
     - service
