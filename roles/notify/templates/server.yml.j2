@@ -1,0 +1,28 @@
+{{ ansible_managed | comment }}
+# ntfy server config
+listen-http: "{{ notify_listen_host }}:{{ notify_listen_port }}"
+base-url: "{{ notify_public_base_url }}"
+behind-proxy: true
+
+# Cache / attachments
+cache-file: "{{ notify_message_cache_db }}"
+attachment-cache-dir: "{{ notify_attachment_cache_dir }}"
+attachment-total-size: "{{ notify_attachment_total_limit }}"
+attachment-file-size: "{{ notify_attachment_file_limit }}"
+
+# Long-lived connections
+keepalive-interval: "{{ notify_keep_alive_interval }}"
+read-timeout: "{{ notify_read_timeout }}"
+write-timeout: "{{ notify_write_timeout }}"
+
+# Auth
+auth-file: "{{ notify_auth_db }}"
+auth-default-access: "{{ notify_auth_default_access }}"
+{% if notify_auth_users_bcrypt is defined and notify_auth_users_bcrypt|length > 0 %}
+auth-users:
+{% for u in notify_auth_users_bcrypt %}
+  - "{{ u }}"
+{% endfor %}
+{% endif %}
+
+log-level: "{{ notify_log_level }}"

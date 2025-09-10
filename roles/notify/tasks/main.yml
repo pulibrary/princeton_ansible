@@ -1,0 +1,86 @@
+---
+# roles/notify
+
+- name: Notify - Install ntfy via APT repo
+  ansible.builtin.import_tasks: apt_install.yml
+
+# Require at least one bcrypt-backed user like "user:$2a$...:admin"
+- name: Notify - Validate bcrypt users list
+  ansible.builtin.assert:
+    that:
+      - notify_auth_users_bcrypt is defined
+      - notify_auth_users_bcrypt | length > 0
+    fail_msg: >
+      notify_auth_users_bcrypt must contain one or more entries like
+      'username:$2a$...:role'. Generate hashes with 'ntfy user hash'.
+
+# Config dir
+- name: Notify - Ensure /etc/ntfy exists
+  ansible.builtin.file:
+    path: /etc/ntfy
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+# Data dirs owned by service user
+- name: Notify - Ensure ntfy data dirs (owned by ntfy)
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: ntfy
+    group: ntfy
+    mode: "0750"
+  loop:
+    - /var/lib/ntfy
+    - "{{ notify_attachment_cache_dir }}"
+
+# If a zero-byte cache.db exists, remove it so ntfy can initialize it
+- name: Notify - Check for existing cache.db
+  ansible.builtin.stat:
+    path: "{{ notify_message_cache_db }}"
+  register: notify_cache_db_stat
+
+- name: Notify - Remove empty/bad cache.db (let ntfy recreate)
+  ansible.builtin.file:
+    path: "{{ notify_message_cache_db }}"
+    state: absent
+  when: notify_cache_db_stat.stat.exists and notify_cache_db_stat.stat.size | int == 0
+  notify: [restart ntfy]
+
+# Render config (ensure template file is named server.yml.j2)
+- name: Notify - Render /etc/ntfy/server.yml
+  ansible.builtin.template:
+    src: server.yml.j2
+    dest: /etc/ntfy/server.yml
+    owner: root
+    group: root
+    mode: "0644"
+  notify: [restart ntfy]
+
+# Force ntfy to use our config
+- name: Notify - Ensure systemd override dir
+  ansible.builtin.file:
+    path: /etc/systemd/system/ntfy.service.d
+    state: directory
+    mode: "0755"
+
+- name: Notify - Force ntfy to use /etc/ntfy/server.yml
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/ntfy.service.d/override.conf
+    mode: "0644"
+    content: |
+      [Service]
+      User=ntfy
+      Group=ntfy
+      Environment=HOME=/var/lib/ntfy
+      WorkingDirectory=/var/lib/ntfy
+      ExecStart=
+      ExecStart=/usr/bin/ntfy serve --config /etc/ntfy/server.yml --no-log-dates
+  notify: [daemon-reload, restart ntfy]
+
+- name: Notify - Enable & start ntfy
+  ansible.builtin.service:
+    name: ntfy
+    enabled: true
+    state: started
