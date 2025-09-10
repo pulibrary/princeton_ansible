@@ -1,0 +1,55 @@
+---
+- name: Notify - Assert Ubuntu
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.os_family == "Debian"
+      - ansible_facts.distribution == "Ubuntu"
+    fail_msg: "This opinionated role only supports Ubuntu."
+
+- name: Notify - Ensure apt prerequisites
+  ansible.builtin.apt:
+    name:
+      - ca-certificates
+      - curl
+      - gnupg
+      - apt-transport-https
+      - python3-passlib
+    state: present
+    update_cache: true
+
+- name: Notify - Create apt keyrings directory
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: "0755"
+
+# Official ntfy APT repo
+- name: Notify - Download ntfy repository key (ASCII)
+  ansible.builtin.get_url:
+    url: https://archive.heckel.io/apt/pubkey.txt
+    dest: /etc/apt/keyrings/archive.heckel.io.asc
+    mode: "0644"
+
+- name: Notify - Convert key to keyring
+  ansible.builtin.command: >
+    gpg --dearmor -o /etc/apt/keyrings/archive.heckel.io.gpg
+    /etc/apt/keyrings/archive.heckel.io.asc
+  args:
+    creates: /etc/apt/keyrings/archive.heckel.io.gpg
+
+- name: Notify - Add ntfy APT repository
+  ansible.builtin.apt_repository:
+    repo: "deb [signed-by=/etc/apt/keyrings/archive.heckel.io.gpg] https://archive.heckel.io/apt debian main"
+    filename: archive.heckel.io
+    state: present
+  register: ntfy_repo
+
+- name: Notify - apt update if repo changed
+  ansible.builtin.apt:
+    update_cache: true
+  when: ntfy_repo is changed
+
+- name: Notify - Install ntfy from APT
+  ansible.builtin.apt:
+    name: ntfy
+    state: present
