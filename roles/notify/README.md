@@ -1,38 +1,31 @@
-Role Name
-=========
+## notify
 
-A brief description of the role goes here.
+This Ansible role installs and configures [ntfy](https://docs.ntfy.sh/), a simple HTTP-based pub-sub notification service that allows you to send push notifications to your phone or desktop via scripts or webhooks.
 
-Requirements
-------------
+### Requirements
 
-Any pre-requisites that may not be covered by Ansible itself or the role should be mentioned here. For instance, if the role uses the EC2 module, it may be a good idea to mention in this section that the boto package is required.
+  * **Operating System:** Ubuntu (Debian family) - this role is opinionated and only supports Ubuntu
+  * **Ansible Version:** 2.9+
+  * **Python Packages** `python3-passlib` (installed by role)
 
-Role Variables
---------------
+### Role variables
 
-A description of the settable variables for this role should go here, including any variables that are in defaults/main.yml, vars/main.yml, and any variables that can/should be set via parameters to the role. Any variables that are read from other roles and/or the global scope (ie. hostvars, group vars, etc.) should be mentioned here as well.
+#### Required Variables:
 
-Dependencies
-------------
+The role requires `notify_auth_users_bcrypt` to be defined
 
-A list of other roles hosted on Galaxy should go here, plus any details in regards to parameters that may need to be set for other roles, or variables that are used from other roles.
+#### Default Variables
 
-Example Playbook
-----------------
+All configurable variables and their default values are at [defaults/main.yml](defaults/main.yml)
 
-Including an example of how to use your role (for instance, with variables passed in as parameters) is always nice for users too:
+#### Post-Installation
 
-    - hosts: servers
-      roles:
-         - { role: username.rolename, x: 42 }
+After the roles runs successfully:
 
-License
--------
+  1. ntfy will be listening on the configured port (default: 8066)
 
-BSD
+  1. Access the web interface at your configured `notify_public_base_url`
 
-Author Information
-------------------
+  1. Use the configured credentials to authenticate
 
-An optional section for the role authors to include contact information, or a website (HTML is not allowed).
+  1. Create topics and start sending notifications

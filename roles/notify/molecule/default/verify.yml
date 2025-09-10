@@ -1,20 +1,92 @@
 ---
-- name: Verify
+- name: Verify notify role
   hosts: all
+  become: true
   gather_facts: false
-  tasks:
-    - name: Check ruby package status
-      ansible.builtin.package:
-        name: "{{ item }}"
-        state: present
-      check_mode: true
-      register: pkg_status
-      loop:
-        - ruby-switch
-        - ruby2.6-dev
-        - ruby2.6
 
-    - name: Test for ruby packages
+  vars:
+    _health_url: "http://127.0.0.1:{{ notify_listen_port }}/v1/health"
+    _topic_url: "http://127.0.0.1:{{ notify_listen_port }}/checkmk"
+
+  tasks:
+    - name: Wait for ntfy port to be listening
+      ansible.builtin.wait_for:
+        host: 127.0.0.1
+        port: "{{ notify_listen_port }}"
+        state: started
+        timeout: 60
+
+    - name: Check ntfy is active
+      ansible.builtin.command: systemctl is-active ntfy
+      register: svc_active
+      changed_when: false
+
+    - name: Assert ntfy is active
       ansible.builtin.assert:
         that:
-          - not pkg_status.changed
+          - svc_active.rc == 0
+          - svc_active.stdout | trim == "active"
+        fail_msg: "ntfy service is not active"
+
+    - name: Check ntfy is enabled
+      ansible.builtin.command: systemctl is-enabled ntfy
+      register: svc_enabled
+      changed_when: false
+
+    - name: Assert ntfy is enabled
+      ansible.builtin.assert:
+        that:
+          - svc_enabled.rc == 0
+          - svc_enabled.stdout | trim in ["enabled","static"]
+        fail_msg: "ntfy service is not enabled"
+
+    - name: Stat /etc/ntfy/server.yml
+      ansible.builtin.stat:
+        path: /etc/ntfy/server.yml
+      register: conf
+
+    - name: Assert config file exists and has correct perms
+      ansible.builtin.assert:
+        that:
+          - conf.stat.exists
+          - conf.stat.pw_name == "root"
+          - conf.stat.gr_name == "root"
+          - (conf.stat.mode | int(base=8)) == 0o644
+        fail_msg: "/etc/ntfy/server.yml missing or wrong ownership/mode"
+
+    - name: Health check (basic auth with notify_admin/molecule)
+      ansible.builtin.uri:
+        url: "{{ _health_url }}"
+        method: GET
+        url_username: "notify_admin"
+        url_password: "molecule"
+        force_basic_auth: true
+        status_code: 200
+        return_content: true
+      register: health
+
+    - name: Assert health response looks good
+      ansible.builtin.assert:
+        that:
+          - health.status == 200
+          - health.json is defined or (health.content | length) > 0
+
+    - name: Publish to topic (check_mk_admin/molecule)
+      ansible.builtin.uri:
+        url: "{{ _topic_url }}"
+        method: POST
+        body: "Hello from Molecule"
+        body_format: raw
+        headers:
+          Title: "test"
+        url_username: "check_mk_admin"
+        url_password: "molecule"
+        force_basic_auth: true
+        status_code: 200
+      register: pub
+
+    - name: Assert publish returned 200
+      ansible.builtin.assert:
+        that:
+          - pub.status == 200
+

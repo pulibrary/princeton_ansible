@@ -3,12 +3,41 @@
   hosts: all
   vars:
     - running_on_server: false
+    - notify_public_base_url: "https://notify.molecule.test"
+    - notify_listen_host: "0.0.0.0"
+    - notify_listen_port: 8066
+    - notify_message_cache_db: "/var/lib/ntfy/cache.db"
+    - notify_attachment_cache_dir: "/var/lib/ntfy/attachments"
+    - notify_attachment_total_limit: "5G"
+    - notify_attachment_file_limit: "50M"
+    - notify_auth_db: "/var/lib/ntfy/user.db"
+    - notify_auth_default_access: "deny-all"
   become: true
   pre_tasks:
     - name: Update cache
       ansible.builtin.apt:
         update_cache: true
         cache_valid_time: 600
+
+    - name: Generate bcrypt hash for notify_admin (password = molecule)
+      ansible.builtin.shell: |
+        set -euo pipefail
+        htpasswd -bnB notify_admin molecule | cut -d: -f2
+      register: bcrypt_admin
+      changed_when: false
+
+    - name: Generate bcrypt hash for check_mk_admin (password = molecule)
+      ansible.builtin.shell: |
+        set -euo pipefail
+        htpasswd -bnB check_mk_admin molecule | cut -d: -f2
+      register: bcrypt_ck
+      changed_when: false
+
+    - name: Set notify_auth_users_bcrypt (username:$2y$hash:role)
+      ansible.builtin.set_fact:
+        notify_auth_users_bcrypt:
+          - "notify_admin:{{ bcrypt_admin.stdout }}:admin"
+          - "check_mk_admin:{{ bcrypt_ck.stdout }}:admin"
   tasks:
     - name: "Include notify"
       ansible.builtin.include_role:
