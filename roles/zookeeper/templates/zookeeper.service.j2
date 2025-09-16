@@ -1,17 +1,20 @@
 [Unit]
-Description=Apache ZooKeeper
+Description=Apache ZooKeeper {{ zk_version }}
 After=network.target
+Wants=network-online.target
 
 [Service]
-Type=forking
+Type=simple
 User={{ zk_user }}
 Group={{ zk_group }}
 Environment=ZOO_LOG_DIR={{ zk_log_dir }}
+Environment=ZOO_LOG4J_PROP=INFO,ROLLINGFILE
 Environment=JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
-ExecStart=/usr/share/zookeeper/bin/zkServer.sh start /etc/zookeeper/conf/zoo.cfg
-ExecStop=/usr/share/zookeeper/bin/zkServer.sh stop /etc/zookeeper/conf/zoo.cfg
+Environment=JAVA_OPTS=-Dzookeeper.extendedTypesEnabled={{ 'true' if zk_extended_types else 'false' }}
+ExecStart={{ zk_install_dir }}/bin/zkServer.sh start-foreground /etc/zookeeper/conf/zoo.cfg
 Restart=on-failure
+RestartSec=5s
+LimitNOFILE=65536
 
 [Install]
 WantedBy=multi-user.target
-
