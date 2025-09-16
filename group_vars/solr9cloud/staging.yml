@@ -30,3 +30,21 @@ solr_zookeeper_hosts:
   - "lib-zk-staging5.princeton.edu:2181"
   - "lib-zk-staging6.princeton.edu:2181"
 cjkfoldingfilter: https://github.com/pulibrary/pul_solr/raw/master/solr8_jars/CJKFoldingFilter.jar
+
+# gcsfuse logrotate
+gcsfuse_directory: "/var/log/gcsfuse"
+
+solr9_gcsfuse_logrotate_rules:
+  - name: "gcsfuse"
+    paths:
+      - "{{ gcsfuse_directory }}/*.log"
+    options:
+      rotate: "{{ logrotate_global_defaults.rotate }}"
+      maxsize: "{{ logrotate_global_defaults.maxsize }}"
+      create_mode: "{{ logrotate_global_defaults.create_mode }}"
+      create_owner: "root"
+      create_group: "root"
+      su_user: "{{ logrotate_global_defaults.su_user }}"
+      su_group: "{{ logrotate_global_defaults.su_group }}"
+      postrotate: |
+        systemctl reload solr-gcsfuse.service 2>/dev/null || true
