@@ -4,29 +4,49 @@ ENV=$2
 BRANCH_NAME="${BRANCH:-main}"
 REPOSITORY="${REPO:-princeton_ansible}"
 
+# Default to production if no environment specified
+if [[ -z "${ENV}" ]]; then
+	echo "Missing Environment. Command: 'BRANCH=main ./bin/deploy <app> <env>'."
+	echo "Available environments: production, staging, sandbox"
+	exit 1
+fi
+
+if [[ -z "${APP}" ]]; then
+	echo "Missing Application. Command: 'BRANCH=main ./bin/deploy <app> <env>'."
+	exit 1
+fi
+
+# Set the appropriate nomad host based on environment
+case "${ENV}" in
+"production")
+	NOMAD_HOST="nomad-host-prod1.lib.princeton.edu"
+	;;
+"staging")
+	NOMAD_HOST="nomad-host-staging1.lib.princeton.edu"
+	;;
+"sandbox")
+	NOMAD_HOST="nomad-host-sandbox1.lib.princeton.edu"
+	;;
+*)
+	echo "Unknown environment: ${ENV}"
+	echo "Available environments: production, staging, sandbox"
+	exit 1
+	;;
+esac
+
 # Make sure we're on VPN
-if ! nslookup nomad-host-prod1.lib.princeton.edu 2>&1 > /dev/null
-then
-  echo "Unable to connect to nomad-host-prod1. Ensure you're on VPN."
-  exit 1
+if ! nslookup ${NOMAD_HOST} 2>&1 >/dev/null; then
+	echo "Unable to connect to ${NOMAD_HOST}. Ensure you're on VPN."
+	exit 1
 fi
 
-if [[ -z "${APP}" ]];
-then
-  echo "Missing Application. Command: 'BRANCH=main ./bin/deploy <app> <env>'."
-  exit
-fi
+echo "Deploying ${APP} to ${ENV} environment via ${NOMAD_HOST}..."
 
-if [[ -z "${APP}" ]];
-then
-  echo "Missing Environment. Command: 'BRANCH=main ./bin/deploy <app> <env>'."
-  exit
-fi
-
-# Deploy using nomad-host-prod1, which has the nomad management key.
+# Deploy using the appropriate nomad host, which has the nomad management key.
 SHA=$(git ls-remote https://github.com/pulibrary/${REPOSITORY}.git ${BRANCH_NAME} | awk '{ print substr($1,1,40) }')
 # Get the short sha since that's what image tags use.
 SHORT_SHA=$(echo ${SHA} | awk '{ print substr($1, 1,7) }')
-ssh deploy@nomad-host-prod1.lib.princeton.edu << EOF
+
+ssh deploy@${NOMAD_HOST} <<EOF
   curl -s "https://raw.githubusercontent.com/pulibrary/${REPOSITORY}/${SHA}/nomad/${APP}/deploy/${ENV}.hcl" | nomad job run -var "branch_or_sha=${SHORT_SHA}" -
 EOF
