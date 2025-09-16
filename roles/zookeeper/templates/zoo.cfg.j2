@@ -1,21 +1,33 @@
 {{ ansible_managed | comment }}
-tickTime=2000
-initLimit=10
-syncLimit=5
+# roles/zookeeper/templates/zoo.cfg.j2
+
+# Core timing
+tickTime={{ zk_tick_time }}
+initLimit={{ zk_init_limit }}
+syncLimit={{ zk_sync_limit }}
+
+# Data & logs
 dataDir={{ zk_data_dir }}
 dataLogDir={{ zk_log_dir }}
-clientPort={{ zk_client_port }}
-maxClientCnxns=200
 
-# List of servers
+# Client port
+clientPort={{ zk_client_port }}
+
+# Health/4lw (3.5+ requires explicit allowlist)
+# key will need to be changed upstream
+4lw.commands.whitelist={{ zk_4lw_allowlist }}
+
+# Autopurge (keeps snapshots/changelogs in check)
+autopurge.snapRetainCount=10
+autopurge.purgeInterval=24
+
+# Session bounds (allow Solr's 60–90s client timeouts)
+maxSessionTimeout={{ zk_max_session_timeout }}
+
+# Extended node types (required for Solr 9 features like TTL/container nodes)
+{% if zk_extended_types %}extendedTypesEnabled=true{% endif %}
+
+# Quorum servers
 {% for node in zk_nodes %}
 server.{{ node.id }}={{ node.host }}:{{ zk_leader_port }}:{{ zk_election_port }}
 {% endfor %}
-
-# Set higher timeout for leader election
-electionAlg=3
-maxSessionTimeout=60000
-autopurge.snapRetainCount=3
-autopurge.purgeInterval=1
-4lw.commands.whitelist=ruok,mntr,srvr,conf,cons
-
