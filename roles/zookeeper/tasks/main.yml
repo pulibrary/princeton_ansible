@@ -1,35 +1,101 @@
 ---
-# tasks file for roles/zookeeper
-- name: Zookeeper | Install ZooKeeper package
+- name: Facts | Collect services
+  ansible.builtin.service_facts:
+
+# Stop & remove distro packages if present
+- name: Zookeeper | Stop legacy distro service if present
+  ansible.builtin.service:
+    name: zookeeper
+    state: stopped
+    enabled: false
+  when: "'zookeeper.service' in ansible_facts.services"
+  register: zk_stop
+
+- name: Zookeeper | Remove legacy distro packages
   ansible.builtin.apt:
     name:
       - zookeeper
       - zookeeperd
-    state: present
-    update_cache: true
+    state: absent
+    purge: true
+    autoremove: true
+  register: zk_pkg_removed
 
-- name: Zookeeper | Create ZooKeeper directories
+# Ensure group/user
+- name: Zookeeper | Ensure group exists
+  ansible.builtin.group:
+    name: "{{ zk_group }}"
+    state: present
+
+- name: Zookeeper | Ensure user exists
+  ansible.builtin.user:
+    name: "{{ zk_user }}"
+    group: "{{ zk_group }}"
+    system: true
+    shell: /usr/sbin/nologin
+    createhome: false
+
+# Directories
+- name: Zookeeper | Create data/log/config dirs
   ansible.builtin.file:
-    path: "{{ item }}"
+    path: "{{ item.path }}"
     state: directory
+    owner: "{{ item.owner | default(zk_user) }}"
+    group: "{{ item.group | default(zk_group) }}"
+    mode: "{{ item.mode | default('0755') }}"
+  loop:
+    - { path: "{{ zk_data_dir }}" }
+    - { path: "{{ zk_log_dir }}" }
+    - { path: "/etc/zookeeper/conf" }
+    - { path: "/opt" }
+
+# Download & unpack Apache ZooKeeper
+- name: Zookeeper | Download apache zookeeper {{ zk_version }}
+  ansible.builtin.get_url:
+    url: "{{ zk_download_url }}"
+    dest: "/tmp/apache-zookeeper-{{ zk_version }}-bin.tar.gz"
+    mode: '0644'
+    timeout: 300
+  register: zk_tar
+  retries: 3
+  delay: 5
+  until: zk_tar is succeeded
+
+- name: Zookeeper | Unpack to /opt (versioned dir)
+  ansible.builtin.unarchive:
+    src: "/tmp/apache-zookeeper-{{ zk_version }}-bin.tar.gz"
+    dest: /opt
+    remote_src: true
+    creates: "{{ zk_versioned_dir }}"
+  notify: Restart zookeeper
+
+- name: Zookeeper | Symlink {{ zk_install_dir }} -> {{ zk_versioned_dir }}
+  ansible.builtin.file:
+    src: "{{ zk_versioned_dir }}"
+    dest: "{{ zk_install_dir }}"
+    state: link
+  notify: Restart zookeeper
+
+- name: Zookeeper | Ownership of install tree
+  ansible.builtin.file:
+    path: "{{ zk_versioned_dir }}"
+    state: directory
+    recurse: true
     owner: "{{ zk_user }}"
     group: "{{ zk_group }}"
-    mode: "0755"
-  with_items:
-    - "{{ zk_data_dir }}"
-    - "{{ zk_log_dir }}"
 
-- name: Zookeeper | Set ZooKeeper ID
+# myid per node
+- name: Zookeeper | Write myid
   ansible.builtin.copy:
     content: "{{ zk_nodes | selectattr('host', 'equalto', inventory_hostname) | map(attribute='id') | first }}"
     dest: "{{ zk_data_dir }}/myid"
     owner: "{{ zk_user }}"
     group: "{{ zk_group }}"
     mode: "0644"
-  when:
-    - running_on_server
+  when: running_on_server | default(true)
 
-- name: Zookeeper | Configure ZooKeeper
+# Config file
+- name: Zookeeper | Render zoo.cfg
   ansible.builtin.template:
     src: zoo.cfg.j2
     dest: /etc/zookeeper/conf/zoo.cfg
@@ -38,7 +104,8 @@
     mode: "0644"
   notify: Restart zookeeper
 
-- name: Zookeeper | Install systemd unit file
+# Systemd unit (runs in foreground; not forking)
+- name: Zookeeper | Install systemd unit
   ansible.builtin.template:
     src: zookeeper.service.j2
     dest: /etc/systemd/system/zookeeper.service
@@ -49,27 +116,19 @@
     - Reload systemd
     - Restart zookeeper
 
-- name: Zookeeper | Override ZOOMAIN in /etc/default/zookeeper
-  ansible.builtin.lineinfile:
-    path: /etc/default/zookeeper
-    regexp: '^(\s*)ZOOMAIN(\s*=)(.*)$'
-    line: 'ZOOMAIN="org.apache.zookeeper.server.quorum.QuorumPeerMain"'
-    backrefs: true
-    create: true
-    mode: "0644"
-  notify: Restart zookeeper
-
-- name: Zookeeper | Start and enable ZooKeeper service
+# Start & enable
+- name: Zookeeper | Enable & start
   ansible.builtin.systemd:
     name: zookeeper
     state: started
     enabled: true
+    daemon_reload: true
 
-- name: Zookeeper | Ensure zookeeper is running
+# Health wait
+- name: Zookeeper | Wait for client port
   ansible.builtin.wait_for:
-    port: "{{ zk_client_port }}"
     host: "{{ inventory_hostname }}"
-    timeout: 30
+    port: "{{ zk_client_port }}"
+    timeout: 60
     delay: 5
-  when:
-    - running_on_server
+  when: running_on_server | default(true)

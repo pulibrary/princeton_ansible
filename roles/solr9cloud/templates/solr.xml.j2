@@ -1,43 +1,43 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<!-- roles/solrcloud/templates/solr.xml.j2 -->
+<!-- roles/solr9cloud/templates/solr.xml.j2 -->
 <solr>
-{% if solr_cloud_download_version is version('9.0.0', '<') %}
-  <int name="maxBooleanClauses">${solr.max.booleanClauses:1024}</int>
-{% endif %}
-{% if solr_cloud_download_version is version('8.6.0', '>=') %}
   <str name="sharedLib">${solr.sharedLib:}</str>
   <str name="modules">${solr.modules:}</str>
   <str name="allowPaths">${solr.allowPaths:}</str>
-{% endif %}
+
   <solrcloud>
     <str name="host">${host:}</str>
     <int name="hostPort">${jetty.port:8983}</int>
     <str name="hostContext">${hostContext:solr}</str>
     <bool name="genericCoreNodeNames">${genericCoreNodeNames:true}</bool>
-    <int name="zkClientTimeout">${zkClientTimeout:30000}</int>
-    <int name="distribUpdateSoTimeout">${distribUpdateSoTimeout:600000}</int>
-    <int name="distribUpdateConnTimeout">${distribUpdateConnTimeout:60000}</int>
+
+    <!-- Tunables -->
+    <int name="zkClientTimeout">{{ solr_zk_client_timeout | default(90000) }}</int>
+    <int name="distribUpdateSoTimeout">{{ solr_distrib_update_so_timeout | default(600000) }}</int>
+    <int name="distribUpdateConnTimeout">{{ solr_distrib_update_conn_timeout | default(60000) }}</int>
+
     <str name="zkCredentialsProvider">${zkCredentialsProvider:org.apache.solr.common.cloud.DefaultZkCredentialsProvider}</str>
     <str name="zkACLProvider">${zkACLProvider:org.apache.solr.common.cloud.DefaultZkACLProvider}</str>
   </solrcloud>
 
-  <shardHandlerFactory name="shardHandlerFactory"
-                       class="HttpShardHandlerFactory">
-    <int name="socketTimeout">${socketTimeout:600000}</int>
-    <int name="connTimeout">${connTimeout:60000}</int>
-{% if solr_cloud_download_version is version('9.0.0', '<') %}
-    <str name="shardsWhitelist">${solr.shardsWhitelist:}</str>
-{% endif %}
+  <!-- Query-time handler -->
+  <shardHandlerFactory name="shardHandlerFactory" class="HttpShardHandlerFactory">
+    <int name="socketTimeout">{{ solr_shard_socket_timeout | default(120000) }}</int>
+    <int name="connTimeout">{{ solr_shard_conn_timeout   | default(60000)  }}</int>
   </shardHandlerFactory>
 
-{% if solr_cloud_download_version is version('9.0.0', '>=') %}
-  <!-- Configure metrics reporting as required for your environment -->
+  <!-- Update/indexing handler -->
+  <updateShardHandler class="solr.UpdateShardHandler">
+    <int name="socketTimeout">{{ solr_update_socket_timeout | default(120000) }}</int>
+    <int name="connTimeout">{{ solr_update_conn_timeout   | default(60000)  }}</int>
+    <int name="maxUpdateConnections">{{ solr_update_max_connections     | default(512) }}</int>
+    <int name="maxUpdateConnectionsPerHost">{{ solr_update_max_per_host | default(64)  }}</int>
+  </updateShardHandler>
+
   <metrics>
     <reporter name="jmx" class="org.apache.solr.metrics.reporters.SolrJmxReporter">
       <str name="domain">solr</str>
       <bool name="enabled">true</bool>
     </reporter>
   </metrics>
-{% endif %}
 </solr>
-

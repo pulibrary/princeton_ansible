@@ -74,7 +74,7 @@ This role sets the following critical system properties for Solr:
 -Dsolr.solr.home=/solr/data
 -Dsolr.log.dir=/solr/logs
 -Dsolr.install.symDir=/opt/solr
--Dsolr.allowPaths=/solr/data,/mnt/solr_backup
+-Dsolr.allowPaths=/solr/data
 -Dlog4j.configurationFile=/solr/log4j2.xml
 -Dsolr.jetty.host=0.0.0.0
 -Djetty.home=/opt/solr/server
@@ -91,7 +91,7 @@ The role creates the following directory structure for a clean, maintainable ins
 /solr/data/                      # Solr data directory
 /solr/data/backup                # Solr backup directory
 /solr/logs/                      # Solr logs
-/run/solr/                       # PID directory (modern systemd location)
+/run/solr/                             # PID directory - non-ephemeral
 ```
 
 ## Example Playbook
@@ -136,4 +136,3 @@ MIT
 ## Author Information
 
 Maintained by Princeton University Library
-
