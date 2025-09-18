@@ -1,23 +1,18 @@
 ---
 # by default this playbook runs in the staging environment
+# to run in qa, pass '-e runtime_env=qa'
 # to run in production, pass '-e runtime_env=production'
-# most common use case is `ansible-playbook playbooks/postfix.yml -t update_config`
-# after adding the IP address of your vm in `vars/main.yml`
-- name: build mailrelay to proofpoint
-  hosts: postfix_{{ runtime_env | default('staging') }}
+- name: Build Datadog infrastructure
+  hosts: sandbox-signoz1.lib.princeton.edu
   remote_user: pulsys
   become: true
   vars_files:
-    - ../group_vars/postfix/{{ runtime_env | default('staging') }}.yml
-
+    - ../group_vars/signoz/common.yml
   roles:
     - role: signoz
-    - role: postfix
-
   post_tasks:
     - name: tell everyone on slack you ran an ansible playbook
       community.general.slack:
         token: "{{ vault_pul_slack_token }}"
         msg: "Ansible ran `{{ ansible_play_name }}` on {{ inventory_hostname }}"
         channel: "{{ slack_alerts_channel }}"
-      when: not ansible_check_mode

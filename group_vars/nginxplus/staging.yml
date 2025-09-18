@@ -14,3 +14,83 @@ nginx_modules:
   dos: true
 # app_protect logs
 app_protect_dir: "/var/log/app_protect/*.log"
+# NGINX Plus OpenTelemetry Collector Configuration
+signoz_is_server: false
+# NGINX Plus OpenTelemetry Collector Configuration
+signoz_is_server: false
+signoz_otel_receivers:
+  hostmetrics:
+    collection_interval: 30s
+    scrapers:
+      cpu: {}
+      load: {}
+      memory: {}
+      disk: {}
+      network: {}
+      filesystem: {}
+      # Removed process scraper to avoid kernel thread errors
+  filelog/nginx-access:
+    include:
+      - "/var/log/nginx/access.log"
+    start_at: end
+    operators:
+      # Simple approach - just add metadata without parsing
+      - type: add
+        field: attributes.log_type
+        value: "nginx_access"
+      - type: add
+        field: attributes.service_name
+        value: "nginx-plus"
+      - type: add
+        field: attributes.log_format
+        value: "combined"
+  filelog/nginx-error:
+    include:
+      - "/var/log/nginx/error.log"
+    start_at: end
+    operators:
+      - type: add
+        field: attributes.log_type
+        value: "nginx_error"
+      - type: add
+        field: attributes.service_name
+        value: "nginx-plus"
+
+signoz_otel_processors:
+  resource:
+    attributes:
+      - key: host.name
+        value: "{{ ansible_fqdn }}"
+        action: upsert
+      - key: service.name
+        value: "nginx-plus-server"
+        action: upsert
+      - key: service.version
+        value: "staging"
+        action: upsert
+      - key: environment
+        value: "staging"
+        action: upsert
+  batch:
+    timeout: 10s
+    send_batch_size: 1024
+
+signoz_otel_exporters:
+  otlp:
+    endpoint: "http://sandbox-signoz1.lib.princeton.edu:4317"
+    tls:
+      insecure: true
+  debug:
+    verbosity: basic
+
+signoz_otel_service_pipelines:
+  metrics:
+    receivers: [hostmetrics]
+    processors: [resource, batch]
+    exporters: [otlp, debug]
+  logs:
+    receivers: [filelog/nginx-access, filelog/nginx-error]
+    processors: [resource, batch]
+    exporters: [otlp, debug]
+
+signoz_otel_service_extensions: []
