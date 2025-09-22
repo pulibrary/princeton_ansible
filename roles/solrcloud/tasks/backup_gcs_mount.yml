@@ -119,9 +119,9 @@
 - name: Solrcloud | Enable and start gcsfuse service
   ansible.builtin.systemd:
     name: solr-gcs-backup
-    enabled: yes
+    enabled: true
     state: started
-    daemon_reload: yes
+    daemon_reload: true
   when: running_on_server
   tags: [fix_backups]
 
@@ -147,6 +147,45 @@
     msg: "GCS mount is {{ 'active' if mount_check.rc == 0 else 'not active' }}"
   when: running_on_server
   tags: [google_cloud, fix_backups]
+
+- name: Solrcloud | Ensure Checkmk local dir exists
+  ansible.builtin.file:
+    path: /usr/lib/check_mk_agent/local
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: running_on_server
+  tags: [google_cloud]
+
+- name: Solrcloud | Install Solr 8 backup local check
+  ansible.builtin.template:
+    src: check_solr_backup.sh.j2
+    dest: /usr/lib/check_mk_agent/local/check_solr_backup.sh
+    owner: root
+    group: root
+    mode: "0755"
+  when: running_on_server
+  tags: [google_cloud]
+
+#  run once to display current output during deploy
+- name: Solrcloud | Verify Solr 8 backup local check
+  ansible.builtin.command: /usr/lib/check_mk_agent/local/check_solr_backup.sh
+  register: solr_backup_check_output
+  changed_when: false
+  failed_when: false
+  when:
+    - running_on_server
+    - checkmk_verify_local | default(false) | bool
+  tags: [google_cloud]
+
+- name: Solrcloud | Show local check output
+  ansible.builtin.debug:
+    var: solr_backup_check_output.stdout_lines
+  when:
+    - running_on_server
+    - checkmk_verify_local | default(false) | bool
+  tags: [google_cloud]
 
 # Set up log rotation for gcsfuse logs
 - name: Solrcloud | Configure gcsfuse log rotation
