@@ -31,23 +31,31 @@
     - ../group_vars/nomad/nodemation/vault.yml
     - ../group_vars/nomad/signoz/vault.yml
     - ../group_vars/nomad/signoz/sandbox.yml
-  roles:
-    - role: pul_nomad
-    - role: signoz
-
   pre_tasks:
-    - name: "Load app vars: staging then production"
-      block:
-        - ansible.builtin.include_vars:
-            file: "../group_vars/nomad/{{ item }}/{{ runtime_env | default('sandbox') }}.yml"
-            # optional: avoid hard failures if an app doesn't have a file yet
-            ignore_missing: true
-          loop: "{{ nomad_enabled_apps }}"
-        - ansible.builtin.include_vars:
-            file: "../group_vars/nomad/{{ item }}/vault.yml"
-            ignore_missing: false
-          loop: "{{ nomad_enabled_apps }}"
-      tags: [always]
+  - name: Discover app var files for this env
+    ansible.builtin.stat:
+      path: "../group_vars/nomad/{{ item }}/{{ runtime_env | default('sandbox') }}.yml"
+    register: app_env_stats
+    loop: "{{ nomad_enabled_apps | default([]) }}"
+
+  - name: Load app vars for this env (only if present)
+    ansible.builtin.include_vars:
+      file: "../group_vars/nomad/{{ item.item }}/{{ runtime_env | default('sandbox') }}.yml"
+    loop: "{{ app_env_stats.results | default([]) }}"
+    when: item.stat.exists
+
+  - name: Discover app vault files
+    ansible.builtin.stat:
+      path: "../group_vars/nomad/{{ item }}/vault.yml"
+    register: app_vault_stats
+    loop: "{{ nomad_enabled_apps | default([]) }}"
+
+  - name: Load app vault vars (only if present)
+    ansible.builtin.include_vars:
+      file: "../group_vars/nomad/{{ item.item }}/vault.yml"
+    loop: "{{ app_vault_stats.results | default([]) }}"
+    when: item.stat.exists
+
   roles:
     - role: pul_nomad
   post_tasks:
