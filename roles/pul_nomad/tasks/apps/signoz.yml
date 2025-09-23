@@ -1,0 +1,67 @@
+---
+# Ensure host dirs
+- name: signoz | create data dirs
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: 1000
+    group: 1000
+    mode: "0755"
+  loop:
+    - "{{ signoz_data_root }}"
+    - "{{ signoz_data_root }}/clickhouse"
+    - "{{ signoz_data_root }}/app"
+    - "{{ signoz_conf_dir }}"
+
+# GCS SA JSON (used for backups)
+- name: signoz | write GCS service account JSON
+  ansible.builtin.copy:
+    dest: "{{ signoz_gcs_sa_path }}"
+    content: "{{ vault_signoz_gcs_sa_json }}"
+    owner: 1000
+    group: 1000
+    mode: "0600"
+
+# Drop OTEL collector config (listens publicly and forwards locally)
+- name: signoz | write otel collector config
+  ansible.builtin.copy:
+    dest: "{{ signoz_otel_config_path }}"
+    owner: 1000
+    group: 1000
+    mode: "0644"
+    content: |
+      receivers:
+        otlp:
+          protocols:
+            grpc: { endpoint: 0.0.0.0:{{ signoz_otlp_grpc_port }} }
+            http: { endpoint: 0.0.0.0:{{ signoz_otlp_http_port }} }
+      processors:
+        batch: {}
+        memory_limiter:
+          check_interval: 1s
+          limit_mib: 512
+          spike_limit_mib: 128
+      exporters:
+        otlp:
+          endpoint: "http://127.0.0.1:{{ signoz_otlp_grpc_port }}"
+          tls: { insecure: true }
+      service:
+        pipelines:
+          traces:  { receivers: [otlp], processors: [memory_limiter, batch], exporters: [otlp] }
+          metrics: { receivers: [otlp], processors: [memory_limiter, batch], exporters: [otlp] }
+          logs:    { receivers: [otlp], processors: [memory_limiter, batch], exporters: [otlp] }
+
+# Render Nomad job file
+- name: signoz | render nomad job spec
+  ansible.builtin.template:
+    src: "signoz.nomad.hcl.j2"
+    dest: "/etc/nomad-jobs/signoz.nomad"
+    owner: root
+    group: root
+    mode: "0644"
+
+# Register/Run job (community.general.nomad_job uses Nomad API)
+- name: signoz | register job
+  community.general.nomad_job:
+    state: present
+    content: "{{ lookup('file', '/etc/nomad-jobs/signoz.nomad') }}"

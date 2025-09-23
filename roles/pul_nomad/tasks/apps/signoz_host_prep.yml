@@ -1,0 +1,37 @@
+---
+- name: Pul_nomad - signoz ensure xfsprogs
+  ansible.builtin.package:
+    name: xfsprogs
+    state: present
+
+- name: Pul_nomad - signoz create parent mount dir
+  ansible.builtin.file:
+    path: "{{ signoz_data_mount }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+    # Simple and explicit for sandbox: force mkfs.xfs on /dev/sda - for staging and prod
+- name: Pul_nomad - signoz mkfs.xfs on data device (sandbox)
+  ansible.builtin.command: "mkfs.xfs -f {{ signoz_data_device }}"
+  changed_when: true
+
+- name: Pul_nomad - signoz mount / fstab
+  ansible.posix.mount:
+    path: "{{ signoz_data_mount }}"
+    src: "{{ signoz_data_device }}"
+    fstype: "{{ signoz_data_fstype }}"
+    opts: "noatime"
+    state: mounted
+
+- name: Pul_nomad - signoz create clickhouse data/log dirs on mounted volume
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: 101
+    group: 101
+    mode: "0755"
+  loop:
+    - "{{ signoz_clickhouse_data_dir }}"
+    - "{{ signoz_clickhouse_logs_dir }}"

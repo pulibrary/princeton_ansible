@@ -1,0 +1,43 @@
+---
+signoz_domain: "sandbox-signoz.lib.princeton.edu"
+
+# images
+signoz_clickhouse_image: "clickhouse/clickhouse-server:24.7"
+signoz_query_image: "signoz/query-service:0.39.0"
+signoz_frontend_image: "signoz/frontend:0.39.0"
+signoz_collector_image: "otel/opentelemetry-collector-contrib:0.111.0"
+signoz_alertmanager_image: "signoz/alertmanager:0.25.0"
+signoz_backup_image: "altinity/clickhouse-backup:2.5.1"
+
+# storage + retention
+signoz_clickhouse_retention_days: 30
+signoz_clickhouse_data_dir: "/var/lib/signoz/clickhouse"
+signoz_clickhouse_logs_dir: "/var/log/signoz/clickhouse"
+
+# 260 GiB data disk (XFS)
+signoz_data_device: "/dev/sda"
+signoz_data_mount: "/var/lib/signoz"
+signoz_data_fstype: "xfs"
+
+# ports
+signoz_ui_port: 3301
+signoz_query_port: 8080
+signoz_otlp_grpc_port: 4317
+signoz_otlp_http_port: 4318
+
+# Google OIDC
+signoz_oidc_enabled: true
+signoz_oidc_issuer: "https://accounts.google.com"
+signoz_oidc_client_id: "{{ vault_signoz_google_oidc_client_id }}"
+signoz_oidc_client_secret: "{{ vault_signoz_google_oidc_client_secret }}"
+# NOTE: SigNoz requires this path:
+signoz_oidc_redirect_url: "https://{{ signoz_domain }}/api/v1/complete/google"
+
+# GCS backups
+signoz_backup_enabled: true
+signoz_backup_bucket: "pul-sandbox-signoz-backups"
+signoz_backup_gcp_sa_json: "{{ vault_signoz_gcs_sa_json }}"   # raw JSON (quoted) or base64
+signoz_backup_schedule_cron: "0 3 * * *"
+
+# pin to node
+signoz_node_constraint: "sandbox-signoz1.lib.princeton.edu"

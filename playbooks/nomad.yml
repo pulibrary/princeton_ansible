@@ -29,6 +29,8 @@
     - ../group_vars/nomad/cdh_baserow/sandbox.yml
     - ../group_vars/nomad/cdh_baserow/vault.yml
     - ../group_vars/nomad/nodemation/vault.yml
+    - ../group_vars/nomad/signoz/vault.yml
+    - ../group_vars/nomad/signoz/sandbox.yml
   roles:
     - role: pul_nomad
     - role: signoz
@@ -37,16 +39,15 @@
     - name: "Load app vars: staging then production"
       block:
         - ansible.builtin.include_vars:
-            file: "../group_vars/nomad/{{ item }}/staging.yml"
-          loop: "{{ nomad_enabled_apps }}"
-        - ansible.builtin.include_vars:
-            file: "../group_vars/nomad/{{ item }}/production.yml"
+            file: "../group_vars/nomad/{{ item }}/{{ runtime_env | default('sandbox') }}.yml"
+            # optional: avoid hard failures if an app doesn't have a file yet
+            ignore_missing: true
           loop: "{{ nomad_enabled_apps }}"
         - ansible.builtin.include_vars:
             file: "../group_vars/nomad/{{ item }}/vault.yml"
+            ignore_missing: false
           loop: "{{ nomad_enabled_apps }}"
-      tags:
-        - always
+      tags: [always]
   roles:
     - role: pul_nomad
   post_tasks:
