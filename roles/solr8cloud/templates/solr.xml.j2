@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!-- roles/solr9cloud/templates/solr.xml.j2 -->
+<solr>
+  <str name="sharedLib">${solr.sharedLib:}</str>
+  <str name="modules">${solr.modules:}</str>
+  <str name="allowPaths">${solr.allowPaths:}</str>
+
+  <solrcloud>
+    <str name="host">${host:}</str>
+    <int name="hostPort">${jetty.port:8983}</int>
+    <str name="hostContext">${hostContext:solr}</str>
+    <bool name="genericCoreNodeNames">${genericCoreNodeNames:true}</bool>
+
+    <!-- Tunables -->
+    <int name="zkClientTimeout">{{ solr_zk_client_timeout | default(90000) }}</int>
+    <int name="distribUpdateSoTimeout">{{ solr_distrib_update_so_timeout | default(600000) }}</int>
+    <int name="distribUpdateConnTimeout">{{ solr_distrib_update_conn_timeout | default(60000) }}</int>
+
+    <str name="zkCredentialsProvider">${zkCredentialsProvider:org.apache.solr.common.cloud.DefaultZkCredentialsProvider}</str>
+    <str name="zkACLProvider">${zkACLProvider:org.apache.solr.common.cloud.DefaultZkACLProvider}</str>
+  </solrcloud>
+
+  <!-- Query-time handler -->
+  <shardHandlerFactory name="shardHandlerFactory" class="HttpShardHandlerFactory">
+    <int name="socketTimeout">{{ solr_shard_socket_timeout | default(120000) }}</int>
+    <int name="connTimeout">{{ solr_shard_conn_timeout   | default(60000)  }}</int>
+  </shardHandlerFactory>
+
+  <!-- Update/indexing handler -->
+  <updateShardHandler class="solr.UpdateShardHandler">
+    <int name="socketTimeout">{{ solr_update_socket_timeout | default(120000) }}</int>
+    <int name="connTimeout">{{ solr_update_conn_timeout   | default(60000)  }}</int>
+    <int name="maxUpdateConnections">{{ solr_update_max_connections     | default(512) }}</int>
+    <int name="maxUpdateConnectionsPerHost">{{ solr_update_max_per_host | default(64)  }}</int>
+  </updateShardHandler>
+
+  <metrics>
+    <reporter name="jmx" class="org.apache.solr.metrics.reporters.SolrJmxReporter">
+      <str name="domain">solr</str>
+      <bool name="enabled">true</bool>
+    </reporter>
+  </metrics>
+</solr>

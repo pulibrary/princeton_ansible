@@ -1,0 +1,221 @@
+---
+# Main task file for SolrCloud role
+#
+- name: Solrcloud | Configure vector using template
+  ansible.builtin.template:
+    src: vector.yaml.j2
+    dest: /etc/vector/vector.yaml
+    mode: "0644"
+  when:
+    - running_on_server
+  notify:
+    - restart vector
+  tags:
+    - logs
+
+- name: Solrcloud | Ensure Vector is running and enabled
+  ansible.builtin.service:
+    name: vector
+    state: started
+    enabled: true
+  when:
+    - running_on_server
+  tags:
+    - logs
+
+- name: Solrcloud | Set Solr version variables
+  ansible.builtin.set_fact:
+    is_solr9: "{{ true if solr_cloud_download_version is version('9.0.0', '>=') else false }}"
+  tags: [always]
+
+- name: Solrcloud | Display Solr version info
+  ansible.builtin.debug:
+    msg: "Configuring Solr {{ 'version 9.x' if is_solr9 else 'version 8.x' }} ({{ solr_cloud_download_version }})"
+  tags: [always]
+
+# Install dependencies
+- name: Solrcloud | Install dependencies
+  ansible.builtin.apt:
+    name:
+      - cifs-utils
+      - lsof
+      - acl
+    state: present
+  tags: [packages]
+
+# Ensure users and groups exist
+- name: Solrcloud | Ensure Solr group exists
+  ansible.builtin.group:
+    name: "{{ solr_group }}"
+    state: present
+  tags: [users]
+
+- name: Solrcloud | Ensure Solr user exists
+  ansible.builtin.user:
+    name: "{{ solr_user }}"
+    group: "{{ solr_group }}"
+    system: true
+    createhome: true
+    home: "/home/{{ solr_user }}"
+    shell: /bin/bash
+  tags: [users]
+
+# Create required directories
+- name: Solrcloud | Create Solr directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+    owner: "{{ solr_user }}"
+    group: "{{ solr_group }}"
+  loop:
+    - "/solr"
+    - "/solr/data"
+    - "/solr/data/backup"
+    - "/solr/data/cloud_backup" # google cloud
+    - "/var/log/gcsfuse"      # gcsfuse
+    - "/solr/logs"
+    - "/run/solr"
+  tags:
+    - google_cloud
+    - [directories]
+
+- name: Solrcloud | Configure backup mounts
+  ansible.builtin.include_tasks: backup_mounts.yml
+
+- name: Solrcloud | Configure cloud backup mounts
+  ansible.builtin.include_tasks: backup_gcs_mount.yml
+  tags:
+    - google_cloud
+
+- name: Solrcloud | Check if Solr is already installed
+  ansible.builtin.stat:
+    path: "{{ solr_versioned_dir }}/README.txt"
+  register: solr_install_check
+  tags: [download, install]
+
+# Download SolrCloud package
+- name: Solrcloud | Download SolrCloud archive
+  ansible.builtin.get_url:
+    url: "{{ solr_cloud_url }}"
+    dest: "/tmp/{{ solr_cloud_package }}"
+    timeout: 300
+    mode: "0644"
+  register: solr_downloaded
+  retries: 3
+  delay: 10
+  until: solr_downloaded is succeeded
+  ignore_errors: true
+  when: not solr_install_check.stat.exists
+  tags: [download]
+
+# Fallback to local copy if download fails
+- name: Solrcloud | Copy local archive if download fails
+  ansible.builtin.copy:
+    src: "local_files/solr/{{ solr_cloud_package }}"
+    dest: "/tmp/{{ solr_cloud_package }}"
+    mode: "0644"
+  when:
+    - not solr_install_check.stat.exists
+    - solr_downloaded is defined and solr_downloaded is failed
+  tags: [download]
+
+- name: Solrcloud | install solr service
+  ansible.builtin.include_tasks: install.yml
+
+- name: Solrcloud | install solr plugin jars
+  ansible.builtin.include_tasks: plugins.yml
+
+- name: Solrcloud | Configure solr service
+  ansible.builtin.include_tasks: service.yml
+
+# Configure SolrCloud environment with idempotence check
+- name: Solrcloud | Check if init script exists
+  ansible.builtin.stat:
+    path: /etc/default/solr.in.sh
+  register: init_file_check
+  tags: [configure]
+
+# Configure SolrCloud environment
+- name: Solrcloud | Configure SolrCloud init script
+  ansible.builtin.template:
+    src: solr.in.sh.j2
+    dest: /etc/default/solr.in.sh
+    owner: "{{ solr_user }}"
+    group: "{{ solr_group }}"
+    mode: "0644"
+  notify: Restart solr
+  register: init_script_updated
+  tags: [configure]
+
+# Configure system limits with checksum
+- name: Solrcloud | Check if limits file exists
+  ansible.builtin.stat:
+    path: /etc/security/limits.d/solr.conf
+  register: limits_file_check
+  tags: [system]
+
+# Configure system limits
+- name: Solrcloud | Configure high ulimit value for Solr
+  ansible.builtin.template:
+    src: solr.conf.j2
+    dest: /etc/security/limits.d/solr.conf
+    mode: "0644"
+  notify: Restart solr
+  register: limits_updated
+  tags: [system]
+
+# Configure Solr XML
+- name: Solrcloud | Configure SolrCloud properties
+  ansible.builtin.template:
+    src: solr.xml.j2
+    dest: "{{ solr_data_dir }}/solr.xml"
+    owner: "{{ solr_user }}"
+    group: "{{ solr_group }}"
+    mode: "0644"
+  notify: Restart solr
+  tags: [configure]
+
+# Configure logging
+- name: Solrcloud | Configure logging
+  ansible.builtin.template:
+    src: log4j2.xml.j2
+    dest: "{{ solr_data_home }}/log4j2.xml"
+    owner: "{{ solr_user }}"
+    group: "{{ solr_group }}"
+    mode: "0644"
+  notify: Restart solr
+  tags: [logging]
+
+# Version-specific configuration
+- name: Solrcloud | Configure Solr 9.x specific settings
+  ansible.builtin.include_tasks: solr9_config.yml
+  when: is_solr9
+
+- name: Solrcloud | Check if temp files exist
+  ansible.builtin.stat:
+    path: "/tmp/{{ solr_cloud_package }}"
+  register: solr_temp_files
+  tags: [cleanup]
+
+# Clean up installation files
+- name: Solrcloud | Cleanup installation files
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "/tmp/{{ solr_cloud_package }}"
+    - "/tmp/solr_extract"
+  when: solr_temp_files.stat.exists and not solr_install_check.stat.exists
+  tags: [cleanup]
+
+# Start and enable Solr service
+- name: Solrcloud | Start and enable Solr service
+  ansible.builtin.systemd:
+    name: solr
+    state: started
+    enabled: true
+    daemon_reload: true
+  when:
+    - running_on_server
+  tags: [service]

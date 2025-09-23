@@ -1,0 +1,99 @@
+---
+# Create systemd service file with proper idempotence checks
+- name: Solrcloud | Get existing service file
+  ansible.builtin.stat:
+    path: /etc/systemd/system/solr.service
+  register: service_file_check
+  tags: [service]
+
+# If the service file doesn't exist, create it
+- name: Solrcloud | Create initial Solr systemd service file
+  ansible.builtin.template:
+    src: solr.service.j2
+    dest: /etc/systemd/system/solr.service
+    mode: "0644"
+  notify: Reload systemd and restart solr
+  when: not service_file_check.stat.exists
+  tags: [service]
+
+# If the service file exists, use this approach to check if we need to update it
+- name: Solrcloud | Create temp directory for service file comparison
+  ansible.builtin.tempfile:
+    state: directory
+    suffix: solr_service_check
+  register: temp_dir
+  check_mode: no
+  changed_when: false
+  when: service_file_check.stat.exists
+  tags: [service]
+
+- name: Solrcloud | Generate comparison service file
+  ansible.builtin.template:
+    src: solr.service.j2
+    dest: "{{ temp_dir.path }}/solr.service.new"
+    mode: "0644"
+  check_mode: no
+  changed_when: false
+  when: service_file_check.stat.exists
+  tags: [service]
+
+- name: Solrcloud | Compare service files
+  ansible.builtin.command: diff /etc/systemd/system/solr.service {{ temp_dir.path }}/solr.service.new
+  register: service_diff
+  changed_when: false
+  failed_when: service_diff.rc > 1
+  when: service_file_check.stat.exists
+  tags: [service]
+
+- name: Solrcloud | Update Solr systemd service file if needed
+  ansible.builtin.template:
+    src: solr.service.j2
+    dest: /etc/systemd/system/solr.service
+    mode: "0644"
+  notify: Reload systemd and restart solr
+  when: 
+    - service_file_check.stat.exists
+    - service_diff.rc == 1
+  tags: [service]
+
+- name: Solrcloud | Remove temp directory
+  ansible.builtin.file:
+    path: "{{ temp_dir.path }}"
+    state: absent
+  when: service_file_check.stat.exists
+  changed_when: false
+  tags: [service]
+
+# Configure SolrCloud init script
+- name: Solrcloud | Check if init script exists
+  ansible.builtin.stat:
+    path: /etc/default/solr.in.sh
+  register: init_file_check
+  tags: [configure]
+
+- name: Solrcloud | Configure SolrCloud init script
+  ansible.builtin.template:
+    src: solr.in.sh.j2
+    dest: /etc/default/solr.in.sh
+    owner: "{{ solr_user }}"
+    group: "{{ solr_group }}"
+    mode: "0644"
+  notify: Restart solr
+  tags: [configure]
+  register: init_script_updated
+
+# Configure system limits
+- name: Solrcloud | Check if limits file exists
+  ansible.builtin.stat:
+    path: /etc/security/limits.d/solr.conf
+  register: limits_file_check
+  tags: [system]
+
+- name: Solrcloud | Configure high ulimit value for Solr
+  ansible.builtin.template:
+    src: solr.conf.j2
+    dest: /etc/security/limits.d/solr.conf
+    mode: "0644"
+  notify: Restart solr
+  tags: [system]
+  register: limits_updated

@@ -1,0 +1,57 @@
+---
+# Solr 9.x specific configurations
+
+- name: Solrcloud | Configure Solr 9 specific settings
+  ansible.builtin.debug:
+    msg: "Configuring Solr 9.x specific settings"
+
+# Add Solr allowPaths option for backups in Solr 9
+- name: Solrcloud | Ensure backup directory has correct permissions for Solr 9
+  ansible.builtin.file:
+    path: "/solr/data/backup"
+    state: directory
+    owner: "{{ solr_user }}"
+    group: "{{ solr_group }}"
+    mode: "0755"
+
+# Copy security configuration only if security is enabled
+- name: Solrcloud | Copy Solr 9 security configuration
+  ansible.builtin.template:
+    src: "solr9_security.json.j2"
+    dest: "{{ solr_data_dir }}/security.json"
+    owner: "{{ solr_user }}"
+    group: "{{ solr_group }}"
+    mode: "0644"
+  when: solr_use_security | default(false)
+  ignore_errors: true
+
+# Check if the security policy file exists first
+- name: Solrcloud | Check if security.policy file exists
+  ansible.builtin.stat:
+    path: "{{ solr_versioned_dir }}/server/etc/security.policy"
+  register: security_policy_file
+
+# Only configure if file exists and we haven't already configured it
+- name: Solrcloud | Check if backup permissions already configured
+  ansible.builtin.lineinfile:
+    path: "{{ solr_versioned_dir }}/server/etc/security.policy"
+    line: '    permission java.io.FilePermission "${solr.allowPaths}", "read,write,delete,readlink";'
+    state: absent
+  check_mode: yes
+  register: backup_perms_check
+  when: security_policy_file.stat.exists
+  changed_when: false
+
+- name: Configure security to allow Solr 9.2 to write to backup dir
+  # we can remove this when we upgrade to Solr >=9.4
+  ansible.builtin.blockinfile:
+    path: "{{ solr_versioned_dir }}/server/etc/security.policy"
+    backup: yes
+    insertafter: "// 3rd party jar resources \\(where symlinks are not supported\\), test-files/ resources"
+    marker: "    // {mark} ANSIBLE MANAGED BLOCK - Solr backup permissions"
+    block: |
+          permission java.io.FilePermission "${solr.allowPaths}", "read,write,delete,readlink";
+          permission java.io.FilePermission "${solr.allowPaths}${/}-", "read,write,delete,readlink";
+  when:
+    - security_policy_file.stat.exists
+    - backup_perms_check.found is defined and not backup_perms_check.found
