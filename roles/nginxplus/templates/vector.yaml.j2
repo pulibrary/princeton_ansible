@@ -35,8 +35,6 @@ transforms:
       ._msg  = .request
       .host  = get_hostname!()
 
-      # 4. Tag with a “service” for victorialogs filtering
-      .service = "nginx"
 
       # 5. (Optional) Keep log_type/status/bytes_sent if you want more labels
       .log_type   = "nginx_access"
@@ -72,21 +70,3 @@ sinks:
   #   encoding:
   #     codec: json
   #  uncomment above to debug
- 
-  victorialogs:
-    type: http
-    inputs:
-      - parse_nginx_access
-      - parse_nginx_error
-    uri: "{{ victorialogs_uri }}/insert/jsonline?_stream_fields=host"
-    method: post
-    compression: gzip
-    encoding:
-      codec: json
-    framing:
-      method: newline_delimited
-    request:
-      headers:
-        Content-Type: "application/x-ndjson"
-    healthcheck:
-      enabled: {{ vector_healthcheck_enabled | default(false) }}
