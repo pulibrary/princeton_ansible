@@ -5,7 +5,10 @@ job "signoz" {
   group "signoz" {
     count = 1
     network {
-      mode = "host"
+      port "ch"           { static = {{ signoz_clickhouse_port | default(9000) }} }
+    port "ui"           { static = {{ signoz_ui_port       | default(3301) }} }
+    port "otlp_grpc"    { static = {{ signoz_otlp_grpc_port }} }
+    port "otlp_http"    { static = {{ signoz_otlp_http_port }} }
     }
 
     task "clickhouse" {
@@ -24,7 +27,7 @@ job "signoz" {
       }
       service {
         name = "clickhouse"
-        port = "{{ signoz_clickhouse_port }}"
+        port = "ch"
         check {
           name     = "ch alive"
           type     = "tcp"
@@ -74,7 +77,7 @@ job "signoz" {
       }
       service {
         name = "signoz-ui"
-        port = "{{ signoz_ui_port }}"
+        port = "ui"
         check {
           name     = "ui http"
           type     = "http"

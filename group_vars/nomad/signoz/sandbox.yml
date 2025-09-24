@@ -18,6 +18,22 @@ signoz_clickhouse_logs_dir: "/var/log/signoz/clickhouse"
 signoz_data_device: "/dev/sda"
 signoz_data_mount: "/var/lib/signoz"
 signoz_data_fstype: "xfs"
+signoz_data_root: /data/signoz
+
+signoz_conf_dir: /etc/signoz
+signoz_gcs_sa_path: "{{ signoz_conf_dir }}/gcs-sa.json"
+signoz_otel_config_path: "{{ signoz_conf_dir }}/otel-collector.yaml"
+
+# ---- image var names that the role/template expect
+signoz_image: "{{ signoz_query_image }}"           # query-service
+signoz_otelcol_image: "{{ signoz_collector_image }}"  # otel collector
+
+# ---- clickhouse connection used by the query service
+signoz_clickhouse_port: 9000
+signoz_clickhouse_db: signoz
+
+# ---- base URL the template references (used for OIDC redirect + UI)
+signoz_baseurl: "https://{{ signoz_domain }}"
 
 # ports
 signoz_ui_port: 3301
@@ -38,6 +54,8 @@ signoz_backup_enabled: true
 signoz_backup_bucket: "pul-sandbox-signoz-backups"
 signoz_backup_gcp_sa_json: "{{ vault_signoz_gcs_sa_json }}"   # raw JSON (quoted) or base64
 signoz_backup_schedule_cron: "0 3 * * *"
+
+nomad_client_acl_token: "{{ pul_nomad_management_token }}"
 
 # pin to node
 signoz_node_constraint: "sandbox-signoz1.lib.princeton.edu"
