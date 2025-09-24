@@ -62,10 +62,6 @@ transforms:
         .level = "unknown"
       }
 
-      # VictoriaLogs expects _msg field, not message
-      ._msg = message_str
-      del(.message)
-
 sinks:
   # Console for debugging
   # debug_console:
@@ -75,22 +71,3 @@ sinks:
   #     codec: json
   #   target: stdout
   #   uncomment to debug
-
-  # VictoriaLogs sink
-  victorialogs:
-    type: http
-    inputs: [process_solr]
-    uri: "{{ victorialogs_uri }}/insert/jsonline?_stream_fields=host,service,log_type,level"
-    method: post
-    encoding:
-      codec: json
-    framing:
-      method: newline_delimited
-    batch:
-      max_events: 10
-      timeout_secs: 2
-    request:
-      headers:
-        Content-Type: "application/x-ndjson"
-    healthcheck:
-      enabled: false
