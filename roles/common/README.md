@@ -55,7 +55,6 @@ Customize logrotate per service or environment by overriding `logrotate_rules` i
 | Variable                      | Default                                      | Description                                      |
 | ----------------------------- | -------------------------------------------- | ------------------------------------------------ |
 | `vector_url`                  | `https://packages.timber.io/vector`          | Repository URL for Vector installation.          |
-| `victorialogs_uri`            | `http://kennyloggin-{{ runtime_env }}1:9428` | Endpoint for VictoriaLogs ingestion.             |
 | `vector_enable_console_debug` | `true`                                       | Enable console debug logs (for troubleshooting). |
 | `vector_api_enabled`          | `true`                                       | Enable Vector's HTTP API endpoint.               |
 
