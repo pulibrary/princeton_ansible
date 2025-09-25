@@ -71,8 +71,14 @@ job "signoz" {
       }
 
       resources {
-        cpu    = 300
-        memory = 384
+        cpu    = 1000
+        memory = 512
+      }
+      restart {
+        attempts = 10
+        interval = "30m"
+        delay = "10s"
+        mode = "delay"
       }
     }
 
