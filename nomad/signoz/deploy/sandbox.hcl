@@ -1,6 +1,7 @@
 job "signoz" {
   datacenters = ["dc1"]
   type        = "service"
+  node_pool   = "sandbox"
   priority    = 50
 
   group "signoz" {
@@ -19,6 +20,10 @@ job "signoz" {
       }
       port "otlp_http" {
         static = 4318
+      }
+      constraint {
+        attribute = "${node.unique.name}"
+        value     = "sandbox-signoz1"
       }
     }
 
