@@ -1,4 +1,4 @@
-#!/bin/bash
+#!usr/bin/env bash
 APP=$1
 ENV=$2
 BRANCH_NAME="${BRANCH:-main}"
@@ -6,38 +6,38 @@ REPOSITORY="${REPO:-princeton_ansible}"
 
 # Default to production if no environment specified
 if [[ -z "${ENV}" ]]; then
-	echo "Missing Environment. Command: 'BRANCH=main ./bin/deploy <app> <env>'."
-	echo "Available environments: production, staging, sandbox"
-	exit 1
+  echo "Missing Environment. Command: 'BRANCH=main ./bin/deploy <app> <env>'."
+  echo "Available environments: production, staging, sandbox"
+  exit 1
 fi
 
 if [[ -z "${APP}" ]]; then
-	echo "Missing Application. Command: 'BRANCH=main ./bin/deploy <app> <env>'."
-	exit 1
+  echo "Missing Application. Command: 'BRANCH=main ./bin/deploy <app> <env>'."
+  exit 1
 fi
 
 # Set the appropriate nomad host based on environment
 case "${ENV}" in
 "production")
-	NOMAD_HOST="nomad-host-prod1.lib.princeton.edu"
-	;;
+  NOMAD_HOST="nomad-host-prod1.lib.princeton.edu"
+  ;;
 "staging")
-	NOMAD_HOST="nomad-host-staging1.lib.princeton.edu"
-	;;
+  NOMAD_HOST="nomad-host-staging1.lib.princeton.edu"
+  ;;
 "sandbox")
-	NOMAD_HOST="nomad-host-sandbox1.lib.princeton.edu"
-	;;
+  NOMAD_HOST="nomad-host-sandbox1.lib.princeton.edu"
+  ;;
 *)
-	echo "Unknown environment: ${ENV}"
-	echo "Available environments: production, staging, sandbox"
-	exit 1
-	;;
+  echo "Unknown environment: ${ENV}"
+  echo "Available environments: production, staging, sandbox"
+  exit 1
+  ;;
 esac
 
 # Make sure we're on VPN
 if ! nslookup ${NOMAD_HOST} 2>&1 >/dev/null; then
-	echo "Unable to connect to ${NOMAD_HOST}. Ensure you're on VPN."
-	exit 1
+  echo "Unable to connect to ${NOMAD_HOST}. Ensure you're on VPN."
+  exit 1
 fi
 
 echo "Deploying ${APP} to ${ENV} environment via ${NOMAD_HOST}..."
