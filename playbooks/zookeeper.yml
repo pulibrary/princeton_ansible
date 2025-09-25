@@ -9,6 +9,14 @@
     - ../group_vars/solr9cloud/{{ runtime_env | default('staging') }}.yml
     - ../group_vars/solr9cloud/vault.yml
     - ../group_vars/zookeeper/{{ runtime_env | default('staging') }}.yml
+  
+  pre_tasks:
+    - name: stop playbook if you didn't pass --limit
+      fail:
+        msg: "you must use -l or --limit"
+      when: ansible_limit is not defined
+      run_once: true
+
   roles:
     - role: roles/openjdk
     - role: roles/zookeeper

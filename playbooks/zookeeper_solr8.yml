@@ -11,6 +11,14 @@
     - ../group_vars/solr8cloud/{{ runtime_env | default('staging') }}.yml
     - ../group_vars/zookeeper/zookeepersolr8_{{ runtime_env | default('staging') }}.yml
 
+  
+  pre_tasks:
+    - name: stop playbook if you didn't pass --limit
+      fail:
+        msg: "you must use -l or --limit"
+      when: ansible_limit is not defined
+      run_once: true
+
   roles:
     - role: roles/openjdk
     - role: roles/zookeeper
