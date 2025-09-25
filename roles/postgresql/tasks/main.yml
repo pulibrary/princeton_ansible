@@ -1,28 +1,4 @@
 ---
-- name: PostgreSQL | Configure vector using template
-  ansible.builtin.template:
-    src: vector.yaml.j2
-    dest: /etc/vector/vector.yaml
-    mode: "0644"
-  when:
-    - postgresql_is_local
-    - running_on_server
-  notify:
-    - restart vector
-  tags:
-    - logs
-
-- name: PostgreSQL | Ensure Vector is running and enabled
-  ansible.builtin.service:
-    name: vector
-    state: started
-    enabled: true
-  when:
-    - postgresql_is_local
-    - running_on_server
-  tags:
-    - logs
-
 - name: PostgreSQL | Set log file path for RHEL based messages
   ansible.builtin.set_fact:
     postgres_log_file: /var/lib/pgsql/data/pg_log/pg.csv
