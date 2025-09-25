@@ -41,9 +41,8 @@ job "signoz" {
       driver = "podman"
 
       config {
-        image        = "clickhouse/clickhouse-server:24.7"
+        image        = "docker.io/clickhouse/clickhouse-server:24.7"
         network_mode = "host"
-        selinux_label = "Z"
         volumes      = ["/data/signoz/clickhouse:/var/lib/clickhouse:Z"]
         ulimit       = ["nofile=262144:262144"]
       }
@@ -71,7 +70,7 @@ job "signoz" {
       driver = "podman"
 
       config {
-        image        = "otel/opentelemetry-collector-contrib:0.111.0"
+        image        = "docker.io/otel/opentelemetry-collector-contrib:0.111.0"
         network_mode = "host"
         selinux_label = "Z"
         args         = ["--config=/etc/signoz/otel.yaml"]
@@ -89,7 +88,7 @@ job "signoz" {
       driver = "podman"
 
       config {
-        image        = "signoz/query-service:0.39.0"
+        image        = "docker.io/signoz/query-service:0.39.0"
         network_mode = "host"
       }
 
@@ -123,7 +122,7 @@ job "signoz" {
       driver = "podman"
 
       config {
-        image        = "signoz/frontend:0.39.0"
+        image        = "docker.io/signoz/frontend:0.39.0"
         network_mode = "host"
       }
 
