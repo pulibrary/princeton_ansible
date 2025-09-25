@@ -65,10 +65,11 @@
 
 - name: Solrcloud | Ensure gcsfuse log dir exists
   ansible.builtin.file:
-    path: "{{ gcsfuse_directory | default('/var/log/gcsfuse') }}"
+    path: "/var/log/gcsfuse"
     state: directory
-    owner: "{{ solr_user | default('deploy') }}"
-    group: "{{ solr_group | default('deploy') }}"
+    recurse: true
+    owner: "deploy"
+    group: "deploy"
     mode: "0755"
   when: running_on_server
 
@@ -166,6 +167,15 @@
     group: root
     mode: "0755"
   when: running_on_server
+  tags: [google_cloud]
+
+- name: Solrcloud  - Recursively change ownership of logfiles
+  ansible.builtin.file:
+    path: /var/log/gcsfuse
+    state: directory
+    recurse: true
+    owner: deploy
+    group: deploy
   tags: [google_cloud]
 
 #  run once to display current output during deploy
