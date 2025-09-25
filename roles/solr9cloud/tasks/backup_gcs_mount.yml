@@ -72,10 +72,11 @@
 
 - name: Solrcloud | Ensure gcsfuse log dir exists
   ansible.builtin.file:
-    path: "{{ gcsfuse_directory | default('/var/log/gcsfuse') }}"
+    path: "/var/log/gcsfuse"
     state: directory
-    owner: "{{ solr_user | default('deploy') }}"
-    group: "{{ solr_group | default('deploy') }}"
+    recurse: true
+    owner: "deploy"
+    group: "deploy"
     mode: "0755"
   when: running_on_server
   tags: [google_cloud]
@@ -195,6 +196,14 @@
     - running_on_server
     - checkmk_verify_local | default(false) | bool
   tags: [google_cloud]
+
+- name: Solrcloud | restart gcsfuse service
+  ansible.builtin.systemd_service:
+    name: solr-gcs-backup.service
+    state: started
+  tags: [google_cloud]
+  when:
+    - running_on_server
 
 # Set up log rotation for gcsfuse logs
 - name: Solrcloud | Configure gcsfuse log rotation
