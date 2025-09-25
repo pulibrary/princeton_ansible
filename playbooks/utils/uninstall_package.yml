@@ -1,0 +1,21 @@
+---
+# you MUST run this playbook on a host or group with '--limit' for example `ansible-playbook -v ---limit pdc_describe_staging playbooks/utils/common_only.yml`
+#
+- name: Uninstall a package/service previously installed with yum/apt
+  hosts: all
+  # hosts: staging:qa:production
+  remote_user: pulsys
+  become: true
+
+  pre_tasks:
+    - name: stop playbook if you didn't pass --limit
+      fail:
+        msg: "you must use -l or --limit"
+      when: ansible_limit is not defined
+      run_once: true
+
+  tasks:
+    - name: uninstall a package
+      ansible.builtin.package:
+       name: "{{ package_to_remove }}"
+       state: absent
