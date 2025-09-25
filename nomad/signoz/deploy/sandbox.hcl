@@ -14,12 +14,6 @@ job "signoz" {
   group "signoz" {
     count = 1
 
-    # Pin to the sandbox-signoz1 node
-    #    constraint {
-    #  attribute = "${node.unique.name}"
-    #  value     = "sandbox-signoz1"
-    # }
-
     # Reserve labeled ports
     network {
       port "ch" {
@@ -43,7 +37,7 @@ job "signoz" {
       config {
         image        = "docker.io/clickhouse/clickhouse-server:24.7"
         network_mode = "host"
-        volumes      = ["/data/signoz/clickhouse:/var/lib/clickhouse:Z"]
+        volumes      = ["/data/signoz/clickhouse:/var/lib/clickhouse"]
         ulimit       = { nofile= "262144:262144" }
       }
 
@@ -73,7 +67,7 @@ job "signoz" {
         image        = "docker.io/otel/opentelemetry-collector-contrib:0.111.0"
         network_mode = "host"
         args         = ["--config=/etc/signoz/otel.yaml"]
-        volumes      = ["/etc/signoz/otel.yaml:/etc/signoz/otel.yaml:ro,Z"]
+        volumes      = ["/etc/signoz/otel.yaml:/etc/signoz/otel.yaml:ro"]
       }
 
       resources {
@@ -89,6 +83,7 @@ job "signoz" {
       config {
         image        = "docker.io/signoz/query-service:0.39.0"
         network_mode = "host"
+        volumes      = ["/data/signoz/app:/var/lib/signoz"]
       }
 
       env {
@@ -123,7 +118,7 @@ job "signoz" {
       config {
         image        = "docker.io/signoz/frontend:0.39.0"
         network_mode = "host"
-        volumes      = ["/etc/signoz/frontend.nginx.conf:/etc/nginx/conf.d/default.conf:ro,Z"]
+        volumes      = ["/etc/signoz/frontend.nginx.conf:/etc/nginx/conf.d/default.conf:ro"]
       }
 
       resources {
