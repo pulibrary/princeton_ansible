@@ -123,6 +123,7 @@ job "signoz" {
       config {
         image        = "docker.io/signoz/frontend:0.39.0"
         network_mode = "host"
+        volumes      = ["/etc/signoz/frontend.nginx.conf:/etc/nginx/conf.d/default.conf:ro,Z"]
       }
 
       resources {
