@@ -14,33 +14,48 @@ job "signoz" {
   group "signoz" {
     count = 1
 
-    # Pin to the sandbox node (move constraint OUT of network block)
+    # Pin to the sandbox-signoz1 node
     constraint {
       attribute = "${node.unique.name}"
       value     = "sandbox-signoz1"
     }
 
-    # Reserve labeled ports so services/checks can reference labels (not numbers)
+    # Reserve labeled ports
     network {
-      port "ch"         { static = 9000 }
-      port "ui"         { static = 3301 }
-      port "otlp_grpc"  { static = 4317 }
-      port "otlp_http"  { static = 4318 }
+      port "ch" {
+        static = 9000
+      }
+      port "ui" {
+        static = 3301
+      }
+      port "otlp_grpc" {
+        static = 4317
+      }
+      port "otlp_http" {
+        static = 4318
+      }
     }
 
     # ClickHouse
     task "clickhouse" {
       driver = "podman"
+
       config {
         image        = "clickhouse/clickhouse-server:24.7"
         network_mode = "host"
         volumes      = ["/data/signoz/clickhouse:/var/lib/clickhouse:Z"]
         ulimit       = ["nofile=262144:262144"]
       }
-      resources { cpu = 1000  memory = 2048 }
+
+      resources {
+        cpu    = 1000
+        memory = 2048
+      }
+
       service {
         name = "signoz-clickhouse"
         port = "ch"
+
         check {
           name     = "tcp-9000"
           type     = "tcp"
@@ -53,29 +68,42 @@ job "signoz" {
     # OpenTelemetry Collector
     task "otelcol" {
       driver = "podman"
+
       config {
         image        = "otel/opentelemetry-collector-contrib:0.111.0"
         network_mode = "host"
         args         = ["--config=/etc/signoz/otel.yaml"]
         volumes      = ["/etc/signoz/otel.yaml:/etc/signoz/otel.yaml:ro,Z"]
       }
-      resources { cpu = 300  memory = 384 }
+
+      resources {
+        cpu    = 300
+        memory = 384
+      }
     }
 
     # SigNoz query service (backend API)
     task "query" {
       driver = "podman"
+
       config {
         image        = "signoz/query-service:0.39.0"
         network_mode = "host"
       }
+
       env {
         CLICKHOUSE_ADDR = "tcp://127.0.0.1:9000?database=signoz"
       }
-      resources { cpu = 500  memory = 1024 }
+
+      resources {
+        cpu    = 500
+        memory = 1024
+      }
+
       service {
         name = "signoz-query"
-        # host networking, numeric check requires address_mode="driver" + port
+
+        # With host networking, numeric check needs address_mode="driver" + explicit port
         check {
           name         = "http-8080"
           type         = "http"
@@ -91,15 +119,22 @@ job "signoz" {
     # SigNoz frontend (UI)
     task "frontend" {
       driver = "podman"
+
       config {
         image        = "signoz/frontend:0.39.0"
         network_mode = "host"
       }
-      resources { cpu = 500  memory = 512 }
+
+      resources {
+        cpu    = 500
+        memory = 512
+      }
+
       service {
         name         = "signoz-ui"
         port         = "ui"
         address_mode = "host"
+
         check {
           name         = "http-root"
           type         = "http"
