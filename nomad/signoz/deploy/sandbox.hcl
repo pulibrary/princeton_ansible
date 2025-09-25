@@ -15,10 +15,10 @@ job "signoz" {
     count = 1
 
     # Pin to the sandbox-signoz1 node
-    constraint {
-      attribute = "${node.unique.name}"
-      value     = "sandbox-signoz1"
-    }
+    #    constraint {
+    #  attribute = "${node.unique.name}"
+    #  value     = "sandbox-signoz1"
+    # }
 
     # Reserve labeled ports
     network {
@@ -43,6 +43,7 @@ job "signoz" {
       config {
         image        = "clickhouse/clickhouse-server:24.7"
         network_mode = "host"
+        selinux_label = "Z"
         volumes      = ["/data/signoz/clickhouse:/var/lib/clickhouse:Z"]
         ulimit       = ["nofile=262144:262144"]
       }
@@ -72,6 +73,7 @@ job "signoz" {
       config {
         image        = "otel/opentelemetry-collector-contrib:0.111.0"
         network_mode = "host"
+        selinux_label = "Z"
         args         = ["--config=/etc/signoz/otel.yaml"]
         volumes      = ["/etc/signoz/otel.yaml:/etc/signoz/otel.yaml:ro,Z"]
       }
