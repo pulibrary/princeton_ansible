@@ -44,7 +44,7 @@ job "signoz" {
         image        = "docker.io/clickhouse/clickhouse-server:24.7"
         network_mode = "host"
         volumes      = ["/data/signoz/clickhouse:/var/lib/clickhouse:Z"]
-        ulimit       = ["nofile=262144:262144"]
+        ulimit       = {"nofile=262144:262144"}
       }
 
       resources {
@@ -72,7 +72,6 @@ job "signoz" {
       config {
         image        = "docker.io/otel/opentelemetry-collector-contrib:0.111.0"
         network_mode = "host"
-        selinux_label = "Z"
         args         = ["--config=/etc/signoz/otel.yaml"]
         volumes      = ["/etc/signoz/otel.yaml:/etc/signoz/otel.yaml:ro,Z"]
       }
