@@ -44,7 +44,7 @@ job "signoz" {
         image        = "docker.io/clickhouse/clickhouse-server:24.7"
         network_mode = "host"
         volumes      = ["/data/signoz/clickhouse:/var/lib/clickhouse:Z"]
-        ulimit       = {"nofile=262144:262144"}
+        ulimit       = { nofile= "262144:262144" }
       }
 
       resources {
