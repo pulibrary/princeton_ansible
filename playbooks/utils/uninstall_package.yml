@@ -1,21 +1,69 @@
 ---
-# you MUST run this playbook on a host or group with '--limit' for example `ansible-playbook -v ---limit pdc_describe_staging playbooks/utils/uninstall_package.yml -e package_to_remove=vector`
-#
+# Uninstall a package/service on RHEL and Ubuntu systems
+# Usage: ansible-playbook -v --limit <host_or_group> playbooks/utils/uninstall_package.yml -e package_to_remove=<package_name>
+# Example: ansible-playbook -v --limit pdc_describe_staging playbooks/utils/uninstall_package.yml -e package_to_remove=vector
+
 - name: Uninstall a package/service previously installed with yum/apt
   hosts: all
-  # hosts: staging:qa:production
   remote_user: pulsys
   become: true
-
+  
   pre_tasks:
-    - name: stop playbook if you didn't pass --limit
+    - name: Verify --limit is used
       fail:
-        msg: "you must use -l or --limit"
+        msg: "ERROR: You must use -l or --limit to target specific hosts"
       when: ansible_limit is not defined
       run_once: true
-
+    
+    - name: Verify package_to_remove variable is defined
+      fail:
+        msg: "ERROR: Variable 'package_to_remove' must be defined"
+      when: package_to_remove is not defined
+      run_once: true
+    
+    - name: Display target information
+      debug:
+        msg: "Removing package '{{ package_to_remove }}' from {{ ansible_hostname }}"
+  
   tasks:
-    - name: uninstall a package
-      ansible.builtin.package:
-       name: "{{ package_to_remove }}"
-       state: absent
+    - name: Gather package facts
+      ansible.builtin.package_facts:
+        manager: auto
+      
+    - name: Check if package is installed
+      debug:
+        msg: "Package '{{ package_to_remove }}' is {{ 'installed' if package_to_remove in ansible_facts.packages else 'not installed' }}"
+    
+    - name: Remove package on Debian/Ubuntu systems
+      ansible.builtin.apt:
+        name: "{{ package_to_remove }}"
+        state: absent
+        purge: yes
+        autoremove: yes
+      when: ansible_os_family == "Debian"
+      
+    - name: Remove package on RHEL/CentOS/Fedora systems (using dnf)
+      ansible.builtin.dnf:
+        name: "{{ package_to_remove }}"
+        state: absent
+        autoremove: yes
+      when: 
+        - ansible_os_family == "RedHat"
+        - ansible_distribution_major_version | int >= 8
+      
+    - name: Remove package on older RHEL/CentOS systems (using yum)
+      ansible.builtin.yum:
+        name: "{{ package_to_remove }}"
+        state: absent
+        autoremove: yes
+      when: 
+        - ansible_os_family == "RedHat"
+        - ansible_distribution_major_version | int < 8
+    
+    - name: Verify package removal
+      ansible.builtin.package_facts:
+        manager: auto
+      
+    - name: Confirm package removal status
+      debug:
+        msg: "Package '{{ package_to_remove }}' has been {{ 'successfully removed' if package_to_remove not in ansible_facts.packages else 'FAILED to remove' }}"
