@@ -86,7 +86,7 @@ job "signoz" {
   driver = "podman"
 
   config {
-    image        = "docker.io/signoz/query-service:0.96.1"
+    image        = "docker.io/signoz/query-service:latest-oss"
     network_mode = "host"
     volumes      = ["/data/signoz/app:/var/lib/signoz"]
   }
@@ -127,7 +127,7 @@ job "signoz" {
       driver = "podman"
 
       config {
-        image        = "docker.io/signoz/frontend:0.96.1"
+        image        = "docker.io/signoz/frontend:latest-oss"
         network_mode = "host"
         volumes      = ["/etc/signoz/frontend.nginx.conf:/etc/nginx/conf.d/default.conf:ro"]
       }
