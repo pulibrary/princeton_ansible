@@ -38,15 +38,15 @@
       ansible.builtin.apt:
         name: "{{ package_to_remove }}"
         state: absent
-        purge: yes
-        autoremove: yes
+        purge: true
+        autoremove: true
       when: ansible_os_family == "Debian"
       
     - name: Remove package on RHEL/CentOS/Fedora systems (using dnf)
       ansible.builtin.dnf:
         name: "{{ package_to_remove }}"
         state: absent
-        autoremove: yes
+        autoremove: true
       when: 
         - ansible_os_family == "RedHat"
         - ansible_distribution_major_version | int >= 8
@@ -55,14 +55,10 @@
       ansible.builtin.yum:
         name: "{{ package_to_remove }}"
         state: absent
-        autoremove: yes
+        autoremove: true
       when: 
         - ansible_os_family == "RedHat"
         - ansible_distribution_major_version | int < 8
-    
-    - name: Verify package removal
-      ansible.builtin.package_facts:
-        manager: auto
       
     - name: Confirm package removal status
       debug:
