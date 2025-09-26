@@ -86,7 +86,7 @@ job "signoz" {
   driver = "podman"
 
   config {
-    image        = "docker.io/signoz/query-service:0.36.1"
+    image        = "docker.io/signoz/query-service:0.96.1"
     network_mode = "host"
     volumes      = ["/data/signoz/app:/var/lib/signoz"]
   }
@@ -100,6 +100,13 @@ job "signoz" {
     cpu    = 500
     memory = 1024
   }
+
+      restart {
+        attempts = 10
+        interval = "30m"
+        delay = "10s"
+        mode = "delay"
+      }
 
   service {
     name = "signoz-query"
@@ -120,7 +127,7 @@ job "signoz" {
       driver = "podman"
 
       config {
-        image        = "docker.io/signoz/frontend:0.39.0"
+        image        = "docker.io/signoz/frontend:0.96.1"
         network_mode = "host"
         volumes      = ["/etc/signoz/frontend.nginx.conf:/etc/nginx/conf.d/default.conf:ro"]
       }
