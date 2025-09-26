@@ -1,7 +1,11 @@
 ---
-# Uninstall a package/service on RHEL and Ubuntu systems
-# Usage: ansible-playbook -v --limit <host_or_group> playbooks/utils/uninstall_package.yml -e package_to_remove=<package_name>
-# Example: ansible-playbook -v --limit pdc_describe_staging playbooks/utils/uninstall_package.yml -e package_to_remove=vector
+# Install or uninstall a package/service on RHEL and Ubuntu systems
+# 
+# Uninstall usage: 
+#   ansible-playbook -v --limit <host_or_group> playbooks/utils/manage_package.yml -e package_to_remove=<package_name>
+# 
+# Example:
+#   ansible-playbook -v --limit pdc_describe_staging playbooks/utils/manage_package.yml -e package_to_remove=vector
 
 - name: Uninstall a package/service previously installed with yum/apt
   hosts: all
@@ -55,10 +59,14 @@
       ansible.builtin.yum:
         name: "{{ package_to_remove }}"
         state: absent
-        autoremove: true
+        autoremove: yes
       when: 
         - ansible_os_family == "RedHat"
         - ansible_distribution_major_version | int < 8
+    
+    - name: Verify package removal
+      ansible.builtin.package_facts:
+        manager: auto
       
     - name: Confirm package removal status
       debug:
