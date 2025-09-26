@@ -127,7 +127,7 @@ job "signoz" {
       driver = "podman"
 
       config {
-        image        = "docker.io/signoz/frontend:v0.48.0-cloud.3>"
+        image        = "docker.io/signoz/frontend:v0.48.0-cloud.3"
         network_mode = "host"
         volumes      = ["/etc/signoz/frontend.nginx.conf:/etc/nginx/conf.d/default.conf:ro"]
       }
