@@ -1,3 +1,4 @@
+---
 # by default this playbook runs in the staging environment
 # to run in production, pass '-e runtime_env=production'
 - name: build zookeeper boxes
@@ -9,6 +10,17 @@
     - ../group_vars/solr9cloud/{{ runtime_env | default('staging') }}.yml
     - ../group_vars/solr9cloud/vault.yml
     - ../group_vars/zookeeper/{{ runtime_env | default('staging') }}.yml
+  vars:
+    allow_multiple_hosts: false
+  pre_tasks:
+    - name: check if running against more than one host
+      fail:
+        msg: |
+          This playbook must be run against one zookeeper node at a time to avoid cluster issues.
+          Use --limit to target a specific host, or set allow_multiple_hosts=true to override.
+      when: 
+        - ansible_play_hosts | length > 1
+        - not allow_multiple_hosts | bool
   roles:
     - role: roles/openjdk
     - role: roles/zookeeper
