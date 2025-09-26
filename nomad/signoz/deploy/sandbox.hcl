@@ -81,6 +81,24 @@ job "signoz" {
         mode = "delay"
       }
     }
+    # Wait for ClickHouse to accept connections before starting other tasks
+task "wait-ch" {
+  driver = "raw_exec"
+
+  lifecycle {
+    hook = "prestart"
+  }
+
+  config {
+    command = "/bin/sh"
+    args    = ["-lc", "for i in $(seq 1 60); do nc -z 127.0.0.1 9000 && exit 0; sleep 1; done; echo 'ClickHouse not ready after 60s' >&2; exit 1"]
+  }
+
+  resources {
+    cpu    = 50
+    memory = 32
+  }
+}
 
     # SigNoz query service (backend API)
     task "query" {
@@ -115,12 +133,13 @@ job "signoz" {
           port         = 8080
         }
       }
-      lifecycle {
-  hook    = "prestart"
-  command = "/bin/sh"
-  args    = ["-c", "sleep 5"]
-}
 
+      restart {
+    attempts = 10
+    interval = "30m"
+    delay    = "10s"
+    mode     = "delay"
+  }
     }
 
     # SigNoz frontend (UI)
