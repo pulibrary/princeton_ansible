@@ -115,6 +115,12 @@ job "signoz" {
           port         = 8080
         }
       }
+      lifecycle {
+  hook    = "prestart"
+  command = "/bin/sh"
+  args    = ["-c", "sleep 5"]
+}
+
     }
 
     # SigNoz frontend (UI)
