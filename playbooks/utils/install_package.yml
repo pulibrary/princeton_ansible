@@ -1,0 +1,75 @@
+---
+# Install a package/service on RHEL and Ubuntu systems
+# 
+# Install usage:
+#   ansible-playbook -v --limit <host_or_group> playbooks/utils/manage_package.yml -e package_to_add=<package_name>
+# 
+# Example:
+#   ansible-playbook -v --limit pdc_describe_staging playbooks/utils/manage_package.yml -e package_to_add=vector
+
+- name: Install a package/service with yum/apt
+  hosts: all
+  remote_user: pulsys
+  become: true
+  
+  pre_tasks:
+    - name: Verify --limit is used
+      fail:
+        msg: "ERROR: You must use -l or --limit to target specific hosts"
+      when: ansible_limit is not defined
+      run_once: true
+    
+    - name: Verify package_to_add variable is defined
+      fail:
+        msg: "ERROR: Variable 'package_to_add' must be defined"
+      when: package_to_add is not defined
+      run_once: true
+    
+    - name: Display target information
+      debug:
+        msg: "Installing package '{{ package_to_add }}' on {{ ansible_hostname }}"
+  
+  tasks:
+    - name: Gather package facts
+      ansible.builtin.package_facts:
+        manager: auto
+      
+    - name: Check if package is already installed
+      debug:
+        msg: "Package '{{ package_to_add }}' is {{ 'already installed' if package_to_add in ansible_facts.packages else 'not installed' }}"
+    
+    - name: Update apt cache on Debian/Ubuntu systems
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600
+      when: ansible_os_family == "Debian"
+    
+    - name: Install package on Debian/Ubuntu systems
+      ansible.builtin.apt:
+        name: "{{ package_to_add }}"
+        state: present
+      when: ansible_os_family == "Debian"
+      
+    - name: Install package on RHEL/CentOS/Fedora systems (using dnf)
+      ansible.builtin.dnf:
+        name: "{{ package_to_add }}"
+        state: present
+      when: 
+        - ansible_os_family == "RedHat"
+        - ansible_distribution_major_version | int >= 8
+      
+    - name: Install package on older RHEL/CentOS systems (using yum)
+      ansible.builtin.yum:
+        name: "{{ package_to_add }}"
+        state: present
+      when: 
+        - ansible_os_family == "RedHat"
+        - ansible_distribution_major_version | int < 8
+    
+    - name: Verify package installation
+      ansible.builtin.package_facts:
+        manager: auto
+      
+    - name: Confirm package installation status
+      debug:
+        msg: "Package '{{ package_to_add }}' has been {{ 'successfully installed' if package_to_add in ansible_facts.packages else 'FAILED to install' }}"
