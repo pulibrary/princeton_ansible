@@ -81,48 +81,39 @@ job "signoz" {
         mode = "delay"
       }
     }
-
-    # SigNoz query service (backend API)
+    #
     task "query" {
-      driver = "podman"
+  driver = "podman"
 
-      config {
-        image        = "docker.io/signoz/query-service:0.39.0"
-        network_mode = "host"
-        volumes      = ["/data/signoz/app:/var/lib/signoz"]
-      }
-
-      env {
-        CLICKHOUSE_ADDR = "tcp://127.0.0.1:9000?database=signoz"
-      }
-
-      resources {
-        cpu    = 500
-        memory = 1024
-      }
-
-      service {
-        name = "signoz-query"
-
-        # With host networking, numeric check needs address_mode="driver" + explicit port
-        check {
-          name         = "http-8080"
-          type         = "http"
-          path         = "/health"
-          interval     = "15s"
-          timeout      = "3s"
-          address_mode = "driver"
-          port         = 8080
-        }
-      }
-
-      restart {
-    attempts = 10
-    interval = "30m"
-    delay    = "10s"
-    mode     = "delay"
+  config {
+    image        = "docker.io/signoz/query-service:0.39.0"
+    network_mode = "host"
+    volumes      = ["/data/signoz/app:/var/lib/signoz"]
   }
+
+  env {
+    STORAGE         = "clickhouse"
+    CLICKHOUSE_ADDR = "tcp://127.0.0.1:9000?database=signoz"
+  }
+
+  resources {
+    cpu    = 500
+    memory = 1024
+  }
+
+  service {
+    name = "signoz-query"
+    check {
+      name         = "http-8080"
+      type         = "http"
+      path         = "/health"
+      interval     = "15s"
+      timeout      = "3s"
+      address_mode = "driver"
+      port         = 8080
     }
+  }
+}
 
     # SigNoz frontend (UI)
     task "frontend" {
