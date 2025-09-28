@@ -35,10 +35,11 @@ job "signoz" {
       driver = "podman"
 
       config {
-        image        = "docker.io/clickhouse/clickhouse-server:24.7"
+        image        = "docker.io/clickhouse/clickhouse-server:24.8"
         network_mode = "host"
         volumes      = ["/data/signoz/clickhouse:/var/lib/clickhouse"]
         ulimit       = { nofile= "262144:262144" }
+        force_pull   = true
       }
 
       resources {
@@ -64,10 +65,11 @@ job "signoz" {
       driver = "podman"
 
       config {
-        image        = "docker.io/otel/opentelemetry-collector-contrib:0.111.0"
+        image        = "docker.io/otel/opentelemetry-collector-contrib:0.120.0"
         network_mode = "host"
         args         = ["--config=/etc/signoz/otel.yaml"]
         volumes      = ["/etc/signoz/otel.yaml:/etc/signoz/otel.yaml:ro"]
+        force_pull   = true
       }
 
       resources {
@@ -81,26 +83,26 @@ job "signoz" {
         mode = "delay"
       }
     }
-    #
+
     task "query" {
-  driver = "podman"
+      driver = "podman"
 
-  config {
-    image        = "docker.io/signoz/query-service:v0.39.0"
-    force_pull   = true
-    network_mode = "host"
-    volumes      = ["/data/signoz/app:/var/lib/signoz"]
-  }
+      config {
+        image        = "docker.io/signoz/query-service:v1.2.0"
+        force_pull   = true
+        network_mode = "host"
+        volumes      = ["/data/signoz/app:/var/lib/signoz"]
+      }
 
-  env {
-    STORAGE         = "clickhouse"
-    CLICKHOUSE_ADDR = "tcp://127.0.0.1:9000?database=signoz"
-  }
+      env {
+        STORAGE         = "clickhouse"
+        CLICKHOUSE_ADDR = "tcp://127.0.0.1:9000?database=signoz"
+      }
 
-  resources {
-    cpu    = 500
-    memory = 1024
-  }
+      resources {
+        cpu    = 500
+        memory = 1024
+      }
 
       restart {
         attempts = 10
@@ -109,28 +111,29 @@ job "signoz" {
         mode = "delay"
       }
 
-  service {
-    name = "signoz-query"
-    check {
-      name         = "http-8080"
-      type         = "http"
-      path         = "/health"
-      interval     = "15s"
-      timeout      = "3s"
-      address_mode = "driver"
-      port         = 8080
+      service {
+        name = "signoz-query"
+        check {
+          name         = "http-8080"
+          type         = "http"
+          path         = "/health"
+          interval     = "15s"
+          timeout      = "3s"
+          address_mode = "driver"
+          port         = 8080
+        }
+      }
     }
-  }
-}
 
     # SigNoz frontend (UI)
     task "frontend" {
       driver = "podman"
 
       config {
-        image        = "docker.io/signoz/frontend:v0.39.0"
+        image        = "docker.io/signoz/frontend:v1.2.0"
         network_mode = "host"
         volumes      = ["/etc/signoz/frontend.nginx.conf:/etc/nginx/conf.d/default.conf:ro"]
+        force_pull   = true
       }
 
       resources {
