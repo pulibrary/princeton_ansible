@@ -30,21 +30,16 @@ job "signoz" {
       }
     }
 
-    # ClickHouse
+    # ClickHouse - using 23.3 for compatibility
     task "clickhouse" {
       driver = "podman"
 
       config {
-        image        = "docker.io/clickhouse/clickhouse-server:24.8"
+        image        = "docker.io/clickhouse/clickhouse-server:23.3"
         network_mode = "host"
         volumes      = ["/data/signoz/clickhouse:/var/lib/clickhouse"]
         ulimit       = { nofile= "262144:262144" }
         force_pull   = true
-      }
-
-      env {
-        # Enable network access for default user when no password is set
-        CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT = "1"
       }
 
       resources {
