@@ -63,16 +63,52 @@ job "signoz" {
       }
     }
 
-    # OpenTelemetry Collector
+    # OpenTelemetry Collector with embedded config
     task "otelcol" {
       driver = "podman"
 
       config {
         image        = "docker.io/otel/opentelemetry-collector-contrib:0.120.0"
         network_mode = "host"
-        args         = ["--config=/etc/signoz/otel.yaml"]
-        volumes      = ["/etc/signoz/otel.yaml:/etc/signoz/otel.yaml:ro"]
+        args         = ["--config=/local/otel.yaml"]
         force_pull   = true
+      }
+
+      template {
+        data = <<EOF
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: "0.0.0.0:4317"
+      http:
+        endpoint: "0.0.0.0:4318"
+
+exporters:
+  clickhouse:
+    endpoint: "tcp://127.0.0.1:9000?database=signoz"
+    timeout: 5s
+
+processors:
+  batch:
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [clickhouse]
+    metrics:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [clickhouse]
+    logs:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [clickhouse]
+EOF
+
+        destination = "local/otel.yaml"
       }
 
       resources {
@@ -130,15 +166,37 @@ job "signoz" {
       }
     }
 
-    # SigNoz frontend (UI)
+    # SigNoz frontend (UI) with embedded nginx config
     task "frontend" {
       driver = "podman"
 
       config {
         image        = "docker.io/signoz/frontend:v1.2.0"
         network_mode = "host"
-        volumes      = ["/etc/signoz/frontend.nginx.conf:/etc/nginx/conf.d/default.conf:ro"]
         force_pull   = true
+      }
+
+      template {
+        data = <<EOF
+server {
+    listen 3301;
+    server_name localhost;
+    root /usr/share/nginx/html;
+    index index.html;
+
+    location / {
+        try_files \$uri \$uri/ /index.html;
+    }
+
+    location /health {
+        access_log off;
+        return 200 "healthy\n";
+        add_header Content-Type text/plain;
+    }
+}
+EOF
+
+        destination = "local/default.conf"
       }
 
       resources {
