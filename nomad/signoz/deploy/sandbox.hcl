@@ -42,6 +42,11 @@ job "signoz" {
         force_pull   = true
       }
 
+      env {
+        # Enable network access for default user when no password is set
+        CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT = "1"
+      }
+
       resources {
         cpu    = 1000
         memory = 2048
