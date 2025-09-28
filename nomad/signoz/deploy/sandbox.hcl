@@ -60,7 +60,7 @@ job "signoz" {
       }
     }
 
-    # OpenTelemetry Collector
+    # OpenTelemetry Collector - depends on ClickHouse
     task "otelcol" {
       driver = "podman"
 
@@ -76,6 +76,7 @@ job "signoz" {
         cpu    = 1000
         memory = 512
       }
+      
       restart {
         attempts = 10
         interval = "30m"
@@ -84,6 +85,7 @@ job "signoz" {
       }
     }
 
+    # Query Service - depends on ClickHouse
     task "query" {
       driver = "podman"
 
@@ -113,6 +115,7 @@ job "signoz" {
 
       service {
         name = "signoz-query"
+        port = 8080
         check {
           name         = "http-8080"
           type         = "http"
@@ -120,12 +123,11 @@ job "signoz" {
           interval     = "15s"
           timeout      = "3s"
           address_mode = "driver"
-          port         = 8080
         }
       }
     }
 
-    # SigNoz frontend (UI)
+    # SigNoz frontend (UI) - depends on Query Service
     task "frontend" {
       driver = "podman"
 
