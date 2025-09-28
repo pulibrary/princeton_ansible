@@ -87,6 +87,7 @@ job "signoz" {
 
   config {
     image        = "docker.io/signoz/query-service:v0.48.0-cloud.3-oss"
+    force_pull   = true
     network_mode = "host"
     volumes      = ["/data/signoz/app:/var/lib/signoz"]
   }
@@ -154,4 +155,3 @@ job "signoz" {
     }
   }
 }
-
