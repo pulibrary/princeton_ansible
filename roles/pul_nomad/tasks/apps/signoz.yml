@@ -1,0 +1,80 @@
+---
+# Ensure host dirs
+
+- name: Pul_nomad - signoz create data dirs
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: 1000
+    group: 1000
+    mode: "0755"
+  loop:
+    - "{{ signoz_data_root }}"
+    - "{{ signoz_data_root }}/clickhouse"
+    - "{{ signoz_data_root }}/app"
+    - "{{ signoz_conf_dir }}"
+
+# GCS SA JSON (used for backups)
+- name: Pul_nomad - signoz write GCS service account JSON
+  ansible.builtin.copy:
+    dest: "{{ signoz_gcs_sa_path }}"
+    content: "{{ vault_signoz_gcs_sa_json }}"
+    owner: 1000
+    group: 1000
+    mode: "0600"
+
+# Drop OTEL collector config (listens publicly and forwards locally)
+- name: Pul_nomad - signoz write otel collector config
+  ansible.builtin.copy:
+    dest: "{{ signoz_otel_config_path }}"
+    owner: 1000
+    group: 1000
+    mode: "0644"
+    content: |
+      receivers:
+        otlp:
+          protocols:
+            grpc: { endpoint: 0.0.0.0:{{ signoz_otlp_grpc_port }} }
+            http: { endpoint: 0.0.0.0:{{ signoz_otlp_http_port }} }
+      processors:
+        batch: {}
+        memory_limiter:
+          check_interval: 1s
+          limit_mib: 512
+          spike_limit_mib: 128
+      exporters:
+        otlp:
+          endpoint: "http://127.0.0.1:{{ signoz_otlp_grpc_port }}"
+          tls: { insecure: true }
+      service:
+        pipelines:
+          traces:  { receivers: [otlp], processors: [memory_limiter, batch], exporters: [otlp] }
+          metrics: { receivers: [otlp], processors: [memory_limiter, batch], exporters: [otlp] }
+          logs:    { receivers: [otlp], processors: [memory_limiter, batch], exporters: [otlp] }
+
+- name: Pul_nomad - signoz ensure Nomad jobs dir exists
+  ansible.builtin.file:
+    path: /etc/nomad-jobs
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+
+# Render Nomad job file
+- name: Pul_nomad  - signoz render nomad job spec
+  ansible.builtin.template:
+    src: "nomad/signoz.nomad.j2"
+    dest: "/etc/nomad-jobs/signoz.nomad"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Pul_nomad - signoz register/update signoz job via CLI
+  ansible.builtin.command:
+    cmd: "/usr/local/bin/nomad job run -detach /etc/nomad-jobs/signoz.nomad"
+  environment:
+    NOMAD_ADDR: "http://nomad-host-sandbox1.lib.princeton.edu:4646"
+    NOMAD_TOKEN: "{{ nomad_client_acl_token }}"
+  register: nomad_run
+  changed_when: nomad_run.rc == 0
