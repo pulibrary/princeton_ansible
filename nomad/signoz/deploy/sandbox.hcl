@@ -22,6 +22,9 @@ job "signoz" {
       port "ui" {
         static = 3301
       }
+      port "query" {
+        static = 8080
+      }
       port "otlp_grpc" {
         static = 4317
       }
@@ -60,7 +63,7 @@ job "signoz" {
       }
     }
 
-    # OpenTelemetry Collector - depends on ClickHouse
+    # OpenTelemetry Collector
     task "otelcol" {
       driver = "podman"
 
@@ -85,7 +88,7 @@ job "signoz" {
       }
     }
 
-    # Query Service - depends on ClickHouse
+    # Query Service
     task "query" {
       driver = "podman"
 
@@ -115,7 +118,7 @@ job "signoz" {
 
       service {
         name = "signoz-query"
-        port = 8080
+        port = "query"
         check {
           name         = "http-8080"
           type         = "http"
@@ -127,7 +130,7 @@ job "signoz" {
       }
     }
 
-    # SigNoz frontend (UI) - depends on Query Service
+    # SigNoz frontend (UI)
     task "frontend" {
       driver = "podman"
 
