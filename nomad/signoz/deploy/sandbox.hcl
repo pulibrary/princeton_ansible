@@ -68,33 +68,6 @@ job "signoz" {
       }
     }
 
-    # Initialize ClickHouse schema
-    task "clickhouse-init" {
-      driver = "podman"
-      
-      lifecycle {
-        hook    = "prestart"
-        sidecar = false
-      }
-
-      config {
-        image        = "docker.io/signoz/query-service:0.44.0"
-        network_mode = "host"
-        command      = "/bin/sh"
-        args         = ["-c", "sleep 30 && /usr/bin/signoz-query-service --skip-server-run"]
-      }
-
-      env {
-        ClickHouseUrl    = "tcp://127.0.0.1:9000?database=signoz"
-        STORAGE          = "clickhouse"
-      }
-
-      resources {
-        cpu    = 200
-        memory = 256
-      }
-    }
-
     # Query Service
     task "query" {
       driver = "podman"
@@ -103,16 +76,8 @@ job "signoz" {
         image        = "docker.io/signoz/query-service:0.44.0"
         force_pull   = true
         network_mode = "host"
-        # Mount a temporary directory for SQLite database
-        volumes      = [
-          "local/signoz:/var/lib/signoz"
-        ]
-      }
-
-      # Create directory for SQLite database
-      template {
-        data = ""
-        destination = "local/signoz/.keep"
+        # Create a tmpfs mount for the SQLite database
+        tmpfs        = ["/var/lib/signoz"]
       }
 
       env {
@@ -158,8 +123,9 @@ job "signoz" {
       config {
         image        = "docker.io/signoz/signoz-otel-collector:0.88.11"  # Use SigNoz's collector
         network_mode = "host"
-        args         = ["--config=/etc/otel/config.yaml"]
+        args         = ["--config=/etc/otel-collector/config.yaml"]
         force_pull   = true
+        volumes      = ["local/config.yaml:/etc/otel-collector/config.yaml"]
       }
 
       template {
@@ -214,7 +180,7 @@ service:
       exporters: []
 EOF
 
-        destination = "etc/otel/config.yaml"
+        destination = "local/config.yaml"
       }
 
       resources {
