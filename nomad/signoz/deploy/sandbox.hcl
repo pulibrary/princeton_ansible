@@ -37,10 +37,29 @@ job "signoz" {
       config {
         image        = "docker.io/clickhouse/clickhouse-server:23.11-alpine"
         network_mode = "host"
+        # provide a single node cluster
+        volumes      = ["local/clickhouse-cluster.xml:/etc/clickhouse-server/config.d/cluster.xml"]
         # Reference the port LABELS, not numbers
         ports        = ["ch_tcp", "ch_http"]
         ulimit = {
           nofile = "262144:262144"
+        }
+        template {
+          data = <<EOF
+        <yandex>
+          <remote_servers>
+            <cluster>
+              <shard>
+                <replica>
+                  <host>127.0.0.1</host>
+                  <port>9000</port>
+                </replica>
+              </shard>
+            </cluster>
+          </remote_servers>
+        </yandex>
+          destination = "local/clickhoust-cluster.xml"
+          perms = "0644"
         }
       }
 
@@ -81,6 +100,8 @@ job "signoz" {
         image        = "docker.io/signoz/query-service:0.44.0"
         network_mode = "host"
         ports        = ["qs_http", "qs_admin"]
+        # writeable scratch for localdb
+        volumes = ["{NOMAD_ALLOC_DIR}/signoz:/var/lib/signoz"]
         # run the start script we render into /local
         command      = "/bin/sh"
         args         = ["/local/start.sh"]
