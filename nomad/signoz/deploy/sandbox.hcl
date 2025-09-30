@@ -209,7 +209,7 @@ EOF
       }
 
       template {
-        data = <<'EOF'
+        data = <<EOF
 receivers:
   otlp:
     protocols:
