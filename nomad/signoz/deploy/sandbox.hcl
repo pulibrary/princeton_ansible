@@ -20,12 +20,9 @@ job "signoz" {
       # Define labeled ports (static since we're using host networking)
       port "ch_tcp"     { static = 9000 }
       port "ch_http"    { static = 8123 }
-
       port "qs_http"    { static = 8080 }
       port "qs_admin"   { static = 8085 }
-
       port "fe_http"    { static = 3301 }
-
       port "otlp_grpc"  { static = 4317 }
       port "otlp_http"  { static = 4318 }
     }
@@ -37,30 +34,30 @@ job "signoz" {
       config {
         image        = "docker.io/clickhouse/clickhouse-server:23.11-alpine"
         network_mode = "host"
-        # provide a single node cluster
         volumes      = ["local/clickhouse-cluster.xml:/etc/clickhouse-server/config.d/cluster.xml"]
-        # Reference the port LABELS, not numbers
         ports        = ["ch_tcp", "ch_http"]
         ulimit = {
           nofile = "262144:262144"
         }
-        template {
-          data = <<EOF
-        <yandex>
-          <remote_servers>
-            <cluster>
-              <shard>
-                <replica>
-                  <host>127.0.0.1</host>
-                  <port>9000</port>
-                </replica>
-              </shard>
-            </cluster>
-          </remote_servers>
-        </yandex>
-          destination = "local/clickhoust-cluster.xml"
-          perms = "0644"
-        }
+      }
+
+      template {
+        data = <<EOF
+<yandex>
+  <remote_servers>
+    <cluster>
+      <shard>
+        <replica>
+          <host>127.0.0.1</host>
+          <port>9000</port>
+        </replica>
+      </shard>
+    </cluster>
+  </remote_servers>
+</yandex>
+EOF
+        destination = "local/clickhouse-cluster.xml"
+        perms       = "0644"
       }
 
       env {
@@ -77,7 +74,7 @@ job "signoz" {
 
       service {
         name = "clickhouse"
-        port = "ch_tcp"  # label!
+        port = "ch_tcp"
 
         check {
           type     = "tcp"
@@ -100,9 +97,7 @@ job "signoz" {
         image        = "docker.io/signoz/query-service:0.44.0"
         network_mode = "host"
         ports        = ["qs_http", "qs_admin"]
-        # writeable scratch for localdb
-        volumes = ["{NOMAD_ALLOC_DIR}/signoz:/var/lib/signoz"]
-        # run the start script we render into /local
+        volumes      = ["${NOMAD_ALLOC_DIR}/signoz:/var/lib/signoz"]
         command      = "/bin/sh"
         args         = ["/local/start.sh"]
       }
@@ -147,7 +142,6 @@ EOF
           path     = "/api/v1/version"
           interval = "30s"
           timeout  = "5s"
-          # address_mode default is fine since we’re using a labeled port
         }
       }
     }
@@ -165,13 +159,11 @@ EOF
         image        = "docker.io/signoz/frontend:0.44.0"
         network_mode = "host"
         ports        = ["fe_http"]
-        # mount our nginx override into the container
         volumes      = ["local/default.conf:/etc/nginx/conf.d/default.conf"]
       }
 
       template {
         data = <<EOF
-# nginx config override to use localhost
 server {
     listen 3301;
 
@@ -282,4 +274,3 @@ EOF
     }
   }
 }
-
