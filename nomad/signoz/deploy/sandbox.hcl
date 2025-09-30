@@ -15,32 +15,20 @@ job "signoz" {
     count = 1
 
     network {
-      port "ch" {
-        static = 9000
-      }
-      port "ui" {
-        static = 3301
-      }
-      port "query" {
-        static = 8080
-      }
-      port "otlp_grpc" {
-        static = 4317
-      }
-      port "otlp_http" {
-        static = 4318
-      }
+      mode = "host"
     }
 
-    # ClickHouse without persistent storage
+    # ClickHouse - start first
     task "clickhouse" {
       driver = "podman"
 
       config {
-        image        = "docker.io/clickhouse/clickhouse-server:23.8"
+        image        = "docker.io/clickhouse/clickhouse-server:23.11-alpine"
         network_mode = "host"
-        ulimit       = { nofile= "262144:262144" }
-        force_pull   = true
+        ports        = ["9000", "8123"]
+        ulimit       = { 
+          nofile = "262144:262144" 
+        }
       }
 
       env {
@@ -51,81 +39,156 @@ job "signoz" {
       }
 
       resources {
-        cpu    = 1000
-        memory = 2048
+        cpu    = 2000
+        memory = 4096
       }
 
       service {
-        name = "signoz-clickhouse"
-        port = "ch"
-
+        name = "clickhouse"
+        port = 9000
+        
         check {
-          name     = "tcp-9000"
           type     = "tcp"
           interval = "10s"
-          timeout  = "3s"
+          timeout  = "2s"
         }
       }
     }
 
-    # Query Service
-    task "query" {
+    # Query Service - needs ClickHouse to be up
+    task "query-service" {
       driver = "podman"
+      
+      # Ensure ClickHouse starts first
+      lifecycle {
+        hook    = "prestart"
+        sidecar = true
+      }
 
       config {
         image        = "docker.io/signoz/query-service:0.44.0"
-        force_pull   = true
         network_mode = "host"
-        # Create a tmpfs mount for the SQLite database
-        tmpfs        = ["/var/lib/signoz"]
+        ports        = ["8080", "8085"]
+        command      = "signoz-query-service"
+        args         = []
+      }
+
+      template {
+        data = <<EOF
+#!/bin/bash
+# Wait for ClickHouse to be ready
+echo "Waiting for ClickHouse..."
+while ! nc -z localhost 9000; do
+  sleep 2
+done
+echo "ClickHouse is ready"
+
+# Run the query service
+exec /usr/bin/signoz-query-service
+EOF
+        destination = "local/start.sh"
+        perms       = "755"
       }
 
       env {
-        ClickHouseUrl    = "tcp://127.0.0.1:9000?database=signoz"
-        STORAGE          = "clickhouse"
+        ClickHouseUrl     = "tcp://localhost:9000/?database=signoz"
+        STORAGE           = "clickhouse"
         GODEBUG          = "netdns=go"
         TELEMETRY_ENABLED = "false"
-        DEPLOYMENT_TYPE  = "docker-standalone-amd"
-        # SQLite database path
+        DEPLOYMENT_TYPE   = "docker-standalone-amd"
         SIGNOZ_LOCAL_DB_PATH = "/var/lib/signoz/signoz.db"
       }
 
       resources {
-        cpu    = 500
+        cpu    = 1000
         memory = 1024
       }
 
-      restart {
-        attempts = 10
-        interval = "30m"
-        delay    = "30s"  # Give ClickHouse time to start
-        mode     = "delay"
+      service {
+        name = "query-service"
+        port = 8080
+        
+        check {
+          type     = "http"
+          path     = "/api/v1/version"
+          interval = "30s"
+          timeout  = "5s"
+        }
+      }
+    }
+
+    # Frontend - needs query service
+    task "frontend" {
+      driver = "podman"
+      
+      lifecycle {
+        hook    = "prestart"
+        sidecar = true
+      }
+
+      config {
+        image        = "docker.io/signoz/frontend:0.44.0"
+        network_mode = "host"
+        ports        = ["3301"]
+      }
+
+      template {
+        data = <<EOF
+# nginx config override to use localhost
+server {
+    listen 3301;
+
+    location / {
+        root /usr/share/nginx/html;
+        try_files $uri /index.html;
+    }
+
+    location /api {
+        proxy_pass http://localhost:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+}
+EOF
+        destination = "local/default.conf"
+      }
+
+      env {
+        FRONTEND_API_URL = "http://localhost:8080"
+      }
+
+      resources {
+        cpu    = 500
+        memory = 512
       }
 
       service {
-        name = "signoz-query"
-        port = "query"
+        name = "signoz-frontend"
+        port = 3301
         
         check {
-          name     = "http-8080"
           type     = "http"
-          path     = "/api/v1/health"
-          interval = "15s"
-          timeout  = "3s"
+          path     = "/"
+          interval = "30s"
+          timeout  = "5s"
         }
       }
     }
 
     # OpenTelemetry Collector
-    task "otelcol" {
+    task "otel-collector" {
       driver = "podman"
+      
+      lifecycle {
+        hook    = "prestart"
+        sidecar = true
+      }
 
       config {
-        image        = "docker.io/signoz/signoz-otel-collector:0.88.11"  # Use SigNoz's collector
+        image        = "docker.io/signoz/signoz-otel-collector:0.88.11"
         network_mode = "host"
-        args         = ["--config=/etc/otel-collector/config.yaml"]
-        force_pull   = true
-        volumes      = ["local/config.yaml:/etc/otel-collector/config.yaml"]
+        ports        = ["4317", "4318"]
+        volumes      = ["local/otel-config.yaml:/etc/otel-collector/config.yaml"]
       }
 
       template {
@@ -142,91 +205,39 @@ processors:
   batch:
     send_batch_size: 10000
     timeout: 10s
-  
-  signozspanmetrics/prometheus:
-    metrics_exporter: prometheus
-    latency_histogram_buckets: [100us, 1ms, 2ms, 6ms, 10ms, 50ms, 100ms, 250ms, 500ms, 1000ms, 1400ms, 2000ms, 5s, 10s, 20s, 40s, 60s]
-    dimensions_cache_size: 10000
 
 exporters:
   clickhousetraces:
-    datasource: tcp://127.0.0.1:9000?database=signoz
-    docker_multi_node_cluster: false
-    low_cardinal_exception_grouping: false
-    low_cardinal_exception_fingerprinting: false
-    timeout: 5s
-    retry_on_failure:
-      enabled: true
-      initial_interval: 5s
-      max_interval: 30s
-      max_elapsed_time: 300s
-  
-  prometheus:
-    endpoint: "0.0.0.0:8889"
+    datasource: tcp://localhost:9000/?database=signoz
+    timeout: 10s
 
 service:
   pipelines:
     traces:
       receivers: [otlp]
-      processors: [signozspanmetrics/prometheus, batch]
+      processors: [batch]
       exporters: [clickhousetraces]
-    metrics:
-      receivers: [otlp]
-      processors: [batch]
-      exporters: [prometheus]
-    logs:
-      receivers: [otlp]
-      processors: [batch]
-      exporters: []
 EOF
+        destination = "local/otel-config.yaml"
+      }
 
-        destination = "local/config.yaml"
+      env {
+        GOGC = "80"
       }
 
       resources {
         cpu    = 1000
-        memory = 512
-      }
-
-      restart {
-        attempts = 10
-        interval = "30m"
-        delay    = "15s"
-        mode     = "delay"
-      }
-    }
-
-    # Frontend
-    task "frontend" {
-      driver = "podman"
-
-      config {
-        image        = "docker.io/signoz/frontend:0.44.0"
-        network_mode = "host"
-        force_pull   = true
-      }
-
-      env {
-        FRONTEND_API_URL = "http://127.0.0.1:8080"
-      }
-
-      resources {
-        cpu    = 500
-        memory = 512
+        memory = 1024
       }
 
       service {
-        name         = "signoz-ui"
-        port         = "ui"
-        address_mode = "host"
-
+        name = "otel-collector"
+        port = 4317
+        
         check {
-          name         = "http-health"
-          type         = "http"
-          path         = "/"
-          interval     = "10s"
-          timeout      = "3s"
-          address_mode = "host"
+          type     = "tcp"
+          interval = "30s"
+          timeout  = "5s"
         }
       }
     }
