@@ -16,6 +16,18 @@ job "signoz" {
 
     network {
       mode = "host"
+
+      # Define labeled ports (static since we're using host networking)
+      port "ch_tcp"     { static = 9000 }
+      port "ch_http"    { static = 8123 }
+
+      port "qs_http"    { static = 8080 }
+      port "qs_admin"   { static = 8085 }
+
+      port "fe_http"    { static = 3301 }
+
+      port "otlp_grpc"  { static = 4317 }
+      port "otlp_http"  { static = 4318 }
     }
 
     # ClickHouse - start first
@@ -25,17 +37,18 @@ job "signoz" {
       config {
         image        = "docker.io/clickhouse/clickhouse-server:23.11-alpine"
         network_mode = "host"
-        ports        = ["9000", "8123"]
-        ulimit       = { 
-          nofile = "262144:262144" 
+        # Reference the port LABELS, not numbers
+        ports        = ["ch_tcp", "ch_http"]
+        ulimit = {
+          nofile = "262144:262144"
         }
       }
 
       env {
-        CLICKHOUSE_DB       = "signoz"
-        CLICKHOUSE_USER     = "default"
-        CLICKHOUSE_PASSWORD = ""
-        CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT = "1"
+        CLICKHOUSE_DB                         = "signoz"
+        CLICKHOUSE_USER                       = "default"
+        CLICKHOUSE_PASSWORD                   = ""
+        CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT  = "1"
       }
 
       resources {
@@ -45,8 +58,8 @@ job "signoz" {
 
       service {
         name = "clickhouse"
-        port = 9000
-        
+        port = "ch_tcp"  # label!
+
         check {
           type     = "tcp"
           interval = "10s"
@@ -58,8 +71,7 @@ job "signoz" {
     # Query Service - needs ClickHouse to be up
     task "query-service" {
       driver = "podman"
-      
-      # Ensure ClickHouse starts first
+
       lifecycle {
         hook    = "prestart"
         sidecar = true
@@ -68,16 +80,17 @@ job "signoz" {
       config {
         image        = "docker.io/signoz/query-service:0.44.0"
         network_mode = "host"
-        ports        = ["8080", "8085"]
-        command      = "signoz-query-service"
-        args         = []
+        ports        = ["qs_http", "qs_admin"]
+        # run the start script we render into /local
+        command      = "/bin/sh"
+        args         = ["/local/start.sh"]
       }
 
       template {
-        data = <<EOF
-#!/bin/bash
+        data = <<'EOF'
+#!/bin/sh
 # Wait for ClickHouse to be ready
-echo "Waiting for ClickHouse..."
+echo "Waiting for ClickHouse on localhost:9000..."
 while ! nc -z localhost 9000; do
   sleep 2
 done
@@ -87,15 +100,15 @@ echo "ClickHouse is ready"
 exec /usr/bin/signoz-query-service
 EOF
         destination = "local/start.sh"
-        perms       = "755"
+        perms       = "0755"
       }
 
       env {
-        ClickHouseUrl     = "tcp://localhost:9000/?database=signoz"
-        STORAGE           = "clickhouse"
-        GODEBUG          = "netdns=go"
-        TELEMETRY_ENABLED = "false"
-        DEPLOYMENT_TYPE   = "docker-standalone-amd"
+        ClickHouseUrl        = "tcp://localhost:9000/?database=signoz"
+        STORAGE              = "clickhouse"
+        GODEBUG              = "netdns=go"
+        TELEMETRY_ENABLED    = "false"
+        DEPLOYMENT_TYPE      = "docker-standalone-amd"
         SIGNOZ_LOCAL_DB_PATH = "/var/lib/signoz/signoz.db"
       }
 
@@ -106,13 +119,14 @@ EOF
 
       service {
         name = "query-service"
-        port = 8080
-        
+        port = "qs_http"
+
         check {
           type     = "http"
           path     = "/api/v1/version"
           interval = "30s"
           timeout  = "5s"
+          # address_mode default is fine since we’re using a labeled port
         }
       }
     }
@@ -120,7 +134,7 @@ EOF
     # Frontend - needs query service
     task "frontend" {
       driver = "podman"
-      
+
       lifecycle {
         hook    = "prestart"
         sidecar = true
@@ -129,11 +143,13 @@ EOF
       config {
         image        = "docker.io/signoz/frontend:0.44.0"
         network_mode = "host"
-        ports        = ["3301"]
+        ports        = ["fe_http"]
+        # mount our nginx override into the container
+        volumes      = ["local/default.conf:/etc/nginx/conf.d/default.conf"]
       }
 
       template {
-        data = <<EOF
+        data = <<'EOF'
 # nginx config override to use localhost
 server {
     listen 3301;
@@ -151,6 +167,7 @@ server {
 }
 EOF
         destination = "local/default.conf"
+        perms       = "0644"
       }
 
       env {
@@ -164,8 +181,8 @@ EOF
 
       service {
         name = "signoz-frontend"
-        port = 3301
-        
+        port = "fe_http"
+
         check {
           type     = "http"
           path     = "/"
@@ -178,7 +195,7 @@ EOF
     # OpenTelemetry Collector
     task "otel-collector" {
       driver = "podman"
-      
+
       lifecycle {
         hook    = "prestart"
         sidecar = true
@@ -187,12 +204,12 @@ EOF
       config {
         image        = "docker.io/signoz/signoz-otel-collector:0.88.11"
         network_mode = "host"
-        ports        = ["4317", "4318"]
+        ports        = ["otlp_grpc", "otlp_http"]
         volumes      = ["local/otel-config.yaml:/etc/otel-collector/config.yaml"]
       }
 
       template {
-        data = <<EOF
+        data = <<'EOF'
 receivers:
   otlp:
     protocols:
@@ -219,6 +236,7 @@ service:
       exporters: [clickhousetraces]
 EOF
         destination = "local/otel-config.yaml"
+        perms       = "0644"
       }
 
       env {
@@ -232,8 +250,8 @@ EOF
 
       service {
         name = "otel-collector"
-        port = 4317
-        
+        port = "otlp_grpc"
+
         check {
           type     = "tcp"
           interval = "30s"
@@ -243,3 +261,4 @@ EOF
     }
   }
 }
+
