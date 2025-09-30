@@ -87,7 +87,7 @@ job "signoz" {
       }
 
       template {
-        data = <<'EOF'
+        data = <<EOF
 #!/bin/sh
 # Wait for ClickHouse to be ready
 echo "Waiting for ClickHouse on localhost:9000..."
@@ -149,7 +149,7 @@ EOF
       }
 
       template {
-        data = <<'EOF'
+        data = <<EOF
 # nginx config override to use localhost
 server {
     listen 3301;
