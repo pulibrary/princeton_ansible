@@ -39,7 +39,6 @@ job "signoz" {
       config {
         image        = "docker.io/clickhouse/clickhouse-server:23.8"
         network_mode = "host"
-        # No volume mounts - use container storage
         ulimit       = { nofile= "262144:262144" }
         force_pull   = true
       }
@@ -48,6 +47,7 @@ job "signoz" {
         CLICKHOUSE_DB       = "signoz"
         CLICKHOUSE_USER     = "default"
         CLICKHOUSE_PASSWORD = ""
+        CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT = "1"
       }
 
       resources {
@@ -68,70 +68,30 @@ job "signoz" {
       }
     }
 
-    # OpenTelemetry Collector
-    task "otelcol" {
+    # Initialize ClickHouse schema
+    task "clickhouse-init" {
       driver = "podman"
-
-      config {
-        image        = "docker.io/otel/opentelemetry-collector-contrib:0.88.0"
-        network_mode = "host"
-        args         = ["--config=/local/otel.yaml"]
-        force_pull   = true
+      
+      lifecycle {
+        hook    = "prestart"
+        sidecar = false
       }
 
-      template {
-        data = <<EOF
-receivers:
-  otlp:
-    protocols:
-      grpc:
-        endpoint: 0.0.0.0:4317
-      http:
-        endpoint: 0.0.0.0:4318
+      config {
+        image        = "docker.io/signoz/query-service:0.44.0"
+        network_mode = "host"
+        command      = "/bin/sh"
+        args         = ["-c", "sleep 30 && /usr/bin/signoz-query-service --skip-server-run"]
+      }
 
-exporters:
-  clickhouse:
-    endpoint: tcp://127.0.0.1:9000?database=signoz
-    timeout: 5s
-    retry_on_failure:
-      enabled: true
-      initial_interval: 5s
-      max_interval: 30s
-      max_elapsed_time: 300s
-
-processors:
-  batch:
-    timeout: 10s
-
-service:
-  pipelines:
-    traces:
-      receivers: [otlp]
-      processors: [batch]
-      exporters: [clickhouse]
-    metrics:
-      receivers: [otlp]
-      processors: [batch]
-      exporters: [clickhouse]
-    logs:
-      receivers: [otlp]
-      processors: [batch]
-      exporters: [clickhouse]
-EOF
-
-        destination = "local/otel.yaml"
+      env {
+        ClickHouseUrl    = "tcp://127.0.0.1:9000?database=signoz"
+        STORAGE          = "clickhouse"
       }
 
       resources {
-        cpu    = 1000
-        memory = 512
-      }
-
-      restart {
-        attempts = 10
-        interval = "30m"
-        delay    = "15s"
-        mode     = "delay"
+        cpu    = 200
+        memory = 256
       }
     }
 
@@ -143,7 +103,16 @@ EOF
         image        = "docker.io/signoz/query-service:0.44.0"
         force_pull   = true
         network_mode = "host"
-        # No volume mounts
+        # Mount a temporary directory for SQLite database
+        volumes      = [
+          "local/signoz:/var/lib/signoz"
+        ]
+      }
+
+      # Create directory for SQLite database
+      template {
+        data = ""
+        destination = "local/signoz/.keep"
       }
 
       env {
@@ -152,6 +121,8 @@ EOF
         GODEBUG          = "netdns=go"
         TELEMETRY_ENABLED = "false"
         DEPLOYMENT_TYPE  = "docker-standalone-amd"
+        # SQLite database path
+        SIGNOZ_LOCAL_DB_PATH = "/var/lib/signoz/signoz.db"
       }
 
       resources {
@@ -162,7 +133,7 @@ EOF
       restart {
         attempts = 10
         interval = "30m"
-        delay    = "15s"
+        delay    = "30s"  # Give ClickHouse time to start
         mode     = "delay"
       }
 
@@ -177,6 +148,85 @@ EOF
           interval = "15s"
           timeout  = "3s"
         }
+      }
+    }
+
+    # OpenTelemetry Collector
+    task "otelcol" {
+      driver = "podman"
+
+      config {
+        image        = "docker.io/signoz/signoz-otel-collector:0.88.11"  # Use SigNoz's collector
+        network_mode = "host"
+        args         = ["--config=/etc/otel/config.yaml"]
+        force_pull   = true
+      }
+
+      template {
+        data = <<EOF
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch:
+    send_batch_size: 10000
+    timeout: 10s
+  
+  signozspanmetrics/prometheus:
+    metrics_exporter: prometheus
+    latency_histogram_buckets: [100us, 1ms, 2ms, 6ms, 10ms, 50ms, 100ms, 250ms, 500ms, 1000ms, 1400ms, 2000ms, 5s, 10s, 20s, 40s, 60s]
+    dimensions_cache_size: 10000
+
+exporters:
+  clickhousetraces:
+    datasource: tcp://127.0.0.1:9000?database=signoz
+    docker_multi_node_cluster: false
+    low_cardinal_exception_grouping: false
+    low_cardinal_exception_fingerprinting: false
+    timeout: 5s
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+  
+  prometheus:
+    endpoint: "0.0.0.0:8889"
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [signozspanmetrics/prometheus, batch]
+      exporters: [clickhousetraces]
+    metrics:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [prometheus]
+    logs:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: []
+EOF
+
+        destination = "etc/otel/config.yaml"
+      }
+
+      resources {
+        cpu    = 1000
+        memory = 512
+      }
+
+      restart {
+        attempts = 10
+        interval = "30m"
+        delay    = "15s"
+        mode     = "delay"
       }
     }
 
