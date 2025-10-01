@@ -16,29 +16,15 @@ job "signoz" {
 
     network {
       mode = "host"
-      
+
       # Define port labels for host networking
-      port "clickhouse" {
-        static = 9000
-      }
-      port "clickhouse_http" {
-        static = 8123
-      }
-      port "query" {
-        static = 8080
-      }
-      port "query_admin" {
-        static = 8085
-      }
-      port "frontend" {
-        static = 3301
-      }
-      port "otlp_grpc" {
-        static = 4317
-      }
-      port "otlp_http" {
-        static = 4318
-      }
+      port "clickhouse"      { static = 9000 }
+      port "clickhouse_http" { static = 8123 }
+      port "query"           { static = 8080 }
+      port "query_admin"     { static = 8085 }
+      port "frontend"        { static = 3301 }
+      port "otlp_grpc"       { static = 4317 }
+      port "otlp_http"       { static = 4318 }
     }
 
     # ClickHouse - must start first
@@ -49,16 +35,18 @@ job "signoz" {
         image        = "docker.io/clickhouse/clickhouse-server:23.11-alpine"
         network_mode = "host"
         ports        = ["clickhouse", "clickhouse_http"]
+        # Provide a single-node cluster called "cluster" expected by SigNoz exporters
+        volumes      = ["local/clickhouse-cluster.xml:/etc/clickhouse-server/config.d/cluster.xml"]
         ulimit = {
           nofile = "262144:262144"
         }
       }
 
       env {
-        CLICKHOUSE_DB                         = "signoz"
-        CLICKHOUSE_USER                       = "default"
-        CLICKHOUSE_PASSWORD                   = ""
-        CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT  = "1"
+        CLICKHOUSE_DB                        = "signoz"
+        CLICKHOUSE_USER                      = "default"
+        CLICKHOUSE_PASSWORD                  = ""
+        CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT = "1"
       }
 
       resources {
@@ -76,6 +64,26 @@ job "signoz" {
           timeout  = "2s"
         }
       }
+
+      # Minimal single-node cluster definition
+      template {
+        data = <<EOF
+<yandex>
+  <remote_servers>
+    <cluster>
+      <shard>
+        <replica>
+          <host>127.0.0.1</host>
+          <port>9000</port>
+        </replica>
+      </shard>
+    </cluster>
+  </remote_servers>
+</yandex>
+EOF
+        destination = "local/clickhouse-cluster.xml"
+        perms       = "0644"
+      }
     }
 
     # Query Service - waits for ClickHouse
@@ -86,9 +94,10 @@ job "signoz" {
         image        = "docker.io/signoz/query-service:0.44.0"
         network_mode = "host"
         ports        = ["query", "query_admin"]
+        # Writable scratch for the local DB
         volumes      = ["${NOMAD_ALLOC_DIR}/signoz:/var/lib/signoz"]
-        command      = "/bin/bash"
-        args         = ["-c", "while ! nc -z localhost 9000; do echo 'Waiting for ClickHouse...'; sleep 2; done; echo 'ClickHouse ready'; exec /usr/bin/signoz-query-service"]
+        command      = "/bin/sh"
+        args         = ["-c", "while ! nc -z 127.0.0.1 9000; do echo 'Waiting for ClickHouse...'; sleep 2; done; echo 'ClickHouse ready'; exec /usr/bin/signoz-query-service"]
       }
 
       env {
@@ -98,11 +107,20 @@ job "signoz" {
         TELEMETRY_ENABLED    = "false"
         DEPLOYMENT_TYPE      = "docker-standalone-amd"
         SIGNOZ_LOCAL_DB_PATH = "/var/lib/signoz/signoz.db"
+        # Dev-only secret to silence warning (rotate in prod)
+        JWT_SECRET           = "please-rotate-in-prod"
       }
 
       resources {
         cpu    = 1000
         memory = 1024
+      }
+
+      restart {
+        attempts = 10
+        interval = "10m"
+        delay    = "15s"
+        mode     = "delay"
       }
 
       service {
@@ -118,7 +136,7 @@ job "signoz" {
       }
     }
 
-    # Frontend - just wait with sleep
+    # Frontend
     task "frontend" {
       driver = "podman"
 
@@ -126,7 +144,6 @@ job "signoz" {
         image        = "docker.io/signoz/frontend:0.44.0"
         network_mode = "host"
         ports        = ["frontend"]
-        # Don't override the default entrypoint, let nginx start normally
       }
 
       env {
@@ -138,7 +155,6 @@ job "signoz" {
         memory = 512
       }
 
-      # Add a restart policy to handle initial failures
       restart {
         attempts = 5
         delay    = "30s"
@@ -167,8 +183,8 @@ job "signoz" {
         image        = "docker.io/signoz/signoz-otel-collector:0.88.11"
         network_mode = "host"
         ports        = ["otlp_grpc", "otlp_http"]
-        command      = "/otelcol-contrib"
-        args         = ["--config=/local/otel-config.yaml"]
+        # Mount the rendered config into the expected path; use default entrypoint
+        volumes      = ["local/otel-config.yaml:/etc/otel-collector/config.yaml"]
       }
 
       template {
@@ -199,6 +215,7 @@ service:
       exporters: [clickhousetraces]
 EOF
         destination = "local/otel-config.yaml"
+        perms       = "0644"
       }
 
       env {
@@ -208,6 +225,13 @@ EOF
       resources {
         cpu    = 1000
         memory = 1024
+      }
+
+      restart {
+        attempts = 10
+        interval = "10m"
+        delay    = "15s"
+        mode     = "delay"
       }
 
       service {
@@ -223,3 +247,4 @@ EOF
     }
   }
 }
+
