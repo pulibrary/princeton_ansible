@@ -16,6 +16,29 @@ job "signoz" {
 
     network {
       mode = "host"
+      
+      # Define port labels for host networking
+      port "clickhouse" {
+        static = 9000
+      }
+      port "clickhouse_http" {
+        static = 8123
+      }
+      port "query" {
+        static = 8080
+      }
+      port "query_admin" {
+        static = 8085
+      }
+      port "frontend" {
+        static = 3301
+      }
+      port "otlp_grpc" {
+        static = 4317
+      }
+      port "otlp_http" {
+        static = 4318
+      }
     }
 
     # ClickHouse - must start first
@@ -25,7 +48,7 @@ job "signoz" {
       config {
         image        = "docker.io/clickhouse/clickhouse-server:23.11-alpine"
         network_mode = "host"
-        ports        = ["9000", "8123"]
+        ports        = ["clickhouse", "clickhouse_http"]
         ulimit = {
           nofile = "262144:262144"
         }
@@ -45,7 +68,7 @@ job "signoz" {
 
       service {
         name = "clickhouse"
-        port = 9000
+        port = "clickhouse"
 
         check {
           type     = "tcp"
@@ -62,7 +85,7 @@ job "signoz" {
       config {
         image        = "docker.io/signoz/query-service:0.44.0"
         network_mode = "host"
-        ports        = ["8080", "8085"]
+        ports        = ["query", "query_admin"]
         volumes      = ["${NOMAD_ALLOC_DIR}/signoz:/var/lib/signoz"]
         command      = "/bin/bash"
         args         = ["-c", "while ! nc -z localhost 9000; do echo 'Waiting for ClickHouse...'; sleep 2; done; echo 'ClickHouse ready'; exec /usr/bin/signoz-query-service"]
@@ -84,7 +107,7 @@ job "signoz" {
 
       service {
         name = "query-service"
-        port = 8080
+        port = "query"
 
         check {
           type     = "http"
@@ -102,7 +125,7 @@ job "signoz" {
       config {
         image        = "docker.io/signoz/frontend:0.44.0"
         network_mode = "host"
-        ports        = ["3301"]
+        ports        = ["frontend"]
         command      = "/bin/sh"
         args         = ["-c", "while ! nc -z localhost 8080; do echo 'Waiting for query service...'; sleep 2; done; echo 'Query service ready'; nginx -g 'daemon off;'"]
       }
@@ -118,7 +141,7 @@ job "signoz" {
 
       service {
         name = "signoz-frontend"
-        port = 3301
+        port = "frontend"
 
         check {
           type     = "http"
@@ -136,7 +159,7 @@ job "signoz" {
       config {
         image        = "docker.io/signoz/signoz-otel-collector:0.88.11"
         network_mode = "host"
-        ports        = ["4317", "4318"]
+        ports        = ["otlp_grpc", "otlp_http"]
         command      = "/otelcol-contrib"
         args         = ["--config=/local/otel-config.yaml"]
       }
@@ -182,7 +205,7 @@ EOF
 
       service {
         name = "otel-collector"
-        port = 4317
+        port = "otlp_grpc"
 
         check {
           type     = "tcp"
