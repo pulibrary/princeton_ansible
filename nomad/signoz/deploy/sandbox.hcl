@@ -86,8 +86,13 @@ EOF
       config {
         image = "signoz/zookeeper:3.7.1"
         ports = ["zookeeper", "zookeeper_metrics"]
-        # ephemeral per-allocation data (swap to a host path if you want persistence)
-        volumes = ["${NOMAD_ALLOC_DIR}/zookeeper:/bitnami/zookeeper"]
+        volumes = ["local/zookeeper-data:/bitnami/zookeeper"]
+      }
+
+      # ensure the data dir exists
+      template {
+        data        = ""
+        destination = "local/zookeeper-data/.keep"
       }
 
       env {
@@ -123,10 +128,16 @@ EOF
           "local/custom-function.xml:/etc/clickhouse-server/custom-function.xml",
           "local/user_scripts:/var/lib/clickhouse/user_scripts/",
           "local/cluster.xml:/etc/clickhouse-server/config.d/cluster.xml",
-          "${NOMAD_ALLOC_DIR}/clickhouse:/var/lib/clickhouse/"
+          "local/clickhouse-data:/var/lib/clickhouse/"
         ]
-        # Raise nofile for CH (podman driver understands map form)
+        # Raise nofile for CH (podman driver supports map form)
         ulimit = { nofile = "262144:262144" }
+      }
+
+      # ensure the data dir exists
+      template {
+        data        = ""
+        destination = "local/clickhouse-data/.keep"
       }
 
       env { CLICKHOUSE_SKIP_USER_SETUP = "1" }
@@ -269,8 +280,14 @@ EOH
         volumes = [
           "local/prometheus.yml:/root/config/prometheus.yml",
           "local/dashboards:/root/config/dashboards",
-          "${NOMAD_ALLOC_DIR}/signoz-sqlite:/var/lib/signoz/"
+          "local/signoz-sqlite:/var/lib/signoz/"
         ]
+      }
+
+      # ensure sqlite dir exists
+      template {
+        data        = ""
+        destination = "local/signoz-sqlite/.keep"
       }
 
       env {
@@ -327,7 +344,6 @@ EOH
       config {
         image = "signoz/signoz-otel-collector:v0.129.6"
         ports = ["otel_grpc", "otel_http"]
-        # Use default entrypoint; mount rendered configs
         volumes = [
           "local/otel-collector-config.yaml:/etc/otel-collector-config.yaml",
           "local/otel-collector-opamp-config.yaml:/etc/manager-config.yaml"
