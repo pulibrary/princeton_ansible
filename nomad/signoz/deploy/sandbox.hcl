@@ -19,9 +19,7 @@ job "signoz" {
     canary            = 1  # required when auto_promote = true
   }
 
-  # =========================
   # Infrastructure group
-  # =========================
   group "infrastructure" {
     count = 1
 
@@ -77,7 +75,10 @@ EOF
         ]
       }
 
-      resources { cpu = 200  memory = 256 }
+      resources {
+        cpu = 200
+        memory = 256
+      }
     }
 
     # ZooKeeper
@@ -91,7 +92,7 @@ EOF
 
       # ensure the data dir exists
       template {
-        data        = ""
+        data        = "# placeholder\n"
         destination = "local/zookeeper-data/.keep"
       }
 
@@ -103,7 +104,10 @@ EOF
         ZOO_PROMETHEUS_METRICS_PORT_NUMBER  = "9141"
       }
 
-      resources { cpu = 500 memory = 512 }
+      resources {
+        cpu = 500
+        memory = 512
+      }
 
       service {
         name = "zookeeper"
@@ -130,17 +134,19 @@ EOF
           "local/cluster.xml:/etc/clickhouse-server/config.d/cluster.xml",
           "local/clickhouse-data:/var/lib/clickhouse/"
         ]
-        # Raise nofile for CH (podman driver supports map form)
+        # Raise nofile for CH
         ulimit = { nofile = "262144:262144" }
       }
 
       # ensure the data dir exists
       template {
-        data        = ""
+        data        = "# placeholder\n"
         destination = "local/clickhouse-data/.keep"
       }
 
-      env { CLICKHOUSE_SKIP_USER_SETUP = "1" }
+      env {
+        CLICKHOUSE_SKIP_USER_SETUP = "1"
+      }
 
       # Base config
       template {
@@ -208,7 +214,10 @@ EOH
         destination = "local/cluster.xml"
       }
 
-      resources { cpu = 2000 memory = 4096 }
+      resources { 
+        cpu = 2000
+        memory = 4096
+      }
 
       # HTTP service (8123)
       service {
@@ -235,9 +244,7 @@ EOH
     }
   }
 
-  # =========================
   # Application group
-  # =========================
   group "signoz-app" {
     count = 1
 
@@ -261,13 +268,19 @@ EOH
     # Sync schema before app (blocks start of other tasks in group)
     task "schema-migrator-sync" {
       driver = "podman"
-      lifecycle { hook = "prestart" sidecar = false }
+      lifecycle {
+        hook = "prestart"
+        sidecar = false
+      }
       config {
         image   = "signoz/signoz-schema-migrator:v0.129.6"
         command = "sync"
         args    = ["--dsn=tcp://clickhouse-native.service.consul:9000", "--up="]
       }
-      resources { cpu = 200 memory = 256 }
+      resources {
+        cpu = 200
+        memory = 256
+      }
     }
 
     # SigNoz app
@@ -286,7 +299,7 @@ EOH
 
       # ensure sqlite dir exists
       template {
-        data        = ""
+        data        = "# placeholder\n"
         destination = "local/signoz-sqlite/.keep"
       }
 
@@ -316,11 +329,14 @@ EOH
 
       # (optional) place JSON dashboards here if you have them in repo
       template {
-        data = ""
+        data = "# placeholder\n"
         destination = "local/dashboards/.keep"
       }
 
-      resources { cpu = 1000 memory = 2048 }
+      resources {
+        cpu = 1000
+        memory = 2048
+      }
 
       service {
         name = "signoz"
@@ -469,17 +485,28 @@ EOH
         destination = "local/otel-collector-opamp-config.yaml"
       }
 
-      resources { cpu = 1000 memory = 1024 }
+      resources {
+        cpu = 1000
+        memory = 1024
+      }
 
       service {
         name = "otel-collector-grpc"
         port = "otel_grpc"
-        check { type = "tcp" interval = "30s" timeout = "5s" }
+        check {
+          type = "tcp"
+          interval = "30s"
+          timeout = "5s"
+        }
       }
       service {
         name = "otel-collector-http"
         port = "otel_http"
-        check { type = "tcp" interval = "30s" timeout = "5s" }
+        check {
+          type = "tcp"
+          interval = "30s"
+          timeout = "5s"
+        }
       }
     }
 
@@ -491,7 +518,10 @@ EOH
         command = "async"
         args    = ["--dsn=tcp://clickhouse-native.service.consul:9000", "--up="]
       }
-      resources { cpu = 200 memory = 256 }
+      resources {
+        cpu = 200
+        memory = 256
+      }
     }
   }
 }
