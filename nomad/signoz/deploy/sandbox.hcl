@@ -1,4 +1,4 @@
-# SigNoz deployment without persistent volumes for testing
+# SigNoz deployment (Nomad + Podman), upstream-like layout
 variable "branch_or_sha" {
   type    = string
   default = "main"
@@ -16,7 +16,7 @@ job "signoz" {
     progress_deadline = "10m"
     auto_revert       = true
     auto_promote      = true
-    canary            = 1        # REQUIRED when auto_promote = true
+    canary            = 1  # required when auto_promote = true
   }
 
   # =========================
@@ -28,17 +28,28 @@ job "signoz" {
     network {
       mode = "bridge"
 
-      port "zookeeper"          { to = 2181 }
-      port "zookeeper_metrics"  { to = 9141 }
-
-      port "clickhouse_http"    { static = 8123 to = 8123 }
-      port "clickhouse_native"  { static = 9000 to = 9000 }
-      port "clickhouse_metrics" { to = 9363 }
+      port "zookeeper" {
+        to = 2181
+      }
+      port "zookeeper_metrics" {
+        to = 9141
+      }
+      port "clickhouse_http" {
+        static = 8123
+        to     = 8123
+      }
+      port "clickhouse_native" {
+        static = 9000
+        to     = 9000
+      }
+      port "clickhouse_metrics" {
+        to = 9363
+      }
     }
 
-    # Init task: fetch histogramQuantile helper
+    # Init: fetch histogramQuantile helper into user_scripts
     task "init-clickhouse" {
-      driver = "docker"
+      driver = "podman"
 
       lifecycle {
         hook    = "prestart"
@@ -58,7 +69,6 @@ echo "Fetching histogram-binary for ${node_os}/${node_arch}"
 cd /tmp
 wget -O histogram-quantile.tar.gz "https://github.com/SigNoz/signoz/releases/download/histogram-quantile%2F${version}/histogram-quantile_${node_os}_${node_arch}.tar.gz"
 tar -xvzf histogram-quantile.tar.gz
-# Write into the mounted user_scripts dir so ClickHouse can see it
 cp histogram-quantile /var/lib/clickhouse/user_scripts/histogramQuantile
 EOF
         ]
@@ -72,24 +82,20 @@ EOF
 
     # ZooKeeper
     task "zookeeper" {
-      driver = "docker"
+      driver = "podman"
       config {
         image = "signoz/zookeeper:3.7.1"
         ports = ["zookeeper", "zookeeper_metrics"]
-        volumes = ["zookeeper-data:/bitnami/zookeeper"]
-        labels = {
-          "signoz.io/scrape" = "true"
-          "signoz.io/port"   = "9141"
-          "signoz.io/path"   = "/metrics"
-        }
+        # ephemeral per-allocation data (swap to a host path if you want persistence)
+        volumes = ["${NOMAD_ALLOC_DIR}/zookeeper:/bitnami/zookeeper"]
       }
 
       env {
-        ZOO_SERVER_ID                    = "1"
-        ALLOW_ANONYMOUS_LOGIN            = "yes"
-        ZOO_AUTOPURGE_INTERVAL           = "1"
-        ZOO_ENABLE_PROMETHEUS_METRICS    = "yes"
-        ZOO_PROMETHEUS_METRICS_PORT_NUMBER = "9141"
+        ZOO_SERVER_ID                       = "1"
+        ALLOW_ANONYMOUS_LOGIN               = "yes"
+        ZOO_AUTOPURGE_INTERVAL              = "1"
+        ZOO_ENABLE_PROMETHEUS_METRICS       = "yes"
+        ZOO_PROMETHEUS_METRICS_PORT_NUMBER  = "9141"
       }
 
       resources { cpu = 500 memory = 512 }
@@ -98,9 +104,7 @@ EOF
         name = "zookeeper"
         port = "zookeeper"
         check {
-          type    = "script"
-          command = "curl"
-          args    = ["-s", "-m", "2", "http://localhost:8080/commands/ruok"]
+          type     = "tcp"
           interval = "30s"
           timeout  = "5s"
         }
@@ -109,7 +113,7 @@ EOF
 
     # ClickHouse
     task "clickhouse" {
-      driver = "docker"
+      driver = "podman"
       config {
         image = "clickhouse/clickhouse-server:25.5.6"
         ports = ["clickhouse_http", "clickhouse_native", "clickhouse_metrics"]
@@ -119,18 +123,10 @@ EOF
           "local/custom-function.xml:/etc/clickhouse-server/custom-function.xml",
           "local/user_scripts:/var/lib/clickhouse/user_scripts/",
           "local/cluster.xml:/etc/clickhouse-server/config.d/cluster.xml",
-          "clickhouse-data:/var/lib/clickhouse/"
+          "${NOMAD_ALLOC_DIR}/clickhouse:/var/lib/clickhouse/"
         ]
-        labels = {
-          "signoz.io/scrape" = "true"
-          "signoz.io/port"   = "9363"
-          "signoz.io/path"   = "/metrics"
-        }
-        ulimit {
-          nproc       = "65535"
-          nofile_soft = "262144"
-          nofile_hard = "262144"
-        }
+        # Raise nofile for CH (podman driver understands map form)
+        ulimit = { nofile = "262144:262144" }
       }
 
       env { CLICKHOUSE_SKIP_USER_SETUP = "1" }
@@ -203,11 +199,26 @@ EOH
 
       resources { cpu = 2000 memory = 4096 }
 
+      # HTTP service (8123)
       service {
         name = "clickhouse"
         port = "clickhouse_http"
         check {
-          type = "http" path = "/ping" interval = "30s" timeout = "5s"
+          type     = "http"
+          path     = "/ping"
+          interval = "30s"
+          timeout  = "5s"
+        }
+      }
+
+      # Native TCP service (9000) for DSNs
+      service {
+        name = "clickhouse-native"
+        port = "clickhouse_native"
+        check {
+          type     = "tcp"
+          interval = "30s"
+          timeout  = "5s"
         }
       }
     }
@@ -221,26 +232,36 @@ EOH
 
     network {
       mode = "bridge"
-      port "signoz"    { static = 8080 to = 8080 }
-      port "otel_grpc" { static = 4317 to = 4317 }
-      port "otel_http" { static = 4318 to = 4318 }
+
+      port "signoz" {
+        static = 8080
+        to     = 8080
+      }
+      port "otel_grpc" {
+        static = 4317
+        to     = 4317
+      }
+      port "otel_http" {
+        static = 4318
+        to     = 4318
+      }
     }
 
-    # Sync schema before app
+    # Sync schema before app (blocks start of other tasks in group)
     task "schema-migrator-sync" {
-      driver = "docker"
+      driver = "podman"
       lifecycle { hook = "prestart" sidecar = false }
       config {
         image   = "signoz/signoz-schema-migrator:v0.129.6"
         command = "sync"
-        args    = ["--dsn=tcp://${NOMAD_ADDR_clickhouse_native}", "--up="]
+        args    = ["--dsn=tcp://clickhouse-native.service.consul:9000", "--up="]
       }
       resources { cpu = 200 memory = 256 }
     }
 
     # SigNoz app
     task "signoz" {
-      driver = "docker"
+      driver = "podman"
       config {
         image   = "signoz/signoz:v0.96.1"
         ports   = ["signoz"]
@@ -248,20 +269,20 @@ EOH
         volumes = [
           "local/prometheus.yml:/root/config/prometheus.yml",
           "local/dashboards:/root/config/dashboards",
-          "signoz-sqlite:/var/lib/signoz/"
+          "${NOMAD_ALLOC_DIR}/signoz-sqlite:/var/lib/signoz/"
         ]
       }
 
       env {
-        SIGNOZ_ALERTMANAGER_PROVIDER              = "signoz"
-        SIGNOZ_TELEMETRYSTORE_CLICKHOUSE_DSN      = "tcp://${NOMAD_ADDR_clickhouse_native}"
-        SIGNOZ_SQLSTORE_SQLITE_PATH               = "/var/lib/signoz/signoz.db"
-        DASHBOARDS_PATH                           = "/root/config/dashboards"
-        STORAGE                                   = "clickhouse"
-        GODEBUG                                   = "netdns=go"
-        TELEMETRY_ENABLED                         = "true"
-        DEPLOYMENT_TYPE                           = "nomad-cluster"
-        DOT_METRICS_ENABLED                        = "true"
+        SIGNOZ_ALERTMANAGER_PROVIDER         = "signoz"
+        SIGNOZ_TELEMETRYSTORE_CLICKHOUSE_DSN = "tcp://clickhouse-native.service.consul:9000"
+        SIGNOZ_SQLSTORE_SQLITE_PATH          = "/var/lib/signoz/signoz.db"
+        DASHBOARDS_PATH                      = "/root/config/dashboards"
+        STORAGE                              = "clickhouse"
+        GODEBUG                              = "netdns=go"
+        TELEMETRY_ENABLED                    = "true"
+        DEPLOYMENT_TYPE                      = "nomad-cluster"
+        DOT_METRICS_ENABLED                  = "true"
       }
 
       template {
@@ -276,7 +297,7 @@ EOH
         destination = "local/prometheus.yml"
       }
 
-      # (optional) drop your JSON dashboards into this folder in git
+      # (optional) place JSON dashboards here if you have them in repo
       template {
         data = ""
         destination = "local/dashboards/.keep"
@@ -288,7 +309,10 @@ EOH
         name = "signoz"
         port = "signoz"
         check {
-          type = "http" path = "/api/v1/health" interval = "30s" timeout = "5s"
+          type     = "http"
+          path     = "/api/v1/health"
+          interval = "30s"
+          timeout  = "5s"
         }
         tags = [
           "traefik.enable=true",
@@ -297,18 +321,13 @@ EOH
       }
     }
 
-    # OTEL Collector
+    # OpenTelemetry Collector
     task "otel-collector" {
-      driver = "docker"
+      driver = "podman"
       config {
         image = "signoz/signoz-otel-collector:v0.129.6"
         ports = ["otel_grpc", "otel_http"]
-        command = "--config=/etc/otel-collector-config.yaml"
-        args = [
-          "--manager-config=/etc/manager-config.yaml",
-          "--copy-path=/var/tmp/collector-config.yaml",
-          "--feature-gates=-pkg.translator.prometheus.NormalizeName"
-        ]
+        # Use default entrypoint; mount rendered configs
         volumes = [
           "local/otel-collector-config.yaml:/etc/otel-collector-config.yaml",
           "local/otel-collector-opamp-config.yaml:/etc/manager-config.yaml"
@@ -316,26 +335,30 @@ EOH
       }
 
       env {
-        OTEL_RESOURCE_ATTRIBUTES       = "host.name=signoz-host,os.type=linux"
+        OTEL_RESOURCE_ATTRIBUTES        = "host.name=signoz-host,os.type=linux"
         LOW_CARDINAL_EXCEPTION_GROUPING = "false"
       }
 
-      # Use NOMAD_ADDR_clickhouse_native in the rendered config
+      # Render config with Consul DNS to ClickHouse
       template {
         data = <<EOH
 receivers:
   otlp:
     protocols:
-      grpc: { endpoint: 0.0.0.0:4317 }
-      http: { endpoint: 0.0.0.0:4318 }
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
   prometheus:
     config:
-      global: { scrape_interval: 60s }
+      global:
+        scrape_interval: 60s
       scrape_configs:
         - job_name: otel-collector
           static_configs:
           - targets: [localhost:8888]
-            labels: { job_name: otel-collector }
+            labels:
+              job_name: otel-collector
 
 processors:
   batch:
@@ -353,38 +376,46 @@ processors:
     aggregation_temporality: AGGREGATION_TEMPORALITY_DELTA
     enable_exp_histogram: true
     dimensions:
-      - { name: service.namespace, default: default }
-      - { name: deployment.environment, default: default }
-      - { name: signoz.collector.id }
-      - { name: service.version }
-      - { name: browser.platform }
-      - { name: browser.mobile }
-      - { name: k8s.cluster.name }
-      - { name: k8s.node.name }
-      - { name: k8s.namespace.name }
-      - { name: host.name }
-      - { name: host.type }
-      - { name: container.name }
+      - name: service.namespace
+        default: default
+      - name: deployment.environment
+        default: default
+      - name: signoz.collector.id
+      - name: service.version
+      - name: browser.platform
+      - name: browser.mobile
+      - name: k8s.cluster.name
+      - name: k8s.node.name
+      - name: k8s.namespace.name
+      - name: host.name
+      - name: host.type
+      - name: container.name
 
 extensions:
-  health_check: { endpoint: 0.0.0.0:13133 }
-  pprof:        { endpoint: 0.0.0.0:1777 }
+  health_check:
+    endpoint: 0.0.0.0:13133
+  pprof:
+    endpoint: 0.0.0.0:1777
 
 exporters:
   clickhousetraces:
-    datasource: tcp://{{ env "NOMAD_ADDR_clickhouse_native" }}/signoz_traces
-    low_cardinal_exception_grouping: {{ env "LOW_CARDINAL_EXCEPTION_GROUPING" | default "false" }}
+    datasource: tcp://clickhouse-native.service.consul:9000/signoz_traces
+    low_cardinal_exception_grouping: ${LOW_CARDINAL_EXCEPTION_GROUPING}
     use_new_schema: true
   signozclickhousemetrics:
-    dsn: tcp://{{ env "NOMAD_ADDR_clickhouse_native" }}/signoz_metrics
+    dsn: tcp://clickhouse-native.service.consul:9000/signoz_metrics
   clickhouselogsexporter:
-    dsn: tcp://{{ env "NOMAD_ADDR_clickhouse_native" }}/signoz_logs
+    dsn: tcp://clickhouse-native.service.consul:9000/signoz_logs
     timeout: 10s
     use_new_schema: true
 
 service:
-  telemetry: { logs: { encoding: json } }
-  extensions: [health_check, pprof]
+  telemetry:
+    logs:
+      encoding: json
+  extensions:
+    - health_check
+    - pprof
   pipelines:
     traces:
       receivers: [otlp]
@@ -416,7 +447,8 @@ capabilities:
 server:
   ws:
     endpoint: ws://signoz:4320/ws
-    tls: { insecure: true }
+    tls:
+      insecure: true
 EOH
         destination = "local/otel-collector-opamp-config.yaml"
       }
@@ -435,15 +467,16 @@ EOH
       }
     }
 
-    # Async migrator
+    # Async migrator (kept separate like upstream)
     task "schema-migrator-async" {
-      driver = "docker"
+      driver = "podman"
       config {
         image   = "signoz/signoz-schema-migrator:v0.129.6"
         command = "async"
-        args    = ["--dsn=tcp://${NOMAD_ADDR_clickhouse_native}", "--up="]
+        args    = ["--dsn=tcp://clickhouse-native.service.consul:9000", "--up="]
       }
       resources { cpu = 200 memory = 256 }
     }
   }
 }
+
