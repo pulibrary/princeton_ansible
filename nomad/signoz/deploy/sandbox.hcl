@@ -118,7 +118,7 @@ job "signoz" {
       }
     }
 
-    # Frontend - waits for query service
+    # Frontend - just wait with sleep
     task "frontend" {
       driver = "podman"
 
@@ -126,8 +126,7 @@ job "signoz" {
         image        = "docker.io/signoz/frontend:0.44.0"
         network_mode = "host"
         ports        = ["frontend"]
-        command      = "/bin/sh"
-        args         = ["-c", "while ! nc -z localhost 8080; do echo 'Waiting for query service...'; sleep 2; done; echo 'Query service ready'; nginx -g 'daemon off;'"]
+        # Don't override the default entrypoint, let nginx start normally
       }
 
       env {
@@ -137,6 +136,14 @@ job "signoz" {
       resources {
         cpu    = 500
         memory = 512
+      }
+
+      # Add a restart policy to handle initial failures
+      restart {
+        attempts = 5
+        delay    = "30s"
+        interval = "5m"
+        mode     = "delay"
       }
 
       service {
