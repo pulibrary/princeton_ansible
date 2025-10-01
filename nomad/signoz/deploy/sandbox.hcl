@@ -136,7 +136,7 @@ EOF
       }
     }
 
-    # Frontend
+    # Frontend - nginx override to localhost
     task "frontend" {
       driver = "podman"
 
@@ -144,6 +144,35 @@ EOF
         image        = "docker.io/signoz/frontend:0.44.0"
         network_mode = "host"
         ports        = ["frontend"]
+        # Override default upstream that points to non-existent DNS
+        volumes      = ["local/default.conf:/etc/nginx/conf.d/default.conf"]
+      }
+
+      # Replace default nginx config so /api goes to localhost:8080
+      template {
+        data = <<EOF
+server {
+    listen 3301;
+
+    # Serve SPA
+    location / {
+        root /usr/share/nginx/html;
+        try_files $uri /index.html;
+    }
+
+    # Proxy API to query-service on localhost
+    location /api/ {
+        proxy_pass http://127.0.0.1:8080/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+EOF
+        destination = "local/default.conf"
+        perms       = "0644"
       }
 
       env {
@@ -247,4 +276,3 @@ EOF
     }
   }
 }
-
