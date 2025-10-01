@@ -24,7 +24,7 @@ job "signoz" {
     count = 1
 
     network {
-      mode = "bridge"
+      mode = "host"
 
       port "zookeeper" {
         to = 2181
@@ -249,7 +249,7 @@ EOH
     count = 1
 
     network {
-      mode = "bridge"
+      mode = "host"
 
       port "signoz" {
         static = 8080
