@@ -48,24 +48,12 @@ job "signoz" {
 
       config {
         image        = "docker.io/signoz/zookeeper:3.7.1"
-        ports        = [
-          "zookeeper",
-          "zookeeper_metrics",
-        ]
-        volumes      = [
-          "local/zookeeper-data:/bitnami/zookeeper",
-        ]
         network_mode = "pasta"
 
-        port_map {
-          zookeeper         = 2181
-          zookeeper_metrics = 9141
-        }
-      }
-
-      template {
-        data        = "# placeholder\n"
-        destination = "local/zookeeper-data/.keep"
+        ports = [
+          "zookeeper",
+          "zookeeper_metrics"
+        ]
       }
 
       env {
@@ -97,24 +85,17 @@ job "signoz" {
       driver = "podman"
 
       artifact {
-        # Nomad will fill in OS/arch (e.g., linux/amd64 or linux/arm64)
-        source      = "https://github.com/SigNoz/signoz/releases/download/histogram-quantile%2Fv0.0.1/histogram-quantile_${attr.os.name}_${attr.cpu.arch}.tar.gz"
-        destination = "local/histogramQuantile"
+        source      = "https://github.com/SigNoz/signoz/releases/download/histogram-quantile%2Fv0.0.1/histogram-quantile_linux_amd64.tar.gz"
+        destination = "local/bin"
       }
 
       config {
         image        = "docker.io/clickhouse/clickhouse-server:25.5.6"
-        ports        = [
-          "clickhouse_http",
-          "clickhouse_native",
-          "clickhouse_metrics",
-        ]
         volumes      = [
           "local/config.xml:/etc/clickhouse-server/config.xml",
           "local/users.xml:/etc/clickhouse-server/users.xml",
           "local/custom-function.xml:/etc/clickhouse-server/custom-function.xml",
-          "local/histogram-quantile/histogram-quantile:/var/lib/clickhouse/user_scripts/histogramQuantile",  # <-- Map the actual binary
-          "local/user_scripts:/var/lib/clickhouse/user_scripts/",
+          "local/bin/histogram-quantile:/var/lib/clickhouse/user_scripts/histogramQuantile",
           "local/cluster.xml:/etc/clickhouse-server/config.d/cluster.xml",
           "local/clickhouse-data:/var/lib/clickhouse/",
         ]
@@ -123,11 +104,11 @@ job "signoz" {
         }
         network_mode = "pasta"
 
-        port_map {
-          clickhouse_http    = 8123
-          clickhouse_native  = 9000
-          clickhouse_metrics = 9363
-        }
+        ports =  [
+          "clickhouse_http",
+          "clickhouse_native",
+          "clickhouse_metrics"
+        ]
       }
 
       template {
@@ -141,41 +122,73 @@ job "signoz" {
 
       template {
         data = <<EOH
-<clickhouse>
-  <logger><level>debug</level><console>1</console></logger>
-  <tcp_port>9000</tcp_port>
-  <http_port>8123</http_port>
-  <prometheus>
-    <endpoint>/metrics</endpoint>
-    <port>9363</port>
-    <metrics>true</metrics>
-    <events>true</events>
-    <asynchronous_metrics>true</asynchronous_metrics>
-  </prometheus>
-  <path>/var/lib/clickhouse/</path>
-  <tmp_path>/var/lib/clickhouse/tmp/</tmp_path>
-  <user_files_path>/var/lib/clickhouse/user_files/</user_files_path>
-  <format_schema_path>/var/lib/clickhouse/format_schemas/</format_schema_path>
-  <user_directories>
-    <users_xml><path>users.xml</path></users_xml>
-    <local_directory><path>/var/lib/clickhouse/access/</path></local_directory>
-  </user_directories>
-</clickhouse>
-EOH
+       <clickhouse>
+         <logger>
+           <level>debug</level>
+           <console>1</console>
+           <log>/var/log/clickhouse-server/clickhouse-server.log</log>
+           <errorlog>/var/log/clickhouse-server/clickhouse-server.err.log</errorlog>
+           <size>1000M</size>
+           <count>10</count>
+         </logger>
+         <tcp_port>9000</tcp_port>
+         <http_port>8123</http_port>
+         <prometheus>
+           <endpoint>/metrics</endpoint>
+           <port>9363</port>
+           <metrics>true</metrics>
+           <events>true</events>
+           <asynchronous_metrics>true</asynchronous_metrics>
+         </prometheus>
+         <path>/var/lib/clickhouse/</path>
+         <tmp_path>/var/lib/clickhouse/tmp/</tmp_path>
+         <user_files_path>/var/lib/clickhouse/user_files/</user_files_path>
+         <format_schema_path>/var/lib/clickhouse/format_schemas/</format_schema_path>
+         <user_directories>
+           <users_xml>
+             <path>users.xml</path>
+           </users_xml>
+           <local_directory>
+             <path>/var/lib/clickhouse/access/</path>
+           </local_directory>
+         </user_directories>
+       </clickhouse>
+       EOH
         destination = "local/config.xml"
       }
 
       template {
         data = <<EOH
-<users>
-  <default>
-    <password></password>
-    <networks><ip>::/0</ip></networks>
-    <profile>default</profile>
-    <quota>default</quota>
-  </default>
-</users>
-EOH
+      <clickhouse>
+        <users>
+          <default>
+            <password></password>
+            <networks>
+              <ip>::/0</ip>
+            </networks>
+            <profile>default</profile>
+            <quota>default</quota>
+          </default>
+        </users>
+        <profiles>
+          <default>
+            <max_memory_usage>10000000000</max_memory_usage>
+          </default>
+        </profiles>
+        <quotas>
+          <default>
+            <interval>
+              <duration>3600</duration>
+              <queries>0</queries>
+              <errors>0</errors>
+              <result_rows>0</result_rows>
+              <read_rows>0</read_rows>
+              <execution_time>0</execution_time>
+            </interval>
+          </default>
+        </quotas>
+      </clickhouse>
+      EOH
         destination = "local/users.xml"
       }
 
@@ -280,9 +293,6 @@ EOH
 
       config {
         image        = "docker.io/signoz/signoz:v0.96.1"
-        ports        = [
-          "signoz",
-        ]
         command      = "--config=/root/config/prometheus.yml"
         volumes      = [
           "local/prometheus.yml:/root/config/prometheus.yml",
@@ -291,9 +301,9 @@ EOH
         ]
         network_mode = "pasta"
 
-        port_map {
-          signoz = 8080
-        }
+        ports = [
+          "signoz"
+        ]
       }
 
       template {
@@ -358,20 +368,16 @@ EOH
 
       config {
         image        = "docker.io/signoz/signoz-otel-collector:v0.129.6"
-        ports        = [
-          "otel_grpc",
-          "otel_http",
-        ]
         volumes      = [
           "local/otel-collector-config.yaml:/etc/otel-collector-config.yaml",
           "local/otel-collector-opamp-config.yaml:/etc/manager-config.yaml",
         ]
         network_mode = "pasta"
 
-        port_map {
-          otel_grpc = 4317
-          otel_http = 4318
-        }
+        ports = [
+          "otel_grpc",
+          "otel_http"
+        ]
       }
 
       env {
