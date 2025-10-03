@@ -19,7 +19,7 @@ job "signoz" {
     canary            = 1
   }
 
-  group "infrastructure" {
+  group "signozstack" {
     count = 1
 
     # Rootless podman: use Nomad network=none and publish with port_map
@@ -41,6 +41,15 @@ job "signoz" {
       port "clickhouse_metrics" {
         static = 9363
       }
+      port "signoz" {
+        static = 8000
+      }
+      port "otel_grpc" {
+        static = 4317
+      }
+      port otel_http {
+        static = 4318
+      }
     }
 
     task "zookeeper" {
@@ -54,6 +63,10 @@ job "signoz" {
           "zookeeper",
           "zookeeper_metrics"
         ]
+        port_map {
+          zookeeper  = 2181
+          zookeeper_metrics = 9141
+        }
       }
 
       env {
@@ -109,6 +122,12 @@ job "signoz" {
           "clickhouse_native",
           "clickhouse_metrics"
         ]
+
+        port_map {
+          clickhouse_http   = 8123
+          clickhouse_native = 9000
+          clickhouse_metrics = 9363
+        }
       }
 
       template {
@@ -275,10 +294,6 @@ EOH
       config {
         image   = "docker.io/signoz/signoz-schema-migrator:v0.129.6"
         command = "sync"
-        args = [
-          "--dsn=tcp://clickhouse-native.service.consul:9000",
-          "--up=",
-        ]
         network_mode = "pasta"
       }
 
@@ -313,8 +328,8 @@ EOH
 
       env {
         SIGNOZ_ALERTMANAGER_PROVIDER         = "signoz"
-        SIGNOZ_TELEMETRYSTORE_CLICKHOUSE_DSN = "tcp://clickhouse-native.service.consul:9000"
         SIGNOZ_SQLSTORE_SQLITE_PATH          = "/var/lib/signoz/signoz.db"
+        SIGNOZ_TELEMETRYSTORE_CLICKHOUSE_DSN = "tcp://${NOMAD_ADDR_clickhouse_native}"
         DASHBOARDS_PATH                      = "/root/config/dashboards"
         STORAGE                              = "clickhouse"
         GODEBUG                              = "netdns=go"
@@ -444,13 +459,13 @@ extensions:
 
 exporters:
   clickhousetraces:
-    datasource: tcp://clickhouse-native.service.consul:9000/signoz_traces
+    datasource: tcp://${NOMAD_ADDR_clickhouse_native}/signoz_traces
     low_cardinal_exception_grouping: {{ env "LOW_CARDINAL_EXCEPTION_GROUPING" | default "false" }}
     use_new_schema: true
   signozclickhousemetrics:
-    dsn: tcp://clickhouse-native.service.consul:9000/signoz_metrics
+    dsn: tcp://${NOMAD_ADDR_clickhouse_native}/signoz_metrics
   clickhouselogsexporter:
-    dsn: tcp://clickhouse-native.service.consul:9000/signoz_logs
+    dsn: tcp://${NOMAD_ADDR_clickhouse_native}/signoz_logs
     timeout: 10s
     use_new_schema: true
 
@@ -531,12 +546,20 @@ EOH
 
       config {
         image        = "docker.io/signoz/signoz-schema-migrator:v0.129.6"
-        command      = "async"
-        args         = [
-          "--dsn=tcp://clickhouse-native.service.consul:9000",
-          "--up=",
-        ]
         network_mode = "pasta"
+        command      = "sh"
+        args = ["-lc", <<EOS
+    # Wait for ClickHouse to be reachable on the host port Nomad assigned
+    for i in $(seq 1 120); do
+      nc -z "${NOMAD_IP_clickhouse_native}" "${NOMAD_PORT_clickhouse_native}" && break
+      sleep 1
+    done
+
+    exec /signoz-schema-migrator sync \
+      --dsn="tcp://${NOMAD_ADDR_clickhouse_native}" \
+      --up=
+    EOS
+        ]
       }
 
       resources {
