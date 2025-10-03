@@ -27,28 +27,28 @@ job "signoz" {
       mode = "none"
 
       port "zookeeper" {
-        static = 2181
+        to = 2181
       }
       port "zookeeper_metrics" {
-        static = 9141
+        to = 9141
       }
       port "clickhouse_http" {
-        static = 8123
+        to = 8123
       }
       port "clickhouse_native" {
-        static = 9000
+        to = 9000
       }
       port "clickhouse_metrics" {
-        static = 9363
+        to = 9363
       }
       port "signoz" {
-        static = 8000
+        to = 8080
       }
       port "otel_grpc" {
-        static = 4317
+        to = 4317
       }
-      port otel_http {
-        static = 4318
+      port "otel_http" {
+        to = 4318
       }
     }
 
@@ -59,14 +59,18 @@ job "signoz" {
         image        = "docker.io/signoz/zookeeper:3.7.1"
         network_mode = "pasta"
 
+        #        ports = [
+        #          "zookeeper",
+        #          "zookeeper_metrics"
+        #        ]
+        #        port_map {
+        #          zookeeper  = 2181
+        #          zookeeper_metrics = 9141
+        #        }
         ports = [
           "zookeeper",
           "zookeeper_metrics"
         ]
-        port_map {
-          zookeeper  = 2181
-          zookeeper_metrics = 9141
-        }
       }
 
       env {
@@ -117,17 +121,22 @@ job "signoz" {
         }
         network_mode = "pasta"
 
-        ports =  [
+        #        ports =  [
+        #          "clickhouse_http",
+        #          "clickhouse_native",
+        #          "clickhouse_metrics"
+        #        ]
+        #
+        #        port_map {
+        #          clickhouse_http   = 8123
+        #          clickhouse_native = 9000
+        #          clickhouse_metrics = 9363
+        #        }
+        ports = [
           "clickhouse_http",
           "clickhouse_native",
           "clickhouse_metrics"
         ]
-
-        port_map {
-          clickhouse_http   = 8123
-          clickhouse_native = 9000
-          clickhouse_metrics = 9363
-        }
       }
 
       template {
@@ -264,37 +273,31 @@ EOH
         }
       }
     }
-  }
-
-  group "signoz-app" {
-    count = 1
-
-    network {
-      mode = "none"
-
-      port "signoz" {
-        static = 8080
-      }
-      port "otel_grpc" {
-        static = 4317
-      }
-      port "otel_http" {
-        static = 4318
-      }
-    }
 
     task "schema-migrator-sync" {
       driver = "podman"
 
       lifecycle {
-        hook    = "prestart"
-        sidecar = false
+        hook    = "poststart"
       }
 
       config {
         image   = "docker.io/signoz/signoz-schema-migrator:v0.129.6"
-        command = "sync"
         network_mode = "pasta"
+        entrypoint   = ["/bin/sh"]
+        command = "-c"
+        args = [<<EOS
+    set -eu
+    for i in $(seq 1 120); do
+      if /signoz-schema-migrator sync --dsn="tcp://${NOMAD_ADDR_clickhouse_native}" --up=; then
+        exit 0
+      fi
+      sleep 2
+    done
+    echo "schema-migrator-sync: ClickHouse still not reachable; failing"
+    exit 1
+    EOS
+        ]
       }
 
       resources {
@@ -329,13 +332,20 @@ EOH
       env {
         SIGNOZ_ALERTMANAGER_PROVIDER         = "signoz"
         SIGNOZ_SQLSTORE_SQLITE_PATH          = "/var/lib/signoz/signoz.db"
-        SIGNOZ_TELEMETRYSTORE_CLICKHOUSE_DSN = "tcp://${NOMAD_ADDR_clickhouse_native}"
         DASHBOARDS_PATH                      = "/root/config/dashboards"
         STORAGE                              = "clickhouse"
         GODEBUG                              = "netdns=go"
         TELEMETRY_ENABLED                    = "true"
         DEPLOYMENT_TYPE                      = "nomad-cluster"
         DOT_METRICS_ENABLED                  = "true"
+      }
+
+      template {
+        env  = true
+        destination = "secrets/env/signoz.env"
+        data = <<EOE
+      SIGNOZ_TELEMETRYSTORE_CLICKHOUSE_DSN=tcp://{{ env "NOMAD_ADDR_clickhouse_native" }}
+      EOE
       }
 
       template {
@@ -370,7 +380,6 @@ EOH
           interval = "30s"
           timeout  = "5s"
         }
-
         tags = [
           "traefik.enable=true",
           "traefik.http.routers.signoz.rule=Host(`signoz.${attr.unique.network.ip-address}.nip.io`)",
@@ -388,17 +397,26 @@ EOH
           "local/otel-collector-opamp-config.yaml:/etc/manager-config.yaml",
         ]
         network_mode = "pasta"
-
         ports = [
           "otel_grpc",
           "otel_http"
         ]
+        args = [
+          "--config=/etc/otel-collector-config.yaml"
+        ]
       }
-
       env {
         OTEL_RESOURCE_ATTRIBUTES        = "host.name=signoz-host,os.type=linux"
         LOW_CARDINAL_EXCEPTION_GROUPING = "false"
       }
+
+      restart {
+    attempts = 10
+    interval = "30m"
+    delay    = "15s"
+    mode     = "delay"
+  }
+
 
       template {
         data = <<EOH
@@ -409,6 +427,7 @@ receivers:
         endpoint: 0.0.0.0:4317
       http:
         endpoint: 0.0.0.0:4318
+
   prometheus:
     config:
       global:
@@ -416,9 +435,9 @@ receivers:
       scrape_configs:
         - job_name: otel-collector
           static_configs:
-          - targets: [localhost:8888]
-            labels:
-              job_name: otel-collector
+            - targets: [localhost:8888]
+              labels:
+                job_name: otel-collector
 
 processors:
   batch:
@@ -459,13 +478,14 @@ extensions:
 
 exporters:
   clickhousetraces:
-    datasource: tcp://${NOMAD_ADDR_clickhouse_native}/signoz_traces
-    low_cardinal_exception_grouping: {{ env "LOW_CARDINAL_EXCEPTION_GROUPING" | default "false" }}
+    datasource: tcp://{{ env "NOMAD_IP_clickhouse_native" }}:{{ env "NOMAD_PORT_clickhouse_native" }}/signoz_traces
     use_new_schema: true
+
   signozclickhousemetrics:
-    dsn: tcp://${NOMAD_ADDR_clickhouse_native}/signoz_metrics
+    dsn: tcp://{{ env "NOMAD_IP_clickhouse_native" }}:{{ env "NOMAD_PORT_clickhouse_native" }}/signoz_metrics
+
   clickhouselogsexporter:
-    dsn: tcp://${NOMAD_ADDR_clickhouse_native}/signoz_logs
+    dsn: tcp://{{ env "NOMAD_IP_clickhouse_native" }}:{{ env "NOMAD_PORT_clickhouse_native" }}/signoz_logs
     timeout: 10s
     use_new_schema: true
 
@@ -473,9 +493,7 @@ service:
   telemetry:
     logs:
       encoding: json
-  extensions:
-    - health_check
-    - pprof
+  extensions: [health_check, pprof]
   pipelines:
     traces:
       receivers: [otlp]
@@ -497,7 +515,6 @@ EOH
         destination = "local/otel-collector-config.yaml"
         perms       = "0644"
       }
-
       template {
         data = <<EOH
 # OpAMP configuration for collector management
@@ -512,12 +529,10 @@ server:
 EOH
         destination = "local/otel-collector-opamp-config.yaml"
       }
-
       resources {
         cpu    = 1000
         memory = 1024
       }
-
       service {
         name = "otel-collector-grpc"
         port = "otel_grpc"
@@ -544,20 +559,25 @@ EOH
     task "schema-migrator-async" {
       driver = "podman"
 
+      lifecycle {
+        hook = "poststart"
+      }
+
       config {
         image        = "docker.io/signoz/signoz-schema-migrator:v0.129.6"
         network_mode = "pasta"
-        command      = "sh"
-        args = ["-lc", <<EOS
-    # Wait for ClickHouse to be reachable on the host port Nomad assigned
+        entrypoint   = ["/bin/sh"]
+        command      = "-c"
+        args = [<<EOS
+    set -eu
     for i in $(seq 1 120); do
-      nc -z "${NOMAD_IP_clickhouse_native}" "${NOMAD_PORT_clickhouse_native}" && break
-      sleep 1
+      if /signoz-schema-migrator async --dsn="tcp://${NOMAD_ADDR_clickhouse_native}" --up=; then
+        exit 0
+      fi
+      sleep 2
     done
-
-    exec /signoz-schema-migrator sync \
-      --dsn="tcp://${NOMAD_ADDR_clickhouse_native}" \
-      --up=
+    echo "schema-migrator-async: ClickHouse still not reachable; failing"
+    exit 1
     EOS
         ]
       }
