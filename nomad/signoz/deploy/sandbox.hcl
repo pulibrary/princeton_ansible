@@ -270,6 +270,7 @@ EOS
 
       config {
         image   = "docker.io/signoz/query-service:0.52.0"
+        network_mode = "pasta"
         command = "--config=/root/config/prometheus.yml"
         volumes = [
           "local/prometheus.yml:/root/config/prometheus.yml",
