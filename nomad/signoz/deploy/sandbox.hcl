@@ -23,16 +23,32 @@ job "signoz" {
     count = 1
 
     network {
-      mode = "none"
+      mode = "host"
 
-      port "zookeeper" {}
-      port "zookeeper_metrics" {}
-      port "clickhouse_http" {}
-      port "clickhouse_native" {}
-      port "clickhouse_metrics" {}
-      port "signoz" {}
-      port "otel_grpc" {}
-      port "otel_http" {}
+      port "zookeeper" {
+        static = 2181
+      }
+      port "zookeeper_metrics" {
+        static = 9141
+      }
+      port "clickhouse_http" {
+        static = 8123
+      }
+      port "clickhouse_native" {
+        static = 9000
+      }
+      port "clickhouse_metrics" {
+        static = 9363
+      }
+      port "signoz" {
+        static = 8080
+      }
+      port "otel_grpc" {
+        static = 4317
+      }
+      port "otel_http" {
+        static = 4318
+      }
     }
 
     task "zookeeper" {
@@ -40,7 +56,6 @@ job "signoz" {
 
       config {
         image = "docker.io/signoz/zookeeper:3.7.1"
-        network_mode = "pasta"
         ports = ["zookeeper", "zookeeper_metrics"]
       }
 
@@ -79,7 +94,6 @@ job "signoz" {
 
       config {
         image   = "docker.io/clickhouse/clickhouse-server:24.5.6"
-        network_mode = "pasta"
         volumes = [
           "local/config.xml:/etc/clickhouse-server/config.xml",
           "local/users.xml:/etc/clickhouse-server/users.xml",
@@ -239,23 +253,13 @@ EOH
 
       config {
         image      = "docker.io/signoz/signoz-schema-migrator:v0.129.6"
-        network_mode = "pasta"
         entrypoint = ["/bin/sh"]
         command    = "-c"
-        args       = [<<EOS
-set -eu
-echo "Waiting for ClickHouse to be ready..."
-for i in $(seq 1 120); do
-  echo "Attempt $i/120"
-  if /signoz-schema-migrator sync --dsn="tcp://${NOMAD_ADDR_clickhouse_native}" --up=; then
-    echo "Schema migration (sync) successful!"
-    exit 0
-  fi
-  sleep 2
-done
-echo "schema-migrator-sync: ClickHouse still not reachable; failing"
-exit 1
-EOS
+        args       = [
+          "sync",
+          "--dsn", "tcp://${NOMAD_ADDR_clickhouse_native}",
+          "--cluster-name", "",
+          "--replication=false"
         ]
       }
 
@@ -270,7 +274,6 @@ EOS
 
       config {
         image   = "docker.io/signoz/query-service:0.52.0"
-        network_mode = "pasta"
         command = "--config=/root/config/prometheus.yml"
         volumes = [
           "local/prometheus.yml:/root/config/prometheus.yml",
@@ -286,6 +289,8 @@ EOS
       }
 
       env {
+        CLICKHOUSE_HOST = "${NOMAD_IP_clickhouse_native}"
+        CLICKHOUSE_PORT = "${NOMAD_PORT_clickhouse_native}"
         SIGNOZ_ALERTMANAGER_PROVIDER = "signoz"
         SIGNOZ_SQLSTORE_SQLITE_PATH  = "/var/lib/signoz/signoz.db"
         DASHBOARDS_PATH              = "/root/config/dashboards"
@@ -300,8 +305,9 @@ EOS
         env         = true
         destination = "secrets/env/signoz.env"
         data        = <<EOE
-SIGNOZ_TELEMETRYSTORE_CLICKHOUSE_DSN=tcp://{{ env "NOMAD_ADDR_clickhouse_native" }}
-EOE
+      SIGNOZ_TELEMETRYSTORE_CLICKHOUSE_DSN=tcp://{{ env "NOMAD_IP_clickhouse_native" }}:9000
+      CLICKHOUSE_ADDRESS = "{{ env "NOMAD_IP_clickhouse_native" }}:9000"
+      EOE
       }
 
       template {
@@ -355,7 +361,6 @@ EOH
 
       config {
         image   = "docker.io/signoz/signoz-otel-collector:v0.129.6"
-        network_mode = "pasta"
         volumes = [
           "local/otel-collector-config.yaml:/etc/otel-collector-config.yaml",
           "local/otel-collector-opamp-config.yaml:/etc/manager-config.yaml",
@@ -436,14 +441,14 @@ extensions:
 
 exporters:
   clickhousetraces:
-    datasource: tcp://{{ env "NOMAD_ADDR_clickhouse_native" }}/signoz_traces
+    datasource: tcp://{{ env "NOMAD_IP_clickhouse_native" }}:9000/signoz_traces
     use_new_schema: true
 
   signozclickhousemetrics:
-    dsn: tcp://{{ env "NOMAD_ADDR_clickhouse_native" }}/signoz_metrics
+    dsn: tcp://{{ env "NOMAD_IP_clickhouse_native" }}:9000/signoz_metrics
 
   clickhouselogsexporter:
-    dsn: tcp://{{ env "NOMAD_ADDR_clickhouse_native" }}/signoz_logs
+    dsn: tcp://{{ env "NOMAD_IP_clickhouse_native" }}:9000/signoz_logs
     timeout: 10s
     use_new_schema: true
 
@@ -527,23 +532,13 @@ EOH
 
       config {
         image      = "docker.io/signoz/signoz-schema-migrator:v0.129.6"
-        network_mode = "pasta"
         entrypoint = ["/bin/sh"]
         command    = "-c"
-        args       = [<<EOS
-set -eu
-echo "Waiting for ClickHouse to be ready..."
-for i in $(seq 1 120); do
-  echo "Attempt $i/120"
-  if /signoz-schema-migrator async --dsn="tcp://${NOMAD_ADDR_clickhouse_native}" --up=; then
-    echo "Schema migration (async) successful!"
-    exit 0
-  fi
-  sleep 2
-done
-echo "schema-migrator-async: ClickHouse still not reachable; failing"
-exit 1
-EOS
+        args       = [
+          "sync",
+          "--dsn", "tcp://${NOMAD_ADDR_clickhouse_native}",
+          "--cluster-name", "",
+          "--replication=false"
         ]
       }
 
