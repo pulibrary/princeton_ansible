@@ -263,6 +263,10 @@ EOH
         ]
       }
 
+      env {
+        CLICKHOUSE_ADDR = "${NOMAD_ADDR_clickhouse_native}"
+      }
+
       resources {
         cpu    = 200
         memory = 256
@@ -289,8 +293,7 @@ EOH
       }
 
       env {
-        CLICKHOUSE_HOST = "${NOMAD_IP_clickhouse_native}"
-        CLICKHOUSE_PORT = "${NOMAD_PORT_clickhouse_native}"
+        CLICKHOUSE_ADDRESS = "clickhouse.service.consul:9000"
         SIGNOZ_ALERTMANAGER_PROVIDER = "signoz"
         SIGNOZ_SQLSTORE_SQLITE_PATH  = "/var/lib/signoz/signoz.db"
         DASHBOARDS_PATH              = "/root/config/dashboards"
@@ -440,17 +443,15 @@ extensions:
     endpoint: 0.0.0.0:1777
 
 exporters:
-  clickhousetraces:
-    datasource: tcp://{{ env "NOMAD_IP_clickhouse_native" }}:9000/signoz_traces
+  clickhouselogsexporter:
+    dsn: "tcp://clickhouse.service.consul:9000"
     use_new_schema: true
+
+  clickhousetraces:
+    dsn: "tcp://clickhouse.service.consul:9000"
 
   signozclickhousemetrics:
-    dsn: tcp://{{ env "NOMAD_IP_clickhouse_native" }}:9000/signoz_metrics
-
-  clickhouselogsexporter:
-    dsn: tcp://{{ env "NOMAD_IP_clickhouse_native" }}:9000/signoz_logs
-    timeout: 10s
-    use_new_schema: true
+    dsn: "tcp://clickhouse.service.consul:9000"
 
 service:
   telemetry:
@@ -540,6 +541,10 @@ EOH
           "--cluster-name", "",
           "--replication=false"
         ]
+      }
+
+      env {
+        CLICKHOUSE_ADDR = "${NOMAD_ADDR_clickhouse_native}"
       }
 
       resources {
