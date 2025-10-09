@@ -1,0 +1,35 @@
+---
+- name: Rebuild solr shards
+  hosts: solr8cloud_{{ runtime_env | default('staging') }}
+  # hosts: staging:qa:production
+  remote_user: pulsys
+  # become: true
+
+  tasks:
+    - name: get data from solr
+      ansible.builtin.uri:
+        url: http://localhost:8983/solr/admin/collections?action=CLUSTERSTATUS
+        return_content: true
+      register: solr_collections
+      
+    - name: view solr_collections
+      ansible.builtin.debug:
+        var: solr_collections
+
+    # - name: generate a variable that we can use 
+    #   ansible.builtin.debug:
+    #     msg: "Distro: {{ ansible_distribution }}, Version: {{ ansible_distribution_version}}"
+
+    # - name: view the variable
+    #   ansible.builtin.debug:
+    #     msg: "Distro: {{ ansible_distribution }}, Version: {{ ansible_distribution_version}}"
+
+    # - name: add shards
+    #   ansible.builtin.debug:
+    #     http://localhost:8983/solr/admin/collections?action=ADDREPLICA&collection=catalog-performance&shard=shard1&node=lib-solr-staging5d.princeton.edu:8983_solr
+    #     msg: "Distro: {{ ansible_distribution }}, Version: {{ ansible_distribution_version}}"
+
+    # - name: delete shards
+    #   ansible.builtin.debug:
+    #   http://localhost:8983/solr/admin/collections?action=DELETEREPLICA&collection=catalog-performance&shard=shard1&replica=core_node22
+    #     msg: "Distro: {{ ansible_distribution }}, Version: {{ ansible_distribution_version}}"
