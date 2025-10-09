@@ -22,8 +22,11 @@
 
     - name: find dead replicas
       ansible.builtin.debug:
-        var: solr_collections.json.cluster.collections
-        # var: solr_collections.json.cluster.collections[0].shards
+        var: item
+      loop: "{{ solr_collections | community.general.json_query('json.cluster.aliases') }}"
+        # var: solr_collections.json.cluster.collections -- this one works
+        # var: solr_collections.json.cluster.collections[0].shards -- this does not work
+        # dead_replicas: "{{ solr_collections.json.cluster.collections | selectattr('tags') | map(attribute='guest_name') }}"
         # dead_replicas: "{{ solr_collections.virtual_machines | rejectattr('tags') | map(attribute='guest_name') }}"
 
     # The {{ vm_to_reboot }} VM
