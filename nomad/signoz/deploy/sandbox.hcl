@@ -444,14 +444,25 @@ extensions:
 
 exporters:
   clickhouselogsexporter:
-    dsn: "tcp://clickhouse.service.consul:9000"
-    use_new_schema: true
+    endpoint: tcp://clickhouse.service.consul:9000?dial_timeout=10s&compress=lz4
+    database: signoz_traces
+    username: default
+    password: ""
+    ttl: 48h
 
   clickhousetraces:
-    dsn: "tcp://clickhouse.service.consul:9000"
+    endpoint: tcp://clickhouse.service.consul:9000?dial_timeout=10s&compress=lz4
+    database: signoz_traces
+    username: default
+    password: ""
+    ttl: 48h
 
   signozclickhousemetrics:
-    dsn: "tcp://clickhouse.service.consul:9000"
+    endpoint: tcp://clickhouse.service.consul:9000?dial_timeout=10s&compress=lz4
+    database: signoz_traces
+    username: default
+    password: ""
+    ttl: 48h
 
 service:
   telemetry:
@@ -461,7 +472,7 @@ service:
   pipelines:
     traces:
       receivers: [otlp]
-      processors: [signozspanmetrics/delta, batch]
+      processors: [batch]
       exporters: [clickhousetraces]
     metrics:
       receivers: [otlp]
