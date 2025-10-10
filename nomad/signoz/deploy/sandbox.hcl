@@ -128,6 +128,7 @@ job "signoz" {
     <size>1000M</size>
     <count>10</count>
   </logger>
+  <listen_host>::</listen_host>
   <tcp_port>9000</tcp_port>
   <http_port>8123</http_port>
   <prometheus>
@@ -220,7 +221,7 @@ EOH
       }
 
       service {
-        name = "clickhouse"
+        name = "clickhouse-http"
         port = "clickhouse_http"
 
         check {
@@ -232,7 +233,7 @@ EOH
       }
 
       service {
-        name = "clickhouse-native"
+        name = "clickhouse"
         port = "clickhouse_native"
 
         check {
@@ -293,7 +294,9 @@ EOH
       }
 
       env {
-        CLICKHOUSE_ADDRESS = "clickhouse.service.consul:9000"
+        CLICKHOUSE_ADDRESS = "tcp://clickhouse.service.consul:9000"
+        CH_HOST = "clickhouse.service.consul"
+        CH_PORT = "9000"
         SIGNOZ_ALERTMANAGER_PROVIDER = "signoz"
         SIGNOZ_SQLSTORE_SQLITE_PATH  = "/var/lib/signoz/signoz.db"
         DASHBOARDS_PATH              = "/root/config/dashboards"
@@ -302,15 +305,6 @@ EOH
         TELEMETRY_ENABLED            = "true"
         DEPLOYMENT_TYPE              = "nomad-cluster"
         DOT_METRICS_ENABLED          = "true"
-      }
-
-      template {
-        env         = true
-        destination = "secrets/env/signoz.env"
-        data        = <<EOE
-      SIGNOZ_TELEMETRYSTORE_CLICKHOUSE_DSN=tcp://{{ env "NOMAD_IP_clickhouse_native" }}:9000
-      CLICKHOUSE_ADDRESS = "{{ env "NOMAD_IP_clickhouse_native" }}:9000"
-      EOE
       }
 
       template {
@@ -443,26 +437,19 @@ extensions:
     endpoint: 0.0.0.0:1777
 
 exporters:
-  clickhouselogsexporter:
-    endpoint: tcp://clickhouse.service.consul:9000?dial_timeout=10s&compress=lz4
-    database: signoz_traces
-    username: default
-    password: ""
-    ttl: 48h
+  clickhouseexporter:
+    dsn: tcp://clickhouse.service.consul:9000?dial_timeout=10s&compress=lz4
+    logs:
+      database: signoz_logs
+      ttl: 48h
 
-  clickhousetraces:
-    endpoint: tcp://clickhouse.service.consul:9000?dial_timeout=10s&compress=lz4
-    database: signoz_traces
-    username: default
-    password: ""
-    ttl: 48h
+    traces:
+      database: signoz_traces
+      ttl: 48h
 
-  signozclickhousemetrics:
-    endpoint: tcp://clickhouse.service.consul:9000?dial_timeout=10s&compress=lz4
-    database: signoz_traces
-    username: default
-    password: ""
-    ttl: 48h
+    metrics:
+      database: signoz_metrics
+      ttl: 48h
 
 service:
   telemetry:
@@ -473,19 +460,19 @@ service:
     traces:
       receivers: [otlp]
       processors: [batch]
-      exporters: [clickhousetraces]
+      exporters: [clickhouse]
     metrics:
       receivers: [otlp]
       processors: [batch]
-      exporters: [signozclickhousemetrics]
+      exporters: [clickhouse]
     metrics/prometheus:
       receivers: [prometheus]
       processors: [batch]
-      exporters: [signozclickhousemetrics]
+      exporters: [clickhouse]
     logs:
       receivers: [otlp]
       processors: [batch]
-      exporters: [clickhouselogsexporter]
+      exporters: [clickhouse]
 EOH
         destination = "local/otel-collector-config.yaml"
         perms       = "0644"
@@ -553,9 +540,16 @@ EOH
           "--replication=false"
         ]
       }
-
       env {
-        CLICKHOUSE_ADDR = "${NOMAD_ADDR_clickhouse_native}"
+        CLICKHOUSE_ADDRESS             = "clickhouse.service.consul:9000"
+        SIGNOZ_ALERTMANAGER_PROVIDER   = "signoz"
+        SIGNOZ_SQLSTORE_SQLITE_PATH    = "/var/lib/signoz/signoz.db"
+        DASHBOARDS_PATH                = "/root/config/dashboards"
+        STORAGE                        = "clickhouse"
+        GODEBUG                        = "netdns=go"
+        TELEMETRY_ENABLED              = "true"
+        DEPLOYMENT_TYPE                = "nomad-cluster"
+        DOT_METRICS_ENABLED            = "true"
       }
 
       resources {
