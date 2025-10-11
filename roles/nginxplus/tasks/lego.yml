@@ -18,6 +18,8 @@
     dest: "/tmp/lego_v{{ lego_version }}_{{ lego_arch }}.tar.gz"
     mode: "0644"
     force: true
+  when:
+    - running_on_server
 
 - name: Nginxplus - Unarchive lego tarball
   ansible.builtin.unarchive:
@@ -25,6 +27,8 @@
     dest: "/tmp/lego-{{ lego_version }}"
     remote_src: true
     creates: "/tmp/lego-{{ lego_version }}/lego"
+  when:
+    - running_on_server
 
 - name: Nginxplus - Install lego to {{ lego_install_path }}
   ansible.builtin.copy:
@@ -34,6 +38,8 @@
     owner: root
     group: root
   notify: Show installed lego version
+  when:
+    - running_on_server
 
 - name: Nginxplus - Write DNSimple environment file
   ansible.builtin.copy:
