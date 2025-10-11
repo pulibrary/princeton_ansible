@@ -25,3 +25,19 @@
 - name: reload systemd
   ansible.builtin.systemd_service:
     daemon_reload: true
+
+- name: Show installed lego version
+  ansible.builtin.command: "{{ lego_install_path }} --version"
+  listen: Show installed lego version
+  register: lego_ver_out
+  changed_when: false
+
+- name: systemd daemon-reload
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+- name: enable and start renew timer
+  ansible.builtin.systemd:
+    name: "{{ renew_timer }}"
+    state: started
+    enabled: true

@@ -441,3 +441,33 @@ nginx_stream_template:
             port: 8080
             weight: 1
             health_check: max_fails=1 fail_timeout=10s
+# lego
+lego_version: "4.26.0"
+lego_arch: "linux_amd64"
+lego_download_url: "https://github.com/go-acme/lego/releases/download/v{{ lego_version }}/lego_v{{ lego_version }}_{{ lego_arch }}.tar.gz"
+lego_install_path: /usr/local/bin/lego
+lego_state_dir: /var/lib/lego
+lego_env_dir: /etc/lego
+lego_env_file: "{{ lego_env_dir }}/dnsimple.env"
+dnsimple_oauth_token: "{{ vault_dnsimple_oauth_token | default(omit) }}"
+dns_propagation_timeout: 300
+dns_polling_interval: 5
+# ---- Renewal scheduling ----
+renew_days: 30
+renew_calendar: "*-*-* 03,15:00:00"
+
+# Derived: CLI args for lego (domains)
+lego_domains_args: >-
+  {%- for s in sites -%}
+  -d {{ s.domain }}
+    {%- for alt in (s.sans | default([])) -%}
+    -d {{ alt }}
+    {%- endfor -%}
+  {%- if not loop.last %} {% endif -%}
+  {%- endfor -%}
+
+# Paths/names for generated assets
+deploy_hook_path: /usr/local/sbin/deploy-ssl-nginx.sh
+renew_service: lego-renew.service
+renew_timer:   lego-renew.timer
+
