@@ -1,0 +1,155 @@
+---
+- name: Nginxplus - Ensure lego directories
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "{{ item.mode | default('0750') }}"
+  loop:
+    - { path: "{{ lego_state_dir }}", mode: "0750" }
+    - { path: "{{ lego_env_dir }}",  mode: "0750" }
+    - { path: "/etc/nginx/conf.d/ssl/certs", mode: "0755" }
+    - { path: "/etc/nginx/conf.d/ssl/private", mode: "0750" }
+
+- name: Nginxplus - Download lego {{ lego_version }}
+  ansible.builtin.get_url:
+    url: "{{ lego_download_url }}"
+    dest: "/tmp/lego_v{{ lego_version }}_{{ lego_arch }}.tar.gz"
+    mode: "0644"
+    force: true
+
+- name: Nginxplus - Unarchive lego tarball
+  ansible.builtin.unarchive:
+    src: "/tmp/lego_v{{ lego_version }}_{{ lego_arch }}.tar.gz"
+    dest: "/tmp/lego-{{ lego_version }}"
+    remote_src: true
+    creates: "/tmp/lego-{{ lego_version }}/lego"
+
+- name: Nginxplus - Install lego to {{ lego_install_path }}
+  ansible.builtin.copy:
+    src: "/tmp/lego-{{ lego_version }}/lego"
+    dest: "{{ lego_install_path }}"
+    mode: "0755"
+    owner: root
+    group: root
+  notify: Show installed lego version
+
+- name: Nginxplus - Write DNSimple environment file
+  ansible.builtin.copy:
+    dest: "{{ lego_env_file }}"
+    owner: root
+    group: root
+    mode: "0600"
+    content: |
+      DNSIMPLE_OAUTH_TOKEN={{ dnsimple_oauth_token }}
+      DNSIMPLE_PROPAGATION_TIMEOUT={{ dns_propagation_timeout }}
+      DNSIMPLE_POLLING_INTERVAL={{ dns_polling_interval }}
+  when:
+    - running_on_server
+
+- name: Nginxplus - Create deploy hook for Nginx
+  ansible.builtin.copy:
+    dest: "{{ deploy_hook_path }}"
+    owner: root
+    group: root
+    mode: "0755"
+    content: |
+      #!/usr/bin/env bash
+      set -Eeuo pipefail
+      : "${LEGO_CERT_DOMAIN:?missing}"
+      : "${LEGO_CERT_PATH:?missing}"
+      : "${LEGO_CERT_KEY_PATH:?missing}"
+
+      LEGO_CERT_ISSUER_PATH="${LEGO_CERT_PATH%.crt}.issuer.crt"
+
+      case "$LEGO_CERT_DOMAIN" in
+      {% for s in sites %}
+        {{ s.domain }}|*.{{ s.domain }})
+          CERT_DST="{{ s.cert_dst }}"
+          KEY_DST="{{ s.key_dst }}"
+          ;;
+      {% endfor %}
+        *)
+          echo "Unknown domain ${LEGO_CERT_DOMAIN}; skipping."
+          exit 0
+          ;;
+      esac
+
+      # Combine server cert + issuer into single chained PEM for Nginx
+      cat "$LEGO_CERT_PATH" "$LEGO_CERT_ISSUER_PATH" >"$CERT_DST"
+      # Keys readable by root only (nginx opens as root then drops privs)
+      install -m 0640 -o root -g root "$LEGO_CERT_KEY_PATH" "$KEY_DST"
+
+      nginx -t
+      systemctl reload nginx
+  when:
+    - running_on_server
+
+- name: Nginxplus - Install systemd service for renewals
+  ansible.builtin.copy:
+    dest: "/etc/systemd/system/{{ renew_service }}"
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      [Unit]
+      Description=Renew Let's Encrypt certificates with lego (DNSimple)
+
+      [Service]
+      Type=oneshot
+      EnvironmentFile={{ lego_env_file }}
+      ExecStart={{ lego_install_path }} --path {{ lego_state_dir }} \
+        --email lsupport@princeton.edu --dns dnsimple \
+        {{ lego_domains_args }} \
+        renew --days {{ renew_days }} --renew-hook {{ deploy_hook_path }}
+  when:
+    - running_on_server
+
+- name: Nginxplus - Install systemd timer for renewals
+  ansible.builtin.copy:
+    dest: "/etc/systemd/system/{{ renew_timer }}"
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      [Unit]
+      Description=Run lego renew twice daily
+
+      [Timer]
+      OnCalendar={{ renew_calendar }}
+      Persistent=true
+
+      [Install]
+      WantedBy=timers.target
+  notify:
+   - systemd daemon-reload
+   - enable and start renew timer
+  when:
+    - running_on_server
+
+# ---- Initial issuance for each site (idempotent) ----
+# Skips if the chained pem already exists at the destination.
+- name: Nginxplus - Issue initial certificate for each site (lego run)
+  ansible.builtin.command: >
+    {{ lego_install_path }} --path {{ lego_state_dir }}
+    --email lsupport@princeton.edu --dns dnsimple
+    {{ item.lego_domains_args }}
+    run --run-hook {{ deploy_hook_path }}
+  environment:
+    DNSIMPLE_OAUTH_TOKEN: "{{ dnsimple_oauth_token }}"
+    DNSIMPLE_PROPAGATION_TIMEOUT: "{{ dns_propagation_timeout }}"
+    DNSIMPLE_POLLING_INTERVAL: "{{ dns_polling_interval }}"
+  args:
+    creates: "{{ item.cert_dst }}"
+  loop: >-
+    {{
+      sites | map('combine', {
+        'lego_domains_args':
+          ('-d ' ~ item.domain ~
+           (item.sans | default([]) | map('regex_replace', '^(.*)$', '-d \\1') | join(' '))
+          )
+      })
+    }}
+  when:
+    - running_on_server
