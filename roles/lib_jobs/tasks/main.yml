@@ -61,6 +61,24 @@
     mode: 0664
   when: running_on_server
 
+- name: lib_jobs | add cloned staging repo
+  become_user: "{{ deploy_user }}"
+  ansible.builtin.git:
+    repo: "git@{{ git_lab_staging_host }}:scua/libsvn.git"
+    dest: '/opt/{{ app_directory }}/shared/git_lab_staging_eads'
+    accept_newhostkey: true
+    update: false
+  when: running_on_server
+
+- name: lib_jobs | add GitLab staging repo configuration
+  ansible.builtin.template:
+    src: eads_gitlab_staging_config.j2
+    dest: '/opt/{{ app_directory }}/shared/git_lab_staging_eads/.git/config'
+    owner: '{{ deploy_user }}'
+    group: '{{ deploy_user }}'
+    mode: 0664
+  when: running_on_server
+
 # PeopleSoft Mount
 - name: lib_jobs | Copy peoplesoft smb credentials
   ansible.builtin.copy:
