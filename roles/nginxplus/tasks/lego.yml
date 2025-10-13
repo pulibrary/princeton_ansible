@@ -11,6 +11,7 @@
     - { path: "{{ lego_env_dir }}",  mode: "0750" }
     - { path: "/etc/nginx/conf.d/ssl/certs", mode: "0755" }
     - { path: "/etc/nginx/conf.d/ssl/private", mode: "0750" }
+    - { path: "/tmp/lego-{{ lego_version }}", mode: "0755" }
 
 - name: Nginxplus - Download lego {{ lego_version }}
   ansible.builtin.get_url:
@@ -37,6 +38,7 @@
     mode: "0755"
     owner: root
     group: root
+    remote_src: true
   notify: Show installed lego version
   when:
     - running_on_server
@@ -140,22 +142,16 @@
   ansible.builtin.command: >
     {{ lego_install_path }} --path {{ lego_state_dir }}
     --email lsupport@princeton.edu --dns dnsimple
-    {{ item.lego_domains_args }}
+    {% for d in [site.domain] + (site.sans | default([])) %}-d {{ d }} {% endfor %}
     run --run-hook {{ deploy_hook_path }}
   environment:
     DNSIMPLE_OAUTH_TOKEN: "{{ dnsimple_oauth_token }}"
     DNSIMPLE_PROPAGATION_TIMEOUT: "{{ dns_propagation_timeout }}"
     DNSIMPLE_POLLING_INTERVAL: "{{ dns_polling_interval }}"
   args:
-    creates: "{{ item.cert_dst }}"
-  loop: >-
-    {{
-      sites | map('combine', {
-        'lego_domains_args':
-          ('-d ' ~ item.domain ~
-           (item.sans | default([]) | map('regex_replace', '^(.*)$', '-d \\1') | join(' '))
-          )
-      })
-    }}
+    creates: "{{ site.cert_dst }}"
+  loop: "{{ sites }}"
+  loop_control:
+    loop_var: site
   when:
     - running_on_server
