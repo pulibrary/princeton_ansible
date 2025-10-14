@@ -22,6 +22,14 @@ job "signoz" {
   group "signoz-all" {
     count = 1
 
+    # hard pin
+    # value of `nomad node status`
+    # ` nomad node status -verbose 1746c3f9`
+    constraint {
+      attribute = "${node.unique.id}"
+      value = "1746c3f9-84a0-5a53-890c-d8aea69c0a02"
+    }
+
     network {
       dns {
         servers = ["10.88.0.1", "128.112.129.209", "8.8.8.8", "8.8.4.4"]
@@ -35,6 +43,11 @@ job "signoz" {
       config {
         image = "docker.io/signoz/zookeeper:3.7.1"
         network_mode = "host"
+        volumes = [
+          # persistent state
+          # selinux needs `sudo chcon -Rt container_file_t /data/clickhouse /data/clickhouse-logs /data/zookeeper /data/signoz`
+          "/data/zookeeper:/bitnami/zookeeper"
+        ]
       }
 
       env {
@@ -61,7 +74,11 @@ job "signoz" {
 
         volumes = [
           "local/clickhouse-config.xml:/etc/clickhouse-server/config.xml",
-          "local/clickhouse-users.xml:/etc/clickhouse-server/users.xml"
+          "local/clickhouse-users.xml:/etc/clickhouse-server/users.xml",
+          # persistent state
+          # selinux needs `sudo chcon -Rt container_file_t /data/clickhouse /data/clickhouse-logs /data/zookeeper /data/signoz`
+          "/data/clickhouse:/var/lib/clickhouse",
+          "/data/clickhouse-logs:/var/log/clickhouse-server"
         ]
       }
 
@@ -250,7 +267,10 @@ EOF
 
         command = "--config=/root/config/prometheus.yml"
         volumes = [
-          "local/prometheus.yml:/root/config/prometheus.yml"
+          "local/prometheus.yml:/root/config/prometheus.yml",
+          # persistent state
+          # selinux needs `sudo chcon -Rt container_file_t /data/clickhouse /data/clickhouse-logs /data/zookeeper /data/signoz`
+          "/data/signoz:/var/lib/signoz"
         ]
       }
 
@@ -258,7 +278,7 @@ EOF
         SIGNOZ_JWT_SECRET                    = "supersecret-jwt-key-change-this-in-production"
         SIGNOZ_ALERTMANAGER_PROVIDER         = "signoz"
         SIGNOZ_TELEMETRYSTORE_CLICKHOUSE_DSN = "tcp://127.0.0.1:9000"
-        SIGNOZ_SQLSTORE_SQLITE_PATH          = "/alloc/data/signoz.db"
+        SIGNOZ_SQLSTORE_SQLITE_PATH          = "/var/lib/signoz/signoz.db"
         STORAGE                              = "clickhouse"
         GODEBUG                              = "netdns=go"
         TELEMETRY_ENABLED                    = "true"
