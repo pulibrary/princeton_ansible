@@ -102,6 +102,36 @@ job "signoz" {
     <http_port>8123</http_port>
     <tcp_port>9000</tcp_port>
 
+    <remote_servers>
+      <cluster>
+        <shard>
+          <replica>
+            <host>127.0.0.1</host>
+            <port>9000</port>
+          </replica>
+        </shard>
+      </cluster>
+    </remote_servers>
+
+    <distributed_ddl>
+      <path>/clickhouse/task_queue/ddl</path>
+    </distributed_ddl>
+
+    <interserver_http_port>9009</interserver_http_port>
+    <interserver_http_host>127.0.0.1</interserver_http_host>
+
+    <zookeeper>
+      <node>
+        <host>127.0.0.1</host>
+        <port>2181</port>
+      </node>
+    </zookeeper>
+
+    <macros>
+      <replica>replica_1</replica>
+      <shard>1</shard>
+    </macros>
+
     <path>/var/lib/clickhouse/</path>
     <tmp_path>/var/lib/clickhouse/tmp/</tmp_path>
     <user_files_path>/var/lib/clickhouse/user_files/</user_files_path>
