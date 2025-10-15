@@ -145,7 +145,9 @@ EOF
     </users>
     <profiles>
         <default>
-            <max_memory_usage>10000000000</max_memory_usage>
+            <max_memory_usage>22000000000</max_memory_usage>
+            <max_threads>0</max_threads>
+            <max_partitions_per_insert_block>200</max_partitions_per_insert_block>
             <use_uncompressed_cache>0</use_uncompressed_cache>
             <load_balancing>random</load_balancing>
         </default>
