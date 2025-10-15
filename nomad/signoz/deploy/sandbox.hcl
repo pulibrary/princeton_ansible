@@ -5,7 +5,7 @@ variable "branch_or_sha" {
 
 variable "signoz_version" {
   type    = string
-  default = "v0.97.0"
+  default = "v0.97.1"
 }
 
 variable "otelcol_tag" {
