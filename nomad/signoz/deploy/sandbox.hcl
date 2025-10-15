@@ -59,8 +59,8 @@ job "signoz" {
       }
 
       resources {
-        cpu    = 256
-        memory = 256
+        cpu    = 500
+        memory = 512
       }
     }
 
@@ -167,8 +167,8 @@ EOF
       }
 
       resources {
-        cpu    = 1000
-        memory = 2048
+        cpu    = 4000
+        memory = 8192
       }
     }
 
@@ -315,8 +315,8 @@ EOF
       }
 
       resources {
-        cpu    = 500
-        memory = 1024
+        cpu    = 2000
+        memory = 4096
       }
 
       restart {
@@ -394,8 +394,8 @@ EOF
       }
 
       resources {
-        cpu    = 500
-        memory = 512
+        cpu    = 1000
+        memory = 1024
       }
 
       restart {
