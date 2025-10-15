@@ -112,14 +112,14 @@
   ansible.builtin.command: /usr/bin/certbot certonly --standalone --non-interactive --agree-tos --email lsupport@princeton.edu --server https://acme.sectigo.com/v2/InCommonRSAOV --eab-kid {{ vault_acme_eab_kid }} --eab-hmac-key {{ vault_acme_eab_hmac_key }} --domain {{ domain_name }}.princeton.edu --cert-name {{ domain_place_name }}
   when: running_on_server
 
+- name: EZproxy | Install GeoIP
+  ansible.builtin.include_tasks: geoip.yml
+
 - name: Ezproxy | start ezproxy
   ansible.builtin.service:
     name: ezproxy
     state: restarted
   when: running_on_server
-
-- name: EZproxy | Install GeoIP
-  ansible.builtin.include_tasks: geoip.yml
 
 - name: Ezproxy | enable cap deployment
   ansible.builtin.include_tasks: cap_deployment.yml
