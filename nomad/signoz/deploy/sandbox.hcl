@@ -34,6 +34,13 @@ job "signoz" {
       dns {
         servers = ["10.88.0.1", "128.112.129.209", "8.8.8.8", "8.8.4.4"]
       }
+      mode = "host"
+      port "otlp_grpc" {
+        static = 4317
+      }
+      port "otlp_http" {
+        static = 4318
+      }
     }
 
     # Zookeeper task
@@ -241,12 +248,8 @@ EOF
       config {
         image = "docker.io/signoz/signoz-schema-migrator:${var.otelcol_tag}"
         network_mode = "host"
-
-        command = "sh"
-        args = [
-          "-c",
-          "sleep 30 && /schema-migrator sync --dsn=tcp://127.0.0.1:9000 --up="
-        ]
+        command = "sync"
+        args    = ["--dsn=tcp://127.0.0.1:9000", "--up="]
       }
 
       resources {
@@ -268,13 +271,8 @@ EOF
       config {
         image = "docker.io/signoz/signoz-schema-migrator:${var.otelcol_tag}"
         network_mode = "host"
-
-        command = "/schema-migrator"
-        args = [
-          "async",
-          "--dsn=tcp://127.0.0.1:9000",
-          "--up="
-        ]
+        command = "async"
+        args    = ["--dsn=tcp://127.0.0.1:9000", "--up="]
       }
 
       resources {
@@ -366,9 +364,6 @@ EOF
         image = "docker.io/signoz/signoz-otel-collector:${var.otelcol_tag}"
         network_mode = "host"
         command = "--config=/etc/otel-collector-config.yaml"
-        args = [
-          "--feature-gates=-pkg.translator.prometheus.NormalizeName"
-        ]
         volumes = [
           "local/otel-collector-config.yaml:/etc/otel-collector-config.yaml"
         ]
@@ -400,8 +395,6 @@ exporters:
 
   signozclickhousemetrics:
     dsn: tcp://127.0.0.1:9000
-    resource_to_telemetry_conversion:
-      enabled: true
 
   clickhouselogsexporter:
     dsn: tcp://127.0.0.1:9000
