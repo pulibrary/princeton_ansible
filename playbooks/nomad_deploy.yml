@@ -1,0 +1,20 @@
+---
+- name: Deploy app to Nomad
+  hosts: "{{ target_host | default('nomad-host-sandbox1.lib.princeton.edu') }}"
+  gather_facts: false
+  become: true
+
+  vars:
+    app: "{{ app | default('grist') }}"
+    env: "{{ env | default('sandbox') }}"
+
+  pre_tasks:
+    - name: Validate environment
+      assert:
+        that:
+          - env in ['production','staging','sandbox']
+        fail_msg: "env must be production|staging|sandbox"
+
+  roles:
+    - role: grist
+      when: app == 'grist'
