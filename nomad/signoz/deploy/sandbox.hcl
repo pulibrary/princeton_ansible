@@ -224,10 +224,7 @@ EOF
         image = "docker.io/library/busybox:latest"
         network_mode = "host"
         command = "sh"
-        args = [
-          "-c",
-          "sleep 15; until nc -z 127.0.0.1 9000; do echo 'Waiting for ClickHouse...'; sleep 2; done; echo 'ClickHouse is ready!'"
-        ]
+         args = ["-c", "until [ \"$(wget -qO- http://127.0.0.1:8123/ping 2>/dev/null)\" = \"Ok\" ]; do echo 'Waiting for ClickHouse…'; sleep 2; done; echo 'ClickHouse is ready!'"]
       }
 
       resources {
