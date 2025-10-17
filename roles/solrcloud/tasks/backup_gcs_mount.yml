@@ -124,7 +124,6 @@
     state: started
     daemon_reload: true
   when: running_on_server
-  tags: [fix_backups]
 
 # Verify mount is working
 - name: Solrcloud | Wait for GCS mount to be available
@@ -133,7 +132,6 @@
     state: present
     timeout: 30
   when: running_on_server
-  tags: [fix_backups]
 
 - name: Solrcloud | Verify GCS mount is active
   ansible.builtin.command: mountpoint -q /solr/data/cloud_backup
@@ -141,13 +139,13 @@
   changed_when: false
   failed_when: false
   when: running_on_server
-  tags: [google_cloud, fix_backups]
+  tags: [google_cloud]
 
 - name: Solrcloud | Display mount status
   ansible.builtin.debug:
     msg: "GCS mount is {{ 'active' if mount_check.rc == 0 else 'not active' }}"
   when: running_on_server
-  tags: [google_cloud, fix_backups]
+  tags: [google_cloud]
 
 - name: Solrcloud | Ensure Checkmk local dir exists
   ansible.builtin.file:
@@ -210,4 +208,4 @@
     - running_on_server
     - solr9_gcsfuse_logrotate_rules is defined
     - solr9_gcsfuse_logrotate_rules | length > 0
-  tags: [google_cloud, fix_backups]
+  tags: [google_cloud]

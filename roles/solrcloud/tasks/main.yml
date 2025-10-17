@@ -1,9 +1,4 @@
 ---
-- name: Solrcloud | Install dependencies
-  ansible.builtin.apt:
-    name: ["cifs-utils"]
-    state: present
-
 - name: Solrcloud | create directories for mounts
   ansible.builtin.file:
     path: "{{ item }}"
@@ -12,12 +7,10 @@
     group: deploy
     owner: deploy
   loop:
-    - "/solr/data/backup"
     - "/solr/data/cloud_backup"
     - "/var/log/gcsfuse"
   tags:
     - google_cloud
-    - fix_backups
 
 - name: Solrcloud | Configure cloud backup mounts
   ansible.builtin.import_tasks: backup_gcs_mount.yml
@@ -25,30 +18,6 @@
   #     tags: google_cloud
   tags:
     - google_cloud
-
-- name: Solrcloud | Copy smb credentials
-  ansible.builtin.copy:
-    src: "files/{{ item }}"
-    dest: "/etc/{{ item }}"
-    mode: "0644"
-  when:
-    - running_on_server
-  loop:
-    - solr.smb.credentials
-  tags:
-    - fix_backups
-
-- name: Solrcloud | Create mount to diglibdata1 shares
-  ansible.posix.mount:
-    path: "/solr/data/backup"
-    src: "//diglibdata1.princeton.edu/solrbackup"
-    fstype: cifs
-    opts: "credentials=/etc/solr.smb.credentials,uid=1001,gid=1001"
-    state: mounted
-  when:
-    - running_on_server
-  tags:
-    - fix_backups
 
 - name: Solrcloud | update host file
   ansible.builtin.lineinfile:
