@@ -1,0 +1,36 @@
+---
+# capistrano based tasks
+- name: Ezproxy | Create app directory
+  ansible.builtin.file:
+    path: "{{ ezproxy_repo_root }}"
+    state: directory
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+    mode: "0750"
+    recurse: true
+  become: true
+
+- name: Ezproxy | Ensure .ssh directory exists.
+  ansible.builtin.file:
+    path: "/home/{{ deploy_user }}/.ssh"
+    state: directory
+    mode: "0700"
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+
+- name: Ezproxy | Allow ability to restart ezproxy for {{ deploy_user }}
+  ansible.builtin.lineinfile:
+    dest: "/etc/sudoers"
+    state: "present"
+    line: "{{ deploy_user }} ALL=(ALL) NOPASSWD: /usr/sbin/service ezproxy restart"
+    validate: "visudo -cf %s"
+
+- name: Ezproxy | chmod back permissions
+  ansible.builtin.file:
+    path: "{{ ezproxy_repo_root }}"
+    state: directory
+    recurse: true
+    mode: "0750"
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+  become: true
