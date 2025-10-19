@@ -3,6 +3,16 @@ variable "branch_or_sha" {
   default = "main"
 }
 
+variable "grist_image" {
+  type    = string
+  default = "docker.io/gristlabs/grist:1.7.4"
+}
+
+variable "grist_data_root" {
+  type    = string
+  default = "/data/grist"
+}
+
 job "grist" {
   region      = "global"
   datacenters = ["dc1"]
@@ -13,9 +23,6 @@ job "grist" {
     count = 1
 
     network {
-      dns {
-        servers = ["10.88.0.1", "128.112.129.209", "8.8.8.8", "8.8.4.4"]
-      }
       mode = "host"
       port "http" {
         static = 8484
@@ -95,7 +102,7 @@ EOF
     }
   }
       restart {
-        attempts = 6
+        attempts = 5
         delay    = "20s"
         mode     = "delay"
       }
