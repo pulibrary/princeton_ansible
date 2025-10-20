@@ -43,44 +43,38 @@ task "grist" {
   }
 
   # minimal env file, no nomadVar usage
-  template {
-    destination = "${NOMAD_SECRETS_DIR}/env.vars"
-    env         = true
-    change_mode = "restart"
-    data = <<EOF
-GRIST_ORG_IN_PATH = true
-GRIST_HOST = "0.0.0.0"
-GRIST_SINGLE_PORT = true
-GRIST_SERVE_SAME_ORIGIN = true
-GRIST_DATA_DIR = "/persist/docs"
-GRIST_INST_DIR = "/persist"
-GRIST_SESSION_COOKIE = "grist_core"
-GRIST_SANDBOX_FLAVOR = "unsandboxed"
-NODE_OPTIONS = "--no-deprecation"
-NODE_ENV = "production"
-TYPEORM_DATABASE = "/persist/home.sqlite3"
+  env {
+    PORT = "8484"
+    GRIST_HOST = "0.0.0.0"
+    GRIST_SINGLE_PORT = "true"
+    GRIST_ORG_IN_PATH = "true"
+    GRIST_SERVE_SAME_ORIGIN = "true"
+    GRIST_DATA_DIR = "/persist/docs"
+    GRIST_INST_DIR = "/persist"
+    GRIST_SESSION_COOKIE = "grist_core"
+    GRIST_SANDBOX_FLAVOR = "unsandboxed"
+    NODE_OPTIONS = "--no-deprecation"
+    NODE_ENV = "production"
+    TYPEORM_DATABASE = "/persist/home.sqlite3"
 
-# SAML base URL for staging
-GRIST_SAML_SP_HOST = "https://pul-sheets-staging.lib.princeton.edu"
+    # SAML base URL for staging
+    GRIST_SAML_SP_HOST = "https://pul-sheets-staging.lib.princeton.edu"
 
-# SAML file paths (mounted from host)
-GRIST_SAML_SP_KEY  = "/idp/sp.key"
-GRIST_SAML_SP_CERT = "/idp/sp.crt"
-GRIST_SAML_IDP_CERTS = "/idp/idp_1.cer"
+    # SAML file paths (mounted from host)
+    GRIST_SAML_SP_KEY  = "/idp/sp.key"
+    GRIST_SAML_SP_CERT = "/idp/sp.crt"
+    GRIST_SAML_IDP_CERTS = "/idp/idp_1.cer"
 
-# Entra endpoints (from your tenant)
-GRIST_SAML_IDP_LOGIN  = "https://login.microsoftonline.com/2ff60116-7431-425d-b5af-077d7791bda4/saml2"
-GRIST_SAML_IDP_LOGOUT = "https://login.microsoftonline.com/2ff60116-7431-425d-b5af-077d7791bda4/logout.saml"
+    # Entra endpoints (from your tenant)
+    GRIST_SAML_IDP_LOGIN  = "https://login.microsoftonline.com/2ff60116-7431-425d-b5af-077d7791bda4/saml2"
+    GRIST_SAML_IDP_LOGOUT = "https://login.microsoftonline.com/2ff60116-7431-425d-b5af-077d7791bda4/logout.saml"
 
-# If your IdP is sending unencrypted assertions (optional):
-# GRIST_SAML_IDP_UNENCRYPTED = "1"
+    GRIST_SAML_IDP_UNENCRYPTED = "1"
 
-# If you don’t have SingleLogout configured (optional):
-# GRIST_SAML_IDP_SKIP_SLO = "1"
+    # GRIST_SAML_IDP_SKIP_SLO = "1"
 
-# Proxies you trust (so Host/XFF are honored)
-GRIST_TRUSTED_PROXY = "10.0.0.0/8,127.0.0.1/32"
-EOF
+    # Proxies we trust (so Host/XFF are honored)
+    GRIST_TRUSTED_PROXY = "10.0.0.0/8,127.0.0.1/32"
   }
 
   resources {
@@ -91,7 +85,7 @@ EOF
   service {
     name         = "grist-sandbox"
     port         = "http"
-    address_mode = "host"
+    #    address_mode = "driver"
     check {
       type         = "http"
       path         = "/"
