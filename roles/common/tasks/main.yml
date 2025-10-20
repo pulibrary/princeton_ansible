@@ -12,6 +12,10 @@
     state: present
   loop:
     - "{{ common_shared_packages }}"
+  when:
+    - ansible_os_family != "OpenBSD"
+    # our openBSD servers are minimalist
+    # we don't install tools on them
 
 - name: Common | Install common ubuntu packages
   ansible.builtin.package:
@@ -75,7 +79,7 @@
     owner: root
     group: root
   loop: "{{ logrotate_rules }}"
-  when: 
+  when:
     - logrotate_rules is defined
     - logrotate_rules | length > 0
   notify:
@@ -130,6 +134,37 @@
     - running_on_server
     - dua_version_result.stdout is defined and dua_version_result.rc == 0
 
-- name: Common | install vector, but not in testing
-  ansible.builtin.include_tasks: vector.yml
+- name: Common | Check for checkmk agent binary
+  ansible.builtin.stat:
+    path: /usr/bin/cmk-agent-ctl
+  register: checkmk_binary_stat
   when: running_on_server
+
+- name: Common | install logrotate check
+  ansible.builtin.copy:
+    src: logrotatecheck.sh
+    dest: /usr/lib/check_mk_agent/local/logrotatecheck.sh
+    mode: "0755"
+    owner: root
+    group: root
+  when:
+    - running_on_server
+    - checkmk_binary_stat.stat.exists
+
+- name: Common | install and update chronyd
+  ansible.builtin.include_tasks: chronyd.yml
+  # when: running_on_server
+  #
+- name: Common | ensure /etc/profile.d exists
+  ansible.builtin.file:
+    path: /etc/profile.d
+    state: directory
+    mode: "0755"
+
+- name: Common | enable timestamped history for bash globally
+  ansible.builtin.template:
+    src: history-timestamp.sh.j2
+    dest: /etc/profile.d/history-timestamp.sh
+    mode: "0644"
+    owner: root
+    group: root

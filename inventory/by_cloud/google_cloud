@@ -8,46 +8,53 @@ bastion-dev.pulcloud.io
 bastion-prod.pulcloud.io
 
 [bastion_staging]
-bastion-staging.pulcloud.io ansible_python_interpreter=/usr/bin/python
+bastion-staging.pulcloud.io
 
 [cdhapps_staging]
-gcp_simrisk_staging ansible_host=10.140.0.17
+gcp-simrisk-staging ansible_host=10.140.0.17
 
 [dspace_dev]
-gcp_dataspace_dev1 ansible_host=10.0.20.4
-gcp_oar_dev1 ansible_host=10.0.20.3
-gcp_oar_beta1 ansible_host=10.0.10.12
+gcp-dataspace-dev1 ansible_host=10.0.20.4
+gcp-oar-dev1 ansible_host=10.0.20.3
 
 [dspace_production]
 gcp-dataspace-prod1 ansible_host=10.244.0.2
 gcp-oar-prod1 ansible_host=10.244.0.3
 
 [dspace_staging]
-gcp_dataspace_staging1 ansible_host=10.132.0.5
-gcp_oar_staging1 ansible_host=10.132.0.4
+gcp-dataspace-staging1 ansible_host=10.132.0.5
+gcp-oar-staging1 ansible_host=10.132.0.4
 
 [obsd_httpd_dev]
+# inventory name is dev.pucloud.io; GCP VM name is gcdc-adc-dev1
 dev.pulcloud.io
 
 [obsd_httpd_production]
-#inventory name is prod.pucloud.io but the VM name in google cloud is pul-gcdc-prod-adc
-prod.pulcloud.io ansible_host=10.246.0.2
+# inventory name is prod.pucloud.io; GCP VM name is gcdc-prod-adc
+prod.pulcloud.io
 
 [obsd_httpd_staging]
-staging.pulcloud.io ansible_host=10.140.0.3
+# inventory name is staging.pucloud.io; GCP VM name is gcdc-staging-adc
+staging.pulcloud.io
+
+[pulcheck_gcp]
+pulmonitor-gcp.pulcloud.io
+# do not add to the gcp_production group
+# already included in the main 'production' group
+# otherwise we'll have a race condition, monitoring the monitoring 
 
 [pulmirror_production]
-pulmirror.princeton.edu ansible_host=10.132.0.20
+pulmirror.princeton.edu
 
 [sftp_production]
-proquestdrop.pulcloud.io ansible_host=10.140.0.15
+proquestdrop.pulcloud.io
 
 [gcp_dev:children]
 dspace_dev
 obsd_httpd_dev
 
 [gcp_dev:vars]
-ansible_ssh_common_args='-o ProxyCommand="ssh -W %h:%p -q pulsys@bastion-dev.pulcloud.io"'
+ansible_ssh_common_args=-o ProxyCommand="ssh '-o ForwardAgent yes' '-o StrictHostKeyChecking=accept-new' -q pulsys@bastion-dev.pulcloud.io -W %h:%p"
 checkmk_folder=linux/staging
 
 [gcp_production:children]
@@ -56,7 +63,7 @@ obsd_httpd_production
 sftp_production
 
 [gcp_production:vars]
-ansible_ssh_common_args='-o ProxyCommand="ssh -W %h:%p -q pulsys@bastion-prod.pulcloud.io"'
+ansible_ssh_common_args=-o ProxyCommand="ssh '-o ForwardAgent yes' '-o StrictHostKeyChecking=accept-new' -q pulsys@bastion-prod.pulcloud.io -W %h:%p"
 checkmk_folder=linux/production
 
 [gcp_staging:children]
@@ -65,7 +72,7 @@ dspace_staging
 obsd_httpd_staging
 
 [gcp_staging:vars]
-ansible_ssh_common_args='-o ProxyCommand="ssh -W %h:%p -q pulsys@bastion-staging.pulcloud.io"'
+ansible_ssh_common_args=-o ProxyCommand="ssh '-o ForwardAgent yes' '-o StrictHostKeyChecking=accept-new' -q pulsys@bastion-staging.pulcloud.io -W %h:%p"
 ansible_python_interpreter=/usr/bin/python3
 checkmk_folder=linux/staging
 
@@ -81,6 +88,7 @@ sftp_production
 
 [obsd:vars]
 ansible_become_method=doas
+ansible_python_interpreter=/usr/local/bin/python3
 
 [gcp_operations:children]
 bastion_dev

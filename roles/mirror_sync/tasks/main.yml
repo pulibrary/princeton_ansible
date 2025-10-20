@@ -1,0 +1,135 @@
+---
+# Packages
+- name: Mirror_sync - install rsync and nginx
+  ansible.builtin.package:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - nginx
+    - rsync
+
+# Directories
+- name: Mirror_sync - ensure web and mirror roots exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+  loop:
+    - "{{ web_root }}"
+    - "{{ mirror_root }}"
+
+# Node.js
+- name: Mirror_sync - ensure Node.js destination exists
+  ansible.builtin.file:
+    path: "{{ nodejs_dest }}"
+    state: directory
+    mode: "0755"
+
+- name: Mirror_sync - initial sync – Node.js (append-verify only)
+  ansible.builtin.command: >
+    /usr/local/bin/rsync {{ mirror_base_flags }}
+    {% if nodejs_bwlimit | int > 0 %} --bwlimit={{ nodejs_bwlimit | int }} {% endif %}
+    {% if nodejs_extra_opts | length %} {{ nodejs_extra_opts | join(' ') }} {% endif %}
+    {{ nodejs_rsync_src }} {{ nodejs_dest }}/
+  register: nodejs_sync
+  changed_when: true
+
+- name: Mirror_sync - cron – Node.js mirror updates
+  ansible.builtin.cron:
+    name: "Mirror Node.js releases"
+    minute: "{{ cron_minute }}"
+    hour: "{{ cron_hours }}"
+    user: root
+    job: >-
+      umask 022 ;
+      /usr/local/bin/rsync {{ mirror_base_flags }}
+      {% if nodejs_bwlimit | int > 0 %} --bwlimit={{ nodejs_bwlimit | int }} {% endif %}
+      {% if nodejs_extra_opts | length %} {{ nodejs_extra_opts | join(' ') }} {% endif %}
+      {{ nodejs_rsync_src }} {{ nodejs_dest }}/
+      >> {{ nodejs_cron_log }} 2>&1
+    state: present
+
+# Apache Solr
+- name: Mirror_sync - ensure Solr destination exists
+  ansible.builtin.file:
+    path: "{{ solr_dest }}"
+    state: directory
+    mode: "0755"
+
+- name: Mirror_sync - initial sync – Apache Solr (append-verify only)
+  ansible.builtin.command: >
+    /usr/local/bin/rsync {{ mirror_base_flags }}
+    {% if solr_bwlimit | int > 0 %} --bwlimit={{ solr_bwlimit | int }} {% endif %}
+    {% if solr_extra_opts | length %} {{ solr_extra_opts | join(' ') }} {% endif %}
+    {{ solr_rsync_src }} {{ solr_dest }}/
+  register: solr_sync
+  changed_when: true
+
+- name: Mirror_sync - cron – Apache Solr mirror updates
+  ansible.builtin.cron:
+    name: "Mirror Apache Solr releases"
+    minute: "{{ cron_minute }}"
+    hour: "{{ cron_hours }}"
+    user: root
+    job: >-
+      umask 022 ;
+      /usr/local/bin/rsync {{ mirror_base_flags }}
+      {% if solr_bwlimit | int > 0 %} --bwlimit={{ solr_bwlimit | int }} {% endif %}
+      {% if solr_extra_opts | length %} {{ solr_extra_opts | join(' ') }} {% endif %}
+      {{ solr_rsync_src }} {{ solr_dest }}/
+      >> {{ solr_cron_log }} 2>&1
+    state: present
+
+# NGINX + TLS
+- name: Mirror_sync - ensure /mirror exists under web root
+  ansible.builtin.file:
+    path: "{{ nginx_root }}/mirror"
+    state: directory
+    mode: "0755"
+
+- name: Mirror_sync - ensure /etc/ssl/private exists (strict perms)
+  ansible.builtin.file:
+    path: /etc/ssl/private
+    state: directory
+    owner: root
+    group: wheel
+    mode: "0700"
+
+- name: Mirror_sync - install public certificate
+  ansible.builtin.copy:
+    src: pulmirror_princeton_edu_chained.pem
+    dest: "{{ nginx_ssl_certificate }}"
+    owner: root
+    group: wheel
+    mode: "0644"
+  notify: Restart nginx
+
+- name: Mirror_sync - install private key (vaulted)
+  ansible.builtin.copy:
+    src: pulmirror_princeton_edu_priv.key
+    dest: "{{ nginx_ssl_certificate_key }}"
+    owner: root
+    group: wheel
+    mode: "0600"
+    decrypt: true
+  no_log: true
+  notify: Restart nginx
+
+- name: Mirror_sync - deploy nginx.conf (TLS-enabled)
+  ansible.builtin.template:
+    src: nginx.conf.j2
+    dest: "{{ nginx_conf_path }}"
+    owner: root
+    group: wheel
+    mode: "0644"
+  notify: Restart nginx
+
+- name: Mirror_sync - test nginx config
+  ansible.builtin.command: /usr/local/sbin/nginx -t
+  changed_when: false
+
+- name: Mirror_sync - enable and start nginx
+  ansible.builtin.service:
+    name: "{{ nginx_service_name }}"
+    enabled: true
+    state: started

@@ -3,3 +3,21 @@
 - name: reload systemd
   ansible.builtin.systemd_service:
     daemon_reload: true
+# Throttle consul/nomad to 1 so they don't all restart at the same time.
+- name: restart consul
+  become: true
+  throttle: 1
+  ansible.builtin.service:
+    name: consul
+    state: restarted
+- name: restart nomad
+  become: true
+  throttle: 1
+  ansible.builtin.service:
+    name: nomad
+    state: restarted
+- name: restart dnsmasq
+  become: true
+  ansible.builtin.service:
+    name: dnsmasq
+    state: restarted

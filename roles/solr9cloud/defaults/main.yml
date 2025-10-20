@@ -1,8 +1,8 @@
 ---
-solr_cloud_download_version: "{{ solr_version | default('9.2.0') }}"
+solr_cloud_download_version: "{{ solr_version | default('9.9.0') }}"
 solr_cloud_build_name: "solr-{{ solr_cloud_download_version }}"
 solr_cloud_package: "{{ solr_cloud_build_name }}.tgz"
-solr_cloud_url: "https://pulmirror.princeton.edu/mirror/solr/dist/lucene/solr/{{ solr_cloud_download_version }}/{{ solr_cloud_package }}"
+solr_cloud_url: "https://pulmirror.princeton.edu/mirror/apache/solr/solr/{{ solr_cloud_download_version }}/{{ solr_cloud_package }}"
 
 ## Service options
 # Owner
@@ -26,7 +26,8 @@ solr_versioned_dir: "/opt/solr-{{ solr_cloud_download_version }}"  # Version-spe
 solr_installation: "/opt/solr"  # Symlink to versioned directory
 solr_bin: "{{ solr_installation }}/bin/solr"  # Path to solr binary
 
-# PID directory - updated for modern systemd
+# put the PID directly in /run
+# subdirectories of /run get deleted on reboot
 solr_pid_dir: "/run/solr"
 
 # Ports
@@ -66,8 +67,6 @@ solr_zookeeper_hosts:
 # Set zookeeper connection string
 solr_zookeeper_hosts_string: "{{ solr_zookeeper_hosts | join(',') }}"
 
-# Set default solr_znode value based on Solr version
-solr_znode: "{% if solr_cloud_download_version is version('9.0.0', '>=') %}solr9{% else %}solr8{% endif %}"
 
 # LOG settings
 log_root_level: WARN
@@ -82,3 +81,6 @@ solr_use_security: false
 solr_block_unknown_users: false
 solr_admin_password: "SolrRocks"
 
+# cloud backup
+gcs_bucket_name: "pul-solr-backup"
+gcs_enable_logging: true

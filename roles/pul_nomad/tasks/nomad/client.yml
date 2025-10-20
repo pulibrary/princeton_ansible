@@ -1,0 +1,20 @@
+---
+- name: pul_nomad | nomad | Install Nomad
+  ansible.builtin.import_tasks: install.yml
+
+# We configure_server first because it registers and sets all the Consul
+# keys/policies, which configure.yml needs.
+- name: pul_nomad | nomad | Configure Nomad Client
+  ansible.builtin.import_tasks: configure_client.yml
+- name: pul_nomad | nomad | Configure Nomad
+  ansible.builtin.import_tasks: configure.yml
+- name: pul_nomad | nomad | Start Nomad service
+  become: true
+  ansible.builtin.service:
+    name: nomad
+    state: started
+    enabled: true
+
+# Install Podman
+- name: pul_nomad | nomad | Install Podman
+  ansible.builtin.import_tasks: podman.yml

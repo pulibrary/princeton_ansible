@@ -29,3 +29,29 @@
     owner: "{{ aspaceftp_user }}"
     group: "pusvc-g"
     mode: "0775"
+
+- name: Lib_sftp | Set up Perl modules
+  ansible.builtin.apt:
+    name: "{{ item }}"
+    state: present
+    update_cache: true
+  loop:
+    - cpanminus
+    - libssh2-1-dev
+  when: running_on_server
+
+- name: Lib_sftp | Install perl modules
+  ansible.builtin.command: cpanm {{ item }}
+  loop:
+    - Net::SFTP::Foreign::Backend::Net_SSH2
+    - Net::SFTP::Foreign
+  when: running_on_server
+
+- name: Lib_sftp | create local checkmk check
+  ansible.builtin.copy:
+    src: sftp_with_pass_check.sh
+    dest: "/usr/lib/check_mk_agent/local/sftp_with_pass_check.sh"
+    mode: "0755"
+    owner: root
+    group: root
+  when: running_on_server

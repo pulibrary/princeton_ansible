@@ -28,6 +28,7 @@ job "circleci-runner" {
 
       config {
         image = "ghcr.io/pulibrary/princeton_ansible-circleci-deployer:sha-${ var.branch_or_sha }"
+        privileged = true
       }
       template {
         destination = "${NOMAD_SECRETS_DIR}/env.vars"
@@ -39,6 +40,8 @@ job "circleci-runner" {
         CIRCLECI_API_TOKEN = {{.CIRCLECI_API_TOKEN}}
         CIRCLECI_RUNNER_API_AUTH_TOKEN = {{.CIRCLECI_API_TOKEN}}
         CIRCLECI_RUNNER_NAME = "circleci-deployer-{{ env "NOMAD_ALLOC_INDEX" }}"
+        CIRCLECI_RUNNER_CLEANUP_WORK_DIR = true
+        CIRCLECI_RUNNER_MODE = "single-task"
         {{- end -}}
         EOF
       }

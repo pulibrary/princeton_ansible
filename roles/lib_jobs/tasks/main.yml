@@ -1,14 +1,5 @@
 ---
 # tasks file for roles/lib_jobs
-# needed for capistrano to have access
-- name: lib_jobs | Install site configuration
-  ansible.builtin.template:
-    src: 'ruby_app_config'
-    dest: '/home/{{ deploy_user }}/app_configs/{{ ruby_app_name }}'
-    owner: '{{ deploy_user }}'
-    group: '{{ deploy_user }}'
-    mode: 0644
-
 - name: lib_jobs | Create app directory structure
   ansible.builtin.file:
     path: '/opt/{{ app_directory }}/shared/tmp'
@@ -17,19 +8,17 @@
     group: '{{ deploy_user }}'
     mode: 0755
 
-# SVN
-- name: Install subversion client
-  ansible.builtin.apt:
-    name: subversion
-    state: present
-
-- name: lib_jobs | checkout the EADs subversion repository
-  ansible.builtin.subversion:
-    repo: 'svn://{{ svn_host }}/libsvn/trunk/eads'
-    dest: '/opt/{{ app_directory }}/shared/subversion_eads'
-    update: no
-  when: running_on_server
-  become_user: '{{ deploy_user }}'
+- name: lib_jobs | rotate the logs for the cron job
+  ansible.builtin.template:
+    src: '../../common/templates/logrotate_rules.j2'
+    dest: "/etc/logrotate.d/{{ item.name }}"
+    mode: "0644"
+    owner: root
+    group: root
+  loop: "{{ lib_jobs_logrotate_rules }}"
+  when: 
+    - lib_jobs_logrotate_rules is defined
+    - lib_jobs_logrotate_rules | length > 0
 
 # GitLab
 - name: lib_jobs | Install gitlab private key
@@ -57,7 +46,7 @@
 - name: lib_jobs | add cloned repo
   become_user: "{{ deploy_user }}"
   ansible.builtin.git:
-    repo: "git@{{ git_lab_host }}:scua/eads.git"
+    repo: "git@{{ git_lab_host }}:scua/libsvn.git"
     dest: '/opt/{{ app_directory }}/shared/git_lab_eads'
     accept_newhostkey: true
     update: false
@@ -67,6 +56,24 @@
   ansible.builtin.template:
     src: eads_gitlab_config.j2
     dest: '/opt/{{ app_directory }}/shared/git_lab_eads/.git/config'
+    owner: '{{ deploy_user }}'
+    group: '{{ deploy_user }}'
+    mode: 0664
+  when: running_on_server
+
+- name: lib_jobs | add cloned staging repo
+  become_user: "{{ deploy_user }}"
+  ansible.builtin.git:
+    repo: "git@{{ git_lab_staging_host }}:scua/libsvn.git"
+    dest: '/opt/{{ app_directory }}/shared/git_lab_staging_eads'
+    accept_newhostkey: true
+    update: false
+  when: running_on_server
+
+- name: lib_jobs | add GitLab staging repo configuration
+  ansible.builtin.template:
+    src: eads_gitlab_staging_config.j2
+    dest: '/opt/{{ app_directory }}/shared/git_lab_staging_eads/.git/config'
     owner: '{{ deploy_user }}'
     group: '{{ deploy_user }}'
     mode: 0664

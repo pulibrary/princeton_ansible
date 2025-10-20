@@ -1,38 +1,37 @@
 {{ ansible_managed | comment }}
 
 {% if nginx_modules.njs %}
-{% if nginx_http_template_enable %}
+  {% if nginx_http_template_enable %}
 load_module modules/ngx_http_js_module.so;
-{% endif %}
-{% if nginx_stream_template_enable %}
+  {% endif %}
+  {% if nginx_stream_template_enable %}
 load_module modules/ngx_stream_js_module.so;
+  {% endif %}
 {% endif %}
-{% endif %}
+
 {% if nginx_modules.perl %}
 load_module modules/ngx_http_perl_module.so;
 {% endif %}
+
 {% if nginx_modules.geoip %}
-{% if nginx_http_template_enable %}
+  {% if nginx_http_template_enable %}
 load_module modules/ngx_http_geoip_module.so;
-{% endif %}
-{% if nginx_stream_template_enable %}
+  {% endif %}
+  {% if nginx_stream_template_enable %}
 load_module modules/ngx_stream_geoip_module.so;
+  {% endif %}
 {% endif %}
-{% endif %}
+
 {% if nginx_modules.image_filter %}
 load_module modules/ngx_http_image_filter_module.so;
 {% endif %}
+
 {% if nginx_modules.rtmp and nginx_type == "plus" %}
 load_module modules/ngx_rtmp_module.so;
 {% endif %}
+
 {% if nginx_modules.xslt %}
 load_module modules/ngx_http_xslt_filter_module.so;
-{% endif %}
-{% if nginx_modules.waf and nginx_type == "plus" %}
-load_module modules/ngx_http_app_protect_module.so;
-{% endif %}
-{% if nginx_modules.dos and nginx_type == "plus" %}
-load_module modules/ngx_http_app_protect_dos_module.so;
 {% endif %}
 
 user  nginx;
@@ -42,15 +41,14 @@ worker_rlimit_nofile 60000;
 error_log  /var/log/nginx/error.log notice;
 pid        /var/run/nginx.pid;
 
-
 events {
     worker_connections  1024;
 }
 
-
 http {
     include       /etc/nginx/mime.types;
     default_type  application/octet-stream;
+
     log_format json_logs escape=json '{'
         '"remote_ip": "$remote_addr",'
         '"remote_user": "$remote_user",'
@@ -74,13 +72,6 @@ http {
     #tcp_nopush     on;
 
     keepalive_timeout  65;
-    {% if nginx_modules.waf and nginx_type == "plus" %}
-    app_protect_enable on;
-    app_protect_security_log_enable on;
-    app_protect_security_log "/etc/app_protect/conf/log_default.json" /var/log/app_protect/security.log;
-    {% elif nginx_modules.dos and nginx_type == "plus" %}
-    app_protect_dos_enable on;
-    {% endif %}
 
     # app_protect_security_log log_all;
 

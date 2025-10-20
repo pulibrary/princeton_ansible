@@ -6,3 +6,19 @@ nginx_passenger_packages:
 __nginx_passenger_packages_16_04:
   - nginx-extras
   - passenger
+# logrotate rules
+logrotate_rules:
+  - name: "nginx"
+    paths:
+      - "/var/log/nginx/*.log"
+    options:
+      rotate: "{{ logrotate_global_defaults.rotate }}"
+      maxsize: "{{ logrotate_global_defaults.maxsize }}"
+      create_mode: "{{ logrotate_global_defaults.create_mode }}"
+      create_owner: "{{ logrotate_global_defaults.create_owner }}"
+      create_group: "{{ logrotate_global_defaults.create_group }}"
+      su_user: "{{ logrotate_global_defaults.su_user }}"
+      su_group: "{{ logrotate_global_defaults.su_group }}"
+      # add passenger-config reopen nginx rotate line
+      postrotate: |
+        passenger-config reopen-logs >/dev/null 2>&1 || true 

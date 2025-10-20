@@ -12,10 +12,10 @@ pg_hba_source: "{{ ansible_host }}/32"
 ansible_python_interpreter: /usr/bin/python3
 
 passenger_app_root: "/opt/orcid_princeton/current/public"
-desired_nodejs_version: "v22.14.0"
-rails_app_name: "orcid_princeton"
-rails_app_directory: "orcid_princeton"
-rails_app_symlinks: []
+desired_nodejs_version: "v22.20.0"
+ruby_app_name: "orcid_princeton"
+ruby_app_directory: "orcid_princeton"
+ruby_app_symlinks: []
 
 application_db_name: '{{orcid_db_name}}'
 application_dbuser_name: '{{orcid_db_user}}'
@@ -27,13 +27,17 @@ application_port: '443'
 project_db_host: '{{postgres_host}}'
 
 install_ruby_from_source: true
-ruby_version_override: "ruby-3.4.2"
+ruby_version_override: "ruby-3.4.7"
 bundler_version: "2.5.14"
 passenger_extra_http_config:
   - "passenger_preload_bundler on;"
 passenger_ruby: "/usr/local/bin/ruby"
 
-rails_app_vars:
+cas_host: 'fed.princeton.edu'
+cas_url: 'https://fed.princeton.edu/cas'
+database_url: 'postgres://{{ orcid_db_user }}:{{ orcid_db_password }}@{{ postgres_host }}/{{ orcid_db_name }}'
+
+ruby_app_vars:
   - name: SECRET_KEY_BASE
     value: '{{orcid_secret_key}}'
   - name: APP_DB
@@ -60,9 +64,33 @@ rails_app_vars:
     value: '{{orcid_client_secret}}'
   - name: ORCID_SANDBOX
     value: '{{ orcid_sandbox }}'
+  - name: HANAMI_ENV
+    value: '{{ passenger_app_env }}'
+  - name: CAS_URL
+    value: '{{ cas_url }}'
+  - name: CAS_HOST
+    value: '{{ cas_host }}'
+  - name: DATABASE_URL
+    value: '{{ database_url }}'
+  - name: OPENSSL_ALGORITHM
+    value: 'AES-256-CBC'
+  - name: OPENSSL_IV_LEN
+    value: '16'
+  - name: OPENSSL_KEY
+    value: '{{ orcid_token_secret }}'
+  - name: BANNER_TITLE
+    value: '{{ app_banner_title }}'
+  - name: BANNER_BODY
+    value: '{{ app_banner_body }}'
+  - name: ORCID_SANDBOX
+    value: '{{ app_orcid_sandbox }}'
+  - name: ORCID_URL
+    value: '{{ app_orcid_url }}'
+  - name: PEOPLESOFT_OUTPUT_LOCATION
+    value: '{{ peoplesoft_output_location }}'
 
 peoplesoft_share: '{{ vault_orcid_peoplesoft_share }}'
 peoplesoft_host: '{{ vault_orcid_peoplesoft_host }}'
 
-rails_app_dependencies:
+ruby_app_dependencies:
   - cifs-utils

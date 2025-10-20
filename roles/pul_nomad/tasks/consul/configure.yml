@@ -1,0 +1,20 @@
+---
+# File: config.yml - Consul configuration tasks
+- name: pul_nomad | consul | Create configuration directories.
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: consul
+    group: consul
+  loop:
+    - '/etc/consul'
+    - '/etc/consul.d'
+    - '/opt/consul'
+- name: pul_nomad | consul | Create base config
+  ansible.builtin.template:
+    src: consul/consul.hcl.j2
+    dest: "/etc/consul.d/consul.hcl"
+    owner: consul
+    group: consul
+    mode: '0640'
+  notify: restart consul

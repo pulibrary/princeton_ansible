@@ -12,42 +12,33 @@
     state: absent
     update_cache: false
 
+- name: remove old rabbitmq repositories
+  apt_repository:
+    repo: '{{ item }}'
+    state: absent
+    update_cache: false
+  loop:
+    - "deb https://dl.bintray.com/rabbitmq/debian {{ ansible_distribution_release }} main"
+    - 'deb http://ppa.launchpad.net/rabbitmq/rabbitmq-erlang/ubuntu {{ ansible_distribution_release }} main'
+    - 'deb-src http://ppa.launchpad.net/rabbitmq/rabbitmq-erlang/ubuntu {{ ansible_distribution_release }} main'
+    - 'deb-src http://ppa.launchpad.net/rabbitmq/rabbitmq-erlang-26/ubuntu {{ ansible_distribution_release }} main'
+    - 'deb https://packagecloud.io/rabbitmq/rabbitmq-server/ubuntu/ {{ ansible_distribution_release }} main'
+    - 'deb-src https://packagecloud.io/rabbitmq/rabbitmq-server/ubuntu/ {{ ansible_distribution_release }} main'
+
 - name: ensure software-properties-common is installed
   apt:
     name: ['software-properties-common', 'apt-transport-https']
     state: present
 
-- name: import key
+- name: import rabbitmq key
   apt_key:
-    url: https://github.com/rabbitmq/signing-keys/releases/download/2.0/rabbitmq-release-signing-key.asc
-    state: present
+    keyserver: 'keys.openpgp.org'
+    id: '0A9AF2115F4687BD29803A206B73A36E6026DFCA'
 
-- name: import launchpad key
+- name: import rabbitmq modern erlang key
   apt_key:
-    keyserver: 'keyserver.ubuntu.com'
-    id: 'F77F1EDA57EBB1CC'
-
-- name: import cloudsmith key
-  apt_key:
-    url: https://packagecloud.io/rabbitmq/rabbitmq-server/gpgkey
-    state: present
-
-- name: add rabbitmq launchpad repository
-  apt_repository:
-    repo: 'deb http://ppa.launchpad.net/rabbitmq/rabbitmq-erlang/ubuntu {{ ansible_distribution_release }} main'
-    state: present
-- name: add rabbitmq launchpad src repository
-  apt_repository:
-    repo: 'deb-src http://ppa.launchpad.net/rabbitmq/rabbitmq-erlang/ubuntu {{ ansible_distribution_release }} main'
-    state: present
-- name: add rabbitmq cloudsmith
-  apt_repository:
-    repo: 'deb https://packagecloud.io/rabbitmq/rabbitmq-server/ubuntu/ {{ ansible_distribution_release }} main'
-    state: present
-- name: add rabbitmq cloudsmith src
-  apt_repository:
-    repo: 'deb-src https://packagecloud.io/rabbitmq/rabbitmq-server/ubuntu/ {{ ansible_distribution_release }} main'
-    state: present
+    keyserver: 'keys.openpgp.org'
+    id: '0A9AF2115F4687BD29803A206B73A36E6026DFCA'
 
 - name: install package
   apt:

@@ -1,8 +1,12 @@
 ---
-# you MUST run this playbook on a single host with '--limit' for example `ansible-playbook -v -e domain_name=orcid-prod --limit adc-prod2.princeton.edu playbooks/incommon_certbot_revoke.yml`
-# This playbook will need to be run on both load balancers sequentially
+# you MUST run this playbook on a single host with '--limit' for example `ansible-playbook -e domain_name=orcid-staging --limit adc-dev2.princeton.edu playbooks/utils/incommon_certbot_revoke.yml`
+# to run in production, you must add '-e runtime_env=production'
+# Run the playbook on the inactive load balancer first
+# if the 'nginx -t' check fails, we probably didn't delete an obsolete config file
+# run 'playbooks/nginx.yml' (or nginx_staging.yml) following the comments for removing obsolete config
+
 - name: revoke incommon acme for {{ domain_name }}
-  hosts: nginxplus_production # default to staging when we get a staging environment going
+  hosts: nginxplus_{{ runtime_env | default('staging') }}
   remote_user: pulsys
   become: true
   vars_files:
@@ -14,8 +18,6 @@
       msg: "you must use -l or --limit"
     when: ansible_limit is not defined
     run_once: true
-  vars_files:
-    - ../group_vars/all/vault.yml
 
   tasks:
     - name: install certbot software
@@ -30,8 +32,19 @@
       become_user: root
       become: true
 
+    - name: check nginx config, alert if it fails
+      block:
+        - name: make sure nginx configs are valid
+          command: /usr/sbin/nginx -t
+          become: true
+      rescue:
+        - name: issue warning if nginx -t fails
+          ansible.builtin.debug:
+            msg: 'config check failed, something is broken (probably obsolete config pointing to the cert you revoked); make nginx -t succeed before you revoke the cert on the other server'
+
     - name: tell everyone on slack you ran an ansible playbook
       community.general.slack:
         token: "{{ vault_pul_slack_token }}"
         msg: "Ansible ran `{{ ansible_play_name }}` on {{ inventory_hostname }}"
-        channel: "{{ slack_alerts_channel }}"
+        channel: ansible-alerts
+        # channel: "{{ slack_alerts_channel }}"

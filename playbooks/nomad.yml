@@ -1,36 +1,57 @@
 ---
-# by default this playbook runs in the staging environment
-# to run in production, pass '-e runtime_env=production'
+# Extensive documentation our Nomad infrastructure found in
+# roles/pul_nomad/README.md
+#
+# Examples:
+#   Only app config:                       ansible-playbook playbooks/nomad.yml --tags dpulc
+#   Provision prod but skip app config:    ansible-playbook playbooks/nomad.yml -e runtime_env=production --skip-tags app_config
+#   Target sandbox:                        ansible-playbook playbooks/nomad.yml -e runtime_env=sandbox
+
 - name: build the nomad cluster
-  hosts: nomad_cluster
+  hosts: "nomad_{{ runtime_env | default('sandbox') }}"
   remote_user: pulsys
   become: true
+
+  # Vault files (env-agnostic secrets or per-env keys within)
   vars_files:
     # This will auto include group_vars/nomad_clients.yml for clients
     # This will auto include group_vars/nomad_servers.yml for servers
+    # This will auto include group_vars/nomad_[clients/servers]_[env].yml
+    # This will auto include host_vars/<hosthere>.yml for specific clients.
     - ../group_vars/nomad/vault.yml
-    - ../group_vars/nomad_cluster.yml
-    - ../group_vars/nomad/dpulc/staging.yml
     - ../group_vars/nomad/dpulc/vault.yml
-    - ../group_vars/nomad/imagecat/staging.yml
-    - ../group_vars/nomad/imagecat/production.yml
     - ../group_vars/nomad/imagecat/vault.yml
-    - ../group_vars/nomad/abid/staging.yml
-    - ../group_vars/nomad/abid/production.yml
     - ../group_vars/nomad/abid/vault.yml
-    - ../group_vars/nomad/logging/staging.yml
     - ../group_vars/nomad/logging/vault.yml
-    - ../group_vars/nomad/traefik_wall/staging.yml
-    - ../group_vars/nomad/traefik_wall/production.yml
     - ../group_vars/nomad/traefik_wall/vault.yml
-    - ../group_vars/nomad/circleci_deployer/staging.yml
     - ../group_vars/nomad/circleci_deployer/vault.yml
-  roles:
-    - role: roles/pul_nomad
+    - ../group_vars/nomad/analytics/vault.yml
+    - ../group_vars/nomad/nodemation/vault.yml
 
+  pre_tasks:
+    - name: "Load app vars: staging then production"
+      block:
+        - ansible.builtin.include_vars:
+            file: "../group_vars/nomad/{{ item }}/staging.yml"
+          loop: "{{ nomad_enabled_apps }}"
+        - ansible.builtin.include_vars:
+            file: "../group_vars/nomad/{{ item }}/production.yml"
+          loop: "{{ nomad_enabled_apps }}"
+        - ansible.builtin.include_vars:
+            file: "../group_vars/nomad/{{ item }}/vault.yml"
+          loop: "{{ nomad_enabled_apps }}"
+      tags:
+        - always
+  roles:
+    - role: pul_nomad
   post_tasks:
-    - name: tell everyone on slack you ran an ansible playbook
+    - name: tell everyone on slack you ran an ansible playbook (controller-only)
       community.general.slack:
         token: "{{ vault_pul_slack_token }}"
-        msg: "Ansible ran `{{ ansible_play_name }}` on {{ inventory_hostname }}"
+        msg: "Ansible ran `{{ ansible_play_name }}` for {{ runtime_env | default('sandbox') }} on {{ groups['nomad_' ~ (runtime_env | default('sandbox')) ] | length }} hosts"
         channel: "{{ slack_alerts_channel }}"
+      delegate_to: localhost
+      run_once: true
+      when:
+        - (notify_slack | default(true))            # allow per-env override
+      tags: [notify]

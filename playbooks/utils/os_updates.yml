@@ -60,9 +60,9 @@
         autoclean: true
       when: ansible_os_family == "Debian"
 
-    - name: Ubuntu | clear out the local repository of retrieved package files 
+    - name: Ubuntu | clear out the local repository of retrieved package files
       ansible.builtin.apt:
-       clean: true
+        clean: true
       when: ansible_os_family == "Debian"
 
     - name: Ubuntu | Check if reboot required
@@ -85,10 +85,11 @@
         pre_reboot_delay: 0
         post_reboot_delay: 15
         test_command: whoami
-      when: 
+      when:
         - ansible_os_family == "RedHat"
         - yum_update_status.changed
         - "'ansible' not in inventory_hostname"
+        - "'recap' not in inventory_hostname"
 
     - name: Ubuntu | Reboot if required
       ansible.builtin.reboot:
@@ -98,7 +99,7 @@
         pre_reboot_delay: 0
         post_reboot_delay: 15
         test_command: whoami
-      when: 
+      when:
         - ansible_os_family == "Debian"
         - reboot_required_file.stat.exists == true
 
@@ -114,8 +115,8 @@
         token: "{{ vault_pul_slack_token }}"
         msg: "@ops {{ inventory_hostname }} needs a reboot"
         channel: "{{ slack_alerts_channel }}"
-      when: 
+      when:
         - ansible_os_family == "RedHat"
         - yum_update_status.changed
         - "'ansible' in inventory_hostname"
-
+        - "'recap' in inventory_hostname"

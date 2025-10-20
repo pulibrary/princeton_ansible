@@ -20,6 +20,7 @@ passenger_ruby: /usr/local/bin/ruby
 passenger_extra_http_config:
   - "passenger_preload_bundler on;"
 ruby_version_override: "ruby-3.4.1"
+git_lab_staging_host: 'gitlab-staging-vm.lib.princeton.edu'
 # admin users
 lib_jobs_admin_netids:
   - cc62
@@ -30,7 +31,7 @@ lib_jobs_admin_netids:
   - pdiskin
   - rl8282
 # logrotation
-logrotate_rules:
+lib_jobs_logrotate_rules:
   - name: "{{ rails_app_directory }}"
     paths:
       - "/opt/{{ rails_app_directory }}/shared/tmp/*.log"
@@ -38,8 +39,8 @@ logrotate_rules:
       rotate: "{{ logrotate_global_defaults.rotate }}"
       maxsize: "{{ logrotate_global_defaults.maxsize }}"
       create_mode: "{{ logrotate_global_defaults.create_mode }}"
-      create_owner: "{{ logrotate_global_defaults.create_owner }}"
-      create_group: "{{ logrotate_global_defaults.create_group }}"
+      create_owner: "deploy"
+      create_group: "deploy"
       su_user: "{{ logrotate_global_defaults.su_user }}"
       su_group: "{{ logrotate_global_defaults.su_group }}"
       # Optional: add postrotate script if service needs notification
@@ -73,6 +74,8 @@ rails_app_vars:
     value: '/alma/fund_adjustment'
   - name: ALMA_PERSON_FEED_OUTPUT_FTP
     value: '/alma/people'
+  - name: ALMA_SC_BARCODES_SET
+    value: '{{ alma_sc_barcodes_set }}'
   - name: APP_DB
     value: '{{ app_db_name }}'
   - name: APP_DB_HOST
@@ -158,7 +161,7 @@ rails_app_vars:
   - name: SCSB_S3_PARTNER_BUCKET_NAME
     value: 'scsb-prod'
   - name: SCSB_S3_UPDATES
-    value: 'data-feed/submitcollections/PUL/cgd_protection/RegularUpdates'
+    value: 'data-feed/submitcollections/PUL/cgd_protection'
     # alphabetical list resumes
   - name: POD_ACCESS_TOKEN
     value: '{{ pod_access_token | default("token") }}'
@@ -190,8 +193,6 @@ rails_app_vars:
     value: 'libjobs'
   - name: SVN_PASSWORD
     value: '{{ vault_lib_jobs_svn_secret }}'
-  - name: SVN_HOST
-    value: '{{ svn_host }}'
   - name: GIT_LAB_HOST
     value: '{{ git_lab_host }}'
   - name: TRANSACTION_ERROR_FEED_RECIPIENTS

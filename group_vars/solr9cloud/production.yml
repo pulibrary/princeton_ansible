@@ -5,11 +5,11 @@ install_zookeeper_from_source: true
 desired_ruby_version: "3.1.0"
 ruby_version_override: "ruby-3.1.0"
 solr_heap_setting: '20g'
-jardirectory: "/opt/solr/modules/analysis-extras/lib"
+jardirectory: "/opt/solr/lib"
 # more granular option would be:
 # solr_java_memory: '-Xms16g -Xmx20g'
 # solr version
-solr_cloud_download_version: 9.2.0
+solr_cloud_download_version: 9.9.0
 solr_cloud_version: "{{ solr_version }}"
 solr_version: "{{ solr_cloud_download_version }}"
 solr_log4j_path: '/solr/log4j2.xml'
@@ -23,6 +23,23 @@ solr_zookeeper_hosts:
   - "lib-zk5.princeton.edu:2181"
   - "lib-zk6.princeton.edu:2181"
 cjkfoldingfilter: https://github.com/pulibrary/pul_solr/raw/master/solr8_jars/CJKFoldingFilter.jar
+# gcsfuse logrotate
+gcsfuse_directory: "/var/log/gcsfuse"
+
+solr9_gcsfuse_logrotate_rules:
+  - name: "gcsfuse"
+    paths:
+      - "{{ gcsfuse_directory }}/*.log"
+    options:
+      rotate: "{{ logrotate_global_defaults.rotate }}"
+      maxsize: "{{ logrotate_global_defaults.maxsize }}"
+      create_mode: "{{ logrotate_global_defaults.create_mode }}"
+      create_owner: "deploy"
+      create_group: "deploy"
+      su_user: "{{ logrotate_global_defaults.su_user }}"
+      su_group: "{{ logrotate_global_defaults.su_group }}"
+      postrotate: |
+        systemctl reload solr-gcsfuse.service 2>/dev/null || true
 datadog_api_key: "{{ vault_datadog_key }}"
 datadog_config:
   tags: "solrcloud, environment:production, role:solr, version:9"
