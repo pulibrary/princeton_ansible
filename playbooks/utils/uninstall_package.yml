@@ -15,7 +15,33 @@
       run_once: true
 
   tasks:
-    - name: uninstall a package
-      ansible.builtin.package:
-       name: "{{ package_to_remove }}"
-       state: absent
+    # - name: uninstall a package
+    #   ansible.builtin.package:
+    #    name: "{{ package_to_remove }}"
+    #    state: absent
+
+    - name: Remove package on Debian/Ubuntu systems
+      ansible.builtin.apt:
+        name: "{{ package_to_remove }}"
+        state: absent
+        purge: true
+        autoremove: true
+      when: ansible_os_family == "Debian"
+
+    - name: Remove package on RHEL/CentOS/Fedora systems (using dnf)
+      ansible.builtin.dnf:
+        name: "{{ package_to_remove }}"
+        state: absent
+        autoremove: true
+      when:
+        - ansible_os_family == "RedHat"
+        - ansible_distribution_major_version | int >= 8
+
+    - name: Remove package on older RHEL/CentOS systems (using yum)
+      ansible.builtin.yum:
+        name: "{{ package_to_remove }}"
+        state: absent
+        autoremove: yes
+      when:
+        - ansible_os_family == "RedHat"
+        - ansible_distribution_major_version | int < 8
