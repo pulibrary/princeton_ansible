@@ -8,7 +8,7 @@
     mode: "{{ item.mode | default('0750') }}"
   loop:
     - { path: "{{ lego_state_dir }}", mode: "0750" }
-    - { path: "{{ lego_env_dir }}",  mode: "0750" }
+    - { path: "{{ lego_env_dir }}", mode: "0750" }
     - { path: "/etc/nginx/conf.d/ssl/certs", mode: "0755" }
     - { path: "/etc/nginx/conf.d/ssl/private", mode: "0750" }
     - { path: "/tmp/lego-{{ lego_version }}", mode: "0755" }
@@ -65,12 +65,14 @@
     content: |
       #!/usr/bin/env bash
       set -Eeuo pipefail
+
       : "${LEGO_CERT_DOMAIN:?missing}"
       : "${LEGO_CERT_PATH:?missing}"
       : "${LEGO_CERT_KEY_PATH:?missing}"
 
       LEGO_CERT_ISSUER_PATH="${LEGO_CERT_PATH%.crt}.issuer.crt"
 
+      # Map domains to destinations
       case "$LEGO_CERT_DOMAIN" in
       {% for s in sites %}
         {{ s.domain }}|*.{{ s.domain }})
@@ -79,18 +81,32 @@
           ;;
       {% endfor %}
         *)
-          echo "Unknown domain ${LEGO_CERT_DOMAIN}; skipping."
+          echo "deploy-hook: Unknown domain ${LEGO_CERT_DOMAIN}; skipping."
           exit 0
           ;;
       esac
 
-      # Combine server cert + issuer into single chained PEM for Nginx
+      # Write fullchain + key for the domain that just renewed
       cat "$LEGO_CERT_PATH" "$LEGO_CERT_ISSUER_PATH" >"$CERT_DST"
-      # Keys readable by root only (nginx opens as root then drops privs)
       install -m 0640 -o root -g root "$LEGO_CERT_KEY_PATH" "$KEY_DST"
 
-      nginx -t
-      systemctl reload nginx
+      # Only reload nginx when *all* configured certs exist,
+      # otherwise the config test will fail on missing peers.
+      missing=0
+      {% for s in sites %}
+      [ -f "{{ s.cert_dst }}" ] || { echo "deploy-hook: missing {{ s.cert_dst }} (skipping reload)"; missing=1; }
+      [ -f "{{ s.key_dst  }}" ] || { echo "deploy-hook: missing {{ s.key_dst  }} (skipping reload)"; missing=1; }
+      {% endfor %}
+
+      if [ "$missing" -eq 0 ]; then
+        if nginx -t; then
+          systemctl reload nginx
+        else
+          echo "deploy-hook: nginx -t failed; skipping reload"
+          # do NOT fail the hook: let lego succeed
+        fi
+      fi
+
   when:
     - running_on_server
 
@@ -131,8 +147,8 @@
       [Install]
       WantedBy=timers.target
   notify:
-   - systemd daemon-reload
-   - enable and start renew timer
+    - systemd daemon-reload
+    - enable and start renew timer
   when:
     - running_on_server
 
