@@ -76,6 +76,7 @@ opkssh_providers:
 ```
 
 ### Example playbooks
+
 Basic installation (pinned version, recommended to allow upgrade)
 
 ```yaml
