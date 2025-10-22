@@ -8,15 +8,6 @@
     owner: root
     group: root
 
-- name: Otel_collector - Check currently installed otelcol-contrib version
-  ansible.builtin.command:
-    cmd: "/opt/otelcol/otelcol-contrib --version"
-  register: otel_version_check
-  changed_when: false
-  failed_when: false
-  # This task will register a failure if the binary doesn't exist,
-  # which is fine and handled by the 'when' condition below.
-
 - name: Otel_collector - Download and unarchive otelcol-contrib binary
   ansible.builtin.unarchive:
     src: "{{ otel_download_url }}"
@@ -25,10 +16,7 @@
     mode: '0755'
     owner: root
     group: root
-  when: otel_version_check.failed or otel_version not in otel_version_check.stdout
-  # This task only runs if:
-  # 1. The version check command failed (e.g., binary doesn't exist)
-  # 2. The installed version string does not match the desired version
+    creates: true
 
 - name: Otel_collector - Deploy generic otel-contrib config
   ansible.builtin.template:
