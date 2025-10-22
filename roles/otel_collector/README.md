@@ -1,38 +1,19 @@
-Role Name
-=========
+# OpenTelemetry Collector (Contrib)
 
-A brief description of the role goes here.
+This role installs the OpenTelemetry Collector Contrib binary (otelcol-contrib) to /opt/otelcol on Linux servers.
 
-Requirements
-------------
+It is opinionated and does the following:
 
-Any pre-requisites that may not be covered by Ansible itself or the role should be mentioned here. For instance, if the role uses the EC2 module, it may be a good idea to mention in this section that the boto package is required.
+  * Installs a specific version, defined by otel_version.
 
-Role Variables
---------------
+  * Only install the `amd64` architecture.
 
-A description of the settable variables for this role should go here, including any variables that are in defaults/main.yml, vars/main.yml, and any variables that can/should be set via parameters to the role. Any variables that are read from other roles and/or the global scope (ie. hostvars, group vars, etc.) should be mentioned here as well.
+  * Deploys a generic, empty `config.yaml` to get the service started
 
-Dependencies
-------------
+## Role Variables
 
-A list of other roles hosted on Galaxy should go here, plus any details in regards to parameters that may need to be set for other roles, or variables that are used from other roles.
+The following variables are available in `defaults/main.yml` and can be overridden: 
 
-Example Playbook
-----------------
+`otel_version`: "enter new value from upstream"
 
-Including an example of how to use your role (for instance, with variables passed in as parameters) is always nice for users too:
-
-    - hosts: servers
-      roles:
-         - { role: username.rolename, x: 42 }
-
-License
--------
-
-BSD
-
-Author Information
-------------------
-
-An optional section for the role authors to include contact information, or a website (HTML is not allowed).
+`otel_download_url`: "unlikely to change"
