@@ -2,19 +2,73 @@
 - name: Verify
   hosts: all
   gather_facts: false
+  vars_files:
+    - ../../defaults/main.yml
   tasks:
-    - name: Check ruby package status
-      ansible.builtin.package:
-        name: "{{ item }}"
-        state: present
-      check_mode: true
-      register: pkg_status
-      loop:
-        - ruby-switch
-        - ruby2.6-dev
-        - ruby2.6
+    - name: Check if install directory exists
+      ansible.builtin.stat:
+        path: "{{ otel_install_dir }}"
+      register: install_dir
 
-    - name: Test for ruby packages
+    - name: Assert install directory exists and is a directory
       ansible.builtin.assert:
         that:
-          - not pkg_status.changed
+          - install_dir.stat.exists
+          - install_dir.stat.isdir
+        fail_msg: "Install directory {{ otel_install_dir }} does not exist or is not a directory."
+
+    - name: Check if binary exists and is executable
+      ansible.builtin.stat:
+        path: "{{ otel_binary_path }}"
+      register: binary_file
+
+    - name: Assert binary exists, is a file, and has correct permissions
+      ansible.builtin.assert:
+        that:
+          - binary_file.stat.exists
+          - binary_file.stat.isreg
+          - binary_file.stat.mode == '0755'
+        fail_msg: "Binary {{ otel_binary_path }} does not exist, is not a file, or has wrong permissions (expected 0755)."
+
+    - name: Check installed binary version
+      ansible.builtin.command:
+        cmd: "{{ otel_binary_path }} --version"
+      register: otel_version_check
+      changed_when: false
+      failed_when: false
+
+    - name: Assert correct version is installed
+      ansible.builtin.assert:
+        that:
+          - "otel_version in otel_version_check.stdout"
+        fail_msg: "Version check failed. Expected '{{ otel_version }}' in stdout, but got: {{ otel_version_check.stdout }}"
+
+    - name: Check if config file exists
+      ansible.builtin.stat:
+        path: "{{ otel_config_path }}"
+      register: config_file
+
+    - name: Assert config file exists and has correct permissions
+      ansible.builtin.assert:
+        that:
+          - config_file.stat.exists
+          - config_file.stat.isreg
+          - config_file.stat.mode == '0644'
+        fail_msg: "Config file {{ otel_config_path }} does not exist, is not a file, or has wrong permissions (expected 0644)."
+
+    - name: Slurp config file content
+      ansible.builtin.slurp:
+        src: "{{ otel_config_path }}"
+      register: config_content
+
+    - name: Parse config file content
+      ansible.builtin.set_fact:
+        parsed_config: "{{ config_content['content'] | b64decode | from_yaml }}"
+
+    - name: Assert config file has correct empty structure
+      ansible.builtin.assert:
+        that:
+          - parsed_config.receivers == {}
+          - parsed_config.processors == {}
+          - parsed_config.exporters == {}
+        fail_msg: "Config file content is not correct. Parsed content: {{ parsed_config }}"
