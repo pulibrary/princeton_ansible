@@ -458,16 +458,11 @@ renew_calendar: "*-*-* 03,15:00:00"
 
 # Derived: CLI args for lego (domains)
 lego_domains_args: >-
-  {%- for s in sites -%}
-  -d {{ s.domain }}
-    {%- for alt in (s.sans | default([])) -%}
-    -d {{ alt }}
-    {%- endfor -%}
-  {%- if not loop.last %} {% endif -%}
-  {%- endfor -%}
+  {% for s in sites %}
+  -d {{ s.domain }} {% for alt in (s.sans | default([])) %}-d {{ alt }} {% endfor %}
+  {% endfor %}
 
 # Paths/names for generated assets
 deploy_hook_path: /usr/local/sbin/deploy-ssl-nginx.sh
 renew_service: lego-renew.service
-renew_timer:   lego-renew.timer
-
+renew_timer: lego-renew.timer
