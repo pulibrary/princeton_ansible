@@ -57,95 +57,32 @@
     - running_on_server
 
 - name: Nginxplus - Create deploy hook for Nginx
-  ansible.builtin.copy:
+  ansible.builtin.template:
+    src: deploy-ssl-nginx.sh.j2
     dest: "{{ deploy_hook_path }}"
     owner: root
     group: root
     mode: "0755"
-    content: |
-      #!/usr/bin/env bash
-      set -Eeuo pipefail
-
-      : "${LEGO_CERT_DOMAIN:?missing}"
-      : "${LEGO_CERT_PATH:?missing}"
-      : "${LEGO_CERT_KEY_PATH:?missing}"
-
-      LEGO_CERT_ISSUER_PATH="${LEGO_CERT_PATH%.crt}.issuer.crt"
-
-      # Map domains to destinations
-      case "$LEGO_CERT_DOMAIN" in
-      {% for s in sites %}
-        {{ s.domain }}|*.{{ s.domain }})
-          CERT_DST="{{ s.cert_dst }}"
-          KEY_DST="{{ s.key_dst }}"
-          ;;
-      {% endfor %}
-        *)
-          echo "deploy-hook: Unknown domain ${LEGO_CERT_DOMAIN}; skipping."
-          exit 0
-          ;;
-      esac
-
-      # Write fullchain + key for the domain that just renewed
-      cat "$LEGO_CERT_PATH" "$LEGO_CERT_ISSUER_PATH" >"$CERT_DST"
-      install -m 0640 -o root -g root "$LEGO_CERT_KEY_PATH" "$KEY_DST"
-
-      # Only reload nginx when *all* configured certs exist,
-      # otherwise the config test will fail on missing peers.
-      missing=0
-      {% for s in sites %}
-      [ -f "{{ s.cert_dst }}" ] || { echo "deploy-hook: missing {{ s.cert_dst }} (skipping reload)"; missing=1; }
-      [ -f "{{ s.key_dst  }}" ] || { echo "deploy-hook: missing {{ s.key_dst  }} (skipping reload)"; missing=1; }
-      {% endfor %}
-
-      if [ "$missing" -eq 0 ]; then
-        if nginx -t; then
-          systemctl reload nginx
-        else
-          echo "deploy-hook: nginx -t failed; skipping reload"
-          # do NOT fail the hook: let lego succeed
-        fi
-      fi
-
   when:
     - running_on_server
 
 - name: Nginxplus - Install systemd service for renewals
-  ansible.builtin.copy:
+  ansible.builtin.template:
+    src: lego-renew.service.j2
     dest: "/etc/systemd/system/{{ renew_service }}"
     owner: root
     group: root
     mode: "0644"
-    content: |
-      [Unit]
-      Description=Renew Let's Encrypt certificates with lego (DNSimple)
-
-      [Service]
-      Type=oneshot
-      EnvironmentFile={{ lego_env_file }}
-      ExecStart={{ lego_install_path }} --path {{ lego_state_dir }} \
-        --email lsupport@princeton.edu --dns dnsimple \
-        {{ lego_domains_args }} \
-        renew --days {{ renew_days }} --renew-hook {{ deploy_hook_path }}
   when:
     - running_on_server
 
 - name: Nginxplus - Install systemd timer for renewals
-  ansible.builtin.copy:
+  ansible.builtin.template:
+    src: lego-renew.timer.j2
     dest: "/etc/systemd/system/{{ renew_timer }}"
     owner: root
     group: root
     mode: "0644"
-    content: |
-      [Unit]
-      Description=Run lego renew twice daily
-
-      [Timer]
-      OnCalendar={{ renew_calendar }}
-      Persistent=true
-
-      [Install]
-      WantedBy=timers.target
   notify:
     - systemd daemon-reload
     - enable and start renew timer
