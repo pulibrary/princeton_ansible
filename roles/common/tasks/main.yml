@@ -85,6 +85,28 @@
   notify:
     - test logrotate configuration
 
+- name: Common | ensure systemd journal directory exists
+  ansible.builtin.file:
+    path: /etc/systemd/journald.conf.d
+    state: directory
+    mode: "0755"
+    owner: root
+    group: root
+  when:
+    - ansible_service_mgr=="systemd"
+
+- name: Common | configure journald log limits
+  ansible.builtin.template:
+    src: "journald.conf.j2"
+    dest: "/etc/systemd/journald.conf.d/00-journal-size.conf"
+    mode: "0644"
+    owner: root
+    group: root
+  when:
+    - ansible_service_mgr=="systemd"
+  notify:
+    - restart journald
+
 - name: Common | install configured dependencies
   ansible.builtin.package:
     name: '{{ configured_dependencies }}'
