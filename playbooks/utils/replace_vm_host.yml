@@ -39,7 +39,7 @@
     # Optional; not used for disk shape, but can be helpful for visibility
     # since we have different sizes and controllers it helps with output
     - name: Gather disk info on VM to replace (optional)
-      community.vmware.vmware_guest_disk:
+      community.vmware.vmware_guest_disk_info:
         hostname: "{{ vcenter_hostname }}"
         username: "{{ vcenter_username }}"
         password: "{{ vcenter_password }}"
@@ -51,8 +51,8 @@
 
     - name: Debug disk info structure (optional)
       debug:
-        var: old_vm_disk_info
-      when: old_vm_disk_info is defined
+        var: old_vm_disk_info.guest_disk_info
+      when: old_vm_disk_info is defined and old_vm_disk_info.guest_disk_info is defined
 
     # Compute DNS domain / FQDN
     - name: Derive DNS domain from old guest_name (fallback to lib.princeton.edu)
@@ -243,15 +243,15 @@
       ansible.builtin.debug:
         msg: "{{ msg.split('\n') }}"
 
-    - name: Gather details on new VM
-      community.vmware.vmware_vm_info:
+    - name: Gather disk info on new VM
+      community.vmware.vmware_guest_disk_info:
         hostname: "{{ vcenter_hostname }}"
         username: "{{ vcenter_username }}"
         password: "{{ vcenter_password }}"
         validate_certs: false
-        show_allocated: true
-        vm_name: "{{ replacement_vm }}"
-      register: new_vm_info
+        datacenter: "{{ vcenter_datacenter }}"
+        name: "{{ replacement_vm }}"
+      register: new_vm_disk_info
 
     - name: Gather network info new VM
       community.vmware.vmware_guest_network:
