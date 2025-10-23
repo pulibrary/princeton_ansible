@@ -11,10 +11,22 @@
     - running_on_server: false
     - install_ruby_from_source: true
   pre_tasks:
-    - name: update cache
-      apt:
+    - name: Update cache
+      ansible.builtin.apt:
+        name: locales
         update_cache: true
         cache_valid_time: 600
+
+    - name: Ensure en_US.UTF-8 locale is uncommented in /etc/locale.gen
+      ansible.builtin.lineinfile:
+        path: /etc/locale.gen
+        regexp: '^# en_US.UTF-8 UTF-8'
+        line: 'en_US.UTF-8 UTF-8'
+        state: present
+
+    - name: Generate locales
+      ansible.builtin.command: locale-gen
+      changed_when: false
   tasks:
     - name: "Include roles/drupal10"
       include_role:

@@ -2,7 +2,7 @@
 
 ## Description
 
-The **common** role bootstraps our Linux servers with a standard baseline of tools, configurations, and services used across our infrastructure. It ensures a consistent environment by installing essential packages, setting up shell/editor configs, implementing a flexible, hierarchical log rotation system, and deploying observability tools.
+The **common** role bootstraps our Linux servers with a standard baseline of tools, configurations, and services used across our infrastructure. It ensures a consistent environment by installing essential packages, setting up shell/editor configs, implementing a flexible, hierarchical log rotation system for application logs, managing systemd journal log disk usage, and deploying observability tools.
 
 ## Features
 
@@ -14,6 +14,10 @@ The **common** role bootstraps our Linux servers with a standard baseline of too
   - Creates `/etc/vim/vimrc.local` for Vim customizations.
 - **SSH Key Management**
   - Fetches public keys from GitHub for operations, library, CDH, and EAL teams.
+- **Journal Log Management**
+  - Configures systemd journal log disk usage limits via `/etc/systemd/journald.conf.d/`.
+  - Prevents journal logs from consuming excessive disk space.
+  - Automatically restarts `journald` when settings are changed.
 - **Log Rotation**
   - Creates a systemd timer override to periodically check log sizes and trigger rotations.
   - Defines **global defaults** (`logrotate_global_defaults`) and **custom rules** (`logrotate_rules`) for `/etc/logrotate.d/`.
@@ -25,7 +29,7 @@ The **common** role bootstraps our Linux servers with a standard baseline of too
 
 - Ansible **2.9+**
 - Python **3.x** on target hosts
-- **systemd** for timer management (Debian/RHEL)
+- **systemd** for timer management and journal configuration (Debian/RHEL)
 
 ## Role Variables
 
@@ -40,6 +44,31 @@ All defaults can be found in `roles/common/defaults/main.yml`. Override these in
 | `common_rhel_packages`    | `[@Development tools, libyaml, …]`       | RHEL/CentOS-specific packages.                    |
 | `configured_dependencies` | `[]`                                     | Additional packages to install.                   |
 | `system_install_dir`      | `/usr/local/bin`                         | Directory to install CLI tools (e.g., `dua-cli`). |
+
+### Journald Configuration
+
+The role manages systemd journal log disk usage to prevent journal logs from consuming excessive space. Configuration is done via `/etc/systemd/journald.conf.d/00-journal-size.conf`.
+
+| Variable                       | Default | Description                                                    |
+| ------------------------------ | ------- | -------------------------------------------------------------- |
+| `journald_system_max_use`      | `800M`  | Maximum disk space journal logs can use (recommended setting). |
+| `journald_system_keep_free`    | *unset* | Ensures specified amount of disk space remains free.           |
+| `journald_system_max_file_size`| *unset* | Maximum size of individual journal files.                      |
+| `journald_system_max_files`    | *unset* | Maximum number of individual journal files.                    |
+
+**Note:** `SystemMaxUse` is the recommended setting as it provides predictable disk usage. When journal settings are modified, `journald` is automatically restarted to apply the changes.
+
+**Example:** Override for high-volume systems in `group_vars/production/vars.yml`:
+
+```yaml
+journald_system_max_use: "2G"
+```
+
+To verify journal disk usage on a host:
+
+```bash
+sudo journalctl --disk-usage
+```
 
 ### Logrotate Configuration
 
@@ -68,6 +97,7 @@ Customize logrotate per service or environment by overriding `logrotate_rules` i
 - hosts: all
   become: true
   vars:
+    journald_system_max_use: "1G"
     logrotate_rules:
       - name: nginx
         paths:
@@ -89,3 +119,4 @@ Customize logrotate per service or environment by overriding `logrotate_rules` i
 
 - **reload logrotate timer settings**: Reloads the systemd timer for logrotate.
 - **test logrotate configuration**: Validates new logrotate rule templates.
+- **restart journald**: Restarts systemd-journald service to apply configuration changes.
