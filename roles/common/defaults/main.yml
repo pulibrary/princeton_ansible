@@ -37,6 +37,13 @@ common_rhel_packages:
   - python3-devel
   - python3-pip
   - the_silver_searcher
+# Journald configuration
+# Controls how much disk space systemd journal logs can consume
+journald_system_max_use: "800M"
+# Optional: Uncomment to use alternative settings
+# journald_system_keep_free: "1G"      # Ensures specified amount of disk space remains free
+# journald_system_max_file_size: "100M"  # Maximum size of individual journal files
+# journald_system_max_files: 10        # Maximum number of individual journal files
 # Logrotate configuration opinionated defaults
 logrotate_global_defaults:
   rotate: 7
@@ -46,7 +53,6 @@ logrotate_global_defaults:
   create_group: "root"
   su_user:    "root"
   su_group:   "root"
-
 # Default logrotate rules - can be completely overridden
 logrotate_rules:
   - name: "falcon-sensor"
@@ -76,7 +82,6 @@ logrotate_rules:
 #        if [ -f /var/run/nginx.pid ]; then
 #          kill -USR1 `cat /var/run/nginx.pid`
 #        fi
-
 #  - name: "nginx-error"
 #    paths:
 #      - "/var/log/nginx/error.log"
@@ -87,7 +92,6 @@ logrotate_rules:
 #        if [ -f /var/run/nginx.pid ]; then
 #          kill -USR1 `cat /var/run/nginx.pid`
 #        fi
-
 # Example 2: postgresql logs (group_vars/postgresql/staging.yml)
 # logrotate_rules:
 #  - name: "postgresql"
@@ -97,7 +101,6 @@ logrotate_rules:
 #      rotate: 14               # we increase the number of rotated DB logs
 #      maxsize: "5000M"          # Database logs can be larger
       # Note: No postrotate needed as PostgreSQL handles this internally
-
 # Example 3: Application-specific logs (group_vars/orangelight/staging.yml)
 # logrotate_rules:
 #  - name: "orangelight"
@@ -110,16 +113,3 @@ logrotate_rules:
 #      create_group: "deploy"
 #      postrotate: |
 #        systemctl reload orangelight || true
-# journald limits
-journald_limits_floor_mib: 400
-journald_limits_ceiling_mib: 2048
-journald_limits_percent_of_root: 2
-
-journald_limits_max_files: 10
-journald_limits_file_size_ratio: 0.125
-
-journald_limits_dropin_dir: /etc/systemd/journald.conf.d
-journald_limits_dropin_file: 10-pul-limits.conf
-
-journald_limits_vacuum_if_over: true
-journald_limits_assert_slack_mib: 128

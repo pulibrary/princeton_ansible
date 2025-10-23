@@ -1,8 +1,5 @@
 ---
 # handlers file for roles/common
-#
-- name: reload logrotate timer settings
-  ansible.builtin.command: systemctl daemon-reload
 
 - name: restart chrony
   ansible.builtin.service:
@@ -14,5 +11,18 @@
   ansible.builtin.command: logrotate -f /etc/logrotate.conf
   register: logrotate_test
   failed_when: logrotate_test.rc != 0
+  when:
+    - running_on_server
+
+- name: reload logrotate timer settings
+  ansible.builtin.systemd:
+    daemon_reload: true
+    name: logrotate.timer
+    enabled: true
+
+- name: restart journald
+  ansible.builtin.systemd:
+    name: systemd-journald
+    state: restarted
   when:
     - running_on_server
