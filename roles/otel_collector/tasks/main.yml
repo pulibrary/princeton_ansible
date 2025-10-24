@@ -1,0 +1,27 @@
+---
+# tasks file for roles/otel_collector
+- name: Otel_collector - Ensure target directory exists
+  ansible.builtin.file:
+    path: "/opt/otelcol"
+    state: directory
+    mode: '0755'
+    owner: root
+    group: root
+
+- name: Otel_collector - Download and unarchive otelcol-contrib binary
+  ansible.builtin.unarchive:
+    src: "{{ otel_download_url }}"
+    dest: "/opt/otelcol"
+    remote_src: true
+    mode: '0755'
+    owner: root
+    group: root
+    creates: "/opt/otelcol/otel-contrib"
+
+- name: Otel_collector - Deploy generic otel-contrib config
+  ansible.builtin.template:
+    src: config.yaml.j2
+    dest: "/opt/otelcol/config.yaml"
+    mode: '0644'
+    owner: root
+    group: root
