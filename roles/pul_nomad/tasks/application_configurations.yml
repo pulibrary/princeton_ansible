@@ -3,15 +3,15 @@
 # when it's present in `nomad_enabled_apps` (a list). This lets us bring
 # up new clusters (e.g., sandbox) without running any app tasks until ready.
 
-- name: "pul_nomad | app_config | set default enable list"
+- name: Pul_nomad | app_config | set default enable list
   ansible.builtin.set_fact:
     nomad_enabled_apps: "{{ nomad_enabled_apps | default([], true) }}"
 
 # This isn't my favorite, but we don't have a way to split these right now and
 # not duplicate tasks.
 # Maybe application configs should be a different playbook.
-- name: "DPULC Staging"
-  import_tasks: apps/dpul_c.yml
+- name: Pul_nomad - app config - DPULC Staging
+  ansible.builtin.import_tasks: apps/dpul_c.yml
   vars:
     dpul_c_job_name: "{{ dpul_c_staging_job_name }}"
     dpul_c_db_name: "{{ dpul_c_staging_db_name }}"
@@ -31,8 +31,8 @@
     - dpulc
     - dpulc_staging
 
-- name: "DPULC Production"
-  import_tasks: apps/dpul_c.yml
+- name: Pul_nomad - app_config - DPULC Production
+  ansible.builtin.import_tasks: apps/dpul_c.yml
   vars:
     dpul_c_job_name: "{{ dpul_c_production_job_name }}"
     dpul_c_db_name: "{{ dpul_c_production_db_name }}"
@@ -53,52 +53,54 @@
     - dpulc_production
 
 # Imagecat
-- name: "pul_nomad | app_config | imagecat"
+- name: Pul_nomad | app_config | imagecat
   ansible.builtin.import_tasks: "apps/imagecat_production.yml"
   when: "'imagecat' in nomad_enabled_apps"
   tags: [app_config, imagecat]
-- name: "pul_nomad | app_config | imagecat"
+
+- name: Pul_nomad | app_config | imagecat
   ansible.builtin.import_tasks: "apps/imagecat_staging.yml"
   when: "'imagecat' in nomad_enabled_apps"
   tags: [app_config, imagecat]
 
 # ABID
-- name: "pul_nomad | app_config | abid"
+- name: Pul_nomad | app_config | abid
   ansible.builtin.import_tasks: "apps/abid_staging.yml"
   when: "'abid' in nomad_enabled_apps"
   tags: [app_config, abid]
 
-- name: "pul_nomad | app_config | abid"
+- name: Pul_nomad | app_config | abid
   ansible.builtin.import_tasks: "apps/abid_production.yml"
   when: "'abid' in nomad_enabled_apps"
   tags: [app_config, abid]
 
 # Logging
-- name: "pul_nomad | app_config | logging"
+- name: Pul_nomad | app_config | logging
   ansible.builtin.import_tasks: "apps/logging.yml"
   when: "'logging' in nomad_enabled_apps"
   tags: [app_config, logging]
 
 # Traefik wall
-- name: "pul_nomad | app_config | traefik_wall"
+- name: Pul_nomad | app_config | traefik_wall
   ansible.builtin.import_tasks: "apps/traefik_wall.yml"
   when: "'traefik_wall' in nomad_enabled_apps"
   tags: [app_config, traefik_wall]
 
 # CircleCI deployer
-- name: "pul_nomad | app_config | circleci_deployer"
+- name: Pul_nomad | app_config | circleci_deployer
   ansible.builtin.import_tasks: "apps/circleci_deployer.yml"
   when: "'circleci_deployer' in nomad_enabled_apps"
   tags: [app_config, circleci_deployer]
 
 
-- name: "pul_nomad | app_config | analytics"
+- name: Pul_nomad | app_config | analytics
   ansible.builtin.import_tasks: "apps/analytics.yml"
   when: "'analytics' in nomad_enabled_apps"
   tags: [app_config, analytics]
 
-# Nodemation
-- name: "pul_nomad | app_config | nodemation"
-  ansible.builtin.import_tasks: "apps/nodemation.yml"
-  when: "'nodemation' in nomad_enabled_apps"
-  tags: [app_config, nodemation]
+- name: Pul_nomad | app_config | grist
+  ansible.builtin.import_tasks: "apps/grist.yml"
+  when:
+    - running_on_server
+    - "'grist' in nomad_enabled_apps"
+  tags: [app_config, grist]
