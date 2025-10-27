@@ -1,0 +1,36 @@
+---
+- name: Pul_nomad - signoz - Create /data/ directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+  loop:
+    - clickhouse
+    - clickhouse-logs
+    - signoz
+    - zookeeper
+
+- name: Pul_nomad - signoz - Ensure /data/ permissions (0775) recursively
+  ansible.builtin.file:
+    path: /data
+    mode: "0775"
+    recurse: true
+
+- name: Pul_nomad - signoz - Ensure selinux management tools
+  ansible.builtin.dnf:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - policycoreutils
+    - policycoreutils-python-utils
+
+- name: Pul_nomad - signoz - Add persistent SELinux context rule for /data
+  community.general.sefcontext:
+    target: "/data/(/.*)?"
+    setype: container_file_t
+    state: present
+
+- name: Pul_nomad - signoz - Restore SELinux contexts on /data
+  command: restorecon -Rv /data
