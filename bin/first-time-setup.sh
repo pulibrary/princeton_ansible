@@ -1,30 +1,63 @@
-#!/bin/zsh
+#!/bin/bash
 
-brew install asdf lastpass-cli
+echo "==================================="
+echo "First Time Setup - Devbox Migration"
+echo "==================================="
 
-# Make sure that the binaries that asdf installs
-# can be found in the $PATH, using the
-# "ZSH and homebrew" instructions from 
-# https://asdf-vm.com/guide/getting-started.html#_3-install-asdf
+# Install Devbox if not already installed
+if ! command -v devbox &>/dev/null; then
+  echo "Installing Devbox..."
+  curl -fsSL https://get.jetpack.io/devbox | bash
 
-if [ -n "$ZSH_VERSION" ]; then
-    if ! grep -q "asdf\.sh" ${ZDOTDIR:-~}/.zshrc; then
-	
-	echo -e '#configure asdf' >> ${ZDOTDIR:-~}/.zshrc
-	echo -e 'export PATH="${ASDF_DATA_DIR:-$HOME/.asdf}/shims:$PATH"' >> ${ZDOTDIR:-~}/.zshrc
-        . ${ZDOTDIR:-~}/.zshrc
-    fi
+  # Add Devbox to PATH for current session
+  export PATH="$HOME/.local/bin:$PATH"
+
+  # Add to shell profile if not already there
+  if [ -n "$ZSH_VERSION" ]; then
+    SHELL_PROFILE="${ZDOTDIR:-$HOME}/.zshrc"
+  elif [ -n "$BASH_VERSION" ]; then
+    SHELL_PROFILE="$HOME/.bashrc"
+  else
+    SHELL_PROFILE="$HOME/.profile"
+  fi
+
+  if ! grep -q "/.local/bin" "$SHELL_PROFILE" 2>/dev/null; then
+    echo "" >>"$SHELL_PROFILE"
+    echo "# Devbox installation" >>"$SHELL_PROFILE"
+    echo 'export PATH="$HOME/.local/bin:$PATH"' >>"$SHELL_PROFILE"
+    echo "Added Devbox to PATH in $SHELL_PROFILE"
+  fi
 else
-    echo "It seems like you are using a shell other than ZSH"
-    echo "Follow the ASDF installation documentation for your shell,"
-    echo "then run the following steps manually."
+  echo "Devbox is already installed"
 fi
 
-asdf plugin add awscli
-asdf plugin add python
-asdf plugin add ruby
-asdf install
-pip install pipenv
-gem install lastpass-ansible
-. "$(dirname $0)/setup"
+# Note: lastpass-cli is now installed via Devbox/Nix packages
+# No need for separate Homebrew installation
 
+# Initialize Devbox shell
+echo ""
+echo "Initializing Devbox environment..."
+echo "This will download and install all required packages."
+echo ""
+
+# Install packages and enter shell
+devbox install
+
+# Run the setup script if it exists
+if [ -f "$(dirname $0)/setup" ]; then
+  echo ""
+  echo "Running additional setup..."
+  . "$(dirname $0)/setup"
+fi
+
+echo ""
+echo "==================================="
+echo "Setup Complete!"
+echo "==================================="
+echo ""
+echo "To enter the development environment, run:"
+echo "  devbox shell"
+echo ""
+echo "Or to run a single command:"
+echo "  devbox run <command>"
+echo ""
