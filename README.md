@@ -7,9 +7,11 @@ Princeton Ansible Playbooks
 
 A collection of roles and playbooks for provisioning and managing the machines that run PUL applications.
 
-# Project Setup for Development and Testing
+Project Setup for Development and Testing
+-----------------------------------------
 
-## First-time setup
+First-time setup
+----------------
 
 Do these things once, after you clone this repo.
 
@@ -30,7 +32,8 @@ Do these things once, after you clone this repo.
 2. Run `bin/first-time-setup.sh` - this installs Devbox and all dependencies
 3. Follow the steps under "Every time setup"
 
-## Every time setup
+Every time setup
+----------------
 
 Run these commands every time you use this repo:
 
@@ -46,6 +49,7 @@ lpass login <your-netid@princeton.edu>
 ```
 
 The Devbox environment provides:
+
 - Python virtual environment with all Ansible tools
 - ANSIBLE_VAULT_PASSWORD_FILE configured to use lastpass-ansible
 - Git hooks to prevent committing unencrypted vault files
@@ -53,7 +57,8 @@ The Devbox environment provides:
 
 Now you can run tests (See "Running molecule tests") or playbooks (See "Usage")
 
-## Validate that everything is installed correctly
+Validate that everything is installed correctly
+-----------------------------------------------
 
 Make sure Docker is running, then from inside the Devbox shell:
 
@@ -70,7 +75,8 @@ cd roles/common
 env -u ANSIBLE_VAULT_IDENTITY_LIST -u ANSIBLE_VAULT_PASSWORD_FILE molecule test
 ```
 
-## Troubleshooting Setup
+Troubleshooting Setup
+---------------------
 
 ### Ansible Command Not Found / Reinstall deps
 
@@ -88,21 +94,25 @@ devbox run init
 If you get vault password errors when running playbooks:
 
 1. Ensure you're logged into LastPass:
+
    ```bash
    lpass status
    ```
-   
+
 2. If not logged in:
+
    ```bash
    lpass login <your-netid@princeton.edu>
    ```
 
 3. Verify the vault configuration is set:
+
    ```bash
    devbox run env-info
    ```
 
-## Available Helper Scripts
+Available Helper Scripts
+------------------------
 
 Inside the Devbox shell, you can run:
 
@@ -114,9 +124,11 @@ Inside the Devbox shell, you can run:
 | `devbox run test` | Verify Ansible tools installation |
 | `devbox run env-info` | Display current environment configuration |
 
-# Developing
+Developing
+----------
 
-## Create a new role
+Create a new role
+-----------------
 
 In all the steps below substitute your role name for `your_new_role`
 
@@ -132,7 +144,7 @@ In all the steps below substitute your role name for `your_new_role`
 
 1. Set up to run from github actions `vim .github/workflows/molecule_tests.yml` add for your role at the end matrix of the roles
 
-   ```
+   ```text
        - your_new_role
    ```
 
@@ -153,7 +165,7 @@ In all the steps below substitute your role name for `your_new_role`
 1. Test that your role is now working
    All tests should pass
 
-   ```
+   ```text
    cd roles/$your_new_role
    env -u ANSIBLE_VAULT_IDENTITY_LIST -u ANSIBLE_VAULT_PASSWORD_FILE molecule test
    ```
@@ -165,7 +177,8 @@ In all the steps below substitute your role name for `your_new_role`
    1. Add an `inventory/all_projects/your_new_project` file and list all VMs and other resources. Group them by environment - see any of the existing files for examples.
    1. Add your new groups to the relevant files in the `inventory/by_environment/` directory. For example, add `your_new_project_production` to `inventory/by_environment/production`. Try to keep the lists alphabetized.
 
-## Running Molecule tests
+Running Molecule tests
+----------------------
 
 Molecule tests should be run without vault configuration to avoid requiring production passwords for testing. Always unset the vault environment variables when running molecule:
 
@@ -185,23 +198,25 @@ env -u ANSIBLE_VAULT_IDENTITY_LIST -u ANSIBLE_VAULT_PASSWORD_FILE molecule verif
 
 If you are having issues with your tests passing and have run `molecule converge` you can connect to the running container by running:
 
-```
+```text
 env -u ANSIBLE_VAULT_IDENTITY_LIST -u ANSIBLE_VAULT_PASSWORD_FILE molecule login
 ```
 
-## Troubleshooting a container step
+Troubleshooting a container step
+--------------------------------
 
 If you have a specific task that is not behaving, utilize the tests to run just that step. This is especially useful for long running `molecule converge`
 
 You basically copy the failing task into the molecule/verify.yml and run verify over and over instead of needing to run the entire converge over and over. This makes debugging much faster and joyful!
 
-## Troubleshooting a test run
+Troubleshooting a test run
+--------------------------
 
 If you need to ensure you're getting the newest docker image for your local
 test run you can do a dance like this to delete your ansible docker machines,
 volumes, and images:
 
-```
+```text
 cd to the role in question
 % env -u ANSIBLE_VAULT_IDENTITY_LIST -u ANSIBLE_VAULT_PASSWORD_FILE molecule destroy
 % docker ps -qaf ancestor=quay.io/pulibrary/jammy-ansible:latest | xargs docker stop
@@ -211,9 +226,11 @@ cd to the role in question
 % env -u ANSIBLE_VAULT_IDENTITY_LIST -u ANSIBLE_VAULT_PASSWORD_FILE molecule converge
 ```
 
-# Usage
+Usage
+-----
 
-## Running a playbook
+Running a playbook
+------------------
 
 Run a playbook (requires LastPass login for vault access):
 
@@ -227,7 +244,8 @@ Run a playbook from an error or a specific task:
 ansible-playbook playbooks/example.yml --start-at-task="Task Name"
 ```
 
-## Avoiding downtime
+Avoiding downtime
+-----------------
 
 To ensure uptime while provisioning a set of machines, the general process is to remove half the machines from the load balancer, provision and deploy them, then put them back on the load balancer and remove the other half for provisioning and deployment.
 
@@ -238,7 +256,7 @@ To ensure uptime while provisioning a set of machines, the general process is to
 
 To run a playbook on only a subset of hosts, use the `--limit` option to `ansible-playbook`, e.g.:
 
-```
+```text
 ansible-playbook playbooks/figgy_production.yml --limit figgy3.princeton.edu
 ```
 
@@ -251,24 +269,26 @@ To check the newly-provisioned boxes before swapping to the other group, SSH to 
 
 Note that some playbooks have separate sections for webservers and workers. Make sure that all the boxes get provisioned.
 
-# Connections to other boxes
+Connections to other boxes
+--------------------------
 
 Currently there's no automation on firewall changes when the box you're provisioning needs to talk to the postgres or solr machines. See instructions for manual edits at:
 
 - <https://github.com/pulibrary/pul-the-hard-way/blob/master/services/postgresql.md#allow-access-from-a-new-box>
 - <https://github.com/pulibrary/pul-the-hard-way/blob/master/services/solr.md#allow-access-from-a-new-box>
 
-# Vault
+Vault
+-----
 
 Use `ansible-vault edit` to make changes to the `vault.yml` file, for example:
 
-```
+```text
 ansible-vault edit group_vars/bibdata/vault.yml
 ```
 
 If you need to diff an ansible-vault file, run
 
-```
+```text
 git config --global diff.ansible-vault.textconv "ansible-vault view"
 git config --local merge.ansible-vault.driver "./ansible-vault-merge %O %A %B %L %P"
 git config --local merge.ansible-vault.name "Ansible Vault merge driver"
@@ -278,7 +298,8 @@ after which any `git diff` command should decrypt your ansible-vault files.
 
 If a file is not decrypting with `git diff` you may need to add the file you're trying to diff to `.gitattributes`.
 
-## Troubleshooting lastpass
+Troubleshooting lastpass
+------------------------
 
 More information about lastpass-cli can be found here: <https://lastpass.github.io/lastpass-cli/lpass.1.html>
 
@@ -305,23 +326,29 @@ devbox run env-info  # Should show ANSIBLE_VAULT_PASSWORD_FILE set
 1. Enter the new vault password
 1. Run `ansible-vault edit --ask-vault-password` on one of the files you changed (providing the new password), to validate that everything is as it should be.
 1. Add the new vault password to the vault_password in lastpass.
-8. Log into [Ansible Tower](https://ansible-tower.princeton.edu/#/credentials/10/details). To replace it click `Edit` then click on the circular arrow to the left of the Vault Password, paste in the new value, and save. The value is automatically encrypted.
+1. Log into [Ansible Tower](https://ansible-tower.princeton.edu/#/credentials/10/details). To replace it click `Edit` then click on the circular arrow to the left of the Vault Password, paste in the new value, and save. The value is automatically encrypted.
 
-## Upgrading Ansible version
+Upgrading Ansible version
+-------------------------
 
 1. Edit `requirements.txt` to update the ansible version
 2. In Devbox shell, update the dependencies:
+
    ```bash
    devbox run update-deps
    ```
+
 3. Verify the new version:
+
    ```bash
    ansible --version
    ```
+
 4. Run the test suite to ensure compatibility
 5. Commit the updated `requirements.txt`
 
-## Migration from Pipenv to Devbox
+Migration from Pipenv to Devbox
+-------------------------------
 
 This project has been migrated from Pipenv to Devbox for better reproducibility and cross-platform support. Key changes:
 
@@ -334,9 +361,11 @@ This project has been migrated from Pipenv to Devbox for better reproducibility 
 | **LastPass CLI** | Homebrew (macOS only) | Nix package (cross-platform) |
 
 ### Files Changed
+
 - **Added**: `devbox.json`, `devbox.lock`, `bin/lastpass-ansible`
 - **Removed**: `Pipfile`, `Pipfile.lock`, `.mise.local.toml`
 - **Updated**: `bin/first-time-setup.sh`, this README
 
 ### For CI/CD
+
 The `requirements.txt` file is maintained for CI/CD compatibility and contains all Python dependencies.
