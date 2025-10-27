@@ -1,0 +1,22 @@
+#!/bin/bash
+# Wrapper script to call the actual lastpass-ansible gem installed by devbox
+# This dynamically finds the gem in the devbox environment
+
+# Ensure LastPass agent socket is available
+export LPASS_AGENT_SOCKET="${LPASS_AGENT_SOCKET:-$HOME/.lpass/agent.sock}"
+export LPASS_AGENT_TIMEOUT="${LPASS_AGENT_TIMEOUT:-32400}"
+
+# First try the devbox ruby virtual environment
+DEVBOX_GEM="$DEVBOX_PROJECT_ROOT/.devbox/virtenv/ruby_3_2/bin/lastpass-ansible"
+if [ -x "$DEVBOX_GEM" ]; then
+    exec "$DEVBOX_GEM" "$@"
+fi
+
+# Fallback to system-wide lastpass-ansible if available
+if command -v lastpass-ansible >/dev/null 2>&1; then
+    exec lastpass-ansible "$@"
+fi
+
+# If neither found, error out
+echo "Error: lastpass-ansible not found. Install with: gem install lastpass-ansible" >&2
+exit 1
