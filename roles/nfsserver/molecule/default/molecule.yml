@@ -3,6 +3,11 @@ scenario:
   name: default
 driver:
   name: docker
+  env:
+    ANSIBLE_CONFIG: "/absolute/path/to/roles/nfsserver/molecule/default/ansible.cfg"
+    ANSIBLE_VAULT_IDENTITY_LIST: ""
+    ANSIBLE_VAULT_PASSWORD_FILE: ""
+    DOCKER_HOST: "unix:///var/run/docker.sock"
   command_timeout: 60
 lint: |
   set -e
@@ -22,10 +27,16 @@ platforms:
 provisioner:
   name: ansible
   log: true
+  env:
+    ANSIBLE_VAULT_IDENTITY_LIST: ""
+    ANSIBLE_VAULT_PASSWORD_FILE: ""
+    DOCKER_HOST: "unix:///var/run/docker.sock"
   playbooks:
+    create: create.yml
     prepare: prepare.yml
   config_options:
     defaults:
       remote_tmp: /tmp/ansible
+      vault_password_file: ""
 verifier:
   name: ansible
