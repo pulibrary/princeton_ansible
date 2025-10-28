@@ -1,0 +1,171 @@
+---
+- name: Create
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  # kill vault usage for this play, no matter what the parent repo config says
+  vars:
+    ansible_vault_password_file: ""
+    ansible_vault_identity_list: ""
+
+  vars_prompt: []
+  vars_files: []
+  handlers: []
+
+  vars:
+    molecule_yml: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') | default(playbook_dir, true) ~ '/molecule.yml' | from_yaml }}"
+    molecule_ephemeral_directory: "{{ lookup('env', 'MOLECULE_EPHEMERAL_DIRECTORY') }}"
+    molecule_workspace: "{{ molecule_ephemeral_directory }}"
+    molecule_driver: "{{ molecule_yml.driver }}"
+    molecule_platforms: "{{ molecule_yml.platforms }}"
+    molecule_provisioner: "{{ molecule_yml.provisioner }}"
+    molecule_env: "{{ molecule_driver.env | default({}) | combine(molecule_provisioner.env | default({})) }}"
+    molecule_login_info: "{{ molecule_driver.login | default({}) }}"
+    molecule_timeout: "{{ molecule_driver.command_timeout | default(60) }}"
+
+  tasks:
+
+    - name: Set async_dir for HOME env
+      set_fact:
+        molecule_env: >-
+          {{
+            molecule_env | combine({
+              "HOME": molecule_workspace ~ "/.ansible_async"
+            })
+          }}
+
+    - name: Ensure async_dir exists
+      file:
+        path: "{{ molecule_env.HOME }}"
+        state: directory
+        mode: "0700"
+
+    - name: Log into a Docker registry
+      when:
+        - molecule_login_info is defined
+        - molecule_login_info | length > 0
+        - molecule_login_info.username is defined
+        - molecule_login_info.password is defined
+      community.docker.docker_login:
+        registry_url: "{{ molecule_login_info.registry_url | default(omit) }}"
+        username: "{{ molecule_login_info.username }}"
+        password: "{{ molecule_login_info.password }}"
+        reauthorize: true
+      no_log: true
+
+    - name: Check presence of custom Dockerfiles
+      loop: "{{ molecule_platforms }}"
+      loop_control:
+        loop_var: item
+      stat:
+        path: "{{ item.dockerfile | default('') }}"
+      register: dockerfile_checks
+
+    - name: Create Dockerfiles from image names
+      when: item.dockerfile is not defined and (item.pre_build_image | default(false)) | bool
+      loop: "{{ molecule_platforms }}"
+      loop_control:
+        loop_var: item
+      copy:
+        dest: "{{ molecule_workspace }}/Dockerfile_{{ item.name }}"
+        mode: "0644"
+        content: |
+          FROM {{ item.image }}
+      register: generated_dockerfiles
+
+    - name: Synchronization the context
+      when: item.context is defined
+      loop: "{{ molecule_platforms }}"
+      loop_control:
+        loop_var: item
+      synchronize:
+        src: "{{ item.context }}"
+        dest: "{{ molecule_workspace }}/{{ item.name }}_build_context"
+        archive: yes
+        delete: no
+        recursive: yes
+        rsync_opts:
+          - "--exclude=.git"
+
+    - name: Discover local Docker images
+      loop: "{{ dockerfile_checks.results }}"
+      loop_control:
+        loop_var: item
+        index_var: i
+      community.docker.docker_image_info:
+        name: "{{ molecule_platforms[i].image }}"
+      register: _local_images
+      failed_when: >
+        (_local_images is failed) and
+        not (molecule_platforms[i].pre_build_image | default(false))
+
+    - name: Build images if needed
+      when:
+        - molecule_platforms[index].pre_build_image | default(false)
+      loop: "{{ molecule_platforms }}"
+      loop_control:
+        loop_var: platform
+        index_var: index
+      community.docker.docker_image:
+        name: "{{ platform.image }}"
+        build:
+          path: >-
+            {{
+              (
+                platform.context is defined
+              )
+              | ternary(
+                  molecule_workspace ~ '/' ~ platform.name ~ '_build_context',
+                  molecule_workspace
+                )
+            }}
+          dockerfile: >-
+            {{
+              platform.dockerfile
+              | default(
+                  (molecule_workspace ~ '/Dockerfile_' ~ platform.name)
+                  if (platform.pre_build_image | default(false))
+                  else omit
+                )
+            }}
+        source: build
+
+    - name: Create molecule managed containers
+      loop: "{{ molecule_platforms }}"
+      loop_control:
+        loop_var: item
+      community.docker.docker_container:
+        name: "{{ item.name }}"
+        image: "{{ item.image }}"
+        command: "{{ item.command | default(omit) }}"
+        privileged: "{{ item.privileged | default(false) }}"
+        volumes: "{{ item.volumes | default([]) }}"
+        state: started
+        detach: true
+        tty: true
+        interactive: true
+        restart_policy: "no"
+        env: "{{ item.env | default({}) }}"
+      register: created_containers
+
+    - name: Wait for containers to become reachable
+      async: "{{ molecule_timeout }}"
+      poll: 0
+      loop: "{{ molecule_platforms }}"
+      loop_control:
+        loop_var: item
+      community.docker.docker_container_info:
+        name: "{{ item.name }}"
+      register: wait_handles
+
+    - name: Poll for container readiness
+      async_status:
+        jid: "{{ item.ansible_job_id }}"
+      register: ready_status
+      until: ready_status.finished
+      retries: 30
+      delay: 2
+      loop: "{{ wait_handles.results }}"
+      loop_control:
+        loop_var: item
