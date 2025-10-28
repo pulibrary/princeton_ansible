@@ -1,0 +1,88 @@
+---
+- name: Restic_backup - Install required system packages
+  ansible.builtin.package:
+    name: "{{ restic_backup_required_packages }}"
+    state: present
+  tags:
+    - restic-packages
+
+- name: Restic_backup - Create Restic directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ restic_backup_user }}"
+    group: "{{ restic_backup_group }}"
+    mode: '0755'
+  loop:
+    - "{{ restic_backup_config_dir }}"
+    - "{{ restic_backup_cache_dir }}"
+    - "{{ restic_backup_log_dir }}"
+  tags:
+    - restic-directories
+
+- name: Restic_backup - Check if Restic is already installed
+  ansible.builtin.stat:
+    path: "{{ restic_backup_install_dir }}/restic"
+  register: restic_binary
+  tags:
+    - restic-binary
+
+- name: Restic_backup - Get installed Restic version
+  ansible.builtin.command: "{{ restic_backup_install_dir }}/restic version"
+  register: restic_installed_version
+  changed_when: false
+  failed_when: false
+  when: restic_binary.stat.exists
+  tags:
+    - restic-binary
+
+- name: Restic_backup - Set fact for version check
+  ansible.builtin.set_fact:
+    restic_needs_update: >-
+      {{
+        not restic_binary.stat.exists or
+        (restic_installed_version.stdout is defined and
+         restic_backup_version not in restic_installed_version.stdout)
+      }}
+  tags:
+    - restic-binary
+
+- name: Restic_backup - Download Restic binary
+  ansible.builtin.get_url:
+    url: "https://github.com/restic/restic/releases/download/v{{ restic_backup_version }}/restic_{{ restic_backup_version }}_linux_{{ restic_binary_arch }}.bz2"
+    dest: "/tmp/restic_{{ restic_backup_version }}.bz2"
+    mode: '0644'
+  when: restic_needs_update | bool
+  tags:
+    - restic-download
+
+- name: Restic_backup - Extract Restic binary
+  ansible.builtin.shell: |
+    bzip2 -dc /tmp/restic_{{ restic_backup_version }}.bz2 > {{ restic_backup_install_dir }}/restic
+    chmod +x {{ restic_backup_install_dir }}/restic
+  args:
+    creates: "{{ restic_backup_install_dir }}/restic"
+  when: restic_needs_update | bool
+  tags:
+    - restic-extract
+
+- name: Restic_backup - Remove temporary download file
+  ansible.builtin.file:
+    path: "/tmp/restic_{{ restic_backup_version }}.bz2"
+    state: absent
+  when: restic_needs_update | bool
+  tags:
+    - restic-cleanup
+
+- name: Restic_backup - Verify Restic installation
+  ansible.builtin.command: "{{ restic_install_dir }}/restic version"
+  register: restic_version_output
+  changed_when: false
+  tags:
+    - restic-verify
+
+- name: Restic_backup - Display installed Restic version
+  ansible.builtin.debug:
+    msg: "Restic version installed: {{ restic_version_output.stdout }}"
+  tags:
+    - restic-verify

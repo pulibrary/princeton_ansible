@@ -1,0 +1,101 @@
+---
+# Restic version to install
+restic_backup_version: "0.17.1"
+
+# Installation paths
+restic_backup_install_dir: "/usr/local/bin"
+restic_backup_config_dir: "/etc/restic"
+restic_backup_cache_dir: "/var/cache/restic"
+restic_backup_log_dir: "/var/log/restic"
+
+# Google Cloud Storage configuration
+restic_backup_gcs_bucket: ""
+restic_backup_gcs_project_id: "pul-gcdc"
+restic_backup_gcs_credentials_file: "{{ restic_config_dir }}/gcs-credentials.json"
+
+# Repository configuration
+restic_backup_repository_password: ""
+restic_backup_repository_password_file: "{{ restic_config_dir }}/repository-password"
+
+# Backup paths (list of directories to backup)
+restic_backup_paths:
+  - /etc
+  - /home
+  - /var/log
+
+# Exclude patterns
+restic_backup_exclude_patterns:
+  - "*.tmp"
+  - "*.cache"
+  - "*.swp"
+  - "/var/log/*.gz"
+  - "/home/*/.cache"
+  - "/root/.cache"
+
+# Exclude file
+restic_backup_exclude_file: "{{ restic_config_dir }}/exclude.txt"
+
+# Backup schedule (cron format)
+restic_backup_schedule:
+  minute: "0"
+  hour: "2"
+  day: "*"
+  month: "*"
+  weekday: "*"
+
+# Use systemd timer instead of cron
+restic_backup_use_systemd_timer: true
+
+# Retention policy
+restic_backup_retention_keep_last: 10
+restic_backup_retention_keep_hourly: 24
+restic_backup_retention_keep_daily: 7
+restic_backup_retention_keep_weekly: 4
+restic_backup_retention_keep_monthly: 6
+restic_backup_retention_keep_yearly: 2
+
+# Backup options
+restic_backup_tag: "{{ inventory_hostname }}"
+restic_backup_verbosity: 1  # 0=quiet, 1=normal, 2=verbose
+restic_backup_compression: "auto"  # auto, max, or off
+
+# Pre and post backup scripts
+restic_backup_pre_backup_script: ""
+restic_backup_post_backup_script: ""
+
+# Check and prune settings
+restic_backup_enable_check: true
+restic_backup_check_schedule:
+  minute: "30"
+  hour: "3"
+  day: "*"
+  month: "*"
+  weekday: "0"  # Sunday
+
+restic_backup_enable_prune: true
+restic_backup_prune_schedule:
+  minute: "0"
+  hour: "4"
+  day: "1"
+  month: "*"
+  weekday: "*"  # First of month
+
+# Notification settings
+restic_backup_enable_notifications: false
+restic_backup_notification_email: ""
+restic_backup_notification_on_success: false
+restic_backup_notification_on_failure: true
+
+# System user for running backups
+restic_backup_user: "root"
+restic_backup_group: "root"
+
+# Initialize repository if it doesn't exist
+restic_backup_initialize_repository: true
+
+# Environment variables
+restic_backup_environment_vars:
+  RESTIC_CACHE_DIR: "{{ restic_backup_cache_dir }}"
+  RESTIC_PASSWORD_FILE: "{{ restic_backup_repository_password_file }}"
+  GOOGLE_PROJECT_ID: "{{ restic_backup_gcs_project_id }}"
+  GOOGLE_APPLICATION_CREDENTIALS: "{{ restic_backup_gcs_credentials_file }}"
