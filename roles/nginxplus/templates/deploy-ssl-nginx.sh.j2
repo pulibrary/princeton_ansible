@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+: "${LEGO_CERT_DOMAIN:?missing}"
+: "${LEGO_CERT_PATH:?missing}"
+: "${LEGO_CERT_KEY_PATH:?missing}"
+
+LEGO_CERT_ISSUER_PATH="${LEGO_CERT_PATH%.crt}.issuer.crt"
+
+log() { logger -p daemon.notice -t lego-deploy -- "$*"; }
+warn(){ logger -p daemon.warning -t lego-deploy -- "$*"; }
+
+case "$LEGO_CERT_DOMAIN" in
+{% for s in sites %}
+  {{ s.domain }}|*.{{ s.domain }})
+    CERT_DST="{{ s.cert_dst }}"
+    KEY_DST="{{ s.key_dst }}"
+    ;;
+{% endfor %}
+  *)
+    warn "Unknown domain ${LEGO_CERT_DOMAIN}; skipping."
+    exit 0
+    ;;
+esac
+
+cat "$LEGO_CERT_PATH" "$LEGO_CERT_ISSUER_PATH" >"$CERT_DST"
+install -m 0640 -o root -g root "$LEGO_CERT_KEY_PATH" "$KEY_DST"
+log "Installed cert for ${LEGO_CERT_DOMAIN} -> ${CERT_DST}; key -> ${KEY_DST}"
+
+missing=0
+MISSING_LIST=()
+{% for s in sites %}
+[ -f "{{ s.cert_dst }}" ] || { missing=1; MISSING_LIST+=("{{ s.cert_dst }}"); }
+[ -f "{{ s.key_dst  }}" ] || { missing=1; MISSING_LIST+=("{{ s.key_dst  }}"); }
+{% endfor %}
+
+STATE_DIR="/var/lib/lego/state"
+mkdir -p "$STATE_DIR"
+
+if [ "$missing" -eq 0 ]; then
+  rm -f "$STATE_DIR"/nginx-reload-deferred* || true
+  if nginx -t; then
+    systemctl reload nginx
+    log "nginx reloaded successfully after ${LEGO_CERT_DOMAIN} deploy."
+  else
+    warn "nginx -t failed; skipping reload (lego success not blocked)."
+  fi
+else
+  SENT="$STATE_DIR/nginx-reload-deferred-$(date +%s).flag"
+  printf '%s\n' "${MISSING_LIST[@]}" > "$SENT"
+  warn "Deferred nginx reload: missing files: ${MISSING_LIST[*]} (sentinel: $SENT)."
+  exit 0
+fi
+
