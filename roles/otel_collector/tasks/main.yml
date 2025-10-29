@@ -26,6 +26,8 @@
     owner: root
     group: root
   notify: Restart otelcol
+  when:
+    - running_on_server
 
 - name: Otel_collector | Validate config
   ansible.builtin.command: "{{ otel_validate_cmd }}"
@@ -40,14 +42,20 @@
     owner: root
     group: root
   notify: Systemd daemon-reload
+  when:
+    - running_on_server
 
 - name: Otel_collector | Daemon-reload (if not via handler)
   ansible.builtin.systemd:
     daemon_reload: true
   changed_when: false
+  when:
+    - running_on_server
 
 - name: Otel_collector | Ensure service is enabled & running
   ansible.builtin.systemd:
     name: "{{ otel_service_name }}"
     state: started
     enabled: true
+  when:
+    - running_on_server
