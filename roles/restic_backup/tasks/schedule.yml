@@ -1,0 +1,169 @@
+---
+- name: Restic_backup - Configure systemd timer for backup
+  block:
+    - name: Create systemd service for backup
+      ansible.builtin.template:
+        src: restic-backup.service.j2
+        dest: /etc/systemd/system/restic-backup.service
+        owner: root
+        group: root
+        mode: '0644'
+      notify: reload systemd
+
+    - name: Create systemd timer for backup
+      ansible.builtin.template:
+        src: restic-backup.timer.j2
+        dest: /etc/systemd/system/restic-backup.timer
+        owner: root
+        group: root
+        mode: '0644'
+      notify: reload systemd
+
+    - name: Enable and start backup timer
+      ansible.builtin.systemd:
+        name: restic-backup.timer
+        enabled: true
+        state: started
+        daemon_reload: true
+
+    - name: Remove cron job if exists
+      ansible.builtin.cron:
+        name: "Restic backup"
+        state: absent
+        user: "{{ restic_user }}"
+
+  when: restic_use_systemd_timer | bool
+  tags:
+    - restic-schedule
+    - restic-systemd
+
+- name: Restic_backup - Configure cron job for backup
+  block:
+    - name: Create backup cron job
+      ansible.builtin.cron:
+        name: "Restic backup"
+        minute: "{{ restic_backup_schedule.minute }}"
+        hour: "{{ restic_backup_schedule.hour }}"
+        day: "{{ restic_backup_schedule.day }}"
+        month: "{{ restic_backup_schedule.month }}"
+        weekday: "{{ restic_backup_schedule.weekday }}"
+        job: "{{ restic_install_dir }}/restic-backup.sh >> {{ restic_log_dir }}/backup.log 2>&1"
+        user: "{{ restic_user }}"
+        state: present
+
+    - name: Stop and disable systemd timer if exists
+      ansible.builtin.systemd:
+        name: restic-backup.timer
+        enabled: false
+        state: stopped
+      failed_when: false
+
+    - name: Remove systemd service files if they exist
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /etc/systemd/system/restic-backup.service
+        - /etc/systemd/system/restic-backup.timer
+      notify: reload systemd
+
+  when: not restic_use_systemd_timer | bool
+  tags:
+    - restic-schedule
+    - restic-cron
+
+- name: Restic_backup - Configure check schedule
+  block:
+    - name: Create systemd service for check
+      ansible.builtin.template:
+        src: restic-check.service.j2
+        dest: /etc/systemd/system/restic-check.service
+        owner: root
+        group: root
+        mode: '0644'
+      notify: reload systemd
+      when: restic_use_systemd_timer | bool
+
+    - name: Create systemd timer for check
+      ansible.builtin.template:
+        src: restic-check.timer.j2
+        dest: /etc/systemd/system/restic-check.timer
+        owner: root
+        group: root
+        mode: '0644'
+      notify: reload systemd
+      when: restic_use_systemd_timer | bool
+
+    - name: Enable and start check timer
+      ansible.builtin.systemd:
+        name: restic-check.timer
+        enabled: true
+        state: started
+        daemon_reload: true
+      when: restic_use_systemd_timer | bool
+
+    - name: Create check cron job
+      ansible.builtin.cron:
+        name: "Restic check"
+        minute: "{{ restic_check_schedule.minute }}"
+        hour: "{{ restic_check_schedule.hour }}"
+        day: "{{ restic_check_schedule.day }}"
+        month: "{{ restic_check_schedule.month }}"
+        weekday: "{{ restic_check_schedule.weekday }}"
+        job: "{{ restic_install_dir }}/restic-check.sh >> {{ restic_log_dir }}/check.log 2>&1"
+        user: "{{ restic_user }}"
+        state: present
+      when: not restic_use_systemd_timer | bool
+
+  when: restic_enable_check | bool
+  tags:
+    - restic-schedule
+    - restic-check
+
+- name: Restic_backup - Configure prune schedule
+  block:
+    - name: Create systemd service for prune
+      ansible.builtin.template:
+        src: restic-prune.service.j2
+        dest: /etc/systemd/system/restic-prune.service
+        owner: root
+        group: root
+        mode: '0644'
+      notify: reload systemd
+      when: restic_use_systemd_timer | bool
+
+    - name: Create systemd timer for prune
+      ansible.builtin.template:
+        src: restic-prune.timer.j2
+        dest: /etc/systemd/system/restic-prune.timer
+        owner: root
+        group: root
+        mode: '0644'
+      notify: reload systemd
+      when: restic_use_systemd_timer | bool
+
+    - name: Enable and start prune timer
+      ansible.builtin.systemd:
+        name: restic-prune.timer
+        enabled: true
+        state: started
+        daemon_reload: true
+      when: restic_use_systemd_timer | bool
+
+    - name: Create prune cron job
+      ansible.builtin.cron:
+        name: "Restic prune"
+        minute: "{{ restic_prune_schedule.minute }}"
+        hour: "{{ restic_prune_schedule.hour }}"
+        day: "{{ restic_prune_schedule.day }}"
+        month: "{{ restic_prune_schedule.month }}"
+        weekday: "{{ restic_prune_schedule.weekday }}"
+        job: "{{ restic_install_dir }}/restic-prune.sh >> {{ restic_log_dir }}/prune.log 2>&1"
+        user: "{{ restic_user }}"
+        state: present
+      when: not restic_use_systemd_timer | bool
+
+  when: restic_enable_prune | bool
+  tags:
+    - restic-schedule
+    - restic-prune

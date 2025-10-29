@@ -1,0 +1,39 @@
+---
+- name: Restic_backup - Check if repository is already initialized
+  ansible.builtin.shell: |
+    source {{ restic_backup_config_dir }}/restic-env
+    {{ restic_backup_install_dir }}/restic snapshots 2>&1
+  args:
+    executable: /bin/bash
+  register: restic_check_repo
+  changed_when: false
+  failed_when: false
+  no_log: true
+  tags:
+    - restic-init
+
+- name: Restic_backup - Initialize Restic repository
+  ansible.builtin.shell: |
+    source {{ restic_backup_config_dir }}/restic-env
+    {{ restic_backup_install_dir }}/restic init
+  args:
+    executable: /bin/bash
+  when: >
+    restic_check_repo.rc != 0 and
+    ('Is there a repository at the following location?' in restic_check_repo.stderr or
+     'create a new repository' in restic_check_repo.stderr)
+  register: restic_init_result
+  no_log: true
+  tags:
+    - restic-init
+
+- name: Restic_backup - Display repository initialization status
+  ansible.builtin.debug:
+    msg: |
+      {% if restic_init_result.changed %}
+      Repository initialized successfully at gs:{{ restic_gcs_bucket }}:/
+      {% else %}
+      Repository already exists at gs:{{ restic_gcs_bucket }}:/
+      {% endif %}
+  tags:
+    - restic-init
