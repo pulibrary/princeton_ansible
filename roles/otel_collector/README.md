@@ -1,4 +1,4 @@
-# OpenTelemetry Collector (Contrib) – Ansible Role
+# OpenTelemetry Collector (Contrib)
 
 This role installs **otelcol-contrib** and renders a fully data-driven `config.yaml`.  
 You define receivers/processors/exporters/pipelines in `group_vars` or `host_vars`, and the role does the rest.
