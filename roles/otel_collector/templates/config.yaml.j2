@@ -8,23 +8,23 @@
 # - otel_service_pipelines (dict)
 # - otel_extensions (list)
 # Optionally add otel_default_resource_attributes (dict) to merge into processors.resource.
+---
 
-{% set merged_processors = otel_processors | default({}) | combine(
-  {
-    'resource': {
-      'attributes': (
-        (otel_processors.resource.attributes if (otel_processors.resource is defined and otel_processors.resource.attributes is defined) else [])
-        +
-        (
-          [
-            {'action': 'upsert', 'key': k, 'value': v}
-            for k, v in (otel_default_resource_attributes | default({})).items()
-          ]
-          if (otel_default_resource_attributes | default({})) else []
-        )
-      )
-    }
-  },
+{% set base_attrs =
+  (otel_processors.resource.attributes
+    if (otel_processors is defined
+        and otel_processors.resource is defined
+        and otel_processors.resource.attributes is defined)
+    else [])
+%}
+
+{% set ns = namespace(extra=[]) %}
+{% for k, v in (otel_default_resource_attributes | default({})).items() %}
+  {% set _ = ns.extra.append({'action': 'upsert', 'key': k, 'value': v}) %}
+{% endfor %}
+
+{% set merged_processors = (otel_processors | default({})) | combine(
+  {'resource': {'attributes': base_attrs + ns.extra}},
   recursive=True
 ) %}
 
@@ -41,3 +41,4 @@ service:
   pipelines:
 {{ (otel_service_pipelines | default({})) | to_nice_yaml(indent=4) | indent(4) }}
   extensions: {{ (otel_extensions | default([])) | to_nice_yaml(indent=2) | indent(2) | trim }}
+
