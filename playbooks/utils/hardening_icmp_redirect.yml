@@ -7,9 +7,9 @@
   gather_facts: true
 
   vars:
-    # Set to true if you also want a host-level firewall rule (defense in depth)
+    # Set to true to add host-level firewall rule (defense in depth)
     manage_firewall: true
-    # Choose "iptables" or "nftables" if manage_firewall is true and you know what you use
+    # Choose "iptables"
     firewall_backend: "iptables"
 
   tasks:
@@ -107,26 +107,6 @@
         - manage_firewall
         - firewall_backend == "iptables"
         - ip6tables_check.rc != 0
-
-    - name: (Optional) nftables rule for IPv4 redirects
-      ansible.builtin.command: >
-        nft add rule ip filter input icmp type redirect drop
-      register: nft_ipv4
-      changed_when: "'Error' not in nft_ipv4.stderr"
-      failed_when: false
-      when:
-        - manage_firewall
-        - firewall_backend == "nftables"
-
-    - name: (Optional) nftables rule for IPv6 redirects
-      ansible.builtin.command: >
-        nft add rule ip6 filter input icmpv6 type redirect drop
-      register: nft_ipv6
-      changed_when: "'Error' not in nft_ipv6.stderr"
-      failed_when: false
-      when:
-        - manage_firewall
-        - firewall_backend == "nftables"
 
   handlers:
     - name: Reload sysctl
