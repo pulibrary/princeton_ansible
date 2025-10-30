@@ -1,0 +1,18 @@
+---
+# this playbook currently runs against opkssh_servers group since it modifies auth
+- name: install opkssh on {{ inventory_hostname }}
+  hosts: opkssh_staging
+  remote_user: pulsys
+  become: true
+  vars_files:
+    - ../group_vars/recap/{{ runtime_env | default('sandbox') }}.yml
+    - ../group_vars/recap/vault.yml
+  roles:
+    - role: opkssh
+
+  post_tasks:
+    - name: tell everyone on slack you ran an ansible playbook
+      community.general.slack:
+        token: "{{ vault_pul_slack_token }}"
+        msg: "Ansible ran `{{ ansible_play_name }}` on {{ inventory_hostname }}"
+        channel: "{{ slack_alerts_channel }}"
