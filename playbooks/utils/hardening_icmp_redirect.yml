@@ -1,7 +1,6 @@
 ---
 - name: Harden Ubuntu hosts against ICMP redirects (IPv4/IPv6)
-  hosts: qa
-  # hosts: all
+  hosts: staging
   remote_user: pulsys
   become: true
   gather_facts: true
@@ -9,12 +8,14 @@
   vars:
     # Set to true to add host-level firewall rule (defense in depth)
     manage_firewall: true
-    # Choose "iptables"
-    firewall_backend: "iptables"
+
+  pre_tasks:
+    - name: End play on non-Ubuntu hosts
+      ansible.builtin.meta: end_host
+      when: ansible_facts.distribution != "Ubuntu"
 
   tasks:
-    - name: Ensure sysctl drop-in exists and is correct
-    # Persist the settings across reboots
+    - name: Ensure sysctl drop-in exists and is correct (persist across reboots)
       ansible.builtin.copy:
         dest: /etc/sysctl.d/99-disable-icmp-redirects.conf
         owner: root
@@ -35,6 +36,7 @@
           net.ipv4.conf.all.rp_filter = 1
           net.ipv4.conf.default.rp_filter = 1
       notify: Reload sysctl
+      tags: [icmp_redirects, sysctl]
 
     - name: Apply immediate (in-memory) sysctl settings - IPv4
       ansible.builtin.sysctl:
@@ -49,6 +51,7 @@
         - { name: "net.ipv4.conf.default.send_redirects", value: "0" }
         - { name: "net.ipv4.conf.all.rp_filter", value: "1" }
         - { name: "net.ipv4.conf.default.rp_filter", value: "1" }
+      tags: [icmp_redirects, sysctl]
 
     - name: Apply immediate (in-memory) sysctl settings - IPv6
       ansible.builtin.sysctl:
@@ -59,54 +62,63 @@
       loop:
         - { name: "net.ipv6.conf.all.accept_redirects", value: "0" }
         - { name: "net.ipv6.conf.default.accept_redirects", value: "0" }
+      tags: [icmp_redirects, sysctl]
 
     - name: Verify sysctl values (assert hardening in-place)
+      ansible.builtin.command: >
+        sysctl -n
+        net.ipv4.conf.all.accept_redirects
+        net.ipv4.conf.default.accept_redirects
+        net.ipv4.conf.all.send_redirects
+        net.ipv4.conf.default.send_redirects
+        net.ipv6.conf.all.accept_redirects
+        net.ipv6.conf.default.accept_redirects
+      register: sysctl_check
+      changed_when: false
+      tags: [icmp_redirects, verify]
+
+    - name: Assert all sysctl values are zero
       ansible.builtin.assert:
         that:
-          - ansible_sysctl["net.ipv4.conf.all.accept_redirects"] | default('0') | string == "0"
-          - ansible_sysctl["net.ipv4.conf.default.accept_redirects"] | default('0') | string == "0"
-          - ansible_sysctl["net.ipv4.conf.all.send_redirects"] | default('0') | string == "0"
-          - ansible_sysctl["net.ipv4.conf.default.send_redirects"] | default('0') | string == "0"
-          - ansible_sysctl["net.ipv6.conf.all.accept_redirects"] | default('0') | string == "0"
-          - ansible_sysctl["net.ipv6.conf.default.accept_redirects"] | default('0') | string == "0"
+          - "'0\n0\n0\n0\n0\n0' in sysctl_check.stdout"
         fail_msg: "One or more ICMP redirect sysctl values are NOT set to 0"
         success_msg: "All ICMP redirect sysctl values are correctly set to 0"
+      tags: [icmp_redirects, verify]
 
-    - name: (Optional) Add firewall rule to drop ICMP redirects - iptables (IPv4)
+
+    - name: Add firewall rule to drop ICMP redirects - iptables (IPv4)
       ansible.builtin.command:
         cmd: iptables -C INPUT -p icmp --icmp-type redirect -j DROP
       register: iptables_check
       ignore_errors: true
       changed_when: false
-      when:
-        - manage_firewall
-        - firewall_backend == "iptables"
+      when: manage_firewall
+      tags: [icmp_redirects, firewall]
 
     - name: Insert DROP rule for IPv4 ICMP redirects (if missing) - iptables
       ansible.builtin.command:
         cmd: iptables -I INPUT -p icmp --icmp-type redirect -j DROP
       when:
         - manage_firewall
-        - firewall_backend == "iptables"
         - iptables_check.rc != 0
+      tags: [icmp_redirects, firewall]
 
-    - name: (Optional) Add firewall rule to drop ICMPv6 redirects - ip6tables
+    - name: Add firewall rule to drop ICMPv6 redirects - ip6tables
       ansible.builtin.command:
         cmd: ip6tables -C INPUT -p ipv6-icmp --icmpv6-type redirect -j DROP
       register: ip6tables_check
       ignore_errors: true
       changed_when: false
-      when:
-        - manage_firewall
-        - firewall_backend == "iptables"
+      when: manage_firewall
+      tags: [icmp_redirects, firewall]
 
     - name: Insert DROP rule for IPv6 ICMP redirects (if missing) - ip6tables
       ansible.builtin.command:
         cmd: ip6tables -I INPUT -p ipv6-icmp --icmpv6-type redirect -j DROP
       when:
         - manage_firewall
-        - firewall_backend == "iptables"
         - ip6tables_check.rc != 0
+      tags: [icmp_redirects, firewall]
 
   handlers:
     - name: Reload sysctl
