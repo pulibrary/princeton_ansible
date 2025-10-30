@@ -27,3 +27,60 @@ mailcatcher_user: "pulsys"
 mailcatcher_group: "pulsys"
 mailcatcher_version: 0.10.0
 mailcatcher_install_location: "/usr/local/lib/ruby/gems/3.3.0/gems/mailcatcher-{{ mailcatcher_version }}/bin/mailcatcher"
+# signoz
+otel_default_resource_attributes:
+  host.name: "{{ inventory_hostname }}"
+  service.name: dss
+  service.version: staging
+  environment: staging
+
+otel_receivers:
+  filelog/nginx-access:
+    include: ["/var/log/nginx/access.log*"]
+    start_at: end
+    operators:
+      - type: regex_parser
+        regex: '^(?P<remote_addr>[^\s]+) \((?P<remote_user>[^)]*)\) - - \[(?P<time_local>[^\]]+)\] "(?P<method>\S+) (?P<path>\S+) (?P<protocol>[^"]+)" (?P<status>\d+) (?P<body_bytes_sent>\d+) "(?P<http_referer>[^"]*)" "(?P<http_user_agent>[^"]*)"'
+        parse_from: body
+      - type: time_parser
+        parse_from: attributes.time_local
+        layout_type: strptime
+        layout: '%d/%b/%Y:%H:%M:%S %z'
+      - type: add
+        field: attributes.log_type
+        value: "dss_access"
+      - type: add
+        field: attributes.service_name
+        value: dss
+  filelog/nginx-error:
+    include: ["/var/log/nginx/error.log*"]
+    start_at: end
+    operators:
+      - type: add
+        field: attributes.log_type
+        value: "dss_error"
+      - type: add
+        field: attributes.service_name
+        value: "dss"
+  hostmetrics:
+    collection_interval: 30s
+    scrapers: { cpu: {}, disk: {}, filesystem: {}, load: {}, memory: {}, network: {} }
+
+otel_processors:
+  batch: { send_batch_max_size: 1024, send_batch_size: 512, timeout: 30s }
+
+otel_exporters:
+  otlp:
+    endpoint: "http://sandbox-signoz1.lib.princeton.edu:4317"
+    tls: { insecure: true }
+  debug: { verbosity: basic }
+
+otel_service_pipelines:
+  logs:
+    receivers: ["filelog/nginx-access", "filelog/nginx-error"]
+    processors: ["resource", "batch"]
+    exporters: ["otlp", "debug"]
+  metrics:
+    receivers: ["hostmetrics"]
+    processors: ["resource", "batch"]
+    exporters: ["otlp", "debug"]
