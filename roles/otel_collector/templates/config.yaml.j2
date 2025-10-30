@@ -1,4 +1,3 @@
----
 # {{ ansible_managed | comment }}
 
 # This file is fully data-driven. Define these in group_vars/project/host_vars:
@@ -8,8 +7,8 @@
 # - otel_service_pipelines (dict)
 # - otel_extensions (list)
 # Optionally add otel_default_resource_attributes (dict) to merge into processors.resource.
----
 
+{# ---- Build processors.resource.attributes safely #}
 {% set base_attrs =
   (otel_processors.resource.attributes
     if (otel_processors is defined
@@ -29,16 +28,17 @@
 ) %}
 
 receivers:
-{{ (otel_receivers | default({})) | to_nice_yaml(indent=2) | indent(2) }}
+{{ (otel_receivers | default({})) | to_nice_yaml(indent=2) | indent(2, true) }}
 
 processors:
-{{ (merged_processors | default({})) | to_nice_yaml(indent=2) | indent(2) }}
+{{ (merged_processors | default({})) | to_nice_yaml(indent=2) | indent(2, true) }}
 
 exporters:
-{{ (otel_exporters | default({})) | to_nice_yaml(indent=2) | indent(2) }}
+{{ (otel_exporters | default({})) | to_nice_yaml(indent=2) | indent(2, true) }}
 
 service:
   pipelines:
-{{ (otel_service_pipelines | default({})) | to_nice_yaml(indent=4) | indent(4) }}
-  extensions: {{ (otel_extensions | default([])) | to_nice_yaml(indent=2) | indent(2) | trim }}
+{{ (otel_service_pipelines | default({})) | to_nice_yaml(indent=2) | indent(4, true) }}
+  extensions:
+{{ (otel_extensions | default([])) | to_nice_yaml(indent=2) | indent(4, true) }}
 
