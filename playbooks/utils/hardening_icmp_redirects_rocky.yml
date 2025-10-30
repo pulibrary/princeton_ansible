@@ -1,0 +1,131 @@
+---
+- name: Harden Rocky Linux hosts against ICMP redirects (IPv4/IPv6)
+  hosts: ci
+  remote_user: pulsys
+  become: true
+  gather_facts: true
+
+  vars:
+    # Set to true to add host-level firewall rule (defense in depth)
+    manage_firewall: true
+
+  pre_tasks:
+    - name: End play on non-Rocky hosts
+      ansible.builtin.meta: end_host
+      when: ansible_facts.distribution != "Rocky"
+
+  tasks:
+    - name: Ensure sysctl drop-in exists and is correct (persist across reboots)
+      ansible.builtin.copy:
+        dest: /etc/sysctl.d/99-disable-icmp-redirects.conf
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          # Disable accepting/sending ICMP redirects (IPv4)
+          net.ipv4.conf.all.accept_redirects = 0
+          net.ipv4.conf.default.accept_redirects = 0
+          net.ipv4.conf.all.send_redirects = 0
+          net.ipv4.conf.default.send_redirects = 0
+
+          # Disable accepting redirects (IPv6)
+          net.ipv6.conf.all.accept_redirects = 0
+          net.ipv6.conf.default.accept_redirects = 0
+
+          # Optional: harder reverse path filtering
+          net.ipv4.conf.all.rp_filter = 1
+          net.ipv4.conf.default.rp_filter = 1
+      notify: Reload sysctl
+      tags: [icmp_redirects, sysctl]
+
+    - name: Apply immediate (in-memory) sysctl settings - IPv4
+      ansible.builtin.sysctl:
+        name: "{{ item.name }}"
+        value: "{{ item.value }}"
+        sysctl_set: true
+        reload: true
+      loop:
+        - { name: "net.ipv4.conf.all.accept_redirects", value: "0" }
+        - { name: "net.ipv4.conf.default.accept_redirects", value: "0" }
+        - { name: "net.ipv4.conf.all.send_redirects", value: "0" }
+        - { name: "net.ipv4.conf.default.send_redirects", value: "0" }
+        - { name: "net.ipv4.conf.all.rp_filter", value: "1" }
+        - { name: "net.ipv4.conf.default.rp_filter", value: "1" }
+      tags: [icmp_redirects, sysctl]
+
+    - name: Apply immediate (in-memory) sysctl settings - IPv6
+      ansible.builtin.sysctl:
+        name: "{{ item.name }}"
+        value: "{{ item.value }}"
+        sysctl_set: true
+        reload: true
+      loop:
+        - { name: "net.ipv6.conf.all.accept_redirects", value: "0" }
+        - { name: "net.ipv6.conf.default.accept_redirects", value: "0" }
+      tags: [icmp_redirects, sysctl]
+
+    - name: Verify sysctl values (assert hardening in-place)
+      ansible.builtin.command: >
+        sysctl -n
+        net.ipv4.conf.all.accept_redirects
+        net.ipv4.conf.default.accept_redirects
+        net.ipv4.conf.all.send_redirects
+        net.ipv4.conf.default.send_redirects
+        net.ipv6.conf.all.accept_redirects
+        net.ipv6.conf.default.accept_redirects
+      register: sysctl_check
+      changed_when: false
+      tags: [icmp_redirects, verify]
+
+    - name: Assert all sysctl values are zero
+      ansible.builtin.assert:
+        that:
+          - "'0\n0\n0\n0\n0\n0' in sysctl_check.stdout"
+        fail_msg: "One or more ICMP redirect sysctl values are NOT set to 0"
+        success_msg: "All ICMP redirect sysctl values are correctly set to 0"
+      tags: [icmp_redirects, verify]
+
+    # -------- firewalld (recommended on Rocky) --------
+    - name: Ensure firewalld is installed and running (Rocky)
+      ansible.builtin.package:
+        name: firewalld
+        state: present
+      when: manage_firewall
+      tags: [icmp_redirects, firewall]
+
+    - name: Ensure firewalld service is enabled and started
+      ansible.builtin.service:
+        name: firewalld
+        state: started
+        enabled: true
+      when: manage_firewall
+      tags: [icmp_redirects, firewall]
+
+    - name: Get firewalld default zone
+      ansible.builtin.command: firewall-cmd --get-default-zone
+      register: fw_default_zone
+      changed_when: false
+      when: manage_firewall
+      tags: [icmp_redirects, firewall]
+
+    - name: Block ICMP redirect (IPv4) in firewalld (permanent + runtime)
+      ansible.posix.firewalld:
+        zone: "{{ fw_default_zone.stdout }}"
+        icmp_block: redirect
+        state: enabled
+        permanent: true
+        immediate: true
+      when: manage_firewall
+      tags: [icmp_redirects, firewall]
+
+    - name: Reload firewalld to ensure changes are active
+      ansible.builtin.command: firewall-cmd --reload
+      when: manage_firewall
+      changed_when: false
+      tags: [icmp_redirects, firewall]
+
+  handlers:
+    - name: Reload sysctl
+      ansible.builtin.command: sysctl --system
+      become: true
+
