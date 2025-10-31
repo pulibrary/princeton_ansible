@@ -11,3 +11,24 @@ otel_config_path: "{{ otel_install_dir }}/config.yaml"
 
 # Construct the download URL (hardcoded for amd64)
 otel_download_url: "https://github.com/open-telemetry/opentelemetry-collector-releases/releases/download/v{{ otel_version }}/otelcol-contrib_{{ otel_version }}_linux_amd64.tar.gz"
+
+# Whether to manage a systemd unit for otelcol-contrib
+otel_service_name: "otelcol-contrib"
+otel_service_user: "root"
+otel_service_group: "root"
+
+# Validate config after templating (safe no-op if disabled)
+otel_validate_config: false
+otel_validate_cmd: "{{ otel_binary_path }} --config {{ otel_config_path }} --dry-run"
+
+# Core config inputs (override in group_vars/project)
+# We keep them empty by default; the template renders valid empty structures.
+otel_receivers: {}
+otel_processors: {}
+otel_exporters: {}
+otel_service_pipelines: {}
+otel_extensions: []
+
+# default resource attributes to merge into processors.resource
+# they’ll be merged under a processors.resource attributes list.
+otel_default_resource_attributes: {}  # e.g. {'host.name': 'lib-postgres-staging1', 'environment': 'staging'}
