@@ -302,6 +302,36 @@
         state: powered-on
       register: vm_power_on
 
+    - name: Ensure NIC is connected now and at boot (all adapters)
+      community.vmware.vmware_guest_network:
+        hostname: "{{ vcenter_hostname }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        validate_certs: false
+        datacenter: "{{ vcenter_datacenter }}"
+        name: "{{ replacement_vm }}"
+        mac_address: "{{ item.mac_address }}"
+        network_name: "{{ item.network_name }}"
+        connected: true
+        start_connected: true
+        state: present
+      loop: "{{ old_vm_net_info.network_info }}"
+
+    - name: Verify NIC connection status (post-fix)
+      community.vmware.vmware_guest_network:
+        hostname: "{{ vcenter_hostname }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        validate_certs: false
+        datacenter: "{{ vcenter_datacenter }}"
+        name: "{{ replacement_vm }}"
+        gather_network_info: true
+      register: verify_net_post
+
+    - name: Show adapter connection state (post-fix)
+      ansible.builtin.debug:
+        var: verify_net_post.network_info | map(attribute='connected') | list
+
     - name: Verify NIC connection status
       community.vmware.vmware_guest_network:
         hostname: "{{ vcenter_hostname }}"
