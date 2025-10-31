@@ -302,6 +302,40 @@
         state: powered-on
       register: vm_power_on
 
+    - name: Ensure NIC is connected and set to connect at boot
+      community.vmware.vmware_guest_network:
+        hostname: "{{ vcenter_hostname }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        validate_certs: false
+        datacenter: "{{ vcenter_datacenter }}"
+        name: "{{ replacement_vm }}"
+        networks:
+          - name: "{{ old_vm_net_info.network_info[0].network_name }}"
+            mac: "{{ old_vm_net_info.network_info[0].mac_address }}"
+            device_type: vmxnet3
+            connected: true
+            start_connected: true
+        state: present
+
+    - name: Verify NIC connection status
+      community.vmware.vmware_guest_network:
+        hostname: "{{ vcenter_hostname }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        validate_certs: false
+        datacenter: "{{ vcenter_datacenter }}"
+        name: "{{ replacement_vm }}"
+        gather_network_info: true
+      register: verify_net
+
+    - name: Show adapter connection state
+      ansible.builtin.debug:
+        msg: >-
+          {{ verify_net.network_info
+             | map(attribute='connected')
+             | list }}
+
     # Clean local known_hosts for the new FQDN to avoid host key mismatch
     - name: Remove host from LOCAL known_hosts (~/.ssh/known_hosts)
       ansible.builtin.known_hosts:
