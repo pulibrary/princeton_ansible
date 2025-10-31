@@ -207,7 +207,7 @@
         cluster: "{{ vcenter_cluster }}"
         folder: "{{ old_vm_info.virtual_machines[0].folder }}"
         name: "{{ replacement_vm }}"
-        state: powered-off
+        state: powered-on
         template: "{{ vm_template | default('template_jammy_spring_2024')}}"
         disk: "{{ vm_disk_config }}"
         hardware:
@@ -301,22 +301,6 @@
         name: "{{ replacement_vm }}"
         state: powered-on
       register: vm_power_on
-
-    - name: Ensure NIC is connected and set to connect at boot
-      community.vmware.vmware_guest_network:
-        hostname: "{{ vcenter_hostname }}"
-        username: "{{ vcenter_username }}"
-        password: "{{ vcenter_password }}"
-        validate_certs: false
-        datacenter: "{{ vcenter_datacenter }}"
-        name: "{{ replacement_vm }}"
-        networks:
-          - name: "{{ old_vm_net_info.network_info[0].network_name }}"
-            mac: "{{ old_vm_net_info.network_info[0].mac_address }}"
-            device_type: vmxnet3
-            connected: true
-            start_connected: true
-        state: present
 
     - name: Verify NIC connection status
       community.vmware.vmware_guest_network:
