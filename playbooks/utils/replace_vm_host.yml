@@ -291,9 +291,13 @@
       ansible.builtin.debug:
         msg: "{{ msg.split('\n') }}"
 
+    - name: Select first VM object from vm_info (safe)
+      ansible.builtin.set_fact:
+        vm0: "{{ (new_vm_info.virtual_machines | default([])) | first | default({}) }}"
+
     # Flatten IPv4s from vmware_guest_network (if any)
     - name: Collect IPv4s from NICs
-      set_fact:
+      ansible.builtin.set_fact:
         nic_ipv4s: >-
           {{
             (new_vm_net_info.network_info
@@ -305,23 +309,49 @@
             | list
           }}
 
-    # Decide the best SSH target: vCenter Tools IP -> NIC IPv4 -> FQDN
+    # Collect IPv4s from BOTH vm_info and NIC facts, handling different keys
+    - name: Collect IPv4 candidates from vm_info and NICs
+      ansible.builtin.set_fact:
+        vm_ipv4s: >-
+          {{
+            (
+              (vm0.guest_ip_addresses | default([]))                                  # list from Tools
+              + [ vm0.ip_address | default('') ]                                       # single from Tools
+            )
+            | select('match', '^[0-9.]+$')
+            | list
+          }}
+        nic_ipv4s: >-
+          {{
+            (
+              ((new_vm_net_info.network_info | default([]))
+                | map(attribute='ip_addresses') | select('defined') | list | sum(start=[]))
+              + ((new_vm_net_info.network_info | default([]))
+            | map(attribute='ipv4') | select('defined') | list)
+              + ((new_vm_net_info.network_info | default([]))
+                | map(attribute='ip_address') | select('defined') | list)
+            )
+            | select('match', '^[0-9.]+$')
+            | list
+          }}
+    # Prefer Tools IP -> NIC IPv4 -> FQDN
     - name: Decide best SSH target (prefer IPs over DNS)
       set_fact:
         ssh_target: >-
           {{
-            (new_vm_info.virtual_machines[0].ip_address | default(''))
-            if (new_vm_info.virtual_machines[0] is defined and
-                (new_vm_info.virtual_machines[0].ip_address | default('')) | length > 0)
-            else
-            (nic_ipv4s[0] if (nic_ipv4s | length) > 0 else vm_fqdn)
+            vm_ipv4s[0]
+              if (vm_ipv4s | length) > 0 else
+            (nic_ipv4s[0]
+              if (nic_ipv4s | length) > 0 else
+            vm_fqdn)
           }}
 
     - name: Show chosen SSH target
       ansible.builtin.debug:
         msg:
           - "VM FQDN: {{ vm_fqdn }}"
-          - "NIC IPv4s: {{ nic_ipv4s | default([]) }}"
+          - "vm_ipv4s: {{ vm_ipv4s }}"
+          - "NIC IPv4s: {{ nic_ipv4s }}"
           - "Chosen ssh_target: {{ ssh_target }}"
 
     - name: Power on new VM for disk verification
