@@ -228,7 +228,7 @@
             device_type: vmxnet3
             start_connected: true
         wait_for_ip_address: true
-        wait_for_ip_address_timeout: 120
+        wait_for_ip_address_timeout: 600
 
     - name: Print out relevant details of old VM
       vars:
@@ -290,6 +290,39 @@
              {{ (new_vm_disk_info.guest_disk_info.keys() | list | length) if (new_vm_disk_info.guest_disk_info is defined) else vm_disk_config | length }} disk(s) configured
       ansible.builtin.debug:
         msg: "{{ msg.split('\n') }}"
+
+    # Flatten IPv4s from vmware_guest_network (if any)
+    - name: Collect IPv4s from NICs
+      set_fact:
+        nic_ipv4s: >-
+          {{
+            (new_vm_net_info.network_info
+              | default([])
+              | map(attribute='ip_addresses')
+              | list
+              | sum(start=[]))
+            | select('match', '^[0-9.]+$')
+            | list
+          }}
+
+    # Decide the best SSH target: vCenter Tools IP -> NIC IPv4 -> FQDN
+    - name: Decide best SSH target (prefer IPs over DNS)
+      set_fact:
+        ssh_target: >-
+          {{
+            (new_vm_info.virtual_machines[0].ip_address | default(''))
+            if (new_vm_info.virtual_machines[0] is defined and
+                (new_vm_info.virtual_machines[0].ip_address | default('')) | length > 0)
+            else
+            (nic_ipv4s[0] if (nic_ipv4s | length) > 0 else vm_fqdn)
+          }}
+
+    - name: Show chosen SSH target
+      ansible.builtin.debug:
+        msg:
+          - "VM FQDN: {{ vm_fqdn }}"
+          - "NIC IPv4s: {{ nic_ipv4s | default([]) }}"
+          - "Chosen ssh_target: {{ ssh_target }}"
 
     - name: Power on new VM for disk verification
       community.vmware.vmware_guest_powerstate:
@@ -354,12 +387,12 @@
     - name: Remove host from LOCAL known_hosts (~/.ssh/known_hosts)
       ansible.builtin.known_hosts:
         path: "{{ lookup('env', 'HOME') + '/.ssh/known_hosts' }}"
-        name: "{{ vm_fqdn }}"
+        name: "{{ ssh_target }}"
         state: "absent"
 
     - name: Wait for VM to be reachable via SSH on derived FQDN
       wait_for:
-        host: "{{ vm_fqdn }}"
+        host: "{{ ssh_target }}"
         port: 22
         delay: 30
         timeout: 300
@@ -367,7 +400,7 @@
       ignore_errors: yes
 
     - name: Detect OS type on new VM
-      delegate_to: "{{ vm_fqdn }}"
+      delegate_to: "{{ ssh_target }}"
       become: true
       shell: |
         if [ -f /etc/os-release ]; then
@@ -380,7 +413,7 @@
       ignore_errors: yes
 
     - name: Gather disk information from new VM
-      delegate_to: "{{ vm_fqdn }}"
+      delegate_to: "{{ ssh_target }}"
       become: true
       shell: |
         echo "=== Disk Layout ==="
@@ -421,7 +454,7 @@
       when: new_vm_disk_layout is defined and new_vm_disk_layout.stdout_lines is defined
 
     - name: Check if additional disks need initialization
-      delegate_to: "{{ vm_fqdn }}"
+      delegate_to: "{{ ssh_target }}"
       become: true
       shell: |
         disks_needing_init=""
@@ -474,7 +507,7 @@
       when: os_type is defined
 
     - name: Create initialization script for additional disks
-      delegate_to: "{{ vm_fqdn }}"
+      delegate_to: "{{ ssh_target }}"
       become: true
       copy:
         dest: /tmp/initialize_disks.sh
@@ -566,7 +599,7 @@
           - "OS Type detected: {{ os_type.stdout | default('unknown') }}"
           - ""
           - "If additional disks need initialization:"
-          - "1. SSH to {{ vm_fqdn }}"
+          - "1. SSH to {{ ssh_target }}"
           - "2. Review the script at /tmp/initialize_disks.sh"
           - "3. Run it if needed: sudo /tmp/initialize_disks.sh"
           - ""
@@ -595,11 +628,11 @@
         force: true
       when: vm_dest_folder is search("ToBeDeleted")
 
-    # Update Tower known_hosts cleanup to use vm_fqdn
+    # Update Tower known_hosts cleanup to use ssh_target
     - name: Remove host from TowerDeploy1 known hosts
       ansible.builtin.known_hosts:
         path: /home/deploy/.ssh/known_hosts
-        name: "{{ vm_fqdn }}"
+        name: "{{ ssh_target }}"
         state: "absent"
       delegate_to: towerdeploy1.princeton.edu
       become: true
@@ -613,7 +646,7 @@
           VM REPLACEMENT SUMMARY
           ========================================
           VM Name: {{ replacement_vm }}
-          FQDN: {{ vm_fqdn }}
+          FQDN: {{ ssh_target }}
           Environment: {{ runtime_env | default('staging') }}
           OS Type: {{ os_type.stdout | default('unknown') | upper }}
 
@@ -634,7 +667,7 @@
           POST-CREATION TASKS:
           {% if disks_to_initialize is defined and disks_to_initialize.stdout is defined and disks_to_initialize.stdout | length > 0 %}
           - Additional disks may need initialization: {{ disks_to_initialize.stdout }}
-          - Script created at /tmp/initialize_disks.sh on {{ vm_fqdn }}
+          - Script created at /tmp/initialize_disks.sh on {{ ssh_target }}
           {% else %}
           - All disks appear to be properly configured
           {% endif %}
