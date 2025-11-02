@@ -1,0 +1,46 @@
+---
+- name: Restic_backup - Include OS-specific variables
+  ansible.builtin.include_vars: "{{ item }}"
+  with_first_found:
+    - "{{ ansible_distribution }}.yml"
+    - "{{ ansible_os_family }}.yml"
+  tags:
+    - restic
+    - restic-install
+
+- name: Restic_backup - Validate required variables
+  ansible.builtin.assert:
+    that:
+      - restic_gcs_bucket is defined and restic_gcs_bucket != ""
+      - restic_gcs_project_id is defined and restic_gcs_project_id != ""
+      - restic_repository_password is defined and restic_repository_password != ""
+    fail_msg: "Required variables are not defined. Please set restic_gcs_bucket, restic_gcs_project_id, and restic_repository_password"
+    success_msg: "All required variables are defined"
+  tags:
+    - restic
+    - restic-validate
+
+- name: Restic_backup - Include installation tasks
+  ansible.builtin.include_tasks: install.yml
+  tags:
+    - restic
+    - restic-install
+
+- name: Restic_backup - Include configuration tasks
+  ansible.builtin.include_tasks: configure.yml
+  tags:
+    - restic
+    - restic-configure
+
+- name: Restic_backup - Include repository initialization tasks
+  ansible.builtin.include_tasks: initialize.yml
+  when: restic_initialize_repository | bool
+  tags:
+    - restic
+    - restic-initialize
+
+- name: Restic_backup - Include backup scheduling tasks
+  ansible.builtin.include_tasks: schedule.yml
+  tags:
+    - restic
+    - restic-schedule

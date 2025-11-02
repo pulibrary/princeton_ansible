@@ -1,0 +1,109 @@
+---
+- name: Restic_Backup - Create GCS credentials file
+  ansible.builtin.copy:
+    content: "{{ restic_backup_gcs_credentials_json }}"
+    dest: "{{ restic_backup_gcs_credentials_file }}"
+    owner: "{{ restic_backup_user }}"
+    group: "{{ restic_backup_group }}"
+    mode: '0600'
+  no_log: true
+  tags:
+    - restic-credentials
+
+- name: Restic_backup - Create repository password file
+  ansible.builtin.copy:
+    content: "{{ restic_backup_repository_password }}"
+    dest: "{{ restic_backup_repository_password_file }}"
+    owner: "{{ restic_backup_user }}"
+    group: "{{ restic_backup_group }}"
+    mode: '0600'
+  no_log: true
+  tags:
+    - restic-credentials
+
+- name: Restic_backup - Create exclude patterns file
+  ansible.builtin.copy:
+    content: |
+      {% for pattern in restic_backup_exclude_patterns %}
+      {{ pattern }}
+      {% endfor %}
+    dest: "{{ restic_backup_exclude_file }}"
+    owner: "{{ restic_backup_user }}"
+    group: "{{ restic_backup_group }}"
+    mode: '0644'
+  tags:
+    - restic-config
+
+- name: Restic_backup - Create Restic environment file
+  ansible.builtin.template:
+    src: restic-env.j2
+    dest: "{{ restic_backup_config_dir }}/restic-env"
+    owner: "{{ restic_backup_user }}"
+    group: "{{ restic_backup_group }}"
+    mode: '0600'
+  tags:
+    - restic-config
+
+- name: Restic_backup - Create backup script
+  ansible.builtin.template:
+    src: restic-backup.sh.j2
+    dest: "{{ restic_backup_install_dir }}/restic-backup.sh"
+    owner: "{{ restic_backup_user }}"
+    group: "{{ restic_backup_group }}"
+    mode: '0750'
+  tags:
+    - restic-scripts
+
+- name: Restic_backup - Create restore script
+  ansible.builtin.template:
+    src: restic-restore.sh.j2
+    dest: "{{ restic_backup_install_dir }}/restic-restore.sh"
+    owner: "{{ restic_backup_user }}"
+    group: "{{ restic_backup_group }}"
+    mode: '0750'
+  tags:
+    - restic-scripts
+
+- name: Restic_backup - Create check script
+  ansible.builtin.template:
+    src: restic-check.sh.j2
+    dest: "{{ restic_backup_install_dir }}/restic-check.sh"
+    owner: "{{ restic_backup_user }}"
+    group: "{{ restic_backup_group }}"
+    mode: '0750'
+  when: restic_enable_check | bool
+  tags:
+    - restic-scripts
+
+- name: Restic_backup - Create prune script
+  ansible.builtin.template:
+    src: restic-prune.sh.j2
+    dest: "{{ restic_backup_install_dir }}/restic-prune.sh"
+    owner: "{{ restic_backup_user }}"
+    group: "{{ restic_backup_group }}"
+    mode: '0750'
+  when: restic_enable_prune | bool
+  tags:
+    - restic-scripts
+
+- name: Restic_backup - Create pre-backup script
+  ansible.builtin.copy:
+    content: "{{ restic_backup_pre_backup_script }}"
+    dest: "{{ restic_backup_config_dir }}/pre-backup.sh"
+    owner: "{{ restic_backup_user }}"
+    group: "{{ restic_backup_group }}"
+    mode: '0750'
+  when: restic_backup_pre_backup_script | length > 0
+  tags:
+    - restic-scripts
+
+- name: Restic_backup - Create post-backup script
+  ansible.builtin.copy:
+    content: "{{ restic_backup_post_backup_script }}"
+    dest: "{{ restic_backup_config_dir }}/post-backup.sh"
+    owner: "{{ restic_backup_user }}"
+    group: "{{ restic_backup_group }}"
+    mode: '0750'
+  when: restic_backup_post_backup_script | length > 0
+  tags:
+    - restic-scripts
