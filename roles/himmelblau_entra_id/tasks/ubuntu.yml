@@ -1,0 +1,152 @@
+---
+- name: Himmelblau (Ubuntu) | ensure keyring dir
+  ansible.builtin.file:
+    path: "{{ himmelblau_ubuntu_keyring | dirname }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Himmelblau (Ubuntu) | fetch repo key
+  ansible.builtin.get_url:
+    url: "{{ himmelblau_ubuntu_key_url }}"
+    dest: /tmp/himmelblau.asc
+    mode: "0644"
+
+- name: Himmelblau (Ubuntu) | install key (dearmor)
+  ansible.builtin.command:
+    cmd: "gpg --dearmor --yes --output {{ himmelblau_ubuntu_keyring }} /tmp/himmelblau.asc"
+  args:
+    creates: "{{ himmelblau_ubuntu_keyring }}"
+
+- name: Himmelblau (Ubuntu) | add apt repo
+  ansible.builtin.apt_repository:
+    repo: "deb [signed-by={{ himmelblau_ubuntu_keyring }}] {{ himmelblau_ubuntu_repo_baseurl }} ./ "
+    filename: "{{ himmelblau_ubuntu_repo_file }}"
+    state: present
+
+- name: Himmelblau (Ubuntu) | apt update
+  ansible.builtin.apt:
+    update_cache: true
+
+- name: Himmelblau (Ubuntu) | install packages
+  ansible.builtin.apt:
+    name: "{{ himmelblau_packages_deb }}"
+    state: present
+# Avoid tripping over unrelated duplicate-entries warnings:
+
+- name: Himmelblau | create configuration directory
+  ansible.builtin.file:
+    path: /etc/himmelblau
+    state: directory
+    mode: "0755"
+    owner: root
+    group: root
+
+- name: Himmelblau | write configuration
+  ansible.builtin.template:
+    src: himmelblau.conf.j2
+    dest: /etc/himmelblau/himmelblau.conf
+    mode: "0644"
+    owner: root
+    group: root
+  notify: restart himmelblaud
+
+# NSS
+- name: Himmelblau (Ubuntu) | ensure nsswitch passwd entry
+  ansible.builtin.lineinfile:
+    path: /etc/nsswitch.conf
+    regexp: '^passwd:'
+    line: 'passwd:         files himmelblau systemd'
+    backup: true
+
+- name: Himmelblau (Ubuntu) | ensure nsswitch group entry
+  ansible.builtin.lineinfile:
+    path: /etc/nsswitch.conf
+    regexp: '^group:'
+    line: 'group:          files himmelblau systemd'
+    backup: true
+
+# Using pamd module for idempotence:
+- name: Himmelblau (Ubuntu) | PAM common-auth
+  community.general.pamd:
+    # Anchor:
+    name: common-auth
+    type: auth
+    control: optional
+    module_path: pam_permit.so
+    state: before
+    # New line:
+    new_type: auth
+    new_control: required
+    new_module_path: pam_himmelblau.so
+    module_arguments:
+      - ignore_unknown_user
+      - mfa_poll_prompt
+
+- name: Himmelblau (Ubuntu) | PAM common-account
+  community.general.pamd:
+    # Anchor:
+    name: common-account
+    type: account
+    control: required
+    module_path: pam_permit.so
+    state: before
+    # New line:
+    new_type: account
+    new_control: sufficient
+    new_module_path: pam_himmelblau.so
+    module_arguments:
+      - ignore_unknown_user
+
+- name: Himmelblau (Ubuntu) | PAM common-session
+  community.general.pamd:
+    # Anchor:
+    name: common-session
+    type: session
+    control: required
+    module_path: pam_permit.so
+    state: before
+    # New line:
+    new_type: session
+    new_control: optional
+    new_module_path: pam_himmelblau.so
+
+- name: Himmelblau (Ubuntu) | PAM common-password
+  community.general.pamd:
+    name: common-password
+    type: password
+    control: "[success=1 default=ignore]"
+    module_path: pam_unix.so
+    state: before
+    # New line:
+    new_type: password
+    new_control: sufficient
+    new_module_path: pam_himmelblau.so
+
+- name: Himmelblau | enable & start service
+  ansible.builtin.systemd:
+    name: himmelblaud
+    enabled: true
+    state: started
+
+- name: Himmelblau | bounce SSH daemon
+  ansible.builtin.systemd:
+    name: "{{ himmelblau_ssh_service }}"
+    state: restarted
+  when: himmelblau_restart_sshd | default(true)
+
+- name: Himmelblau | wait for daemon socket
+  ansible.builtin.wait_for:
+    path: /var/run/himmelblaud/socket
+    state: present
+    timeout: 30
+
+- name: Himmelblau | enrollment instructions
+  ansible.builtin.debug:
+    msg: |
+      Device enrollment must be completed manually:
+      1. Run: sudo himmelblaud -e {{ himmelblau_tenant_id }}
+      2. Follow the device code flow
+      3. Approve device in Entra ID portal
+  when: himmelblau_show_enrollment_instructions | default(true)
