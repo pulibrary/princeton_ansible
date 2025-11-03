@@ -67,62 +67,8 @@
     line: 'group:          files himmelblau systemd'
     backup: true
 
-# Using pamd module for idempotence:
-- name: Himmelblau (Ubuntu) | PAM common-auth
-  community.general.pamd:
-    # Anchor:
-    name: common-auth
-    type: auth
-    control: optional
-    module_path: pam_permit.so
-    state: before
-    # New line:
-    new_type: auth
-    new_control: required
-    new_module_path: pam_himmelblau.so
-    module_arguments:
-      - ignore_unknown_user
-      - mfa_poll_prompt
-
-- name: Himmelblau (Ubuntu) | PAM common-account
-  community.general.pamd:
-    # Anchor:
-    name: common-account
-    type: account
-    control: required
-    module_path: pam_permit.so
-    state: before
-    # New line:
-    new_type: account
-    new_control: sufficient
-    new_module_path: pam_himmelblau.so
-    module_arguments:
-      - ignore_unknown_user
-
-- name: Himmelblau (Ubuntu) | PAM common-session
-  community.general.pamd:
-    # Anchor:
-    name: common-session
-    type: session
-    control: required
-    module_path: pam_permit.so
-    state: before
-    # New line:
-    new_type: session
-    new_control: optional
-    new_module_path: pam_himmelblau.so
-
-- name: Himmelblau (Ubuntu) | PAM common-password
-  community.general.pamd:
-    name: common-password
-    type: password
-    control: "[success=1 default=ignore]"
-    module_path: pam_unix.so
-    state: before
-    # New line:
-    new_type: password
-    new_control: sufficient
-    new_module_path: pam_himmelblau.so
+- name: Himmelblau - Include strict PAM for Ubuntu
+  ansible.builtin.include_tasks: ubuntu_pam_strict.yml
 
 - name: Himmelblau | enable & start service
   ansible.builtin.systemd:
