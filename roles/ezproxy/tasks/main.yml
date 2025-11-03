@@ -83,9 +83,6 @@
   ansible.builtin.command: /var/local/ezproxy/ezproxy -m
   become: true
   become_user: "root"
-  register: proxy_results
-  changed_when: false
-  failed_when: "proxy_results.rc != 1"
   when:
     - running_on_server
 
@@ -115,11 +112,30 @@
 - name: EZproxy | Install GeoIP
   ansible.builtin.include_tasks: geoip.yml
 
-- name: Ezproxy | start ezproxy
-  ansible.builtin.service:
-    name: ezproxy
+- name: Ezproxy | create systemd unit
+  ansible.builtin.template:
+    src: ezproxy.service.j2
+    dest: /lib/systemd/system/ezproxy.service
+    owner: root
+    group: root
+    mode: a+x
+  when:
+    - running_on_server
+- name: Ezproxy | make sure directory is owned by {{ deploy_user }}
+  ansible.builtin.file:
+    path: /var/local/ezproxy
+    state: directory
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+    recurse: true
+
+- name: Ezproxy | Restart ezproxy daemon-reload to pick up config changes
+  ansible.builtin.systemd_service:
     state: restarted
-  when: running_on_server
+    daemon_reload: true
+    name: ezproxy
+  when:
+    - running_on_server
 
 - name: Ezproxy | enable cap deployment
   ansible.builtin.include_tasks: cap_deployment.yml
