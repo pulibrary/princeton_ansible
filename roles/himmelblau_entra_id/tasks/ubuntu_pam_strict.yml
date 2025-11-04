@@ -1,7 +1,7 @@
 ---
 # Ensure dpkg-divert module is available (collection must be installed)
 # ansible-galaxy collection install community.general
-- name: Himmelblau | check if original PAM files exist
+- name: Himmelblau | gather file state
   ansible.builtin.stat:
     path: "/etc/pam.d/{{ item }}"
   loop:
@@ -20,47 +20,34 @@
     - common-session
     - common-password
   register: _pam_distrib
+  failed_when: false
 
-- name: Himmelblau  | one-time backups of original files (if present)
+- name: Himmelblau | register dpkg-divert (no rename) for each file
+  community.general.dpkg_divert:
+    path: "/etc/pam.d/{{ item }}"
+    divert: "/etc/pam.d/{{ item }}.distrib"
+    state: present
+    rename: false
+  loop:
+    - common-auth
+    - common-account
+    - common-session
+    - common-password
+
+# If original exists and diverted copy doesn't yet, save one-time copy
+- name: Ubuntu PAM (strict) | seed .distrib from current file when needed
   ansible.builtin.copy:
-    src: "/etc/pam.d/{{ item }}"
-    dest: "/etc/pam.d/{{ item }}.orig.bak"
+    src: "/etc/pam.d/{{ item.item }}"
+    dest: "/etc/pam.d/{{ item.item }}.distrib"
     remote_src: true
     force: false
     mode: "0644"
-  loop: "{{ _pam_orig.results }}"
+  loop: "{{ _pam_distrib.results }}"
   loop_control:
-    label: "{{ item.stat.path }}"
-  when: item.stat.exists | default(false)
-  failed_when: false
-
-- name: Himmelblau | protect common-auth from package overwrites
-  community.general.dpkg_divert:
-    path: /etc/pam.d/common-auth
-    rename: true
-    state: present
-    divert: /etc/pam.d/common-auth.distrib
-
-- name: Himmelblau | protect common-account from package overwrites
-  community.general.dpkg_divert:
-    path: /etc/pam.d/common-account
-    rename: true
-    state: present
-    divert: /etc/pam.d/common-account.distrib
-
-- name: Himmelblau | protect common-session from package overwrites
-  community.general.dpkg_divert:
-    path: /etc/pam.d/common-session
-    rename: true
-    state: present
-    divert: /etc/pam.d/common-session.distrib
-
-- name: Himmelblau | protect common-password from package overwrites
-  community.general.dpkg_divert:
-    path: /etc/pam.d/common-password
-    rename: true
-    state: present
-    divert: /etc/pam.d/common-password.distrib
+    label: "/etc/pam.d/{{ item.item }}"
+  when:
+    - (_pam_orig.results | selectattr('item','equalto', item.item) | list)[0].stat.exists | default(false)
+    - not item.stat.exists | default(false)
 
 - name: Himmelblau | write /etc/pam.d/common-auth
   ansible.builtin.copy:
