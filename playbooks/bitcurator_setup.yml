@@ -1,0 +1,222 @@
+---
+- name: BitCurator Environment Setup
+  hosts: sandbox-acozine.lib.princeton.edu
+  become: yes
+  vars_files:
+    - ../group_vars/bitcurator/shared.yml
+    - ../group_vars/bitcurator/vault.yml
+
+  tasks:
+    # ========================================
+    # GNOME Desktop Installation
+    # ========================================
+    
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+      tags: gnome
+
+    - name: Upgrade all packages
+      apt:
+        upgrade: dist
+        autoremove: yes
+        autoclean: yes
+      tags: gnome
+
+    - name: Install GNOME Desktop
+      apt:
+        name:
+          - ubuntu-desktop
+          - gnome-shell
+          - gnome-session
+        state: present
+      tags: gnome
+
+    - name: Set graphical target as default
+      command: systemctl set-default graphical.target
+      tags: gnome
+
+    - name: Create bcadmin user
+      user:
+        name: "{{ admin_user }}"
+        state: present
+        createhome: yes
+        shell: /bin/bash
+        groups: sudo
+        append: yes
+      tags: user
+
+    - name: Set password for bcadmin user (optional - change or remove as needed)
+      user:
+        name: "{{ admin_user }}"
+        password: "{{ admin_user_password }}"
+      tags: user
+    
+    # ========================================
+    # Directory Setup
+    # ========================================
+    - name: Create apps directory
+      file:
+        path: "{{ apps_dir }}"
+        state: directory
+        owner: "{{ admin_user }}"
+        group: "{{ admin_user }}"
+        mode: '0755'
+      tags: directories
+
+    # ========================================
+    # BitCurator Installation
+    # ========================================
+    - name: Install BitCurator dependencies
+      apt:
+        name:
+          - gnupg
+          - curl
+          - git
+        state: present
+      tags: bitcurator
+
+    - name: Download BitCurator CLI
+      get_url:
+        url: "https://github.com/BitCurator/bitcurator-cli/releases/download/{{ bitcurator_version }}/bitcurator-cli-linux"
+        dest: "{{ download_dir }}/bitcurator-cli-linux"
+        mode: '0644'
+        owner: "{{ admin_user }}"
+        group: "{{ admin_user }}"
+      tags: bitcurator
+
+    - name: Move BitCurator to /usr/local/bin
+      copy:
+        src: "{{ download_dir }}/bitcurator-cli-linux"
+        dest: /usr/local/bin/bitcurator
+        remote_src: yes
+        mode: '0755'
+        owner: root
+        group: root
+      tags: bitcurator
+
+    - name: Run BitCurator install
+      command: bitcurator install
+      args:
+        creates: /usr/local/bin/bitcurator
+      register: bitcurator_install
+      tags: bitcurator
+
+    # ========================================
+    # XRDP Installation
+    # ========================================
+    - name: Download xRDP installer
+      get_url:
+        url: "https://www.c-nergy.be/downloads/xRDP/xrdp-installer-{{ xrdp_installer_version }}.zip"
+        dest: "{{ download_dir }}/xrdp-installer-{{ xrdp_installer_version }}.zip"
+        owner: "{{ admin_user }}"
+        group: "{{ admin_user }}"
+      tags: xrdp
+
+    - name: Install unzip package
+      apt:
+        name: unzip
+        state: present
+      tags: xrdp
+
+    - name: Unzip xRDP installer
+      unarchive:
+        src: "{{ download_dir }}/xrdp-installer-{{ xrdp_installer_version }}.zip"
+        dest: "{{ download_dir }}"
+        remote_src: yes
+        owner: "{{ admin_user }}"
+        group: "{{ admin_user }}"
+      tags: xrdp
+
+    - name: Make xRDP installer executable
+      file:
+        path: "{{ download_dir }}/xrdp-installer-{{ xrdp_installer_version }}.sh"
+        mode: '0755'
+      tags: xrdp
+
+    - name: Run xRDP installer with sound support
+      command: "{{ download_dir }}/xrdp-installer-{{ xrdp_installer_version }}.sh -s"
+      args:
+        creates: /etc/xrdp/xrdp.ini
+      become_user: "{{ admin_user }}"
+      tags: xrdp
+
+    # ========================================
+    # Bagger Installation
+    # ========================================
+    - name: Install Java (required for Bagger)
+      apt:
+        name: default-jre
+        state: present
+      tags: bagger
+
+    - name: Download Bagger
+      get_url:
+        url: "https://github.com/LibraryOfCongress/bagger/releases/download/v{{ bagger_version }}/bagger-{{ bagger_version }}.zip"
+        dest: "{{ download_dir }}/bagger-{{ bagger_version }}.zip"
+        owner: "{{ admin_user }}"
+        group: "{{ admin_user }}"
+      tags: bagger
+
+    - name: Unzip Bagger to apps directory
+      unarchive:
+        src: "{{ download_dir }}/bagger-{{ bagger_version }}.zip"
+        dest: "{{ apps_dir }}"
+        remote_src: yes
+        owner: "{{ admin_user }}"
+        group: "{{ admin_user }}"
+      tags: bagger
+
+    - name: Create Desktop directory if it doesn't exist
+      file:
+        path: "{{ admin_home }}/Desktop"
+        state: directory
+        owner: "{{ admin_user }}"
+        group: "{{ admin_user }}"
+        mode: '0755'
+      tags: bagger
+
+    # NOTE: Manual steps for droid.png and droid.desktop are noted below
+    # These would need to be handled separately with source files
+
+    # ========================================
+    # FSLint Installation
+    # ========================================
+    - name: Install snapd
+      apt:
+        name: snapd
+        state: present
+      tags: fslint
+
+    - name: Ensure snapd service is running
+      systemd:
+        name: snapd
+        state: started
+        enabled: yes
+      tags: fslint
+
+    - name: Install FSLint via snap
+      snap:
+        name: fslint-unofficial
+        state: present
+      tags: fslint
+
+    # ========================================
+    # Completion Message
+    # ========================================
+    - name: Display completion message
+      debug:
+        msg:
+          - "=========================================="
+          - "BitCurator Environment Setup Complete!"
+          - "=========================================="
+          - ""
+          - "Next Steps:"
+          - "1. Change bcadmin password: sudo passwd bcadmin"
+          - "2. Reboot the system: sudo reboot"
+          - "3. After reboot, verify BitCurator: bitcurator --version"
+          - "4. Test XRDP connection to this system"
+          - ""
+          - "=========================================="
+      tags: always
