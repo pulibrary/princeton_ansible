@@ -1,0 +1,60 @@
+---
+- name: build the firewall and vcenter backup server
+  hosts: backup
+  remote_user: pulsys
+  become: true
+  vars_files:
+    - ../group_vars/lib_backup/main.yml
+    - ../group_vars/lib_backup/vault.yml
+
+  roles:
+    - role: common
+
+  tasks:
+    - name: Ensure the backup group exists
+      ansible.builtin.group:
+        name: backup
+        state: present
+
+    - name: Manage users and group membership
+      ansible.builtin.user:
+        name: "{{ item.name }}"
+        password: "{{ item.password }}"
+        groups: backup
+        append: true
+        state: present
+      loop: "{{ backup_users }}"
+
+    - name: create directories with respective ownership
+      ansible.builtin.file:
+        path: "/backup/{{ item.name }}"
+        state: directory
+        mode: "0755"
+        group: backup
+        owner: "{{ item.owner }}"
+      loop:
+        - { name: "palofw", owner: "bkppalofw" }
+        - { name: "vcenter", owner: "bkpvcenter" }
+
+    - name: Ensure password authentication is enabled in sshd_config
+      ansible.builtin.lineinfile:
+        path: /etc/ssh/sshd_config
+        # This regex matches the line whether it is commented out or not
+        regexp: '^(\s*)#?\s*PasswordAuthentication\s+'
+        # We replace it with a known-good, unindented line
+        line: 'PasswordAuthentication yes'
+        state: present
+        validate: /usr/sbin/sshd -t -f %s # Validates config before applying
+      notify:
+        - Restart sshd
+
+  post_tasks:
+      - name: send information to slack
+        ansible.builtin.include_tasks:
+          file: utils/slack_tasks_end_of_playbook.yml
+
+  handlers:
+    - name: Restart sshd
+      ansible.builtin.service:
+        name: ssh
+        state: restarted
