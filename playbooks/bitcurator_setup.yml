@@ -8,57 +8,37 @@
     - ../group_vars/bitcurator/vault.yml
 
   tasks:
-    # ========================================
-    # GNOME Desktop Installation
-    # ========================================
-    
     - name: Update apt cache
-      apt:
-        update_cache: yes
+      ansible.builtin.apt:
+        update_cache: true
         cache_valid_time: 3600
       tags: gnome
 
     - name: Upgrade all packages
-      apt:
+      ansible.builtin.apt:
         upgrade: dist
-        autoremove: yes
-        autoclean: yes
+        autoremove: true
+        autoclean: true
       tags: gnome
 
-    # - name: Install GNOME Desktop
-    #   apt:
-    #     name:
-    #       - ubuntu-desktop
-    #       - gnome-shell
-    #       - gnome-session
-    #     state: present
-    #   tags: gnome
-
-    # - name: Set graphical target as default
-    #   command: systemctl set-default graphical.target
-    #   tags: gnome
-
     - name: Create bcadmin user
-      user:
+      ansible.builtin.user:
         name: "{{ admin_user }}"
         state: present
-        createhome: yes
+        createhome: true
         shell: /bin/bash
         groups: sudo
-        append: yes
+        append: true
       tags: user
 
     - name: Set password for bcadmin user (optional - change or remove as needed)
-      user:
+      ansible.builtin.user:
         name: "{{ admin_user }}"
         password: "{{ admin_user_password }}"
       tags: user
-    
-    # ========================================
-    # Directory Setup
-    # ========================================
+
     - name: Create apps directory
-      file:
+      ansible.builtin.file:
         path: "{{ apps_dir }}"
         state: directory
         owner: "{{ admin_user }}"
@@ -66,11 +46,8 @@
         mode: '0755'
       tags: directories
 
-    # ========================================
-    # BitCurator Installation
-    # ========================================
     - name: Install BitCurator dependencies
-      apt:
+      ansible.builtin.apt:
         name:
           - gnupg
           - curl
@@ -79,7 +56,7 @@
       tags: bitcurator
 
     - name: Download BitCurator CLI
-      get_url:
+      ansible.builtin.get_url:
         url: "https://github.com/BitCurator/bitcurator-cli/releases/download/{{ bitcurator_version }}/bitcurator-cli-linux"
         dest: "{{ download_dir }}/bitcurator-cli-linux"
         mode: '0644'
@@ -88,27 +65,24 @@
       tags: bitcurator
 
     - name: Move BitCurator to /usr/local/bin
-      copy:
+      ansible.builtin.copy:
         src: "{{ download_dir }}/bitcurator-cli-linux"
         dest: /usr/local/bin/bitcurator
-        remote_src: yes
+        remote_src: true
         mode: '0755'
         owner: root
         group: root
       tags: bitcurator
 
     - name: Run BitCurator install
-      command: bitcurator install
+      ansible.builtin.command: bitcurator install
       args:
         creates: /usr/local/bin/bitcurator
       register: bitcurator_install
       tags: bitcurator
 
-    # ========================================
-    # XRDP Installation
-    # ========================================
     - name: Download xRDP installer
-      get_url:
+      ansible.builtin.get_url:
         url: "https://www.c-nergy.be/downloads/xRDP/xrdp-installer-{{ xrdp_installer_version }}.zip"
         dest: "{{ download_dir }}/xrdp-installer-{{ xrdp_installer_version }}.zip"
         owner: "{{ admin_user }}"
@@ -116,13 +90,13 @@
       tags: xrdp
 
     - name: Install unzip package
-      apt:
+      ansible.builtin.apt:
         name: unzip
         state: present
       tags: xrdp
 
     - name: Unzip xRDP installer
-      unarchive:
+      ansible.builtin.unarchive:
         src: "{{ download_dir }}/xrdp-installer-{{ xrdp_installer_version }}.zip"
         dest: "{{ download_dir }}"
         remote_src: yes
@@ -131,29 +105,26 @@
       tags: xrdp
 
     - name: Make xRDP installer executable
-      file:
+      ansible.builtin.file:
         path: "{{ download_dir }}/xrdp-installer-{{ xrdp_installer_version }}.sh"
         mode: '0755'
       tags: xrdp
 
     - name: Run xRDP installer with sound support
-      command: "{{ download_dir }}/xrdp-installer-{{ xrdp_installer_version }}.sh -s"
+      ansible.builtin.command: "{{ download_dir }}/xrdp-installer-{{ xrdp_installer_version }}.sh -s"
       args:
         creates: /etc/xrdp/xrdp.ini
       become_user: "{{ admin_user }}"
       tags: xrdp
 
-    # ========================================
-    # Bagger Installation
-    # ========================================
     - name: Install Java (required for Bagger)
-      apt:
+      ansible.builtin.apt:
         name: default-jre
         state: present
       tags: bagger
 
     - name: Download Bagger
-      get_url:
+      ansible.builtin.get_url:
         url: "https://github.com/LibraryOfCongress/bagger/releases/download/v{{ bagger_version }}/bagger-{{ bagger_version }}.zip"
         dest: "{{ download_dir }}/bagger-{{ bagger_version }}.zip"
         owner: "{{ admin_user }}"
@@ -161,16 +132,16 @@
       tags: bagger
 
     - name: Unzip Bagger to apps directory
-      unarchive:
+      ansible.builtin.unarchive:
         src: "{{ download_dir }}/bagger-{{ bagger_version }}.zip"
         dest: "{{ apps_dir }}"
-        remote_src: yes
+        remote_src: true
         owner: "{{ admin_user }}"
         group: "{{ admin_user }}"
       tags: bagger
 
     - name: Create Desktop directory if it doesn't exist
-      file:
+      ansible.builtin.file:
         path: "{{ admin_home }}/Desktop"
         state: directory
         owner: "{{ admin_user }}"
@@ -178,36 +149,27 @@
         mode: '0755'
       tags: bagger
 
-    # NOTE: Manual steps for droid.png and droid.desktop are noted below
-    # These would need to be handled separately with source files
-
-    # ========================================
-    # FSLint Installation
-    # ========================================
     - name: Install snapd
-      apt:
+      ansible.builtin.apt:
         name: snapd
         state: present
       tags: fslint
 
     - name: Ensure snapd service is running
-      systemd:
+      ansible.builtin.systemd:
         name: snapd
         state: started
         enabled: yes
       tags: fslint
 
     - name: Install FSLint via snap
-      snap:
+      community.general.snap:
         name: fslint-unofficial
         state: present
       tags: fslint
 
-    # ========================================
-    # Completion Message
-    # ========================================
     - name: Display completion message
-      debug:
+      ansible.builtin.debug:
         msg:
           - "=========================================="
           - "BitCurator Environment Setup Complete!"
