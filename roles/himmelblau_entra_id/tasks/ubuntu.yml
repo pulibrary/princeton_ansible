@@ -33,7 +33,16 @@
   ansible.builtin.apt:
     name: "{{ himmelblau_packages_deb }}"
     state: present
-# Avoid tripping over unrelated duplicate-entries warnings:
+    # Avoid tripping over unrelated duplicate-entries warnings:
+    #
+# Ubuntu (Jammy/Noble)
+- name: Himmelblau PAM deps
+  ansible.builtin.apt:
+    name:
+      - libpam-sss
+      - libpam-pwquality
+    state: present
+    update_cache: true
 
 - name: Himmelblau | create configuration directory
   ansible.builtin.file:
@@ -75,6 +84,19 @@
     name: himmelblaud
     enabled: true
     state: started
+
+# Himmelblau package adds the interactive
+- name: Himmelblau | Comment out 'KbdInteractiveAuthentication no'
+  ansible.builtin.replace:
+    path: /etc/ssh/sshd_config
+    regexp: '^(?!#)\s*KbdInteractiveAuthentication\s+no\b.*$'
+    replace: '# \g<0>'
+
+- name: Himmelblau | Validate config
+  ansible.builtin.command: sshd -t -f /etc/ssh/sshd_config
+  register: sshd_validate
+  changed_when: false
+  failed_when: sshd_validate.rc != 0
 
 - name: Himmelblau | bounce SSH daemon
   ansible.builtin.systemd:
