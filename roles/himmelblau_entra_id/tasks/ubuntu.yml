@@ -61,6 +61,33 @@
     group: root
   notify: restart himmelblaud
 
+- name: Himmelblau | write systemd modification (ensure path exists)
+  ansible.builtin.file:
+    path: /etc/systemd/system/himmelblaud.service.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Himmelblau | write systemd modification
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/himmelblaud.service.d/10-dirs.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      [Service]
+      Type=notify
+      RuntimeDirectory=himmelblaud
+      RuntimeDirectoryMode=0750
+      StateDirectory=himmelblaud
+      StateDirectoryMode=0750
+      CacheDirectory=himmelblaud
+      CacheDirectoryMode=0750
+      UMask=0027
+      Environment=HIMMELBLAU_SOCKET=/var/run/himmelblaud/socket
+  notify: Restart himmelblaud
+
 # NSS
 - name: Himmelblau (Ubuntu) | ensure nsswitch passwd entry
   ansible.builtin.lineinfile:
