@@ -4,6 +4,7 @@
   ansible.builtin.apt:
     name:
       - curl
+      - gpg
       - ca-certificates
       - tzdata
       - perl
@@ -42,15 +43,29 @@
   changed_when: false
   when: running_on_server
 
-- name: GitLab | Add repository GPG key (keyring)
+- name: GitLab | Remove old ascii key if present
+  ansible.builtin.file:
+    path: /usr/share/keyrings/gitlab-ce.gpg
+    state: absent
+
+- name: GitLab | Download repo ASCII key
   ansible.builtin.get_url:
-    url: https://packages.gitlab.com/gitlab/gitlab-ce/gpgkey
-    dest: /usr/share/keyrings/gitlab-ce.gpg
+    url: https://packages.gitlab.com/gpg.key
+    dest: /usr/share/keyrings/gitlab-ce-archive-keyring.asc
     mode: "0644"
 
-- name: GitLab | Add APT repository (Ubuntu jammy only)
+- name: GitLab | Dearmor key into keyring
+  ansible.builtin.command:
+    cmd: >
+      gpg --dearmor
+      -o /usr/share/keyrings/gitlab-ce-archive-keyring.gpg
+      /usr/share/keyrings/gitlab-ce-archive-keyring.asc
+  args:
+    creates: /usr/share/keyrings/gitlab-ce-archive-keyring.gpg
+
+- name: GitLab | Add APT repository
   ansible.builtin.apt_repository:
-    repo: "deb [signed-by=/usr/share/keyrings/gitlab-ce.gpg] https://packages.gitlab.com/gitlab/gitlab-ce/ubuntu jammy main"
+    repo: "deb [signed-by=/usr/share/keyrings/gitlab-ce-archive-keyring.gpg] https://packages.gitlab.com/gitlab/gitlab-ce/ubuntu jammy main"
     filename: gitlab_gitlab-ce
     state: present
 
