@@ -4,3 +4,17 @@
   ansible.builtin.systemd:
     name: himmelblaud
     state: restarted
+
+- name: restart sshd (validate)
+  listen: restart sshd (validate)
+  block:
+    - name: SSHD | validate configuration
+      ansible.builtin.command: sshd -t -f /etc/ssh/sshd_config
+      register: sshd_validate
+      changed_when: false
+      failed_when: sshd_validate.rc != 0
+
+    - name: SSHD | restart service
+      ansible.builtin.systemd:
+        name: "{{ himmelblau_ssh_service | default('sshd') }}"
+        state: restarted
