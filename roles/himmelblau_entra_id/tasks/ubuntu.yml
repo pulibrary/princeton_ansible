@@ -85,12 +85,37 @@
     enabled: true
     state: started
 
+- name: Himmelblau | ensure config.d directory exists
+  ansible.builtin.file:
+    path: "{{ sshd_config_d_path }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
 # Himmelblau package adds the interactive
 - name: Himmelblau | Comment out 'KbdInteractiveAuthentication no'
   ansible.builtin.replace:
     path: /etc/ssh/sshd_config
     regexp: '^(?!#)\s*KbdInteractiveAuthentication\s+no\b.*$'
     replace: '# \g<0>'
+
+- name: Himmelblau | manage {{ allow_users_filename }}
+  ansible.builtin.template:
+    src: sshd-allow-users.conf.j2
+    dest: "{{ sshd_config_d_path }}/{{ allow_users_filename }}"
+    owner: root
+    group: root
+    mode: "0644"
+  when: allow_users_enable | default(true)
+  notify: restart sshd (validate)
+
+- name: Himmelblau | remove {{ allow_users_filename }}
+  ansible.builtin.file:
+    path: "{{ sshd_config_d_path }}/{{ allow_users_filename }}"
+    state: absent
+  when: not (allow_users_enable | default(true))
+  notify: restart sshd (validate)
 
 - name: Himmelblau | Validate config
   ansible.builtin.command: sshd -t -f /etc/ssh/sshd_config
