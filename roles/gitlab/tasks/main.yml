@@ -42,20 +42,29 @@
   changed_when: false
   when: running_on_server
 
-- name: GitLab | Add package repository (alternative)
+- name: GitLab | Add repository GPG key (keyring)
   ansible.builtin.get_url:
-    url: https://packages.gitlab.com/install/repositories/gitlab/gitlab-ce/script.deb.sh
-    dest: /tmp/script.deb.sh
-    mode: "0755"
+    url: https://packages.gitlab.com/gitlab/gitlab-ce/gpgkey
+    dest: /usr/share/keyrings/gitlab-ce.gpg
+    mode: "0644"
 
-- name: GitLab | Execute the script
-  ansible.builtin.command: /tmp/script.deb.sh
-  changed_when: false
+- name: GitLab | Add APT repository (Ubuntu jammy only)
+  ansible.builtin.apt_repository:
+    repo: "deb [signed-by=/usr/share/keyrings/gitlab-ce.gpg] https://packages.gitlab.com/gitlab/gitlab-ce/ubuntu jammy main"
+    filename: gitlab_gitlab-ce
+    state: present
+
+- name: GitLab | Update apt cache after adding repo
+  ansible.builtin.apt:
+    update_cache: true
 
 - name: GitLab | install CE package
   ansible.builtin.apt:
     name: gitlab-ce
     state: present
+    force_apt_get: true
+  environment:
+    DEBIAN_FRONTEND: noninteractive
 
 - name: Copy GitLab configuration file
   ansible.builtin.template:
