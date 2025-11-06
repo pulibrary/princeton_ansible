@@ -56,9 +56,10 @@
     owner: root
     group: root
     content: |
-      auth    required    pam_himmelblau.so ignore_unknown_user mfa_poll_prompt
-      auth    optional    pam_permit.so
-      auth    optional    pam_cap.so
+      auth [success=done default=die]  pam_himmelblau.so ignore_unknown_user mfa_poll_prompt
+      auth requisite                   pam_deny.so
+      auth required                    pam_permit.so
+      auth optional                    pam_cap.so
 
 - name: Himmelblau | write /etc/pam.d/common-session
   ansible.builtin.copy:
@@ -74,9 +75,9 @@
 
       session optional        pam_himmelblau.so
       session required        pam_unix.so
-      session optional                        pam_sss.so
+      session optional        pam_sss.so
       session optional        pam_systemd.so
-      session optional        pam_mkhomedir.so skel=/etc/skel umask=0027
+      session required        pam_mkhomedir.so skel=/etc/skel umask=0027
 
 - name: Himmelblau | write /etc/pam.d/common-password
   ansible.builtin.copy:
