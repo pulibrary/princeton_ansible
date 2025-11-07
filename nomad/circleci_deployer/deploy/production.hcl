@@ -30,6 +30,13 @@ job "circleci-runner" {
       mode = "delay"
     }
 
+    reschedule {
+      delay          = "30s"
+      delay_function = "exponential"
+      max_delay      = "120s"
+      unlimited      = true
+    }
+
     task "deploy-runner" {
       driver = "podman"
 
