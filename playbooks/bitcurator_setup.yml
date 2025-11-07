@@ -12,14 +12,6 @@
       ansible.builtin.apt:
         update_cache: true
         cache_valid_time: 3600
-      tags: gnome
-
-    - name: Upgrade all packages
-      ansible.builtin.apt:
-        upgrade: dist
-        autoremove: true
-        autoclean: true
-      tags: gnome
 
     - name: Create bcadmin user
       ansible.builtin.user:
@@ -29,13 +21,11 @@
         shell: /bin/bash
         groups: sudo
         append: true
-      tags: user
 
     - name: Set password for bcadmin user (optional - change or remove as needed)
       ansible.builtin.user:
         name: "{{ admin_user }}"
         password: "{{ admin_user_password }}"
-      tags: user
 
     - name: Create apps directory
       ansible.builtin.file:
@@ -44,16 +34,12 @@
         owner: "{{ admin_user }}"
         group: "{{ admin_user }}"
         mode: '0755'
-      tags: directories
 
     - name: Install BitCurator dependencies
       ansible.builtin.apt:
-        name:
-          - gnupg
-          - curl
-          - git
+        name: "{{ item }}"
         state: present
-      tags: bitcurator
+      loop: "{{ bitcurator_dependencies }}"
 
     - name: Download BitCurator CLI
       ansible.builtin.get_url:
@@ -62,7 +48,6 @@
         mode: '0644'
         owner: "{{ admin_user }}"
         group: "{{ admin_user }}"
-      tags: bitcurator
 
     - name: Move BitCurator to /usr/local/bin
       ansible.builtin.copy:
@@ -72,14 +57,12 @@
         mode: '0755'
         owner: root
         group: root
-      tags: bitcurator
 
     - name: Run BitCurator install
       ansible.builtin.command: bitcurator install
       args:
         creates: /usr/local/bin/bitcurator
       register: bitcurator_install
-      tags: bitcurator
 
     - name: Download xRDP installer
       ansible.builtin.get_url:
@@ -87,13 +70,6 @@
         dest: "{{ download_dir }}/xrdp-installer-{{ xrdp_installer_version }}.zip"
         owner: "{{ admin_user }}"
         group: "{{ admin_user }}"
-      tags: xrdp
-
-    - name: Install unzip package
-      ansible.builtin.apt:
-        name: unzip
-        state: present
-      tags: xrdp
 
     - name: Unzip xRDP installer
       ansible.builtin.unarchive:
@@ -102,26 +78,16 @@
         remote_src: yes
         owner: "{{ admin_user }}"
         group: "{{ admin_user }}"
-      tags: xrdp
 
     - name: Make xRDP installer executable
       ansible.builtin.file:
         path: "{{ download_dir }}/xrdp-installer-{{ xrdp_installer_version }}.sh"
         mode: '0755'
-      tags: xrdp
 
     - name: Run xRDP installer with sound support
       ansible.builtin.command: "{{ download_dir }}/xrdp-installer-{{ xrdp_installer_version }}.sh -s"
       args:
         creates: /etc/xrdp/xrdp.ini
-      become_user: "{{ admin_user }}"
-      tags: xrdp
-
-    - name: Install Java (required for Bagger)
-      ansible.builtin.apt:
-        name: default-jre
-        state: present
-      tags: bagger
 
     - name: Download Bagger
       ansible.builtin.get_url:
@@ -129,7 +95,6 @@
         dest: "{{ download_dir }}/bagger-{{ bagger_version }}.zip"
         owner: "{{ admin_user }}"
         group: "{{ admin_user }}"
-      tags: bagger
 
     - name: Unzip Bagger to apps directory
       ansible.builtin.unarchive:
@@ -138,7 +103,21 @@
         remote_src: true
         owner: "{{ admin_user }}"
         group: "{{ admin_user }}"
-      tags: bagger
+
+    - name: Download Droid
+      ansible.builtin.get_url:
+        url: "https://cdn.nationalarchives.gov.uk/documents/droid-binary-{{ droid_version }}-bin.zip"
+        dest: "{{ download_dir }}/"
+        owner: "{{ admin_user }}"
+        group: "{{ admin_user }}"
+
+    - name: Unzip Droid to apps directory
+      ansible.builtin.unarchive:
+        src: "{{ download_dir }}/droid-binary-{{ droid_version }}-bin.zip"
+        dest: "{{ apps_dir }}"
+        remote_src: true
+        owner: "{{ admin_user }}"
+        group: "{{ admin_user }}"
 
     - name: Create Desktop directory if it doesn't exist
       ansible.builtin.file:
@@ -147,26 +126,17 @@
         owner: "{{ admin_user }}"
         group: "{{ admin_user }}"
         mode: '0755'
-      tags: bagger
-
-    - name: Install snapd
-      ansible.builtin.apt:
-        name: snapd
-        state: present
-      tags: fslint
 
     - name: Ensure snapd service is running
       ansible.builtin.systemd:
         name: snapd
         state: started
         enabled: yes
-      tags: fslint
 
     - name: Install FSLint via snap
       community.general.snap:
         name: fslint-unofficial
         state: present
-      tags: fslint
 
     - name: Display completion message
       ansible.builtin.debug:
@@ -182,4 +152,3 @@
           - "4. Test XRDP connection to this system"
           - ""
           - "=========================================="
-      tags: always
