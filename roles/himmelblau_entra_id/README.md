@@ -19,7 +19,7 @@ This role:
 
 * Restarts services safely and waits for the daemon socket to be ready
 
-> This changes system authentication.
+> Be aware that this role changes system authentication, so you could end up with a brick
 
 ## Supported platforms
 
@@ -82,3 +82,69 @@ This role:
 * `/etc/ssh/sshd_config.d/99-allow-users-global.conf`
 
 * Starts and enables `himmelblaud`, then waits for `/var/run/himmelblaud/socket`
+
+## Inventory & vars example
+
+```ini
+[sandboxes]
+sandbox-fkayiwa1.lib.princeton.edu
+```
+
+```yaml
+# group_vars/himmelblau/common.yml
+himmelblau_domain: "princeton.edu"
+himmelblau_tenant_id: "Entra-TENANT-GUID"
+himmelblau_domain_app_id: "APP-REGISTRATION-CLIENT-ID"
+allow_users:
+  - ac2754
+  - ar1789
+  - fkayiwa
+  - gpmenos
+  - jkazmier
+  - vk4273
+  ```
+
+```yaml
+# playbooks/himmelblau_entra_id.yml
+- name: install himmelblau on {{ inventory_hostname }}
+  hosts: sandboxes
+  become: true
+  vars_files:
+    - ../group_vars/himmelblau/common.yml
+    - ../group_vars/himmelblau/vault.yml
+  roles:
+    - role: himmelblau_entra_id
+  post_tasks:
+    - name: tell everyone on slack you ran an ansible playbook
+      community.general.slack:
+        token: "{{ vault_pul_slack_token }}"
+        msg: "Ansible ran `{{ ansible_play_name }}` on {{ inventory_hostname }}"
+        channel: "{{ slack_alerts_channel }}"
+```
+
+## Verifying
+
+On the endpoint (local)
+
+```bash
+sudo apt -y install pamtester
+# Auth should MFA and succeed (no PAM_IGNORE)
+sudo pamtester -v sshd <netid>@princeton.edu authenticate
+sudo pamtester -v sshd <netid>@princeton.edu open_session
+
+# Daemon health
+sudo systemctl status himmelblaud
+sudo journalctl -u himmelblaud -n 120 --no-pager
+
+# Socket present
+sudo ls -l /run/himmelblaud
+```
+
+From remote (your workstation)
+
+```bash
+ssh -o PreferredAuthentications=keyboard-interactive \
+    -o KbdInteractiveDevices=pam \
+    -o PubkeyAuthentication=no \
+    -l <netid> sandbox-rl36671.lib.princeton.edu
+```
