@@ -15,7 +15,7 @@
 
 - name: fits | download fits
   ansible.builtin.get_url:
-    url: "{{ fits_download_url }}/fits-{{ fits_version }}.zip"
+    url: "{{ fits_download_url }}/{{ fits_version }}/fits-{{ fits_version }}.zip"
     dest: /tmp/fits-{{ fits_version }}.zip
     timeout: 100
     owner: root
@@ -30,17 +30,18 @@
     flat: true
   when: ansible_virtualization_type == 'virtualbox'
 
-- name: fits | unarchive fits
-  ansible.builtin.unarchive:
-    src: /tmp/fits-{{ fits_version }}.zip
-    dest: /opt
-    copy: no
-    creates: /opt/fits-{{ fits_version }}/fits.sh
-
 - name: fits | make fits directory accessible
   ansible.builtin.file:
     path: /opt/fits-{{ fits_version }}
+    state: directory
     mode: a+x
+
+- name: fits | unarchive fits
+  ansible.builtin.unarchive:
+    src: /tmp/fits-{{ fits_version }}.zip
+    dest: /opt/fits-{{ fits_version }}
+    copy: no
+    creates: /opt/fits-{{ fits_version }}/fits.sh
 
 - name: fits | create sane scripting symbolic link
   ansible.builtin.file:
