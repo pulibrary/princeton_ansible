@@ -1,0 +1,146 @@
+---
+# tasks file for roles/bitcurator
+- name: Bitcurator - update apt cache
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Bitcurator - create bcadmin user
+  ansible.builtin.user:
+    name: "{{ admin_user }}"
+    state: present
+    createhome: true
+    shell: /bin/bash
+    groups: sudo
+    append: true
+
+- name: Bitcurator - set password for bcadmin user (optional - change or remove as needed)
+  ansible.builtin.user:
+    name: "{{ admin_user }}"
+    password: "{{ admin_user_password }}"
+
+- name: Bitcurator - create apps directory
+  ansible.builtin.file:
+    path: "{{ apps_dir }}"
+    state: directory
+    owner: "{{ admin_user }}"
+    group: "{{ admin_user }}"
+    mode: '0755'
+
+- name: Bitcurator - install BitCurator dependencies
+  ansible.builtin.apt:
+    name: "{{ item }}"
+    state: present
+  loop: "{{ bitcurator_dependencies }}"
+
+- name: Bitcurator - download BitCurator CLI
+  ansible.builtin.get_url:
+    url: "https://github.com/BitCurator/bitcurator-cli/releases/download/{{ bitcurator_version }}/bitcurator-cli-linux"
+    dest: "{{ download_dir }}/bitcurator-cli-linux"
+    mode: '0644'
+    owner: "{{ admin_user }}"
+    group: "{{ admin_user }}"
+
+- name: Bitcurator - move to /usr/local/bin
+  ansible.builtin.copy:
+    src: "{{ download_dir }}/bitcurator-cli-linux"
+    dest: /usr/local/bin/bitcurator
+    remote_src: true
+    mode: '0755'
+    owner: root
+    group: root
+
+- name: Bitcurator - run installer
+  ansible.builtin.command: bitcurator install
+  args:
+    creates: /usr/local/bin/bitcurator
+  register: bitcurator_install
+
+- name: Bitcurator -  download xRDP installer
+  ansible.builtin.get_url:
+    url: "https://www.c-nergy.be/downloads/xRDP/xrdp-installer-{{ xrdp_installer_version }}.zip"
+    dest: "{{ download_dir }}/xrdp-installer-{{ xrdp_installer_version }}.zip"
+    owner: "{{ admin_user }}"
+    group: "{{ admin_user }}"
+
+- name: Bitcurator - unzip xRDP installer
+  ansible.builtin.unarchive:
+    src: "{{ download_dir }}/xrdp-installer-{{ xrdp_installer_version }}.zip"
+    dest: "{{ download_dir }}"
+    remote_src: true
+    owner: "{{ admin_user }}"
+    group: "{{ admin_user }}"
+
+- name: Bitcurator - make xRDP installer executable
+  ansible.builtin.file:
+    path: "{{ download_dir }}/xrdp-installer-{{ xrdp_installer_version }}.sh"
+    mode: '0755'
+
+- name: Bitcurator - run xRDP installer with sound support
+  ansible.builtin.command: "{{ download_dir }}/xrdp-installer-{{ xrdp_installer_version }}.sh -s"
+  args:
+    creates: /etc/xrdp/xrdp.ini
+
+- name: Bitcurator - download Bagger
+  ansible.builtin.get_url:
+    url: "https://github.com/LibraryOfCongress/bagger/releases/download/v{{ bagger_version }}/bagger-{{ bagger_version }}.zip"
+    dest: "{{ download_dir }}/bagger-{{ bagger_version }}.zip"
+    owner: "{{ admin_user }}"
+    group: "{{ admin_user }}"
+
+- name: Bitcurator - unzip Bagger to apps directory
+  ansible.builtin.unarchive:
+    src: "{{ download_dir }}/bagger-{{ bagger_version }}.zip"
+    dest: "{{ apps_dir }}"
+    remote_src: true
+    owner: "{{ admin_user }}"
+    group: "{{ admin_user }}"
+
+- name: Bitcurator - download Droid
+  ansible.builtin.get_url:
+    url: "https://cdn.nationalarchives.gov.uk/documents/droid-binary-{{ droid_version }}-bin.zip"
+    dest: "{{ download_dir }}/"
+    owner: "{{ admin_user }}"
+    group: "{{ admin_user }}"
+
+- name: Bitcurator - unzip Droid to apps directory
+  ansible.builtin.unarchive:
+    src: "{{ download_dir }}/droid-binary-{{ droid_version }}-bin.zip"
+    dest: "{{ apps_dir }}"
+    remote_src: true
+    owner: "{{ admin_user }}"
+    group: "{{ admin_user }}"
+
+- name: Bitcurator - create Desktop directory if it doesn't exist
+  ansible.builtin.file:
+    path: "{{ admin_home }}/Desktop"
+    state: directory
+    owner: "{{ admin_user }}"
+    group: "{{ admin_user }}"
+    mode: '0755'
+
+- name: Bitcurator - ensure snapd service is running
+  ansible.builtin.systemd:
+    name: snapd
+    state: started
+    enabled: true
+
+- name: Bitcurator - install FSLint via snap
+  community.general.snap:
+    name: fslint-unofficial
+    state: present
+
+- name: Bitcurator - display completion message
+  ansible.builtin.debug:
+    msg:
+      - "=========================================="
+      - "BitCurator Environment Setup Complete!"
+      - "=========================================="
+      - ""
+      - "Next Steps:"
+      - "1. Change bcadmin password: sudo passwd bcadmin"
+      - "2. Reboot the system: sudo reboot"
+      - "3. After reboot, verify BitCurator: bitcurator --version"
+      - "4. Test XRDP connection to this system"
+      - ""
+      - "=========================================="
