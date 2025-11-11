@@ -34,22 +34,3 @@
   retries: 5
   delay: 3
   until: yum_cache is succeeded
-
-- name: Common | Determine Ubuntu codename
-  ansible.builtin.set_fact:
-    ubuntu_codename: "{{ ansible_distribution_release | default(ansible_lsb.codename) }}"
-  when:
-    - ansible_os_family == "Debian"
-
-- name: Common | Prefer Princeton mirror for apt
-  ansible.builtin.apt_repository:
-    repo: deb https://mirror.math.princeton.edu/pub/ubuntu {{ item }} main restricted universe multiverse
-    state: present
-    filename: "00-princeton"
-    update_cache: true
-  loop:
-    - "{{ ubuntu_codename }}"
-    - "{{ ubuntu_codename }}-updates"
-    - "{{ ubuntu_codename }}-backports"
-  when:
-    - ansible_os_family == "Debian"
