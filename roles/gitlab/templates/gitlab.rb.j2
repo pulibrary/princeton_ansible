@@ -69,3 +69,45 @@ gitlab_rails['backup_upload_connection'] = {
 }
 gitlab_rails['backup_upload_remote_directory'] = '{{ gitlab_google_bucket }}'
 gitlab_rails['backup_keep_time'] = 2419200
+
+## OmniAuth common settings
+gitlab_rails['omniauth_enabled'] = true
+#
+## Allow JIT provisioning ONLY from OpenID Connect (initially keep new users blocked)
+gitlab_rails['omniauth_allow_single_sign_on'] = ['openid_connect']
+gitlab_rails['omniauth_block_auto_created_users'] = true
+#
+## Try to auto-link Entra users to existing GitLab users by matching email
+gitlab_rails['omniauth_auto_link_user'] = ['openid_connect']
+#
+## Since we still have LDAP, let GitLab auto-link LDAP identity to OmniAuth logins when uid matches
+#gitlab_rails['omniauth_auto_link_ldap_user'] = true
+#
+## Since Entra MFA/CA is authoritative, we can bypass GitLab’s 2FA for OIDC:
+gitlab_rails['omniauth_allow_bypass_two_factor'] = ['openid_connect']
+#
+## Add the Entra ID (OIDC) provider
+gitlab_rails['omniauth_providers'] = [
+  {
+    name: "openid_connect",
+    label: "PU Entra ID",
+    args: {
+      name: "openid_connect",
+      scope: ["openid","profile","email"],
+      response_type: "code",
+      discovery: true,
+      # Issuer with tenant v2 endpoint:
+      issuer: "https://login.microsoftonline.com/{{ gitlab_entra_issuer_id }}/v2.0",
+      # Azure works fine with client creds in body (query)
+      client_auth_method: "query",
+      # Keep uid as the OIDC 'sub' (default).
+      # uid_field: "sub",
+      pkce: true,
+      client_options: {
+        identifier: "{{ gitlab_entra_identifier_id }}",
+        secret: "{{ gitlab_entra_secret_id }}",
+        redirect_uri: "{{ gitlab_loadbalancer_domain_name }}/users/auth/openid_connect/callback"
+      }
+    }
+  }
+]
