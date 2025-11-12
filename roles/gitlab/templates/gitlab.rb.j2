@@ -71,6 +71,8 @@ gitlab_rails['backup_upload_remote_directory'] = '{{ gitlab_google_bucket }}'
 gitlab_rails['backup_keep_time'] = 2419200
 
 ## OmniAuth common settings
+{% set _external_url = 'https://' ~ gitlab_loadbalancer_domain_name %}
+{% set _redirect_uri = _external_url ~ '/users/auth/openid_connect/callback' %}
 gitlab_rails['omniauth_enabled'] = true
 #
 ## Allow JIT provisioning ONLY from OpenID Connect (initially keep new users blocked)
@@ -106,7 +108,7 @@ gitlab_rails['omniauth_providers'] = [
       client_options: {
         identifier: "{{ gitlab_entra_identifier_id }}",
         secret: "{{ gitlab_entra_secret_id }}",
-        redirect_uri: "{{ gitlab_loadbalancer_domain_name }}/users/auth/openid_connect/callback"
+        redirect_uri: "{{ _redirect_uri }}"
       }
     }
   }
