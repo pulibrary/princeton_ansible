@@ -15,12 +15,26 @@ job "circleci-runner" {
       attribute = "${node.pool}"
       weight    = 100
     }
-    count = 12
+    count = 4
 
     network {
       dns {
         servers = ["10.88.0.1", "128.112.129.209", "8.8.8.8", "8.8.4.4"]
       }
+    }
+    
+    restart {
+      attempts = 10
+      delay = "5s"
+      interval = "5m"
+      mode = "delay"
+    }
+
+    reschedule {
+      delay          = "30s"
+      delay_function = "exponential"
+      max_delay      = "120s"
+      unlimited      = true
     }
 
     task "deploy-runner" {
