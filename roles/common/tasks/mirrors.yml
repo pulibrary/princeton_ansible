@@ -7,13 +7,12 @@
 
 - name: Add Princeton Rocky repo (preferred by low cost)
   ansible.builtin.template:
-    src: "{{ item.src }}"
-    dest: "{{ item.dest }}"
+    src: rocky-princeton.repo.j2
+    dest: "/etc/yum.repos.d/{{ item.priority }}-{{ item.name }}-rocky.repo"
     owner: root
     group: root
     mode: '0644'
-  loop:
-    - { src: "rocky-princeton.repo.j2", dest: "/etc/yum.repos.d/00-princeton-rocky.repo" }
+  loop: "{{ preferred_mirrors }}"
   when: ansible_os_family == 'RedHat'
 
 # Build cache using the package module, with retries
@@ -43,13 +42,30 @@
 
 - name: Common | Prefer Princeton mirror for apt
   ansible.builtin.apt_repository:
-    repo: deb https://mirror.math.princeton.edu/pub/ubuntu {{ item }} main restricted universe multiverse
+    repo: deb https://{{ item.base }}/pub/ubuntu {{ ubuntu_codename }} main restricted universe multiverse
     state: present
-    filename: "00-princeton"
+    filename: "{{ item.priority }}-{{ item.name }}"
     update_cache: true
-  loop:
-    - "{{ ubuntu_codename }}"
-    - "{{ ubuntu_codename }}-updates"
-    - "{{ ubuntu_codename }}-backports"
+  loop: "{{ preferred_mirrors }}"
+  when:
+    - ansible_os_family == "Debian"
+
+- name: Common | Prefer Princeton mirror for apt updates
+  ansible.builtin.apt_repository:
+    repo: deb https://{{ item.base }}/pub/ubuntu {{ ubuntu_codename }}-updates main restricted universe multiverse
+    state: present
+    filename: "{{ item.priority }}-{{ item.name }}"
+    update_cache: true
+  loop: "{{ preferred_mirrors }}"
+  when:
+    - ansible_os_family == "Debian"
+
+- name: Common | Prefer Princeton mirror for apt backports
+  ansible.builtin.apt_repository:
+    repo: deb https://{{ item.base }}/pub/ubuntu {{ ubuntu_codename }}-backports main restricted universe multiverse
+    state: present
+    filename: "{{ item.priority }}-{{ item.name }}"
+    update_cache: true
+  loop: "{{ preferred_mirrors }}"
   when:
     - ansible_os_family == "Debian"
