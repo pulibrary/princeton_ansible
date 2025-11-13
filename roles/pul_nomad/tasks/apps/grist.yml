@@ -1,0 +1,66 @@
+---
+- name: Pul_nomad - grist - Create /etc/grist-saml directory
+  ansible.builtin.file:
+    path: /etc/grist-saml
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Pul_nomad - grist - Create /data/grist/docs (and parents)
+  ansible.builtin.file:
+    path: "{{ item }}"
+    owner: "1000"
+    group: "1000"
+    state: directory
+    mode: "0775"
+    recurse: true
+  loop:
+    - /data/grist/docs
+    - /data/grist
+
+- name: Pul_nomad - grist - Ensure /data/grist permissions (0775) recursively
+  ansible.builtin.file:
+    mode: "0775"
+    recurse: true
+
+- name: Pul_nomad - grist - Install SP private key
+  ansible.builtin.copy:
+    src: files/grist/sp.key
+    dest: /etc/grist-saml/sp.key
+    owner: root
+    group: root
+    mode: "0600"
+
+- name: Pul_nomad - grist - Install SP certificate
+  ansible.builtin.copy:
+    src: files/grist/sp.crt
+    dest: /etc/grist-saml/sp.crt
+    owner: root
+    group: root
+    mode: "0600"
+
+- name: Pul_nomad - grist - Entra IdP certificate
+  ansible.builtin.copy:
+    src: files/grist/idp_1.cer
+    dest: /etc/grist-saml/idp_1.cer
+    owner: root
+    group: root
+    mode: "0600"
+
+- name: Pul_nomad - grist - Ensure selinux management tools
+  ansible.builtin.dnf:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - policycoreutils
+    - policycoreutils-python-utils
+
+- name: Pul_nomad - grist - Add persistent SELinux context rule for /etc/grist-saml
+  community.general.sefcontext:
+    target: "/etc/grist-saml/(/.*)?"
+    setype: container_file_t
+    state: present
+
+- name: Pul_nomad - grist - Restore SELinux contexts on /etc/grist-saml
+  command: restorecon -Rv /etc/grist-saml
