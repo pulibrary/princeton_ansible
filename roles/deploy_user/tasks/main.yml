@@ -47,18 +47,18 @@
   register: deploy_legacy_allowusers
   changed_when: false
   failed_when: false
-  when:
-    - running_on_server
-# Gather existing AllowUsers users from new main sshd_config.d/99
-- name: deploy_user | gather AllowUsers from /etc/ssh/sshd_config.d/99-allowusers-pulsys
+  when: running_on_server
+
+# Gather existing AllowUsers users from the old drop-in file, if it exists
+- name: deploy_user | gather AllowUsers from /etc/ssh/sshd_config.d/99-allowusers-pulsys.conf
   ansible.builtin.command:
     cmd: awk '/^AllowUsers/ {for (i=2;i<=NF;i++) print $i}' /etc/ssh/sshd_config.d/99-allowusers-pulsys.conf
   register: deploy_dropin_allowusers
   changed_when: false
   failed_when: false
-  when:
-    - running_on_server
-# Build existing AllowUser list
+  when: running_on_server
+
+# Build list of existing AllowUsers entries from both places
 - name: deploy_user | build existing AllowUsers list
   ansible.builtin.set_fact:
     deploy_ssh_allowusers_existing: >-
@@ -70,7 +70,8 @@
       }}
   when: running_on_server
 
-- name: deploy_user | write the file
+# Build unified list including deploy_user (only if pulsys is already present)
+- name: deploy_user | build unified AllowUsers list
   ansible.builtin.set_fact:
     deploy_ssh_allowusers_unified: >-
       {{
@@ -81,24 +82,26 @@
     - deploy_ssh_allowusers_existing is defined
     - "'pulsys' in deploy_ssh_allowusers_existing"
 
-- name: deploy_user | write a new unified dropin
+# Write new unified sshd drop-in
+- name: deploy_user | write unified AllowUsers drop-in
   ansible.builtin.copy:
-    dest: "/etc/ssh/ssh_config.d/99-allowusers.conf"
+    dest: /etc/ssh/sshd_config.d/99-allowusers.conf
     owner: root
     group: root
-    mode: "0644"
+    mode: '0644'
     content: |
-      ## Managed by Ansible
-      AllowUsers {{ deploy_ssh_allowusers_unified | join (' ') }}
+      # Managed by Ansible
+      AllowUsers {{ deploy_ssh_allowusers_unified | join(' ') }}
   when:
     - running_on_server
     - deploy_ssh_allowusers_unified is defined
   notify:
     - restart sshd
 
-- name: deploy_user | remove AllowUsers in legacy
+# Remove legacy AllowUsers line from main sshd_config
+- name: deploy_user | remove legacy AllowUsers from /etc/ssh/sshd_config
   ansible.builtin.lineinfile:
-    path: "/etc/ssh/ssh_config"
+    path: /etc/ssh/sshd_config
     state: absent
     regexp: '^AllowUsers\b'
   when:
@@ -106,9 +109,11 @@
     - deploy_ssh_allowusers_unified is defined
   notify:
     - restart sshd
-- name: deploy_user | remove AllowUsers in new
+
+# Remove old pulsys-only drop-in
+- name: deploy_user | remove legacy 99-allowusers-pulsys.conf
   ansible.builtin.file:
-    path: "/etc/ssh/ssh_config.d/99-allowusers-pulsys.conf"
+    path: /etc/ssh/sshd_config.d/99-allowusers-pulsys.conf
     state: absent
   when:
     - running_on_server
