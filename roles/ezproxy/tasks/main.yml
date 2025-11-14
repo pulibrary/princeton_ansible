@@ -7,6 +7,61 @@
     owner: "{{ deploy_user }}"
     mode: "0755"
 
+- name: Ezproxy | Create a log and ssl directory for ezproxy
+  ansible.builtin.file:
+    path: "/var/local/ezproxy/{{ item }}"
+    state: directory
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+    mode: "0755"
+  become: true
+  loop:
+    - log
+    - ssl
+
+- name: Ezproxy | add shib config user
+  ansible.builtin.template:
+    src: "shibuser.txt.j2"
+    dest: /var/local/ezproxy/shibuser.txt
+    mode: "0644"
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+
+- name: Ezproxy | Set the hostname
+  ansible.builtin.copy:
+    dest: '/var/local/ezproxy/hostname.txt'
+    mode: "0644"
+    content: "Name {{ host_name }}"
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+
+- name: Ezproxy | copy ezproxy config.txt
+  ansible.builtin.template:
+    src: "config.txt.j2"
+    dest: "/var/local/ezproxy/config.txt"
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+    mode: "0644"
+  changed_when: false
+  when:
+    - running_on_server
+
+- name: Ezproxy | add user config file
+  ansible.builtin.template:
+    src: "user.txt.j2"
+    dest: /var/local/ezproxy/user.txt
+    mode: "0644"
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+
+- name: Ezproxy | add princeton allow IP ranges
+  ansible.builtin.template:
+    src: "princeton_allow.txt.j2"
+    dest: /var/local/ezproxy/princeton_allow.txt
+    mode: "0644"
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+
 - name: Ezproxy | copy ezproxy binary
   ansible.builtin.copy:
     src: "{{ item }}"
@@ -27,9 +82,8 @@
 - name: Ezproxy | install missing file replacements
   ansible.builtin.command: /var/local/ezproxy/ezproxy -m
   become: true
-  become_user: "{{ deploy_user }}"
+  become_user: "root"
   register: proxy_results
-  changed_when: false
   failed_when: "proxy_results.rc != 1"
   when:
     - running_on_server
@@ -47,14 +101,6 @@
   changed_when: false
   when: running_on_server
 
-- name: Ezproxy | create ezproxy tls directory
-  ansible.builtin.file:
-    path: "/var/local/ezproxy/tls"
-    state: directory
-    group: "{{ deploy_user }}"
-    owner: "{{ deploy_user }}"
-    mode: "0755"
-
 - name: Ezproxy | install certbot
   ansible.builtin.apt:
     name: certbot
@@ -65,131 +111,40 @@
   ansible.builtin.command: /usr/bin/certbot certonly --standalone --non-interactive --agree-tos --email lsupport@princeton.edu --server https://acme.sectigo.com/v2/InCommonRSAOV --eab-kid {{ vault_acme_eab_kid }} --eab-hmac-key {{ vault_acme_eab_hmac_key }} --domain {{ domain_name }}.princeton.edu --cert-name {{ domain_place_name }}
   when: running_on_server
 
-- name: Ezproxy | Creates a log directory for ezproxy
-  ansible.builtin.file:
-    path: "/var/local/ezproxy/log"
-    state: directory
-    owner: "{{ deploy_user }}"
-    group: "{{ deploy_user }}"
-    mode: "0755"
-  become: true
+- name: EZproxy | Install GeoIP
+  ansible.builtin.include_tasks: geoip.yml
 
-- name: Ezproxy | Create app directory
-  ansible.builtin.file:
-    path: "{{ ezproxy_repo_root }}"
-    state: directory
-    owner: "{{ deploy_user }}"
-    group: "{{ deploy_user }}"
-    mode: "0750"
-    recurse: true
-  become: true
-
-- name: Ezproxy | Ensure .ssh directory exists.
-  ansible.builtin.file:
-    path: "/home/{{ deploy_user }}/.ssh"
-    state: directory
-    mode: "0700"
-    owner: "{{ deploy_user }}"
-    group: "{{ deploy_user }}"
-
-- name: Ezproxy | Allow ability to restart ezproxy for {{ deploy_user }}
-  ansible.builtin.lineinfile:
-    dest: "/etc/sudoers"
-    state: "present"
-    line: "{{ deploy_user }} ALL=(ALL) NOPASSWD: /usr/sbin/service ezproxy restart"
-    validate: "visudo -cf %s"
-
-- name: Ezproxy | chmod back permissions
-  ansible.builtin.file:
-    path: "{{ ezproxy_repo_root }}"
-    state: directory
-    recurse: true
-    mode: "0750"
-    owner: "{{ deploy_user }}"
-    group: "{{ deploy_user }}"
-  become: true
-
-- name: Ezproxy | add geoip ppa
-  ansible.builtin.apt_repository:
-    repo: "ppa:maxmind/ppa"
-    state: present
-
-- name: Ezproxy | install geoupdate
-  ansible.builtin.apt:
-    name: geoipupdate
-    state: present
-
-- name: Ezproxy | add geoip configuration file
+- name: Ezproxy | create systemd unit
   ansible.builtin.template:
-    src: geoip_conf.j2
-    dest: "/etc/GeoIP.conf"
-    mode: "0644"
-  when:
-    - running_on_server
-
-- name: Ezproxy | run a cronjob to update
-  ansible.builtin.cron:
-    name: "run the update"
-    minute: 49
-    hour: 8
-    job: "/usr/bin/geoipupdate"
-  when:
-    - running_on_server
-
-- name: Ezproxy | add shib config user
-  ansible.builtin.template:
-    src: "shibuser.txt.j2"
-    dest: /var/local/ezproxy/shibuser.txt
-    mode: "0644"
-    owner: root
-    group: root
-
-- name: Ezproxy | add princeton allow IP ranges
-  ansible.builtin.template:
-    src: "princeton_allow.txt.j2"
-    dest: /var/local/ezproxy/princeton_allow.txt
-    mode: "0644"
-    owner: root
-    group: root
-
-- name: Ezproxy | copy a systemd service
-  ansible.builtin.template:
-    src: "ezproxy.service.j2"
+    src: ezproxy.service.j2
     dest: /lib/systemd/system/ezproxy.service
     owner: root
     group: root
     mode: a+x
-  changed_when: false
   when:
     - running_on_server
 
-- name: Ezproxy | reload systemd to recognize new service
-  ansible.builtin.systemd:
-    daemon_reload: true
-  when:
-    - running_on_server
+- name: Ezproxy | make sure directory is owned by {{ deploy_user }}
+  ansible.builtin.file:
+    path: /var/local/ezproxy
+    state: directory
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+    recurse: true
 
-- name: Ezproxy | copy ezproxy config.txt
-  ansible.builtin.template:
-    src: "config.txt.j2"
-    dest: "/var/local/ezproxy/config.txt"
-    owner: root
-    group: root
-    mode: "0644"
-  changed_when: false
-  when:
-    - running_on_server
-
-- name: Ezproxy | add user config file
-  ansible.builtin.template:
-    src: "user.txt.j2"
-    dest: /var/local/ezproxy/user.txt
-    mode: "0644"
-    owner: root
-    group: root
-
-- name: Ezproxy | start ezproxy
-  ansible.builtin.service:
-    name: ezproxy
+- name: Ezproxy | Restart ezproxy daemon-reload to pick up config changes
+  ansible.builtin.systemd_service:
     state: restarted
-  when: running_on_server
+    daemon_reload: true
+    name: ezproxy
+  when:
+    - running_on_server
+
+# OCLC provides a SysV init file that makes the command below unpossible
+# - name: Ezproxy | enable ezproxy daemon to start on boot
+#   ansible.builtin.systemd_service:
+#    name: ezproxy
+#    enabled: true
+
+- name: Ezproxy | enable cap deployment
+  ansible.builtin.include_tasks: cap_deployment.yml
