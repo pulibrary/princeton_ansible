@@ -1,0 +1,172 @@
+---
+- name: Himmelblau (Ubuntu) | ensure keyring dir
+  ansible.builtin.file:
+    path: "{{ himmelblau_ubuntu_keyring | dirname }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Himmelblau (Ubuntu) | fetch repo key
+  ansible.builtin.get_url:
+    url: "{{ himmelblau_ubuntu_key_url }}"
+    dest: /tmp/himmelblau.asc
+    mode: "0644"
+
+- name: Himmelblau (Ubuntu) | install key (dearmor)
+  ansible.builtin.command:
+    cmd: "gpg --dearmor --yes --output {{ himmelblau_ubuntu_keyring }} /tmp/himmelblau.asc"
+  args:
+    creates: "{{ himmelblau_ubuntu_keyring }}"
+
+- name: Himmelblau (Ubuntu) | add apt repo
+  ansible.builtin.apt_repository:
+    repo: "deb [signed-by={{ himmelblau_ubuntu_keyring }}] {{ himmelblau_ubuntu_repo_baseurl }} ./ "
+    filename: "{{ himmelblau_ubuntu_repo_file }}"
+    state: present
+
+- name: Himmelblau (Ubuntu) | apt update
+  ansible.builtin.apt:
+    update_cache: true
+
+- name: Himmelblau (Ubuntu) | install packages
+  ansible.builtin.apt:
+    name: "{{ himmelblau_packages_deb }}"
+    state: present
+    # Avoid tripping over unrelated duplicate-entries warnings:
+    #
+# Ubuntu (Jammy/Noble)
+- name: Himmelblau PAM deps
+  ansible.builtin.apt:
+    name:
+      - libpam-sss
+      - libpam-pwquality
+    state: present
+    update_cache: true
+
+- name: Himmelblau | create configuration directory
+  ansible.builtin.file:
+    path: /etc/himmelblau
+    state: directory
+    mode: "0755"
+    owner: root
+    group: root
+
+- name: Himmelblau | write configuration
+  ansible.builtin.template:
+    src: himmelblau.conf.j2
+    dest: /etc/himmelblau/himmelblau.conf
+    mode: "0644"
+    owner: root
+    group: root
+  notify: restart himmelblaud
+
+- name: Himmelblau | write systemd modification (ensure path exists)
+  ansible.builtin.file:
+    path: /etc/systemd/system/himmelblaud.service.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Himmelblau | write systemd modification
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/himmelblaud.service.d/10-dirs.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      [Service]
+      Type=notify
+      RuntimeDirectory=himmelblaud
+      RuntimeDirectoryMode=0750
+      StateDirectory=himmelblaud
+      StateDirectoryMode=0750
+      CacheDirectory=himmelblaud
+      CacheDirectoryMode=0750
+      UMask=0027
+      Environment=HIMMELBLAU_SOCKET=/var/run/himmelblaud/socket
+  notify: restart himmelblaud
+
+# NSS
+- name: Himmelblau (Ubuntu) | ensure nsswitch passwd entry
+  ansible.builtin.lineinfile:
+    path: /etc/nsswitch.conf
+    regexp: '^passwd:'
+    line: 'passwd:         files himmelblau systemd'
+    backup: true
+
+- name: Himmelblau (Ubuntu) | ensure nsswitch group entry
+  ansible.builtin.lineinfile:
+    path: /etc/nsswitch.conf
+    regexp: '^group:'
+    line: 'group:          files himmelblau systemd'
+    backup: true
+
+- name: Himmelblau - Include strict PAM for Ubuntu
+  ansible.builtin.include_tasks: ubuntu_pam_strict.yml
+
+- name: Himmelblau | enable & start service
+  ansible.builtin.systemd:
+    name: himmelblaud
+    enabled: true
+    state: started
+
+- name: Himmelblau | ensure config.d directory exists
+  ansible.builtin.file:
+    path: "{{ sshd_config_d_path }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+# Himmelblau package adds the interactive
+- name: Himmelblau | Comment out 'KbdInteractiveAuthentication no'
+  ansible.builtin.replace:
+    path: /etc/ssh/sshd_config
+    regexp: '^(?!#)\s*KbdInteractiveAuthentication\s+no\b.*$'
+    replace: '# \g<0>'
+
+- name: Himmelblau | manage {{ allow_users_filename }}
+  ansible.builtin.template:
+    src: sshd-allow-users.conf.j2
+    dest: "{{ sshd_config_d_path }}/{{ allow_users_filename }}"
+    owner: root
+    group: root
+    mode: "0644"
+  when: allow_users_enable | default(true)
+  notify: restart sshd (validate)
+
+- name: Himmelblau | remove {{ allow_users_filename }}
+  ansible.builtin.file:
+    path: "{{ sshd_config_d_path }}/{{ allow_users_filename }}"
+    state: absent
+  when: not (allow_users_enable | default(true))
+  notify: restart sshd (validate)
+
+- name: Himmelblau | Validate config
+  ansible.builtin.command: sshd -t -f /etc/ssh/sshd_config
+  register: sshd_validate
+  changed_when: false
+  failed_when: sshd_validate.rc != 0
+
+- name: Himmelblau | bounce SSH daemon
+  ansible.builtin.systemd:
+    name: "{{ himmelblau_ssh_service }}"
+    state: restarted
+  when: himmelblau_restart_sshd | default(true)
+
+- name: Himmelblau | wait for daemon socket
+  ansible.builtin.wait_for:
+    path: /var/run/himmelblaud/socket
+    state: present
+    timeout: 30
+
+- name: Himmelblau | enrollment instructions
+  ansible.builtin.debug:
+    msg: |
+      Device enrollment must be completed manually:
+      1. Run: sudo himmelblaud -e {{ himmelblau_tenant_id }}
+      2. Follow the device code flow
+      3. Approve device in Entra ID portal
+  when: himmelblau_show_enrollment_instructions | default(true)

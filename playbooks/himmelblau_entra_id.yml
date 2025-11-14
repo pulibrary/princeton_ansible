@@ -1,0 +1,20 @@
+---
+# this playbook currently runs against limited_servers group since it modifies auth
+- name: install himmelblau on {{ inventory_hostname }}
+  # hosts: staging:qa:production
+  hosts: sandboxes
+  remote_user: pulsys
+  become: true
+  vars_files:
+    - ../group_vars/himmelblau/common.yml
+    - ../group_vars/himmelblau/vault.yml
+  roles:
+    - role: himmelblau_entra_id
+
+  post_tasks:
+    - name: tell everyone on slack you ran an ansible playbook
+      community.general.slack:
+        token: "{{ vault_pul_slack_token }}"
+        msg: "Ansible ran `{{ ansible_play_name }}` on {{ inventory_hostname }}"
+        channel: "{{ slack_alerts_channel }}"
+
