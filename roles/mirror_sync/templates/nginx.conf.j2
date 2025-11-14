@@ -6,7 +6,7 @@ worker_processes {{ nginx_worker_processes }};
 worker_rlimit_nofile {{ nginx_worker_rlimit_nofile }};
 
 events {
-    worker_connections 1024;  # Increased worker connections
+    worker_connections {{ nginx_worker_connections | default(1024) }};
 }
 
 http {
@@ -33,22 +33,52 @@ http {
             autoindex_localtime on;     # local time
         }
 
-        # Legacy Solr paths → archive or current
-        # Matches: /mirror/solr/dist/lucene/solr/<ver>/<file>
-        # <ver> examples: 4.10.4, 9.2.0, 4.0.0-BETA
-        location ~ ^/mirror/solr/dist/lucene/solr/(?<ver>[0-9]+\.[0-9]+(?:\.[0-9]+)?(?:-[A-Za-z0-9.-]+)?)/(?<file>.+)$ {
-            # Prefer the "current" tree if the file exists there
-            if (-f $document_root/mirror/archive/solr/$ver/$file) {
-                return 302 /mirror/archive/solr/$ver/$file;
+        # STABLE CANONICAL PATH: /mirror/solr/<version>/<file>
+        # This provides a version-independent URL structure that never breaks
+        # Examples:
+        #   /mirror/solr/9.9.0/solr-9.9.0.tgz
+        #   /mirror/solr/8.11.4/solr-8.11.4.tgz
+        #   /mirror/solr/4.10.4/solr-4.10.4.tgz
+        location ~ ^{{ nginx_mirror_uri_prefix | regex_replace('/$', '') }}/solr/(?<ver>[0-9]+\.[0-9]+(?:\.[0-9]+)?(?:-[A-Za-z0-9.-]+)?)/(?<file>.+)$ {
+            # Try locations in order of likelihood
+            # 1. Check apache/solr/solr (current releases like 9.10.0)
+            if (-f $document_root{{ nginx_mirror_uri_prefix }}apache/solr/solr/$ver/$file) {
+                rewrite ^ {{ nginx_mirror_uri_prefix }}apache/solr/solr/$ver/$file last;
             }
-            # Otherwise route by version family
-            if ($ver ~ '^9\.') {
-                return 302 /mirror/archive/solr/9x/$ver/$file;
+            # 2. Check archive/solr/9x
+            if (-f $document_root{{ nginx_mirror_uri_prefix }}archive/solr/9x/$ver/$file) {
+                rewrite ^ {{ nginx_mirror_uri_prefix }}archive/solr/9x/$ver/$file last;
             }
-            return 302 /mirror/archive/solr/legacy/$ver/$file;  # 1.x–8.x
+            # 3. Check archive/solr/legacy
+            if (-f $document_root{{ nginx_mirror_uri_prefix }}archive/solr/legacy/$ver/$file) {
+                rewrite ^ {{ nginx_mirror_uri_prefix }}archive/solr/legacy/$ver/$file last;
+            }
+            # 4. Check solr/dist/lucene/solr (old structure)
+            if (-f $document_root{{ nginx_mirror_uri_prefix }}solr/dist/lucene/solr/$ver/$file) {
+                rewrite ^ {{ nginx_mirror_uri_prefix }}solr/dist/lucene/solr/$ver/$file last;
+            }
+            # If not found anywhere, return 404
+            return 404;
+        }
+
+        # LEGACY PATH SUPPORT: /mirror/apache/solr/solr/<version>/<file>
+        # Redirect to canonical path for consistency
+        location ~ ^{{ nginx_mirror_uri_prefix | regex_replace('/$', '') }}/apache/solr/solr/(?<ver>[0-9]+\.[0-9]+(?:\.[0-9]+)?(?:-[A-Za-z0-9.-]+)?)/(?<file>.+)$ {
+            return 301 {{ nginx_mirror_uri_prefix }}solr/$ver/$file;
+        }
+
+        # LEGACY PATH SUPPORT: /mirror/solr/dist/lucene/solr/<version>/<file>
+        # Redirect to canonical path for consistency
+        location ~ ^{{ nginx_mirror_uri_prefix | regex_replace('/$', '') }}/solr/dist/lucene/solr/(?<ver>[0-9]+\.[0-9]+(?:\.[0-9]+)?(?:-[A-Za-z0-9.-]+)?)/(?<file>.+)$ {
+            return 301 {{ nginx_mirror_uri_prefix }}solr/$ver/$file;
         }
 
         location = /50x.html { root {{ nginx_root }}; }
+
+{% if nginx_acme_challenge_conf %}
+        # allow acme path to port 80
+        include {{ nginx_acme_challenge_conf }};
+{% endif %}
     }
 
     # HTTPS
@@ -71,15 +101,39 @@ http {
             autoindex_localtime on;
         }
 
-        # Legacy Solr paths → archive or current (HTTPS too)
-        location ~ ^/mirror/solr/dist/lucene/solr/(?<ver>[0-9]+\.[0-9]+(?:\.[0-9]+)?(?:-[A-Za-z0-9.-]+)?)/(?<file>.+)$ {
-            if (-f $document_root/mirror/archive/solr/$ver/$file) {
-                return 302 /mirror/archive/solr/$ver/$file;
+        # STABLE CANONICAL PATH: /mirror/solr/<version>/<file>
+        location ~ ^{{ nginx_mirror_uri_prefix | regex_replace('/$', '') }}/solr/(?<ver>[0-9]+\.[0-9]+(?:\.[0-9]+)?(?:-[A-Za-z0-9.-]+)?)/(?<file>.+)$ {
+            # Try locations in order of likelihood
+            # 1. Check apache/solr/solr (current releases like 9.10.0)
+            if (-f $document_root{{ nginx_mirror_uri_prefix }}apache/solr/solr/$ver/$file) {
+                rewrite ^ {{ nginx_mirror_uri_prefix }}apache/solr/solr/$ver/$file last;
             }
-            if ($ver ~ '^9\.') {
-                return 302 /mirror/archive/solr/9x/$ver/$file;
+            # 2. Check archive/solr/9x
+            if (-f $document_root{{ nginx_mirror_uri_prefix }}archive/solr/9x/$ver/$file) {
+                rewrite ^ {{ nginx_mirror_uri_prefix }}archive/solr/9x/$ver/$file last;
             }
-            return 302 /mirror/archive/solr/legacy/$ver/$file;
+            # 3. Check archive/solr/legacy
+            if (-f $document_root{{ nginx_mirror_uri_prefix }}archive/solr/legacy/$ver/$file) {
+                rewrite ^ {{ nginx_mirror_uri_prefix }}archive/solr/legacy/$ver/$file last;
+            }
+            # 4. Check solr/dist/lucene/solr (old structure)
+            if (-f $document_root{{ nginx_mirror_uri_prefix }}solr/dist/lucene/solr/$ver/$file) {
+                rewrite ^ {{ nginx_mirror_uri_prefix }}solr/dist/lucene/solr/$ver/$file last;
+            }
+            # If not found anywhere, return 404
+            return 404;
+        }
+
+        # LEGACY PATH SUPPORT: /mirror/apache/solr/solr/<version>/<file>
+        # Redirect to canonical path for consistency
+        location ~ ^{{ nginx_mirror_uri_prefix | regex_replace('/$', '') }}/apache/solr/solr/(?<ver>[0-9]+\.[0-9]+(?:\.[0-9]+)?(?:-[A-Za-z0-9.-]+)?)/(?<file>.+)$ {
+            return 301 {{ nginx_mirror_uri_prefix }}solr/$ver/$file;
+        }
+
+        # LEGACY PATH SUPPORT: /mirror/solr/dist/lucene/solr/<version>/<file>
+        # Redirect to canonical path for consistency
+        location ~ ^{{ nginx_mirror_uri_prefix | regex_replace('/$', '') }}/solr/dist/lucene/solr/(?<ver>[0-9]+\.[0-9]+(?:\.[0-9]+)?(?:-[A-Za-z0-9.-]+)?)/(?<file>.+)$ {
+            return 301 {{ nginx_mirror_uri_prefix }}solr/$ver/$file;
         }
 
         location = /50x.html { root {{ nginx_root }}; }

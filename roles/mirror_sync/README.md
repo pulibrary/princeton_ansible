@@ -7,7 +7,6 @@ An opinionated Ansible role that sets up [pulmirror.princeton.edu](https://pulmi
 - Installs & configures nginx to serve /mirror/ with directory listings
 - Keeps mirrors fresh via cron 4×/day at :13 past 00, 06, 12, 18
 
-
 ## What it mirrors & serves
 
 - Node.js: `rsync://unencrypted.nodejs.org/nodejs/release/` → `/var/www/htdocs/mirror/node/dist/`
@@ -17,7 +16,6 @@ An opinionated Ansible role that sets up [pulmirror.princeton.edu](https://pulmi
 ### Requirements
 
 Target hosts: OpenBSD (tested with OpenBSD 7.7)
-
 
 Role layout
 roles/mirror_artifacts/
@@ -31,6 +29,7 @@ roles/mirror_artifacts/
 └─ README.md
 
 Variables (defaults)
+
 ```yaml
 # Paths
 web_root: /var/www/htdocs
@@ -112,7 +111,6 @@ ansible-vault encrypt roles/mirror_artifacts/files/pulmirror_princeton_edu_priv.
 - Cert → `/etc/ssl/pulmirror_princeton_edu_chained.pem` (0644)
 - Key → `/etc/ssl/private/pulmirror_princeton_edu_priv.key` (0600, directory 0700)
 
-
 ### Quick start
 
 **Playbook:**
@@ -126,13 +124,11 @@ ansible-vault encrypt roles/mirror_artifacts/files/pulmirror_princeton_edu_priv.
     nginx_server_name: pulmirror.princeton.edu
 ```
 
-
 **Run:**
 
 ```bash
 ansible-playbook mirror_sync.yml --ask-vault-pass
 ```
-
 
 #### Operational details
 
@@ -146,6 +142,7 @@ ansible-playbook mirror_sync.yml --ask-vault-pass
 #### Customizing
 
 - Bandwidth cap
+
 We've been sin-binned by upstream. If this happens. Set nodejs_bwlimit / solr_bwlimit in KiB/s. Example ~20 MB/s:
 
 ```yaml
