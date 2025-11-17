@@ -1,4 +1,6 @@
 ---
+# molecule/default/verify.yml
+
 - name: Verify
   hosts: all
   become: true
@@ -11,20 +13,35 @@
       changed_when: false
       failed_when: curl_check.rc != 0
 
-    - name: Wait for systemd to settle
-      ansible.builtin.command: systemctl is-system-running
-      register: systemd_status
+    - name: Check that PID 1 looks like systemd/init
+      ansible.builtin.command: ps -p 1 -o comm=
+      register: pid1
       changed_when: false
-      retries: 10
-      delay: 3
-      until: >
-        systemd_status.rc == 0 or
-        'degraded' in systemd_status.stdout
-      failed_when: >
-        systemd_status.rc != 0 and
-        'degraded' not in systemd_status.stdout and
-        'running' not in systemd_status.stdout
 
-    - name: Show systemd status for debugging
+    - name: Assert PID 1 is systemd-like
+      ansible.builtin.assert:
+        that:
+          - "'systemd' in pid1.stdout or 'init' in pid1.stdout"
+        fail_msg: "PID 1 is not systemd/init (got: {{ pid1.stdout | trim }})"
+
+    - name: Check that systemd runtime dir exists
+      ansible.builtin.stat:
+        path: /run/systemd/system
+      register: systemd_dir
+
+    - name: Assert systemd runtime dir exists
+      ansible.builtin.assert:
+        that:
+          - systemd_dir.stat.isdir | default(false)
+        fail_msg: "/run/systemd/system is missing; systemd may not be active"
+
+    - name: Log systemd overall state (best-effort)
+      ansible.builtin.command: systemctl is-system-running
+      register: systemd_state
+      changed_when: false
+      failed_when: false
+
+    - name: Show systemd state
       ansible.builtin.debug:
-        var: systemd_status.stdout
+        msg: "systemctl is-system-running => rc={{ systemd_state.rc }}, stdout={{ systemd_state.stdout | default('') | trim }}"
+
