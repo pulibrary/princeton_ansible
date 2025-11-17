@@ -11,9 +11,20 @@
       changed_when: false
       failed_when: curl_check.rc != 0
 
-    - name: Check that systemd is running
+    - name: Wait for systemd to settle
       ansible.builtin.command: systemctl is-system-running
       register: systemd_status
       changed_when: false
-      failed_when: systemd_status.rc != 0 and
-                  "'degraded' not in systemd_status.stdout"
+      retries: 10
+      delay: 3
+      until: >
+        systemd_status.rc == 0 or
+        'degraded' in systemd_status.stdout
+      failed_when: >
+        systemd_status.rc != 0 and
+        'degraded' not in systemd_status.stdout and
+        'running' not in systemd_status.stdout
+
+    - name: Show systemd status for debugging
+      ansible.builtin.debug:
+        var: systemd_status.stdout
