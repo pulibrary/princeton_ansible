@@ -1,20 +1,21 @@
 ---
-# you MUST run this playbook on a single host with '--limit' for example `ansible-playbook -v --limit adc-prod2.princeton.edu playbooks/nginxplus.yml`
+# by default this playbook runs in the staging environment, to run in production, pass '-e runtime_env=production'.
+# you MUST run this playbook on a single host with '--limit' for example `ansible-playbook -v -e runtime_env=production --limit adc-prod2.princeton.edu playbooks/nginxplus.yml`
 # to update the second load-balancer, switch which adc# host is currently active, then run the playbook on the second (formerly active, now inactive) host
-# to update configuration for existing sites, run with '-t update_conf' for example `ansible-playbook -v --limit adc-prod2.princeton.edu playbooks/nginxplus.yml -t update_conf`
+# to update configuration for existing sites, run with '-t update_conf' for example `ansible-playbook -v -e runtime_env=production --limit adc-prod2.princeton.edu playbooks/nginxplus.yml -t update_conf`
 # to remove obsolete config files, you cannot use the update_conf tag AND you must pass '-e nginx_cleanup_config=true'
 # note that this will delete the entire config directory, this is why you must run the full playbook and not use tags
 # To find the active load-balancer ssh onto a machine and run `ip a |grep 146` the active one will display `inet 128.112.203.146/32 scope global eno1`
 
 - name: update loadbalancer configuration
-  hosts: nginxplus_production # default to staging when we get a staging environment going
+  hosts: nginxplus_{{ runtime_env | default('staging') }}
   remote_user: pulsys
   strategy: linear
   become: true
   vars_files:
     - ../group_vars/nginxplus/main.yml
     - ../group_vars/nginxplus/vault.yml
-    - ../group_vars/nginxplus/production.yml # when we merge the playbook this can have the environment
+    - ../group_vars/nginxplus/{{ runtime_env | default('staging') }}.yml
 
   pre_tasks:
     - name: prepare to update loadbalancer config
@@ -46,13 +47,13 @@
       when: runtime_env | default('staging') == "production"
 
 - name: restart nginx, load new config
-  hosts: nginxplus_production
+  hosts: nginxplus_{{ runtime_env | default('staging') }}
   remote_user: pulsys
   strategy: linear
   become: true
   vars_files:
     - ../group_vars/nginxplus/main.yml
-    - ../group_vars/nginxplus/production.yml # when we merge the playbook this can have the environment
+    - ../group_vars/nginxplus/{{ runtime_env | default('staging') }}.yml
 
   post_tasks:
     - name: tell everyone on slack you ran an ansible playbook
