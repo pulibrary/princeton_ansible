@@ -1,20 +1,19 @@
 ---
 - name: Verify
   hosts: all
+  become: true
   gather_facts: false
-  tasks:
-    - name: Check ruby package status
-      ansible.builtin.package:
-        name: "{{ item }}"
-        state: present
-      check_mode: true
-      register: pkg_status
-      loop:
-        - ruby-switch
-        - ruby2.6-dev
-        - ruby2.6
 
-    - name: Test for ruby packages
-      ansible.builtin.assert:
-        that:
-          - not pkg_status.changed
+  tasks:
+    - name: Check that curl is installed (from example role)
+      ansible.builtin.command: curl --version
+      register: curl_check
+      changed_when: false
+      failed_when: curl_check.rc != 0
+
+    - name: Check that systemd is running
+      ansible.builtin.command: systemctl is-system-running
+      register: systemd_status
+      changed_when: false
+      failed_when: systemd_status.rc != 0 and
+                  "'degraded' not in systemd_status.stdout"
