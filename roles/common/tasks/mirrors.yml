@@ -1,0 +1,71 @@
+---
+- name: Ensure repo tools present
+  ansible.builtin.package:
+    name: dnf-plugins-core
+    state: present
+  when: ansible_pkg_mgr == 'dnf'
+
+- name: Add Princeton Rocky repo (preferred by low cost)
+  ansible.builtin.template:
+    src: rocky-princeton.repo.j2
+    dest: "/etc/yum.repos.d/{{ item.priority }}-{{ item.name }}-rocky.repo"
+    owner: root
+    group: root
+    mode: '0644'
+  loop: "{{ preferred_mirrors }}"
+  when: ansible_os_family == 'RedHat'
+
+# Build cache using the package module, with retries
+- name: Build package metadata cache
+  ansible.builtin.dnf:
+    update_cache: yes
+  when: ansible_pkg_mgr == 'dnf'
+  register: dnf_cache
+  retries: 5
+  delay: 3
+  until: dnf_cache is succeeded
+
+- name: Build package metadata cache (yum fallback)
+  ansible.builtin.yum:
+    update_cache: yes
+  when: ansible_pkg_mgr == 'yum'
+  register: yum_cache
+  retries: 5
+  delay: 3
+  until: yum_cache is succeeded
+
+- name: Common | Determine Ubuntu codename
+  ansible.builtin.set_fact:
+    ubuntu_codename: "{{ ansible_distribution_release | default(ansible_lsb.codename) }}"
+  when:
+    - ansible_os_family == "Debian"
+
+- name: Common | Prefer Princeton mirror for apt
+  ansible.builtin.apt_repository:
+    repo: deb https://{{ item.base }}/pub/ubuntu {{ ubuntu_codename }} main restricted universe multiverse
+    state: present
+    filename: "{{ item.priority }}-{{ item.name }}"
+    update_cache: true
+  loop: "{{ preferred_mirrors }}"
+  when:
+    - ansible_os_family == "Debian"
+
+- name: Common | Prefer Princeton mirror for apt updates
+  ansible.builtin.apt_repository:
+    repo: deb https://{{ item.base }}/pub/ubuntu {{ ubuntu_codename }}-updates main restricted universe multiverse
+    state: present
+    filename: "{{ item.priority }}-{{ item.name }}"
+    update_cache: true
+  loop: "{{ preferred_mirrors }}"
+  when:
+    - ansible_os_family == "Debian"
+
+- name: Common | Prefer Princeton mirror for apt backports
+  ansible.builtin.apt_repository:
+    repo: deb https://{{ item.base }}/pub/ubuntu {{ ubuntu_codename }}-backports main restricted universe multiverse
+    state: present
+    filename: "{{ item.priority }}-{{ item.name }}"
+    update_cache: true
+  loop: "{{ preferred_mirrors }}"
+  when:
+    - ansible_os_family == "Debian"
