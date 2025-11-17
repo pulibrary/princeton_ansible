@@ -1,0 +1,19 @@
+---
+# handlers file for roles/himmelblau_entra_id
+- name: restart himmelblaud
+  ansible.builtin.systemd:
+    name: himmelblaud
+    state: restarted
+
+- name: SSHD | validate configuration
+  listen: "restart sshd (validate)"
+  ansible.builtin.command: sshd -t -f /etc/ssh/sshd_config
+  register: sshd_validate
+  changed_when: false
+  failed_when: sshd_validate.rc != 0
+
+- name: SSHD | restart service
+  listen: "restart sshd (validate)"
+  ansible.builtin.systemd:
+    name: "{{ himmelblau_ssh_service | default('sshd') }}"
+    state: restarted
