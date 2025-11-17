@@ -1,0 +1,121 @@
+---
+# Ensure dpkg-divert module is available (collection must be installed)
+# ansible-galaxy collection install community.general
+- name: Himmelblau | gather file state
+  ansible.builtin.stat:
+    path: "/etc/pam.d/{{ item }}"
+  loop:
+    - common-auth
+    - common-account
+    - common-session
+    - common-password
+  register: _pam_orig
+
+- name: Himmelblau | gather .distrib state
+  ansible.builtin.stat:
+    path: "/etc/pam.d/{{ item }}.distrib"
+  loop:
+    - common-auth
+    - common-account
+    - common-session
+    - common-password
+  register: _pam_distrib
+  failed_when: false
+
+- name: Himmelblau | register dpkg-divert (no rename) for each file
+  community.general.dpkg_divert:
+    path: "/etc/pam.d/{{ item }}"
+    divert: "/etc/pam.d/{{ item }}.distrib"
+    state: present
+    rename: false
+  loop:
+    - common-auth
+    - common-account
+    - common-session
+    - common-password
+
+# If original exists and diverted copy doesn't yet, save one-time copy
+- name: Ubuntu PAM (strict) | seed .distrib from current file when needed
+  ansible.builtin.copy:
+    src: "/etc/pam.d/{{ item.item }}"
+    dest: "/etc/pam.d/{{ item.item }}.distrib"
+    remote_src: true
+    force: false
+    mode: "0644"
+  loop: "{{ _pam_distrib.results }}"
+  loop_control:
+    label: "/etc/pam.d/{{ item.item }}"
+  when:
+    - (_pam_orig.results | selectattr('item','equalto', item.item) | list)[0].stat.exists | default(false)
+    - not item.stat.exists | default(false)
+
+- name: Himmelblau | write /etc/pam.d/common-auth
+  ansible.builtin.copy:
+    dest: /etc/pam.d/common-auth
+    mode: "0644"
+    owner: root
+    group: root
+    content: |
+      auth [success=done default=die] pam_himmelblau.so ignore_unknown_user mfa_poll_prompt socket=/var/run/himmelblaud/socket connect_timeout_ms=3000 retries=2
+      auth requisite                   pam_deny.so
+      auth required                    pam_permit.so
+      auth optional                    pam_cap.so
+
+- name: Himmelblau | write /etc/pam.d/common-session
+  ansible.builtin.copy:
+    dest: /etc/pam.d/common-session
+    mode: "0644"
+    owner: root
+    group: root
+    content: |
+      session [default=1]                     pam_permit.so
+      session requisite                       pam_deny.so
+      session required                        pam_permit.so
+      session optional                        pam_umask.so
+
+      session optional        pam_himmelblau.so
+      session required        pam_unix.so
+      session optional        pam_sss.so
+      session optional        pam_systemd.so
+      session required        pam_mkhomedir.so skel=/etc/skel umask=0027
+
+- name: Himmelblau | write /etc/pam.d/common-password
+  ansible.builtin.copy:
+    dest: /etc/pam.d/common-password
+    mode: "0644"
+    owner: root
+    group: root
+    content: |
+      # here are the per-package modules (the "Primary" block)
+      password        [success=4 default=ignore]    pam_himmelblau.so ignore_unknown_user
+      password        requisite                       pam_pwquality.so retry=3
+      password        [success=2 default=ignore]      pam_unix.so obscure use_authtok try_first_pass yescrypt
+      password        sufficient                      pam_sss.so use_authtok
+      # here's the fallback if no module succeeds
+      password        requisite                       pam_deny.so
+
+      password        required                        pam_permit.so
+      # and here are more per-package modules (the "Additional" block)
+      password        optional        pam_gnome_keyring.so
+      # end of pam-auth-update config
+
+- name: Himmelblau | write /etc/pam.d/common-account
+  ansible.builtin.copy:
+    dest: /etc/pam.d/common-account
+    mode: "0644"
+    owner: root
+    group: root
+    content: |
+      # here are the per-package modules (the "Primary" block)
+      account [success=done default=ignore]    pam_himmelblau.so ignore_unknown_user
+      account [success=1 new_authtok_reqd=done default=ignore]        pam_unix.so
+      # here's the fallback if no module succeeds
+      account requisite                       pam_deny.so
+      # prime the stack with a positive return value if there isn't one already;
+      # this avoids us returning an error just because nothing sets a success code
+      # since the modules above will each just jump around
+      account required                        pam_permit.so
+      # and here are more per-package modules (the "Additional" block)
+      account sufficient                      pam_localuser.so
+      account [default=bad success=ok user_unknown=ignore]    pam_sss.so
+      # end of pam-auth-update config
