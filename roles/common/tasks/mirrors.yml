@@ -125,29 +125,6 @@
     - ansible_os_family == "Debian"
   changed_when: false
 
-- name: Common | Check for stuck lock files
-  ansible.builtin.stat:
-    path: "{{ item }}"
-  loop:
-    - /var/lib/apt/lists/lock
-    - /var/cache/apt/archives/lock
-    - /var/lib/dpkg/lock
-    - /var/lib/dpkg/lock-frontend
-  when:
-    - ansible_os_family == "Debian"
-  register: lock_files_stat
-
-- name: Common | Remove any lock files that are actually present
-  ansible.builtin.file:
-    path: "{{ item.item }}"
-    state: absent
-  loop: "{{ lock_files_stat.results }}"
-  when:
-    - ansible_os_family == "Debian"
-    - item.stat.exists
-  loop_control:
-    label: "{{ item.item }}"
-
 - name: Common | Update apt cache after configuring all repositories
   ansible.builtin.command: apt-get update -o Debug::Acquire::http=true
   when:
