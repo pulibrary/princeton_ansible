@@ -1,11 +1,11 @@
 ---
-- name: Ensure repo tools present
+- name: Common - Ensure repo tools present
   ansible.builtin.package:
     name: dnf-plugins-core
     state: present
   when: ansible_pkg_mgr == 'dnf'
 
-- name: Add Princeton Rocky repo (preferred by low cost)
+- name: Common - Add Princeton Rocky repo (preferred by low cost)
   ansible.builtin.template:
     src: rocky-princeton.repo.j2
     dest: "/etc/yum.repos.d/{{ item.priority }}-{{ item.name }}-rocky.repo"
@@ -16,18 +16,18 @@
   when: ansible_os_family == 'RedHat'
 
 # Build cache using the package module, with retries
-- name: Build package metadata cache
+- name: Common - Build package metadata cache
   ansible.builtin.dnf:
-    update_cache: yes
+    update_cache: true
   when: ansible_pkg_mgr == 'dnf'
   register: dnf_cache
   retries: 5
   delay: 3
   until: dnf_cache is succeeded
 
-- name: Build package metadata cache (yum fallback)
+- name: Common - Build package metadata cache (yum fallback)
   ansible.builtin.yum:
-    update_cache: yes
+    update_cache: true
   when: ansible_pkg_mgr == 'yum'
   register: yum_cache
   retries: 5
@@ -40,32 +40,102 @@
   when:
     - ansible_os_family == "Debian"
 
-- name: Common | Prefer Princeton mirror for apt
-  ansible.builtin.apt_repository:
-    repo: deb https://{{ item.base }}/pub/ubuntu {{ ubuntu_codename }} main restricted universe multiverse
-    state: present
-    filename: "{{ item.priority }}-{{ item.name }}"
-    update_cache: true
-  loop: "{{ preferred_mirrors }}"
+- name: Common | Determine if architecture is supported by Princeton mirror
+  ansible.builtin.set_fact:
+    use_princeton_mirror: "{{ ansible_architecture in ['x86_64', 'amd64'] }}"
   when:
     - ansible_os_family == "Debian"
 
-- name: Common | Prefer Princeton mirror for apt updates
+- name: Common | Prefer Princeton mirror for apt (x86_64/amd64 only)
   ansible.builtin.apt_repository:
-    repo: deb https://{{ item.base }}/pub/ubuntu {{ ubuntu_codename }}-updates main restricted universe multiverse
+    repo: deb [arch=amd64] https://{{ item.base }}/pub/ubuntu {{ ubuntu_codename }} main restricted universe multiverse
     state: present
     filename: "{{ item.priority }}-{{ item.name }}"
-    update_cache: true
+    update_cache: false
   loop: "{{ preferred_mirrors }}"
+  when:
+    - ansible_os_family == "Debian"
+    - use_princeton_mirror | bool
+  register: princeton_mirror_apt
+  failed_when:
+    - princeton_mirror_apt is failed
+    - "'does not have a Release file' not in princeton_mirror_apt.msg | default('')"
+    - "'Failed to fetch' not in princeton_mirror_apt.msg | default('')"
+    - "'Connection failed' not in princeton_mirror_apt.msg | default('')"
+    - "'Unable to connect' not in princeton_mirror_apt.msg | default('')"
+    - "'Could not resolve' not in princeton_mirror_apt.msg | default('')"
+
+- name: Common | Add fallback Ubuntu archive for apt
+  ansible.builtin.apt_repository:
+    repo: deb http://archives.ubuntu.com/ubuntu {{ ubuntu_codename }} main restricted universe multiverse
+    state: present
+    filename: "99-ubuntu-archive"
+    update_cache: false
   when:
     - ansible_os_family == "Debian"
 
-- name: Common | Prefer Princeton mirror for apt backports
+- name: Common | Prefer Princeton mirror for apt updates (x86_64/amd64 only)
   ansible.builtin.apt_repository:
-    repo: deb https://{{ item.base }}/pub/ubuntu {{ ubuntu_codename }}-backports main restricted universe multiverse
+    repo: deb [arch=amd64] https://{{ item.base }}/pub/ubuntu {{ ubuntu_codename }}-updates main restricted universe multiverse
     state: present
     filename: "{{ item.priority }}-{{ item.name }}"
-    update_cache: true
+    update_cache: false
   loop: "{{ preferred_mirrors }}"
   when:
     - ansible_os_family == "Debian"
+    - use_princeton_mirror | bool
+  register: princeton_mirror_updates
+  failed_when:
+    - princeton_mirror_updates is failed
+    - "'does not have a Release file' not in princeton_mirror_updates.msg | default('')"
+    - "'Failed to fetch' not in princeton_mirror_updates.msg | default('')"
+    - "'Connection failed' not in princeton_mirror_updates.msg | default('')"
+    - "'Unable to connect' not in princeton_mirror_updates.msg | default('')"
+    - "'Could not resolve' not in princeton_mirror_updates.msg | default('')"
+
+- name: Common | Add fallback Ubuntu archive for apt updates
+  ansible.builtin.apt_repository:
+    repo: deb http://archives.ubuntu.com/ubuntu {{ ubuntu_codename }}-updates main restricted universe multiverse
+    state: present
+    filename: "99-ubuntu-archive"
+    update_cache: false
+  when:
+    - ansible_os_family == "Debian"
+
+- name: Common | Prefer Princeton mirror for apt backports (x86_64/amd64 only)
+  ansible.builtin.apt_repository:
+    repo: deb [arch=amd64] https://{{ item.base }}/pub/ubuntu {{ ubuntu_codename }}-backports main restricted universe multiverse
+    state: present
+    filename: "{{ item.priority }}-{{ item.name }}"
+    update_cache: false
+  loop: "{{ preferred_mirrors }}"
+  when:
+    - ansible_os_family == "Debian"
+    - use_princeton_mirror | bool
+  register: princeton_mirror_backports
+  failed_when:
+    - princeton_mirror_backports is failed
+    - "'does not have a Release file' not in princeton_mirror_backports.msg | default('')"
+    - "'Failed to fetch' not in princeton_mirror_backports.msg | default('')"
+    - "'Connection failed' not in princeton_mirror_backports.msg | default('')"
+    - "'Unable to connect' not in princeton_mirror_backports.msg | default('')"
+    - "'Could not resolve' not in princeton_mirror_backports.msg | default('')"
+
+- name: Common | Add fallback Ubuntu archive for apt backports
+  ansible.builtin.apt_repository:
+    repo: deb http://archives.ubuntu.com/ubuntu {{ ubuntu_codename }}-backports main restricted universe multiverse
+    state: present
+    filename: "99-ubuntu-archive"
+    update_cache: false
+  when:
+    - ansible_os_family == "Debian"
+
+- name: Common | Update apt cache after configuring all repositories
+  ansible.builtin.apt:
+    update_cache: true
+  when:
+    - ansible_os_family == "Debian"
+  register: apt_cache
+  retries: 3
+  delay: 5
+  until: apt_cache is succeeded
