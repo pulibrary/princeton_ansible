@@ -21,8 +21,18 @@
     repo: "deb [arch=amd64,arm64] https://dlm.mariadb.com/repo/mariadb-server/11.rolling/repo/ubuntu {{ ansible_distribution_release }} main"
     state: present
     validate_certs: false
+    update_cache: false
   when: install_app_key.changed
 
+- name: MySQL | Update apt cache after adding MariaDB repository
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 0
+  when: install_app_key.changed
+  register: mariadb_cache_update
+  retries: 3
+  delay: 5
+  until: mariadb_cache_update is succeeded
 
 - name: MySQL | Install database client packages
   ansible.builtin.apt:
@@ -116,7 +126,7 @@
     src: "deploy_user_my_cnf.j2"
     dest: "//home/{{ deploy_user }}/.my.cnf"
     owner: "{{ deploy_user }}"
-    mode: 0600
+    mode: "0600"
   when:
     - not mysql_server
 

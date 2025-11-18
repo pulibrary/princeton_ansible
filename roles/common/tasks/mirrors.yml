@@ -1,11 +1,11 @@
 ---
-- name: Common - Ensure repo tools present
+- name: Ensure repo tools present
   ansible.builtin.package:
     name: dnf-plugins-core
     state: present
   when: ansible_pkg_mgr == 'dnf'
 
-- name: Common - Add Princeton Rocky repo (preferred by low cost)
+- name: Add Princeton Rocky repo (preferred by low cost)
   ansible.builtin.template:
     src: rocky-princeton.repo.j2
     dest: "/etc/yum.repos.d/{{ item.priority }}-{{ item.name }}-rocky.repo"
@@ -16,18 +16,18 @@
   when: ansible_os_family == 'RedHat'
 
 # Build cache using the package module, with retries
-- name: Common - Build package metadata cache
+- name: Build package metadata cache
   ansible.builtin.dnf:
-    update_cache: true
+    update_cache: yes
   when: ansible_pkg_mgr == 'dnf'
   register: dnf_cache
   retries: 5
   delay: 3
   until: dnf_cache is succeeded
 
-- name: Common - Build package metadata cache (yum fallback)
+- name: Build package metadata cache (yum fallback)
   ansible.builtin.yum:
-    update_cache: true
+    update_cache: yes
   when: ansible_pkg_mgr == 'yum'
   register: yum_cache
   retries: 5
@@ -125,20 +125,87 @@
     - ansible_os_family == "Debian"
   changed_when: false
 
+- name: Common | Remove any lock files that might be stuck
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /var/lib/apt/lists/lock
+    - /var/cache/apt/archives/lock
+    - /var/lib/dpkg/lock
+    - /var/lib/dpkg/lock-frontend
+  when:
+    - ansible_os_family == "Debian"
+  register: lock_removal
+  failed_when:
+    - lock_removal is failed
+    - "'Permission denied' not in lock_removal.msg | default('')"
+    - "'No such file or directory' not in lock_removal.msg | default('')"
+
 - name: Common | Update apt cache after configuring all repositories
-  ansible.builtin.apt:
-    update_cache: true
-    cache_valid_time: 0
+  ansible.builtin.command: apt-get update -o Debug::Acquire::http=true
   when:
     - ansible_os_family == "Debian"
   register: apt_cache_update
   retries: 3
   delay: 5
-  until: apt_cache_update is succeeded
+  until: apt_cache_update.rc == 0
+  changed_when: false
+  failed_when: false
+
+- name: Common | Show apt-get update output for debugging
+  ansible.builtin.debug:
+    msg: |
+      Return code: {{ apt_cache_update.rc }}
+      STDOUT:
+      {{ apt_cache_update.stdout }}
+      STDERR:
+      {{ apt_cache_update.stderr }}
+  when:
+    - ansible_os_family == "Debian"
+
+- name: Common | Check what repository files were created
+  ansible.builtin.command: cat /etc/apt/sources.list.d/00-princeton.list
+  when:
+    - ansible_os_family == "Debian"
+    - use_princeton_mirror | bool
+  register: princeton_list_content
+  changed_when: false
+  failed_when: false
+
+- name: Common | Show Princeton repository file content
+  ansible.builtin.debug:
+    var: princeton_list_content.stdout_lines
+  when:
+    - ansible_os_family == "Debian"
+    - use_princeton_mirror | bool
+    - princeton_list_content.stdout is defined
+
+- name: Common | Check Ubuntu archive repository file
+  ansible.builtin.command: cat /etc/apt/sources.list.d/99-ubuntu-archive.list
+  when:
+    - ansible_os_family == "Debian"
+  register: ubuntu_archive_content
+  changed_when: false
+  failed_when: false
+
+- name: Common | Show Ubuntu archive file content
+  ansible.builtin.debug:
+    var: ubuntu_archive_content.stdout_lines
+  when:
+    - ansible_os_family == "Debian"
+    - ubuntu_archive_content.stdout is defined
+
+- name: Common | Fail if apt update didn't succeed
+  ansible.builtin.fail:
+    msg: "apt-get update failed with return code {{ apt_cache_update.rc }}. Check the debug output above for details."
+  when:
+    - ansible_os_family == "Debian"
+    - apt_cache_update.rc != 0
 
 - name: Common | Display apt update status
   ansible.builtin.debug:
     msg: "apt cache updated successfully"
   when:
     - ansible_os_family == "Debian"
-    - apt_cache_update is succeeded
+    - apt_cache_update.rc == 0
