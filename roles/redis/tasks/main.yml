@@ -9,6 +9,16 @@
     repo: "deb https://packages.redis.io/deb {{ ansible_distribution_release }} main"
     state: present
     filename: redis
+    update_cache: false
+
+- name: Redis | Update apt cache after adding Redis repository
+  ansible.builtin.apt:
+    update_cache: yes
+    cache_valid_time: 0
+  register: redis_cache_update
+  retries: 3
+  delay: 5
+  until: redis_cache_update is succeeded
 
 - name: Redis | install redis packages
   ansible.builtin.apt:
