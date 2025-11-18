@@ -33,14 +33,12 @@
 
     - name: create directories with respective ownership
       ansible.builtin.file:
-        path: "/backup/{{ item.name }}"
+        path: "/backup/{{ item.file_path_name }}"
         state: directory
         mode: "0755"
         group: backup
-        owner: "{{ item.owner }}"
-      loop:
-        - { name: "palofw", owner: "bkppalofw" }
-        - { name: "vcenter", owner: "bkpvcenter" }
+        owner: "{{ item.name }}"
+      loop: "{{ backup_users }}"
 
     - name: Ensure password authentication is enabled in sshd_config
       ansible.builtin.lineinfile:
