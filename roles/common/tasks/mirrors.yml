@@ -66,15 +66,6 @@
     - "'Could not resolve' not in princeton_mirror_apt.msg | default('')"
     - "'Temporary failure' not in princeton_mirror_apt.msg | default('')"
 
-- name: Common | Add fallback Ubuntu archive for apt
-  ansible.builtin.apt_repository:
-    repo: deb http://archives.ubuntu.com/ubuntu {{ ubuntu_codename }} main restricted universe multiverse
-    state: present
-    filename: "99-ubuntu-archive"
-    update_cache: false
-  when:
-    - ansible_os_family == "Debian"
-
 - name: Common | Prefer Princeton mirror for apt updates (x86_64/amd64 only)
   ansible.builtin.apt_repository:
     repo: deb [arch=amd64] https://{{ item.base }}/pub/ubuntu {{ ubuntu_codename }}-updates main restricted universe multiverse
@@ -94,15 +85,6 @@
     - "'Unable to connect' not in princeton_mirror_updates.msg | default('')"
     - "'Could not resolve' not in princeton_mirror_updates.msg | default('')"
     - "'Temporary failure' not in princeton_mirror_updates.msg | default('')"
-
-- name: Common | Add fallback Ubuntu archive for apt updates
-  ansible.builtin.apt_repository:
-    repo: deb http://archives.ubuntu.com/ubuntu {{ ubuntu_codename }}-updates main restricted universe multiverse
-    state: present
-    filename: "99-ubuntu-archive"
-    update_cache: false
-  when:
-    - ansible_os_family == "Debian"
 
 - name: Common | Prefer Princeton mirror for apt backports (x86_64/amd64 only)
   ansible.builtin.apt_repository:
@@ -124,12 +106,16 @@
     - "'Could not resolve' not in princeton_mirror_backports.msg | default('')"
     - "'Temporary failure' not in princeton_mirror_backports.msg | default('')"
 
-- name: Common | Add fallback Ubuntu archive for apt backports
+- name: Common | Add fallback Ubuntu archive for apt (all suites)
   ansible.builtin.apt_repository:
-    repo: deb http://archives.ubuntu.com/ubuntu {{ ubuntu_codename }}-backports main restricted universe multiverse
+    repo: "{{ item }}"
     state: present
     filename: "99-ubuntu-archive"
     update_cache: false
+  loop:
+    - "deb http://archives.ubuntu.com/ubuntu {{ ubuntu_codename }} main restricted universe multiverse"
+    - "deb http://archives.ubuntu.com/ubuntu {{ ubuntu_codename }}-updates main restricted universe multiverse"
+    - "deb http://archives.ubuntu.com/ubuntu {{ ubuntu_codename }}-backports main restricted universe multiverse"
   when:
     - ansible_os_family == "Debian"
 
@@ -140,45 +126,19 @@
   changed_when: false
 
 - name: Common | Update apt cache after configuring all repositories
-  ansible.builtin.command: apt-get update
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 0
   when:
     - ansible_os_family == "Debian"
   register: apt_cache_update
   retries: 3
   delay: 5
-  until: apt_cache_update.rc == 0
-  changed_when: false
-  failed_when: false
+  until: apt_cache_update is succeeded
 
-- name: Common | Display apt update output if it failed
+- name: Common | Display apt update status
   ansible.builtin.debug:
-    msg: |
-      apt-get update failed. Details:
-      Return code: {{ apt_cache_update.rc }}
-      Stdout: {{ apt_cache_update.stdout }}
-      Stderr: {{ apt_cache_update.stderr }}
+    msg: "apt cache updated successfully"
   when:
     - ansible_os_family == "Debian"
-    - apt_cache_update.rc != 0
-
-- name: Common | Check configured sources
-  ansible.builtin.command: ls -la /etc/apt/sources.list.d/
-  when:
-    - ansible_os_family == "Debian"
-    - apt_cache_update.rc != 0
-  register: sources_list
-  changed_when: false
-
-- name: Common | Display configured sources if update failed
-  ansible.builtin.debug:
-    var: sources_list.stdout_lines
-  when:
-    - ansible_os_family == "Debian"
-    - apt_cache_update.rc != 0
-
-- name: Common | Fail if apt update couldn't complete after retries
-  ansible.builtin.fail:
-    msg: "apt-get update failed after 3 retries. See debug output above for details."
-  when:
-    - ansible_os_family == "Debian"
-    - apt_cache_update.rc != 0
+    - apt_cache_update is succeeded
