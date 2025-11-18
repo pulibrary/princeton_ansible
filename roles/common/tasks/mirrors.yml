@@ -1,11 +1,11 @@
 ---
-- name: Ensure repo tools present
+- name: Common - Ensure repo tools present
   ansible.builtin.package:
     name: dnf-plugins-core
     state: present
   when: ansible_pkg_mgr == 'dnf'
 
-- name: Add Princeton Rocky repo (preferred by low cost)
+- name: Common - Add Princeton Rocky repo (preferred by low cost)
   ansible.builtin.template:
     src: rocky-princeton.repo.j2
     dest: "/etc/yum.repos.d/{{ item.priority }}-{{ item.name }}-rocky.repo"
@@ -16,18 +16,18 @@
   when: ansible_os_family == 'RedHat'
 
 # Build cache using the package module, with retries
-- name: Build package metadata cache
+- name: Common - Build package metadata cache
   ansible.builtin.dnf:
-    update_cache: yes
+    update_cache: true
   when: ansible_pkg_mgr == 'dnf'
   register: dnf_cache
   retries: 5
   delay: 3
   until: dnf_cache is succeeded
 
-- name: Build package metadata cache (yum fallback)
+- name: Common - Build package metadata cache (yum fallback)
   ansible.builtin.yum:
-    update_cache: yes
+    update_cache: true
   when: ansible_pkg_mgr == 'yum'
   register: yum_cache
   retries: 5
@@ -125,10 +125,9 @@
     - ansible_os_family == "Debian"
   changed_when: false
 
-- name: Common | Remove any lock files that might be stuck
-  ansible.builtin.file:
+- name: Common | Check for stuck lock files
+  ansible.builtin.stat:
     path: "{{ item }}"
-    state: absent
   loop:
     - /var/lib/apt/lists/lock
     - /var/cache/apt/archives/lock
@@ -136,11 +135,18 @@
     - /var/lib/dpkg/lock-frontend
   when:
     - ansible_os_family == "Debian"
-  register: lock_removal
-  failed_when:
-    - lock_removal is failed
-    - "'Permission denied' not in lock_removal.msg | default('')"
-    - "'No such file or directory' not in lock_removal.msg | default('')"
+  register: lock_files_stat
+
+- name: Common | Remove any lock files that are actually present
+  ansible.builtin.file:
+    path: "{{ item.item }}"
+    state: absent
+  loop: "{{ lock_files_stat.results }}"
+  when:
+    - ansible_os_family == "Debian"
+    - item.stat.exists
+  loop_control:
+    label: "{{ item.item }}"
 
 - name: Common | Update apt cache after configuring all repositories
   ansible.builtin.command: apt-get update -o Debug::Acquire::http=true
