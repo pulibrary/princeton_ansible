@@ -64,6 +64,7 @@
     - "'Connection failed' not in princeton_mirror_apt.msg | default('')"
     - "'Unable to connect' not in princeton_mirror_apt.msg | default('')"
     - "'Could not resolve' not in princeton_mirror_apt.msg | default('')"
+    - "'Temporary failure' not in princeton_mirror_apt.msg | default('')"
 
 - name: Common | Add fallback Ubuntu archive for apt
   ansible.builtin.apt_repository:
@@ -92,6 +93,7 @@
     - "'Connection failed' not in princeton_mirror_updates.msg | default('')"
     - "'Unable to connect' not in princeton_mirror_updates.msg | default('')"
     - "'Could not resolve' not in princeton_mirror_updates.msg | default('')"
+    - "'Temporary failure' not in princeton_mirror_updates.msg | default('')"
 
 - name: Common | Add fallback Ubuntu archive for apt updates
   ansible.builtin.apt_repository:
@@ -120,6 +122,7 @@
     - "'Connection failed' not in princeton_mirror_backports.msg | default('')"
     - "'Unable to connect' not in princeton_mirror_backports.msg | default('')"
     - "'Could not resolve' not in princeton_mirror_backports.msg | default('')"
+    - "'Temporary failure' not in princeton_mirror_backports.msg | default('')"
 
 - name: Common | Add fallback Ubuntu archive for apt backports
   ansible.builtin.apt_repository:
@@ -130,12 +133,52 @@
   when:
     - ansible_os_family == "Debian"
 
-- name: Common | Update apt cache after configuring all repositories
-  ansible.builtin.apt:
-    update_cache: true
+- name: Common | Clean apt cache before update
+  ansible.builtin.command: apt-get clean
   when:
     - ansible_os_family == "Debian"
-  register: apt_cache
+  changed_when: false
+
+- name: Common | Update apt cache after configuring all repositories
+  ansible.builtin.command: apt-get update
+  when:
+    - ansible_os_family == "Debian"
+  register: apt_cache_update
   retries: 3
   delay: 5
-  until: apt_cache is succeeded
+  until: apt_cache_update.rc == 0
+  changed_when: false
+  failed_when: false
+
+- name: Common | Display apt update output if it failed
+  ansible.builtin.debug:
+    msg: |
+      apt-get update failed. Details:
+      Return code: {{ apt_cache_update.rc }}
+      Stdout: {{ apt_cache_update.stdout }}
+      Stderr: {{ apt_cache_update.stderr }}
+  when:
+    - ansible_os_family == "Debian"
+    - apt_cache_update.rc != 0
+
+- name: Common | Check configured sources
+  ansible.builtin.command: ls -la /etc/apt/sources.list.d/
+  when:
+    - ansible_os_family == "Debian"
+    - apt_cache_update.rc != 0
+  register: sources_list
+  changed_when: false
+
+- name: Common | Display configured sources if update failed
+  ansible.builtin.debug:
+    var: sources_list.stdout_lines
+  when:
+    - ansible_os_family == "Debian"
+    - apt_cache_update.rc != 0
+
+- name: Common | Fail if apt update couldn't complete after retries
+  ansible.builtin.fail:
+    msg: "apt-get update failed after 3 retries. See debug output above for details."
+  when:
+    - ansible_os_family == "Debian"
+    - apt_cache_update.rc != 0
