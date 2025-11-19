@@ -1,17 +1,17 @@
 ---
-- name: nodejs | get yarn key from yarnpkg
+- name: Nodejs | get yarn key from yarnpkg
   ansible.builtin.apt_key:
     url: https://dl.yarnpkg.com/debian/pubkey.gpg
     state: present
   register: yarn_pkg_registered
   when: use_yarn
 
-- name: nodejs | get yarn keys from other sources
+- name: Nodejs | get yarn keys from other sources
   ansible.builtin.apt_key:
     id: "{{ nodejs__yarn_upstream_key_id }}"
     keyserver: "{{ item }}"
     state: present
-  when: 
+  when:
     - yarn_pkg_registered is failed
     - use_yarn
   register: yarn_key_registered
@@ -22,26 +22,36 @@
   failed_when:
     - yarn_key_registered == 0
 
-- name: nodejs | Add upstream Yarn APT repository
+- name: Nodejs | Add upstream Yarn APT repository
   ansible.builtin.apt_repository:
     repo: "{{ nodejs__yarn_upstream_repository }}"
     state: present
+    update_cache: false
   when: use_yarn
 
-- name: nodejs | uninstall any apt installed node
+- name: Nodejs | Update apt cache after adding repository
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 0
+  register: repo_cache_update
+  retries: 3
+  delay: 5
+  until: repo_cache_update is succeeded
+
+- name: Nodejs | uninstall any apt installed node
   ansible.builtin.apt:
     name: ["nodejs"]
     state: absent
   changed_when: false
 
-- name: nodejs | download nodejs version
+- name: Nodejs | download nodejs version
   ansible.builtin.unarchive:
     src: "{{ nodejs_release_url }}/{{ desired_nodejs_version }}/node-{{ desired_nodejs_version }}-linux-x64.tar.gz"
     dest: /usr/local
     creates: /usr/local/node-{{ desired_nodejs_version }}-linux-x64
     remote_src: true
 
-- name: nodejs | create symbolic links for node and npm
+- name: Nodejs | create symbolic links for node and npm
   ansible.builtin.file:
     src: "{{ item.src }}"
     dest: "{{ item.dest }}"
@@ -53,7 +63,7 @@
     - {src: "/usr/local/node-{{ desired_nodejs_version }}-linux-x64/lib/node_modules/npm/bin/npm-cli.js", dest: "/usr/local/bin/npm"}
   changed_when: false
 
-- name: nodejs | Install yarn packages
+- name: Nodejs | Install yarn packages
   ansible.builtin.apt:
     name: ["yarn"]
     state: present

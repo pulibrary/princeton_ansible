@@ -16,16 +16,21 @@
     state: present
     url: https://nginx.org/keys/nginx_signing.key
 
-- name: Add Nginx repository
+- name: Nginx - add repository
   ansible.builtin.apt_repository:
     repo: deb http://nginx.org/packages/ubuntu/ {{ ansible_distribution_release }} nginx
     state: present
     filename: nginx
+    update_cache: false
 
-- name: Nginx | Refresh apt cache
+- name: Nginx | Update apt cache after adding repository
   ansible.builtin.apt:
     update_cache: true
-  tags: molecule-idempotence-notest
+    cache_valid_time: 0
+  register: repo_cache_update
+  retries: 3
+  delay: 5
+  until: repo_cache_update is succeeded
 
 - name: Nginx | Install Nginx
   ansible.builtin.apt:

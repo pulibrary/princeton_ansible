@@ -1,19 +1,19 @@
 ---
 # Needed in order to add the rabbitmq repository
-- name: remove old erlang apt repository
-  apt_repository:
+- name: Rabbitmq - remove old erlang apt repository
+  ansible.builtin.apt_repository:
     repo: 'deb https://dl.bintray.com/rabbitmq-erlang/debian {{ ansible_distribution_release }} erlang-21.x'
     state: absent
     update_cache: false
 
-- name: remove old rabbitmq official apt repository
-  apt_repository:
+- name: Rabbitmq - remove old rabbitmq official apt repository
+  ansible.builtin.apt_repository:
     repo: 'deb https://dl.bintray.com/rabbitmq/debian {{ ansible_distribution_release }} main'
     state: absent
     update_cache: false
 
-- name: remove old rabbitmq repositories
-  apt_repository:
+- name: Rabbitmq - remove old rabbitmq repositories
+  ansible.builtin.apt_repository:
     repo: '{{ item }}'
     state: absent
     update_cache: false
@@ -25,46 +25,46 @@
     - 'deb https://packagecloud.io/rabbitmq/rabbitmq-server/ubuntu/ {{ ansible_distribution_release }} main'
     - 'deb-src https://packagecloud.io/rabbitmq/rabbitmq-server/ubuntu/ {{ ansible_distribution_release }} main'
 
-- name: ensure software-properties-common is installed
-  apt:
+- name: Rabbitmq - ensure software-properties-common is installed
+  ansible.builtin.apt:
     name: ['software-properties-common', 'apt-transport-https']
     state: present
 
-- name: import rabbitmq key
-  apt_key:
+- name: Rabbitmq - import rabbitmq key
+  ansible.builtin.apt_key:
     keyserver: 'keys.openpgp.org'
     id: '0A9AF2115F4687BD29803A206B73A36E6026DFCA'
 
-- name: import rabbitmq modern erlang key
-  apt_key:
+- name: Rabbitmq - import rabbitmq modern erlang key
+  ansible.builtin.apt_key:
     keyserver: 'keys.openpgp.org'
     id: '0A9AF2115F4687BD29803A206B73A36E6026DFCA'
 
-- name: install package
-  apt:
+- name: Rabbitmq - install package
+  ansible.builtin.apt:
     name: rabbitmq-server
     state: present
 
-- name: enable rabbitmq plugins
-  rabbitmq_plugin:
+- name: Rabbitmq - enable rabbitmq plugins
+  community.rabbitmq.rabbitmq_plugin:
     names: rabbitmq_management
     state: enabled
   notify:
     - restart rabbitmq
 
-- name: add user
-  become: true
-  rabbitmq_user:
-    user: '{{rabbitmq_user}}'
-    password: '{{rabbitmq_password}}'
-    tags: 'administrator,{{rabbitmq_user}}'
+- name: Rabbitmq - add user
+  community.rabbitmq.rabbitmq_user:
+    user: '{{ rabbitmq_user }}'
+    password: '{{ rabbitmq_password }}'
+    tags: 'administrator,{{ rabbitmq_user }}'
     vhost: '/'
     configure_priv: '.*'
     write_priv: '.*'
     read_priv: '.*'
     state: present
+  become: true
 
-- name: remove default guest user
-  rabbitmq_user:
+- name: Rabbitmq - remove default guest user
+  community.rabbitmq.rabbitmq_user:
     user: guest
     state: absent

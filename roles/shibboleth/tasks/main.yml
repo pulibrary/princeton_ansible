@@ -1,0 +1,99 @@
+---
+- name: shibboleth | include apache config task
+  ansible.builtin.include_tasks:
+    file: apache_config.yml
+
+# tasks file for roles/shibboleth
+- name: shibboleth | Download repository package
+  ansible.builtin.get_url:
+    url: "{{ repo_url }}/{{ ansible_distribution_release }}/main/binary-all/misc/switchaai-apt-source_1.0.0ubuntu1_all.deb"
+    dest: /tmp
+  when: running_on_server
+
+- name: shibboleth | Install repository package
+  ansible.builtin.apt:
+    deb: /tmp/switchaai-apt-source_1.0.0ubuntu1_all.deb
+  when: running_on_server
+
+- name: shibboleth | Shibboleth Service Provider Installation
+  ansible.builtin.apt:
+    name: ["shibboleth"]
+    state: present
+    install_recommends: true
+  when: running_on_server
+
+- name: shibboleth | generate keys
+  ansible.builtin.command: "/usr/sbin/shib-keygen -f -u _shibd -h {{ shib_hostname }} -y 10 -o /etc/shibboleth/"
+  when: running_on_server
+  args:
+    creates: "{{ item }}"
+  loop:
+    - /etc/shibboleth/sp-cert.pem
+    - /etc/shibboleth/sp-key.pem
+
+- name: shibboleth | generate metadata file
+  ansible.builtin.shell: "/usr/bin/shib-metagen -c /etc/shibboleth/sp-cert.pem -h {{ shib_hostname }} -e {{ shib_hostname }} > {{ shib_host }}_metadata.xml"
+  args:
+    chdir: /etc/shibboleth/
+    creates: "/etc/shibboleth/{{ shib_host }}_metadata.xml"
+  changed_when: false
+  become: true
+  when: running_on_server
+
+- name: shibboleth | add attributes for shibboleth
+  ansible.builtin.copy:
+    src: attribute-map.xml
+    dest: "{{ shib_home }}/attribute-map.xml"
+    mode: 0644
+  when: running_on_server
+
+- name: shibboleth | add security policy for shibboleth
+  ansible.builtin.copy:
+    src: security-policy.xml
+    dest: "{{ shib_home }}/security-policy.xml"
+    mode: 0644
+  when: running_on_server
+
+- name: shibboleth | add protocols for shibboleth
+  ansible.builtin.copy:
+    src: protocols.xml
+    dest: "{{ shib_home }}/protocols.xml"
+    mode: 0644
+  when: running_on_server
+
+- name: shibboleth | add attribute-policy for shibboleth
+  ansible.builtin.copy:
+    src: attribute-policy.xml
+    dest: "{{ shib_home }}/attribute-policy.xml"
+    mode: 0644
+  when: running_on_server
+
+- name: shibboleth | add logging config for shibboleth
+  ansible.builtin.copy:
+    src: shibd.logger
+    dest: "{{ shib_home }}/shibd.logger"
+    mode: 0644
+  when: running_on_server
+
+
+- name: shibboleth | add shibboleth sp config
+  ansible.builtin.template:
+    src: shibboleth2.xml.j2
+    dest: "{{ shib_home }}/shibboleth2.xml"
+    mode: 0644
+    force: true
+  when: running_on_server
+
+- name: shibboleth | add shibboleth idp config
+  ansible.builtin.get_url:
+    url: "https://idp.princeton.edu/idp/shibboleth"
+    dest: "{{ shib_home }}/idp-metadata.xml"
+  when: running_on_server
+
+- name: shibboleth | restart shibd
+  ansible.builtin.service:
+    name: shibd
+    enabled: true
+    state: restarted
+  become: true
+  when: running_on_server

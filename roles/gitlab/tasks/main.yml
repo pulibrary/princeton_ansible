@@ -68,10 +68,16 @@
     repo: "deb [signed-by=/usr/share/keyrings/gitlab-ce-archive-keyring.gpg] https://packages.gitlab.com/gitlab/gitlab-ce/ubuntu jammy main"
     filename: gitlab_gitlab-ce
     state: present
+    update_cache: false
 
-- name: GitLab | Update apt cache after adding repo
+- name: Gitlab | Update apt cache after adding repository
   ansible.builtin.apt:
     update_cache: true
+    cache_valid_time: 0
+  register: repo_cache_update
+  retries: 3
+  delay: 5
+  until: repo_cache_update is succeeded
 
 - name: GitLab | install CE package
   ansible.builtin.apt:

@@ -247,6 +247,15 @@
     codename: "{{ ansible_lsb.codename | default('jammy') }}"
     update_cache: false
 
+- name: Figgy | Update apt cache after adding repository
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 0
+  register: repo_cache_update
+  retries: 3
+  delay: 5
+  until: repo_cache_update is succeeded
+
 - name: Figgy | Install GDAL
   ansible.builtin.apt:
     name: "{{ item }}"
