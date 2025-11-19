@@ -35,11 +35,21 @@
   when:
     - ansible_os_family == "Debian"
 
+- name: PostgreSQL | Update apt cache after adding PostgreSQL repository
+  ansible.builtin.apt:
+    update_cache: yes
+    cache_valid_time: 0
+  when:
+    - ansible_os_family == "Debian"
+  register: postgresql_cache_update
+  retries: 3
+  delay: 5
+  until: postgresql_cache_update is succeeded
+
 - name: PostgreSQL | install postgresql server packages (Ubuntu)
   ansible.builtin.apt:
     name: '{{ item }}'
     state: present
-    cache_valid_time: '{{ apt_cache_timeout }}'
   loop:
     - "{{ postgres_packages }}"
   when:
@@ -99,7 +109,6 @@
   ansible.builtin.apt:
     name: '{{ item }}'
     state: present
-    cache_valid_time: '{{ apt_cache_timeout }}'
   loop:
     - "{{ postgres_client_packages }}"
   changed_when: false
