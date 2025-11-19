@@ -55,6 +55,31 @@
     owner: "{{ deploy_user }}"
     mode: "0755"
 
+- name: Ezproxy | Clean apt cache
+  ansible.builtin.command: apt-get clean
+  changed_when: false
+
+- name: Ezproxy | Update apt cache after adding repository
+  ansible.builtin.command: apt-get update
+  register: ezproxy_cache_update
+  retries: 3
+  delay: 5
+  until: ezproxy_cache_update.rc == 0
+  changed_when: false
+  failed_when: false
+
+- name: Ezproxy | Display errors if update failed
+  ansible.builtin.debug:
+    msg: |
+      Return code: {{ ezproxy_cache_update.rc }}
+      STDERR: {{ ezproxy_cache_update.stderr }}
+  when: ezproxy_cache_update.rc != 0
+
+- name: Ezproxy | Fail if update failed
+  ansible.builtin.fail:
+    msg: "Cache update failed after adding repository"
+  when: ezproxy_cache_update.rc != 0
+
 - name: Ezproxy | install certbot
   ansible.builtin.apt:
     name: certbot
