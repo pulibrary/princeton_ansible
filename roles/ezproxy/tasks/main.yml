@@ -55,11 +55,35 @@
     owner: "{{ deploy_user }}"
     mode: "0755"
 
+- name: Ezproxy | Clean apt cache
+  ansible.builtin.command: apt-get clean
+  changed_when: false
+
+- name: Ezproxy | Update apt cache after adding repository
+  ansible.builtin.command: apt-get update
+  register: ezproxy_cache_update
+  retries: 3
+  delay: 5
+  until: ezproxy_cache_update.rc == 0
+  changed_when: false
+  failed_when: false
+
+- name: Ezproxy | Display errors if update failed
+  ansible.builtin.debug:
+    msg: |
+      Return code: {{ ezproxy_cache_update.rc }}
+      STDERR: {{ ezproxy_cache_update.stderr }}
+  when: ezproxy_cache_update.rc != 0
+
+- name: Ezproxy | Fail if update failed
+  ansible.builtin.fail:
+    msg: "Cache update failed after adding repository"
+  when: ezproxy_cache_update.rc != 0
+
 - name: Ezproxy | install certbot
   ansible.builtin.apt:
     name: certbot
     state: present
-    update_cache: true
 
 - name: Ezproxy | update acme certificates for {{ domain_name }}
   ansible.builtin.command: /usr/bin/certbot certonly --standalone --non-interactive --agree-tos --email lsupport@princeton.edu --server https://acme.sectigo.com/v2/InCommonRSAOV --eab-kid {{ vault_acme_eab_kid }} --eab-hmac-key {{ vault_acme_eab_hmac_key }} --domain {{ domain_name }}.princeton.edu --cert-name {{ domain_place_name }}
@@ -113,6 +137,32 @@
   ansible.builtin.apt_repository:
     repo: "ppa:maxmind/ppa"
     state: present
+    update_cache: false
+
+- name: Ezproxy | Clean apt cache
+  ansible.builtin.command: apt-get clean
+  changed_when: false
+
+- name: Ezproxy | Update apt cache after adding repository
+  ansible.builtin.command: apt-get update
+  register: ezproxy_cache_update
+  retries: 3
+  delay: 5
+  until: ezproxy_cache_update.rc == 0
+  changed_when: false
+  failed_when: false
+
+- name: Ezproxy | Display errors if update failed
+  ansible.builtin.debug:
+    msg: |
+      Return code: {{ ezproxy_cache_update.rc }}
+      STDERR: {{ ezproxy_cache_update.stderr }}
+  when: ezproxy_cache_update.rc != 0
+
+- name: Ezproxy | Fail if update failed
+  ansible.builtin.fail:
+    msg: "Cache update failed after adding repository"
+  when: ezproxy_cache_update.rc != 0
 
 - name: Ezproxy | install geoupdate
   ansible.builtin.apt:

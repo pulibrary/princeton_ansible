@@ -31,14 +31,40 @@
   ansible.builtin.apt_repository:
     repo: 'deb http://apt.postgresql.org/pub/repos/apt/ {{ ansible_distribution_release }}-pgdg main'
     state: present
+    update_cache: false
   when:
     - ansible_os_family == "Debian"
+
+- name: PostgreSQL | Clean apt cache
+  ansible.builtin.command: apt-get clean
+  changed_when: false
+
+- name: PostgreSQL | Update apt cache after adding repository
+  ansible.builtin.command: apt-get update
+  register: cache_update
+  retries: 3
+  delay: 5
+  until: cache_update.rc == 0
+  changed_when: false
+  failed_when: false
+
+- name: PostgreSQL | Display cache update errors
+  ansible.builtin.debug:
+    msg: |
+      Return code: {{ cache_update.rc }}
+      STDOUT: {{ cache_update.stdout }}
+      STDERR: {{ cache_update.stderr }}
+  when: cache_update.rc != 0
+
+- name: PostgreSQL | Fail if cache update failed
+  ansible.builtin.fail:
+    msg: "apt-get update failed. See debug output above."
+  when: cache_update.rc != 0
 
 - name: PostgreSQL | install postgresql server packages (Ubuntu)
   ansible.builtin.apt:
     name: '{{ item }}'
     state: present
-    cache_valid_time: '{{ apt_cache_timeout }}'
   loop:
     - "{{ postgres_packages }}"
   when:
@@ -98,7 +124,6 @@
   ansible.builtin.apt:
     name: '{{ item }}'
     state: present
-    cache_valid_time: '{{ apt_cache_timeout }}'
   loop:
     - "{{ postgres_client_packages }}"
   changed_when: false

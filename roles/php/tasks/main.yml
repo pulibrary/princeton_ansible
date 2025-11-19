@@ -30,9 +30,35 @@
 - name: Php | Add ondrej sury repository
   ansible.builtin.apt_repository:
     repo: "ppa:ondrej/php"
-    update_cache: true
     codename: "{{ ansible_distribution_release }}"
     state: present
+    update_cache: false
+
+- name: Php | Clean apt cache
+  ansible.builtin.command: apt-get clean
+  changed_when: false
+
+- name: Php | Update apt cache after adding repository
+  ansible.builtin.command: apt-get update
+  register: cache_update
+  retries: 3
+  delay: 5
+  until: cache_update.rc == 0
+  changed_when: false
+  failed_when: false
+
+- name: Php | Display cache update errors
+  ansible.builtin.debug:
+    msg: |
+      Return code: {{ cache_update.rc }}
+      STDOUT: {{ cache_update.stdout }}
+      STDERR: {{ cache_update.stderr }}
+  when: cache_update.rc != 0
+
+- name: Php | Fail if cache update failed
+  ansible.builtin.fail:
+    msg: "apt-get update failed. See debug output above."
+  when: cache_update.rc != 0
 
 - name: Php | install php
   ansible.builtin.apt:

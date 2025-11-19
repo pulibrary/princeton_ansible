@@ -9,14 +9,22 @@
     - install_mailcatcher: true
   become: true
   pre_tasks:
-    - name: update cache
-      apt:
-        update_cache: true
-        cache_valid_time: 600
+    - name: Role | Clean apt cache before update
+      ansible.builtin.command: apt-get clean
+      changed_when: false
+
+    - name: Role | Update apt cache after adding repository
+      ansible.builtin.command: apt-get update
+      register: repo_cache_update
+      retries: 3
+      delay: 5
+      until: repo_cache_update.rc == 0
+      changed_when: false
+      failed_when: false
   roles:
     - role: samba
     - role: hr_share
   tasks:
     - name: "Include approvals"
-      include_role:
+      ansible.builtin.include_role:
         name: approvals
