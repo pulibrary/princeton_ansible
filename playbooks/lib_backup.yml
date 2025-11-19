@@ -1,0 +1,92 @@
+---
+- name: build the firewall and vcenter backup server
+  hosts: backup
+  remote_user: pulsys
+  become: true
+  vars_files:
+    - ../group_vars/lib_backup/main.yml
+    - ../group_vars/lib_backup/vault.yml
+
+  roles:
+    - role: common
+
+  vars:
+    # You can add more always-allowed users here later if needed
+    allow_ssh_base_users:
+      - pulsys
+
+  tasks:
+    - name: Ensure the backup group exists
+      ansible.builtin.group:
+        name: backup
+        state: present
+
+    - name: Manage users and group membership
+      ansible.builtin.user:
+        name: "{{ item.name }}"
+        password: "{{ item.password }}"
+        shell: /bin/bash
+        groups: backup
+        append: true
+        state: present
+      loop: "{{ backup_users }}"
+
+    - name: create directories with respective ownership
+      ansible.builtin.file:
+        path: "/backup/{{ item.file_path_name }}"
+        state: directory
+        mode: "0755"
+        group: backup
+        owner: "{{ item.name }}"
+      loop: "{{ backup_users }}"
+
+    - name: Ensure password authentication is enabled in sshd_config
+      ansible.builtin.lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^(\s*)#?\s*PasswordAuthentication\s+'
+        line: 'PasswordAuthentication yes'
+        state: present
+        validate: /usr/sbin/sshd -t -f %s
+      notify: Restart sshd
+
+    - name: Build AllowUsers list (pulsys + backup users)
+      ansible.builtin.set_fact:
+        allow_ssh_users: >-
+          {{ (allow_ssh_base_users + (backup_users | map(attribute='name') | list)) | unique }}
+
+    - name: Ensure sshd drop-in directory exists
+      ansible.builtin.file:
+        path: /etc/ssh/sshd_config.d
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Remove old pulsys-only drop-in if present
+      ansible.builtin.file:
+        path: /etc/ssh/sshd_config.d/99-allowusers-pulsys.conf
+        state: absent
+      notify: Restart sshd
+
+    - name: Manage unified AllowUsers drop-in
+      ansible.builtin.copy:
+        dest: /etc/ssh/sshd_config.d/99-allowusers.conf
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          # Managed by Ansible
+          AllowUsers {{ allow_ssh_users | join(' ') }}
+      notify: Restart sshd
+
+  post_tasks:
+    - name: send information to slack
+      ansible.builtin.include_tasks:
+        file: utils/slack_tasks_end_of_playbook.yml
+
+  handlers:
+    - name: Restart sshd
+      ansible.builtin.service:
+        name: ssh
+        state: restarted
+
