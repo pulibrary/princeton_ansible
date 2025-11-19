@@ -8,6 +8,19 @@
     - rails_app_name: 'approvals'
     - install_mailcatcher: true
   become: true
+  pre_tasks:
+    - name: Role | Clean apt cache before update
+      ansible.builtin.command: apt-get clean
+      changed_when: false
+
+    - name: Role | Update apt cache after adding repository
+      ansible.builtin.command: apt-get update
+      register: repo_cache_update
+      retries: 3
+      delay: 5
+      until: repo_cache_update.rc == 0
+      changed_when: false
+      failed_when: false
   roles:
     - role: samba
     - role: hr_share
