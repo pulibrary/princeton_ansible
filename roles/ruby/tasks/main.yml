@@ -1,34 +1,43 @@
 ---
-- name: ruby | install the dependencies
+- name: Ruby | install the dependencies
   ansible.builtin.apt:
     name: software-properties-common
     state: present
 
-- name: ruby | add the Brightbox repository
+- name: Ruby | add the Brightbox repository
   ansible.builtin.apt_repository:
     repo: "ppa:brightbox/ruby-ng"
     state: present
-    update_cache: true
+    update_cache: false
 
-- name: ruby | check version
+- name: Ruby | Update apt cache after adding repository
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 0
+  register: repo_cache_update
+  retries: 3
+  delay: 5
+  until: repo_cache_update is succeeded
+
+- name: Ruby | check version
   ansible.builtin.command: ruby -v
   register: installed_ruby
   ignore_errors: true
   changed_when: false
 
-- name: ruby | install Ruby "{{ ruby_version }}"
+- name: Ruby | install Ruby "{{ ruby_version }}"
   ansible.builtin.apt:
     name: ["{{ ruby_version }}", "{{ ruby_version }}-dev", "ruby-switch"]
     state: present
   when: installed_ruby.rc !=0 or installed_ruby.stdout.split()[1] != ruby_version
   register: packages_installed
 
-- name: ruby | switch to Ruby "{{ ruby_version }}" release for the system default
+- name: Ruby | switch to Ruby "{{ ruby_version }}" release for the system default
   ansible.builtin.command: ruby-switch --set "{{ ruby_version }}"
   when: installed_ruby.rc !=0 or installed_ruby.stdout.split()[1] != ruby_version
   changed_when: false
 
-- name: ruby | uninstall bundler to get specific version
+- name: Ruby | uninstall bundler to get specific version
   community.general.gem:
     name: bundler
     state: absent
@@ -36,7 +45,7 @@
   changed_when: false
   when: bundler_version is defined
 
-- name: ruby | install global bundler, specific version
+- name: Ruby | install global bundler, specific version
   community.general.gem:
     name: bundler
     version: "{{ bundler_version }}"
@@ -44,7 +53,7 @@
   when: bundler_version is defined
   changed_when: false
 
-- name: ruby | install global bundler, any version
+- name: Ruby | install global bundler, any version
   community.general.gem:
     name: bundler
     user_install: false
