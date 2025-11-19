@@ -11,14 +11,31 @@
     filename: redis
     update_cache: false
 
+- name: Redis | Clean apt cache before update
+  ansible.builtin.command: apt-get clean
+  changed_when: false
+
 - name: Redis | Update apt cache after adding Redis repository
-  ansible.builtin.apt:
-    update_cache: yes
-    cache_valid_time: 0
+  ansible.builtin.command: apt-get update
   register: redis_cache_update
   retries: 3
   delay: 5
-  until: redis_cache_update is succeeded
+  until: redis_cache_update.rc == 0
+  changed_when: false
+  failed_when: false
+
+- name: Redis | Display cache update output for debugging
+  ansible.builtin.debug:
+    msg: |
+      apt-get update return code: {{ redis_cache_update.rc }}
+      STDOUT: {{ redis_cache_update.stdout }}
+      STDERR: {{ redis_cache_update.stderr }}
+  when: redis_cache_update.rc != 0
+
+- name: Redis | Fail if cache update didn't succeed
+  ansible.builtin.fail:
+    msg: "Failed to update apt cache after adding Redis repository. See debug output above."
+  when: redis_cache_update.rc != 0
 
 - name: Redis | install redis packages
   ansible.builtin.apt:
