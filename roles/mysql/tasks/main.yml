@@ -25,14 +25,30 @@
   when: install_app_key.changed
 
 - name: MySQL | Update apt cache after adding MariaDB repository
-  ansible.builtin.apt:
-    update_cache: true
-    cache_valid_time: 0
+  ansible.builtin.command: apt-get update
   when: install_app_key.changed
   register: mariadb_cache_update
   retries: 3
   delay: 5
-  until: mariadb_cache_update is succeeded
+  until: mariadb_cache_update.rc == 0
+  changed_when: false
+  failed_when: false
+
+- name: MySQL | Display errors if update failed
+  ansible.builtin.debug:
+    msg: |
+      Return code: {{ mariadb_cache_update.rc }}
+      STDERR: {{ mariadb_cache_update.stderr }}
+  when:
+    - install_app_key.changed
+    - mariadb_cache_update.rc != 0
+
+- name: MySQL | Fail if update failed
+  ansible.builtin.fail:
+    msg: "Cache update failed after adding MariaDB repository"
+  when:
+    - install_app_key.changed
+    - mariadb_cache_update.rc != 0
 
 - name: MySQL | Install database client packages
   ansible.builtin.apt:
