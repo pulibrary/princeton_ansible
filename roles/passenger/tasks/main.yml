@@ -23,14 +23,31 @@
     filename: passenger
     update_cache: false
 
-- name: Phusion | Update apt cache after adding repository
-  ansible.builtin.apt:
-    update_cache: true
-    cache_valid_time: 0
-  register: repo_cache_update
+- name: Passenger | Clean apt cache
+  ansible.builtin.command: apt-get clean
+  changed_when: false
+
+- name: Passenger | Update apt cache after adding repository
+  ansible.builtin.command: apt-get update
+  register: cache_update
   retries: 3
   delay: 5
-  until: repo_cache_update is succeeded
+  until: cache_update.rc == 0
+  changed_when: false
+  failed_when: false
+
+- name: Passenger | Display cache update errors
+  ansible.builtin.debug:
+    msg: |
+      Return code: {{ cache_update.rc }}
+      STDOUT: {{ cache_update.stdout }}
+      STDERR: {{ cache_update.stderr }}
+  when: cache_update.rc != 0
+
+- name: Passenger | Fail if cache update failed
+  ansible.builtin.fail:
+    msg: "apt-get update failed. See debug output above."
+  when: cache_update.rc != 0
 
 - name: Phusion | Install Nginx and Passenger.
   ansible.builtin.apt:
