@@ -1,11 +1,8 @@
 ---
-# molecule/default/verify.yml
-
 - name: Verify
   hosts: all
   become: true
   gather_facts: false
-
   tasks:
     - name: Check that curl is installed (from example role)
       ansible.builtin.command: curl --version
@@ -18,12 +15,19 @@
       register: pid1
       changed_when: false
 
-    - name: Wait for systemd to finish initializing
+    - name: Wait for systemd to be operational (running or degraded)
       ansible.builtin.shell: |
-        until systemctl is-system-running | grep -q 'running'; do
+        for i in {1..60}; do
+          state=$(systemctl is-system-running 2>/dev/null || echo "unknown")
+          if [[ "$state" == "running" ]] || [[ "$state" == "degraded" ]]; then
+            exit 0
+          fi
           sleep 1
         done
+        exit 1
       changed_when: false
+      failed_when: false
+      register: systemd_wait
 
     - name: Assert PID 1 is systemd-like
       ansible.builtin.assert:
@@ -51,3 +55,10 @@
     - name: Show systemd state
       ansible.builtin.debug:
         msg: "systemctl is-system-running => rc={{ systemd_state.rc }}, stdout={{ systemd_state.stdout | default('') | trim }}"
+
+    - name: Assert systemd is operational
+      ansible.builtin.assert:
+        that:
+          - systemd_wait.rc == 0
+        fail_msg: "Systemd did not become operational within 60 seconds"
+        success_msg: "Systemd is operational ({{ systemd_state.stdout | default('unknown') | trim }})"
