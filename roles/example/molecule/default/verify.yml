@@ -18,6 +18,13 @@
       register: pid1
       changed_when: false
 
+    - name: Wait for systemd to finish initializing
+      ansible.builtin.shell: |
+        until systemctl is-system-running | grep -q 'running'; do
+          sleep 1
+        done
+      changed_when: false
+
     - name: Assert PID 1 is systemd-like
       ansible.builtin.assert:
         that:
@@ -44,4 +51,3 @@
     - name: Show systemd state
       ansible.builtin.debug:
         msg: "systemctl is-system-running => rc={{ systemd_state.rc }}, stdout={{ systemd_state.stdout | default('') | trim }}"
-
