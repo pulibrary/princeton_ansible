@@ -1,5 +1,5 @@
 ---
-#  This playbook will install OIT mandated security tools Rapid7 and Cortex XDR
+# This playbook will install OIT mandated security tools Rapid7 and Cortex XDR
 # By default this playbook runs on all hosts in the three environment groups. To run against a single host or group, use '--limit <group_or_host_name>'. For example '--limit qa' or '--limit figgy-web-staging1.princeton.edu'."
 #
 - name: install OIT Security Tools on a host
@@ -30,7 +30,7 @@
   - name: set to greenfield if falcon log is absent
     ansible.builtin.set_fact:
       install_type: greenfield
-      version: greenfield_xdr_version
+      xdr_version: "{{ greenfield_xdr_version }}"
     when:
       - not falcon_configured.stat.exists
     # when:
@@ -39,7 +39,7 @@
   - name: set to brownfield if falcon log is present
     ansible.builtin.set_fact:
       install_type: brownfield
-      version: brownfield_xdr_version
+      xdr_version: "{{ brownfield_xdr_version }}"
     when:
       - falcon_configured.stat.exists
     # when:
@@ -47,10 +47,11 @@
 
   - name: Download the XDR deb file (Ubuntu)
     ansible.builtin.unarchive:
-      src: "https://pulmirror.princeton.edu/mirror/palo/{{ install_type }}/Linux-{{ version }}_deb.tar.gz"
+      src: "https://pulmirror.princeton.edu/mirror/palo/{{ install_type }}/Linux-{{ xdr_version }}_deb.tar.gz"
       dest: /opt/
-      # creates: /opt/Linux-{{ version }}.deb
+      creates: /opt/{{ cortex_install }}.deb
       remote_src: true
+    become: true
     when:
       - ansible_os_family == "Debian"
 
@@ -58,16 +59,39 @@
     ansible.builtin.unarchive:
       src: "https://pulmirror.princeton.edu/mirror/palo/{{ install_type }}/Linux-{{ version }}_rpm.tar.gz"
       dest: /opt/
-      # creates: /opt/Linux-{{ version }}.rpm
+      creates: /opt/{{ cortex_install }}.rpm
       remote_src: true
+    become: true
     when:
       - ansible_os_family == "RedHat"
 
-  - name: install XDR
-    vars:
-      xdr_client_id: "{{ vault_crowdstrike_client_id }}"
-      xdr_client_secret: "{{ vault_crowdstrike_secret }}"
-      xdr_download_path: /opt/
+  # apt module equiv of sudo dpkg -i filename for ubuntu
+  - name: install XDR agent (Ubuntu)
+    ansible.builtin.apt:
+      deb: "/opt/{{ cortex_install }}.deb"
+    when:
+      - ansible_os_family == "Debian"
+
+  # yum module equiv of sudo yum -y install for rocky
+  - name: install XDR agent (RedHat)
+    ansible.builtin.dnf:
+      name: "/opt/{{ cortex_install }}.rpm"
+      state: present
+    when:
+      - ansible_os_family == "RedHat"
+  #
+  # Build the config file
+  - name: build the XDR config file
+    ansible.builtin.blockinfile:
+      path: /etc/cortex.conf
+      create: true
+      group: root
+      owner: root
+      mode: 0744
+      block: |
+        --distribution-id {{ xdr_vault_distribution_id }}
+        --distribution-server {{ xdr_distribution_server }}
+    become: true
 
   - name: Install, configure, and start BigFix
     when: "ansible_facts.services['besclient.service'] is not defined"
