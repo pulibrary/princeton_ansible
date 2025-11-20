@@ -21,18 +21,21 @@
     ansible.builtin.package_facts:
 
   tasks:
-  - name: include falcon_install
-    ansible.builtin.include_role:
-      name: crowdstrike.falcon.falcon_install
+  - name: install greenfield XDR
     vars:
-      falcon_client_id: "{{ vault_crowdstrike_client_id }}"
-      falcon_client_secret: "{{ vault_crowdstrike_secret }}"
-      falcon_sensor_version_decrement: 2
-      falcon_gpg_key_check: false
-      # be sure to add this so we don't download if we don't need to
-      falcon_api_sensor_download_path: /opt/
+      xdr_client_id: "{{ vault_crowdstrike_client_id }}"
+      xdr_client_secret: "{{ vault_crowdstrike_secret }}"
+      xdr_download_path: /opt/
     when:
       - "'falcon-sensor' not in ansible_facts.services"
+
+  - name: install XDR in listening mode
+    vars:
+      xdr_client_id: "{{ vault_crowdstrike_client_id }}"
+      xdr_client_secret: "{{ vault_crowdstrike_secret }}"
+      xdr_download_path: /opt/
+    when:
+      - "'falcon-sensor' in ansible_facts.services"
 
   - name: check for the falcon log file
     ansible.builtin.stat:
