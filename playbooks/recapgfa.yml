@@ -1,0 +1,42 @@
+---
+# this playbook currently runs against limited_servers group since it modifies auth
+- name: install himmelblau on {{ inventory_hostname }}
+  # hosts: staging:qa:production
+  hosts: recapgfadev.lib.princeton.edu
+  remote_user: pulsys
+  become: true
+  vars_files:
+    - ../group_vars/recapgfa/sandbox.yml
+    - ../group_vars/recapgfa/vault.yml
+  pre_tasks:
+    - name: Ensure Himmelblau RPM GPG key is present (Rocky)
+      ansible.builtin.rpm_key:
+        state: present
+        key: "{{ himmelblau_rpm_signing_key }}"
+      when: ansible_os_family == "RedHat"
+
+    - name: Force-correct Himmelblau repo early (Rocky)
+      ansible.builtin.yum_repository:
+        name: himmelblau
+        description: "Himmelblau IDM (Rocky {{ ansible_distribution_major_version }})"
+        baseurl: "{{ himmelblau_rocky_repo_baseurl }}"
+        enabled: true
+        gpgcheck: true
+        gpgkey: "{{ himmelblau_rpm_signing_key }}"
+        skip_if_unavailable: true
+      when: ansible_os_family == "RedHat"
+
+    - name: Makecache after repo fix (Rocky)
+      ansible.builtin.command: dnf -y makecache
+      changed_when: false
+      when: ansible_os_family == "RedHat"
+  roles:
+    - role: himmelblau_entra_id
+
+  post_tasks:
+    - name: tell everyone on slack you ran an ansible playbook
+      community.general.slack:
+        token: "{{ vault_pul_slack_token }}"
+        msg: "Ansible ran `{{ ansible_play_name }}` on {{ inventory_hostname }}"
+        channel: "{{ slack_alerts_channel }}"
+
