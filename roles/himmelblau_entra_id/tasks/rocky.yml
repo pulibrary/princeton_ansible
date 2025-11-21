@@ -1,4 +1,33 @@
 ---
+- name: Himmelblau (Rocky) | import RPM GPG key
+  ansible.builtin.rpm_key:
+    state: present
+    key: "{{ himmelblau_rpm_signing_key }}"
+
+# Add the repo (use default baseurl)
+# Example default: https://packages.himmelblau-idm.org/stable/latest/rpm/el{{ ansible_distribution_major_version }}/$basearch/
+- name: Himmelblau (Rocky) | add yum repo
+  ansible.builtin.yum_repository:
+    name: himmelblau
+    description: "Himmelblau IDM (Rocky {{ ansible_distribution_major_version }})"
+    baseurl: "{{ himmelblau_rocky_repo_baseurl }}"
+    enabled: true
+    gpgcheck: true
+    gpgkey: "{{ himmelblau_rpm_signing_key }}"
+    module_hotfixes: true
+    skip_if_unavailable: true
+  notify: yum-makecache
+
+- name: Himmelblau (Rocky) | probe repo URL
+  ansible.builtin.uri:
+    url: "{{ himmelblau_rocky_repo_baseurl }}"
+    method: HEAD
+    return_content: false
+    status_code: [200, 403]   # some repos block HEAD listing but exist
+    timeout: 10
+  register: _repo_probe
+  failed_when: _repo_probe.status not in [200, 403]
+
 - name: Himmelblau (Rocky) | install packages
   ansible.builtin.dnf:
     name: "{{ himmelblau_packages_rpm }}"
@@ -22,6 +51,14 @@
     group: root
     mode: "0644"
   notify: restart himmelblaud
+
+- name: Himmelblau | ensure systemd drop-in dir exists (Rocky)
+  ansible.builtin.file:
+    path: /etc/systemd/system/himmelblaud.service.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
 
 - name: Himmelblau | systemd drop-in (Rocky)
   ansible.builtin.copy:
