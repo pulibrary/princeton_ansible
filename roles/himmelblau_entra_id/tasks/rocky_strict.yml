@@ -1,0 +1,54 @@
+---
+- name: Himmelblau | ensure final Include at end of main sshd_config (Rocky)
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    line: 'Include /etc/ssh/sshd_config.d/*.conf'
+    insertafter: EOF
+    state: present
+  notify: restart sshd (validate)
+
+# Neutralize base files that fight us
+- name: Himmelblau | comment PasswordAuthentication in main file (Rocky)
+  ansible.builtin.replace:
+    path: /etc/ssh/sshd_config
+    regexp: '^\s*PasswordAuthentication\b.*$'
+    replace: '# \g<0>'
+  notify: restart sshd (validate)
+
+- name: Himmelblau | comment PasswordAuthentication in cloud-init drop-in if present (Rocky)
+  ansible.builtin.replace:
+    path: /etc/ssh/sshd_config.d/50-cloud-init.conf
+    regexp: '^\s*PasswordAuthentication\b.*$'
+    replace: '# \g<0>'
+  ignore_errors: true
+  notify: restart sshd (validate)
+
+- name: Himmelblau | comment CRAuthentication "no" in 50-redhat.conf (Rocky)
+  ansible.builtin.replace:
+    path: /etc/ssh/sshd_config.d/50-redhat.conf
+    regexp: '^\s*ChallengeResponseAuthentication\b.*$'
+    replace: '# \g<0>'
+  notify: restart sshd (validate)
+
+# Final override with explicit knobs (no AuthenticationMethods yet)
+- name: Himmelblau | write 99-himmelblau.conf (Rocky)
+  ansible.builtin.copy:
+    dest: /etc/ssh/sshd_config.d/99-himmelblau.conf
+    mode: "0644"
+    content: |
+      UsePAM yes
+      KbdInteractiveAuthentication yes
+      ChallengeResponseAuthentication yes
+      PasswordAuthentication no
+  notify: restart sshd (validate)
+
+# Make sure no stray AuthenticationMethods is present anywhere
+- name: Rocky | comment AuthenticationMethods everywhere
+  ansible.builtin.shell: |
+    sed -i 's/^\s*AuthenticationMethods\b/# &/' /etc/ssh/sshd_config || true
+    find /etc/ssh/sshd_config.d -maxdepth 1 -type f -name '*.conf' \
+      -exec sed -i 's/^\s*AuthenticationMethods\b/# &/' {} +
+  args:
+    executable: /bin/bash
+  changed_when: true
+  notify: restart sshd (validate)
