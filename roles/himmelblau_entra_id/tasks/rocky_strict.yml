@@ -1,5 +1,8 @@
 ---
+<<<<<<< HEAD
 # Ensure we always read drop-ins, and do it last in the main file
+=======
+>>>>>>> 03fc14f13 (apply strict pam)
 - name: Himmelblau | ensure final Include at end of main sshd_config (Rocky)
   ansible.builtin.lineinfile:
     path: /etc/ssh/sshd_config
@@ -8,7 +11,11 @@
     state: present
   notify: restart sshd (validate)
 
+<<<<<<< HEAD
 # Neutralize main-file & common drop-ins that fight us
+=======
+# Neutralize base files that fight us
+>>>>>>> 03fc14f13 (apply strict pam)
 - name: Himmelblau | comment PasswordAuthentication in main file (Rocky)
   ansible.builtin.replace:
     path: /etc/ssh/sshd_config
@@ -29,10 +36,28 @@
     path: /etc/ssh/sshd_config.d/50-redhat.conf
     regexp: '^\s*ChallengeResponseAuthentication\b.*$'
     replace: '# \g<0>'
+<<<<<<< HEAD
   ignore_errors: true
   notify: restart sshd (validate)
 
 # Never hard-force AuthenticationMethods anywhere (let PAM pick it up)
+=======
+  notify: restart sshd (validate)
+
+# Final override with explicit knobs (no AuthenticationMethods yet)
+- name: Himmelblau | write 99-himmelblau.conf (Rocky)
+  ansible.builtin.copy:
+    dest: /etc/ssh/sshd_config.d/99-himmelblau.conf
+    mode: "0644"
+    content: |
+      UsePAM yes
+      KbdInteractiveAuthentication yes
+      ChallengeResponseAuthentication yes
+      PasswordAuthentication no
+  notify: restart sshd (validate)
+
+# Make sure no stray AuthenticationMethods is present anywhere
+>>>>>>> 03fc14f13 (apply strict pam)
 - name: Rocky | comment AuthenticationMethods everywhere
   ansible.builtin.shell: |
     sed -i 's/^\s*AuthenticationMethods\b/# &/' /etc/ssh/sshd_config || true
@@ -42,6 +67,7 @@
     executable: /bin/bash
   changed_when: true
   notify: restart sshd (validate)
+<<<<<<< HEAD
 
 <<<<<<< HEAD
   # Our SINGLE early, authoritative auth drop-in (alphabetically first)
@@ -114,3 +140,5 @@
       sshd -T is not in the expected state. Got:
       {{ sshd_effective.stdout | regex_findall('usepam\\s+\\w+|kbdinteractiveauthentication\\s+\\w+|challengeresponseauthentication\\s+\\w+|passwordauthentication\\s+\\w+|gssapiauthentication\\s+\\w+') | join(', ') }}
     success_msg: sshd effective config matches Himmelblau/PAM expectations.
+=======
+>>>>>>> 03fc14f13 (apply strict pam)
