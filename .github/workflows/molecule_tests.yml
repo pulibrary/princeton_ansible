@@ -107,6 +107,12 @@ jobs:
           pip install -r requirements.txt
           #- name: Setup upterm session
           #uses: lhotari/action-upterm@v1
+          #
+      - name: Enable Docker retry for GHCR pulls
+        run: |
+          # bump Docker's default timeouts & retries
+          echo '{ "registry-mirrors": [], "debug": true }' | sudo tee /etc/docker/daemon.json
+          sudo systemctl restart docker
 
       # pull the image early
       - name: Pre-pull Molecule base image
