@@ -89,23 +89,33 @@ jobs:
           git config --global http.postBuffer 1048576000
           for i in 1 2 3 4 5; do git clone https://github.com/pulibrary/princeton_ansible.git . && break || sleep 15; done
           git checkout ${{ github.sha }}
+
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: "3.11"
+
       - name: cache python environment
         uses: actions/cache@v3
         with:
           path: ${{ env.pythonLocation }}
           key: ${{ env.pythonLocation }}-${{ hashFiles('requirements.txt') }}
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           #- name: Setup upterm session
           #uses: lhotari/action-upterm@v1
+
+      # pull the image early
+      - name: Pre-pull Molecule base image
+        run: |
+          docker pull ghcr.io/pulibrary/vm-builds/ubuntu-22.04:latest
+
       - name: Run tests
         env:
           MOLECULE_DOCKER_PLATFORM: linux/amd64
         run: |
           ROLE=${{ matrix.role }} python run_molecule.py
+
