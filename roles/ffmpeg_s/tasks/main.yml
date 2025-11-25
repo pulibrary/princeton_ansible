@@ -1,0 +1,53 @@
+---
+# tasks file for roles/ffmpeg_s
+- name: Ffmpeg_s - ensure base directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - "{{ ffmpeg_s_bin_dir }}"
+    - "{{ ffmpeg_s_build_dir }}"
+    - "{{ ffmpeg_s_prefix }}"
+    - "{{ ffmpeg_s_sources_dir }}"
+
+- name: Ffmpeg_s - build dependencies (using apt)
+  ansible.builtin.apt:
+    name:
+      - autoconf
+      - automake
+      - build-essential
+      - cmake
+      - git-core
+      - libass-dev
+      - libfreetype6-dev
+      - libgnutls28-dev
+      - libjpeg-dev
+      - libmp3lame-dev
+      - libnuma-dev
+      - libpng-dev
+      - libsdl2-dev
+      - libtiff-dev
+      - libtool
+      - libva-dev
+      - libvdpau-dev
+      - libvorbis-dev
+      - libwebp-dev
+      - libxcb1-dev
+      - libxcb-shm0-dev
+      - libxcb-xfixes0-dev
+      - meson
+      - ninja-build
+      - pkg-config
+      - python3-pip
+      - texinfo
+      - wget
+      - yasm
+      - zlib1g-dev
+    state: present
+
+
+- name: Ffmpeg_s | build and install ffmpeg
+  ansible.builtin.include_tasks: build_commands.yml
