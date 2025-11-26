@@ -73,6 +73,28 @@
     when:
       - ansible_os_family == "RedHat"
 
+  # Create config directory
+  - name: Create /etc/panw directory
+    ansible.builtin.file:
+      path: /etc/panw
+      state: directory
+      owner: root
+      group: root
+      mode: '0755'
+    become: true
+
+  # Build the config file
+  - name: Build the XDR config file
+    ansible.builtin.copy:
+      content: |
+        --distribution-id {{ xdr_vault_distribution_id }}
+        --distribution-server {{ xdr_distribution_server }}
+      dest: /etc/panw/cortex.conf
+      owner: root
+      group: root
+      mode: '0744'
+    become: true
+
   # apt module equiv of sudo dpkg -i filename for ubuntu
   - name: install XDR agent (Ubuntu)
     ansible.builtin.apt:
@@ -89,18 +111,13 @@
     when:
       - ansible_os_family == "RedHat"
   #
-  # Build the config file
-  - name: build the XDR config file
-    ansible.builtin.blockinfile:
-      path: /etc/cortex.conf
-      create: true
-      group: root
-      owner: root
-      mode: 0744
-      block: |
-        --distribution-id {{ xdr_vault_distribution_id }}
-        --distribution-server {{ xdr_distribution_server }}
+  # Force agent checkin after installation
+  - name: Run cytool checkin
+    ansible.builtin.command:
+      cmd: /opt/traps/bin/cytool checkin
     become: true
+    register: cytool_result
+    changed_when: cytool_result.rc == 0
 
   - name: Install, configure, and start BigFix
     when: "ansible_facts.services['besclient.service'] is not defined"
