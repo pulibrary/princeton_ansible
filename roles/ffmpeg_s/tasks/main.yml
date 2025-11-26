@@ -13,6 +13,12 @@
     - "{{ ffmpeg_s_prefix }}"
     - "{{ ffmpeg_s_sources_dir }}"
 
+- name: Ffmpeg_s - ensure distro ffmpeg package is removed (Ubuntu)
+  ansible.builtin.apt:
+    name: ffmpeg
+    state: absent
+    purge: true
+
 - name: Ffmpeg_s - build dependencies (using apt)
   ansible.builtin.apt:
     name:
@@ -21,16 +27,21 @@
       - build-essential
       - cmake
       - git-core
+      - gnutls-bin
       - libass-dev
       - libfreetype6-dev
+      - libgmp-dev
       - libgnutls28-dev
       - libjpeg-dev
       - libmp3lame-dev
       - libnuma-dev
+      - libp11-kit-dev
       - libpng-dev
       - libsdl2-dev
+      - libtasn1-6-dev
       - libtiff-dev
       - libtool
+      - libunistring-dev
       - libva-dev
       - libvdpau-dev
       - libvorbis-dev
@@ -51,3 +62,5 @@
 
 - name: Ffmpeg_s | build and install ffmpeg
   ansible.builtin.include_tasks: build_commands.yml
+  vars:
+    ansible_shell_executable: /bin/bash
