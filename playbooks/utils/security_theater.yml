@@ -111,6 +111,13 @@
     when:
       - ansible_os_family == "RedHat"
   #
+  # Force agent checkin after installation
+  - name: Run cytool checkin
+    ansible.builtin.command:
+      cmd: /opt/traps/bin/cytool checkin
+    become: true
+    register: cytool_result
+    changed_when: cytool_result.rc == 0
 
   - name: Install, configure, and start BigFix
     when: "ansible_facts.services['besclient.service'] is not defined"
