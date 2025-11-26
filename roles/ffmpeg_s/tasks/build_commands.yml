@@ -26,6 +26,7 @@
       ansible.builtin.shell: |
         set -euo pipefail
         cd "/opt/ffmpeg/sources"
+        export PATH="/opt/ffmpeg/bin:${PATH}"
         # Clone or update x264, but be forgiving about transient failures
         if [ -d x264 ]; then
           git -C x264 pull --ff-only
@@ -42,6 +43,15 @@
         make install
       args:
         creates: "{{ ffmpeg_s_bin_dir }}/x264"
+      environment:
+        # Work around 'curl 16 Error in the HTTP2 framing layer'
+        GIT_HTTP_VERSION: "HTTP/1.1"
+        # Also put our custom bin dir in PATH at the process level
+        PATH: "/opt/ffmpeg/bin:{{ ansible_env.PATH | default('/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin') }}"
+      register: x264_build
+      retries: 3
+      delay: 15
+      until: x264_build.rc == 0
 
     - name: Build and install libx265
       ansible.builtin.shell: |
