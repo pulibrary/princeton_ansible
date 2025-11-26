@@ -1,31 +1,38 @@
 ---
 scenario:
   name: default
+  test_sequence:
+    - dependency
+    - syntax
+    - create
+    - prepare
+    - converge
+    - verify
+    - destroy
 driver:
   name: docker
-  command_timeout: 60
 lint: |
   set -e
   yamllint .
   ansible-lint
 platforms:
   - name: instance
-    image: "ghcr.io/pulibrary/pul_containers:jammy_multi"
-    command: "sleep infinity"
+    image: "ghcr.io/pulibrary/vm-builds/ubuntu-22.04"
+    command: ""
+    tmpfs:
+      - /run
+      - /run/lock
+      - /tmp
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
     privileged: true
     pre_build_image: true
-    connection_options:
-      ansible_user: root
-      ansible_connection: docker
 provisioner:
   name: ansible
-  log: true
-  playbooks:
-    prepare: prepare.yml
   config_options:
     defaults:
-      remote_tmp: /tmp/ansible
+      remote_tmp: /tmp
+  log: true
 verifier:
   name: ansible
