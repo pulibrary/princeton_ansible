@@ -26,7 +26,12 @@
       ansible.builtin.shell: |
         set -euo pipefail
         cd "/opt/ffmpeg/sources"
-        git -C x264 pull 2>/dev/null || git clone --depth 1 https://code.videolan.org/videolan/x264.git
+        # Clone or update x264, but be forgiving about transient failures
+        if [ -d x264 ]; then
+          git -C x264 pull --ff-only
+        else
+          git clone --depth 1 https://code.videolan.org/videolan/x264.git x264
+        fi
         cd x264
         ./configure \
           --prefix="/opt/ffmpeg/build" \
