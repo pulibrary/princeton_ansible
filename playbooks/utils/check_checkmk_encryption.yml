@@ -1,0 +1,26 @@
+---
+# use `--limit your-project-vm1.princeton.edu` or '--limit your_inventory_group' to select the vm or group
+
+- name: check for /etc/check_mk/encryption.cfg file
+  hosts: all
+  remote_user: pulsys
+  become: true
+  vars_files:
+    - ../group_vars/all/vault.yml
+  tasks:
+    - name: Stat the file
+      ansible.builtin.stat:
+        path: /etc/check_mk/encryption.cfg
+      register: encrypt
+
+    - name: Print list of VMs with the file
+      ansible.builtin.debug:
+        msg: "The {{ inventory_hostname }} has an encryption.cfg file"
+      when: encrypt.stat.exists
+
+  # post_tasks:
+  #   - name: tell everyone on slack you ran an ansible playbook
+  #     community.general.slack:
+  #       token: "{{ vault_pul_slack_token }}"
+  #       msg: "Ansible ran `{{ ansible_play_name }}` on {{ inventory_hostname }}"
+  #       channel: "{{ slack_alerts_channel }}"
