@@ -261,11 +261,19 @@
       ansible.builtin.shell: |
         set -euo pipefail
         cd "/opt/ffmpeg/sources/ffmpeg"
+
         # Decide dynamically whether to enable libaom
         LIBAOM_FLAG=""
-        if [ -f "{{ ffmpeg_s_build_dir }}/lib/libaom.a" ]; then
+        if pkg-config --exists aom; then
           LIBAOM_FLAG="--enable-libaom"
         fi
+
+        # Decide dynamically whether to enable libsvtav1
+        LIBSVTAV1_FLAG=""
+        if pkg-config --exists SvtAv1Enc; then
+          LIBSVTAV1_FLAG="--enable-libsvtav1"
+        fi
+
         ./configure \
           --prefix="/opt/ffmpeg/build" \
           --pkg-config-flags="--static" \
@@ -277,12 +285,12 @@
           --enable-gpl \
           --enable-gnutls \
           ${LIBAOM_FLAG} \
+          ${LIBSVTAV1_FLAG} \
           --enable-libass \
           --enable-libfdk-aac \
           --enable-libfreetype \
           --enable-libmp3lame \
           --enable-libopus \
-          --enable-libsvtav1 \
           --enable-libdav1d \
           --enable-libvorbis \
           --enable-libvpx \
@@ -290,12 +298,14 @@
           --enable-libx265 \
           --enable-libvmaf \
           --enable-nonfree
-        make -j"{{ ansible_facts.processor_vcpus | default(2) }}"
+
+        make -j"{{ ansible_facts.processor_vcpus | default(4) }}"
         make install
         hash -r || true
       args:
-        chdir: "/opt/ffmpeg/sources/ffmpeg"
+        creates: "/opt/ffmpeg/bin/ffmpeg"
       environment:
+        PATH: "/opt/ffmpeg/bin:{{ ansible_env.PATH | default('/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin') }}"
         TMPDIR: "/opt/ffmpeg/tmp"
         PKG_CONFIG_PATH: "/opt/ffmpeg/build/lib/pkgconfig:{{ ansible_env.PKG_CONFIG_PATH | default('') }}"
 
