@@ -135,50 +135,35 @@
       ansible.builtin.shell: |
         set -euo pipefail
         cd "/opt/ffmpeg/sources"
-        git -C aom pull 2>/dev/null || git clone --depth 1 https://aomedia.googlesource.com/aom
+
+        # Clone or update aom
+        if [ -d aom ]; then
+          git -C aom pull --ff-only
+        else
+          git clone --depth 1 https://aomedia.googlesource.com/aom
+        fi
+
         rm -rf aom_build
         mkdir -p aom_build
         cd aom_build
-         # Architecture-specific tweaks (similar to x265)
-        AOM_EXTRA_CMAKE_FLAGS=""
-        case "$(uname -m)" in
-          arm64|aarch64)
-            AOM_EXTRA_CMAKE_FLAGS="
-              -DCONFIG_RUNTIME_CPU_DETECT=0
-              -DCMAKE_C_FLAGS='-march=armv8-a'
-              -DCMAKE_CXX_FLAGS='-march=armv8-a'
-            "
-            ;;
-        esac
+
         cmake -G "Unix Makefiles" \
           -DCMAKE_INSTALL_PREFIX="{{ ffmpeg_s_build_dir }}" \
           -DENABLE_TESTS=OFF \
-          -DENABLE_NASM=on \
+          -DENABLE_NASM=OFF \
+          -DAOM_TARGET_CPU=generic \
           ../aom
+
         make -j"{{ ansible_facts.processor_vcpus | default(2) }}"
         make install
       args:
         creates: "{{ ffmpeg_s_build_dir }}/lib/libaom.a"
-      when: ansible_architecture == "x86_64"
-
-    - name: Build and install libsvtav1
-      ansible.builtin.shell: |
-        set -euo pipefail
-        cd "/opt/ffmpeg/sources"
-        git -C SVT-AV1 pull 2>/dev/null || git clone https://gitlab.com/AOMediaCodec/SVT-AV1.git
-        rm -rf SVT-AV1/build
-        mkdir -p SVT-AV1/build
-        cd SVT-AV1/build
-        cmake -G "Unix Makefiles" \
-          -DCMAKE_INSTALL_PREFIX="{{ ffmpeg_s_build_dir }}" \
-          -DCMAKE_BUILD_TYPE=Release \
-          -DBUILD_DEC=OFF \
-          -DBUILD_SHARED_LIBS=OFF \
-          ..
-        make -j"{{ ansible_facts.processor_vcpus | default(2) }}"
-        make install
-      args:
-        creates: "{{ ffmpeg_s_build_dir }}/lib/libSvtAv1Enc.a"
+      environment:
+        PATH: "/opt/ffmpeg/bin:{{ ansible_env.PATH | default('/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin') }}"
+      register: aom_build
+      retries: 3
+      delay: 15
+      until: aom_build.rc == 0
 
     - name: Build and install libdav1d
       ansible.builtin.shell: |
