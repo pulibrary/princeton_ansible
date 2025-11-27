@@ -67,13 +67,22 @@
           -DENABLE_SVE=OFF \
           -DENABLE_SVE2=OFF \
           -DENABLE_SVE2_BITPERM=OFF \
+          {% if ansible_architecture in ['aarch64', 'arm64'] -%}
           -DCMAKE_C_FLAGS="-march=armv8-a" \
           -DCMAKE_CXX_FLAGS="-march=armv8-a" \
+          {% endif -%}
           ../../source
         make -j"{{ ansible_facts.processor_vcpus | default(2) }}"
         make install
       args:
         creates: "{{ ffmpeg_s_build_dir }}/bin/x265"
+      environment:
+        PATH: "/opt/ffmpeg/bin:{{ ansible_env.PATH | default('/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin') }}"
+        PKG_CONFIG_PATH: "/opt/ffmpeg/build/lib/pkgconfig:{{ ansible_env.PKG_CONFIG_PATH | default('') }}"
+      register: x265_build
+      retries: 3
+      delay: 15
+      until: x265_build.rc == 0
 
     - name: Build and install libvpx
       ansible.builtin.shell: |
