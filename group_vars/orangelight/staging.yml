@@ -32,37 +32,60 @@ deploy_user_local_keys:
   - { name: 'catalog-staging-circleci-key', key: "{{ lookup('file', '../keys/circleci/catalog-staging.pub') }}" }
   - { name: 'heaven', key: "{{ lookup('file', '../keys/heaven.pub') }}" }
   - { name: 'TowerDeployKey', key: "{{ lookup('file', '../keys/TowerDeployKey.pub') }}" }
-  - { name: 'CodeDeployKey', key: "{{ lookup('file', '../keys/CodeDeployKey.pub') }}" }
-datadog_api_key: "{{ vault_datadog_key }}"
-datadog_config:
-  tags: "application:orangelight, environment:staging, type:webserver"
-  apm_enabled: "true"
-  log_enabled: true
-  process_config:
-    enabled: "true"
-  apm_config:
-    analyzed_spans:
-      orangelight|rack.request: 1
-    filter_tags:
-      reject: ["http.useragent:nginx/1.23.4 (health check)", "operation:heartbeat", "operation:job_fetch", "operation:scheduled_push", "operation:scheduled_poller_wait"]
-datadog_checks:
-  ruby:
-    init_config:
-    logs:
-      - type: file
-        path: /opt/orangelight/current/log/staging.log
-        service: orangelight
-        source: ruby
-  nginx:
-    init_config:
-    logs:
-      - type: file
-        path: /var/log/nginx/access.log
-        service: orangelight
-        source: nginx
-        sourcecategory: http_web_access
-      - type: file
-        path: /var/log/nginx/error.log
-        service: orangelight
-        source: nginx
-        sourcecategory: http_web_access
+# signoz 
+otel_default_resource_attributes:
+  host.name: "{{ inventory_hostname }}"
+  service.name: orangelight-catalog
+  service.version: staging
+  environment: staging
+
+otel_receivers:
+  filelog/nginx-access:
+    include: ["/var/log/nginx/access.log*"]
+    start_at: end
+    operators:
+      - type: regex_parser
+        regex: '^(?P<remote_addr>[^\s]+) \((?P<remote_user>[^)]*)\) - - \[(?P<time_local>[^\]]+)\] "(?P<method>\S+) (?P<path>\S+) (?P<protocol>[^"]+)" (?P<status>\d+) (?P<body_bytes_sent>\d+) "(?P<http_referer>[^"]*)" "(?P<http_user_agent>[^"]*)"'
+        parse_from: body
+      - type: time_parser
+        parse_from: attributes.time_local
+        layout_type: strptime
+        layout: '%d/%b/%Y:%H:%M:%S %z'
+      - type: add
+        field: attributes.log_type
+        value: "orangelight_catalog_access"
+      - type: add
+        field: attributes.service_name
+        value: orangelight_catalog_access
+  filelog/nginx-error:
+    include: ["/var/log/nginx/error.log*"]
+    start_at: end
+    operators:
+      - type: add
+        field: attributes.log_type
+        value: "orangelight_catalog_error"
+      - type: add
+        field: attributes.service_name
+        value: "orangelight_catalog"
+  hostmetrics:
+    collection_interval: 30s
+    scrapers: { cpu: {}, disk: {}, filesystem: {}, load: {}, memory: {}, network: {} }
+
+otel_processors:
+  batch: { send_batch_max_size: 1024, send_batch_size: 512, timeout: 30s }
+
+otel_exporters:
+  otlp:
+    endpoint: "http://sandbox-signoz1.lib.princeton.edu:4317"
+    tls: { insecure: true }
+  debug: { verbosity: basic }
+
+otel_service_pipelines:
+  logs:
+    receivers: ["filelog/nginx-access", "filelog/nginx-error"]
+    processors: ["resource", "batch"]
+    exporters: ["otlp", "debug"]
+  metrics:
+    receivers: ["hostmetrics"]
+    processors: ["resource", "batch"]
+    exporters: ["otlp", "debug"]
