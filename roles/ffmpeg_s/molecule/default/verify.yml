@@ -1,0 +1,96 @@
+---
+- name: Verify ffmpeg_s role
+  hosts: all
+  gather_facts: true
+  tasks:
+
+    - name: Check apt ffmpeg is NOT installed
+      ansible.builtin.shell: |
+        dpkg -l ffmpeg 2>/dev/null | grep -q "^ii"
+      register: apt_ffmpeg_check
+      failed_when: apt_ffmpeg_check.rc == 0
+      changed_when: false
+
+    - name: Verify ffmpeg binary exists
+      ansible.builtin.stat:
+        path: /opt/ffmpeg/bin/ffmpeg
+      register: ffmpeg_binary
+      failed_when: not ffmpeg_binary.stat.exists
+
+    - name: Verify ffprobe binary exists
+      ansible.builtin.stat:
+        path: /opt/ffmpeg/bin/ffprobe
+      register: ffprobe_binary
+      failed_when: not ffprobe_binary.stat.exists
+
+    - name: Verify ffmpeg symlink exists
+      ansible.builtin.stat:
+        path: /usr/local/bin/ffmpeg
+      register: ffmpeg_symlink
+      failed_when:
+        - not ffmpeg_symlink.stat.exists
+        - not ffmpeg_symlink.stat.islnk
+
+    - name: Verify ffprobe symlink exists
+      ansible.builtin.stat:
+        path: /usr/local/bin/ffprobe
+      register: ffprobe_symlink
+      failed_when:
+        - not ffprobe_symlink.stat.exists
+        - not ffprobe_symlink.stat.islnk
+
+    - name: Verify ffmpeg runs and reports version
+      ansible.builtin.command: /opt/ffmpeg/bin/ffmpeg -version
+      register: ffmpeg_version
+      changed_when: false
+      failed_when: "'ffmpeg version' not in ffmpeg_version.stdout"
+
+    - name: Get ffmpeg encoder list
+      ansible.builtin.command: /opt/ffmpeg/bin/ffmpeg -encoders
+      register: ffmpeg_encoders
+      changed_when: false
+
+    - name: Verify expected codecs are available
+      ansible.builtin.assert:
+        that:
+          - "'libx264' in ffmpeg_encoders.stdout"
+          - "'libx265' in ffmpeg_encoders.stdout"
+          - "'libvpx' in ffmpeg_encoders.stdout"
+          - "'libopus' in ffmpeg_encoders.stdout"
+          - "'libfdk_aac' in ffmpeg_encoders.stdout"
+        fail_msg: "Missing expected codec in ffmpeg build"
+
+    - name: Verify ffmpeg directories exist
+      ansible.builtin.stat:
+        path: "{{ dir_path }}"
+      register: dir_stat
+      loop:
+        - /opt/ffmpeg
+        - /opt/ffmpeg/bin
+        - /opt/ffmpeg/build
+        - /opt/ffmpeg/sources
+      loop_control:
+        loop_var: dir_path
+      failed_when: not dir_stat.stat.exists
+
+    - name: Verify static libraries were built
+      ansible.builtin.stat:
+        path: "{{ lib_path }}"
+      register: lib_stat
+      loop:
+        - /opt/ffmpeg/build/lib/libx264.a
+        - /opt/ffmpeg/build/lib/libx265.a
+        - /opt/ffmpeg/build/lib/libvpx.a
+        - /opt/ffmpeg/build/lib/libfdk-aac.a
+        - /opt/ffmpeg/build/lib/libopus.a
+        - /opt/ffmpeg/build/lib/libdav1d.a
+        - /opt/ffmpeg/build/lib/libvmaf.a
+      loop_control:
+        loop_var: lib_path
+      failed_when: not lib_stat.stat.exists
+
+    - name: Verify NASM was built
+      ansible.builtin.stat:
+        path: /opt/ffmpeg/bin/nasm
+      register: nasm_binary
+      failed_when: not nasm_binary.stat.exists
