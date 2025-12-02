@@ -9,12 +9,32 @@
   when: nginx_user is not defined
   tags: passenger_config
 
-# Passenger repository setup.
-- name: Phusion | Add Passenger apt key.
-  ansible.builtin.apt_key:
-    keyserver: keyserver.ubuntu.com
-    id: 561F9B9CAC40B2F7
-    state: present
+# phusion new key
+# https://blog.phusion.nl/important-new-signing-key-for-passenger/
+- name: Phusion | use new sha-256 apt key
+  ansible.builtin.get_url:
+    url: https://oss-binaries.phusionpassenger.com/auto-software-signing-gpg-key-2025.txt
+    dest: /usr/local/share/keyrings/phusion_passenger_2025.asc
+    mode: "0644"
+  register: phusion_passenger_key
+
+- name: Phusion Passenger | Convert key to GPG keyring
+  ansible.builtin.command:
+    cmd: >
+      gpg --batch --yes --dearmor
+      -o /usr/local/share/keyrings/phusion_passenger_2025.gpg
+      /usr/local/share/keyrings/phusion_passenger_2025.asc
+  when: phusion_passenger_key.changed
+
+- name: Phusion Passenger | Install key into apt trusted.gpg.d
+  ansible.builtin.copy:
+    src: /usr/local/share/keyrings/phusion_passenger_2025.gpg
+    dest: /etc/apt/trusted.gpg.d/phusion_new.gpg
+    owner: root
+    group: root
+    mode: "0644"
+    remote_src: true
+  when: phusion_passenger_key.changed
 
 - name: Phusion | Add Phusion apt repo.
   ansible.builtin.apt_repository:
