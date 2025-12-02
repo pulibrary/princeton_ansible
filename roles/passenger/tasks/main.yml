@@ -17,9 +17,37 @@
     owner: root
     group: root
     mode: "0755"
+# Legacy auto-software-signing key (still used to sign the jammy repo)
+# https://oss-binaries.phusionpassenger.com/auto-software-signing-gpg-key.txt
+- name: Phusion | Download legacy auto signing key (SHA1)
+  ansible.builtin.get_url:
+    url: https://oss-binaries.phusionpassenger.com/auto-software-signing-gpg-key.txt
+    dest: /usr/local/share/keyrings/phusion_passenger_legacy.asc
+    mode: "0644"
+  register: phusion_passenger_legacy_key
 
-# phusion new key
+- name: Phusion | Convert legacy key to GPG keyring
+  become: true
+  ansible.builtin.command: >
+    gpg --batch --yes --dearmor
+    -o /usr/local/share/keyrings/phusion_passenger_legacy.gpg
+    /usr/local/share/keyrings/phusion_passenger_legacy.asc
+  when: phusion_passenger_legacy_key.changed
+
+- name: Phusion | Install legacy key into apt trusted.gpg.d
+  become: true
+  ansible.builtin.copy:
+    src: /usr/local/share/keyrings/phusion_passenger_legacy.gpg
+    dest: /etc/apt/trusted.gpg.d/phusion.gpg
+    owner: root
+    group: root
+    mode: "0644"
+    remote_src: true
+  when: phusion_passenger_legacy_key.changed
+
+# phusion new future proof key
 # https://blog.phusion.nl/important-new-signing-key-for-passenger/
+# https://oss-binaries.phusionpassenger.com/auto-software-signing-gpg-key-2025.txt
 - name: Phusion | use new sha-256 apt key
   ansible.builtin.get_url:
     url: https://oss-binaries.phusionpassenger.com/auto-software-signing-gpg-key-2025.txt
