@@ -43,7 +43,7 @@ job "analytics-production" {
       driver = "podman"
 
       config {
-        image = "ghcr.io/rybbit-io/rybbit-client:v2.2.1"
+        image = "ghcr.io/rybbit-io/rybbit-client:v2.2.0"
         ports = ["rybbit_frontend_port"]
       }
 
@@ -98,7 +98,7 @@ job "analytics-production" {
       driver = "podman"
 
       config {
-        image = "ghcr.io/rybbit-io/rybbit-backend:v2.2.1"
+        image = "ghcr.io/rybbit-io/rybbit-backend:v2.2.0"
         ports = ["rybbit_api_port"]
       }
 
