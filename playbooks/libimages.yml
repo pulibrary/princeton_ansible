@@ -1,0 +1,83 @@
+---
+# Ansible expects you to have `~/.aws/credentials` configured
+# you will need to create these on your own
+# the playbook will create a user `{{ project_user }}` as defined in the `pre_tasks` block
+# If the playbook creates a new `{{ project_user }}` with access keys and saves them in your
+# ~/.aws/ansible_key_list.txt if none exists. These variables will need to go inventory_hostname
+# `group_vars/iiif/vault.yml` if this is the first time running
+# you will need to create these on your own
+# by default this playbook runs in the staging environment
+# to run in production, pass '-e runtime_env=production'
+# this playbook will create a directory ~/serverless-iiif unless you provide a 
+# a path elsewhere
+- name: build and libimages site
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - ../group_vars/libimages/main.yml
+    - ../group_vars/iiif/vault.yml
+
+  pre_tasks:
+    - block:
+        - name: iiif | check for "{{ project_user }}"
+          community.aws.iam_access_key_info:
+            user_name: "{{ project_user }}"
+          register: user_check
+
+        - name: iiif |  create iam group
+          ansible.builtin.shell: 'aws iam create-group --group-name "{{ project_user }}"'
+          when:
+            - user_check.error is defined
+            - "'NoSuchEntity' in user_check.error.code"
+
+        - name: iiif | assign profile to iam_group
+          ansible.builtin.shell: 'aws iam attach-group-policy --group-name "{{ project_user }}" --policy-arn "{{ item }}"'
+          loop:
+            - "arn:aws:iam::aws:policy/IAMFullAccess"
+            - "arn:aws:iam::aws:policy/AmazonS3FullAccess"
+            - "arn:aws:iam::aws:policy/CloudWatchFullAccess"
+            - "arn:aws:iam::aws:policy/CloudFrontFullAccess"
+            - "arn:aws:iam::aws:policy/CloudWatchLogsFullAccess"
+            - "arn:aws:iam::aws:policy/AmazonAPIGatewayAdministrator"
+            - "arn:aws:iam::aws:policy/AWSXrayFullAccess"
+            - "arn:aws:iam::aws:policy/AWSCertificateManagerFullAccess"
+            - "arn:aws:iam::aws:policy/AWSCloudFormationFullAccess"
+            - "arn:aws:iam::aws:policy/AWSLambda_FullAccess"
+          when:
+            - user_check.error is defined
+            - "'NoSuchEntity' in user_check.error.code"
+
+        - name: iiif | create iam user who will create s3 bucket
+          ansible.builtin.shell: 'aws iam create-user --user-name "{{ project_user }}"'
+          when:
+            - user_check.error is defined
+            - "'NoSuchEntity' in user_check.error.code"
+
+        - name: iiif | add user to group
+          ansible.builtin.shell: 'aws iam add-user-to-group --group-name "{{ project_user }}" --user-name "{{ project_user }}"'
+          when:
+            - user_check.error is defined
+            - "'NoSuchEntity' in user_check.error.code"
+
+        - name: iiif | create iam user keys
+          ansible.builtin.shell: 'aws iam create-access-key --user-name "{{ project_user }}" >> ~/.aws/ansible_key_list.txt'
+          when: 
+            - user_check.error is defined
+            - "'NoSuchEntity' in user_check.error.code"
+
+        - name: iiif | create iam users login-profile
+          ansible.builtin.shell: 'aws iam create-login-profile --user-name "{{ project_user }}" --password "{{ project_user_password }}"'
+          when: 
+            - user_check.error is defined
+            - "'NoSuchEntity' in user_check.error.code"
+
+        - name: iiif | list iam users key
+          ansible.builtin.shell: 'cat key_list.txt | grep "UserName\|AccessKeyId\|SecretAccessKey" | sed "s/,$//"'
+          register: list_key
+          when: 
+            - user_check.error is defined
+            - "'NoSuchEntity' in user_check.error.code"
+      ignore_errors: true
+
+  roles:
+    - role: roles/iiif
