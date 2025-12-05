@@ -53,6 +53,22 @@ None.
 # Deploy
 ansible-playbook playbooks/libimages.yml
 
+## DNS Configuration
+
+The Lambda deployment creates an ACM certificate that requires DNS validation. During deployment, CloudFormation will generate a CNAME record that must be added to DNS before the stack can complete.
+
+**Steps:**
+
+1. Run the playbook - it will pause waiting for certificate validation
+2. In the AWS Console, navigate to **Certificate Manager** in us-east-1
+3. Find the pending certificate for `<iiif_domain>.princeton.edu`
+4. Copy the CNAME name and value for DNS validation
+5. Submit a request to the **OIT DNS group** to add this CNAME record
+6. Once DNS propagates, CloudFormation will complete the certificate validation and finish the deployment
+
+**Note:** The deployment will timeout if the DNS record is not added within the CloudFormation timeout period. If this happens, re-run the playbook after DNS is configured.
+
+
 
 ## AWS Profile Setup
 
