@@ -1,0 +1,317 @@
+---
+- name: Ffmpeg_s - Build ffmpeg and related libraries
+  block:
+
+    - name: Build and install NASM from source
+      ansible.builtin.shell: |
+        set -euo pipefail
+        cd "/opt/ffmpeg/sources"
+        if [ ! -f "nasm-2.16.03.tar.bz2" ]; then
+          wget https://www.nasm.us/pub/nasm/releasebuilds/2.16.03/nasm-2.16.03.tar.bz2
+        fi
+        if [ ! -d "nasm-2.16.03" ]; then
+          tar xjvf nasm-2.16.03.tar.bz2
+        fi
+        cd nasm-2.16.03
+        ./autogen.sh
+        ./configure \
+          --prefix="/opt/ffmpeg/build" \
+          --bindir="/opt/ffmpeg/bin"
+        make -j"{{ ansible_facts.processor_vcpus | default(2) }}"
+        make install
+      args:
+        creates: "/opt/ffmpeg/bin/nasm"
+
+    - name: Build and install libx264
+      ansible.builtin.shell: |
+        set -euo pipefail
+        cd "/opt/ffmpeg/sources"
+        git -C x264 pull 2>/dev/null || git clone --depth 1 https://code.videolan.org/videolan/x264.git
+        cd x264
+        ./configure \
+          --prefix="/opt/ffmpeg/build" \
+          --bindir="/opt/ffmpeg/bin" \
+          --enable-static \
+          --enable-pic
+        make -j"{{ ansible_facts.processor_vcpus | default(2) }}"
+        make install
+      args:
+        creates: "{{ ffmpeg_s_bin_dir }}/x264"
+      environment:
+        # Work around 'curl 16 Error in the HTTP2 framing layer'
+        GIT_HTTP_VERSION: "HTTP/1.1"
+        # Also put our custom bin dir in PATH at the process level
+        PATH: "/opt/ffmpeg/bin:{{ ansible_env.PATH | default('/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin') }}"
+      register: x264_build
+      retries: 3
+      delay: 15
+      until: x264_build.rc == 0
+
+    - name: Build and install libx265
+      ansible.builtin.shell: |
+        set -euo pipefail
+        cd "/opt/ffmpeg/sources"
+        wget -O x265.tar.bz2 https://bitbucket.org/multicoreware/x265_git/get/master.tar.bz2
+        rm -rf multicoreware*
+        tar xjvf x265.tar.bz2
+        cd multicoreware*/build/linux
+        cmake -G "Unix Makefiles" \
+          -DCMAKE_INSTALL_PREFIX="{{ ffmpeg_s_build_dir }}" \
+          -DENABLE_SHARED=off \
+          -DENABLE_SVE=OFF \
+          -DENABLE_SVE2=OFF \
+          -DENABLE_SVE2_BITPERM=OFF \
+          {% if ansible_architecture in ['aarch64', 'arm64'] -%}
+          -DCMAKE_C_FLAGS="-march=armv8-a" \
+          -DCMAKE_CXX_FLAGS="-march=armv8-a" \
+          {% endif -%}
+          ../../source
+        make -j"{{ ansible_facts.processor_vcpus | default(2) }}"
+        make install
+      args:
+        creates: "{{ ffmpeg_s_build_dir }}/bin/x265"
+      environment:
+        PATH: "/opt/ffmpeg/bin:{{ ansible_env.PATH | default('/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin') }}"
+        PKG_CONFIG_PATH: "/opt/ffmpeg/build/lib/pkgconfig:{{ ansible_env.PKG_CONFIG_PATH | default('') }}"
+      register: x265_build
+      retries: 3
+      delay: 15
+      until: x265_build.rc == 0
+
+    - name: Build and install libvpx
+      ansible.builtin.shell: |
+        set -euo pipefail
+        cd "/opt/ffmpeg/sources"
+        git -C libvpx pull 2>/dev/null || git clone --depth 1 https://chromium.googlesource.com/webm/libvpx.git
+        cd libvpx
+        ./configure \
+          --prefix="/opt/ffmpeg/build" \
+          --disable-examples \
+          --disable-unit-tests \
+          --enable-vp9-highbitdepth \
+          --as=yasm
+        make -j"{{ ansible_facts.processor_vcpus | default(2) }}"
+        make install
+      args:
+        creates: "{{ ffmpeg_s_build_dir }}/lib/libvpx.a"
+
+    - name: Build and install libfdk-aac
+      ansible.builtin.shell: |
+        set -euo pipefail
+        cd "/opt/ffmpeg/sources"
+        git -C fdk-aac pull 2>/dev/null || git clone --depth 1 https://github.com/mstorsjo/fdk-aac
+        cd fdk-aac
+        autoreconf -fiv
+        ./configure \
+          --prefix="/opt/ffmpeg/build" \
+          --disable-shared
+        make -j"{{ ansible_facts.processor_vcpus | default(2) }}"
+        make install
+      args:
+        creates: "{{ ffmpeg_s_build_dir }}/lib/libfdk-aac.a"
+
+    - name: Build and install libopus
+      ansible.builtin.shell: |
+        set -euo pipefail
+        cd "/opt/ffmpeg/sources"
+        git -C opus pull 2>/dev/null || git clone --depth 1 https://github.com/xiph/opus.git
+        cd opus
+        ./autogen.sh
+        ./configure \
+          --prefix="/opt/ffmpeg/build" \
+          --disable-shared
+        make -j"{{ ansible_facts.processor_vcpus | default(2) }}"
+        make install
+      args:
+        creates: "{{ ffmpeg_s_build_dir }}/lib/libopus.a"
+
+    - name: Build and install libaom
+      ansible.builtin.shell: |
+        set -euo pipefail
+        cd "/opt/ffmpeg/sources"
+        git -C aom pull 2>/dev/null || git clone --depth 1 https://aomedia.googlesource.com/aom
+        rm -rf aom_build
+        mkdir -p aom_build
+        cd aom_build
+        # Architecture-specific tweaks (similar to x265)
+        AOM_EXTRA_CMAKE_FLAGS=""
+        case "$(uname -m)" in
+          arm64|aarch64)
+            AOM_EXTRA_CMAKE_FLAGS="
+              -DCONFIG_RUNTIME_CPU_DETECT=0
+              -DCMAKE_C_FLAGS='-march=armv8-a'
+              -DCMAKE_CXX_FLAGS='-march=armv8-a'
+            "
+            ;;
+        esac
+        cmake -G "Unix Makefiles" \
+          -DCMAKE_INSTALL_PREFIX="{{ ffmpeg_s_build_dir }}" \
+          -DENABLE_TESTS=OFF \
+          -DENABLE_NASM=on \
+          ../aom
+        make -j"{{ ansible_facts.processor_vcpus | default(2) }}"
+        make install
+      args:
+        creates: "{{ ffmpeg_s_build_dir }}/lib/libaom.a"
+      when: ansible_architecture == "x86_64"
+      environment:
+        PATH: "/opt/ffmpeg/bin:{{ ansible_env.PATH | default('/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin') }}"
+
+    - name: Build and install libdav1d
+      ansible.builtin.shell: |
+        set -euo pipefail
+        cd "/opt/ffmpeg/sources"
+        git -C dav1d pull 2>/dev/null || git clone --depth 1 https://code.videolan.org/videolan/dav1d.git
+        rm -rf dav1d/build
+        mkdir -p dav1d/build
+        cd dav1d/build
+        meson setup \
+          -Denable_tools=false \
+          -Denable_tests=false \
+          --default-library=static \
+          .. \
+          --prefix="/opt/ffmpeg/build" \
+          --libdir="{{ ffmpeg_s_build_dir }}/lib"
+        ninja -j"{{ ansible_facts.processor_vcpus | default(2) }}"
+        ninja install
+      args:
+        creates: "{{ ffmpeg_s_build_dir }}/lib/libdav1d.a"
+      environment:
+        PATH: "/opt/ffmpeg/bin:{{ ansible_env.PATH | default('/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin') }}"
+
+    - name: Build and install libvmaf
+      ansible.builtin.shell: |
+        set -euo pipefail
+        cd "/opt/ffmpeg/sources"
+        rm -rf vmaf-master
+        git clone https://github.com/Netflix/vmaf vmaf-master
+        mkdir -p vmaf-master/libvmaf/build
+        cd vmaf-master/libvmaf/build
+        meson setup \
+          -Denable_tests=false \
+          -Denable_docs=false \
+          --buildtype=release \
+          --default-library=static \
+          ../ \
+          --prefix "/opt/ffmpeg/build" \
+          --bindir "bin" \
+          --libdir "lib"
+        ninja -j"20"
+        ninja install
+      args:
+        creates: "{{ ffmpeg_s_build_dir }}/lib/libvmaf.a"
+
+    - name: Build and install libde265
+      ansible.builtin.shell: |
+        set -euo pipefail
+        cd "/opt/ffmpeg/sources"
+        git -C libde265 pull 2>/dev/null || git clone https://github.com/strukturag/libde265.git
+        cd libde265
+        rm -rf build
+        mkdir build
+        cd build
+        cmake -G "Unix Makefiles" \
+          -DCMAKE_INSTALL_PREFIX="{{ ffmpeg_s_build_dir }}" \
+          -DBUILD_SHARED_LIBS=OFF \
+          ..
+        make -j"{{ ansible_facts.processor_vcpus | default(2) }}"
+        make install
+      args:
+        creates: "{{ ffmpeg_s_build_dir }}/lib/libde265.a"
+
+    - name: Build and install libheif
+      ansible.builtin.shell: |
+        set -euo pipefail
+        cd "/opt/ffmpeg/sources"
+        git -C libheif pull 2>/dev/null || git clone https://github.com/strukturag/libheif.git
+        cd libheif
+        rm -rf build
+        mkdir build
+        cd build
+        cmake -G "Unix Makefiles" \
+          -DCMAKE_INSTALL_PREFIX="{{ ffmpeg_s_build_dir }}" \
+          -DBUILD_SHARED_LIBS=OFF \
+          -DWITH_EXAMPLES=OFF \
+          -DBUILD_TESTING=OFF \
+          ..
+        make -j"{{ ansible_facts.processor_vcpus | default(2) }}"
+        make install
+      args:
+        creates: "{{ ffmpeg_s_build_dir }}/lib/libheif.a"
+
+    - name: Download and extract ffmpeg {{ ffmpeg_s_version }}
+      ansible.builtin.shell: |
+        set -euo pipefail
+        cd "/opt/ffmpeg/sources"
+        wget -O ffmpeg-{{ ffmpeg_s_version }}.tar.bz2 \
+          https://ffmpeg.org/releases/ffmpeg-{{ ffmpeg_s_version }}.tar.bz2
+        rm -rf ffmpeg ffmpeg-{{ ffmpeg_s_version }}
+        tar xjvf ffmpeg-{{ ffmpeg_s_version }}.tar.bz2
+        mv ffmpeg-{{ ffmpeg_s_version }} ffmpeg
+      args:
+        creates: "{{ ffmpeg_s_sources_dir }}/ffmpeg"
+
+    - name: Ensure ffmpeg tmp directory exists
+      ansible.builtin.file:
+        path: "/opt/ffmpeg/tmp"
+        state: directory
+        mode: "1777"
+
+    - name: Configure, build and install ffmpeg
+      ansible.builtin.shell: |
+        set -euo pipefail
+        cd "/opt/ffmpeg/sources/ffmpeg"
+
+        # Decide dynamically whether to enable libaom
+        LIBAOM_FLAG=""
+        if pkg-config --exists aom; then
+          LIBAOM_FLAG="--enable-libaom"
+        fi
+
+        # Decide dynamically whether to enable libsvtav1
+        LIBSVTAV1_FLAG=""
+        if pkg-config --exists SvtAv1Enc; then
+          LIBSVTAV1_FLAG="--enable-libsvtav1"
+        fi
+
+        ./configure \
+          --prefix="/opt/ffmpeg/build" \
+          --pkg-config-flags="--static" \
+          --extra-cflags="-I/opt/ffmpeg/build/include" \
+          --extra-ldflags="-L/opt/ffmpeg/build/lib" \
+          --extra-libs="-lpthread -lm" \
+          --ld="g++" \
+          --bindir="/opt/ffmpeg/bin" \
+          --enable-gpl \
+          --enable-gnutls \
+          ${LIBAOM_FLAG} \
+          ${LIBSVTAV1_FLAG} \
+          --enable-libass \
+          --enable-libfdk-aac \
+          --enable-libfreetype \
+          --enable-libmp3lame \
+          --enable-libopus \
+          --enable-libdav1d \
+          --enable-libvorbis \
+          --enable-libvpx \
+          --enable-libx264 \
+          --enable-libx265 \
+          --enable-libvmaf \
+          --enable-nonfree
+
+        make -j"{{ ansible_facts.processor_vcpus | default(4) }}"
+        make install
+        hash -r || true
+      args:
+        creates: "/opt/ffmpeg/bin/ffmpeg"
+      environment:
+        PATH: "/opt/ffmpeg/bin:{{ ansible_env.PATH | default('/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin') }}"
+        TMPDIR: "/opt/ffmpeg/tmp"
+        PKG_CONFIG_PATH: "/opt/ffmpeg/build/lib/pkgconfig:{{ ansible_env.PKG_CONFIG_PATH | default('') }}"
+
+- name: Create /usr/local/bin symlinks for ffmpeg tools
+  ansible.builtin.file:
+    src: "{{ ffmpeg_s_bin_dir }}/{{ item }}"
+    dest: "/usr/local/bin/{{ item }}"
+    state: link
+  loop: "{{ ffmpeg_s_symlink_targets }}"
