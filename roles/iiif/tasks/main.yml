@@ -1,59 +1,57 @@
 ---
 # tasks file for iiif
-- name: iiif | create a working directory for serverless
+- name: Iiif | create a working directory for serverless
   ansible.builtin.file:
     path: "{{ serverless_path }}"
     state: directory
-    mode: 0755
+    mode: "0755"
 
-- name: iiif | install sam and awscli
+- name: Iiif | install sam and awscli
   ansible.builtin.package:
     name: "{{ item }}"
     state: present
   loop:
     - awscli
-    - aws-sam-cli  # will this get the tap'ed repo
+    - aws-sam-cli
 
-- name: iiif | add clone repo
+- name: Iiif | clone serverless-iiif repo
   ansible.builtin.git:
     repo: "https://github.com/pulibrary/serverless-iiif.git"
-    dest: "{{ serverless_path }}/serverless-iiif"
+    dest: "{{ lambda_dir }}"
+    version: "{{ serverless_iiif_branch | default('main') }}"
     force: true
 
-- name: iiif | ensure existence of S3 bucket
-  amazon.aws.aws_s3:
-    aws_access_key: "{{ project_user_aws_access_key }}"
-    aws_secret_key: "{{ project_user_aws_secret_key }}"
-    region: "{{ aws_region }}"
-    bucket: "{{ item }}"
-    mode: create
+- name: Iiif | ensure existence of S3 buckets
+  amazon.aws.s3_bucket:
+    profile: "{{ aws_profile }}"
+    region: "{{ source_bucket_region }}"
+    name: "{{ item }}"
+    state: present
   loop:
-    - "puliiif-{{ runtime_env | default('staging') }}"
-    - "puliiif-{{ runtime_env | default('staging') }}-cache"
+    - "{{ source_bucket }}"
 
-- name: iiif | copy deploy script
+- name: Iiif | copy deploy script
   ansible.builtin.template:
     src: ans_deploy.sh.j2
     dest: "{{ lambda_dir }}/ans_deploy.sh"
-    mode: 0755
+    mode: "0755"
 
-- name: iiif | build container
-  ansible.builtin.command: sam build --use-container
-  environment: 
-    AWS_REGION: "{{ aws_region }}"
-    AWS_ACCESS_KEY_ID: "{{ project_user_aws_access_key }}"
-    AWS_SECRET_ACCESS_KEY: "{{ project_user_aws_secret_key }}"
+- name: Iiif | build with SAM
+  ansible.builtin.command: >
+    sam build --use-container
+    --build-image public.ecr.aws/sam/build-nodejs22.x
   args:
     chdir: "{{ lambda_dir }}"
+  environment:
+    AWS_PROFILE: "{{ aws_profile }}"
+    AWS_DEFAULT_REGION: "{{ aws_region }}"
   changed_when: false
 
-- name: iiif | deploy lambda
-  ansible.builtin.command: ans_deploy.sh "{{ runtime_env | default('staging') }}"
-  environment: 
-    AWS_REGION: "{{ aws_region }}"
-    AWS_ACCESS_KEY_ID: "{{ project_user_aws_access_key }}"
-    AWS_SECRET_ACCESS_KEY: "{{ project_user_aws_secret_key }}"
+- name: Iiif | deploy lambda
+  ansible.builtin.command: "{{ lambda_dir }}/ans_deploy.sh"
   args:
     chdir: "{{ lambda_dir }}"
+  environment:
+    AWS_PROFILE: "{{ aws_profile }}"
+    AWS_DEFAULT_REGION: "{{ aws_region }}"
   changed_when: false
-  ignore_errors: true
