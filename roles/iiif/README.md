@@ -52,6 +52,28 @@ None.
 ```bash
 # Deploy
 ansible-playbook playbooks/libimages.yml
+```
+
+
+## Application URL
+
+After successful deployment, the IIIF endpoint will be available at:
+
+**`https://{{ iiif_domain }}.princeton.edu/iiif/2/`**
+
+in the example above:  **`https://libimages-cloud.princeton.edu/iiif/2/`**
+
+To find the endpoint URL and other deployment details in AWS:
+
+1. **CloudFormation Console** → Stacks → `iiif-serverless-production` → Outputs tab
+   - `EndpointV2`: IIIF 2.1 API endpoint
+   - `EndpointV3`: IIIF 3.0 API endpoint
+   - `DistributionId`: CloudFront distribution ID
+   - `FunctionUrl`: Direct Lambda function URL (bypasses CloudFront)
+
+2. **CloudFront Console** → Distributions
+   - Find distribution with alias `iiif-cloud.princeton.edu`
+   - The distribution domain (e.g., `d1234abcd.cloudfront.net`) can be used before DNS is configured
 
 ## DNS Configuration
 
