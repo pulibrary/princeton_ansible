@@ -1,6 +1,10 @@
 # Role Name: iiif
 
-Deploys [Samvera Labs serverless-iiif](https://github.com/samvera-labs/serverless-iiif) - a IIIF Image API 2.1/3.0 server running on AWS Lambda.
+Deploys [Samvera Labs serverless-iiif](https://github.com/samvera-labs/serverless-iiif) - a IIIF Image API 2.1/3.0 server running on AWS Lambda. serverless-iiif is an AWS Serverless Application that functions as a IIIF Image API 2.1 & 3.0 compliant server. It has the following 3 components.
+
+  * A simple [lambda funtion](https://aws.amazon.com/lambda/)
+  * A [Lambda Function URL](https://docs.aws.amazon.com/lambda/latest/dg/lambda-urls.html) that is used to invoke the IIIF API via HTTPS.
+  * A [Lambda Layer](https://docs.aws.amazon.com/lambda/latest/dg/configuration-layers.html) containing all the dependencies for the Lambda Function.
 
 ## Requirements
 
