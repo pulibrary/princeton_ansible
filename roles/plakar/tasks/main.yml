@@ -38,6 +38,8 @@
 - name: Plakar | Check installed plugins
   ansible.builtin.command: plakar pkg show
   register: plakar_pkg_show
+  become: true
+  become_user: "{{ plakar_user }}"
   changed_when: false
   failed_when: plakar_pkg_show.rc not in [0, 1]
   # rc==1 could mean "no plugins installed yet" depending on version
@@ -49,6 +51,8 @@
 # Build S3 plugin (if missing)
 - name: Plakar | Build S3 plugin from upstream recipe
   ansible.builtin.command: plakar pkg build s3
+  become: true
+  become_user: "{{ plakar_user }}"
   args:
     chdir: "{{ plakar_s3_build_dir }}"
   when: not plakar_s3_installed
@@ -75,12 +79,16 @@
     plakar pkg add {{ plakar_s3_build_dir }}/{{ plakar_s3_plugin_filename }}
   args:
     chdir: "{{ plakar_s3_build_dir }}"
+  become: true
+  become_user: "{{ plakar_user }}"
   when: not plakar_s3_installed
 
 # Verify plugin is now installed
 - name: Plakar | Verify S3 plugin is installed
   ansible.builtin.command: plakar pkg show
   register: plakar_pkg_show_after
+  become: true
+  become_user: "{{ plakar_user }}"
   changed_when: false
 
 - name: Plakar | Assert S3 shows up in plugin list
@@ -88,3 +96,9 @@
     that:
       - "'s3' in (plakar_pkg_show_after.stdout | default(''))"
     fail_msg: "S3 plugin did not appear in 'plakar pkg show' after install."
+
+- name: Plakar | Configure repository and initial backup
+  ansible.builtin.include_tasks: configure_backup.yml
+  when:
+    - running_on_server
+    - plakar_configure_backup | default(false)

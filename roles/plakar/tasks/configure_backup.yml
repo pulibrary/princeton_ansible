@@ -1,0 +1,34 @@
+---
+- name: Plakar | Render /etc/plakar.yml
+  ansible.builtin.template:
+    src: plakar.yml.j2
+    dest: /etc/plakar.yml
+    owner: root
+    group: root
+    mode: "0640"
+
+#  make sure the snapshot root exists
+- name: Plakar | Ensure snapshot root directory exists
+  ansible.builtin.file:
+    path: "{{ plakar_snapshot_root }}"
+    state: directory
+    mode: "0755"
+#
+# plakar_run_initial_backup (default: false). Set to true the first time
+# you want to create + seed the repo.
+
+- name: Plakar | Initialize repository (plakar create)
+  ansible.builtin.command: plakar create
+  become: true
+  become_user: "{{ plakar_user }}"
+  environment:
+    PLAKAR_PASSPHRASE: "{{ plakar_repo_passphrase }}"
+  when: plakar_run_initial_backup | default(false)
+
+- name: Plakar | Run initial backup
+  ansible.builtin.command: plakar backup "{{ plakar_snapshot_root }}"
+  become: true
+  become_user: "{{ plakar_user }}"
+  environment:
+    PLAKAR_PASSPHRASE: "{{ plakar_repo_passphrase }}"
+  when: plakar_run_initial_backup | default(false)
