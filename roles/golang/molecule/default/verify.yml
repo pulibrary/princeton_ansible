@@ -1,53 +1,42 @@
 ---
 - name: Verify
   hosts: all
-  become: true
   gather_facts: false
+  vars:
+    - expected_golang_version: "1.25.5"
   tasks:
-    - name: Check that curl is installed (from example role)
-      ansible.builtin.command: curl --version
-      register: curl_check
-      changed_when: false
-      failed_when: curl_check.rc != 0
-
-    - name: Check that PID 1 looks like systemd/init
-      ansible.builtin.command: ps -p 1 -o comm=
-      register: pid1
-      changed_when: false
-
-    - name: Wait for systemd to be operational (running or degraded)
-      ansible.builtin.shell: |
-        for i in {1..60}; do
-          state=$(systemctl is-system-running 2>/dev/null || echo "unknown")
-          if [[ "$state" == "running" ]] || [[ "$state" == "degraded" ]]; then
-            exit 0
-          fi
-          sleep 1
-        done
-        exit 1
-      changed_when: false
-      failed_when: false
-      register: systemd_wait
-
-    - name: Assert PID 1 is systemd-like
-      ansible.builtin.assert:
-        that:
-          - "'systemd' in pid1.stdout or 'init' in pid1.stdout"
-        fail_msg: "PID 1 is not systemd/init (got: {{ pid1.stdout | trim }})"
-
-    - name: Check that systemd runtime dir exists
+    - name: Check if Go binary exists at install location
       ansible.builtin.stat:
-        path: /run/systemd/system
-      register: systemd_dir
+        path: /usr/local/go/bin/go
+      register: go_binary
 
-    - name: Assert systemd runtime dir exists
+    - name: Assert Go binary is present and executable
       ansible.builtin.assert:
         that:
-          - systemd_dir.stat.isdir | default(false)
-        fail_msg: "/run/systemd/system is missing; systemd may not be active"
+          - go_binary.stat.exists
+          - go_binary.stat.executable
+        fail_msg: "Go binary not found or not executable at /usr/local/go/bin/go"
 
-    - name: Log systemd overall state (best-effort)
-      ansible.builtin.command: systemctl is-system-running
-      register: systemd_state
+    - name: Check if the symlink exists in /usr/local/bin
+      ansible.builtin.stat:
+        path: /usr/local/bin/go
+      register: go_symlink
+
+    - name: Assert symlink is valid and points to the correct source
+      ansible.builtin.assert:
+        that:
+          - go_symlink.stat.exists
+          - go_symlink.stat.islnk
+          - go_symlink.stat.lnk_source == '/usr/local/go/bin/go'
+        fail_msg: "/usr/local/bin/go is missing or does not point to /usr/local/go/bin/go"
+
+    - name: Get installed Go version
+      ansible.builtin.command: /usr/local/bin/go version
+      register: go_version_output
       changed_when: false
-      failed_when: false
+
+    - name: Assert installed version matches expectation
+      ansible.builtin.assert:
+        that:
+          - "'go' ~ expected_golang_version in go_version_output.stdout"
+        fail_msg: "Expected Go version {{ expected_golang_version }}, but got: {{ go_version_output.stdout }}"
