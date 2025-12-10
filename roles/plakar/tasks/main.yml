@@ -20,6 +20,32 @@
     filename: "plakar"
     state: present
 
+- name: Plakar | Clean apt cache
+  ansible.builtin.command: apt-get clean
+  changed_when: false
+
+- name: Plakar | Update apt cache after adding repository
+  ansible.builtin.command: apt-get update
+  register: cache_update
+  retries: 3
+  delay: 5
+  until: cache_update.rc == 0
+  changed_when: false
+  failed_when: false
+
+- name: Plakar | Display cache update errors
+  ansible.builtin.debug:
+    msg: |
+      Return code: {{ cache_update.rc }}
+      STDOUT: {{ cache_update.stdout }}
+      STDERR: {{ cache_update.stderr }}
+  when: cache_update.rc != 0
+
+- name: Plakar | Fail if cache update failed
+  ansible.builtin.fail:
+    msg: "apt-get update failed. See debug output above."
+  when: cache_update.rc != 0
+
 - name: Plakar | Install plakar package
   ansible.builtin.apt:
     name: plakar
