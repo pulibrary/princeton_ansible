@@ -1,13 +1,58 @@
 ---
-# roles/example
-
-- name: Example | ensure example package is present
-  ansible.builtin.package:
-    name: curl
-    state: present
-
-- name: Example | example service unit directory exists
+# roles/golang
+- name: Golang | Ensure download directory exists
   ansible.builtin.file:
-    path: /etc/systemd/system/example.service.d
+    path: "{{ golang_download_dir }}"
     state: directory
     mode: "0755"
+
+- name: Golang | Determine architecture string (if not overridden)
+  ansible.builtin.set_fact:
+    golang_arch: >-
+      {{ 'amd64' if ansible_architecture in ['x86_64', 'amd64'] else
+         'arm64' if ansible_architecture in ['aarch64', 'arm64'] else
+         golang_arch }}
+  when: golang_arch is not defined or golang_arch | length == 0
+
+- name: Golang | Check existing Go installation
+  ansible.builtin.command: "{{ golang_install_dir }}/bin/go version"
+  register: golang_current_version_cmd
+  ignore_errors: true
+  changed_when: false
+
+- name: Golang | Parse current Go version
+  ansible.builtin.set_fact:
+    golang_current_version: >-
+      {{ (golang_current_version_cmd.stdout.split()[2] | default('')) | regex_replace('^go', '') }}
+  when: golang_current_version_cmd.rc == 0
+
+- name: Golang | Decide if install/upgrade is needed
+  ansible.builtin.set_fact:
+    golang_install_needed: "{{ golang_current_version is not defined or golang_current_version != golang_version }}"
+
+- name: Golang | Download Go tarball for {{ golang_version }}
+  ansible.builtin.get_url:
+    url: "https://go.dev/dl/go{{ golang_version }}.linux-{{ golang_arch }}.tar.gz"
+    dest: "{{ golang_download_dir }}/go{{ golang_version }}.linux-{{ golang_arch }}.tar.gz"
+    mode: "0644"
+    checksum: "{{ golang_tarball_checksum | default(omit) }}"
+  when: golang_install_needed
+
+- name: Golang | Remove existing installation at {{ golang_install_dir }}
+  ansible.builtin.file:
+    path: "{{ golang_install_dir }}"
+    state: absent
+  when: golang_install_needed
+
+- name: Golang | Extract Go {{ golang_version }}
+  ansible.builtin.unarchive:
+    src: "{{ golang_download_dir }}/go{{ golang_version }}.linux-{{ golang_arch }}.tar.gz"
+    dest: "/usr/local"
+    remote_src: true
+  when: golang_install_needed
+
+- name: Golang | Ensure /usr/local/bin/go symlink exists
+  ansible.builtin.file:
+    src: "{{ golang_install_dir }}/bin/go"
+    dest: "/usr/local/bin/go"
+    state: link
