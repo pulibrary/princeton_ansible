@@ -8,11 +8,17 @@
       - ca-certificates
     state: present
 
-- name: Plakar | Install repo GPG key
+- name: Plakar | Download repo GPG key (ASCII)
   ansible.builtin.get_url:
     url: "{{ plakar_apt_key_url }}"
-    dest: "{{ plakar_apt_key_path }}"
+    dest: "{{ plakar_apt_key_path }}.asc"
     mode: "0644"
+
+- name: Plakar | Dearmor repo GPG key
+  ansible.builtin.command: >
+    gpg --dearmor -o {{ plakar_apt_key_path }} {{ plakar_apt_key_path }}.asc
+  args:
+    creates: "{{ plakar_apt_key_path }}"
 
 - name: Plakar | Configure apt repository
   ansible.builtin.apt_repository:
