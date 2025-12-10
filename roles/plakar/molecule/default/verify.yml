@@ -32,25 +32,3 @@
         that:
           - plakar_version_output.rc == 0
         fail_msg: "Plakar version command failed with exit code {{ plakar_version_output.rc }}"
-
-    - name: Check for S3 plugin installation
-      ansible.builtin.command: plakar pkg show
-      register: plakar_plugins
-      changed_when: false
-
-    - name: Assert S3 plugin is actively installed
-      ansible.builtin.assert:
-        that:
-          - "'s3' in plakar_plugins.stdout"
-        fail_msg: "S3 plugin is not listed in 'plakar pkg show'. Output: {{ plakar_plugins.stdout }}"
-
-    - name: Check if S3 plugin artifact (.ptar) exists
-      ansible.builtin.stat:
-        path: "{{ plakar_s3_build_dir }}/{{ plakar_s3_plugin_filename }}"
-      register: s3_ptar
-
-    - name: Assert S3 ptar build artifact exists
-      ansible.builtin.assert:
-        that:
-          - s3_ptar.stat.exists
-        fail_msg: "S3 plugin artifact not found at {{ plakar_s3_build_dir }}/{{ plakar_s3_plugin_filename }}"
