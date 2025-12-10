@@ -1,0 +1,22 @@
+# {{ ansible_managed | comment }}
+version: 1.0.0
+
+# 1. Define the storage backend (Google Cloud via S3 API)
+repository:
+  backend: s3
+  config:
+    endpoint: "{{ plakar_repo_endpoint }}"           # GCS S3 interoperability endpoint
+    bucket: "{{ plakar_repo_bucket }}"               # GCS bucket name
+    region: "{{ plakar_repo_region }}"               # GCS ignores this; plugin requires it (use us-east-1)
+    access_key: "{{ plakar_repo_access_key }}"       # HMAC Access Key
+    secret_key: "{{ plakar_repo_secret_key }}"       # HMAC Secret Key
+    compression: "{{ plakar_repo_compression }}"     # saves bandwidth/storage
+    encryption: "{{ plakar_repo_encryption }}"       # encrypts data before sending to Google
+
+# 2. Define the backup job
+snapshot:
+  root: "{{ plakar_snapshot_root }}"                 # The directory you want backed up
+  excludes:
+{% for pattern in plakar_snapshot_excludes %}
+    - "{{ pattern }}"
+{% endfor %}
