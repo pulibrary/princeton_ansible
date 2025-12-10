@@ -1,53 +1,56 @@
 ---
 - name: Verify
   hosts: all
-  become: true
   gather_facts: false
+  become: true
+  vars:
+    # Mirror defaults for verification logic
+    plakar_s3_build_dir: "/var/lib/plakar/plugins-build"
+    plakar_s3_plugin_version: "1.0.7"
+    plakar_s3_plugin_arch: "linux_amd64"
+    plakar_s3_plugin_filename: "s3_v{{ plakar_s3_plugin_version }}_{{ plakar_s3_plugin_arch }}.ptar"
   tasks:
-    - name: Check that curl is installed (from example role)
-      ansible.builtin.command: curl --version
-      register: curl_check
-      changed_when: false
-      failed_when: curl_check.rc != 0
-
-    - name: Check that PID 1 looks like systemd/init
-      ansible.builtin.command: ps -p 1 -o comm=
-      register: pid1
-      changed_when: false
-
-    - name: Wait for systemd to be operational (running or degraded)
-      ansible.builtin.shell: |
-        for i in {1..60}; do
-          state=$(systemctl is-system-running 2>/dev/null || echo "unknown")
-          if [[ "$state" == "running" ]] || [[ "$state" == "degraded" ]]; then
-            exit 0
-          fi
-          sleep 1
-        done
-        exit 1
-      changed_when: false
-      failed_when: false
-      register: systemd_wait
-
-    - name: Assert PID 1 is systemd-like
-      ansible.builtin.assert:
-        that:
-          - "'systemd' in pid1.stdout or 'init' in pid1.stdout"
-        fail_msg: "PID 1 is not systemd/init (got: {{ pid1.stdout | trim }})"
-
-    - name: Check that systemd runtime dir exists
+    - name: Check if Plakar binary exists
       ansible.builtin.stat:
-        path: /run/systemd/system
-      register: systemd_dir
+        path: /usr/bin/plakar
+      register: plakar_binary
 
-    - name: Assert systemd runtime dir exists
+    - name: Assert Plakar binary is present and executable
       ansible.builtin.assert:
         that:
-          - systemd_dir.stat.isdir | default(false)
-        fail_msg: "/run/systemd/system is missing; systemd may not be active"
+          - plakar_binary.stat.exists
+          - plakar_binary.stat.executable
+        fail_msg: "Plakar binary not found or not executable at /usr/bin/plakar"
 
-    - name: Log systemd overall state (best-effort)
-      ansible.builtin.command: systemctl is-system-running
-      register: systemd_state
+    - name: Get Plakar version
+      ansible.builtin.command: plakar version
+      register: plakar_version_output
       changed_when: false
-      failed_when: false
+
+    - name: Assert Plakar runs successfully
+      ansible.builtin.assert:
+        that:
+          - plakar_version_output.rc == 0
+        fail_msg: "Plakar version command failed with exit code {{ plakar_version_output.rc }}"
+
+    - name: Check for S3 plugin installation
+      ansible.builtin.command: plakar pkg show
+      register: plakar_plugins
+      changed_when: false
+
+    - name: Assert S3 plugin is actively installed
+      ansible.builtin.assert:
+        that:
+          - "'s3' in plakar_plugins.stdout"
+        fail_msg: "S3 plugin is not listed in 'plakar pkg show'. Output: {{ plakar_plugins.stdout }}"
+
+    - name: Check if S3 plugin artifact (.ptar) exists
+      ansible.builtin.stat:
+        path: "{{ plakar_s3_build_dir }}/{{ plakar_s3_plugin_filename }}"
+      register: s3_ptar
+
+    - name: Assert S3 ptar build artifact exists
+      ansible.builtin.assert:
+        that:
+          - s3_ptar.stat.exists
+        fail_msg: "S3 plugin artifact not found at {{ plakar_s3_build_dir }}/{{ plakar_s3_plugin_filename }}"
