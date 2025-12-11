@@ -1,122 +1,92 @@
-# Example Role
+# golang
 
-This role is a placeholder for creation of molecule roles
+This role installs a specific version of the Go toolchain from the official
+`go.dev` tarballs into `/usr/local/go`, and ensures `go` is available on
+`$PATH` via `/usr/local/bin/go`.
 
-1. From your new role create a molecule directory
+---
 
-  ```bash
-  cd roles/<your_role_name>
-  mkdir -p molecule/default
-  ```
+## What it does
 
-1. Copy the files from the example role from the root of the repo:
+On each run, the role:
 
-  ```bash
-  cp -a roles/example/* roles/your_role_name
-  ```
+1. Figures out the correct architecture string (`amd64` / `arm64`) if you
+   didn’t override it.
+2. Checks if `{{ golang_install_dir }}/bin/go` exists and what version it is.
+3. If the version doesn’t match `golang_version`:
+   - Downloads `https://go.dev/dl/go{{ golang_version }}.linux-{{ golang_arch }}.tar.gz`
+     into `{{ golang_download_dir }}`.
+   - Removes any existing installation at `{{ golang_install_dir }}`.
+   - Extracts the new Go tree into `/usr/local`.
+4. Ensures a symlink `/usr/local/bin/go` → `{{ golang_install_dir }}/bin/go`
+   exists so `go` is on the PATH for non-interactive commands.
 
-1. Edit the following files:
-   * `molecule/default/converge.yml`
+The role is idempotent: if the requested version is already installed, no
+downloads or changes occur.
 
-    ```yaml
-    roles:
-      - role: <your_role_name>
-    ```
+> Note: This role assumes a typical Linux layout where `/usr/local` is
+> writable by `root` and is intended to be run with `become: true`.
 
-   * `meta/main.yml`
+---
 
-    ```yaml
-    role_name: <your_role_name>
-    ...
-    description: <Description of your role>
-    ...
-    dependencies: []
-    ### or if your role depends on another
-      - role: other_role
-    ```
+## Default variables
 
-2. Run:
+Defined in `roles/golang/defaults/main.yml`:
 
-    ```bash
-    cd roles/<your_role_name>
-    molecule converge
-    molecule verify
-    ```
+```yaml
+# Go version to install (from go.dev)
+golang_version: "1.25.5"
 
-## Architecture/platform notes (Apple Silicon vs GHA CI)
+# Architecture string for Go tarball. Override if needed.
+# Normally auto-detected from ansible_architecture, but you can force it.
+golang_arch: "amd64"
 
-We use a multi-arch Docker image:
+# Where to cache downloaded tarballs
+golang_download_dir: "/usr/local/src"
 
-  * ghcr.io/pulibrary/vm-builds/ubuntu-22.04
+# Where Go will be installed
+golang_install_dir: "/usr/local/go"
+You can override these in group/host vars as needed, for example to pin a
+different version:
 
-  * It has linux/amd64 and linux/arm64 manifests.
+```
 
-  * GitHub Actions runners are amd64.
+```yaml
+golang_version: "1.23.3"
+```
 
-  * Local Macs (M1/M2/M3) are arm64.
+Example usage
+Simple playbook:
 
-Molecule’s Docker driver honors the MOLECULE_DOCKER_PLATFORM environment variable:
+```yaml
+- name: Install modern Go from go.dev
+  hosts: my_build_hosts
+  become: true
 
-  * If not set, Docker chooses a platform based on the host.
+  roles:
+    - role: golang
+```
 
-  * If set, Molecule passes it to Docker as the platform= option.
+With overrides:
 
-### Important: `.env.yml` vs GitHub Actions `env`:
+```yaml
+- name: Install Go 1.23.3 on AMD64
+  hosts: my_build_hosts
+  become: true
 
-Molecule will load environment variables from `.env.yml` (or whatever `MOLECULE_ENV_FILE` points to) **inside the runner/container.**
+  vars:
+    golang_version: "1.23.3"
+    golang_download_dir: "/var/cache/go-downloads"
 
-That means:
+  roles:
+    - role: golang
+```
 
-  * If you commit:
+After the role runs, you should see something like:
 
-    ```yaml
-    # roles/<role>/.env.yml
-      ---
-      MOLECULE_DOCKER_PLATFORM: linux/arm64
-      ```
+```bash
+$ go version
+go1.23.3 linux/amd64
+```
 
-
-  * And in GitHub Actions you also set:
-
-      ```yaml
-      env:
-        MOLECULE_DOCKER_PLATFORM: linux/amd64
-      ```
-
-
-Then the value from `.env.yml` wins inside Molecule, and CI will still use `linux/arm64`.
-
-#### Rule of thumb:
-
-Let CI control the platform, so **do not commit** `MOLECULE_DOCKER_PLATFORM` in `.env.yml.`
-
-### Recommended patterns
-
-Local Apple Silicon (M1/M2/M3)
-
-Use:
-
-Export the variable when you run Molecule:
-
-Use a local, untracked env file:
-
-  * Depend on the global .gitignore (at repo root):
-
-  * Create `roles/<your_role_name>/.env.local.yml`:
-
-    ```yaml
-    ---
-    MOLECULE_DOCKER_PLATFORM: linux/arm64
-    ```
-
-
-  * Run Molecule with:
-
-    ```bash
-    cd roles/<your_role_name>
-    MOLECULE_ENV_FILE=.env.local.yml molecule test
-    ```
-
-#### GitHub Actions (CI)
-
-  * The workflow sets MOLECULE_DOCKER_PLATFORM=linux/amd64 (or relies on the default amd64 runner).
+and the binaries under `/usr/local/go/bin.`
