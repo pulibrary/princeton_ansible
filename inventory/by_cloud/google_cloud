@@ -1,9 +1,6 @@
 # for openBSD, which has 'doas'instead of 'sudo'
 # set ansible_become_method - see the 'obsd' group of groups
 
-[bastion_dev]
-bastion-dev.pulcloud.io
-
 [bastion_production]
 bastion-prod.pulcloud.io
 
@@ -13,10 +10,6 @@ bastion-staging.pulcloud.io
 [cdhapps_staging]
 gcp-simrisk-staging ansible_host=10.140.0.17
 
-[dspace_dev]
-gcp-dataspace-dev1 ansible_host=10.0.20.4
-gcp-oar-dev1 ansible_host=10.0.20.3
-
 [dspace_production]
 gcp-dataspace-prod1 ansible_host=10.244.0.2
 gcp-oar-prod1 ansible_host=10.244.0.3
@@ -24,10 +17,6 @@ gcp-oar-prod1 ansible_host=10.244.0.3
 [dspace_staging]
 gcp-dataspace-staging1 ansible_host=10.132.0.5
 gcp-oar-staging1 ansible_host=10.132.0.4
-
-[obsd_httpd_dev]
-# inventory name is dev.pucloud.io; GCP VM name is gcdc-adc-dev1
-dev.pulcloud.io
 
 [obsd_httpd_production]
 # inventory name is prod.pucloud.io; GCP VM name is gcdc-prod-adc
@@ -49,14 +38,6 @@ pulmirror.princeton.edu
 [sftp_production]
 proquestdrop.pulcloud.io
 
-[gcp_dev:children]
-dspace_dev
-obsd_httpd_dev
-
-[gcp_dev:vars]
-ansible_ssh_common_args=-o ProxyCommand="ssh '-o ForwardAgent yes' '-o StrictHostKeyChecking=accept-new' -q pulsys@bastion-dev.pulcloud.io -W %h:%p"
-checkmk_folder=linux/staging
-
 [gcp_production:children]
 dspace_production
 obsd_httpd_production
@@ -77,10 +58,8 @@ ansible_python_interpreter=/usr/bin/python3
 checkmk_folder=linux/staging
 
 [obsd:children]
-bastion_dev
 bastion_production
 bastion_staging
-obsd_httpd_dev
 obsd_httpd_production
 obsd_httpd_staging
 pulmirror_production
@@ -91,7 +70,6 @@ ansible_become_method=doas
 ansible_python_interpreter=/usr/local/bin/python3
 
 [gcp_operations:children]
-bastion_dev
 bastion_production
 bastion_staging
 pulmirror_production
