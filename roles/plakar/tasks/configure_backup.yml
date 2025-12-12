@@ -90,3 +90,35 @@
   environment:
     PLAKAR_PASSPHRASE: "{{ plakar_repo_passphrase }}"
   when: plakar_run_initial_backup | default(false) | bool
+
+# Render the scheduler config (maps the docs example to your store + root)
+- name: Plakar | Render scheduler config
+  ansible.builtin.template:
+    src: scheduler.yaml.j2
+    dest: "{{ plakar_scheduler_config_path }}"
+    owner: "{{ plakar_user }}"
+    group: "{{ plakar_user }}"
+    mode: "0640"
+  when: plakar_scheduler_enabled | default(false) | bool
+
+# Check if scheduler is already running
+- name: Plakar | Check if scheduler is already running
+  become: true
+  become_user: "{{ plakar_user }}"
+  ansible.builtin.command: plakar scheduler list
+  register: plakar_scheduler_list
+  changed_when: false
+  failed_when: false
+  when: plakar_scheduler_enabled | default(false) | bool
+
+# Start scheduler in the background if it's not running
+# Matches docs:
+#   plakar scheduler start -tasks ./scheduler.yaml
+- name: Plakar | Start scheduler for daily backups
+  become: true
+  become_user: "{{ plakar_user }}"
+  ansible.builtin.command: >
+    plakar scheduler start -tasks {{ plakar_scheduler_config_path }}
+  when:
+    - plakar_scheduler_enabled | default(false) | bool
+    - plakar_scheduler_list.rc != 0
