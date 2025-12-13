@@ -1,81 +1,49 @@
 ---
-# EE definition for general PUL automation
-# to build an EE, run `ansible-builder build`
-
-# builder schema version
 version: 3
 
 images:
-  # build a new image based on this image
+  # Python 3.11 base image required for Ansible 12
   base_image:
-    name: registry.redhat.io/ansible-automation-platform-24/ee-supported-rhel8:1.0.0-543
-    # name: registry.redhat.io/ansible-automation-platform-24/ee-supported-rhel9
+    name: registry.redhat.io/ansible-automation-platform-24/ee-supported-rhel9:1.0
 
 dependencies:
   ansible_core:
-    package_pip: ansible-core==2.19.4
+    # We let the 'ansible' python package below determine the core version
+    # so they don't fight. (Ansible 12.2.0 implies Core 2.19.x)
+    package_pip: ansible-core>=2.19.0 
   ansible_runner:
     package_pip: ansible-runner
   python_interpreter:
     python_path: "/usr/bin/python3"
+
   galaxy:
-    # includes all collections used in the prancible repo
-    # versions taken from the Ansible 8 inclusion list:
-    # https://github.com/ansible-community/ansible-build-data/blob/main/8/ansible-8.7.0.yaml
+    # ONLY list collections that are NOT part of the standard Ansible package
     collections:
-      - name: ansible.netcommon
-        version: 5.3.0
-      - name: ansible.posix
-        version: 1.5.4
-      - name: ansible.utils
-        version: 2.12.0
-      - name: community.crypto
-        version: 2.16.1
-      - name: community.dns
-        version: 2.6.4
-      - name: community.general
-        version: 7.5.2
-      - name: community.mysql
-        version: 3.8.0
-      - name: community.postgresql
-        version: 2.4.3
-      - name: community.rabbitmq
-        version: 1.2.3
-      - name: community.vmware
-        version: 3.11.1
-      - name: google.cloud
-        version: 1.3.0
-      - name: vmware.vmware_rest
-        version: 2.3.1
-    # these collections are not in Ansible package
-    # latest versions from Galaxy as of Feb. 2024
+      - name: checkmk.general
+        version: 6.4.1
+      - name: paloaltonetworks.panos
+        version: 3.2.0
       - name: servicenow.servicenow
         version: 1.0.6
-      - name: paloaltonetworks.panos
-        version: 2.19.1
-      - name: checkmk.general
-        version: 4.3.1
 
-  # python packages, stuff you install with 'pip install'
   python:
+    # "The Kitchen Sink" - This installs the standard library of ~100 collections
+    # (community.general, ansible.posix, etc.) matching Ansible 12.2.0
+    - ansible==12.2.0
     - six
     - psutil
+    # These often need to be re-stated here if the base image 
+    # doesn't provide the python bindings for your specific collections
+    - requests 
+    - google-auth
 
-  # system packages, stuff you install with 'apt/yum/dnf install'
-  # ansible-builder writes this list into the 'context/bindep.txt' file
   system:
     - git
     - python3-dnf
     - python3-pip
-options:
-  # default path is /usr/bin/dnf, which does not exist on the base image
-  package_manager_path: /usr/bin/microdnf
+    # RHEL9 uses dnf, not microdnf, but 'microdnf' alias often exists.
+    # If build fails, try removing the path override below.
 
-# if you need to run more commands on the EE, use this section:
-# additional_build_steps:
-  # items in the list of append_base steps are expressed
-  # as containerfile directives
-  # prepend_base:
-    # - RUN /usr/bin/apt-get update
-  # append_base:
-    # - RUN /usr/bin/python3 -m pip install --upgrade pip
+options:
+  # RHEL 9 UBI/EE images often use /usr/bin/dnf or /usr/bin/microdnf
+  package_manager_path: /usr/bin/microdnf
