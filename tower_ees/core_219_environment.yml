@@ -1,0 +1,49 @@
+---
+version: 3
+
+images:
+  # Python 3.11 base image required for Ansible 12
+  base_image:
+    name: registry.redhat.io/ansible-automation-platform-24/ee-supported-rhel9:1.0
+
+dependencies:
+  ansible_core:
+    # We let the 'ansible' python package below determine the core version
+    # so they don't fight. (Ansible 12.2.0 implies Core 2.19.x)
+    package_pip: ansible-core>=2.19.0 
+  ansible_runner:
+    package_pip: ansible-runner
+  python_interpreter:
+    python_path: "/usr/bin/python3"
+
+  galaxy:
+    # ONLY list collections that are NOT part of the standard Ansible package
+    collections:
+      - name: checkmk.general
+        version: 6.4.1
+      - name: paloaltonetworks.panos
+        version: 3.2.0
+      - name: servicenow.servicenow
+        version: 1.0.6
+
+  python:
+    # "The Kitchen Sink" - This installs the standard library of ~100 collections
+    # (community.general, ansible.posix, etc.) matching Ansible 12.2.0
+    - ansible==12.2.0
+    - six
+    - psutil
+    # These often need to be re-stated here if the base image 
+    # doesn't provide the python bindings for your specific collections
+    - requests 
+    - google-auth
+
+  system:
+    - git
+    - python3-dnf
+    - python3-pip
+    # RHEL9 uses dnf, not microdnf, but 'microdnf' alias often exists.
+    # If build fails, try removing the path override below.
+
+options:
+  # RHEL 9 UBI/EE images often use /usr/bin/dnf or /usr/bin/microdnf
+  package_manager_path: /usr/bin/microdnf
