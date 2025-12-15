@@ -1,18 +1,44 @@
----
 # {{ ansible_managed | comment }}
-#
-# This is a generic, empty config file deployed by Ansible.
-# It provides the basic structure for the OpenTelemetry Collector
-# to start, but it does not enable any components.
 
-receivers: {}
-# Collect host data like CPU, memory, disk etc
-processors: {}
-#  Process the data. The resource detection processor detects and appends the variables, such as environment and system, which helps with the correlation
-exporters: {}
-# Output data. in our case ship them to the signoz endpoint
+# This file is fully data-driven. Define these in group_vars/project/host_vars:
+# - otel_receivers (dict)
+# - otel_processors (dict)
+# - otel_exporters (dict)
+# - otel_service_pipelines (dict)
+# - otel_extensions (list)
+# Optionally add otel_default_resource_attributes (dict) to merge into processors.resource.
+
+{# ---- Build processors.resource.attributes safely #}
+{% set base_attrs =
+  (otel_processors.resource.attributes
+    if (otel_processors is defined
+        and otel_processors.resource is defined
+        and otel_processors.resource.attributes is defined)
+    else [])
+%}
+
+{% set ns = namespace(extra=[]) %}
+{% for k, v in (otel_default_resource_attributes | default({})).items() %}
+  {% set _ = ns.extra.append({'action': 'upsert', 'key': k, 'value': v}) %}
+{% endfor %}
+
+{% set merged_processors = (otel_processors | default({})) | combine(
+  {'resource': {'attributes': base_attrs + ns.extra}},
+  recursive=True
+) %}
+
+receivers:
+{{ (otel_receivers | default({})) | to_nice_yaml(indent=2) | indent(2, true) }}
+
+processors:
+{{ (merged_processors | default({})) | to_nice_yaml(indent=2) | indent(2, true) }}
+
+exporters:
+{{ (otel_exporters | default({})) | to_nice_yaml(indent=2) | indent(2, true) }}
 
 service:
-  pipelines: {}
+  pipelines:
+{{ (otel_service_pipelines | default({})) | to_nice_yaml(indent=2) | indent(4, true) }}
+  extensions:
+{{ (otel_extensions | default([])) | to_nice_yaml(indent=2) | indent(4, true) }}
 
-# Service combines receivers, processors and exports into a pipe consisting of logs, metrics, traces etc.,

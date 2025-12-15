@@ -12,12 +12,13 @@
     - ../group_vars/pulfalight/{{ runtime_env | default('staging') }}_solr.yml
     - ../group_vars/pulfalight/vault.yml
   roles:
-    - { role: 'roles/postgresql', tags: 'postgresql' }
-    - role: roles/openjdk
-    - role: roles/sidekiq_worker  # the staging box is both web and worker
+    - { role: 'postgresql', tags: 'postgresql' }
+    - role: openjdk
+    - role: sidekiq_worker  # the staging box is both web and worker
       when: runtime_env | default('staging') == "staging"
-    - role: roles/pulfalight
-    - role: roles/datadog
+    - role: pulfalight
+    - role: otel_collector
+    - role: datadog
       when: runtime_env | default('staging') == "production"
 
   post_tasks:

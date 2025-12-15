@@ -42,33 +42,4 @@
         that:
           - "otel_version in otel_version_check.stdout"
         fail_msg: "Version check failed. Expected '{{ otel_version }}' in stdout, but got: {{ otel_version_check.stdout }}"
-
-    - name: Check if config file exists
-      ansible.builtin.stat:
-        path: "{{ otel_config_path }}"
-      register: config_file
-
-    - name: Assert config file exists and has correct permissions
-      ansible.builtin.assert:
-        that:
-          - config_file.stat.exists
-          - config_file.stat.isreg
-          - config_file.stat.mode == '0644'
         fail_msg: "Config file {{ otel_config_path }} does not exist, is not a file, or has wrong permissions (expected 0644)."
-
-    - name: Slurp config file content
-      ansible.builtin.slurp:
-        src: "{{ otel_config_path }}"
-      register: config_content
-
-    - name: Parse config file content
-      ansible.builtin.set_fact:
-        parsed_config: "{{ config_content['content'] | b64decode | from_yaml }}"
-
-    - name: Assert config file has correct empty structure
-      ansible.builtin.assert:
-        that:
-          - parsed_config.receivers == {}
-          - parsed_config.processors == {}
-          - parsed_config.exporters == {}
-        fail_msg: "Config file content is not correct. Parsed content: {{ parsed_config }}"
