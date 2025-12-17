@@ -4,10 +4,10 @@
   gather_facts: false
   tasks:
   - name: test for rails_app file
-    stat:
+    ansible.builtin.stat:
       path: "/home/deploy/app_configs/rails_app"
     register: rails_app
     failed_when:
-      - rails_app.stat.isreg is not defined
-      - rails_app.stat.pw_name != deploy
-      - rails_app.stat.gr_name != deploy
+      - not rails_app.stat.exists
+      - rails_app.stat.pw_name | default('') != 'deploy'
+      - rails_app.stat.gr_name | default('') != 'deploy'
