@@ -236,7 +236,7 @@
     block: |
       # localhost
   when:
-    - postgres_host is not none
+    - (postgres_host | default(None)) is not none
     - postgresql_is_local
     - ansible_os_family == "Debian"
     - running_on_server
@@ -251,7 +251,7 @@
     block: |
       # localhost
   when:
-    - postgres_host is not none
+    - (postgres_host | default(None)) is not none
     - postgresql_is_local
     - ansible_os_family == "RedHat"
     - running_on_server
@@ -261,6 +261,9 @@
 
 - name: PostgreSQL | configure access to postgres server
   ansible.builtin.include_tasks: pg_hba.yml
+  when:
+    - not postgresql_is_local
+    - (postgres_host | default('') | length) > 0
 
 - name: PostgreSQL | configure warm standy
   ansible.builtin.include_tasks: warm_standby_leader.yml

@@ -12,7 +12,9 @@ Role Variables
 --------------
 
 ### Server-side variables
-These vars provide connection information to the database server. By convention we store these values in `/group_vars/postgresql/<env>.yml`. 
+
+These vars provide connection information to the database server. By convention we store these values in `/group_vars/postgresql/<env>.yml`.
+
 ```ini
   postgresadmin: "postgres"
   db_clusteradmin_user: "postgres"
@@ -25,7 +27,9 @@ These vars provide connection information to the database server. By convention 
 ```
 
 ### Client-side variables
+
 These vars provide connection information for the database you want to create or connect to. By convention, we store these values in files like `/group_vars/<project-name>/<env>.yml`.
+
 ```ini
   pg_hba_contype: "host"
   pg_hba_method: "md5"
@@ -43,7 +47,7 @@ These vars provide connection information for the database you want to create or
   postgresql_is_local: "false" # should always be false
   postgres_version: 15  # on application side this will install the postgresql client version
 ```
-    
+
 Dependencies
 ------------
 

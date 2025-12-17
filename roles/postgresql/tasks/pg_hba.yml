@@ -3,10 +3,10 @@
   ansible.builtin.lineinfile:
     path: '/etc/postgresql/{{ postgres_version }}/main/pg_hba.conf'
     line: 'host  {{ pg_hba_postgresql_database }}      {{ pg_hba_postgresql_user }} {{ ansible_default_ipv4.address }}/32       md5'
-  delegate_to: '{{ postgres_host }}'
+  delegate_to: "{{ postgres_host | default(inventory_hostname) }}"
   register: remote_postgres_configured
   when:
-    - postgres_host is not none
+    - (postgres_host | default('') | length) > 0
     - not postgresql_is_local
     - ansible_os_family == "Debian"
     - running_on_server
@@ -16,6 +16,7 @@
     name: postgresql
     state: reloaded
   when:
+    - (postgres_host | default('') | length) > 0
     - running_on_server
     - not postgresql_is_local
-  delegate_to: '{{ postgres_host }}'
+  delegate_to: "{{ postgres_host | default(inventory_hostname) }}"
