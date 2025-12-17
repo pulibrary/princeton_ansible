@@ -1,6 +1,14 @@
 ---
 scenario:
   name: default
+  test_sequence:
+    - dependency
+    - syntax
+    - create
+    - prepare
+    - converge
+    - verify
+    - destroy
 driver:
   name: docker
 lint: |
@@ -9,14 +17,23 @@ lint: |
   ansible-lint
 platforms:
   - name: instance
-    image: "ghcr.io/pulibrary/pul_containers:jammy_multi"
-    command: "/lib/systemd/systemd"
+    image: "ghcr.io/pulibrary/vm-builds/ubuntu-22.04"
+    command: "" # image above already has the /sbin/init
+    tmpfs:
+      - /run
+      - /run/lock
+      - /tmp
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
     privileged: true
     pre_build_image: true
 provisioner:
   name: ansible
+  config_options:
+    defaults:
+      remote_tmp: /tmp
+      ALLOW_BROKEN_CONDITIONALS: true
   log: true
 verifier:
   name: ansible
