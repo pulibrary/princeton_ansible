@@ -1,9 +1,66 @@
 ---
 - name: Verify
   hosts: all
+  become: true
   gather_facts: false
+
+  vars:
+    verify_rust_cargo_home: "{{ rust_cargo_home | default('/usr/local/cargo') }}"
+    verify_rust_rustup_home: "{{ rust_rustup_home | default('/usr/local/rustup') }}"
+
   tasks:
-    - name: Create a new application with cargo
-      ansible.builtin.shell: cargo new my_test_app
-      args:
-        chdir: ~
+    - name: Verify /etc/profile.d/rust.sh exists
+      ansible.builtin.stat:
+        path: /etc/profile.d/rust.sh
+      register: rust_profile
+
+    - name: Assert /etc/profile.d/rust.sh exists
+      ansible.builtin.assert:
+        that:
+          - rust_profile.stat.exists
+        fail_msg: "/etc/profile.d/rust.sh is missing"
+
+    - name: Stat rustup/cargo/rustc paths
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - "{{ verify_rust_cargo_home }}/bin/cargo"
+        - "{{ verify_rust_cargo_home }}/bin/rustc"
+        - "{{ verify_rust_cargo_home }}/bin/rustup"
+      register: rust_bin_stats
+
+    - name: Assert rustup/cargo/rustc paths exist
+      ansible.builtin.assert:
+        that:
+          - item.stat.exists
+        fail_msg: "{{ item.item }} is missing"
+      loop: "{{ rust_bin_stats.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Verify cargo works
+      ansible.builtin.command: "{{ verify_rust_cargo_home }}/bin/cargo --version"
+      environment:
+        CARGO_HOME: "{{ verify_rust_cargo_home }}"
+        RUSTUP_HOME: "{{ verify_rust_rustup_home }}"
+      changed_when: false
+
+    - name: Verify rustc works
+      ansible.builtin.command: "{{ verify_rust_cargo_home }}/bin/rustc --version"
+      environment:
+        CARGO_HOME: "{{ verify_rust_cargo_home }}"
+        RUSTUP_HOME: "{{ verify_rust_rustup_home }}"
+      changed_when: false
+
+    - name: Verify stable toolchain is active
+      ansible.builtin.command: "{{ verify_rust_cargo_home }}/bin/rustup show active-toolchain"
+      environment:
+        CARGO_HOME: "{{ verify_rust_cargo_home }}"
+        RUSTUP_HOME: "{{ verify_rust_rustup_home }}"
+      register: active_toolchain
+      changed_when: false
+      failed_when: "'stable' not in active_toolchain.stdout"
+
+    - name: Verify login shell can find cargo via /etc/profile.d/rust.sh
+      ansible.builtin.command: "bash -lc 'command -v cargo && cargo --version'"
+      changed_when: false
