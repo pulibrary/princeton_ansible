@@ -11,6 +11,22 @@
     - ../group_vars/pulfalight/{{ runtime_env | default('staging') }}.yml
     - ../group_vars/pulfalight/{{ runtime_env | default('staging') }}_solr.yml
     - ../group_vars/pulfalight/vault.yml
+
+  pre_tasks:
+    - name: Allow HTTP traffic from 128.112.200.0/21
+      community.general.ufw:
+        rule: allow
+        src: 128.112.200.0/21
+        port: '80'
+        proto: tcp
+
+    - name: Allow HTTPS traffic from 128.112.200.0/21
+      community.general.ufw:
+        rule: allow
+        src: 128.112.200.0/21
+        port: '443'
+        proto: tcp
+
   roles:
     - { role: 'postgresql', tags: 'postgresql' }
     - role: openjdk
