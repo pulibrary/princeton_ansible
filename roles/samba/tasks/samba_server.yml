@@ -1,59 +1,59 @@
 ---
-- name: Create Samba shares root directory
-  file:
+- name: Samba | Create Samba shares root directory
+  ansible.builtin.file:
     state: directory
     path: "{{ samba_shares_root }}"
     owner: root
     group: root
     mode: 0755
-  when: samba_shares
+  when: samba_shares | length > 0
   tags: samba
 
-- name: Create share directories
-  with_items: "{{ samba_shares }}"
-  file:
+- name: Samba | Create share directories
+  loop: "{{ samba_shares }}"
+  ansible.builtin.file:
     state: directory
     path: "{{ item.path|default([samba_shares_root,item.name]|join('/')) }}"
     owner: "{{ item.owner|default('root') }}"
     group: "{{ item.group|default('users') }}"
-    mode: 0775
+    mode: "0775"
   tags: samba
 
-- name: Samba configuration
-  template:
+- name: Samba | add configuration
+  ansible.builtin.template:
     dest: /etc/samba/smb.conf
     src: smb.conf.j2
     validate: 'testparm -s %s'
-    mode: 0644
+    mode: "0644"
   notify:
     - Restart Samba services
   tags: samba
 
-- name: Start Samba service(s)
-  service:
+- name: Samba | Start Samba service(s)
+  ansible.builtin.service:
     name: "{{ item }}"
     state: started
     enabled: true
-  with_items:
+  loop:
     - smbd
     - nmbd
   tags: samba
 
-- name: Create samba users
-  user:
+- name: Samba | Create samba users
+  ansible.builtin.user:
     name: "{{ item.name }}"
     password: "{{ item.password }}"
-  with_items: "{{ samba_users }}"
+  loop: "{{ samba_users }}"
 
-- name: Create Samba users if they don't exist yet
-  shell: >
+- name: Samba | Create Samba users if they don't exist yet
+  ansible.builtin.shell: >
     set -o pipefail; \
     (pdbedit --user={{ item.name }} 2>&1 > /dev/null) \
     || (echo {{ item.password }}; echo {{ item.password }}) \
     | smbpasswd -s -a {{ item.name }}
   args:
     executable: /bin/bash
-  with_items: "{{ samba_users }}"
+  loop: "{{ samba_users }}"
   no_log: true
   register: create_user_output
   changed_when: "'Added user' in create_user_output.stdout"
