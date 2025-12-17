@@ -1,6 +1,14 @@
 ---
 scenario:
   name: default
+  test_sequence:
+    - dependency
+    - syntax
+    - create
+    - prepare
+    - converge
+    - verify
+    - destroy
 driver:
   name: docker
 lint: |
@@ -9,8 +17,12 @@ lint: |
   ansible-lint
 platforms:
   - name: instance
-    image: "quay.io/pulibrary/jammy-ansible:latest"
-    command: ""
+    image: "ghcr.io/pulibrary/vm-builds/ubuntu-22.04"
+    command: "" # image above already has the /sbin/init
+    tmpfs:
+      - /run
+      - /run/lock
+      - /tmp
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
     cgroupns_mode: host
@@ -18,6 +30,9 @@ platforms:
     pre_build_image: true
 provisioner:
   name: ansible
+  playbooks:
+    create: create.yml
+    destroy: destroy.yml
   config_options:
     defaults:
       remote_tmp: /tmp
