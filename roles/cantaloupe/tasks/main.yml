@@ -34,13 +34,25 @@
     remote_src: true
     owner: "{{ cantaloupe_user }}"
     group: "{{ cantaloupe_group }}"
-    creates: "{{ cantaloupe_install_root }}/Cantaloupe-{{ cantaloupe_version }}"
   when: not cantaloupe_installed_dir.stat.exists
+
+- name: Cantaloupe | Find the extracted directory
+  ansible.builtin.find:
+    paths: "{{ cantaloupe_install_root }}"
+    patterns: "*antaloupe-{{ cantaloupe_version }}"
+    file_type: directory
+  register: found_cantaloupe_dir
+
+- name: Cantaloupe | Fail if directory not found
+  ansible.builtin.fail:
+    msg: "Could not find the unarchived Cantaloupe directory in {{ cantaloupe_install_root }}."
+  when: found_cantaloupe_dir.matched == 0
 
 - name: Cantaloupe | Create symlink
   ansible.builtin.file:
-    src: "{{ cantaloupe_install_root }}/Cantaloupe-{{ cantaloupe_version }}"
+    src: "{{ found_cantaloupe_dir.files[0].path }}"
     dest: "{{ cantaloupe_symlink }}"
     state: link
     owner: "{{ cantaloupe_user }}"
     group: "{{ cantaloupe_group }}"
+    force: true
