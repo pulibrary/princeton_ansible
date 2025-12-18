@@ -1,26 +1,46 @@
 ---
-- name: cantaloupe | install steps
-  ansible.builtin.include_tasks: install.yml
-  tags:
-    - cantaloupe
-    - cantaloupe-install
+- name: Cantaloupe | Ensure group exists
+  ansible.builtin.group:
+    name: "{{ cantaloupe_group }}"
+    state: present
 
-- name: cantaloupe | config steps
-  ansible.builtin.include_tasks: config.yml
-  tags:
-    - cantaloupe
-    - cantaloupe-config
+- name: Cantaloupe | Ensure user exists
+  ansible.builtin.user:
+    name: "{{ cantaloupe_user }}"
+    group: "{{ cantaloupe_group }}"
+    state: present
 
-- name: cantaloupe | web
-  ansible.builtin.include_tasks: web.yml
-  tags:
-    - cantaloupe
-    - cantaloupe-web
-  when: cantaloupe_deploy_war
+- name: Cantaloupe | Check if Cantaloupe is already installed
+  ansible.builtin.stat:
+    path: "{{ cantaloupe_install_root }}/Cantaloupe-{{ cantaloupe_version }}"
+  register: cantaloupe_installed_dir
 
-- name: cantaloupe | cache
-  ansible.builtin.include_tasks: cache.yml
-  tags:
-    - cantaloupe
-    - cantaloupe-cache
-  when: cantaloupe_create_FilesystemCache_dir
+- name: Cantaloupe | Download Cantaloupe release
+  ansible.builtin.get_url:
+    url: "https://github.com/medusa-project/cantaloupe/releases/download/v{{ cantaloupe_version }}/Cantaloupe-{{ cantaloupe_version }}.zip"
+    dest: "/tmp/Cantaloupe-{{ cantaloupe_version }}.zip"
+    mode: '0644'
+    timeout: 60
+  register: download_cantaloupe
+  until: download_cantaloupe is success
+  retries: 5
+  delay: 10
+  when: not cantaloupe_installed_dir.stat.exists
+
+- name: Cantaloupe | Install Cantaloupe (unarchive)
+  ansible.builtin.unarchive:
+    src: "/tmp/Cantaloupe-{{ cantaloupe_version }}.zip"
+    dest: "{{ cantaloupe_install_root }}"
+    remote_src: true
+    owner: "{{ cantaloupe_user }}"
+    group: "{{ cantaloupe_group }}"
+    creates: "{{ cantaloupe_install_root }}/Cantaloupe-{{ cantaloupe_version }}"
+  when: not cantaloupe_installed_dir.stat.exists
+
+- name: Cantaloupe | Create symlink
+  ansible.builtin.file:
+    src: "{{ cantaloupe_install_root }}/Cantaloupe-{{ cantaloupe_version }}"
+    dest: "{{ cantaloupe_symlink }}"
+    state: link
+    owner: "{{ cantaloupe_user }}"
+    group: "{{ cantaloupe_group }}"
