@@ -5,6 +5,7 @@
     append: true
     groups:
       - 'adm'
+
 - name: Datadog | Create /etc/datadog-agent
   ansible.builtin.file:
     dest: /etc/datadog-agent
@@ -38,6 +39,7 @@
     group: '{{ datadog_group }}'
     mode: "0644"
   with_items: '{{ datadog_typed_checks }}'
+  when: item.type is defined
   notify: restart datadog-agent
 
 - name: Datadog | Create a nginx config file if it is configures
@@ -47,8 +49,8 @@
     owner: '{{ datadog_user }}'
     group: '{{ datadog_group }}'
     mode: "0644"
-  when: item.type == 'nginx'
   with_items: '{{ datadog_typed_checks }}'
+  when: item.type | default('') == 'nginx'
   notify: restart datadog-agent
 
 - name: Datadog | Create trace agent configuration file
