@@ -1,10 +1,10 @@
 ---
-- name: deploy_user | create system user group
+- name: Deploy_user | create system user group
   ansible.builtin.group:
     name: "{{ deploy_user }}"
     gid: "{{ deploy_user_uid }}"
 
-- name: deploy_user | create system user
+- name: Deploy_user | create system user
   ansible.builtin.user:
     name: "{{ deploy_user }}"
     uid: "{{ deploy_user_uid }}"
@@ -14,7 +14,7 @@
 
 # this task uses the '*.keys' GitHub URLs to access key contents
 # the contents are used in a template two tasks further down
-- name: deploy_user | get key content from github
+- name: Deploy_user | get key content from github
   ansible.builtin.command: 'curl {{ item }}'
   loop: "{{ deploy_user_github_keys }}"
   register: deploy_user_keys_from_github
@@ -22,16 +22,15 @@
   run_once: true
   tags: update_keys
 
-
-- name: deploy_user | create the .ssh directory
+- name: Deploy_user | create the .ssh directory
   ansible.builtin.file:
     path: "/home/{{ deploy_user }}/.ssh/"
     state: directory
     owner: "{{ deploy_user }}"
     group: "{{ deploy_user }}"
-    mode: 0700
+    mode: "0700"
 
-- name: deploy_user | build authorized keys file
+- name: Deploy_user | build authorized keys file
   ansible.builtin.template:
     src: authorized_keys.j2
     dest: /home/{{ deploy_user }}/.ssh/authorized_keys
@@ -41,29 +40,63 @@
     backup: true
   tags: update_keys
 
-- name: deploy_user | allow "authorized_key" files
-  ansible.builtin.lineinfile: >
-              dest=/etc/ssh/sshd_config
-              state=present
-              backrefs=yes
-              regexp='^#AuthorizedKeysFile(.*?)$'
-              line="AuthorizedKeysFile\1"
+- name: Deploy_user | allow "authorized_key" files
+  ansible.builtin.lineinfile:
+    dest: /etc/ssh/sshd_config
+    state: present
+    backrefs: true
+    regexp: '^#AuthorizedKeysFile(.*?)$'
+    line: 'AuthorizedKeysFile\1'
   when:
     - running_on_server
 
-- name: deploy_user | allow deploy user to SSH
-  ansible.builtin.lineinfile: >
-              dest=/etc/ssh/sshd_config
-              state=present
-              backrefs=yes
-              regexp='^AllowUsers(.*?)( ?)({{ deploy_user }})?$'
-              line="AllowUsers\1 {{ deploy_user }}"
+# we check for the presence of AllowUsers which pre-2025 vms will all have
+- name: Deploy_user | check /etc/ssh/sshd_config For AllowUsers
+  ansible.builtin.lineinfile:
+    name: /etc/ssh/sshd_config
+    regexp: '^AllowUsers'
+    state: absent
+  check_mode: true
+  register: allow_users
+  changed_when: false
   when:
     - running_on_server
+
+# Append the deploy_user to pre-2025 /etc/ssh/sshd_config
+- name: Deploy_user | allow deploy user to SSH
+  ansible.builtin.lineinfile:
+    path: "/etc/ssh/sshd_config"
+    state: present
+    backrefs: true
+    regexp: '^AllowUsers(.*?)( ?)({{ deploy_user }})?$'
+    line: 'AllowUsers\1 {{ deploy_user }}'
+  when:
+    - running_on_server
+    - allow_users.found | bool
   notify:
     - restart sshd
 
-- name: deploy_user | install deploy github key
+# newer boxes will have this path
+- name: Deploy_user | Get stats of the /etc/ssh/sshd_config.d/99-pulsys
+  ansible.builtin.stat:
+    path: /etc/ssh/sshd_config.d/99-allowusers-pulsys.conf
+  register: pulsys_file
+
+# Append the deploy_user to 2025 config /etc/ssh/sshd_config.d/
+- name: Deploy_user | allow deploy user to SSH
+  ansible.builtin.lineinfile:
+    dest: "/etc/ssh/sshd_config.d/99-allowusers-pulsys.conf"
+    state: present
+    backrefs: true
+    regexp: "^AllowUsers(.*?)( ?)({{ deploy_user }})?$"
+    line: 'AllowUsers\1 {{ deploy_user }}'
+  when:
+    - running_on_server
+    - pulsys_file.stat.exists
+  notify:
+    - restart sshd
+
+- name: Deploy_user | install deploy github key
   ansible.builtin.copy:
     content: "{{ deploy_id_rsa_private_key }}"
     dest: "/home/{{ deploy_user }}/.ssh/id_rsa"
@@ -72,7 +105,7 @@
     mode: 0600
   when: running_on_server
 
-- name: deploy_user | install deploy github ssh config
+- name: Deploy_user | install deploy github ssh config
   ansible.builtin.blockinfile:
     path: "/home/{{ deploy_user }}/.ssh/config"
     insertbefore: BOF
@@ -87,7 +120,7 @@
         User git
   register: deploy_ssh_config
 
-- name: deploy_user | set sudo options for {{ deploy_user }}
+- name: Deploy_user | set sudo options for {{ deploy_user }}
   ansible.builtin.template:
     src: sudo.j2
     dest: "/etc/sudoers.d/{{ deploy_user }}"
@@ -97,6 +130,6 @@
   loop_control:
     label: "{{ deploy_user }}"
 
-- name: deploy_user | Run all handlers notified by the deploy_user role
+- name: Deploy_user | Run all handlers notified by the deploy_user role
   ansible.builtin.meta: flush_handlers
   changed_when: false
