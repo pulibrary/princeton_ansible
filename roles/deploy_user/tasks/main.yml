@@ -1,20 +1,20 @@
 ---
-- name: deploy_user | create system user group
+- name: Deploy_user | create system user group
   ansible.builtin.group:
     name: "{{ deploy_user }}"
     gid: "{{ deploy_user_uid }}"
 
-- name: deploy_user | create system user
+- name: Deploy_user | create system user
   ansible.builtin.user:
     name: "{{ deploy_user }}"
     uid: "{{ deploy_user_uid }}"
     group: "{{ deploy_user }}"
     home: "/home/{{ deploy_user }}"
     shell: "{{ deploy_user_shell }}"
-
 # this task uses the '*.keys' GitHub URLs to access key contents
 # the contents are used in a template two tasks further down
-- name: deploy_user | get key content from github
+#
+- name: Deploy_user | get key content from github
   ansible.builtin.command: 'curl {{ item }}'
   loop: "{{ deploy_user_github_keys }}"
   register: deploy_user_keys_from_github
@@ -22,16 +22,15 @@
   run_once: true
   tags: update_keys
 
-
-- name: deploy_user | create the .ssh directory
+- name: Deploy_user | create the .ssh directory
   ansible.builtin.file:
     path: "/home/{{ deploy_user }}/.ssh/"
     state: directory
     owner: "{{ deploy_user }}"
     group: "{{ deploy_user }}"
-    mode: 0700
+    mode: "0700"
 
-- name: deploy_user | build authorized keys file
+- name: Deploy_user | build authorized keys file
   ansible.builtin.template:
     src: authorized_keys.j2
     dest: /home/{{ deploy_user }}/.ssh/authorized_keys
@@ -41,38 +40,104 @@
     backup: true
   tags: update_keys
 
-- name: deploy_user | allow "authorized_key" files
+- name: Deploy_user | allow "authorized_key" files
   ansible.builtin.lineinfile: >
-              dest=/etc/ssh/sshd_config
-              state=present
-              backrefs=yes
-              regexp='^#AuthorizedKeysFile(.*?)$'
-              line="AuthorizedKeysFile\1"
+    dest=/etc/ssh/sshd_config state=present backrefs=yes regexp='^#AuthorizedKeysFile(.*?)$' line="AuthorizedKeysFile\1"
+
   when:
     - running_on_server
 
-- name: deploy_user | allow deploy user to SSH
-  ansible.builtin.lineinfile: >
-              dest=/etc/ssh/sshd_config
-              state=present
-              backrefs=yes
-              regexp='^AllowUsers(.*?)( ?)({{ deploy_user }})?$'
-              line="AllowUsers\1 {{ deploy_user }}"
+# Gather existing AllowUsers users from legacy main sshd_config
+- name: Deploy_user | gather AllowUsers from /etc/ssh/sshd_config
+  ansible.builtin.command:
+    cmd: awk '/^AllowUsers/ {for (i=2;i<=NF;i++) print $i}' /etc/ssh/sshd_config
+  register: deploy_legacy_allowusers
+  changed_when: false
+  failed_when: false
+  when: running_on_server
+
+# Gather existing AllowUsers users from the old drop-in file, if it exists
+- name: Deploy_user | gather AllowUsers from /etc/ssh/sshd_config.d/99-allowusers-pulsys.conf
+  ansible.builtin.command:
+    cmd: awk '/^AllowUsers/ {for (i=2;i<=NF;i++) print $i}' /etc/ssh/sshd_config.d/99-allowusers-pulsys.conf
+  register: deploy_dropin_allowusers
+  changed_when: false
+  failed_when: false
+  when: running_on_server
+
+# Build list of existing AllowUsers entries from both places
+- name: Deploy_user | build existing AllowUsers list
+  ansible.builtin.set_fact:
+    deploy_ssh_allowusers_existing: >-
+      {{
+        (
+          (deploy_legacy_allowusers.stdout_lines | default([])) +
+          (deploy_dropin_allowusers.stdout_lines | default([]))
+        ) | unique
+      }}
+  when: running_on_server
+
+# Build unified list including deploy_user (only if pulsys is already present)
+- name: Deploy_user | build unified AllowUsers list
+  ansible.builtin.set_fact:
+    deploy_ssh_allowusers_unified: >-
+      {{
+        (deploy_ssh_allowusers_existing + [deploy_user]) | unique
+      }}
   when:
     - running_on_server
+    - deploy_ssh_allowusers_existing is defined
+    - "'pulsys' in deploy_ssh_allowusers_existing"
+
+# Write new unified sshd drop-in
+- name: Deploy_user | write unified AllowUsers drop-in
+  ansible.builtin.copy:
+    dest: /etc/ssh/sshd_config.d/99-allowusers.conf
+    owner: root
+    group: root
+    mode: '0644'
+    content: |
+      # Managed by Ansible
+      AllowUsers {{ deploy_ssh_allowusers_unified | join(' ') }}
+  when:
+    - running_on_server
+    - deploy_ssh_allowusers_unified is defined
   notify:
     - restart sshd
 
-- name: deploy_user | install deploy github key
+# Remove legacy AllowUsers line from main sshd_config
+- name: Deploy_user | remove legacy AllowUsers from /etc/ssh/sshd_config
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    state: absent
+    regexp: '^AllowUsers\b'
+  when:
+    - running_on_server
+    - deploy_ssh_allowusers_unified is defined
+  notify:
+    - restart sshd
+
+# Remove old pulsys-only drop-in
+- name: Deploy_user | remove legacy 99-allowusers-pulsys.conf
+  ansible.builtin.file:
+    path: /etc/ssh/sshd_config.d/99-allowusers-pulsys.conf
+    state: absent
+  when:
+    - running_on_server
+    - deploy_ssh_allowusers_unified is defined
+  notify:
+    - restart sshd
+
+- name: Deploy_user | install deploy github key
   ansible.builtin.copy:
     content: "{{ deploy_id_rsa_private_key }}"
     dest: "/home/{{ deploy_user }}/.ssh/id_rsa"
     owner: "{{ deploy_user }}"
     group: "{{ deploy_user }}"
-    mode: 0600
+    mode: "0600"
   when: running_on_server
 
-- name: deploy_user | install deploy github ssh config
+- name: Deploy_user | install deploy github ssh config
   ansible.builtin.blockinfile:
     path: "/home/{{ deploy_user }}/.ssh/config"
     insertbefore: BOF
@@ -86,17 +151,16 @@
         IdentityFile ~/.ssh/id_rsa
         User git
   register: deploy_ssh_config
-
 - name: deploy_user | set sudo options for {{ deploy_user }}
   ansible.builtin.template:
     src: sudo.j2
     dest: "/etc/sudoers.d/{{ deploy_user }}"
-    mode: 0600
+    mode: "0600"
   when:
     - sudo_options is defined
   loop_control:
     label: "{{ deploy_user }}"
 
-- name: deploy_user | Run all handlers notified by the deploy_user role
+- name: Deploy_user | Run all handlers notified by the deploy_user role
   ansible.builtin.meta: flush_handlers
   changed_when: false
