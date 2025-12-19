@@ -57,6 +57,5 @@ Step 3: Clean up related records and infrastructure
 - [ ] Remove from Cohesity if present
 - [ ] Remove from BigFix if present
 - [ ] Remove computer account from domain if joined
-- [ ] Remove from inventory spreadsheet
 
 ### Implementation notes, if any
