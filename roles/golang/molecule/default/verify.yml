@@ -2,12 +2,21 @@
 - name: Verify
   hosts: all
   gather_facts: false
-  vars:
-    - expected_golang_version: "1.25.5"
+
   tasks:
+    - name: Load golang role defaults
+      ansible.builtin.include_vars:
+        file: "../../defaults/main.yml"
+        name: golang_defaults
+
+    - name: Derive expected Go version and install dir
+      ansible.builtin.set_fact:
+        expected_golang_version: "{{ golang_version | default(golang_defaults.golang_version) }}"
+        expected_install_dir: "{{ golang_install_dir | default(golang_defaults.golang_install_dir) }}"
+
     - name: Check if Go binary exists at install location
       ansible.builtin.stat:
-        path: /usr/local/go/bin/go
+        path: "{{ expected_install_dir }}/bin/go"
       register: go_binary
 
     - name: Assert Go binary is present and executable
@@ -15,7 +24,7 @@
         that:
           - go_binary.stat.exists
           - go_binary.stat.executable
-        fail_msg: "Go binary not found or not executable at /usr/local/go/bin/go"
+        fail_msg: "Go binary not found or not executable at {{ expected_install_dir }}/bin/go"
 
     - name: Check if the symlink exists in /usr/local/bin
       ansible.builtin.stat:
@@ -27,8 +36,8 @@
         that:
           - go_symlink.stat.exists
           - go_symlink.stat.islnk
-          - go_symlink.stat.lnk_source == '/usr/local/go/bin/go'
-        fail_msg: "/usr/local/bin/go is missing or does not point to /usr/local/go/bin/go"
+          - go_symlink.stat.lnk_source == expected_install_dir + '/bin/go'
+        fail_msg: "/usr/local/bin/go is missing or does not point to {{ expected_install_dir }}/bin/go"
 
     - name: Get installed Go version
       ansible.builtin.command: /usr/local/bin/go version
@@ -40,3 +49,4 @@
         that:
           - "'go' ~ expected_golang_version in go_version_output.stdout"
         fail_msg: "Expected Go version {{ expected_golang_version }}, but got: {{ go_version_output.stdout }}"
+
