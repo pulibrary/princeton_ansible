@@ -10,19 +10,24 @@ This role installs a specific version of the Go toolchain from the official
 
 On each run, the role:
 
-1. Figures out the correct architecture string (`amd64` / `arm64`) if you
-   didn’t override it.
-2. Checks if `{{ golang_install_dir }}/bin/go` exists and what version it is.
-3. If the version doesn’t match `golang_version`:
-   - Downloads `https://go.dev/dl/go{{ golang_version }}.linux-{{ golang_arch }}.tar.gz`
-     into `{{ golang_download_dir }}`.
-   - Removes any existing installation at `{{ golang_install_dir }}`.
-   - Extracts the new Go tree into `/usr/local`.
-4. Ensures a symlink `/usr/local/bin/go` → `{{ golang_install_dir }}/bin/go`
-   exists so `go` is on the PATH for non-interactive commands.
+1. Ensures the download directory (`{{ golang_download_dir }}`) exists.
+2. Derives the correct architecture string (`amd64` / `arm64`) from
+   `ansible_architecture` if you didn’t override `golang_arch`.
+3. Downloads the versioned Go tarball
+   (`go{{ golang_version }}.linux-{{ golang_arch }}.tar.gz`) from `go.dev`
+   into `{{ golang_download_dir }}` if the file does **not** already exist.
+4. If the tarball was downloaded/changed, it:
+   - Extracts it into `/usr/local` (which creates/overwrites
+     `{{ golang_install_dir }}`).
+   - Ensures a symlink `/usr/local/bin/go` → `{{ golang_install_dir }}/bin/go`
+     exists so `go` is on the PATH for non-interactive commands.
 
-The role is idempotent: if the requested version is already installed, no
-downloads or changes occur.
+The role’s idempotence is driven by the **presence of the versioned tarball**:
+
+- If `go{{ golang_version }}.linux-{{ golang_arch }}.tar.gz` already exists
+  in `{{ golang_download_dir }}`, the install step is skipped.
+- If you bump `golang_version`, the tarball name changes, so the role
+  downloads the new tarball and re-installs Go.
 
 > Note: This role assumes a typical Linux layout where `/usr/local` is
 > writable by `root` and is intended to be run with `become: true`.
@@ -46,37 +51,23 @@ golang_download_dir: "/usr/local/src"
 
 # Where Go will be installed
 golang_install_dir: "/usr/local/go"
+```
+
 You can override these in group/host vars as needed, for example to pin a
 different version:
-
-```
 
 ```yaml
 golang_version: "1.23.3"
 ```
 
-Example usage
-Simple playbook:
+### Example Usage
+
+Simple Playbook:
 
 ```yaml
 - name: Install modern Go from go.dev
   hosts: my_build_hosts
   become: true
-
-  roles:
-    - role: golang
-```
-
-With overrides:
-
-```yaml
-- name: Install Go 1.23.3 on AMD64
-  hosts: my_build_hosts
-  become: true
-
-  vars:
-    golang_version: "1.23.3"
-    golang_download_dir: "/var/cache/go-downloads"
 
   roles:
     - role: golang
@@ -89,4 +80,6 @@ $ go version
 go1.23.3 linux/amd64
 ```
 
-and the binaries under `/usr/local/go/bin.`
+and the binaries under `/usr/local/go/bin`
+
+
