@@ -48,10 +48,10 @@ Step 3: Clean up related records and infrastructure
 - [ ] Remove border firewall rules if present
 - [ ] Remove from princeton_ansible inventory if present
 - [ ] If we are redirecting a site, update nginxplus config files in princeton_ansible
-- [ ] If we are decommissioning a site, remove nginxplus config files in princeton_ansible
 - [ ] If we are decommissioning a site, remove group variables from princeton_ansible
-- [ ] If we are decommissioning a site, remove alias from the load balancers' network record
-- [ ] If we removed nginxplus config files, or are decommissioning a machine that had SSL set up, revoke the TLS certificates
+- [ ] If we are decommissioning a site, remove nginxplus config files in princeton_ansible
+- [ ] If we removed nginxplus config files, remove alias from the load balancers' network record
+- [ ] If we removed nginxplus config files, or are decommissioning a machine that had SSL set up, [revoke the TLS certificates](https://github.com/pulibrary/pul-it-handbook/blob/main/services/create_ssl_certs.md#revoking-certificates-for-sites-on-our-load-balancers)
 - [ ] Remove from CheckMK
 - [ ] Remove from Datadog if present
 - [ ] Remove from Cohesity if present
