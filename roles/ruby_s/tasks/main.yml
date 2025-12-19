@@ -8,18 +8,6 @@
   ansible.builtin.debug:
     msg: Installed ruby {{ installed_ruby.stdout }} Desired ruby {{ ruby_version }}
 
-# our test env does not have ruby installed
-# only run cleanup when ruby is installed AND it's the wrong version
-- name: ruby_s | remove wrong ruby versions with apt
-  ansible.builtin.include_tasks: cleanup.yml
-  when:
-    - installed_ruby.stderr is not search("not found")
-    # installed_ruby.stdout contains something like
-    # 'ruby 2.7.0p243 (2018-12-21 revision . . . )'
-    # ruby_version contains something like 'ruby-3.1.0'
-    # regex pulls out x.y.z to compare '2.7.0' to '3.1.0'
-    - installed_ruby.stdout | regex_search('\d+\.\d+\.\d+') != ruby_version | regex_search('\d+\.\d+\.\d+')
-
 # install from source when ruby is not installed OR it's the wrong version
 - name: ruby_s | install, upgrade, or downgrade ruby from source
   ansible.builtin.include_tasks: install_from_source.yml
