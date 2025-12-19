@@ -27,7 +27,7 @@
 - name: Ezproxy | install missing file replacements
   ansible.builtin.command: /var/local/ezproxy/ezproxy -m
   become: true
-  become_user: "{{ deploy_user }}"
+  become_user: root
   register: proxy_results
   changed_when: false
   failed_when: "proxy_results.rc != 1"
@@ -37,23 +37,16 @@
 - name: Ezproxy | install ezproxy startup script (requires root)
   ansible.builtin.command: /var/local/ezproxy/ezproxy -si
   become: true
-  become_user: "root"
+  become_user: root
   changed_when: false
   when: running_on_server
 
 - name: Ezproxy | run command with WSKey
   ansible.builtin.command: /var/local/ezproxy/ezproxy -k "{{ oclc_wskey }}"
   become: true
+  become_user: root
   changed_when: false
   when: running_on_server
-
-- name: Ezproxy | create ezproxy tls directory
-  ansible.builtin.file:
-    path: "/var/local/ezproxy/tls"
-    state: directory
-    group: "{{ deploy_user }}"
-    owner: "{{ deploy_user }}"
-    mode: "0755"
 
 - name: Ezproxy | Clean apt cache
   ansible.builtin.command: apt-get clean
@@ -80,33 +73,42 @@
     msg: "Cache update failed after adding repository"
   when: ezproxy_cache_update.rc != 0
 
-- name: Ezproxy | install certbot
-  ansible.builtin.apt:
-    name: certbot
-    state: present
+- name: Ezproxy | Allow HTTP and HTTPS traffic
+  community.general.ufw:
+    rule: allow
+    port: "{{ item }}"
+    proto: tcp
+  loop:
+    - "80"
+    - "443"
+  when:
+    - running_on_server
 
-- name: Ezproxy | update acme certificates for {{ domain_name }}
-  ansible.builtin.command: /usr/bin/certbot certonly --standalone --non-interactive --agree-tos --email lsupport@princeton.edu --server https://acme.sectigo.com/v2/InCommonRSAOV --eab-kid {{ vault_acme_eab_kid }} --eab-hmac-key {{ vault_acme_eab_hmac_key }} --domain {{ domain_name }}.princeton.edu --cert-name {{ domain_place_name }}
+- name: Ezproxy | Allow checkmk from 128.112.0.0/16
+  community.general.ufw:
+    rule: allow
+    port: "6556"
+    proto: tcp
+    src: "128.112.0.0/16"
+  when:
+    - running_on_server
+
+- name: Ezproxy | Install snapd
+  ansible.builtin.apt:
+    name: snapd
+    state: present
   when: running_on_server
 
-- name: Ezproxy | Creates a log directory for ezproxy
-  ansible.builtin.file:
-    path: "/var/local/ezproxy/log"
-    state: directory
-    owner: "{{ deploy_user }}"
-    group: "{{ deploy_user }}"
-    mode: "0755"
-  become: true
+# Install a snap with classic confinement
+- name: Ezproxy | Install certbot with option --classic
+  community.general.snap:
+    name: certbot
+    classic: true
+  when: running_on_server
 
-- name: Ezproxy | Create app directory
-  ansible.builtin.file:
-    path: "{{ ezproxy_repo_root }}"
-    state: directory
-    owner: "{{ deploy_user }}"
-    group: "{{ deploy_user }}"
-    mode: "0750"
-    recurse: true
-  become: true
+- name: Ezproxy | update acme certificates for {{ domain_name }}
+  ansible.builtin.command: /snap/bin/certbot certonly --standalone --non-interactive --agree-tos --email lsupport@princeton.edu --server https://acme.sectigo.com/v2/InCommonRSAOV --eab-kid {{ vault_acme_eab_kid }} --eab-hmac-key {{ vault_acme_eab_hmac_key }} --domain *.{{ domain_name }}.princeton.edu --cert-name {{ domain_place_name }}
+  when: running_on_server
 
 - name: Ezproxy | Ensure .ssh directory exists.
   ansible.builtin.file:
@@ -122,16 +124,6 @@
     state: "present"
     line: "{{ deploy_user }} ALL=(ALL) NOPASSWD: /usr/sbin/service ezproxy restart"
     validate: "visudo -cf %s"
-
-- name: Ezproxy | chmod back permissions
-  ansible.builtin.file:
-    path: "{{ ezproxy_repo_root }}"
-    state: directory
-    recurse: true
-    mode: "0750"
-    owner: "{{ deploy_user }}"
-    group: "{{ deploy_user }}"
-  become: true
 
 - name: Ezproxy | add geoip ppa
   ansible.builtin.apt_repository:
@@ -186,21 +178,76 @@
   when:
     - running_on_server
 
+- name: Ezproxy | create ezproxy tls directory
+  ansible.builtin.file:
+    path: "/var/local/ezproxy/tls"
+    state: directory
+    group: "{{ deploy_user }}"
+    owner: "{{ deploy_user }}"
+    mode: "0755"
+
+- name: Ezproxy | Creates a log directory for ezproxy
+  ansible.builtin.file:
+    path: "/var/local/ezproxy/log"
+    state: directory
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+    mode: "0755"
+  become: true
+
+- name: Ezproxy | add user config file
+  ansible.builtin.template:
+    src: "user.txt.j2"
+    dest: /var/local/ezproxy/user.txt
+    mode: "0644"
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+  changed_when: false
+  when:
+    - running_on_server
+
 - name: Ezproxy | add shib config user
   ansible.builtin.template:
     src: "shibuser.txt.j2"
     dest: /var/local/ezproxy/shibuser.txt
     mode: "0644"
-    owner: root
-    group: root
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+  changed_when: false
+  when:
+    - running_on_server
 
 - name: Ezproxy | add princeton allow IP ranges
   ansible.builtin.template:
     src: "princeton_allow.txt.j2"
     dest: /var/local/ezproxy/princeton_allow.txt
     mode: "0644"
-    owner: root
-    group: root
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+  changed_when: false
+  when:
+    - running_on_server
+
+- name: Ezproxy | copy ezproxy config.txt
+  ansible.builtin.template:
+    src: "config.txt.j2"
+    dest: "/var/local/ezproxy/config.txt"
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+    mode: "0644"
+  changed_when: false
+  when:
+    - running_on_server
+
+- name: Ezproxy | chmod back permissions
+  ansible.builtin.file:
+    path: "/var/local/ezproxy"
+    state: directory
+    recurse: true
+    mode: "0755"
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+  become: true
 
 - name: Ezproxy | copy a systemd service
   ansible.builtin.template:
@@ -218,25 +265,6 @@
     daemon_reload: true
   when:
     - running_on_server
-
-- name: Ezproxy | copy ezproxy config.txt
-  ansible.builtin.template:
-    src: "config.txt.j2"
-    dest: "/var/local/ezproxy/config.txt"
-    owner: root
-    group: root
-    mode: "0644"
-  changed_when: false
-  when:
-    - running_on_server
-
-- name: Ezproxy | add user config file
-  ansible.builtin.template:
-    src: "user.txt.j2"
-    dest: /var/local/ezproxy/user.txt
-    mode: "0644"
-    owner: root
-    group: root
 
 - name: Ezproxy | start ezproxy
   ansible.builtin.service:
