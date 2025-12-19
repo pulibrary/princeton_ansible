@@ -1,17 +1,25 @@
-# {{ ansible_managed | comment }}
 [Unit]
 Description=EZProxy
 Documentation=https://help.oclc.org/Library_Management/EZproxy
-After=network.target local-fs.target nss-lookup.target  network-online.target
+After=network-online.target
+Wants=network-online.target
 
 [Service]
-Type=simple
+Type=forking
+WorkingDirectory=/var/local/ezproxy
+UMask=007
+LimitNOFILE=65536
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
 ExecStart=/var/local/ezproxy/ezproxy start
 ExecStop=/var/local/ezproxy/ezproxy stop
 ExecReload=/var/local/ezproxy/ezproxy restart
 Restart=on-failure
 RestartSec=3
+User=ezproxy
+Group=ezproxy
+WorkingDirectory=/var/local/ezproxy
+UMask=007
 
 [Install]
 WantedBy=multi-user.target
-Alias=ezproxy.service
