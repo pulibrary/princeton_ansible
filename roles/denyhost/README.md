@@ -20,9 +20,23 @@ banned_ranges:
 
 ## Requirements
 
-DNS registered [at Google Cloud](https://console.cloud.google.com/net-services/dns/zones?referrer=search&project=pul-gcdc)
+  - PanOS configured to Read from an [External DynamicList](https://docs.paloaltonetworks.com/network-security/security-policy/administration/objects/external-dynamic-lists/configure-the-firewall-to-access-an-external-dynamic-list). In our instance the URI is an S3 Bucket [https://nginx-deny-list.s3.us-east-1.amazonaws.com/denylist.txt](https://nginx-deny-list.s3.us-east-1.amazonaws.com/denylist.txt)
+  - The S3 Bucket Allows Public Access (see [the AWS docs](https://docs.aws.amazon.com/AmazonS3/latest/userguide/managing-acls.html)) with the following policy:
+      ```yaml
+        {
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+              "Sid": "PublicReadGetObject",
+              "Effect": "Allow",
+              "Principal": "*",
+              "Action": "s3:GetObject",
+              "Resource": "arn:aws:s3:::nginx-deny-list/*"
+            }
+          ]
+        }
 
-edit the [files/drop.txt](files/drop.txt) and run the playbook
+  - The vaulted credentials are allowed to modify the denylist
 
 ## Example Playbook
 
