@@ -35,7 +35,6 @@ banned_ranges:
             }
           ]
         }
-        ```
 
   - The vaulted credentials are allowed to modify the denylist
 
