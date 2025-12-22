@@ -1,13 +1,14 @@
-"{{ ansible_managed | comment }}"
+{{ ansible_managed | comment }}
 #
 #
-If !(auth:issuer eq "https://idp.princeton.edu/idp/shibboleth");
+If !(auth:issuer eq "https://sts.windows.net/{{ microsoft_entra_idp_uuid }}/");
    Deny unaffiliated.html
-If !(Any(auth:memberOf, "CN=PU:LIB:electronicaccess:remote,OU=Grouper,DC=pu,DC=win,DC=princeton,DC=edu"));
-   Deny unauthorized.html
 Group Default
+Debug
 {% for item in shib_admin_user %}
-If auth:eduPersonPrincipalName eq "{{ item }}";
+If auth:"http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name" eq "{{ item }}";
    Admin
 {% endfor %}
-If auth:eduPersonPrincipalName ne ""; Set login:loguser = auth:eduPersonPrincipalName
+If auth:"http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name" ne "";
+   Set login:loguser = auth:"http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name"
+
