@@ -29,6 +29,7 @@
     path: /etc/ssh/sshd_config.d/50-redhat.conf
     regexp: '^\s*ChallengeResponseAuthentication\b.*$'
     replace: '# \g<0>'
+  ignore_errors: true
   notify: restart sshd (validate)
 
 # Never hard-force AuthenticationMethods anywhere (let PAM pick it up)
@@ -42,7 +43,8 @@
   changed_when: true
   notify: restart sshd (validate)
 
-# Our SINGLE early, authoritative auth drop-in (alphabetically first)
+  # Our SINGLE early, authoritative auth drop-in (alphabetically first)
+  #  yes.. that seemed to matter
 - name: Himmelblau | write 01-himmelblau-auth.conf (Rocky)
   ansible.builtin.copy:
     dest: /etc/ssh/sshd_config.d/01-himmelblau-auth.conf
@@ -50,6 +52,9 @@
     content: |
       UsePAM yes
       KbdInteractiveAuthentication yes
+      # Some OpenSSH builds print this alias in `sshd -T`, some omit it.
+      # Keep it explicit; assertions below tolerate omission.
+      ChallengeResponseAuthentication yes
       PasswordAuthentication no
       GSSAPIAuthentication no
       GSSAPIKeyExchange no
@@ -68,6 +73,15 @@
   changed_when: true
   notify: restart sshd (validate)
 
+# Ensure the PAM service name used by remote sshd matches local pamtester (both hit sshd stack)
+- name: PAM | make /etc/pam.d/ssh a symlink to sshd
+  ansible.builtin.file:
+    src: sshd
+    dest: /etc/pam.d/ssh
+    state: link
+    force: true
+
+# Apply any pending restarts before verification
 - name: Ensure sshd is restarted before checking effective config
   ansible.builtin.meta: flush_handlers
 
