@@ -1,0 +1,106 @@
+---
+# Ensure we always read drop-ins, and do it last in the main file
+- name: Himmelblau | ensure final Include at end of main sshd_config (Rocky)
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    line: 'Include /etc/ssh/sshd_config.d/*.conf'
+    insertafter: EOF
+    state: present
+  notify: restart sshd (validate)
+
+# Neutralize main-file & common drop-ins that fight us
+- name: Himmelblau | comment PasswordAuthentication in main file (Rocky)
+  ansible.builtin.replace:
+    path: /etc/ssh/sshd_config
+    regexp: '^\s*PasswordAuthentication\b.*$'
+    replace: '# \g<0>'
+  notify: restart sshd (validate)
+
+- name: Himmelblau | comment PasswordAuthentication in cloud-init drop-in if present (Rocky)
+  ansible.builtin.replace:
+    path: /etc/ssh/sshd_config.d/50-cloud-init.conf
+    regexp: '^\s*PasswordAuthentication\b.*$'
+    replace: '# \g<0>'
+  ignore_errors: true
+  notify: restart sshd (validate)
+
+- name: Himmelblau | comment CRAuthentication "no" in 50-redhat.conf (Rocky)
+  ansible.builtin.replace:
+    path: /etc/ssh/sshd_config.d/50-redhat.conf
+    regexp: '^\s*ChallengeResponseAuthentication\b.*$'
+    replace: '# \g<0>'
+  ignore_errors: true
+  notify: restart sshd (validate)
+
+# Never hard-force AuthenticationMethods anywhere (let PAM pick it up)
+- name: Rocky | comment AuthenticationMethods everywhere
+  ansible.builtin.shell: |
+    sed -i 's/^\s*AuthenticationMethods\b/# &/' /etc/ssh/sshd_config || true
+    find /etc/ssh/sshd_config.d -maxdepth 1 -type f -name '*.conf' \
+      -exec sed -i 's/^\s*AuthenticationMethods\b/# &/' {} +
+  args:
+    executable: /bin/bash
+  changed_when: true
+  notify: restart sshd (validate)
+
+  # Our SINGLE early, authoritative auth drop-in (alphabetically first)
+  #  yes.. that seemed to matter
+- name: Himmelblau | write 01-himmelblau-auth.conf (Rocky)
+  ansible.builtin.copy:
+    dest: /etc/ssh/sshd_config.d/01-himmelblau-auth.conf
+    mode: "0644"
+    content: |
+      UsePAM yes
+      KbdInteractiveAuthentication yes
+      # Some OpenSSH builds print this alias in `sshd -T`, some omit it.
+      # Keep it explicit; assertions below tolerate omission.
+      ChallengeResponseAuthentication yes
+      PasswordAuthentication no
+      GSSAPIAuthentication no
+      GSSAPIKeyExchange no
+  notify: restart sshd (validate)
+
+# Blanket-neutralize conflicting toggles in every OTHER drop-in
+- name: Rocky | comment conflicting auth toggles in other drop-ins
+  ansible.builtin.shell: |
+    set -e
+    for f in /etc/ssh/sshd_config.d/*.conf; do
+      [ "$(basename "$f")" = "01-himmelblau-auth.conf" ] && continue
+      sed -i -E 's/^\s*(PasswordAuthentication|KbdInteractiveAuthentication|ChallengeResponseAuthentication|GSSAPI(Authentication|KeyExchange))\b.*$/# &/' "$f" || true
+    done
+  args:
+    executable: /bin/bash
+  changed_when: true
+  notify: restart sshd (validate)
+
+# Ensure the PAM service name used by remote sshd matches local pamtester (both hit sshd stack)
+- name: PAM | make /etc/pam.d/ssh a symlink to sshd
+  ansible.builtin.file:
+    src: sshd
+    dest: /etc/pam.d/ssh
+    state: link
+    force: true
+
+# Apply any pending restarts before verification
+- name: Ensure sshd is restarted before checking effective config
+  ansible.builtin.meta: flush_handlers
+
+# Observe the effective runtime view and assert convergence
+- name: SSHD | dump effective auth toggles
+  ansible.builtin.command: /usr/sbin/sshd -T
+  register: sshd_effective
+  changed_when: false
+
+- name: Assert sshd effective config has our values (alias-tolerant)
+  ansible.builtin.assert:
+    that:
+      - "'usepam yes' in sshd_effective.stdout"
+      - "'kbdinteractiveauthentication yes' in sshd_effective.stdout"
+      - "'passwordauthentication no' in sshd_effective.stdout"
+      - "'gssapiauthentication no' in sshd_effective.stdout"
+      # If the alias is shown, it must be 'yes'; if it's absent, that's OK.
+      - "('challengeresponseauthentication yes' in sshd_effective.stdout) or ('challengeresponseauthentication' not in sshd_effective.stdout)"
+    fail_msg: >
+      sshd -T is not in the expected state. Got:
+      {{ sshd_effective.stdout | regex_findall('usepam\\s+\\w+|kbdinteractiveauthentication\\s+\\w+|challengeresponseauthentication\\s+\\w+|passwordauthentication\\s+\\w+|gssapiauthentication\\s+\\w+') | join(', ') }}
+    success_msg: sshd effective config matches Himmelblau/PAM expectations.

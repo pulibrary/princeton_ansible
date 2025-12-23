@@ -151,7 +151,36 @@
     new_control: optional
     new_module_path: pam_himmelblau.so
 
+<<<<<<< HEAD
 - name: Himmelblau | enable & start service
+=======
+- name: Himmelblau - Manage {{ allow_users_filename }}
+  ansible.builtin.template:
+    src: sshd-allow-users.conf.j2
+    dest: "{{ sshd_config_d_path }}/{{ allow_users_filename }}"
+    mode: "0644"
+  when: allow_users_enable | default(true)
+  notify: restart sshd (validate)
+
+- name: Himmelblau - Include strict PAM for Rocky
+  ansible.builtin.include_tasks: rocky_nss.yml
+
+- name: Himmelblau - Include strict PAM for Rocky
+  ansible.builtin.include_tasks: rocky_strict.yml
+
+- name: Himmelblau - Validate and bounce sshd
+  ansible.builtin.command: /usr/sbin/sshd -t -f /etc/ssh/sshd_config
+  register: sshd_validate
+  changed_when: false
+  failed_when: sshd_validate.rc != 0
+
+- name: Himmelblau - Restart sshd
+  ansible.builtin.systemd:
+    name: "{{ himmelblau_ssh_service }}"
+    state: restarted
+
+- name: Himmelblau - Enable & start himmelblaud
+>>>>>>> e6f2bbdf1 (add nss module for remote auth)
   ansible.builtin.systemd:
     name: himmelblaud
     enabled: true
