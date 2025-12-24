@@ -1,4 +1,5 @@
 ---
+
 - name: 'pul_nomad | consul | Create consul user/group'
   block:
     # Add group
@@ -14,6 +15,15 @@
         comment: Consul user
         group: "consul"
         system: true
+
+- name: Pul_nomad | consule | Gather minimal facts for install decisions
+  ansible.builtin.setup:
+    gather_subset:
+      - '!all'
+      - 'min'
+      - 'distribution'
+      - 'pkg_mgr'
+  tags: always
 
 - name: 'pul_nomad | consul | Install Debian OS packages for consul'
   ansible.builtin.package:
@@ -31,7 +41,7 @@
     name:
       - iproute
       - dmidecode
-      - dnsutils
+      - bind-utils
       - sudo
       - unzip
     state: present
@@ -91,10 +101,11 @@
             path: "{{ consul_temp_dir.path }}"
             state: absent
           tags: installation
+
 - name: 'pul_nomad | consul | Install systemd config'
   ansible.builtin.copy:
     src: files/consul/consul.service
-    dest: /lib/systemd/system/consul.service
+    dest: /etc/systemd/system/consul.service
     owner: root
     group: root
     mode: 0644

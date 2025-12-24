@@ -1,50 +1,173 @@
 ---
-# This is an example playbook to execute Ansible tests.
-
-- name: Verify
+- name: Verify Consul Cluster
   hosts: all
   gather_facts: false
   tasks:
-    - name: register output of consul members
-      command: consul members
+    - name: Check Consul service is running
+      ansible.builtin.command: systemctl is-active consul
+      register: consul_service_status
+      changed_when: false
+
+    - name: Verify Consul service is active
+      ansible.builtin.assert:
+        that:
+          - consul_service_status.stdout == "active"
+        fail_msg: "Consul service is not running"
+        success_msg: "Consul service is active"
+
+    - name: Get Consul cluster members
+      ansible.builtin.command: consul members
       environment:
         CONSUL_HTTP_TOKEN: '{{ consul_acl_management_token }}'
       register: consul_members_results
-    - name: test consul cluster has members
-      assert:
+      changed_when: false
+
+    - name: Verify all nodes are Consul cluster members
+      ansible.builtin.assert:
         that:
           - "'nomadserver1' in consul_members_results.stdout"
           - "'nomadserver2' in consul_members_results.stdout"
           - "'nomadserver3' in consul_members_results.stdout"
           - "'nomadclient1' in consul_members_results.stdout"
-    - name: register output of consul DNS command
-      command: dig consul.service.consul SRV
-      register: consul_dns_results
-    - name: test consul dns has consul members
-      assert:
+        fail_msg: "Not all expected nodes are in Consul cluster"
+        success_msg: "All nodes present in Consul cluster"
+
+    - name: Check Consul leader exists
+      ansible.builtin.uri:
+        url: http://127.0.0.1:8500/v1/status/leader
+        return_content: true
+        headers:
+          X-Consul-Token: '{{ consul_acl_management_token }}'
+      register: consul_leader
+      failed_when: consul_leader.content | trim in ['""', '']
+
+    - name: Verify Consul has elected a leader
+      ansible.builtin.assert:
         that:
-          - "'ANSWER SECTION:' in consul_dns_results.stdout"
-          - "'ANSWER: 3' in consul_dns_results.stdout"
-    - name: register output of nomad command
-      command: nomad operator raft list-peers
-      register: nomad_operator_raft_results
-      environment:
-        NOMAD_TOKEN: '{{ pul_nomad_management_token }}'
-    - name: test nomad cluster registration
-      assert:
+          - consul_leader.status == 200
+          - consul_leader.content | trim != '""'
+          - consul_leader.content | trim != ''
+        fail_msg: "Consul cluster has no leader"
+        success_msg: "Consul cluster has a leader: {{ consul_leader.content }}"
+
+    # Test Consul DNS directly on port 8600 instead of relying on DNSMasq
+    - name: Query Consul DNS directly for consul service
+      ansible.builtin.command: dig @127.0.0.1 -p 8600 consul.service.consul SRV +short
+      register: consul_dns_direct
+      changed_when: false
+      failed_when: false
+
+    - name: Verify Consul DNS is responding
+      ansible.builtin.assert:
         that:
-          - "'nomadserver1' in nomad_operator_raft_results.stdout"
-# Podman should be in the RedHat box.
-- name: Verify Podman Nomad Driver
-  hosts: nomadclient1
+          - consul_dns_direct.rc == 0
+          - consul_dns_direct.stdout | length > 0
+        fail_msg: "Consul DNS not responding on port 8600"
+        success_msg: "Consul DNS is working"
+
+- name: Verify Nomad Cluster on Servers
+  hosts: nomad_servers
   gather_facts: false
   tasks:
-    - name: register output of nomad node status
-      command: nomad node status -self
+    - name: Check Nomad service is running
+      ansible.builtin.command: systemctl is-active nomad
+      register: nomad_service_status
+      changed_when: false
+
+    - name: Verify Nomad service is active
+      ansible.builtin.assert:
+        that:
+          - nomad_service_status.stdout == "active"
+        fail_msg: "Nomad service is not running"
+        success_msg: "Nomad service is active"
+
+    - name: Get Nomad server members
+      ansible.builtin.command: nomad server members
+      environment:
+        NOMAD_TOKEN: '{{ pul_nomad_management_token }}'
+      register: nomad_server_members
+      changed_when: false
+      run_once: true
+
+    - name: Verify Nomad servers are clustered
+      ansible.builtin.assert:
+        that:
+          - "'nomadserver1' in nomad_server_members.stdout"
+          - "'nomadserver2' in nomad_server_members.stdout"
+          - "'nomadserver3' in nomad_server_members.stdout"
+        fail_msg: "Not all Nomad servers are in the cluster"
+        success_msg: "All Nomad servers are clustered"
+      run_once: true
+
+    - name: Get Nomad raft peers
+      ansible.builtin.command: nomad operator raft list-peers
+      environment:
+        NOMAD_TOKEN: '{{ pul_nomad_management_token }}'
+      register: nomad_raft_peers
+      changed_when: false
+      run_once: true
+
+    - name: Verify Nomad raft has leader
+      ansible.builtin.assert:
+        that:
+          - "'leader' in nomad_raft_peers.stdout"
+        fail_msg: "Nomad raft cluster has no leader"
+        success_msg: "Nomad raft cluster has a leader"
+      run_once: true
+
+- name: Verify Nomad Clients
+  hosts: nomad_clients
+  gather_facts: false
+  tasks:
+    - name: Check Nomad service is running on client
+      ansible.builtin.command: systemctl is-active nomad
+      register: nomad_client_service_status
+      changed_when: false
+
+    - name: Verify Nomad client service is active
+      ansible.builtin.assert:
+        that:
+          - nomad_client_service_status.stdout == "active"
+        fail_msg: "Nomad client service is not running"
+        success_msg: "Nomad client service is active"
+
+    - name: Get Nomad node status
+      ansible.builtin.command: nomad node status -self
       environment:
         NOMAD_TOKEN: '{{ pul_nomad_management_token }}'
       register: nomad_node_status
-    - name: test nomad podman driver
-      assert:
+      changed_when: false
+
+    - name: Verify Nomad client is registered and ready
+      ansible.builtin.assert:
+        that:
+          - "'Status' in nomad_node_status.stdout"
+          - "'ready' in nomad_node_status.stdout"
+        fail_msg: "Nomad client is not ready"
+        success_msg: "Nomad client is registered and ready"
+
+    - name: Verify Podman driver is available (Rocky Linux only)
+      ansible.builtin.assert:
         that:
           - "'podman' in nomad_node_status.stdout"
+        fail_msg: "Podman driver not available on Nomad client"
+        success_msg: "Podman driver is available"
+
+- name: Verify Consul-Nomad Integration
+  hosts: nomad_servers[0]
+  gather_facts: false
+  tasks:
+    - name: Check Nomad services are registered in Consul
+      ansible.builtin.uri:
+        url: http://127.0.0.1:8500/v1/catalog/services
+        return_content: true
+        headers:
+          X-Consul-Token: '{{ consul_acl_management_token }}'
+      register: consul_services
+
+    - name: Verify Nomad services exist in Consul catalog
+      ansible.builtin.assert:
+        that:
+          - "'nomad' in consul_services.content or 'nomad-servers' in consul_services.content or 'nomad-clients' in consul_services.content"
+        fail_msg: "Nomad services not registered in Consul"
+        success_msg: "Nomad services are registered in Consul"
