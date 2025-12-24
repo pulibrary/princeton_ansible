@@ -16,7 +16,7 @@
 
     - name: Check if Go binary exists at install location
       ansible.builtin.stat:
-        path: "{{ expected_install_dir }}/bin/go"
+        path: "{{ expected_install_dir }}/go/bin/go"
       register: go_binary
 
     - name: Assert Go binary is present and executable
@@ -24,7 +24,7 @@
         that:
           - go_binary.stat.exists
           - go_binary.stat.executable
-        fail_msg: "Go binary not found or not executable at {{ expected_install_dir }}/bin/go"
+        fail_msg: "Go binary not found or not executable at {{ expected_install_dir }}/go/bin/go"
 
     - name: Check if the symlink exists in /usr/local/bin
       ansible.builtin.stat:
@@ -36,8 +36,8 @@
         that:
           - go_symlink.stat.exists
           - go_symlink.stat.islnk
-          - go_symlink.stat.lnk_source == expected_install_dir + '/bin/go'
-        fail_msg: "/usr/local/bin/go is missing or does not point to {{ expected_install_dir }}/bin/go"
+          - go_symlink.stat.lnk_source == expected_install_dir + '/go/bin/go'
+        fail_msg: "/usr/local/bin/go is missing or does not point to {{ expected_install_dir }}/go/bin/go"
 
     - name: Get installed Go version
       ansible.builtin.command: /usr/local/bin/go version
