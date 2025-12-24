@@ -1,5 +1,18 @@
 ---
 # File: config.yml - Consul configuration tasks
+- name: pul_nomad | consul | Determine bind address from routing
+  ansible.builtin.shell:
+    executable: /bin/bash
+    cmd: |
+      set -euo pipefail
+      ip -4 route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src"){print $(i+1); exit}}'
+  register: _consul_src_ip
+  changed_when: false
+
+- name: pul_nomad | consul | Set consul_bind_addr fact
+  ansible.builtin.set_fact:
+    consul_bind_addr: "{{ _consul_src_ip.stdout | trim }}"
+
 - name: pul_nomad | consul | Create configuration directories.
   ansible.builtin.file:
     path: "{{ item }}"
