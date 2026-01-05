@@ -8,14 +8,76 @@
 - name: pul_nomad | consul | Server Configuration
   ansible.builtin.import_tasks: configure_server.yml
 
-- name: pul_nomad | consul | Start Consul service
+- name: Pul_nomad | consul | Start Consul service
   become: true
-  ansible.builtin.service:
-    name: consul
-    state: started
-    enabled: true
-  # Make sure it's healthy before we continue, so there's a leader.
-  register: consulServiceDetails
-  until: consulServiceDetails.status.ActiveState == "active"
-  retries: 15
-  delay: 5
+  block:
+    # Check if Consul is already running and healthy before attempting cleanup
+    - name: Pul_nomad | consul | Check if Consul is already running
+      ansible.builtin.uri:
+        url: http://127.0.0.1:8500/v1/status/leader
+        method: GET
+        status_code: [200]
+      register: consul_health_check
+      failed_when: false
+      changed_when: false
+
+    # Clean stale Consul data that can cause "error reading server metadata" in CI/Molecule
+    # Only runs in containers AND only if Consul is not already healthy
+    - name: Pul_nomad | consul | Clean stale Consul raft data (CI/Molecule only)
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /opt/consul/raft
+        - /opt/consul/serf
+        - /opt/consul/node-id
+      when:
+        - ansible_virtualization_type is defined
+        - ansible_virtualization_type in ["docker", "container", "podman"]
+        - consul_health_check.status is not defined or consul_health_check.status != 200
+
+    - name: Pul_nomad | consul | Start consul
+      ansible.builtin.systemd_service:
+        name: consul
+        state: started
+        enabled: true
+        daemon_reload: true
+
+    - name: Pul_nomad | consul | Wait for Consul HTTP port
+      ansible.builtin.wait_for:
+        host: 127.0.0.1
+        port: 8500
+        timeout: 60
+
+  rescue:
+    - name: Pul_nomad | consul | systemctl status consul
+      ansible.builtin.command: systemctl status consul --no-pager -l
+      changed_when: false
+      register: consul_status
+      failed_when: false
+
+    - name: Pul_nomad | consul | journalctl -u consul
+      ansible.builtin.command: journalctl -u consul --no-pager -n 200
+      changed_when: false
+      register: consul_journal
+      failed_when: false
+
+    - name: Pul_nomad | consul | dump configs
+      ansible.builtin.command: sh -c "echo '--- /etc/consul.d/consul.hcl'; sed -n '1,200p' /etc/consul.d/consul.hcl; echo '--- /etc/consul.d/server.hcl'; sed -n '1,200p' /etc/consul.d/server.hcl"
+      changed_when: false
+      register: consul_cfg_dump
+      failed_when: false
+
+    - name: Pul_nomad | consul | fail with logs
+      ansible.builtin.fail:
+        msg: |
+          Consul failed to start on {{ inventory_hostname }}.
+
+          systemctl status:
+          {{ consul_status.stdout | default('') }}
+
+          journalctl:
+          {{ consul_journal.stdout | default('') }}
+
+          configs:
+          {{ consul_cfg_dump.stdout | default('') }}

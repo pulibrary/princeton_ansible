@@ -29,8 +29,12 @@ lint: |
   ansible-lint
 platforms:
   - name: nomadserver1
-    image: "ghcr.io/pulibrary/pul_containers:jammy_multi_systemd"
-    command: "/sbin/init"
+    image: "ghcr.io/pulibrary/vm-builds/ubuntu-22.04"
+    command: ""
+    tmpfs:
+      - /run
+      - /run/lock
+      - /tmp
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
     privileged: true
@@ -38,23 +42,26 @@ platforms:
     groups:
       - nomad_cluster
       - nomad_servers
-    cgroupns_mode: host # make docker work
+    cgroupns_mode: host
     capabilities:
       - SYS_ADMIN
       - SYS_RAWIO
     dns_servers:
       - 127.0.0.1
       - 8.8.8.8
-    network_mode: "nomad" # make dockers talk to each other
+    network_mode: "nomad"
     networks:
       - name: "nomad"
     published_ports:
-      - 127.0.0.1:8500:8500 # consul port
-      - 127.0.0.1:4646:4646 # Nomad port
-  # Debian box to ensure it can build a client on either.
+      - 127.0.0.1:8500:8500
+      - 127.0.0.1:4646:4646
   - name: nomadserver2
-    image: "ghcr.io/pulibrary/pul_containers:jammy_multi_systemd"
-    command: "/sbin/init"
+    image: "ghcr.io/pulibrary/vm-builds/ubuntu-22.04"
+    command: ""
+    tmpfs:
+      - /run
+      - /run/lock
+      - /tmp
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
     privileged: true
@@ -62,19 +69,23 @@ platforms:
     groups:
       - nomad_cluster
       - nomad_servers
-    cgroupns_mode: host # make docker work
+    cgroupns_mode: host
     capabilities:
       - SYS_ADMIN
       - SYS_RAWIO
     dns_servers:
       - 127.0.0.1
       - 8.8.8.8
-    network_mode: "nomad" # make dockers talk to each other
+    network_mode: "nomad"
     networks:
       - name: "nomad"
   - name: nomadserver3
-    image: "ghcr.io/pulibrary/pul_containers:jammy_multi_systemd"
-    command: "/sbin/init"
+    image: "ghcr.io/pulibrary/vm-builds/ubuntu-22.04"
+    command: ""
+    tmpfs:
+      - /run
+      - /run/lock
+      - /tmp
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
     privileged: true
@@ -82,19 +93,23 @@ platforms:
     groups:
       - nomad_cluster
       - nomad_servers
-    cgroupns_mode: host # make docker work
+    cgroupns_mode: host
     capabilities:
       - SYS_ADMIN
       - SYS_RAWIO
     dns_servers:
       - 127.0.0.1
       - 8.8.8.8
-    network_mode: "nomad" # make dockers talk to each other
+    network_mode: "nomad"
     networks:
       - name: "nomad"
   - name: nomadclient1
-    image: "ghcr.io/pulibrary/pul_containers:rocky_multi"
-    command: "/usr/sbin/init"
+    image: "ghcr.io/pulibrary/vm-builds/rocky-9"
+    command: ""
+    tmpfs:
+      - /run
+      - /run/lock
+      - /tmp
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
     privileged: true
@@ -102,17 +117,14 @@ platforms:
     groups:
       - nomad_cluster
       - nomad_clients
-    cgroupns_mode: host # make docker work
+    cgroupns_mode: host
     capabilities:
       - SYS_ADMIN
       - SYS_RAWIO
     dns_servers:
       - 127.0.0.1
       - 8.8.8.8
-    network_mode: "nomad" # make dockers talk to each other
-    tmpfs:
-      - /run
-      - /tmp
+    network_mode: "nomad"
     networks:
       - name: "nomad"
 provisioner:
@@ -120,5 +132,9 @@ provisioner:
   log: true
   env:
     ANSIBLE_PIPELINING: "True"
+    ANSIBLE_CACHE_PLUGIN: "memory"
+    ANSIBLE_GATHERING: "implicit"
+  connection_options:
+    ansible_user: root
 verifier:
   name: ansible
