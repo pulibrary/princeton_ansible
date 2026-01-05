@@ -11,6 +11,30 @@
   vars_files:
     - ../group_vars/all/vault.yml
   tasks:
+
+    - name: Common | Determine Ubuntu codename
+      ansible.builtin.set_fact:
+        ubuntu_codename: "{{ ansible_distribution_release | default(ansible_lsb.codename) }}"
+      when:
+        - ansible_os_family == "Debian"
+
+    - name: debug
+      ansible.builtin.debug:
+        msg: 'ansible codename {{ ansible_lsb.codename }} ubuntu_codename {{ ubuntu_codename }}'
+
+    - name: Common | Add fallback Ubuntu archive for apt (all suites)
+      ansible.builtin.apt_repository:
+        repo: "{{ item }}"
+        state: absent
+        filename: "99-ubuntu-archive"
+        update_cache: false
+      loop:
+        - "deb http://archives.ubuntu.com/ubuntu {{ ubuntu_codename }} main restricted universe multiverse"
+        - "deb http://archives.ubuntu.com/ubuntu {{ ubuntu_codename }}-updates main restricted universe multiverse"
+        - "deb http://archives.ubuntu.com/ubuntu {{ ubuntu_codename }}-backports main restricted universe multiverse"
+      when:
+        - ansible_os_family == "Debian"
+
     - name: Remove a repository from sources list
       ansible.builtin.apt_repository:
         repo: "{{ useless_apt_repo | default(omit) }}"
