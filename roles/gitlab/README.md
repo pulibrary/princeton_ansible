@@ -10,7 +10,7 @@ Role Variables
 
 ```bash
 gitlab_trusted_proxies: "'172.20.80.13', '172.20.80.14', '172.20.80.19'"
-gitlab_loadbalancer_domain_name: "git-{{ environment }}.lib.princeton.edu"
+gitlab_loadbalancer_domain_name: "gitlab-{{ environment }}.lib.princeton.edu"
 ```
 
 BSD
