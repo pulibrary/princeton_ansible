@@ -1,24 +1,39 @@
 
-### Make the hostfile configurable by ansible
-Name {{ inventory_hostname }}
-Option ForceHTTPSLogin
+{{ ansible_managed | comment }}
+Name {{ host_name }}
+
+# IncludeFile hostname.txt
+
 Option ProxyByHostname
-## Loadbalancer IP
-Option ForceHTTPSLogin
+
+## Loadbalancer IP ##
+# initial install cannot have https
+# Option ForceHTTPSLogin
+# LoginPortSSL 443
+
 ##  By default, EZproxy listens on port 2048. 
 LoginPort 80
-#Option DisableSSLv2
-LoginPortSSL 443
+
 ## Shibboleth Configuration
-ShibbolethDisable 1.3
-ShibbolethMetadata -EntityID=http://{{ ezproxy_public_host }} -File=idp_princeton.xml -Cert={{ cert_value }}
+# ShibbolethDisable 2.0
+## Shibboleth Metadata (see: https://help.oclc.org/Library_Management/EZproxy/Authenticate_users/EZproxy_authentication_methods/SAML_authentication)
+## Find out the need for Cert=3 below
+# ShibbolethMetadata \
+#   -EntityID=http://{{ host_name }} \
+#   -File=MetadataFile \
+#   -SignResponse=false -SignAssertion=true -EncryptAssertion=false \
+#   -Cert=3 \
+#   -URL=https://login.microsoftonline.com/{{ microsoft_entra_idp_uuid }}/federationmetadata/2007-06/federationmetadata.xml?appid={{ microsoft_entra_app_uuid }}
+
 ##  Connection limits. == see: http://www.oclc.org/support/documentation/ezproxy/cfg/limits.htm
 MaxLifetime 30
 MaxSessions 500
 MaxVirtualHosts 17000
 MaxConcurrentTransfers 300
-# Adding Per OCLC Support Ticket
+
+## Adding Per OCLC Support Ticket
 ChargeSetLatency SaveUsage 120
+
 ##  Securing EZproxy == see: http://www.oclc.org/support/documentation/ezproxy/example/securing.htm
 Audit Most
 AuditPurge 360
@@ -27,28 +42,30 @@ Option LogSession
 IntruderIPAttempts -interval=5 -expires=15 20
 IntruderUserAttempts -interval=5 -expires=15 10
 UsageLimit -interval=10 -expires=120 -MB=300 -transfers=600 Global
-# Set up Support for IP Geo Coding
+
+## Set up Support for IP Geo Coding
 Location -File=/usr/share/GeoIP/GeoLite2-City.mmdb
 Option BlockCountryChange
-# Log formatting
+
+## Log formatting
 LogFormat %h %l %u %t "%r" %s %b "%{Country()}e" "%{user-agent}i"
 LogFile -strftime log/ezp%Y%m%d.log
-# send logfiles to the log subdir
-# log starting point URLs
+## send logfiles to the log subdir
+## log starting point URLs
 LogSPU -strftime log/spu%Y%m%d.log %h %l %u %t "%r" %s %b
 # for analysis in tab delimited file
-# Princeton IP Blocks
-IncludeFile config/current/admin/ipblocks.txt
 #Community EZproxy block repo
 #
-IncludeFile config/current/admin/neverproxy.txt
-IncludeFile config/current/admin/non_proxy_stanzas.txt
+###### This will be configured by the cap deploy ######
+# Princeton IP Blocks
+# IncludeFile config/current/admin/ipblocks.txt
+# IncludeFile config/current/admin/neverproxy.txt
+# IncludeFile config/current/admin/non_proxy_stanzas.txt
+# Stanzas that must appear at start of config
+# IncludeFile config/current/includes/positiondependent.txt
+# Keep in A to Z Order
+# IncludeFile config/current/includes.txt
 ###### Now add the default Group for all other databases #################################
 Group Default
 # Excluded campus IP ranges from proxying
 IncludeFile princeton_allow.txt
-
-# Stanzas that must appear at start of config
-IncludeFile config/current/includes/positiondependent.txt
-# Keep in A to Z Order
-IncludeFile config/current/includes.txt
