@@ -115,8 +115,7 @@
         token: "{{ vault_pul_slack_token }}"
         msg: "@ops {{ inventory_hostname }} needs a reboot"
         channel: "{{ slack_alerts_channel }}"
+
       when:
-        - ansible_os_family == "RedHat"
-        - yum_update_status.changed
-        - "'ansible' in inventory_hostname"
-        - "'recap' in inventory_hostname"
+        - (yum_update_status.changed) and
+          (('ansible' in inventory_hostname) or ('recap' in inventory_hostname))
