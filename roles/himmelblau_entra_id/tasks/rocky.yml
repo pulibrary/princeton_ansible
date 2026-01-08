@@ -1,179 +1,156 @@
 ---
-- name: Himmelblau (Rocky) | import repo GPG key
+- name: Himmelblau (Rocky) | import RPM GPG key
   ansible.builtin.rpm_key:
-    key: "https://packages.himmelblau-idm.org/himmelblau.asc"
     state: present
+    key: "{{ himmelblau_rpm_signing_key }}"
 
-- name: Himmelblau (Rocky) | add Himmelblau yum repo
+# Add the repo (use default baseurl)
+# Example default: https://packages.himmelblau-idm.org/stable/latest/rpm/el{{ ansible_distribution_major_version }}/$basearch/
+- name: Himmelblau (Rocky) | add yum repo
   ansible.builtin.yum_repository:
     name: himmelblau
-    description: Himmelblau (stable/latest) for Rocky {{ ansible_distribution_major_version }}
-    baseurl: "https://packages.himmelblau-idm.org/stable/latest/rpm/rocky{{ ansible_distribution_major_version }}"
+    description: "Himmelblau IDM (Rocky {{ ansible_distribution_major_version }})"
+    baseurl: "{{ himmelblau_rocky_repo_baseurl }}"
     enabled: true
-    repo_gpgcheck: true
-    gpgcheck: false
-    gpgkey: "https://packages.himmelblau-idm.org/himmelblau.asc"
-    sslverify: true
+    gpgcheck: true
+    gpgkey: "{{ himmelblau_rpm_signing_key }}"
+    module_hotfixes: true
+    skip_if_unavailable: true
+  notify: yum-makecache
 
-- name: Himmelblau (Rocky) | makecache
-  ansible.builtin.dnf:
-    name: ""
-    update_cache: true
+- name: Himmelblau (Rocky) | probe repo URL
+  ansible.builtin.uri:
+    url: "{{ himmelblau_rocky_repo_baseurl }}"
+    method: HEAD
+    return_content: false
+    status_code: [200, 403]   # some repos block HEAD listing but exist
+    timeout: 10
+  register: _repo_probe
+  failed_when: _repo_probe.status not in [200, 403]
 
 - name: Himmelblau (Rocky) | install packages
   ansible.builtin.dnf:
-    name:
-      - himmelblau
-      - nss-himmelblau
-      - pam-himmelblau
-      - himmelblau-sso
-      - himmelblau-sshd-config
-      - himmelblau-qr-greeter
+    name: "{{ himmelblau_packages_rpm }}"
     state: present
 
-- name: Himmelblau | create configuration directory
-  ansible.builtin.file:
-    path: /etc/himmelblau
-    state: directory
-    mode: "0755"
-    owner: root
-    group: root
+- name: Himmelblau (Rocky) | ensure nsswitch entries
+  ansible.builtin.lineinfile:
+    path: /etc/nsswitch.conf
+    regexp: '^{{ item.key }}:'
+    line: '{{ item.key }}: {{ item.line }}'
+    backup: true
+  loop:
+    - {key: 'passwd', line: 'files himmelblau systemd'}
+    - {key: 'group', line: 'files himmelblau systemd'}
 
 - name: Himmelblau | write configuration
   ansible.builtin.template:
     src: himmelblau.conf.j2
     dest: /etc/himmelblau/himmelblau.conf
-    mode: "0644"
     owner: root
     group: root
+    mode: "0644"
   notify: restart himmelblaud
 
-# NSS
-- name: Himmelblau (Rocky) | ensure nsswitch passwd entry
-  ansible.builtin.lineinfile:
-    path: /etc/nsswitch.conf
-    regexp: '^passwd:'
-    line: 'passwd:     files himmelblau sss systemd'
-    backup: true
+- name: Himmelblau | ensure systemd drop-in dir exists (Rocky)
+  ansible.builtin.file:
+    path: /etc/systemd/system/himmelblaud.service.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
 
-- name: Himmelblau (Rocky) | ensure nsswitch group entry
-  ansible.builtin.lineinfile:
-    path: /etc/nsswitch.conf
-    regexp: '^group:'
-    line: 'group:      files himmelblau sss systemd'
-    backup: true
+- name: Himmelblau | systemd drop-in (Rocky)
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/himmelblaud.service.d/10-dirs.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      [Service]
+      Type=notify
+      RuntimeDirectory=himmelblaud
+      RuntimeDirectoryMode=0750
+      StateDirectory=himmelblaud
+      StateDirectoryMode=0750
+      CacheDirectory=himmelblaud
+      CacheDirectoryMode=0750
+      UMask=0027
+      Environment=HIMMELBLAU_SOCKET=/var/run/himmelblaud/socket
+  notify: restart himmelblaud
 
-- name: Himmelblau (Rocky) | PAM system-auth (auth)
-  community.general.pamd:
-    # Anchor (where to insert before):
-    name: system-auth
-    type: auth
-    control: sufficient
-    module_path: pam_unix.so
-    state: before
-    # New line to insert:
-    new_type: auth
-    new_control: required
-    new_module_path: pam_himmelblau.so
-    module_arguments:
-      - ignore_unknown_user
-      - mfa_poll_prompt
+- name: Himmelblau - Ensure authselect present
+  ansible.builtin.dnf:
+    name: authselect
+    state: present
 
-- name: Himmelblau (Rocky) | PAM system-auth (account)
-  community.general.pamd:
-    # Anchor:
-    name: system-auth
-    type: account
-    control: required
-    module_path: pam_unix.so
-    state: before
-    # New line:
-    new_type: account
-    new_control: sufficient
-    new_module_path: pam_himmelblau.so
-    module_arguments:
-      - ignore_unknown_user
+- name: Himmelblau - Create custom authselect profile (once)
+  ansible.builtin.command:
+    cmd: authselect create-profile himmelblau-pul -b sssd
+  args:
+    creates: /etc/authselect/custom/himmelblau-pul
+  register: _authsel_profile_created
+  changed_when: _authsel_profile_created.rc == 0
 
-- name: Himmelblau (Rocky) | PAM system-auth (session)
-  community.general.pamd:
-    # Anchor:
-    name: system-auth
-    type: session
-    control: required
-    module_path: pam_limits.so
-    state: after
-    # New line:
-    new_type: session
-    new_control: optional
-    new_module_path: pam_himmelblau.so
+- name: Himmelblau - Install system-auth/password-auth/postlogin in custom profile
+  ansible.builtin.copy:
+    dest: "/etc/authselect/custom/himmelblau-pul/{{ item.name }}"
+    mode: "0644"
+    content: "{{ item.content }}"
+  loop:
+    - {name: "system-auth", content: "{{ lookup('template', 'rocky_pam_system-auth.j2') }}"}
+    - {name: "password-auth", content: "{{ lookup('template', 'rocky_pam_password-auth.j2') }}"}
+    - {name: "postlogin", content: "{{ lookup('template', 'rocky_pam_postlogin.j2') }}"}
 
-- name: Himmelblau (Rocky) | PAM password-auth (auth)
-  community.general.pamd:
-    # Anchor:
-    name: password-auth
-    type: auth
-    control: sufficient
-    module_path: pam_unix.so
-    state: before
-    # New line:
-    new_type: auth
-    new_control: required
-    new_module_path: pam_himmelblau.so
-    module_arguments:
-      - ignore_unknown_user
-      - mfa_poll_prompt
+- name: Himmelblau - Select custom profile
+  ansible.builtin.command: authselect select custom/himmelblau-pul --force
 
-- name: Himmelblau (Rocky) | PAM password-auth (account)
-  community.general.pamd:
-    # Anchor:
-    name: password-auth
-    type: account
-    control: required
-    module_path: pam_unix.so
-    state: before
-    # New line:
-    new_type: account
-    new_control: sufficient
-    new_module_path: pam_himmelblau.so
-    module_arguments:
-      - ignore_unknown_user
+- name: Himmelblau - Apply authselect changes
+  ansible.builtin.command: authselect apply-changes
 
-- name: Himmelblau (Rocky) | PAM password-auth (session)
-  community.general.pamd:
-    # Anchor:
-    name: password-auth
-    type: session
-    control: required
-    module_path: pam_limits.so
-    state: after
-    # New line:
-    new_type: session
-    new_control: optional
-    new_module_path: pam_himmelblau.so
+- name: Himmelblau - Ensure sshd_config.d exists
+  ansible.builtin.file:
+    path: "{{ sshd_config_d_path }}"
+    state: directory
+    mode: "0755"
 
-- name: Himmelblau | enable & start service
+- name: Himmelblau - Manage {{ allow_users_filename }}
+  ansible.builtin.template:
+    src: sshd-allow-users.conf.j2
+    dest: "{{ sshd_config_d_path }}/{{ allow_users_filename }}"
+    mode: "0644"
+  when: allow_users_enable | default(true)
+  notify: restart sshd (validate)
+
+- name: Himmelblau - Include strict PAM for Rocky
+  ansible.builtin.include_tasks: rocky_nss.yml
+
+- name: Himmelblau - Include strict PAM for Rocky
+  ansible.builtin.include_tasks: rocky_strict.yml
+
+- name: Himmelblau - Validate and bounce sshd
+  ansible.builtin.command: /usr/sbin/sshd -t -f /etc/ssh/sshd_config
+  register: sshd_validate
+  changed_when: false
+  failed_when: sshd_validate.rc != 0
+
+- name: Himmelblau - Restart sshd
+  ansible.builtin.systemd:
+    name: "{{ himmelblau_ssh_service }}"
+    state: restarted
+
+- name: Himmelblau - Enable & start himmelblaud
   ansible.builtin.systemd:
     name: himmelblaud
     enabled: true
     state: started
 
-- name: Himmelblau | bounce SSH daemon
-  ansible.builtin.systemd:
-    name: "{{ himmelblau_ssh_service }}"
-    state: restarted
-  when: himmelblau_restart_sshd | default(true)
-
-- name: Himmelblau | wait for daemon socket
+- name: Himmelblau - Wait for daemon socket
   ansible.builtin.wait_for:
     path: /var/run/himmelblaud/socket
     state: present
     timeout: 30
 
-- name: Himmelblau | enrollment instructions
-  ansible.builtin.debug:
-    msg: |
-      Device enrollment must be completed manually:
-      1. Run: sudo himmelblaud -e {{ himmelblau_tenant_id }}
-      2. Follow the device code flow
-      3. Approve device in Entra ID portal
-  when: himmelblau_show_enrollment_instructions | default(true)
+- name: Himmelblau - Restore SELinux context on runtime dir
+  ansible.builtin.command: restorecon -R /var/run/himmelblaud
+  when: ansible_selinux.status | default('disabled') == 'enabled'
