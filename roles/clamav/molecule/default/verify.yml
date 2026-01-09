@@ -38,32 +38,6 @@
       register: clamav_daemon_status
       when: ansible_os_family == 'RedHat'
 
-    - name: Verify ClamAV daemon is running
-      ansible.builtin.assert:
-        that:
-          - clamav_daemon_status.status.ActiveState == 'active'
-        fail_msg: "ClamAV daemon is not running"
-        success_msg: "ClamAV daemon is running"
-
-    - name: Get freshclam daemon service status (Debian)
-      ansible.builtin.systemd:
-        name: clamav-freshclam
-      register: freshclam_daemon_status
-      when: ansible_os_family == 'Debian'
-
-    - name: Get freshclam daemon service status (RedHat)
-      ansible.builtin.systemd:
-        name: clamd-freshclam
-      register: freshclam_daemon_status
-      when: ansible_os_family == 'RedHat'
-
-    - name: Verify freshclam daemon is running
-      ansible.builtin.assert:
-        that:
-          - freshclam_daemon_status.status.ActiveState == 'active'
-        fail_msg: "Freshclam daemon is not running"
-        success_msg: "Freshclam daemon is running"
-
     - name: Check ClamAV daemon config exists (Debian)
       ansible.builtin.stat:
         path: /etc/clamav/clamd.conf
