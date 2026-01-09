@@ -1,0 +1,58 @@
+---
+- name: ClamAV - Include OS-Specific variables
+  ansible.builtin.include_vars: "{{ ansible_os_family }}.yml"
+
+- name: ClamAV - setup variables
+  ansible.builtin.include_tasks: setup-vars.yml
+
+- name: ClamAV - ensure packages are installed.
+  ansible.builtin.package:
+    name: "{{ item }}"
+    state: present
+  loop: "{{ clamav_packages }}"
+  register: clamav_packages_install
+
+- name: ClamAV - refresh packages change.
+  ansible.builtin.command: freshclam
+  when: clamav_packages_install.changed
+  register: freshclam_result
+  notify: restart clamav daemon
+  # On Debian, freshclam is automatically run post-install, so this may fail.
+  failed_when:
+    - freshclam_result is failed
+    - freshclam_result.stderr.find('locked by another process') != -1
+  tags: ["skip_ansible_lint"]
+
+- name: ClamAV - change configuration for the daemon.
+  ansible.builtin.lineinfile:
+    path: "{{ clamav_daemon_config_path }}"
+    regexp: "{{ item.regexp }}"
+    line: "{{ item.line | default('') }}"
+    state: "{{ item.state | default('present') }}"
+    mode: "0644"
+    create: true
+  notify: restart clamav daemon
+  loop: "{{ clamav_daemon_configuration_changes }}"
+
+- name: ClamAV - Change configuration for the freshclam daemon.
+  ansible.builtin.lineinfile:
+    path: "{{ clamav_freshclam_daemon_config_path }}"
+    regexp: '{{ item.regexp }}'
+    line: "{{ item.line | default('') }}"
+    state: "{{ item.state | default('present') }}"
+  loop: "{{ clamav_freshclam_configuration_changes }}"
+  when: clamav_freshclam_configuration_changes is defined
+
+- name: ClamAV - ensure daemon is running (if configured).
+  ansible.builtin.service:
+    name: "{{ clamav_daemon }}"
+    state: "{{ clamav_daemon_state }}"
+    enabled: "{{ clamav_daemon_enabled }}"
+  when: not ansible_check_mode
+
+- name: ClamAV - ensure freshclam daemon is running (if configured).
+  ansible.builtin.service:
+    name: "{{ clamav_freshclam_daemon }}"
+    state: "{{ clamav_freshclam_daemon_state }}"
+    enabled: "{{ clamav_freshclam_daemon_enabled }}"
+  when: not ansible_check_mode
