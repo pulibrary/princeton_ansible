@@ -1,10 +1,8 @@
 # Ansible Role: ClamAV
 
-Copied from https://github.com/geerlingguy/ansible-role-clamav
+Installs and configures ClamAV antivirus on Debian/Ubuntu and RedHat/CentOS Linux servers.
 
-[![CI](https://github.com/geerlingguy/ansible-role-clamav/actions/workflows/ci.yml/badge.svg)](https://github.com/geerlingguy/ansible-role-clamav/actions/workflows/ci.yml)
-
-Installs ClamAV on RedHat/CentOS and Debian/Ubuntu Linux servers.
+Originally forked from [geerlingguy/ansible-role-clamav](https://github.com/geerlingguy/ansible-role-clamav).
 
 ## Requirements
 
@@ -12,46 +10,60 @@ None.
 
 ## Role Variables
 
-Available variables are listed below, along with default values (see `defaults/main.yml`):
+### OS-Specific Variables (Auto-detected)
 
-    clamav_packages:
-      - clamav
-      - clamav-base
-      - clamav-daemon
+These variables are automatically set based on the target OS family and generally should not be overridden:
 
-(Defaults for Debian/Ubuntu shown). List of packages to be installed for ClamAV operations.
+| Variable | Debian | RedHat |
+|----------|--------|--------|
+| `clamav_daemon_localsocket` | `/var/run/clamav/clamd.ctl` | `/var/run/clamd.scan/clamd.sock` |
+| `clamav_daemon_config_path` | `/etc/clamav/clamd.conf` | `/etc/clamd.d/scan.conf` |
+| `clamav_freshclam_daemon_config_path` | `/etc/clamav/freshclam.conf` | `/etc/freshclam.conf` |
+| `clamav_daemon` | `clamav-daemon` | `clamd@scan` |
+| `clamav_freshclam_daemon` | `clamav-freshclam` | `clamd-freshclam` |
+| `clamav_packages` | `clamav`, `clamav-base`, `clamav-daemon` | `clamav`, `clamav-update`, `clamav-scanner-systemd`, `clamav-data` |
 
-    clamav_daemon_localsocket: /var/run/clamav/clamd.ctl
-    clamav_daemon_config_path: /etc/clamav/clamd.conf
-    clamav_freshclam_daemon_config_path: /etc/clamav/freshclam.conf
+### Configurable Variables
 
-Path configuration for ClamAV daemon. These are hardcoded specifically for each OS family (Debian and Red Hat) and cannot be overidden.
+```yaml
+# ClamAV daemon service state and boot behavior
+clamav_daemon_state: started
+clamav_daemon_enabled: true
 
-    clamav_daemon_configuration_changes:
-      - regexp: '^.*Example$'
-        state: absent
-      - regexp: '^.*LocalSocket .*$'
-        line: 'LocalSocket {{ clamav_daemon_localsocket }}'
+# Freshclam daemon service state and boot behavior
+clamav_freshclam_daemon_state: started
+clamav_freshclam_daemon_enabled: true
+```
 
-Changes to make to the configuration file that is read from when ClamAV starts. You need to at least comment the 'Example' line and open a LocalSocket (or `TCPSocket`, e.g. `3310` by default) to get the ClamAV daemon to run.
+### Daemon Configuration
 
-    clamav_daemon_state: started
-    clamav_daemon_enabled: true
+Configuration changes are applied via `lineinfile` to the ClamAV daemon config file:
 
-Control whether the `clamav-daemon` service is running and/or enabled on system boot.
+```yaml
+clamav_daemon_configuration_changes:
+  - regexp: '^.*Example$'
+    state: absent
+  - regexp: '^.*LocalSocket .*$'
+    line: 'LocalSocket {{ clamav_daemon_localsocket }}'
+```
 
-    clamav_freshclam_configuration_changes:
-      - regexp: '^.*HTTPProxyServer .*$'
-        line: 'HTTPProxyServer {{ clamav_freshclam_http_proxy_server }}'
-      - regexp: '^.*HTTPProxyPort .*$'
-        line: 'HTTPProxyPort {{ clamav_freshclam_http_proxy_port }}'
+Each item supports:
 
-Changes to make to the configuration file that is read from when freshclam starts. You will need to add your HTTP Proxy server configuration here, if you have one.
+- `regexp`: Pattern to match in the config file
+- `line`: Replacement line (optional, omit for deletion)
+- `state`: `present` (default) or `absent`
 
-    clamav_freshclam_daemon_state: started
-    clamav_freshclam_daemon_enabled: true
+### Freshclam Configuration (Optional)
 
-Control whether the `clamav-freshclam` service is running and/or enabled on system boot.
+To configure freshclam (e.g., for proxy settings), define `clamav_freshclam_configuration_changes`:
+
+```yaml
+clamav_freshclam_configuration_changes:
+  - regexp: '^.*HTTPProxyServer .*$'
+    line: 'HTTPProxyServer proxy.example.com'
+  - regexp: '^.*HTTPProxyPort .*$'
+    line: 'HTTPProxyPort 3128'
+```
 
 ## Dependencies
 
@@ -59,15 +71,65 @@ None.
 
 ## Example Playbook
 
-    - hosts: servers
-      become: true
-      roles:
-        - clamav
+Basic usage:
+
+```yaml
+- hosts: servers
+  become: true
+  roles:
+    - clamav
+```
+
+With custom configuration:
+
+```yaml
+- hosts: servers
+  become: true
+  vars:
+    clamav_daemon_configuration_changes:
+      - regexp: '^.*Example$'
+        state: absent
+      - regexp: '^.*LocalSocket .*$'
+        line: 'LocalSocket /var/run/clamav/clamd.ctl'
+      - regexp: '^.*TCPSocket .*$'
+        line: 'TCPSocket 3310'
+      - regexp: '^.*MaxFileSize .*$'
+        line: 'MaxFileSize 100M'
+    clamav_freshclam_configuration_changes:
+      - regexp: '^.*Checks .*$'
+        line: 'Checks 12'
+  roles:
+    - clamav
+```
+
+## Handlers
+
+| Handler | Description |
+|---------|-------------|
+| `restart clamav daemon` | Restarts the ClamAV daemon when configuration changes |
+
+## Supported Platforms
+
+- Ubuntu: xenial, bionic, jammy, noble
+- Debian: jessie, stretch, bookworm
+- RedHat/CentOS: Rocky Linux 9 (tested via Molecule)
+
+## Testing
+
+This role includes Molecule tests using Docker:
+
+```bash
+# Run with default distribution (Rocky Linux 9)
+molecule test
+
+# Run with a specific distribution
+MOLECULE_DISTRO=ubuntu2204 molecule test
+```
 
 ## License
 
-MIT / BSD
+MIT
 
 ## Author Information
 
-This role was created in 2017 by [Jeff Geerling](https://www.jeffgeerling.com/), author of [Ansible for DevOps](https://www.ansiblefordevops.com/).
+Originally created by [Jeff Geerling](https://www.jeffgeerling.com/).
