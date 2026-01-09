@@ -1,0 +1,114 @@
+---
+- name: Verify
+  hosts: all
+  gather_facts: true
+  become: true
+
+  tasks:
+    - name: Gather package facts
+      ansible.builtin.package_facts:
+        manager: auto
+
+    - name: Verify ClamAV packages are installed (Debian)
+      ansible.builtin.assert:
+        that:
+          - "'clamav' in ansible_facts.packages"
+          - "'clamav-daemon' in ansible_facts.packages"
+        fail_msg: "ClamAV packages are not installed"
+        success_msg: "ClamAV packages are installed"
+      when: ansible_os_family == 'Debian'
+
+    - name: Verify ClamAV packages are installed (RedHat)
+      ansible.builtin.assert:
+        that:
+          - "'clamav' in ansible_facts.packages"
+        fail_msg: "ClamAV packages are not installed"
+        success_msg: "ClamAV packages are installed"
+      when: ansible_os_family == 'RedHat'
+
+    - name: Get clamav daemon service status (Debian)
+      ansible.builtin.systemd:
+        name: clamav-daemon
+      register: clamav_daemon_status
+      when: ansible_os_family == 'Debian'
+
+    - name: Get clamav daemon service status (RedHat)
+      ansible.builtin.systemd:
+        name: clamd@scan
+      register: clamav_daemon_status
+      when: ansible_os_family == 'RedHat'
+
+    - name: Verify ClamAV daemon is running
+      ansible.builtin.assert:
+        that:
+          - clamav_daemon_status.status.ActiveState == 'active'
+        fail_msg: "ClamAV daemon is not running"
+        success_msg: "ClamAV daemon is running"
+
+    - name: Get freshclam daemon service status (Debian)
+      ansible.builtin.systemd:
+        name: clamav-freshclam
+      register: freshclam_daemon_status
+      when: ansible_os_family == 'Debian'
+
+    - name: Get freshclam daemon service status (RedHat)
+      ansible.builtin.systemd:
+        name: clamd-freshclam
+      register: freshclam_daemon_status
+      when: ansible_os_family == 'RedHat'
+
+    - name: Verify freshclam daemon is running
+      ansible.builtin.assert:
+        that:
+          - freshclam_daemon_status.status.ActiveState == 'active'
+        fail_msg: "Freshclam daemon is not running"
+        success_msg: "Freshclam daemon is running"
+
+    - name: Check ClamAV daemon config exists (Debian)
+      ansible.builtin.stat:
+        path: /etc/clamav/clamd.conf
+      register: clamd_conf_debian
+      when: ansible_os_family == 'Debian'
+
+    - name: Check ClamAV daemon config exists (RedHat)
+      ansible.builtin.stat:
+        path: /etc/clamd.d/scan.conf
+      register: clamd_conf_redhat
+      when: ansible_os_family == 'RedHat'
+
+    - name: Verify ClamAV config file exists (Debian)
+      ansible.builtin.assert:
+        that:
+          - clamd_conf_debian.stat.exists
+        fail_msg: "ClamAV daemon config file does not exist"
+        success_msg: "ClamAV daemon config file exists"
+      when: ansible_os_family == 'Debian'
+
+    - name: Verify ClamAV config file exists (RedHat)
+      ansible.builtin.assert:
+        that:
+          - clamd_conf_redhat.stat.exists
+        fail_msg: "ClamAV daemon config file does not exist"
+        success_msg: "ClamAV daemon config file exists"
+      when: ansible_os_family == 'RedHat'
+
+    - name: Verify clamscan command is available
+      ansible.builtin.command: which clamscan
+      register: clamscan_which
+      changed_when: false
+
+    - name: Assert clamscan is available
+      ansible.builtin.assert:
+        that:
+          - clamscan_which.rc == 0
+        fail_msg: "clamscan command not found"
+        success_msg: "clamscan command is available"
+
+    - name: Test clamscan version
+      ansible.builtin.command: clamscan --version
+      register: clamscan_version
+      changed_when: false
+
+    - name: Display ClamAV version
+      ansible.builtin.debug:
+        msg: "{{ clamscan_version.stdout }}"

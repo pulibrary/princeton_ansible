@@ -1,16 +1,19 @@
 ---
-- name: Include OS-Specific variables
-  include_vars: "{{ ansible_os_family }}.yml"
+- name: ClamAV - Include OS-Specific variables
+  ansible.builtin.include_vars: "{{ ansible_os_family }}.yml"
 
-- include_tasks: setup-vars.yml
+- name: ClamAV - setup variables
+  ansible.builtin.include_tasks: setup-vars.yml
 
-- name: Ensure ClamAV packages are installed.
-  package: name={{ item }} state=present
-  with_items: "{{ clamav_packages }}"
+- name: ClamAV - ensure packages are installed.
+  ansible.builtin.package:
+    name: "{{ item }}"
+    state: present
+  loop: "{{ clamav_packages }}"
   register: clamav_packages_install
 
-- name: Run freshclam after ClamAV packages change.
-  command: freshclam
+- name: ClamAV - refresh packages change.
+  ansible.builtin.command: freshclam
   when: clamav_packages_install.changed
   register: freshclam_result
   notify: restart clamav daemon
@@ -20,38 +23,35 @@
     - freshclam_result.stderr.find('locked by another process') != -1
   tags: ["skip_ansible_lint"]
 
-- include_tasks: setup-RedHat.yml
-  when: ansible_os_family == 'RedHat'
-
-- name: Change configuration for the ClamAV daemon.
-  lineinfile:
+- name: ClamAV - change configuration for the daemon.
+  ansible.builtin.lineinfile:
     path: "{{ clamav_daemon_config_path }}"
     regexp: "{{ item.regexp }}"
     line: "{{ item.line | default('') }}"
     state: "{{ item.state | default('present') }}"
-    mode: 0644
-    create: yes
+    mode: "0644"
+    create: true
   notify: restart clamav daemon
-  with_items: "{{ clamav_daemon_configuration_changes }}"
+  loop: "{{ clamav_daemon_configuration_changes }}"
 
-- name: Change configuration for the freshclam daemon.
-  lineinfile:
+- name: ClamAV - Change configuration for the freshclam daemon.
+  ansible.builtin.lineinfile:
     path: "{{ clamav_freshclam_daemon_config_path }}"
     regexp: '{{ item.regexp }}'
     line: "{{ item.line | default('') }}"
     state: "{{ item.state | default('present') }}"
-  with_items: "{{ clamav_freshclam_configuration_changes }}"
+  loop: "{{ clamav_freshclam_configuration_changes }}"
   when: clamav_freshclam_configuration_changes is defined
 
-- name: Ensure ClamAV daemon is running (if configured).
-  service:
+- name: ClamAV - ensure daemon is running (if configured).
+  ansible.builtin.service:
     name: "{{ clamav_daemon }}"
     state: "{{ clamav_daemon_state }}"
     enabled: "{{ clamav_daemon_enabled }}"
   when: not ansible_check_mode
 
-- name: Ensure ClamAV freshclam daemon is running (if configured).
-  service:
+- name: ClamAV - ensure freshclam daemon is running (if configured).
+  ansible.builtin.service:
     name: "{{ clamav_freshclam_daemon }}"
     state: "{{ clamav_freshclam_daemon_state }}"
     enabled: "{{ clamav_freshclam_daemon_enabled }}"
