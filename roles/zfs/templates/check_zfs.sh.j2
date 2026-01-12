@@ -1,0 +1,44 @@
+#!/bin/bash
+# ZFS health check for monitoring systems
+# Managed by Ansible
+
+STATUS=0
+OUTPUT=""
+
+# Check pool health
+while IFS= read -r pool; do
+    health=$(zpool list -H -o health "$pool")
+    
+    if [ "$health" != "ONLINE" ]; then
+        STATUS=2
+        OUTPUT="${OUTPUT}CRITICAL: Pool $pool is $health\n"
+    else
+        OUTPUT="${OUTPUT}OK: Pool $pool is $health\n"
+    fi
+    
+    # Check for errors
+    errors=$(zpool status "$pool" | grep -E "errors:" | grep -v "No known data errors")
+    if [ -n "$errors" ]; then
+        STATUS=2
+        OUTPUT="${OUTPUT}CRITICAL: $pool has errors\n"
+    fi
+done < <(zpool list -H -o name)
+
+# Check dataset quotas (if used)
+quota_exceeded=$(zfs list -H -o name,used,quota | awk '$3 != "-" && $3 != "none" {gsub(/[^0-9]/, "", $2); gsub(/[^0-9]/, "", $3); if ($2 >= $3 * 0.9) print $1}')
+
+if [ -n "$quota_exceeded" ]; then
+    STATUS=1
+    OUTPUT="${OUTPUT}WARNING: Datasets near quota: $quota_exceeded\n"
+fi
+
+# Output results
+if [ $STATUS -eq 0 ]; then
+    echo "OK - All ZFS pools healthy"
+elif [ $STATUS -eq 1 ]; then
+    echo -e "WARNING - $OUTPUT"
+else
+    echo -e "CRITICAL - $OUTPUT"
+fi
+
+exit $STATUS

@@ -1,0 +1,21 @@
+---
+- name: Verify
+  hosts: all
+  become: true
+  gather_facts: false
+  tasks:
+    - name: zpool command exists
+      ansible.builtin.command: zpool --version
+      register: zpool_version
+      changed_when: false
+      failed_when: zpool_version.rc != 0
+
+    - name: /etc/modules-load.d/zfs.conf exists
+      ansible.builtin.stat:
+        path: /etc/modules-load.d/zfs.conf
+      register: zfs_modules_load
+
+    - name: Assert modules-load file exists
+      ansible.builtin.assert:
+        that:
+          - zfs_modules_load.stat.exists
