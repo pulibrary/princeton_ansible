@@ -1,3 +1,4 @@
+---
 - name: 'pul_nomad | consul | Get consul installed version'
   block:
     - name: 'pul_nomad | consul | Check for existing Consul binary'
@@ -16,9 +17,100 @@
         consul_installed_version: "{{ consul_installed_version_json.stdout | from_json | community.general.json_query('Version') }}"
       when:
         - consul_binary_installed.stat.exists
-    - name: 'pul_nomad | consul | Gather IPs of nomad_servers'
+
+    - name: 'pul_nomad | consul | Gather network facts for nomad_servers'
+      ansible.builtin.setup:
+        gather_subset:
+          - all
+      register: server_facts
+      delegate_to: "{{ item }}"
+      loop: "{{ groups[nomad_server_group] }}"
+      run_once: true
+
+    - name: 'pul_nomad | consul | Debug - show raw server_facts results'
+      ansible.builtin.debug:
+        msg: "{{ server_facts.results | map(attribute='ansible_facts') | list }}"
+      run_once: true
+
+    - name: 'pul_nomad | consul | Build server IPs from gathered facts'
       ansible.builtin.set_fact:
-        nomad_server_ips: "{{ groups[nomad_server_group] | map('extract', hostvars, ['ansible_default_ipv4', 'address']) }}"
+        nomad_server_ips: >-
+          {{
+            server_facts.results
+            | selectattr('ansible_facts.ansible_default_ipv4', 'defined')
+            | map(attribute='ansible_facts.ansible_default_ipv4.address')
+            | list
+          }}
+      run_once: true
+
+    - name: 'pul_nomad | consul | Fallback - get IPs from ansible_all_ipv4_addresses if no default_ipv4'
+      ansible.builtin.set_fact:
+        nomad_server_ips: >-
+          {{
+            server_facts.results
+            | selectattr('ansible_facts.ansible_all_ipv4_addresses', 'defined')
+            | map(attribute='ansible_facts.ansible_all_ipv4_addresses')
+            | map('first')
+            | list
+          }}
+      when: nomad_server_ips | length == 0
+      run_once: true
+
+    - name: 'pul_nomad | consul | Last resort - get IPs via hostname command'
+      ansible.builtin.command: hostname -I
+      register: hostname_ips
+      delegate_to: "{{ item }}"
+      loop: "{{ groups['nomad_cluster'] }}"
+      changed_when: false
+      when: nomad_server_ips | length == 0
+      run_once: true
+
+    - name: 'pul_nomad | consul | Build server IPs from hostname command'
+      ansible.builtin.set_fact:
+        nomad_server_ips: >-
+          {{
+            hostname_ips.results
+            | selectattr('item', 'in', groups[nomad_server_group])
+            | map(attribute='stdout')
+            | map('trim')
+            | map('split', ' ')
+            | map('first')
+            | list
+          }}
+      when:
+        - nomad_server_ips | length == 0
+        - hostname_ips is defined
+        - hostname_ips.results is defined
+      run_once: true
+
+    - name: 'pul_nomad | consul | Set ansible_default_ipv4 for hosts missing network facts'
+      ansible.builtin.set_fact:
+        ansible_default_ipv4:
+          address: "{{ (hostname_ips.results | selectattr('item', 'equalto', item) | first).stdout.split() | first }}"
+      delegate_to: "{{ item }}"
+      delegate_facts: true
+      loop: "{{ groups['nomad_cluster'] }}"
+      when:
+        - hostname_ips is defined
+        - hostname_ips.results is defined
+        - hostvars[item].ansible_default_ipv4 is not defined
+      run_once: true
+
+    - name: 'pul_nomad | consul | Debug - show gathered IPs'
+      ansible.builtin.debug:
+        var: nomad_server_ips
+      run_once: true
+
+    - name: 'pul_nomad | consul | Distribute server IPs to all hosts'
+      ansible.builtin.set_fact:
+        nomad_server_ips: "{{ hostvars[groups[nomad_server_group][0]].nomad_server_ips }}"
+      when: nomad_server_ips is not defined # this is strangely only happening on GA
+
+    - name: 'pul_nomad | consul | Verify we have server IPs'
+      ansible.builtin.assert:
+        that:
+          - nomad_server_ips | length > 0
+        fail_msg: "No server IPs found. Ensure facts are gathered for all hosts in {{ nomad_server_group }}"
 
 - name: 'pul_nomad | consul | Check mandatory variables are defined'
   assert:
