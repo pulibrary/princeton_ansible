@@ -9,9 +9,15 @@
   tags: mailcatcher
 
 - name: mailcatcher | install global mail catcher
-  ansible.builtin.command: gem install mailcatcher
+  ansible.builtin.shell: |
+    /usr/local/bin/gem list -i '^mailcatcher$' || /usr/local/bin/gem install mailcatcher
   register: gem_install
-  changed_when: "'Successfully installed mailcatcher' in gem_install.stdout"
+  changed_when: "'Successfully installed' in gem_install.stdout"
+  tags: mailcatcher
+
+- name: mailcatcher | Set mailcatcher path fact
+  ansible.builtin.set_fact:
+    mailcatcher_install_location: "/usr/local/bin/mailcatcher"
   tags: mailcatcher
 
 - name: mailcatcher | Install startup script for mailcatcher
