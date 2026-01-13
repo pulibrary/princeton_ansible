@@ -44,7 +44,7 @@ job "analytics-production" {
       driver = "podman"
 
       config {
-        image        = "ghcr.io/umami-software/umami:postgresql-v2.19"
+        image        = "ghcr.io/umami-software/umami:3.0.3"
         ports = ["http"]
       }
 
