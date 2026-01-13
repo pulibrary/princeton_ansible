@@ -1,0 +1,20 @@
+---
+# you MUST run this playbook on a host or group with '--limit' for example `ansible-playbook -v ---limit pdc_describe_staging playbooks/zfs.yml`
+#
+- name: Run just the zfs role, to install zfs tools
+  hosts: all
+  # hosts: staging:qa:production
+  remote_user: pulsys
+  become: true
+  vars:
+    running_on_server: true
+
+  pre_tasks:
+    - name: stop playbook if you didn't pass --limit
+      fail:
+        msg: "you must use -l or --limit"
+      when: ansible_limit is not defined
+      run_once: true
+
+  roles:
+    - role: roles/zfs
