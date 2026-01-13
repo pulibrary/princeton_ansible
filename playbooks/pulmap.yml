@@ -11,18 +11,10 @@
     - ../group_vars/pulmap/{{ runtime_env | default('staging') }}_solr.yml
     - ../group_vars/pulmap/vault.yml
 
-  pre_tasks:
-    - name: pulmap | update rubygems
-      ansible.builtin.command: gem update --system 3.5.18
-      become: true
-      register: update_rubygems
-      changed_when: '"Latest version already installed. Done." not in update_rubygems.stdout'
-      tags: rubygems
-
   roles:
-    - role: pulmap
-    - role: otel_collector
-    - role: datadog
+    - role: roles/pulmap
+    - role: roles/otel_collector
+    - role: roles/datadog
       when: runtime_env | default('staging') == "production"
 
   post_tasks:
