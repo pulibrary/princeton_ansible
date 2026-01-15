@@ -127,6 +127,8 @@ Inside the Devbox shell, you can run:
 Developing
 ----------
 
+If you need support while developing Ansible content, the [Ansible Community Forum](https://forum.ansible.com/latest) is a good source of ideas and feedback.
+
 Create a new role
 -----------------
 
