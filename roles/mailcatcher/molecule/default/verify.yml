@@ -1,13 +1,36 @@
 ---
 - name: Verify
   hosts: all
-  gather_facts: false
+  gather_facts: true
   tasks:
-  - name: test mailcatcher
-    command: gem list
-    register: gem_results
-    ignore_errors: true
-  - name: assert gem output has mailcatcher
-    assert:
-      that:
-        - "'mailcatcher' in gem_results.stdout"
+    - name: Check if mailcatcher binary exists
+      ansible.builtin.stat:
+        path: /usr/local/bin/mailcatcher
+      register: bin_check
+
+    - name: Assert binary is present
+      ansible.builtin.assert:
+        that:
+          - bin_check.stat.exists
+          - bin_check.stat.executable
+
+    - name: Check if mailcatcher service is running
+      ansible.builtin.service_facts:
+
+    - name: Assert service is active
+      ansible.builtin.assert:
+        that:
+          - "'mailcatcher.service' in ansible_facts.services"
+          - ansible_facts.services['mailcatcher.service'].state == 'running'
+      when: 
+        - hostvars[inventory_hostname]['install_mailcatcher'] | default(true)
+        - hostvars[inventory_hostname]['running_on_server'] | default(false)
+
+    - name: Verify network ports (HTTP and SMTP)
+      ansible.builtin.wait_for:
+        port: "{{ item }}"
+        timeout: 5
+      loop:
+        - 1080
+        - 1025
+      when: hostvars[inventory_hostname]['running_on_server'] | default(false)
