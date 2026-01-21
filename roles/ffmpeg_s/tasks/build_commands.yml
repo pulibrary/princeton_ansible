@@ -51,10 +51,10 @@
       ansible.builtin.shell: |
         set -euo pipefail
         cd "/opt/ffmpeg/sources"
-        wget -O x265.tar.bz2 https://bitbucket.org/multicoreware/x265_git/get/master.tar.bz2
+        wget -O x265.tar.gz https://github.com/videolan/x265/archive/refs/heads/master.tar.gz
         rm -rf multicoreware*
-        tar xjvf x265.tar.bz2
-        cd multicoreware*/build/linux
+        tar -xzvf x265.tar.gz
+        cd x265-master/build/linux
         cmake -G "Unix Makefiles" \
           -DCMAKE_INSTALL_PREFIX="{{ ffmpeg_s_build_dir }}" \
           -DENABLE_SHARED=off \
@@ -229,10 +229,12 @@
         mkdir build
         cd build
         cmake -G "Unix Makefiles" \
-          -DCMAKE_INSTALL_PREFIX="{{ ffmpeg_s_build_dir }}" \
+          -DCMAKE_INSTALL_PREFIX="/opt/ffmpeg/build" \
+          -DCMAKE_PREFIX_PATH="/opt/ffmpeg/build" \
           -DBUILD_SHARED_LIBS=OFF \
           -DWITH_EXAMPLES=OFF \
           -DBUILD_TESTING=OFF \
+          -DWITH_GDK_PIXBUF=OFF \
           ..
         make -j"{{ ansible_facts.processor_vcpus | default(2) }}"
         make install
