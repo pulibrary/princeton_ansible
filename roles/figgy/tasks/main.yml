@@ -236,16 +236,40 @@
   when:
     - running_on_server
 
+- name: Figgy | Install PPA management tools
+  ansible.builtin.apt:
+    name: software-properties-common
+    state: present
+
 - name: Figgy | Gather distribution facts
   ansible.builtin.setup:
     filter: ansible_lsb*
   when: ansible_facts.ansible_lsb is not defined or ansible_facts.ansible_lsb.codename is not defined
 
 - name: Figgy | add GDAL repository
-  ansible.builtin.apt_repository:
-    repo: ppa:ubuntugis/ubuntugis-unstable
-    codename: "{{ ansible_lsb.codename | default('jammy') }}"
-    update_cache: false
+  ansible.builtin.shell: |
+    set -o pipefail
+    add-apt-repository -y ppa:ubuntugis/ubuntugis-unstable
+    if ! grep -q "ubuntugis-unstable" /etc/apt/sources.list.d/*; then
+      add-apt-repository -y ppa:ubuntugis/ubuntugis-unstable
+    fi
+  args:
+    executable: /bin/bash
+  register: ppa_result
+  until: ppa_result.rc == 0
+  retries: 5
+  delay: 10
+  changed_when: "'PPA published' in ppa_result.stdout or ppa_result.rc == 0"
+  tags:
+    - notest
+
+- name: Figgy | Update apt cache after adding repository
+  ansible.builtin.apt:
+    update_cache: true
+  register: apt_update
+  until: apt_update is success
+  retries: 5
+  delay: 10
 
 - name: Figgy | Clean apt cache
   ansible.builtin.command: apt-get clean
@@ -309,10 +333,21 @@
     state: absent
   changed_when: "'molecule-idempotence-notest' not in ansible_skip_tags"
 
+- name: Figgy | Install build prerequisites for rasterio
+  pip:
+    name: 
+      - "numpy>=1.20.0"
+      - "setuptools<81"
+      - "wheel"
+    executable: /usr/local/bin/pip3
+    state: present
+
 - name: Figgy | Pre‑install rasterio compatible with GDAL 3.4
   ansible.builtin.pip:
     name: "rasterio<1.4.0"
-    executable: pip3
+    executable: /usr/local/bin/pip3
+    state: present
+    extra_args: "--no-build-isolation"
 
 - name: Figgy | Install cogeo‑mosaic (no deps, since we already have rasterio)
   ansible.builtin.pip:
