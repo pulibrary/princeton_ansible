@@ -1,5 +1,5 @@
 ---
-- name: Get info on VEEAM backup tags from vSphere
+- name: Get info on VEEAM backup tags from vSphere and save to CSV
   hosts: localhost
 
   vars_files:
@@ -18,68 +18,32 @@
         vm_type: vm
       register: vms_and_tags
 
-    - name: Find all tags
+    - name: Find all unique tags
       ansible.builtin.set_fact:
         unique_tags: "{{ vms_and_tags.virtual_machines | map(attribute='tags') | flatten | map(attribute='name') | unique }}"
 
     - name: Debug for find all unique tags
       ansible.builtin.debug:
         var: vms_and_tags
-
-    - name: View list of tags
-      ansible.builtin.debug:
-        var: unique_tags
-
-    - name: Find VMs without tags
-      ansible.builtin.set_fact:
-        untagged_vms: "{{ vms_and_tags.virtual_machines | rejectattr('tags') | map(attribute='guest_name') }}"
-
-    - name: View VMs without tags
-      ansible.builtin.debug:
-        msg:
-          - Review these VMs - they have no tags now.
-          - If we want to back them up, add backup tags.
-          - If not, add the 'LIB_DONT_BACKUP' tag. 
-          - VM names with no tags {{ untagged_vms }}
-
-    - name: Find VMs with tags
-      ansible.builtin.set_fact:
-        tagged_vms: "{{ vms_and_tags | community.general.json_query(not_null) }}"
-      vars:
-        not_null: "virtual_machines[?not_null(tags)]"
-
-    - name: Create a dict of fields we want from tagged VMs
-      ansible.builtin.set_fact:
-        # build a list of VMs with tags, names, and disk size
-        slim_tagged_vms: "{{ tagged_vms | community.general.json_query('[*].{VM_name: guest_name, Tag_name: tags[0].name, Disk_size: allocated.storage}') }}"
-
-    - name: View data on VMs by tag
-      ansible.builtin.debug:
-        msg:
-          - The {{ item }} tag marks these VMs {{ slim_tagged_vms | selectattr('Tag_name', 'equalto', item) | map(attribute='VM_name') }}
-          - which have disk sizes of {{ slim_tagged_vms | selectattr('Tag_name', 'equalto', item) | map(attribute='Disk_size') }}
-          - the total size of the {{ item }} backup is {{ slim_tagged_vms | selectattr('Tag_name', 'equalto', item) | map(attribute='Disk_size') | sum | human_readable }}
-      loop: "{{ unique_tags }}"
-
-#Trying this with .csvs output 
+    
     - name: Create CSV file for tags
       copy:
         dest: "/tmp/tags_report.csv"
         content: "Tag\n"
-      delegate_to: lib-sftp-staging1.princeton.edu
+      delegate_to: localhost
 
     - name: Append tags to CSV
       lineinfile:
         path: "/tmp/tags_report.csv"
         line: "{{ item }}"
       loop: "{{ unique_tags }}"
-      delegate_to: lib-sftp-staging1.princeton.edu
+      delegate_to: localhost
 
     - name: Append report date and time to tags CSV
       lineinfile:
         path: "/tmp/tags_report.csv"
         line: "Report Date/Time {{ lookup('pipe', \"date '+%m.%d.%Y %H:%M'\") }}"
-      delegate_to: lib-sftp-staging1.princeton.edu
+      delegate_to: localhost
 
     - name: Find VMs without tags
       ansible.builtin.set_fact:
@@ -89,20 +53,20 @@
       copy:
         dest: "/tmp/untagged_vms_report.csv"
         content: "VM Name\n"
-      delegate_to: lib-sftp-staging1.princeton.edu
+      delegate_to: localhost
 
     - name: Append untagged VMs to CSV
       lineinfile:
         path: "/tmp/untagged_vms_report.csv"
         line: "{{ item }}"
       loop: "{{ untagged_vms }}"
-      delegate_to: lib-sftp-staging1.princeton.edu
+      delegate_to: localhost
 
     - name: Append report date and time to untagged VMs CSV
       lineinfile:
         path: "/tmp/untagged_vms_report.csv"
         line: "Report Date/Time {{ lookup('pipe', \"date '+%m.%d.%Y %H:%M'\") }}"
-      delegate_to: lib-sftp-staging1.princeton.edu
+      delegate_to: localhost
 
     - name: Find VMs with tags
       ansible.builtin.set_fact:
@@ -118,17 +82,17 @@
       copy:
         dest: "/tmp/tagged_vms_report.csv"
         content: "VM Name,Tag Name,Disk Size\n"
-      delegate_to: lib-sftp-staging1.princeton.edu
+      delegate_to: localhost
 
     - name: Append tagged VMs to CSV
       lineinfile:
         path: "/tmp/tagged_vms_report.csv"
         line: "{{ item.VM_name }},{{ item.Tag_name }},{{ item.Disk_size }}"
       loop: "{{ slim_tagged_vms }}"
-      delegate_to: lib-sftp-staging1.princeton.edu
+      delegate_to: localhost
 
     - name: Append report date and time to tagged VMs CSV
       lineinfile:
         path: "/tmp/tagged_vms_report.csv"
         line: "Report Date/Time {{ lookup('pipe', \"date '+%m.%d.%Y %H:%M'\") }}"
-      delegate_to: lib-sftp-staging1.princeton.edu
+      delegate_to: localhost
