@@ -1,0 +1,136 @@
+---
+# roles/xrdp
+- name: Xrdp - install XRDP packages
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+    name:
+      - xrdp
+      - xorgxrdp
+    state: present
+
+- name: Xrdp - ensure runtime dir exists
+  ansible.builtin.file:
+    path: /run/xrdp
+    state: directory
+    owner: xrdp
+    group: xrdp
+    mode: "0755"
+- name: Ensure log files exist and are writable by xrdp
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: touch
+    owner: xrdp
+    group: adm
+    mode: "0640"
+  loop:
+    - /var/log/xrdp.log
+    - /var/log/xrdp-sesman.log
+
+- name: Configure xrdp globals
+  ansible.builtin.ini_file:
+    path: /etc/xrdp/xrdp.ini
+    section: Globals
+    option: "{{ item.option }}"
+    value: "{{ item.value }}"
+    no_extra_spaces: true
+  loop:
+    - { option: address, value: "0.0.0.0" }
+    - { option: port,    value: "3389" }
+  notify: restart xrdp
+
+- name: Configure xrdp logging
+  ansible.builtin.ini_file:
+    path: /etc/xrdp/xrdp.ini
+    section: Logging
+    option: "{{ item.option }}"
+    value: "{{ item.value }}"
+    no_extra_spaces: true
+  loop:
+    - { option: LogFile,      value: "/var/log/xrdp.log" }
+    - { option: LogLevel,     value: "INFO" }
+    - { option: EnableSyslog, value: "true" }
+    - { option: SyslogLevel,  value: "INFO" }
+  notify: restart xrdp
+
+- name: Configure Xorg backend (must not be 3389)
+  ansible.builtin.ini_file:
+    path: /etc/xrdp/xrdp.ini
+    section: Xorg
+    option: "{{ item.option }}"
+    value: "{{ item.value }}"
+    no_extra_spaces: true
+  loop:
+    - { option: lib,  value: "libxup.so" }
+    - { option: ip,   value: "127.0.0.1" }
+    - { option: port, value: "-1" }
+  notify: restart xrdp
+
+- name: Xrdp - configure startwm.sh to launch GNOME session for XRDP logins
+  ansible.builtin.template:
+    src: startwm.sh.j2
+    dest: /etc/xrdp/startwm.sh
+    owner: root
+    group: root
+    mode: "0755"
+  notify: restart xrdp
+
+- name: Xrdp -  disable Wayland in GDM (Ubuntu GNOME)
+  when: xrdp_disable_wayland_in_gdm | bool
+  block:
+    - name: Check if /etc/gdm3/custom.conf exists
+      ansible.builtin.stat:
+        path: /etc/gdm3/custom.conf
+      register: _gdm_custom
+
+    - name: Set WaylandEnable=false in /etc/gdm3/custom.conf
+      ansible.builtin.lineinfile:
+        path: /etc/gdm3/custom.conf
+        regexp: '^\s*#?\s*WaylandEnable='
+        line: "WaylandEnable=false"
+        create: false
+        backrefs: false
+      when: _gdm_custom.stat.exists
+      notify: restart gdm3
+
+- name: Open firewall via ufw
+  when: xrdp_manage_ufw | bool
+  block:
+    - name: Check ufw exists
+      ansible.builtin.command: "command -v ufw"
+      register: _ufw
+      changed_when: false
+      failed_when: false
+
+    - name: Allow XRDP port (no source restriction)
+      ansible.builtin.command: "ufw allow {{ xrdp_port }}/tcp"
+      when:
+        - _ufw.rc == 0
+        - xrdp_ufw_allow_from | length == 0
+      register: _ufw_allow
+      changed_when: "'Skipping' not in (_ufw_allow.stdout | default(''))"
+      failed_when: false
+
+    - name: Allow XRDP port (source restricted)
+      ansible.builtin.command: "ufw allow from {{ xrdp_ufw_allow_from }} to any port {{ xrdp_port }} proto tcp"
+      when:
+        - _ufw.rc == 0
+        - xrdp_ufw_allow_from | length > 0
+      register: _ufw_allow_src
+      changed_when: "'Skipping' not in (_ufw_allow_src.stdout | default(''))"
+      failed_when: false
+
+- name: Ensure XRDP log file exists and is writable
+  ansible.builtin.file:
+    path: /var/log/xrdp.log
+    state: touch
+    owner: xrdp
+    group: adm
+    mode: "0640"
+  notify: restart xrdp
+
+- name: Xrdp - enable and start xrdp
+  ansible.builtin.service:
+    name: xrdp
+    enabled: true
+    state: started
