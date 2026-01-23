@@ -1,31 +1,47 @@
 ---
-- name: Nodejs | get yarn key from yarnpkg
-  ansible.builtin.apt_key:
-    url: https://dl.yarnpkg.com/debian/pubkey.gpg
-    state: present
-  register: yarn_pkg_registered
+- name: Nodejs | Check for legacy Yarn repository files
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  register: legacy_yarn_files
+  loop:
+    - /etc/apt/sources.list.d/yarn.list
+
+- name: Nodejs | Remove legacy Yarn repository files
+  ansible.builtin.file:
+    path: "{{ item.item }}"
+    state: absent
+  when: item.stat.exists
+  loop: "{{ legacy_yarn_files.results }}"
+  become: true
+
+- name: Nodejs | Download Yarn GPG key (ASCII)
+  ansible.builtin.get_url:
+    url: "{{ nodejs__yarn_key_url }}"
+    dest: "/tmp/yarnpkg.gpg.key"
+    mode: '0644'
   when: use_yarn
 
-- name: Nodejs | get yarn keys from other sources
-  ansible.builtin.apt_key:
-    id: "{{ nodejs__yarn_upstream_key_id }}"
-    keyserver: "{{ item }}"
-    state: present
-  when:
-    - yarn_pkg_registered is failed
-    - use_yarn
-  register: yarn_key_registered
-  loop:
-    - "hkp://pool.sks-keyservers.net"
-    - "pgp.mit.edu"
-    - "keyserver.pgp.com"
-  failed_when:
-    - yarn_key_registered == 0
+- name: Nodejs | De-armor Yarn GPG key to binary keyring
+  ansible.builtin.shell: "gpg --dearmor < /tmp/yarnpkg.gpg.key > {{ nodejs__yarn_keyring_path }}"
+  args:
+    creates: "{{ nodejs__yarn_keyring_path }}"
+  when: use_yarn
+  become: true
+
+- name: Nodejs | Ensure keyring permissions
+  ansible.builtin.file:
+    path: "{{ nodejs__yarn_keyring_path }}"
+    mode: '0644'
+    owner: root
+    group: root
+    state: file
+  when: use_yarn
 
 - name: Nodejs | Add upstream Yarn APT repository
   ansible.builtin.apt_repository:
     repo: "{{ nodejs__yarn_upstream_repository }}"
     state: present
+    filename: pul_yarn
     update_cache: false
   when: use_yarn
 
@@ -36,8 +52,8 @@
 - name: Nodejs | Update apt cache after adding repository
   ansible.builtin.command: apt-get update
   register: cache_update
-  retries: 3
-  delay: 5
+  retries: 5
+  delay: 10
   until: cache_update.rc == 0
   changed_when: false
   failed_when: false
