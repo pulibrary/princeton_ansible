@@ -1,0 +1,207 @@
+---
+# roles/zfs
+#
+- name: ZFS -  OS-specific variables
+  ansible.builtin.include_vars: "{{ ansible_os_family }}.yml"
+  when: ansible_os_family in ['Debian', 'RedHat']
+
+- name: ZFS - assert supported OS family
+  ansible.builtin.assert:
+    that:
+      - ansible_os_family in ['Debian', 'RedHat']
+    fail_msg: "roles/zfs supports Debian and RedHat families only (got: {{ ansible_os_family }})"
+
+- name: ZFS - load OS-specific variables
+  ansible.builtin.include_vars: "{{ ansible_os_family }}.yml"
+
+- name: ZFS - enforce pool name "tank" (pools)
+  ansible.builtin.assert:
+    that:
+      - item.name == 'tank'
+    fail_msg: "roles/zfs enforces a single pool named 'tank' (got pool name: {{ item.name }})"
+  loop: "{{ zfs_pools }}"
+  when: zfs_pools | length > 0
+
+- name: ZFS - enforce pool name "tank" (datasets)
+  ansible.builtin.assert:
+    that:
+      - (item.name.split('/')[0]) == 'tank'
+    fail_msg: "roles/zfs enforces datasets under pool 'tank' only (got dataset: {{ item.name }})"
+  loop: "{{ zfs_datasets }}"
+  when: zfs_datasets | length > 0
+
+- name: ZFS - install on RedHat-based systems
+  when: ansible_os_family == 'RedHat'
+  block:
+    - name: Install EPEL repository
+      ansible.builtin.package:
+        name: epel-release
+        state: present
+
+    - name: Install ZFS repository
+      ansible.builtin.package:
+        name: "{{ zfs_repo_url }}"
+        state: present
+        disable_gpg_check: true
+
+    - name: Install kernel development packages
+      ansible.builtin.package:
+        name: "{{ zfs_devel_packages }}"
+        state: present
+
+    - name: Install ZFS packages
+      ansible.builtin.package:
+        name: "{{ zfs_packages }}"
+        state: present
+
+    - name: Enable ZFS services
+      ansible.builtin.systemd:
+        name: "{{ item }}"
+        enabled: true
+      loop: "{{ zfs_services }}"
+
+- name: ZFS on Debian-based systems
+  when: ansible_os_family == 'Debian'
+  block:
+    - name: Install ZFS packages
+      ansible.builtin.apt:
+        name: "{{ zfs_packages }}"
+        state: present
+
+- name: ZFS - configure module parameters
+  ansible.builtin.template:
+    src: zfs.conf.j2
+    dest: /etc/modprobe.d/zfs.conf
+    mode: '0644'
+  register: zfs_modprobe_conf
+  when: (zfs_arc_max | default('') | length > 0) or (zfs_arc_min | default('') | length > 0)
+
+- name: ZFS - ensure module loads on boot
+  ansible.builtin.lineinfile:
+    path: /etc/modules-load.d/zfs.conf
+    line: zfs
+    create: true
+    mode: '0644'
+
+- name: ZFS - load kernel module
+  community.general.modprobe:
+    name: zfs
+    state: present
+  when: zfs_load_module | bool
+
+- name: ZFS - get existing pools
+  ansible.builtin.command: zpool list -H -o name
+  register: existing_pools
+  changed_when: false
+  failed_when: false
+
+- name: ZFS - safe reload module to apply ARC changes (only if no pools exist)
+  ansible.builtin.command: modprobe -r zfs && modprobe zfs
+  register: zfs_reload_result
+  changed_when: true
+  failed_when: false
+  when:
+    - zfs_load_module | bool
+    - zfs_safe_reload_module_on_arc_change | bool
+    - zfs_modprobe_conf is defined
+    - zfs_modprobe_conf.changed
+    - (existing_pools.stdout_lines | default([]) | length) == 0
+
+- name: ZFS - warn when ARC settings changed but pools exist (reboot required)
+  ansible.builtin.debug:
+    msg: >-
+      ARC module parameters changed, but pools exist. For safety, the role will not reload the zfs module.
+      Reboot (or do a controlled maintenance reload) to apply ARC changes.
+  when:
+    - zfs_modprobe_conf is defined
+    - zfs_modprobe_conf.changed
+    - (existing_pools.stdout_lines | default([]) | length) > 0
+
+- name: ZFS - create pools via zpool
+  ansible.builtin.command:
+    cmd: >
+      zpool create
+      {{ item.name }}
+      {% for key, value in (item.properties | default({})).items() %}
+      -o {{ key }}={{ value }}
+      {% endfor %}
+      {{ item.devices | join(' ') }}
+  loop: "{{ zfs_pools }}"
+  when:
+    - zfs_pools | length > 0
+    - item.state | default('present') == 'present'
+    - item.name not in (existing_pools.stdout_lines | default([]))
+
+- name: ZFS - destroy pools (DANGEROUS; requires zfs_allow_pool_destroy=true)
+  ansible.builtin.command:
+    cmd: "zpool destroy {{ item.name }}"
+  loop: "{{ zfs_pools }}"
+  when:
+    - zfs_allow_pool_destroy | bool
+    - zfs_pools | length > 0
+    - item.state | default('present') == 'absent'
+    - item.name in (existing_pools.stdout_lines | default([]))
+
+- name: ZFS  - create datasets
+  community.general.zfs:
+    name: "{{ item.name }}"
+    state: "{{ item.state | default('present') }}"
+    extra_zfs_properties: "{{ zfs_default_dataset_properties | combine(item.properties | default({})) }}"
+  loop: "{{ zfs_datasets }}"
+  when:
+    - zfs_datasets | length > 0
+    - item.name.split('/')[0] in existing_pools.stdout_lines | default([]))
+
+- name: ZFS - set up automatic scrub timer
+  block:
+    - name: Create ZFS scrub service
+      ansible.builtin.template:
+        src: zfs-scrub.service.j2
+        dest: /etc/systemd/system/zfs-scrub.service
+        mode: '0644'
+      notify: reload systemd
+
+    - name: Create ZFS scrub timer
+      ansible.builtin.template:
+        src: zfs-scrub.timer.j2
+        dest: /etc/systemd/system/zfs-scrub.timer
+        mode: '0644'
+      notify:
+        - reload systemd
+        - restart zfs-scrub timer
+
+    - name: Enable ZFS scrub timer
+      ansible.builtin.systemd:
+        name: zfs-scrub.timer
+        enabled: true
+        state: started
+        daemon_reload: true
+
+- name: ZFS - deploy monitoring script
+  block:
+    - name: Create monitoring script
+      ansible.builtin.template:
+        src: check_zfs.sh.j2
+        dest: "{{ zfs_monitoring_script_path }}"
+        mode: '0755'
+
+    - name: Add monitoring script to CheckMK (MRPE)
+      ansible.builtin.lineinfile:
+        path: /etc/check_mk/mrpe.cfg
+        line: "ZFS {{ zfs_monitoring_script_path }}"
+        create: true
+        mode: '0644'
+      notify: restart check-mk-agent
+
+- name: ZFS - display pool status
+  ansible.builtin.command: zpool status
+  register: zpool_status
+  changed_when: false
+  when: (existing_pools.stdout_lines | default([]) | length) > 0
+
+- name: Show pool status
+  ansible.builtin.debug:
+    var: (existing_pools.stdout_lines | default([]) | length) > 0
+  when:
+    - zfs_pools | length > 0
+    - zpool_status is defined

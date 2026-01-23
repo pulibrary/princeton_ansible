@@ -1,0 +1,21 @@
+---
+- name: Converge
+  hosts: all
+  vars:
+    running_on_server: false
+  become: true
+  pre_tasks:
+    - name: Update cache
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 600
+  roles:
+    - role: zfs
+      vars:
+        # Containers cannot reliably load kernel modules or build DKMS.
+        zfs_load_module: false
+        zfs_enable_scrub: false
+        zfs_monitoring_enabled: false
+        # Override packages for test image to avoid DKMS build in container
+        zfs_packages:
+          - zfsutils-linux

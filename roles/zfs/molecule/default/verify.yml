@@ -1,0 +1,70 @@
+---
+- name: Verify
+  hosts: all
+  become: true
+  gather_facts: false
+
+  vars:
+    zfs_monitoring_script_path: /usr/local/bin/check_zfs.sh
+    zfs_mrpe_cfg_path: /etc/check_mk/mrpe.cfg
+
+  tasks:
+    - name: zpool binary exists in PATH
+      ansible.builtin.command: sh -lc 'command -v zpool'
+      register: zpool_path
+      changed_when: false
+      failed_when: zpool_path.rc != 0
+
+    - name: /etc/modules-load.d/zfs.conf exists
+      ansible.builtin.stat:
+        path: /etc/modules-load.d/zfs.conf
+      register: zfs_modules_load
+
+    - name: Assert modules-load file exists
+      ansible.builtin.assert:
+        that:
+          - zfs_modules_load.stat.exists
+
+    - name: zfs-scrub.service unit exists
+      ansible.builtin.stat:
+        path: /etc/systemd/system/zfs-scrub.service
+      register: scrub_service
+
+    - name: zfs-scrub.timer unit exists
+      ansible.builtin.stat:
+        path: /etc/systemd/system/zfs-scrub.timer
+      register: scrub_timer
+
+    - name: Assert scrub unit files exist
+      ansible.builtin.assert:
+        that:
+          - scrub_service.stat.exists
+          - scrub_timer.stat.exists
+        fail_msg: "Expected scrub unit files to exist under /etc/systemd/system/"
+
+    - name: Assert zfs-scrub.timer is enabled
+      ansible.builtin.command: systemctl is-enabled zfs-scrub.timer
+      register: scrub_enabled
+      changed_when: false
+      failed_when: scrub_enabled.rc != 0 or (scrub_enabled.stdout | trim) not in ['enabled', 'enabled-runtime']
+
+    - name: Assert zfs-scrub.timer is active
+      ansible.builtin.command: systemctl is-active zfs-scrub.timer
+      register: scrub_active
+      changed_when: false
+      failed_when: scrub_active.rc != 0 or (scrub_active.stdout | trim) != 'active'
+
+    - name: Monitoring script exists
+      ansible.builtin.stat:
+        path: "{{ zfs_monitoring_script_path }}"
+      register: monitor_script
+
+    - name: Assert monitoring script is present and executable
+      ansible.builtin.assert:
+        that:
+          - monitor_script.stat.exists
+          - monitor_script.stat.mode is defined
+          - (monitor_script.stat.mode | int(base=8)) is not none
+          - (monitor_script.stat.mode | int(base=8)) >= 0o755
+        fail_msg: "Monitoring script missing or not executable: {{ zfs_monitoring_script_path }}"
+
