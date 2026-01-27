@@ -60,7 +60,7 @@
       ansible.builtin.command: hostname -I
       register: hostname_ips
       delegate_to: "{{ item }}"
-      loop: "{{ groups['nomad_cluster'] }}"
+      loop: "{{ groups[nomad_server_group] }}"
       changed_when: false
       when: nomad_server_ips | length == 0
       run_once: true
@@ -89,7 +89,7 @@
           address: "{{ (hostname_ips.results | selectattr('item', 'equalto', item) | first).stdout.split() | first }}"
       delegate_to: "{{ item }}"
       delegate_facts: true
-      loop: "{{ groups['nomad_cluster'] }}"
+      loop: "{{ groups[nomad_server_group] }}"
       when:
         - hostname_ips is defined
         - hostname_ips.results is defined
