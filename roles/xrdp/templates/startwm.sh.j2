@@ -1,45 +1,93 @@
-sudo tee /etc/xrdp/startwm.sh >/dev/null <<'EOF'
 #!/usr/bin/env bash
 # Managed by Ansible (roles/xrdp)
-set -e
 
-# XRDP sessions need dbus
-if command -v dbus-launch >/dev/null 2>&1; then
-  eval "$(dbus-launch --sh-syntax)"
-fi
+# Don't "set -e" here; desktop startup often returns non-zero during probing.
+set -u
+
+# Basic logging to help debug "exited quickly"
+LOG="/tmp/xrdp-startwm-${USER:-unknown}-${DISPLAY:-no_display}.log"
+exec >>"$LOG" 2>&1
+echo "---- $(date -Is) startwm.sh starting: user=${USER:-} display=${DISPLAY:-} shell=$SHELL ----"
+env | sort
+
+# Ensure a coherent PATH for non-interactive sessions
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
 # Prefer Xorg session semantics
 export XDG_SESSION_TYPE=x11
 export GDK_BACKEND=x11
 
-# Lubuntu / LXQt
-if command -v startlxqt >/dev/null 2>&1; then
-  export DESKTOP_SESSION=LXQt
-  export XDG_SESSION_DESKTOP=LXQt
-  export XDG_CURRENT_DESKTOP=LXQt
-  exec startlxqt
+# Gnome seems to expect this to exist
+if [[ -z "${XDG_RUNTIME_DIR:-}" ]]; then
+  export XDG_RUNTIME_DIR="/run/user/$(id -u)"
 fi
 
-# Xubuntu / XFCE
-if command -v startxfce4 >/dev/null 2>&1; then
-  export DESKTOP_SESSION=xfce
-  export XDG_CURRENT_DESKTOP=XFCE
-  exec startxfce4
+# Start a DBus session if possible
+run_with_dbus() {
+  if command -v dbus-run-session >/dev/null 2>&1; then
+    exec dbus-run-session -- "$@"
+  elif command -v dbus-launch >/dev/null 2>&1; then
+    # shellcheck disable=SC2046
+    eval "$(dbus-launch --sh-syntax)"
+    exec "$@"
+  else
+    exec "$@"
+  fi
+}
+
+# Desktop selection:
+# - If xrdp_desktop is set to xfce/lxqt/gnome, prefer it
+# - Otherwise auto-detect based on what's installed
+DESKTOP="{{ xrdp_desktop | default('auto') }}"
+
+case "$DESKTOP" in
+  xfce)
+    if command -v startxfce4 >/dev/null 2>&1; then
+      export DESKTOP_SESSION=xfce
+      export XDG_CURRENT_DESKTOP=XFCE
+      export XDG_SESSION_DESKTOP=xfce
+      run_with_dbus startxfce4
+    fi
+    ;;
+  lxqt)
+    if command -v startlxqt >/dev/null 2>&1; then
+      export DESKTOP_SESSION=LXQt
+      export XDG_CURRENT_DESKTOP=LXQt
+      export XDG_SESSION_DESKTOP=LXQt
+      run_with_dbus startlxqt
+    fi
+    ;;
+  gnome)
+    if command -v gnome-session >/dev/null 2>&1; then
+      run_with_dbus gnome-session
+    fi
+    ;;
+  auto|*)
+    if command -v startxfce4 >/dev/null 2>&1; then
+      export DESKTOP_SESSION=xfce
+      export XDG_CURRENT_DESKTOP=XFCE
+      export XDG_SESSION_DESKTOP=xfce
+      run_with_dbus startxfce4
+    fi
+
+    if command -v startlxqt >/dev/null 2>&1; then
+      export DESKTOP_SESSION=LXQt
+      export XDG_CURRENT_DESKTOP=LXQt
+      export XDG_SESSION_DESKTOP=LXQt
+      run_with_dbus startlxqt
+    fi
+
+    if command -v gnome-session >/dev/null 2>&1; then
+      run_with_dbus gnome-session
+    fi
+    ;;
+esac
+
+# Fallback to Xsession if present
+if [[ -x /etc/X11/Xsession ]]; then
+  run_with_dbus /etc/X11/Xsession
 fi
 
-# Ubuntu Desktop / GNOME
-if command -v gnome-session >/dev/null 2>&1; then
-  exec gnome-session
-fi
-
-# Fallback
-if [ -x /etc/X11/Xsession ]; then
-  exec /etc/X11/Xsession
-fi
-
-echo "No supported desktop session found (need startlxqt, startxfce4, or gnome-session)" >&2
+echo "No supported desktop session found. Missing startxfce4/startlxqt/gnome-session."
 exit 127
-EOF
 
-sudo chmod 0755 /etc/xrdp/startwm.sh
-sudo systemctl restart xrdp xrdp-sesman
