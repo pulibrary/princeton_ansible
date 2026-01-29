@@ -1,6 +1,6 @@
+sudo tee /etc/xrdp/startwm.sh >/dev/null <<'EOF'
 #!/usr/bin/env bash
-# Managed by Ansible (roles/xrdp_gnome)
-
+# Managed by Ansible (roles/xrdp)
 set -e
 
 # XRDP sessions need dbus
@@ -12,5 +12,34 @@ fi
 export XDG_SESSION_TYPE=x11
 export GDK_BACKEND=x11
 
-# Start GNOME session
-exec {{ xrdp_gnome_session_command }}
+# Lubuntu / LXQt
+if command -v startlxqt >/dev/null 2>&1; then
+  export DESKTOP_SESSION=LXQt
+  export XDG_SESSION_DESKTOP=LXQt
+  export XDG_CURRENT_DESKTOP=LXQt
+  exec startlxqt
+fi
+
+# Xubuntu / XFCE
+if command -v startxfce4 >/dev/null 2>&1; then
+  export DESKTOP_SESSION=xfce
+  export XDG_CURRENT_DESKTOP=XFCE
+  exec startxfce4
+fi
+
+# Ubuntu Desktop / GNOME
+if command -v gnome-session >/dev/null 2>&1; then
+  exec gnome-session
+fi
+
+# Fallback
+if [ -x /etc/X11/Xsession ]; then
+  exec /etc/X11/Xsession
+fi
+
+echo "No supported desktop session found (need startlxqt, startxfce4, or gnome-session)" >&2
+exit 127
+EOF
+
+sudo chmod 0755 /etc/xrdp/startwm.sh
+sudo systemctl restart xrdp xrdp-sesman

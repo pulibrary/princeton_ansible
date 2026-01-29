@@ -1,21 +1,23 @@
 ---
 # roles/xrdp
-- name: Xrdp - install XRDP packages
+- name: Xrdp - install common XRDP packages
   ansible.builtin.apt:
-    update_cache: true
-    cache_valid_time: 3600
-    name:
-      - xrdp
-      - xorgxrdp
+    name: "{{ xrdp_packages_common }}"
     state: present
+    update_cache: true
 
-- name: Xrdp - ensure runtime dir exists
-  ansible.builtin.file:
-    path: /run/xrdp
-    state: directory
-    owner: xrdp
-    group: xrdp
-    mode: "0755"
+- name: Xrdp - install LXQt packages
+  ansible.builtin.apt:
+    name: "{{ xrdp_packages_lxqt }}"
+    state: present
+  when: xrdp_desktop == 'lxqt'
+
+- name: Xrdp - install XFCE packages
+  ansible.builtin.apt:
+    name: "{{ xrdp_packages_xfce }}"
+    state: present
+  when: xrdp_desktop == 'xfce'
+
 - name: Ensure log files exist and are writable by xrdp
   ansible.builtin.file:
     path: "{{ item }}"
