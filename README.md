@@ -246,6 +246,12 @@ Run a playbook from an error or a specific task:
 ansible-playbook playbooks/example.yml --start-at-task="Task Name"
 ```
 
+Run a playbook for a specific environment:
+
+```bash
+ansible-playbook playbooks/example.yml -e runtime_env=staging
+```
+
 Avoiding downtime
 -----------------
 
