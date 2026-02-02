@@ -12,12 +12,36 @@
   when:
     - ansible_os_family == "Debian"
 
-- name: PostgreSQL | Add PostgreSQL repository apt-key
-  ansible.builtin.apt_key:
+- name: PostgreSQL | Download PostgreSQL GPG key (ASCII)
+  ansible.builtin.get_url:
     url: "{{ postgres_apt_key_url }}"
+    dest: "/tmp/postgresql.key"
+    mode: '0644'
+  when: ansible_os_family == "Debian"
+
+- name: PostgreSQL | De-armor PostgreSQL GPG key to binary keyring
+  ansible.builtin.shell: "gpg --dearmor < /tmp/postgresql.key > {{ postgres_keyring_path }}"
+  args:
+    creates: "{{ postgres_keyring_path }}"
+  when: ansible_os_family == "Debian"
+  become: true
+
+- name: PostgreSQL | Ensure keyring permissions
+  ansible.builtin.file:
+    path: "{{ postgres_keyring_path }}"
+    mode: '0644'
+    owner: root
+    group: root
+    state: file
+  when: ansible_os_family == "Debian"
+
+- name: PostgreSQL | add postgresql repository for latest ubuntu
+  ansible.builtin.apt_repository:
+    repo: "{{ postgres_apt_repository }}"
     state: present
-  when:
-    - ansible_os_family == "Debian"
+    filename: pul_postgresql
+    update_cache: false
+  when: ansible_os_family == "Debian"
 
 - name: PostgreSQL | add postgres:13 appstream
   ansible.builtin.dnf:
