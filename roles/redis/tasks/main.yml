@@ -1,14 +1,36 @@
 ---
-- name: Redis | Add Redis Labs apt key
-  ansible.builtin.apt_key:
-    url: "https://packages.redis.io/gpg"
-    state: present
+- name: Redis | Download Redis GPG key (ASCII)
+  ansible.builtin.get_url:
+    url: "{{ redis_apt_key_url }}"
+    dest: "/tmp/redis.gpg.key"
+    mode: '0644'
 
-- name: Redis | Add Redis Labs repository
+- name: Redis | De-armor Redis GPG key to binary keyring
+  ansible.builtin.shell: "gpg --dearmor < /tmp/redis.gpg.key > {{ redis_keyring_path }}"
+  args:
+    creates: "{{ redis_keyring_path }}"
+  become: true
+
+- name: Redis | Ensure keyring permissions
+  ansible.builtin.file:
+    path: "{{ redis_keyring_path }}"
+    mode: '0644'
+    owner: root
+    group: root
+    state: file
+  become: true
+
+- name: Redis | Remove legacy repository file if it exists
+  ansible.builtin.file:
+    path: /etc/apt/sources.list.d/redis.list
+    state: absent
+  become: true
+
+- name: Redis | Add Redis Labs repository (Modern)
   ansible.builtin.apt_repository:
-    repo: "deb https://packages.redis.io/deb {{ ansible_distribution_release }} main"
+    repo: "{{ redis_apt_repository }}"
     state: present
-    filename: redis
+    filename: pul_redis
     update_cache: false
 
 - name: Redis | Clean apt cache before update
