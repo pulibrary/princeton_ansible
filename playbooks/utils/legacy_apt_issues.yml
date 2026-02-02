@@ -1,0 +1,65 @@
+---
+- name: fix legacy apt repositories
+  hosts: all
+  remote_user: pulsys
+  become: true
+  vars_files:
+    - ../group_vars/all/vault.yml
+
+  pre_tasks:
+    - name: Princeton | Deduplicate 00-princeton.list (forced)
+      ansible.builtin.shell: |
+        cat /etc/apt/sources.list.d/00-princeton.list | sed 's/[[:space:]]*$//' | sort -u > /tmp/00-p.clean
+        mv /tmp/00-p.clean /etc/apt/sources.list.d/00-princeton.list
+      changed_when: false
+
+    - name: Princeton | Purge Yarn entries from all source lists to start fresh
+      ansible.builtin.shell: "grep -l 'yarnpkg' /etc/apt/sources.list.d/*.list | xargs -r rm"
+      changed_when: false
+
+    - name: Nodejs | Delete old Yarn keyrings to prevent conflicts
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /usr/share/keyrings/yarnkey.gpg
+        - /etc/apt/trusted.gpg.d/yarn.gpg
+
+    - name: Nodejs | Re-import specific Yarn key from keyserver
+      ansible.builtin.shell: "gpg --no-default-keyring --keyring /usr/share/keyrings/yarnkey.gpg --keyserver keyserver.ubuntu.com --recv-keys 62D54FD4003F6525"
+
+    - name: Nodejs | Create clean Yarn repository file
+      ansible.builtin.copy:
+        dest: /etc/apt/sources.list.d/pul_yarn.list
+        content: "deb [signed-by=/usr/share/keyrings/yarnkey.gpg] https://dl.yarnpkg.com/debian/ stable main"
+        mode: '0644'
+
+  tasks:
+    - name: update release info
+      ansible.builtin.command: apt-get --allow-releaseinfo-change update
+      register: apt_result
+      failed_when: "apt_result.rc != 0 and '62D54FD4003F6525' in apt_result.stderr"
+      changed_when: "apt_result.rc == 0"
+
+    - name: PostgreSQL | Remove legacy list file to prevent duplicates
+      ansible.builtin.file:
+        path: /etc/apt/sources.list.d/apt_postgresql_org_pub_repos_apt.list
+        state: absent
+      when: ansible_os_family == "Debian"
+
+    - name: Update apt certificates
+      ansible.builtin.apt:
+        name: ca-certificates
+        state: latest
+        update_cache: false
+
+    - name: Ubuntu | refresh all keys
+      ansible.builtin.command: /usr/bin/apt-key adv --refresh-keys --keyserver keyserver.ubuntu.com
+      ignore_errors: true
+
+  post_tasks:
+    - name: tell everyone on slack you ran an ansible playbook
+      community.general.slack:
+        token: "{{ vault_pul_slack_token }}"
+        msg: "Ansible ran `{{ ansible_play_name }}` on {{ inventory_hostname }}"
+        channel: "{{ slack_alerts_channel }}"
