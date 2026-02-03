@@ -40,12 +40,18 @@ http:
           challengeTmpl: /challenge.tmpl.html
     append-catalog-regex:
       redirectRegex:
+        # Matches any set of params that look search-ish, and may be prefixed,
+        # e.g.
         # Matches http://x.x.x.x:yyyy/?f[]=
         # Matches http://x.x.x.x:yyyy/?something&f[]=
-        regex: //([^/]*)/\?([^&]*&)*?f(.*)
+        # Matches http://x.x.x.x:yyyy/?per_page=50&search_field=all_fields
+        # Matches http://x.x.x.x:yyyy/?something&per_page=50&search_field=all_fields
+        regex: //([^/]*)/\?(.*((f\[)|(range\[)|(search_field=)|(sort=)).*)
         # Converts to http://x.x.x.x:yyyy/catalog?f[]=
         # or http://x.x.x.x:yyyy/catalog?something&f[]=
-        replacement: //${1}/catalog?${2}f${3}
+        # Converts to http://x.x.x.x:yyyy/catalog?per_page=50&search_field=all_fields
+        # or http://x.x.x.x:yyyy/catalog?something&per_page=50&search_field=all_fields
+        replacement: //${1}/catalog?${2}
     # discovery is hosted at a sub-path, need special handling.
     append-discovery-regex:
       redirectRegex:
