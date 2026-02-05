@@ -43,6 +43,49 @@
             policy = "read"
           }
       run_once: true
+    - name: pul_nomad | nomad | Create consul auth method for Nomad
+      community.general.consul_auth_method:
+        name: 'nomad-workloads'
+        type: 'jwt'
+        description: 'JWT auth method for Nomad services and workloads'
+        token: '{{ consul_acl_management_token }}'
+        config:
+          JWKSURL: "{{ nomad_http_address }}/.well-known/jwks.json"
+          JWTSupportedAlgs: 
+            - "RS256"
+          BoundAudiences: 
+            - "consul.io"
+          ClaimMappings:
+            nomad_namespace: "nomad_namespace"
+            nomad_job_id: "nomad_job_id"
+            nomad_task: "nomad_task"
+            nomad_service: "nomad_service"
+      run_once: true
+    - name: pul_nomad | nomad | Bind Nomad auth method for services
+      community.general.consul_binding_rule:
+        name: 'nomad-workloads'
+        token: '{{ consul_acl_management_token }}'
+        auth_method: 'nomad-workloads'
+        bind_type: service
+        bind_name: '${value.nomad_service}'
+        selector: '"nomad_service" in value'
+      run_once: true
+    - name: pul_nomad | nomad | Bind Nomad auth method for tasks
+      community.general.consul_binding_rule:
+        name: 'nomad-tasks-binding'
+        token: '{{ consul_acl_management_token }}'
+        auth_method: 'nomad-workloads'
+        bind_type: 'role'
+        bind_name: 'nomad-tasks-${value.nomad_namespace}'
+        selector: '"nomad_service" not in value'
+      run_once: true
+    - name: pul_nomad | nomad | Create consul task role that tasks will be associated with
+      community.general.consul_role:
+        name: 'nomad-tasks-default'
+        token: '{{ consul_acl_management_token }}'
+        policies:
+          - name: "nomad-task-policy"
+      run_once: true
     # TODO: Remove this when we have task identitys working.
     - name: pul_nomad | nomad | Create Nomad Task Token
       community.general.consul_token:
