@@ -228,17 +228,6 @@
   when:
     - running_on_server
 
-- name: Ezproxy | update ezproxy config.txt
-  ansible.builtin.copy:
-    src: "working_config.txt"
-    dest: "/var/local/ezproxy/config.txt"
-    owner: "{{ deploy_user }}"
-    group: "{{ deploy_user }}"
-    mode: "0644"
-  changed_when: false
-  when:
-    - running_on_server
-
 - name: Ezproxy | Get stats of a file
   ansible.builtin.stat:
     path: /var/local/ezproxy/config.txt
@@ -252,9 +241,22 @@
     group: "{{ deploy_user }}"
     mode: "0644"
   changed_when: false
+  register: new_config_file
   when:
     - running_on_server
     - not config_file.stat.exists
+
+- name: Ezproxy | update ezproxy config.txt
+  ansible.builtin.copy:
+    src: "working_config.txt"
+    dest: "/var/local/ezproxy/config.txt"
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+    mode: "0644"
+  changed_when: false
+  when:
+    - running_on_server
+    - not new_config_file.stat.exists
 
 - name: Ezproxy | chmod back permissions
   ansible.builtin.file:
