@@ -1,0 +1,18 @@
+---
+- name: prepare
+  hosts: all
+  tasks:
+    # Disable some podman things to let it work in molecule.
+    - name: Create a directory if it does not exist
+      ansible.builtin.file:
+        path: /etc/containers
+        state: directory
+        mode: '0755'
+    - name: prepare | set up Podman storage.conf to use VFS
+      ansible.builtin.copy:
+        dest: /etc/containers/storage.conf
+        content: |
+          [storage]
+          driver = "vfs"
+    - name: refetch facts
+      setup:
