@@ -228,19 +228,6 @@
   when:
     - running_on_server
 
-- name: Ezproxy | greenfield config.txt
-  ansible.builtin.template:
-    src: "config.txt.j2"
-    dest: "/var/local/ezproxy/config.txt"
-    owner: "{{ deploy_user }}"
-    group: "{{ deploy_user }}"
-    mode: "0644"
-    force: no
-  changed_when: false
-  register: greenfield_result
-  when:
-    - running_on_server
-
 - name: Ezproxy | brownfield config.txt
   ansible.builtin.copy:
     src: "working_config.txt"
@@ -248,11 +235,13 @@
     owner: "{{ deploy_user }}"
     group: "{{ deploy_user }}"
     mode: "0644"
-  changed_when: false
   when:
     - running_on_server
-    - not (greenfield_result.changed | default(false))
-    - greenfield_result.failed is not defined
+
+- name: Ezproxy | template the greenfield config.txt
+  ansible.builtin.import_tasks: greenfield.yml
+  tags:
+    - never
 
 - name: Ezproxy | chmod back permissions
   ansible.builtin.file:
