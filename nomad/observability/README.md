@@ -2,6 +2,11 @@
 
 This contains infrastructure for observability of some of our applications hosted on Nomad. It's mostly here to provide logging and metrics for staging resources that we can't put on Datadog, but need observability for during development.
 
+## [Signoz](https://signoz.io/)
+
+Signoz is a Datadog-like observability platform. This only installs the
+collector on all nomad nodes.
+
 ## [Prometheus](https://prometheus.io/)
 
 Prometheus is metrics scraping agent. Ours is configured to gather metrics from `/metrics` for all Nomad nodes registered in Consul that have the "metrics" tag.
@@ -27,6 +32,6 @@ We're using Promtail to ship logs from containers to Loki. Now that Podman has s
 
 ## Deployment
 
-From `nomad` directory: `BRANCH=main ./bin/deploy observability <prometheus/loki/grafana/log-shipping>`
+From `nomad` directory: `BRANCH=main ./bin/deploy observability <signoz/prometheus/loki/grafana/log-shipping>`
 
 You can track progress and status of nomad apps by looking at the Nomad UI, accessible from `./bin/login`
