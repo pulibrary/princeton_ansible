@@ -54,21 +54,7 @@
         var: old_vm_disk_info
       when: old_vm_disk_info is defined
 
-    # Compute DNS domain / FQDN
-    - name: Derive DNS domain from old guest_name (fallback to lib.princeton.edu)
-      set_fact:
-        dns_domain: >-
-          {%- set guest = old_vm_info.virtual_machines[0].guest_name | default('') -%}
-          {%- if '.' in guest -%}
-            {{ guest.split('.', 1)[1] }}
-          {%- else -%}
-            lib.princeton.edu
-          {%- endif -%}
-    - name: Allow override via vm_dns_domain if provided
-      set_fact:
-        dns_domain: "{{ vm_dns_domain }}"
-      when: vm_dns_domain is defined and vm_dns_domain|length > 0
-
+    # We choose the DNS domain in the Tower template
     - name: Build VM FQDN
       set_fact:
         vm_fqdn: "{{ replacement_vm }}.{{ dns_domain }}"
@@ -364,7 +350,6 @@
         delay: 30
         timeout: 300
         state: started
-      ignore_errors: yes
 
     - name: Detect OS type on new VM
       delegate_to: "{{ vm_fqdn }}"
