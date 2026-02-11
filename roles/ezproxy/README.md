@@ -90,16 +90,24 @@ The role automatically configures UFW to allow:
     * 443/tcp (HTTPS)
     * 6556/tcp (CheckMK monitoring agent) - restricted to source 128.112.0.0/16.
 
-## Post Ansible playbook Tasks
+## Ansible playbook Tasks
 
-We have a companion private :unamused: repository that administers [Ezproxy](https://github.com/PrincetonUniversityLibrary/ezproxy_conf). When the run completes on a brand new VM the following tasks will be needed:
+We have a companion private :unamused: repository that administers [Ezproxy](https://github.com/PrincetonUniversityLibrary/ezproxy_conf). 
 
-* [ ] cap deploy (`BRANCH=name bundle exec cap <environment> deploy`) from the repo above
-* [ ] login as break-glass user (remove the 's' in https)
+When we run the playbook on a brand new VM (greenfield scenario), the following tasks will be needed:
+
+* [ ] run the `ezproxy.yml` playbook with tags for `all` and `never` to use the built-in `config.txt` file, which lets us then login to the admin UI and configure TLS certs (see below): 
+`ansible-playbooks playbooks/ezproxy.yml --tags "all,never"`
+* [ ] cap deploy from the ezproxy_config private repo (linked above) (`BRANCH=name bundle exec cap <environment> deploy`)
+* [ ] log in as break-glass user with credentials in the `/var/local/ezproxy/user.txt` file to `http://ezproxy(-test).princeton.edu` (make sure to remove the 's' in https)
 * [ ] update TLS certs (follow steps in [pul-it-handbook](https://github.com/pulibrary/pul-it-handbook/blob/main/services/ezproxy.md))
-* [ ] change the following files
-  * [ ] in `config.txt`: uncomment `# LoginPortSSL 443` & `# Option ForceHTTPSLogin`
-  * [ ] in `config.txt`: remove `ShibbolethDisable2.0` (line 20)
-  * [ ] in `config.txt`: uncomment everything under `ShibbolethMetadata /`(lines 22-27)
-  * [ ] in `config.txt`: uncomment IncludeFiles, lines 62-64, 66, 68
-* [ ] restart the ezproxy service: `sudo systemctl restart ezproxy`
+
+To make changes to an existing VM (brownfield scenario): 
+* [ ] create a PR to files in the princeton_ansible repo with proposed changes
+  * [ ] if making changes to the `config.txt` you will need to: 
+    * [ ] decrypt `/roles/ezproxy/files/production_working_config.txt` (or `.../testing_working_config.txt` if on testing VM)
+    * [ ] make your changes to the above file
+    * [ ] encrypt the file and push changes
+* [ ] from your branch, run the ezproxy playbook with NO tags:  
+`ansible-playbooks playbooks/ezproxy.yml`
+* [ ] if needed, restart the ezproxy service: `sudo systemctl restart ezproxy`
