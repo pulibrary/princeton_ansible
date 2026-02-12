@@ -19,23 +19,36 @@
 - name: PostgreSQL | create postgresql db server users
   community.postgresql.postgresql_user:
     name: "{{ item.name }}"
-    #    login_host: "{{ item.host }}"
     password: "{{ item.password }}"
     encrypted: true
-    priv: "{{ item.priv | default(omit) }}"  # least privilege is better
     state: "present"
-    db: "{{ item.db }}"
-    role_attr_flags: "{{ item.role_attr_flags | default(omit) }}"  # see above
-  #  delegate_to: '{{ postgres_host }}'
+    role_attr_flags: "{{ item.role_attr_flags | default(omit) }}"
   when:
     - running_on_server
     - postgresql_is_local
-    - postgresql_users|length > 0
-  changed_when: false
+    - postgresql_users | length > 0
   become: true
   become_user: "{{ postgres_admin_user }}"
   loop: "{{ postgresql_users }}"
   no_log: true
+  run_once: true
+
+- name: PostgreSQL | grant privileges to db server users
+  community.postgresql.postgresql_privs:
+    database: "{{ item.db }}"
+    role: "{{ item.name }}"
+    objs: "{{ item.objs | default(item.db) }}"
+    privs: "{{ item.priv }}"
+    type: "{{ item.type | default('database') }}"
+    state: "present"
+  when:
+    - running_on_server
+    - postgresql_is_local
+    - postgresql_users | length > 0
+    - item.priv is defined
+  become: true
+  become_user: "{{ postgres_admin_user }}"
+  loop: "{{ postgresql_users }}"
   run_once: true
 
 - name: PostgreSQL | change postgresql database owner
