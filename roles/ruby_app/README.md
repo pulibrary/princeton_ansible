@@ -20,6 +20,11 @@ ruby_version_override: "ruby-3.0.3"
 To update the ruby app env vars in your application but nothing else, run your
 playbook with --tags=site_config
 
+## Updating just checkmk
+
+To update the ruby app check mk configuration but nothing else, run your playbook
+with -t update_checkmk
+
 ## Role Variables
 For backwards compatibility any ruby_ var can also be set by rails_
 
@@ -42,6 +47,13 @@ A python dictionary of found in `group_vars/lae_production.yml`
     rails_app_env: staging
 
 The rails environment
+
+    check_mk_health_url
+
+The path on the local machine that displays the health page (default 'localhost/health.json')
+    expects a format that includes an overall status and individual statuses. For example:
+    
+    {"results":[{"name":"Database","message":"","status":"OK"}],"status":"ok"}
 
 ## Dependencies
 
