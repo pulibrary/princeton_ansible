@@ -101,9 +101,17 @@
 
 - name: Ruby_app | add local checkmk check
   ansible.builtin.template:
-    src: ruby_app_health_check.j2
-    dest: "/usr/lib/check_mk_agent/local/ruby_app_health_check.sh"
+    src: ruby_app_health_check.py.j2
+    dest: "/usr/lib/check_mk_agent/local/ruby_app_health_check.py"
     mode: "0755"
     owner: root
     group: root
+  tags: update_checkmk
+  when: running_on_server
+
+- name: Ruby_app | remove old local checkmk check
+  ansible.builtin.file:
+    path: "/usr/lib/check_mk_agent/local/ruby_app_health_check.sh"
+    state: absent
+  tags: update_checkmk
   when: running_on_server
