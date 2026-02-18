@@ -10,7 +10,8 @@
     "git",
     "podman@latest",
     "ruby@3.4.3",
-    "ruby_3_4@latest"
+    "ruby_3_4@latest",
+    "bash"
   ],
   "env": {
     "PYTHON_VERSION":              "3.11.1",
@@ -25,7 +26,8 @@
   "shell": {
     "init_hook": [
       "echo 'Welcome to the Devbox shell!'",
-      "echo 'Run \"devbox run init\" to set up the Python environment'"
+      "echo 'Run \"devbox run init\" to set up the Python environment'",
+      "bash -lc 'if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then git config core.hooksPath .githooks; fi'"
     ],
     "scripts": {
       "init": [
@@ -39,8 +41,7 @@
         "echo 'Setup complete!'"
       ],
       "setup": [
-        "git config core.hooksPath .githooks",
-        "echo 'Git hooks configured: .githooks'"
+        "bash -lc 'if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then test \"$(git config --get core.hooksPath || true)\" = \".githooks\" || git config core.hooksPath .githooks; fi'"
       ],
       "update-deps": [
         "./.venv/bin/python -m pip install --upgrade pip",
