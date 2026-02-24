@@ -105,7 +105,7 @@ When we run the playbook on a brand new VM (greenfield scenario), the following 
 To make changes to an existing VM (brownfield scenario): 
 * [ ] create a PR to files in the princeton_ansible repo with proposed changes
   * [ ] if making changes to the `config.txt` you will need to: 
-    * [ ] decrypt `/roles/ezproxy/files/production_working_config.txt` (or `.../testing_working_config.txt` if on testing VM)
+    * [ ] decrypt `/roles/ezproxy/files/production_vault_config.txt` (or `.../testing_vault_config.txt` if on testing VM)
     * [ ] make your changes to the above file
     * [ ] encrypt the file and push changes
 * [ ] from your branch, run the ezproxy playbook with NO tags:  
