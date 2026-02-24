@@ -109,5 +109,5 @@ To make changes to an existing VM (brownfield scenario):
     * [ ] make your changes to the above file
     * [ ] encrypt the file and push changes
 * [ ] from your branch, run the ezproxy playbook with NO tags:  
-`ansible-playbooks playbooks/ezproxy.yml`
+`ansible-playbook playbooks/ezproxy.yml`
 * [ ] if needed, restart the ezproxy service: `sudo systemctl restart ezproxy`
