@@ -140,13 +140,11 @@
   changed_when: false
   failed_when: false
   when: running_on_server
-  tags: [google_cloud]
 
 - name: Solrcloud | Display mount status
   ansible.builtin.debug:
     msg: "GCS mount is {{ 'active' if mount_check.rc == 0 else 'not active' }}"
   when: running_on_server
-  tags: [google_cloud]
 
 - name: Solrcloud | Ensure Checkmk local dir exists
   ansible.builtin.file:
@@ -156,7 +154,6 @@
     group: root
     mode: "0755"
   when: running_on_server
-  tags: [google_cloud]
 
 - name: Solrcloud | Install Solr 8 backup local check
   ansible.builtin.template:
@@ -166,7 +163,6 @@
     group: root
     mode: "0755"
   when: running_on_server
-  tags: [google_cloud]
 
 - name: Solrcloud  - Recursively change ownership of logfiles
   ansible.builtin.file:
@@ -175,7 +171,6 @@
     recurse: true
     owner: deploy
     group: deploy
-  tags: [google_cloud]
 
 #  run once to display current output during deploy
 - name: Solrcloud | Verify Solr 8 backup local check
@@ -186,7 +181,6 @@
   when:
     - running_on_server
     - checkmk_verify_local | default(false) | bool
-  tags: [google_cloud]
 
 - name: Solrcloud | Show local check output
   ansible.builtin.debug:
@@ -194,7 +188,6 @@
   when:
     - running_on_server
     - checkmk_verify_local | default(false) | bool
-  tags: [google_cloud]
 
 # Set up log rotation for gcsfuse logs
 - name: Solrcloud | Configure gcsfuse log rotation
@@ -209,4 +202,3 @@
     - running_on_server
     - solr9_gcsfuse_logrotate_rules is defined
     - solr9_gcsfuse_logrotate_rules | length > 0
-  tags: [google_cloud]

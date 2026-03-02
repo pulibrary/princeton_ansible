@@ -4,15 +4,11 @@
   ansible.builtin.file:
     path: /etc/init.d/solr
     state: absent
-  tags:
-    - service
 
 - name: solrcloud | add the systemd service
   ansible.builtin.copy:
     src: files/solr.service
     dest: /etc/systemd/system/solr.service
-  tags:
-    - service
   register: solr_systemd_changed
 
 - name: daemon-reload
@@ -21,8 +17,6 @@
     name: solr
     state: restarted
   when: solr_systemd_changed.changed
-  tags:
-    - service
 
 - name: solrcloud | Configure SolrCloud service
   ansible.builtin.service:
@@ -30,5 +24,3 @@
     state: "{{ solr_service_state }}"
     enabled: "{{ solr_service_enabled }}"
   changed_when: false
-  tags:
-    - service
