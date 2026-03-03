@@ -39,26 +39,17 @@ Using this role
   * The `nginx_production_rebuild.yml` playbook builds new NGINX Plus load balancers from scratch.
   * The `nginx_production.yml` playbook updates existing NGINX Plus load balancers.
 
-When updating existing load balancers, best practice is to run on a single host with `-limit`.
+When updating existing load balancers, the playbook forces you to run on a single host with `-limit`.
 
 Adding hosts
 ------------
 
 * To add a new host to the load balancers, you need to do more than just run this role. See the [Add Hosts Guide](ADDHOSTS.md) for details.
 
-Updating SSL or configuration with tags: quick focused updates
+Updating configuration quickly
 --------------------------------------------------------------
 
-The two tags in this role let you run subsets of its actions, so you can quickly update the load balancer in specific ways.
-
-  * The `SSL` tag adds or updates SSL Certs and Keys. To use it:
-    - add the new cert and key to the `files/ssl/` directory
-    - run the `nginx_production.yml` playbook with `-t SSL` (this runs tasks with `tags: SSL` and tasks with `tags: always`)
-
-  * The `update_conf` tag updates configuration for existing sites. To use it:
-    - add the configuration file to the `files/html/` directory
-    - run the `nginx_production.yml` playbook with `-t update_conf` (this runs tasks with `tags: update_conf` and tasks with `tags: always`)
-
+You can quickly update existing configuration files or add new ones using the `update_conf` tag. There is documentation on using this tag in the playbook itself, and also in the pul-it-handbook [documentation about nginxplus](https://github.com/pulibrary/pul-it-handbook/blob/main/services/nginxplus.md#only-upload-new-and-changed-config-files).
 
 Requirements
 ------------
@@ -195,12 +186,6 @@ nginx_stream_upload_dest: /etc/nginx/conf.d/
 nginx_html_upload_enable: false
 nginx_html_upload_src: www/*
 nginx_html_upload_dest: /usr/share/nginx/html
-# Upload SSL certificates and keys.
-nginx_ssl_upload_enable: false
-nginx_ssl_crt_upload_src: ssl/*.crt
-nginx_ssl_crt_upload_dest: /etc/ssl/certs/
-nginx_ssl_key_upload_src: ssl/*.key
-nginx_ssl_key_upload_dest: /etc/ssl/private/
 
 # Enable creating dynamic templated NGINX HTML demo websites.
 nginx_html_demo_template_enable: false
@@ -273,19 +258,6 @@ nginx_http_template:
         #name: Header-X
         #value: Value-X
         #always: false
-    ssl:
-      cert: /etc/ssl/certs/default.crt
-      key: /etc/ssl/private/default.key
-      dhparam: /etc/ssl/private/dh_param.pem
-      protocols: TLSv1 TLSv1.1 TLSv1.2
-      ciphers: HIGH:!aNULL:!MD5
-      prefer_server_ciphers: true
-      session_cache: none
-      session_timeout: 5m
-      disable_session_tickets: false
-      trusted_cert: /etc/ssl/certs/root_CA_cert_plus_intermediates.crt
-      stapling: true
-      stapling_verify: true
     web_server:
       locations:
         default:
@@ -381,15 +353,6 @@ nginx_http_template:
           #proxy_store: off
           #proxy_store_acccess: user:rw
           proxy_read_timeout: null
-          proxy_ssl:
-            cert: /etc/ssl/certs/proxy_default.crt
-            key: /etc/ssl/private/proxy_default.key
-            trusted_cert: /etc/ssl/certs/proxy_ca.crt
-            protocols: TLSv1 TLSv1.1 TLSv1.2
-            ciphers: HIGH:!aNULL:!MD5
-            verify: false
-            verify_depth: 1
-            session_reuse: true
           proxy_cache: frontend_proxy_cache
           proxy_temp_path:
             path: /var/cache/nginx/proxy/backend/temp
@@ -485,15 +448,6 @@ nginx_stream_template:
         proxy_timeout: 3s
         proxy_connect_timeout: 1s
         proxy_protocol: false
-        proxy_ssl:
-          cert: /etc/ssl/certs/proxy_default.crt
-          key: /etc/ssl/private/proxy_default.key
-          trusted_cert: /etc/ssl/certs/proxy_ca.crt
-          protocols: TLSv1 TLSv1.1 TLSv1.2
-          ciphers: HIGH:!aNULL:!MD5
-          verify: false
-          verify_depth: 1
-          session_reuse: true
         health_check_plus: false
     upstreams:
       upstream1:
