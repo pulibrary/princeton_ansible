@@ -43,7 +43,7 @@ job "reservoir" {
         env = true
         change_mode = "restart"
         data = <<EOF
-        {{- with nomadVar "nomad/jobs/reservoir-production" -}}
+        {{- with nomadVar "nomad/jobs/reservoir-sandbox" -}}
         DB_USERNAME = '{{ .DB_USERNAME }}'
         DB_PASSWORD = '{{ .DB_PASSWORD }}'
         DB_DATABASE = '{{ .DB_database }}'
