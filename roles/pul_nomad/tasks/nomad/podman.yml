@@ -99,7 +99,6 @@
             remote_src: true
             src: "{{ nomad_temp_dir.path }}/nomad-driver-podman_{{ nomad_podman_version }}_linux_{{ nomad_architecture }}.zip"
             dest: "/var/nomad/plugins/"
-            creates: "/var/nomad/plugins/nomad-driver-podman"
             mode: "0755"
           register: nomad_install
           notify:
@@ -112,7 +111,7 @@
           ansible.builtin.copy:
             content: "{{ nomad_podman_version }}"
             dest: "/var/nomad/.podman-plugin-version"
-          when: nomad_download is changed
+          when: nomad_install is changed
           tags: installation
       always:
         - name: 'pul_nomad | nomad | podman | Cleanup'
