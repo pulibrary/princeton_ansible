@@ -1,31 +1,60 @@
 job "reservoir" {
-    region = "global"
-    datacenters = ["dc1]
-    type = "service"
-    node_pool = "all"
+  region = "global"
+  datacenters = ["dc1]
+  type = "service"
+  node_pool = "staging"
 
-    group "grist-all" {
-        count = 1
+  group "reservoir-all" {
+    count = 1
 
-        network {
-            mode = "host"
-            port "http" {
-                static = 8081
-            }
-        }
+    network {
+      port "http" {
+        to = "8081"
+      }
+      port "https" {}
+    }
+
+    service {
+      port = "http"
+
+      check {
+        type = "http"
+        port = "http"
+        path = "/reservoir/upload-form"
+        interval = "10s"
+        timeout  = "2s"
+      }
     }
 
     task "reservoir" {
-        driver = "docker"
+    driver = "podman"
 
-        config {
-            image = "ghcr.io/pulibrary/reservoir-jit:latest-02-27-2026"
-            network_mode = "host"
-        }
-    }
+      config {
+        image = "ghcr.io/pulibrary/reservoir-jit:latest-02-27-2026"
+      }
 
-    resources {
+      resources {
         cpu = 2000
         memory = 2048
+      }
+
+      template {
+        destination = "${NOMAD_SECRETS_DIR}/env.vars"
+        env = true
+        change_mode = "restart"
+        data = <<EOF
+        {{- with nomadVar "nomad/jobs/reservoir-production" -}}
+        DB_USERNAME = '{{ .DB_USERNAME }}'
+        DB_PASSWORD = '{{ .DB_PASSWORD }}'
+        DB_DATABASE = '{{ .DB_database }}'
+        DB_HOST = '{{ .DB_HOST }}'
+        {{- end -}}
+        EOF
+      }
+
+      env {
+        
+      }
     }
+  }
 }
