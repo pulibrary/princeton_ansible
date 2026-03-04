@@ -27,7 +27,7 @@ job "reservoir" {
     }
 
     task "reservoir" {
-    driver = "podman"
+      driver = "podman"
 
       config {
         image = "ghcr.io/pulibrary/reservoir-jit:latest-02-27-2026"
@@ -50,10 +50,6 @@ job "reservoir" {
         DB_HOST = '{{ .DB_HOST }}'
         {{- end -}}
         EOF
-      }
-
-      env {
-        
       }
     }
   }
