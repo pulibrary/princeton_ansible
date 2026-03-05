@@ -1,6 +1,6 @@
 job "reservoir" {
   region = "global"
-  datacenters = ["dc1]
+  datacenters = ["dc1"]
   type = "service"
   node_pool = "staging"
 
