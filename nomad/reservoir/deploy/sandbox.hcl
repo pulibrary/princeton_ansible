@@ -2,7 +2,7 @@ job "reservoir" {
   region = "global"
   datacenters = ["dc1"]
   type = "service"
-  node_pool = "staging"
+  node_pool = "sandbox"
 
   group "reservoir-all" {
     count = 1
