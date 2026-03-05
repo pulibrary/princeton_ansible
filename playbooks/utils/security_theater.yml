@@ -21,33 +21,9 @@
     ansible.builtin.package_facts:
 
   tasks:
-  - name: check for the falcon log file
-    ansible.builtin.stat:
-      path: "/var/log/falcon-sensor.log"
-      # path: "/var/log/falcon-libbpf.log"
-    register: falcon_configured
-
-  - name: set to greenfield if falcon log is absent
-    ansible.builtin.set_fact:
-      install_type: greenfield
-      xdr_version: "{{ greenfield_xdr_version }}"
-    when:
-      - not falcon_configured.stat.exists
-    # when:
-    #   - "'falcon-sensor' not in ansible_facts.services"
-
-  - name: set to brownfield if falcon log is present
-    ansible.builtin.set_fact:
-      install_type: brownfield
-      xdr_version: "{{ brownfield_xdr_version }}"
-    when:
-      - falcon_configured.stat.exists
-    # when:
-    #   - "'falcon-sensor' not in ansible_facts.services"
-
   - name: Download the XDR deb file (Ubuntu)
     ansible.builtin.unarchive:
-      src: "https://pulmirror.princeton.edu/mirror/palo/{{ install_type }}/Linux-{{ xdr_version }}_deb.tar.gz"
+      src: "https://pulmirror.princeton.edu/mirror/palo/Linux-{{ xdr_version }}_deb.tar.gz"
       dest: /opt/
       creates: /opt/{{ cortex_install }}.deb
       remote_src: true
@@ -57,7 +33,7 @@
 
   - name: Download the XDR rpm file (RedHat)
     ansible.builtin.unarchive:
-      src: "https://pulmirror.princeton.edu/mirror/palo/{{ install_type }}/Linux-{{ xdr_version }}_rpm.tar.gz"
+      src: "https://pulmirror.princeton.edu/mirror/palo/Linux-{{ xdr_version }}_rpm.tar.gz"
       dest: /opt/
       creates: /opt/{{ cortex_install }}.rpm
       remote_src: true
@@ -101,6 +77,7 @@
       deb: "/opt/{{ cortex_install }}.deb"
     when:
       - ansible_os_family == "Debian"
+      - "'cortex-agent' not in ansible_facts.packages"
 
   # yum module equiv of sudo yum -y install for rocky
   - name: install XDR agent (RedHat)
