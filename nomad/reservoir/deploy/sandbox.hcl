@@ -35,8 +35,16 @@ job "reservoir" {
     task "reservoir" {
       driver = "podman"
 
+      env {
+        DB_USERNAME= "reservoir_db_user"
+        DB_PASSWORD= "reservoir_db_password"
+        DB_DATABASE= "reservoir_db"
+        DB_HOST= "lib-postgres-staging1.princeton.edu"
+      }
+
       config {
         image = "ghcr.io/pulibrary/reservoir-jit:latest-02-27-2026"
+        force_pull = true
       }
 
       resources {
@@ -44,23 +52,6 @@ job "reservoir" {
         memory = 2048
       }
 
-      template {
-        destination = "${NOMAD_SECRETS_DIR}/env.vars"
-        env = true
-        change_mode = "restart"
-        data = <<EOF
-      {{- if nomadVarExists "nomad/jobs/reservoir-sandbox" -}}
-      {{- with nomadVar "nomad/jobs/reservoir-sandbox" -}}
-      DB_USERNAME={{ .DB_USERNAME }}
-      DB_PASSWORD={{ .DB_PASSWORD }}
-      DB_DATABASE={{ .DB_DATABASE }}
-      DB_HOST={{ .DB_HOST }}
-      {{- end -}}
-      {{- else -}}
-      MISSING_NOMAD_VAR=1
-      {{- end -}}
-      EOF
-      }
     }
   }
 }
