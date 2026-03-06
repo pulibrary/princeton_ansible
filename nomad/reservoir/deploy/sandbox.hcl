@@ -1,3 +1,9 @@
+variable "branch_or_sha" {
+  type    = string
+  default = "main"
+}
+
+
 job "reservoir" {
   region = "global"
   datacenters = ["dc1"]
