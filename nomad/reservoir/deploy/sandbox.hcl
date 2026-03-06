@@ -49,13 +49,17 @@ job "reservoir" {
         env = true
         change_mode = "restart"
         data = <<EOF
-        {{- with nomadVar "nomad/jobs/reservoir-sandbox" -}}
-        DB_USERNAME = '{{ .DB_USERNAME }}'
-        DB_PASSWORD = '{{ .DB_PASSWORD }}'
-        DB_DATABASE = '{{ .DB_database }}'
-        DB_HOST = '{{ .DB_HOST }}'
-        {{- end -}}
-        EOF
+      {{- if nomadVarExists "nomad/jobs/reservoir-sandbox" -}}
+      {{- with nomadVar "nomad/jobs/reservoir-sandbox" -}}
+      DB_USERNAME={{ .DB_USERNAME }}
+      DB_PASSWORD={{ .DB_PASSWORD }}
+      DB_DATABASE={{ .DB_DATABASE }}
+      DB_HOST={{ .DB_HOST }}
+      {{- end -}}
+      {{- else -}}
+      MISSING_NOMAD_VAR=1
+      {{- end -}}
+      EOF
       }
     }
   }
