@@ -24,6 +24,8 @@
 
 # Set up consul/nomad auth
 - name: pul_nomad | nomad | Create consul auth method for Nomad
+  retries: 15
+  delay: 5
   community.general.consul_auth_method:
     name: 'nomad-workloads'
     type: 'jwt'
@@ -65,6 +67,7 @@
     token: '{{ consul_acl_management_token }}'
     policies:
       - name: "nomad-task-policy"
+  changed_when: false
   run_once: true
 # Bootstrap ACL
 # We have to do check/register/act here for idempotence because the nomad_token
