@@ -138,6 +138,11 @@
       register: nomad_node_status
       changed_when: false
 
+    - name: Get Podman info
+      ansible.builtin.command: podman info
+      register: podman_info
+      changed_when: false
+
     - name: Verify Nomad client is registered and ready
       ansible.builtin.assert:
         that:
@@ -152,6 +157,13 @@
           - "'podman' in nomad_node_status.stdout"
         fail_msg: "Podman driver not available on Nomad client"
         success_msg: "Podman driver is available"
+
+    - name: Verify podman is set up with sqlite
+      ansible.builtin.assert:
+        that:
+          - "'sqlite' in podman_info.stdout"
+        fail_msg: "Podman not configured to use sqlite"
+        success_msg: "Podman configured to use sqlite"
 
 - name: Verify Consul-Nomad Integration
   hosts: nomad_servers[0]
