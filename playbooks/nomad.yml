@@ -27,6 +27,7 @@
     - ../group_vars/nomad/circleci_deployer/vault.yml
     - ../group_vars/nomad/analytics/vault.yml
     - ../group_vars/nomad/nodemation/vault.yml
+    - ../group_vars/nomad/reservoir/vault.yml
 
   pre_tasks:
     - name: "Load app vars: staging then production"
@@ -37,6 +38,10 @@
         - ansible.builtin.include_vars:
             file: "../group_vars/nomad/{{ item }}/production.yml"
           loop: "{{ nomad_enabled_apps }}"
+        - ansible.builtin.include_vars:
+            file: "../group_vars/nomad/{{ item }}/sandbox.yml"
+          loop: "{{ nomad_enabled_apps }}"
+          when: runtime_env == 'sandbox'
         - ansible.builtin.include_vars:
             file: "../group_vars/nomad/{{ item }}/vault.yml"
           loop: "{{ nomad_enabled_apps }}"
