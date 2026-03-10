@@ -26,7 +26,7 @@ job "reservoir" {
       check {
         type = "http"
         port = "http"
-        path = "/reservoir/upload-form"
+        path = "/reservoir"
         interval = "10s"
         timeout  = "2s"
       }
