@@ -1,0 +1,51 @@
+- name: Run just the common role, to install tools and common configuration
+  hosts: all
+  # hosts: staging:qa:production
+  remote_user: pulsys
+  become: true
+  vars:
+    running_on_server: true
+
+  pre_tasks:
+    - name: stop playbook if you didn't pass --limit
+      fail:
+        msg: "you must use -l or --limit"
+      when: ansible_limit is not defined
+      run_once: true
+
+  tasks:
+    - name: Ensure /usr/share/keyrings directory exists
+      ansible.builtin.file:
+        path: /usr/share/keyrings
+        state: directory
+        mode: '0755'
+
+    # --- FIX YARN ---
+    - name: Download Yarn GPG key
+      ansible.builtin.shell: |
+        curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | gpg --dearmor -o /usr/share/keyrings/yarn-archive-keyring.gpg
+      args:
+        creates: /usr/share/keyrings/yarn-archive-keyring.gpg
+
+    - name: Purge ALL existing Yarn configurations
+      shell: grep -l "dl.yarnpkg.com" /etc/apt/sources.list.d/* | xargs rm -f
+      failed_when: false
+      become: yes
+
+    - name: Create clean pul_yarn.list
+      ansible.builtin.apt_repository:
+        filename: pul_yarn
+        repo: "deb [signed-by=/usr/share/keyrings/yarn-archive-keyring.gpg] https://dl.yarnpkg.com/debian/ stable main"
+        state: present
+        update_cache: no
+
+    # --- UPGRADE ---
+    - name: Ubuntu | Upgrade all packages
+      ansible.builtin.apt:
+        update_cache: true
+        upgrade: dist
+        force_apt_get: true
+
+    - name: Ubuntu | remove dependencies
+      ansible.builtin.apt:
+        autoremove: true
