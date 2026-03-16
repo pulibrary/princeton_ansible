@@ -15,7 +15,7 @@ job "reservoir" {
 
     network {
       port "http" {
-        to = "8081"
+        to = 8081
       }
       port "https" {}
     }
