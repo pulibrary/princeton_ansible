@@ -57,10 +57,10 @@
   ansible.builtin.lineinfile:
     path: /etc/fuse.conf
     regexp: '^\s*#?\s*user_allow_other\s*$'
-    line: 'user_allow_other'
+    line: "user_allow_other"
     state: present
     create: true
-    mode: '0644'
+    mode: "0644"
   when: running_on_server
   notify: reload systemd
 
@@ -112,18 +112,20 @@
       [Install]
       WantedBy=multi-user.target
     dest: /etc/systemd/system/solr-gcs-backup.service
-    mode: '0644'
+    mode: "0644"
     owner: root
     group: root
   when: running_on_server
-  notify: reload systemd
+  notify:
+    - reload systemd
+    - restart gcsfuse
 
 - name: Solrcloud | Enable and start gcsfuse service
   ansible.builtin.systemd:
     name: solr-gcs-backup
-    enabled: yes
-    state: started
-    daemon_reload: yes
+    enabled: true
+    state: restarted
+    daemon_reload: true
   when: running_on_server
 
 # Verify mount is working
@@ -191,7 +193,7 @@
 # Set up log rotation for gcsfuse logs
 - name: Solrcloud | Configure gcsfuse log rotation
   ansible.builtin.template:
-    src: '../../common/templates/logrotate_rules.j2'
+    src: "../../common/templates/logrotate_rules.j2"
     dest: "/etc/logrotate.d/{{ item.name | basename }}"
     mode: "0644"
     owner: deploy
