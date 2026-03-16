@@ -57,10 +57,10 @@
   ansible.builtin.lineinfile:
     path: /etc/fuse.conf
     regexp: '^\s*#?\s*user_allow_other\s*$'
-    line: 'user_allow_other'
+    line: "user_allow_other"
     state: present
     create: true
-    mode: '0644'
+    mode: "0644"
   when: running_on_server
   notify: reload systemd
 
@@ -88,8 +88,8 @@
       User={{ solr_user | default('deploy') }}
       Group={{ solr_group | default('deploy') }}
       Environment="GOOGLE_APPLICATION_CREDENTIALS=/etc/solr-backup-account-key.json"
-      ExecStartPre=/usr/bin/mkdir -p /solr/data/cloud_backup
-      ExecStartPre=/bin/chown {{ solr_user | default('deploy') }}:{{ solr_group | default('deploy') }} /solr/data/cloud_backup
+      ExecStartPre=/usr/bin/mkdir -p /solr/backups/cloud_backup
+      ExecStartPre=/bin/chown {{ solr_user | default('deploy') }}:{{ solr_group | default('deploy') }} /solr/backups/cloud_backup
       ExecStart=/usr/bin/gcsfuse \
         --foreground \
         --uid=1001 \
@@ -104,38 +104,40 @@
         --key-file=/etc/solr-backup-account-key.json \
         -o allow_other \
         {{ gcs_bucket_name | default('solr-backups') }} \
-        /solr/data/cloud_backup
-      ExecStop=/bin/fusermount -u /solr/data/cloud_backup
+        /solr/backups/cloud_backup
+      ExecStop=/bin/fusermount -u /solr/backups/cloud_backup
       Restart=on-failure
       RestartSec=10
 
       [Install]
       WantedBy=multi-user.target
     dest: /etc/systemd/system/solr-gcs-backup.service
-    mode: '0644'
+    mode: "0644"
     owner: root
     group: root
   when: running_on_server
-  notify: reload systemd
+  notify:
+    - reload systemd
+    - restart gcsfuse
 
 - name: Solrcloud | Enable and start gcsfuse service
   ansible.builtin.systemd:
     name: solr-gcs-backup
-    enabled: yes
-    state: started
-    daemon_reload: yes
+    enabled: true
+    state: restarted
+    daemon_reload: true
   when: running_on_server
 
 # Verify mount is working
 - name: Solrcloud | Wait for GCS mount to be available
   ansible.builtin.wait_for:
-    path: /solr/data/cloud_backup
+    path: /solr/backups/cloud_backup
     state: present
     timeout: 30
   when: running_on_server
 
 - name: Solrcloud | Verify GCS mount is active
-  ansible.builtin.command: mountpoint -q /solr/data/cloud_backup
+  ansible.builtin.command: mountpoint -q /solr/backups/cloud_backup
   register: mount_check
   changed_when: false
   failed_when: false
@@ -191,7 +193,7 @@
 # Set up log rotation for gcsfuse logs
 - name: Solrcloud | Configure gcsfuse log rotation
   ansible.builtin.template:
-    src: '../../common/templates/logrotate_rules.j2'
+    src: "../../common/templates/logrotate_rules.j2"
     dest: "/etc/logrotate.d/{{ item.name | basename }}"
     mode: "0644"
     owner: deploy
