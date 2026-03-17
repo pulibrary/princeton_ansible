@@ -22,7 +22,7 @@ job "circleci-runner" {
         servers = ["10.88.0.1", "128.112.129.209", "8.8.8.8", "8.8.4.4"]
       }
     }
-    
+
     restart {
       attempts = 10
       delay = "5s"
@@ -61,7 +61,7 @@ job "circleci-runner" {
       }
       resources {
         cpu    = 4000
-        memory = 3072
+        memory = 4096
       }
     }
   }
