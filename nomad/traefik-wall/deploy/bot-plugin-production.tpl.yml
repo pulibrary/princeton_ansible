@@ -56,9 +56,14 @@ http:
     append-discovery-regex:
       redirectRegex:
         # Matches http://x.x.x.x:yyyy/discovery?f[]=
-        # Matches http://x.x.x.x:yyyy/discovery/catalog?something&f[]=
-        regex: //([^/]*)/discovery/\?([^&]*&)*?f(.*)
+        # Matches http://x.x.x.x:yyyy/discovery?something&f[]=
+        # Matches http://x.x.x.x:yyyy/discovery?per_page=50&search_field=all_fields
+        # Matches http://x.x.x.x:yyyy/discovery?something&per_page=50&search_field=all_fields
+        regex: //([^/]*)/discovery/\?(.*((f\[)|(range\[)|(search_field=)|(sort=)|(f%)|(range%)).*)
         # Converts to http://x.x.x.x:yyyy/discovery/catalog?f[]=
         # or http://x.x.x.x:yyyy/discovery/catalog?something&f[]=
-        replacement: //${1}/discovery/catalog?{2}f${2}
+        #
+        # Notice although PDC Discovery searches are usually at /discovery?whatever
+        # Blacklight also recognizes them under /discovery/catalog?whatever
+        replacement: //${1}/discovery/catalog?${2}
 {{- end -}}
