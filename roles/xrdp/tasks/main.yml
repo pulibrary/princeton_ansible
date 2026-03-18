@@ -15,17 +15,37 @@
     state: present
     update_cache: true
 
-- name: Xrdp - install LXQt packages
-  ansible.builtin.apt:
-    name: "{{ xrdp_packages_lxqt }}"
-    state: present
-  when: xrdp_desktop == 'lxqt'
-
 - name: Xrdp - install XFCE packages
   ansible.builtin.apt:
     name: "{{ xrdp_packages_xfce }}"
     state: present
-  when: xrdp_desktop == 'xfce'
+    update_cache: true
+
+- name: Xrdp - remove xfce4-screensaver
+  ansible.builtin.apt:
+    name: xfce4-screensaver
+    state: absent
+
+- name: Xrdp - disable XFCE screensaver and power management (system defaults)
+  ansible.builtin.copy:
+    dest: /etc/xdg/xfce4/xfconf/xfce-perchannel-xml/xfce4-power-manager.xml
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      <?xml version="1.0" encoding="UTF-8"?>
+      <channel name="xfce4-power-manager" version="1.0">
+        <property name="xfce4-power-manager" type="empty">
+          <property name="blank-on-ac" type="int" value="0"/>
+          <property name="blank-on-battery" type="int" value="0"/>
+          <property name="dpms-enabled" type="bool" value="false"/>
+          <property name="dpms-on-ac-off" type="int" value="0"/>
+          <property name="dpms-on-ac-sleep" type="int" value="0"/>
+          <property name="dpms-on-battery-off" type="int" value="0"/>
+          <property name="dpms-on-battery-sleep" type="int" value="0"/>
+          <property name="logind-handle-lid-switch" type="bool" value="false"/>
+        </property>
+      </channel>
 
 - name: Ensure log files exist and are writable by xrdp
   ansible.builtin.file:
