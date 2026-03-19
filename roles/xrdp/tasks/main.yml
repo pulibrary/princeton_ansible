@@ -1,15 +1,7 @@
 ---
 # roles/xrdp
-- name: Xrdp | Allow xrdp from 128.112.0.0/16
-  community.general.ufw:
-    rule: allow
-    port: "3389"
-    proto: tcp
-    src: "128.112.0.0/16"
-  when:
-    - running_on_server
 
-- name: Xrdp - install common XRDP packages
+- name: Xrdp - install XRDP common packages
   ansible.builtin.apt:
     name: "{{ xrdp_packages_common }}"
     state: present
@@ -21,12 +13,56 @@
     state: present
     update_cache: true
 
-- name: Xrdp - remove xfce4-screensaver
+- name: Xrdp - read current default terminal emulator
+  ansible.builtin.command: readlink -f /usr/bin/x-terminal-emulator
+  register: _xterm_link
+  changed_when: false
+  failed_when: false
+
+- name: Xrdp - set default terminal emulator to xfce4-terminal
+  ansible.builtin.command: update-alternatives --set x-terminal-emulator /usr/bin/xfce4-terminal.wrapper
+  when:
+    - _xterm_link.stdout is defined
+    - _xterm_link.stdout != '/usr/bin/xfce4-terminal.wrapper'
+  changed_when: true
+  failed_when: false
+
+- name: Xrdp - ensure XFCE session defaults directory exists
+  ansible.builtin.file:
+    path: /etc/xdg/xfce4/xfconf/xfce-perchannel-xml
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Xrdp - set XFCE TerminalEmulator default to xfce4-terminal
+  ansible.builtin.copy:
+    dest: /etc/xdg/xfce4/xfconf/xfce-perchannel-xml/xfce4-session.xml
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      <?xml version="1.0" encoding="UTF-8"?>
+      <channel name="xfce4-session" version="1.0">
+        <property name="general" type="empty">
+          <property name="TerminalEmulator" type="string" value="xfce4-terminal"/>
+        </property>
+      </channel>
+
+- name: Xrdp - remove xfce4-screensaver (avoid lock/blank)
   ansible.builtin.apt:
     name: xfce4-screensaver
     state: absent
 
-- name: Xrdp - disable XFCE screensaver and power management (system defaults)
+- name: Xrdp - ensure XFCE xconf defaults directory exists
+  ansible.builtin.file:
+    path: /etc/xdg/xfce4/xfconf/xfce-perchannel-xml
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Xrdp - disable XFCE power management / DPMS (system defaults)
   ansible.builtin.copy:
     dest: /etc/xdg/xfce4/xfconf/xfce-perchannel-xml/xfce4-power-manager.xml
     owner: root
@@ -47,30 +83,16 @@
         </property>
       </channel>
 
-- name: Ensure log files exist and are writable by xrdp
-  ansible.builtin.file:
-    path: "{{ item }}"
-    state: touch
-    owner: xrdp
-    group: adm
-    mode: "0640"
-  loop:
-    - /var/log/xrdp.log
-    - /var/log/xrdp-sesman.log
-
-- name: Configure xrdp globals
+- name: Xrdp - configure XRDP Globals port
   ansible.builtin.ini_file:
     path: /etc/xrdp/xrdp.ini
     section: Globals
-    option: "{{ item.option }}"
-    value: "{{ item.value }}"
+    option: port
+    value: "{{ xrdp_port | int }}"
     no_extra_spaces: true
-  loop:
-    - { option: address, value: "0.0.0.0" }
-    - { option: port,    value: "3389" }
   notify: restart xrdp
 
-- name: Configure xrdp logging
+- name: Configure XRDP logging (syslog)
   ansible.builtin.ini_file:
     path: /etc/xrdp/xrdp.ini
     section: Logging
@@ -78,13 +100,12 @@
     value: "{{ item.value }}"
     no_extra_spaces: true
   loop:
-    - { option: LogFile,      value: "/var/log/xrdp.log" }
     - { option: LogLevel,     value: "INFO" }
     - { option: EnableSyslog, value: "true" }
     - { option: SyslogLevel,  value: "INFO" }
   notify: restart xrdp
 
-- name: Configure Xorg backend (must not be 3389)
+- name: Xrdp - configure XRDP Xorg backend
   ansible.builtin.ini_file:
     path: /etc/xrdp/xrdp.ini
     section: Xorg
@@ -95,9 +116,10 @@
     - { option: lib,  value: "libxup.so" }
     - { option: ip,   value: "127.0.0.1" }
     - { option: port, value: "-1" }
+    - { option: code, value: "20" }
   notify: restart xrdp
 
-- name: Xrdp - configure startwm.sh to launch desktop session for XRDP logins
+- name: Xrdp - configure startwm.sh for XFCE
   ansible.builtin.template:
     src: startwm.sh.j2
     dest: /etc/xrdp/startwm.sh
@@ -106,25 +128,7 @@
     mode: "0755"
   notify: restart xrdp
 
-- name: Xrdp -  disable Wayland in GDM (Ubuntu GNOME)
-  when: xrdp_disable_wayland_in_gdm | bool
-  block:
-    - name: Check if /etc/gdm3/custom.conf exists
-      ansible.builtin.stat:
-        path: /etc/gdm3/custom.conf
-      register: _gdm_custom
-
-    - name: Set WaylandEnable=false in /etc/gdm3/custom.conf
-      ansible.builtin.lineinfile:
-        path: /etc/gdm3/custom.conf
-        regexp: '^\s*#?\s*WaylandEnable='
-        line: "WaylandEnable=false"
-        create: false
-        backrefs: false
-      when: _gdm_custom.stat.exists
-      notify: restart gdm3
-
-- name: Open firewall via ufw
+- name: Xrdp - open firewall via ufw
   when: xrdp_manage_ufw | bool
   block:
     - name: Check ufw exists
@@ -134,7 +138,7 @@
       failed_when: false
 
     - name: Allow XRDP port (no source restriction)
-      ansible.builtin.command: "ufw allow {{ xrdp_port }}/tcp"
+      ansible.builtin.command: "ufw allow {{ xrdp_port | int }}/tcp"
       when:
         - _ufw.rc == 0
         - xrdp_ufw_allow_from | length == 0
@@ -143,7 +147,7 @@
       failed_when: false
 
     - name: Allow XRDP port (source restricted)
-      ansible.builtin.command: "ufw allow from {{ xrdp_ufw_allow_from }} to any port {{ xrdp_port }} proto tcp"
+      ansible.builtin.command: "ufw allow from {{ xrdp_ufw_allow_from }} to any port {{ xrdp_port | int }} proto tcp"
       when:
         - _ufw.rc == 0
         - xrdp_ufw_allow_from | length > 0
@@ -151,17 +155,11 @@
       changed_when: "'Skipping' not in (_ufw_allow_src.stdout | default(''))"
       failed_when: false
 
-- name: Ensure XRDP log file exists and is writable
-  ansible.builtin.file:
-    path: /var/log/xrdp.log
-    state: touch
-    owner: xrdp
-    group: adm
-    mode: "0640"
-  notify: restart xrdp
-
-- name: Xrdp - enable and start xrdp
+- name: Xrdp - enable and start XRDP services
   ansible.builtin.service:
-    name: xrdp
+    name: "{{ item }}"
     enabled: true
     state: started
+  loop:
+    - xrdp-sesman
+    - xrdp
