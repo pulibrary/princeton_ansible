@@ -9,6 +9,7 @@
 
   vars:
     slack_alerts_channel: "#infrastructure"
+    vm_template_name: "{{ vm_template | default('template_jammy_spring_2024') }}"
 
   vars_files:
     - ../../group_vars/all/vault.yml
@@ -36,47 +37,11 @@
         gather_network_info: true
       register: old_vm_net_info
 
-    - name: Gather disk info on VM to replace (optional)
-      community.vmware.vmware_guest_disk:
-        hostname: "{{ vcenter_hostname }}"
-        username: "{{ vcenter_username }}"
-        password: "{{ vcenter_password }}"
-        validate_certs: false
-        datacenter: "{{ vcenter_datacenter }}"
-        name: "{{ replacement_vm }}"
-      register: old_vm_disk_info
-      ignore_errors: true
-
     - name: Build VM FQDN
       set_fact:
         vm_fqdn: "{{ replacement_vm }}.{{ dns_domain }}"
 
-    - name: Compute datastore name robustly
-      set_fact:
-        vm_datastore_name: >-
-          {%- set vm = old_vm_info.virtual_machines[0] -%}
-          {%- if vm.datastore is defined -%}
-            {%- if vm.datastore is string -%}
-              {{ vm.datastore }}
-            {%- elif vm.datastore is sequence -%}
-              {{ vm.datastore | first }}
-            {%- elif vm.datastore is mapping and 'name' in vm.datastore -%}
-              {{ vm.datastore.name }}
-            {%- else -%}
-              datastore1
-            {%- endif -%}
-          {%- elif vm.datastore_url is defined -%}
-            {%- set dsu = (vm.datastore_url | first) if (vm.datastore_url is sequence) else vm.datastore_url -%}
-            {%- if dsu is mapping and 'name' in dsu -%}
-              {{ dsu.name }}
-            {%- else -%}
-              datastore1
-            {%- endif -%}
-          {%- else -%}
-            datastore1
-          {%- endif -%}
-
-    - name: Get current VM guest info with hardware details
+    - name: Get current VM hardware details
       community.vmware.vmware_guest_info:
         hostname: "{{ vcenter_hostname }}"
         username: "{{ vcenter_username }}"
@@ -87,8 +52,6 @@
         schema: vsphere
         properties:
           - config.hardware.device
-          - config.hardware.numCPU
-          - config.hardware.memoryMB
       register: vm_hardware_info
 
     - name: Get template hardware details
@@ -98,118 +61,73 @@
         password: "{{ vcenter_password }}"
         validate_certs: false
         datacenter: "{{ vcenter_datacenter }}"
-        name: "{{ vm_template | default('2026-jammy-0317-template') }}"
+        name: "{{ vm_template_name }}"
         schema: vsphere
         properties:
           - config.hardware.device
       register: template_hardware_info
 
-    - name: Build disk config from current VM hardware
+    - name: Build disk config from current VM
       set_fact:
         vm_disk_config: >-
           {%- set disks = [] -%}
-          {%- set devices = vm_hardware_info.instance.config.hardware.device | default([]) -%}
-          {%- for device in devices -%}
+          {%- for device in vm_hardware_info.instance.config.hardware.device | default([]) -%}
             {%- if device._vimtype == 'vim.vm.device.VirtualDisk' -%}
-              {%- set disk_size_gb = (device.capacityInKB / 1024 / 1024) | round(0, 'ceil') | int -%}
-              {%- set unit_num = device.unitNumber | default(loop.index0) -%}
               {%- set _ = disks.append({
-                'size_gb': disk_size_gb,
+                'size_gb': (device.capacityInKB / 1024 / 1024) | round(0, 'ceil') | int,
+                'unit_number': device.unitNumber | default(loop.index0),
                 'controller_type': 'paravirtual',
-                'controller_number': 0,
-                'unit_number': unit_num,
-                'datastore': vm_datastore_name
+                'controller_number': 0
               }) -%}
             {%- endif -%}
           {%- endfor -%}
-          {%- if disks | length == 0 -%}
-            {%- set total_storage_kb = (old_vm_info.virtual_machines[0].allocated.storage / 1024) | int -%}
-            {%- set disk_size_gb = (total_storage_kb / 1024 / 1024) | round(0, 'ceil') | int -%}
-            {%- set _ = disks.append({
-              'size_gb': disk_size_gb,
-              'controller_type': 'paravirtual',
-              'controller_number': 0,
-              'unit_number': 0,
-              'datastore': vm_datastore_name
-            }) -%}
-          {%- endif -%}
           {{ disks | sort(attribute='unit_number') }}
 
-    - name: Build disk config from template hardware
+    - name: Build disk config from template
       set_fact:
         template_disk_config: >-
           {%- set disks = [] -%}
-          {%- set devices = template_hardware_info.instance.config.hardware.device | default([]) -%}
-          {%- for device in devices -%}
+          {%- for device in template_hardware_info.instance.config.hardware.device | default([]) -%}
             {%- if device._vimtype == 'vim.vm.device.VirtualDisk' -%}
-              {%- set disk_size_gb = (device.capacityInKB / 1024 / 1024) | round(0, 'ceil') | int -%}
-              {%- set unit_num = device.unitNumber | default(loop.index0) -%}
               {%- set _ = disks.append({
-                'size_gb': disk_size_gb,
-                'controller_type': 'paravirtual',
-                'controller_number': 0,
-                'unit_number': unit_num
+                'size_gb': (device.capacityInKB / 1024 / 1024) | round(0, 'ceil') | int,
+                'unit_number': device.unitNumber | default(loop.index0)
               }) -%}
             {%- endif -%}
           {%- endfor -%}
           {{ disks | sort(attribute='unit_number') }}
 
-    - name: Print source and template disk configurations
-      ansible.builtin.debug:
-        msg:
-          - "Existing VM disks: {{ vm_disk_config | length }}"
-          - "{% for disk in vm_disk_config %}Existing disk {{ loop.index }}: {{ disk.size_gb }}GB on unit {{ disk.unit_number }}{% endfor %}"
-          - "Template disks: {{ template_disk_config | length }}"
-          - "{% for disk in template_disk_config %}Template disk {{ loop.index }}: {{ disk.size_gb }}GB on unit {{ disk.unit_number }}{% endfor %}"
-
-    - name: Guard - fail if template has more disks than current VM
+    - name: Fail if template has more disks than current VM
       ansible.builtin.fail:
         msg: >-
-          Refusing to continue: template {{ vm_template | default('template_jammy_spring_2024') }}
-          has {{ template_disk_config | length }} disk(s) but source VM {{ replacement_vm }}
-          has {{ vm_disk_config | length }} disk(s). This playbook cannot safely reconcile that difference automatically.
+          Template {{ vm_template_name }} has {{ template_disk_config | length }} disk(s)
+          but {{ replacement_vm }} has {{ vm_disk_config | length }} disk(s).
+          Refusing to continue.
       when: template_disk_config | length > vm_disk_config | length
 
     - name: Build map of template disks by unit number
       set_fact:
-        template_disk_map: "{{ template_disk_map | default({}) | combine({ (item.unit_number | string): item }) }}"
+        template_disk_map: "{{ template_disk_map | default({}) | combine({ (item.unit_number | string): item.size_gb }) }}"
       loop: "{{ template_disk_config }}"
 
-    - name: Guard - fail if any source disk is smaller than matching template disk
-      ansible.builtin.fail:
-        msg: >-
-          Refusing to continue before any destructive action:
-          requested disk unit {{ item.unit_number }} from source VM is {{ item.size_gb }}GB,
-          but template disk is {{ template_disk_map[item.unit_number | string].size_gb }}GB.
-          Shrinking template disks is not allowed by vSphere.
-      when:
-        - template_disk_map[item.unit_number | string] is defined
-        - item.size_gb | int < template_disk_map[item.unit_number | string].size_gb | int
-      loop: "{{ vm_disk_config }}"
-
-    - name: Build safe disk config using the larger of source and template
+    - name: Build safe disk config
       set_fact:
         vm_disk_config_safe: >-
           {%- set disks = [] -%}
           {%- for disk in vm_disk_config -%}
-            {%- set tmpl = template_disk_map[disk.unit_number | string] if (template_disk_map[disk.unit_number | string] is defined) else {} -%}
-            {%- set safe_size = [disk.size_gb, (tmpl.size_gb | default(disk.size_gb))] | max -%}
+            {%- set template_size = template_disk_map[disk.unit_number | string] | default(disk.size_gb) -%}
             {%- set _ = disks.append({
-              'size_gb': safe_size,
-              'controller_type': 'paravirtual',
-              'controller_number': 0,
+              'size_gb': [disk.size_gb, template_size] | max,
               'unit_number': disk.unit_number,
-              'datastore': disk.datastore
+              'controller_type': 'paravirtual',
+              'controller_number': 0
             }) -%}
           {%- endfor -%}
           {{ disks | sort(attribute='unit_number') }}
 
-    - name: Print safe disk configuration to be created
+    - name: Show safe disk config
       ansible.builtin.debug:
-        msg:
-          - "Number of disks to create: {{ vm_disk_config_safe | length }}"
-          - "Safe disk configuration:"
-          - "{% for disk in vm_disk_config_safe %}Disk {{ loop.index }}: {{ disk.size_gb }}GB on unit {{ disk.unit_number }}{% endfor %}"
+        var: vm_disk_config_safe
 
     - name: Print out warning
       ansible.builtin.debug:
@@ -248,7 +166,7 @@
         object_moid: "{{ old_vm_info.virtual_machines[0].moid }}"
         object_type: VirtualMachine
 
-    - name: Create a new virtual machine from a template
+    - name: Create replacement VM from template
       community.vmware.vmware_guest:
         hostname: "{{ vcenter_hostname }}"
         username: "{{ vcenter_username }}"
@@ -258,8 +176,8 @@
         cluster: "{{ vcenter_cluster }}"
         folder: "{{ old_vm_info.virtual_machines[0].folder }}"
         name: "{{ replacement_vm }}"
+        template: "{{ vm_template_name }}"
         state: powered-on
-        template: "{{ vm_template | default('template_jammy_spring_2024') }}"
         disk: "{{ vm_disk_config_safe }}"
         hardware:
           memory_mb: "{{ old_vm_info.virtual_machines[0].allocated.memory | int | default(16384) }}"
@@ -268,16 +186,12 @@
           scsi: paravirtual
           version: latest
           boot_firmware: efi
-        cdrom:
-          - controller_number: 0
-            unit_number: 0
-            state: present
         networks:
           - name: "{{ old_vm_net_info.network_info[0].network_name }}"
             mac: "{{ old_vm_net_info.network_info[0].mac_address }}"
             connected: true
-            device_type: vmxnet3
             start_connected: true
+            device_type: vmxnet3
         wait_for_ip_address: true
         wait_for_ip_address_timeout: 120
 
@@ -381,7 +295,7 @@
           - Status: {% if vm_dest_folder is search("ToBeDeleted") %}Deleted{% else %}Moved to {{ vm_dest_folder }}{% endif %}
 
           TEMPLATE:
-          - Name: {{ vm_template | default('template_jammy_spring_2024') }}
+          - Name: {{ vm_template_name }}
           - Disks: {{ template_disk_config | length }}
           {% for disk in template_disk_config %}
           - Template Disk {{ loop.index }}: {{ disk.size_gb }}GB (unit {{ disk.unit_number }})
