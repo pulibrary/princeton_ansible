@@ -41,6 +41,33 @@
       set_fact:
         vm_fqdn: "{{ replacement_vm }}.{{ dns_domain }}"
 
+    - name: Compute datastore name robustly
+      set_fact:
+        vm_datastore_name: >-
+          {%- set vm = old_vm_info.virtual_machines[0] -%}
+          {%- if vm.datastore is defined -%}
+            {%- if vm.datastore is string -%}
+              {{ vm.datastore }}
+            {%- elif vm.datastore is sequence and not (vm.datastore is string) -%}
+              {{ vm.datastore | first }}
+            {%- elif vm.datastore is mapping and 'name' in vm.datastore -%}
+              {{ vm.datastore.name }}
+            {%- else -%}
+              datastore1
+            {%- endif -%}
+          {%- elif vm.datastore_url is defined -%}
+            {%- set dsu = (vm.datastore_url | first) if (vm.datastore_url is sequence and not (vm.datastore_url is string)) else vm.datastore_url -%}
+            {%- if dsu is mapping and 'name' in dsu -%}
+              {{ dsu.name }}
+            {%- elif dsu is string and dsu.startswith('[') -%}
+              {{ dsu.split(']')[0] | regex_replace('^\\[', '') }}
+            {%- else -%}
+              datastore1
+            {%- endif -%}
+          {%- else -%}
+            datastore1
+          {%- endif -%}
+
     - name: Get current VM hardware details
       community.vmware.vmware_guest_info:
         hostname: "{{ vcenter_hostname }}"
@@ -77,7 +104,8 @@
                 'size_gb': (device.capacityInKB / 1024 / 1024) | round(0, 'ceil') | int,
                 'unit_number': device.unitNumber | default(loop.index0),
                 'controller_type': 'paravirtual',
-                'controller_number': 0
+                'controller_number': 0,
+                'datastore': vm_datastore_name
               }) -%}
             {%- endif -%}
           {%- endfor -%}
@@ -120,7 +148,8 @@
               'size_gb': [disk.size_gb, template_size] | max,
               'unit_number': disk.unit_number,
               'controller_type': 'paravirtual',
-              'controller_number': 0
+              'controller_number': 0,
+              'datastore': vm_datastore_name
             }) -%}
           {%- endfor -%}
           {{ disks | sort(attribute='unit_number') }}
@@ -134,7 +163,7 @@
         msg:
           - Ansible will now move and power off the current {{ old_vm_info.virtual_machines[0].guest_name }} VM.
           - Then create a replacement in the {{ old_vm_net_info.network_info[0].network_name }} network.
-          - The new VM will have {{ vm_disk_config_safe | length }} disk(s) using a template-safe configuration.
+          - The new VM will have {{ vm_disk_config_safe | length }} disk(s) using a template-safe configuration on datastore {{ vm_datastore_name }}.
 
     - name: Move old VM to a different folder (ToBeDeleted, Forensics)
       community.vmware.vmware_guest_move:
