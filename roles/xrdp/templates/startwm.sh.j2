@@ -5,7 +5,7 @@ set -u
 
 LOG="/tmp/xrdp-startwm-${USER:-unknown}-${DISPLAY:-no_display}.log"
 exec >>"$LOG" 2>&1
-echo "---- $(date -Is) startwm.sh starting: user=${USER:-} display=${DISPLAY:-} ----"
+echo "---- $(date -Is) startwm.sh starting: user=${USER:-} display=${DISPLAY:-} uid=$(id -u) ----"
 
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
@@ -15,9 +15,21 @@ export DESKTOP_SESSION=xfce
 export XDG_CURRENT_DESKTOP=XFCE
 export XDG_SESSION_DESKTOP=xfce
 
-# If systemd-logind has set this up, keep it; otherwise leave unset
-if [[ -z "${XDG_RUNTIME_DIR:-}" ]] && [[ -d "/run/user/$(id -u)" ]]; then
-  export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+uid="$(id -u)"
+gid="$(id -g)"
+
+if [[ -d /run/user ]] && [[ ! -d "/run/user/${uid}" ]]; then
+  mkdir -p "/run/user/${uid}" || true
+fi
+
+if [[ -d "/run/user/${uid}" ]]; then
+  chown "${uid}:${gid}" "/run/user/${uid}" || true
+  chmod 0700 "/run/user/${uid}" || true
+  export XDG_RUNTIME_DIR="/run/user/${uid}"
+
+  mkdir -p "${XDG_RUNTIME_DIR}/gvfs" || true
+  chown "${uid}:${gid}" "${XDG_RUNTIME_DIR}/gvfs" || true
+  chmod 0700 "${XDG_RUNTIME_DIR}/gvfs" || true
 fi
 
 # Disable blanking/DPMS for this XRDP session
@@ -25,16 +37,11 @@ xset s off || true
 xset s noblank || true
 xset -dpms || true
 
-# Start XFCE under a DBus session if possible
-if command -v startxfce4 >/dev/null 2>&1; then
-  if command -v dbus-run-session >/dev/null 2>&1; then
-    exec dbus-run-session -- startxfce4
-  fi
-  if command -v dbus-launch >/dev/null 2>&1; then
-    eval "$(dbus-launch --sh-syntax)"
-  fi
-  exec startxfce4
+if ! command -v startxfce4 >/dev/null 2>&1; then
+  echo "startxfce4 not found. Install xfce4/xfce4-session." >&2
+  exit 127
 fi
 
-echo "startxfce4 not found. Install xfce4/xfce4-session." >&2
-exit 127
+# Start XFCE with a proper per-session dbus
+command -v dbus-run-session >/dev/null 2>&1 || { echo "dbus-run-session missing"; exit 127; }
+exec dbus-run-session -- startxfce4

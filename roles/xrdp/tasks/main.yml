@@ -13,6 +13,80 @@
     state: present
     update_cache: true
 
+- name: Xrdp - ensure pam_systemd is used for XRDP sessions
+  ansible.builtin.lineinfile:
+    path: /etc/pam.d/xrdp-sesman
+    regexp: '^\s*session\s+required\s+pam_systemd\.so'
+    line: 'session required pam_systemd.so'
+    insertafter: '^\s*session\s+required\s+pam_unix\.so'
+    state: present
+  notify: restart xrdp
+
+- name: Xrdp - ensure pam_systemd is used for XRDP sessions
+  ansible.builtin.lineinfile:
+    path: /etc/pam.d/xrdp-sesman
+    regexp: '^\s*session\s+required\s+pam_systemd\.so\b'
+    line: 'session required pam_systemd.so'
+    insertafter: '^\@include\s+common-session'
+    state: present
+  notify: restart xrdp
+
+- name: Xrdp - ensure pam_systemd is present in /etc/pam.d/xrdp-sesman (fallback)
+  ansible.builtin.lineinfile:
+    path: /etc/pam.d/xrdp-sesman
+    regexp: '^\s*session\s+required\s+pam_systemd\.so'
+    line: 'session required pam_systemd.so'
+    insertbefore: '^#?end of file|^$'
+    state: present
+  notify: restart xrdp
+
+- name: Xrdp - ensure /etc/xdg/autostart exists
+  ansible.builtin.file:
+    path: /etc/xdg/autostart
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Xrdp - find gvfs / vfs autostart entries (system)
+  ansible.builtin.find:
+    paths: /usr/share/xdg/autostart
+    patterns:
+      - "gvfs*.desktop"
+      - "org.gtk.vfs*.desktop"
+    file_type: file
+  register: _vfs_autostart
+
+- name: Xrdp - copy vfs autostart entries into /etc/xdg/autostart (override)
+  ansible.builtin.copy:
+    src: "{{ item.path }}"
+    dest: "/etc/xdg/autostart/{{ item.path | basename }}"
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ _vfs_autostart.files }}"
+  when: (_vfs_autostart.matched | int) > 0
+
+- name: Xrdp - disable vfs autostart overrides
+  ansible.builtin.lineinfile:
+    path: "/etc/xdg/autostart/{{ item.path | basename }}"
+    regexp: '^(Hidden|X-GNOME-Autostart-enabled)='
+    line: 'Hidden=true'
+  loop: "{{ _vfs_autostart.files }}"
+  when: (_vfs_autostart.matched | int) > 0
+
+- name: Xrdp - remove gvfs-fuse
+  ansible.builtin.apt:
+    name:
+      - gvfs
+      - gvfs-backends
+      - gvfs-daemons
+      - gvfs-fuse
+    state: absent
+    purge: true
+    autoremove: true
+  #
 - name: Xrdp - read current default terminal emulator
   ansible.builtin.command: readlink -f /usr/bin/x-terminal-emulator
   register: _xterm_link
