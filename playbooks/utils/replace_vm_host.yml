@@ -224,6 +224,38 @@
         wait_for_ip_address: true
         wait_for_ip_address_timeout: 120
 
+    - name: Ensure NIC is connected now and at boot
+      community.vmware.vmware_guest_network:
+        hostname: "{{ vcenter_hostname }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        validate_certs: false
+        datacenter: "{{ vcenter_datacenter }}"
+        name: "{{ replacement_vm }}"
+        mac_address: "{{ old_vm_net_info.network_info[0].mac_address }}"
+        network_name: "{{ old_vm_net_info.network_info[0].network_name }}"
+        connected: true
+        start_connected: true
+        state: present
+
+    - name: Verify NIC connection status
+      community.vmware.vmware_guest_network:
+        hostname: "{{ vcenter_hostname }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        validate_certs: false
+        datacenter: "{{ vcenter_datacenter }}"
+        name: "{{ replacement_vm }}"
+        gather_network_info: true
+      register: verify_net
+
+    - name: Show adapter connection state
+      ansible.builtin.debug:
+        msg: >-
+          {{ verify_net.network_info
+             | map(attribute='connected')
+             | list }}
+
     - name: Print out relevant details of old VM
       vars:
         msg: |
