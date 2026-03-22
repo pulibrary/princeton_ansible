@@ -13,30 +13,37 @@
     state: present
     update_cache: true
 
-- name: Xrdp - ensure pam_systemd is used for XRDP sessions
+- name: Xrdp - disable logind idle sleep and suspend
+  ansible.builtin.lineinfile:
+    path: /etc/systemd/logind.conf
+    regexp: "{{ item.regexp }}"
+    line: "{{ item.line }}"
+    state: present
+  loop:
+    - { regexp: '^#?IdleAction=',       line: 'IdleAction=ignore' }
+    - { regexp: '^#?IdleActionSec=',    line: 'IdleActionSec=0' }
+    - { regexp: '^#?HandleSuspendKey=', line: 'HandleSuspendKey=ignore' }
+    - { regexp: '^#?HandleHibernateKey=', line: 'HandleHibernateKey=ignore' }
+    - { regexp: '^#?HandleLidSwitch=',  line: 'HandleLidSwitch=ignore' }
+    - { regexp: '^#?HandleLidSwitchDocked=', line: 'HandleLidSwitchDocked=ignore' }
+  notify: restart logind
+
+- name: Xrdp - mask sleep/suspend/hibernate targets
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    masked: true
+  loop:
+    - sleep.target
+    - suspend.target
+    - hibernate.target
+    - hybrid-sleep.target
+
+- name: Xrdp - ensure pam_systemd is present in /etc/pam.d/xrdp-sesman
   ansible.builtin.lineinfile:
     path: /etc/pam.d/xrdp-sesman
     regexp: '^\s*session\s+required\s+pam_systemd\.so'
     line: 'session required pam_systemd.so'
     insertafter: '^\s*session\s+required\s+pam_unix\.so'
-    state: present
-  notify: restart xrdp
-
-- name: Xrdp - ensure pam_systemd is used for XRDP sessions
-  ansible.builtin.lineinfile:
-    path: /etc/pam.d/xrdp-sesman
-    regexp: '^\s*session\s+required\s+pam_systemd\.so\b'
-    line: 'session required pam_systemd.so'
-    insertafter: '^\@include\s+common-session'
-    state: present
-  notify: restart xrdp
-
-- name: Xrdp - ensure pam_systemd is present in /etc/pam.d/xrdp-sesman (fallback)
-  ansible.builtin.lineinfile:
-    path: /etc/pam.d/xrdp-sesman
-    regexp: '^\s*session\s+required\s+pam_systemd\.so'
-    line: 'session required pam_systemd.so'
-    insertbefore: '^#?end of file|^$'
     state: present
   notify: restart xrdp
 

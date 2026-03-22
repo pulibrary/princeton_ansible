@@ -43,5 +43,15 @@ if ! command -v startxfce4 >/dev/null 2>&1; then
 fi
 
 # Start XFCE with a proper per-session dbus
-command -v dbus-run-session >/dev/null 2>&1 || { echo "dbus-run-session missing"; exit 127; }
-exec dbus-run-session -- startxfce4
+if [ -z "${DBUS_SESSION_BUS_ADDRESS:-}" ]; then
+  eval "$(dbus-launch --sh-syntax --exit-with-session)"
+  export DBUS_SESSION_BUS_ADDRESS
+fi
+
+# xrdp writes the cookie here; make sure xfce4-session can find it
+if [[ -z "${XAUTHORITY:-}" ]]; then
+  export XAUTHORITY="${HOME}/.Xauthority"
+fi
+echo "DEBUG: XAUTHORITY=${XAUTHORITY} DISPLAY=${DISPLAY}"
+
+exec xfce4-session

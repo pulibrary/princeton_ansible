@@ -19,6 +19,32 @@
     name: "{{ admin_user }}"
     password: "{{ admin_user_password }}"
 
+- name: bitcurator - ensure bcadmin xfconf dir exists
+  ansible.builtin.file:
+    path: /home/bcadmin/.config/xfce4/xfconf/xfce-perchannel-xml
+    state: directory
+    owner: bcadmin
+    group: bcadmin
+    mode: "0755"
+
+- name: bitcurator - disable power management for bcadmin user
+  ansible.builtin.copy:
+    dest: /home/bcadmin/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-power-manager.xml
+    owner: bcadmin
+    group: bcadmin
+    mode: "0644"
+    content: |
+      <?xml version="1.0" encoding="UTF-8"?>
+      <channel name="xfce4-power-manager" version="1.0">
+        <property name="xfce4-power-manager" type="empty">
+          <property name="blank-on-ac"           type="int"  value="0"/>
+          <property name="dpms-enabled"           type="bool" value="false"/>
+          <property name="dpms-on-ac-off"         type="int"  value="0"/>
+          <property name="dpms-on-ac-sleep"       type="int"  value="0"/>
+          <property name="logind-handle-lid-switch" type="bool" value="false"/>
+        </property>
+      </channel>
+
 - name: Bitcurator - create apps directory
   ansible.builtin.file:
     path: "{{ apps_dir }}"
