@@ -41,6 +41,29 @@
   changed_when: bitcurator_install.rc == 0
   when: not bitcurator_install_marker.stat.exists
 
+- name: Bitcurator | check key installed artifacts
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+    - /usr/local/bin/bc_mounter.py
+    - /usr/local/bin/bc_policyapp.py
+    - /usr/local/bin/sf
+    - /usr/local/bin/bagit.py
+  register: bitcurator_artifacts
+  when: not bitcurator_install_marker.stat.exists
+
+- name: Bitcurator | fail if installer returned error and artifacts are missing
+  ansible.builtin.fail:
+    msg: |
+      bitcurator install returned rc={{ bitcurator_install.rc }}.
+      Output indicates the CLI summary parser failed.
+      Expected installed artifacts were not all present.
+      Review /var/cache/bitcurator/cli/5.1.0/saltstack.log on the target host.
+  when:
+    - not bitcurator_install_marker.stat.exists
+    - bitcurator_install.rc != 0
+    - (bitcurator_artifacts.results | selectattr('stat.exists', 'equalto', true) | list | length) < 4
+
 - name: Bitcurator | create install marker
   ansible.builtin.file:
     path: /var/lib/bitcurator/.installed
@@ -48,7 +71,9 @@
     owner: root
     group: root
     mode: "0644"
-  when: not bitcurator_install_marker.stat.exists
+  when:
+    - not bitcurator_install_marker.stat.exists
+    - (bitcurator_artifacts.results | selectattr('stat.exists', 'equalto', true) | list | length) == 4
 
 - name: Bitcurator | download Bagger
   ansible.builtin.get_url:
