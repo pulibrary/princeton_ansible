@@ -1,122 +1,150 @@
-# Example Role
+# xrdp
 
-This role is a placeholder for creation of molecule roles
+Install and configure XRDP with an XFCE desktop on Ubuntu Jammy.
 
-1. From your new role create a molecule directory
+This role is intended for hosts that need remote desktop access over XRDP. It installs XRDP and Xorg backend packages, configures an XFCE-based session, disables sleep and power-management behaviors that interfere with remote sessions, optionally manages UFW access for the XRDP port, and enables the XRDP services.
 
-  ```bash
-  cd roles/<your_role_name>
-  mkdir -p molecule/default
-  ```
+## What this role does
 
-1. Copy the files from the example role from the root of the repo:
+- Disables `systemd-logind` idle and lid-switch suspend behaviors
+- Masks system sleep targets:
+  - `sleep.target`
+  - `suspend.target`
+  - `hibernate.target`
+  - `hybrid-sleep.target`
+- Installs XRDP and supporting packages
+- Installs XFCE desktop packages for remote sessions
+- Sets `xfce4-terminal` as the default terminal emulator
+- Configures XFCE session defaults for XRDP users
+- Disables XFCE power management, DPMS, and screen locking at the system level
+- Configures XRDP listener and logging settings in `/etc/xrdp/xrdp.ini`
+- Installs a managed `/etc/xrdp/startwm.sh` for launching XFCE components directly
+- Optionally opens the XRDP port in UFW
+- Enables and starts:
+  - `xrdp`
+  - `xrdp-sesman`
 
-  ```bash
-  cp -a roles/example/* roles/your_role_name
-  ```
+## Requirements
 
-1. Edit the following files:
-   * `molecule/default/converge.yml`
+- Ubuntu 22.04 (Jammy)
+- `apt` package management
+- Systemd
 
-    ```yaml
-    roles:
-      - role: <your_role_name>
-    ```
+## Role Variables
 
-   * `meta/main.yml`
+Defined in `defaults/main.yml`:
 
-    ```yaml
-    role_name: <your_role_name>
-    ...
-    description: <Description of your role>
-    ...
-    dependencies: []
-    ### or if your role depends on another
-      - role: other_role
-    ```
+```yaml
+xrdp_port: 3389
 
-2. Run:
+xrdp_manage_ufw: false
+xrdp_ufw_allow_from: "128.112.0.0/16"
 
-    ```bash
-    cd roles/<your_role_name>
-    molecule converge
-    molecule verify
-    ```
+xrdp_desktop: xfce
 
-## Architecture/platform notes (Apple Silicon vs GHA CI)
+xrdp_packages_common:
+  - dbus-x11
+  - dbus-user-session
+  - libpam-systemd
+  - xorgxrdp
+  - xrdp
 
-We use a multi-arch Docker image:
+xrdp_packages_xfce:
+  - xfce4
+  - xfce4-goodies
+  - xfce4-screensaver
+  - xfce4-session
+  - xfce4-terminal
+  - xfconf
+```
 
-  * ghcr.io/pulibrary/vm-builds/ubuntu-22.04
+## Variable Notes
 
-  * It has linux/amd64 and linux/arm64 manifests.
+### `xrdp_port`
 
-  * GitHub Actions runners are amd64.
+TCP port XRDP listens on.
 
-  * Local Macs (M1/M2/M3) are arm64.
+Default:
 
-Molecule’s Docker driver honors the MOLECULE_DOCKER_PLATFORM environment variable:
+```yaml
+xrdp_port: 3389
+```
 
-  * If not set, Docker chooses a platform based on the host.
+`xrdp_manage_ufw`
 
-  * If set, Molecule passes it to Docker as the platform= option.
+Whether the role should attempt to create a UFW allow rule for the XRDP port.
 
-### Important: `.env.yml` vs GitHub Actions `env`:
+Default:
 
-Molecule will load environment variables from `.env.yml` (or whatever `MOLECULE_ENV_FILE` points to) **inside the runner/container.**
+```yaml
+xrdp_manage_ufw: false
+```
 
-That means:
+`xrdp_ufw_allow_from`
 
-  * If you commit:
+Optional source restriction when `xrdp_manage_ufw` is enabled.
 
-    ```yaml
-    # roles/<role>/.env.yml
-      ---
-      MOLECULE_DOCKER_PLATFORM: linux/arm64
-      ```
+Default:
 
+```yaml
+xrdp_ufw_allow_from: "128.112.0.0/16"
+```
 
-  * And in GitHub Actions you also set:
+If set to an empty string, the role allows the XRDP port without a source restriction.
 
-      ```yaml
-      env:
-        MOLECULE_DOCKER_PLATFORM: linux/amd64
-      ```
+## Templates and Managed Files
 
+This role manages:
 
-Then the value from `.env.yml` wins inside Molecule, and CI will still use `linux/arm64`.
+- `/etc/xrdp/startwm.sh`
+- `/etc/xdg/xfce4/xfconf/xfce-perchannel-xml/xfce4-session.xml`
+- `/etc/xdg/xfce4/xfconf/xfce-perchannel-xml/xfce4-power-manager.xml`
+- `/etc/xdg/xfce4/xfconf/xfce-perchannel-xml/xfce4-screensaver.xml`
 
-#### Rule of thumb:
+It also updates `/etc/xrdp/xrdp.ini` using `ini_file` tasks.
 
-Let CI control the platform, so **do not commit** `MOLECULE_DOCKER_PLATFORM` in `.env.yml.`
+## Session Behavior
 
-### Recommended patterns
+The managed `startwm.sh` intentionally launches XFCE components directly instead of calling `xfce4-session`. This avoids logind/session issues seen under XRDP on Ubuntu 22.04 and provides a more reliable remote desktop startup path.
 
-Local Apple Silicon (M1/M2/M3)
+The role also disables screen blanking, DPMS, and screensaver locking to reduce remote-session interruptions.
 
-Use:
+## Handlers
 
-Export the variable when you run Molecule:
+This role defines handlers for:
 
-Use a local, untracked env file:
+- `restart xrdp`
+- `restart gdm3`
+- `restart logind`
 
-  * Depend on the global .gitignore (at repo root):
+## Example Playbook
 
-  * Create `roles/<your_role_name>/.env.local.yml`:
+```yaml
+---  
 
-    ```yaml
-    ---
-    MOLECULE_DOCKER_PLATFORM: linux/arm64
-    ```
+- name: Configure XRDP host  
+  hosts: xrdp_hosts  
+  become: true  
 
+  roles:  
 
-  * Run Molecule with:
+  - role: xrdp
+```
 
-    ```bash
-    cd roles/<your_role_name>
-    MOLECULE_ENV_FILE=.env.local.yml molecule test
-    ```
+Example with custom firewall handling:
 
-#### GitHub Actions (CI)
+```yaml
+---  
 
-  * The workflow sets MOLECULE_DOCKER_PLATFORM=linux/amd64 (or relies on the default amd64 runner).
+- name: Configure XRDP host  
+  hosts: xrdp_hosts  
+  become: true  
+
+  roles:  
+
+  - role: xrdp  
+    vars:  
+      xrdp_manage_ufw: true  
+      xrdp_ufw_allow_from: "128.112.0.0/16"  
+      xrdp_port: 3389
+```
