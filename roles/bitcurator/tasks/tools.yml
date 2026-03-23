@@ -1,0 +1,96 @@
+---
+- name: Bitcurator | ensure download directory exists
+  ansible.builtin.file:
+    path: "{{ download_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Bitcurator | download CLI
+  ansible.builtin.get_url:
+    url: "https://github.com/BitCurator/bitcurator-cli/releases/download/{{ bitcurator_version }}/bitcurator-cli-linux"
+    dest: "{{ download_dir }}/bitcurator-cli-linux"
+    mode: "0644"
+
+- name: Bitcurator | install CLI binary
+  ansible.builtin.copy:
+    src: "{{ download_dir }}/bitcurator-cli-linux"
+    dest: /usr/local/bin/bitcurator
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Bitcurator | check install marker
+  ansible.builtin.stat:
+    path: /var/lib/bitcurator/.installed
+  register: bitcurator_install_marker
+
+- name: Bitcurator | create install marker directory
+  ansible.builtin.file:
+    path: /var/lib/bitcurator
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Bitcurator | run installer once
+  ansible.builtin.command: /usr/local/bin/bitcurator install
+  register: bitcurator_install
+  changed_when: bitcurator_install.rc == 0
+  when: not bitcurator_install_marker.stat.exists
+
+- name: Bitcurator | create install marker
+  ansible.builtin.file:
+    path: /var/lib/bitcurator/.installed
+    state: touch
+    owner: root
+    group: root
+    mode: "0644"
+  when: not bitcurator_install_marker.stat.exists
+
+- name: Bitcurator | download Bagger
+  ansible.builtin.get_url:
+    url: "https://github.com/LibraryOfCongress/bagger/releases/download/v{{ bagger_version }}/bagger-{{ bagger_version }}.zip"
+    dest: "{{ download_dir }}/bagger-{{ bagger_version }}.zip"
+    mode: "0644"
+
+- name: Bitcurator | unarchive Bagger
+  ansible.builtin.unarchive:
+    src: "{{ download_dir }}/bagger-{{ bagger_version }}.zip"
+    dest: "{{ apps_dir }}"
+    remote_src: true
+    owner: "{{ admin_user }}"
+    group: "{{ admin_user }}"
+    creates: "{{ apps_dir }}/bagger-{{ bagger_version }}"
+
+- name: Bitcurator | download DROID
+  ansible.builtin.get_url:
+    url: "https://cdn.nationalarchives.gov.uk/documents/droid-binary-{{ droid_version }}-bin.zip"
+    dest: "{{ download_dir }}/droid-binary-{{ droid_version }}-bin.zip"
+    mode: "0644"
+
+- name: Bitcurator | unarchive DROID
+  ansible.builtin.unarchive:
+    src: "{{ download_dir }}/droid-binary-{{ droid_version }}-bin.zip"
+    dest: "{{ apps_dir }}"
+    remote_src: true
+    owner: "{{ admin_user }}"
+    group: "{{ admin_user }}"
+    creates: "{{ apps_dir }}/droid"
+
+- name: Bitcurator | download Siegfried package
+  ansible.builtin.get_url:
+    url: "{{ siegfried_deb_url }}"
+    dest: "{{ download_dir }}/siegfried_{{ siegfried_version }}-1_{{ siegfried_deb_arch }}.deb"
+    mode: "0644"
+
+- name: Bitcurator | install Siegfried package
+  ansible.builtin.apt:
+    deb: "{{ download_dir }}/siegfried_{{ siegfried_version }}-1_{{ siegfried_deb_arch }}.deb"
+
+- name: Bitcurator | verify Siegfried installation
+  ansible.builtin.command: /usr/bin/sf -version
+  register: siegfried_version_check
+  changed_when: false

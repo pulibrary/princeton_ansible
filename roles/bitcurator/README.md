@@ -1,38 +1,164 @@
-Role Name
-=========
+# bitcurator
 
-A brief description of the role goes here.
+Install and configure a BitCurator workstation on Ubuntu Jammy.
 
-Requirements
-------------
+This role is intended for BitCurator hosts. It creates the BitCurator administrative user, installs required Ubuntu packages, downloads and installs BitCurator CLI and supporting tools, deploys helper scripts, configures basic XFCE power settings, and prepares common mount points. This effectively re-writes [Bitcurator-salt](https://github.com/bitcurator/bitcurator-salt)
 
-Any pre-requisites that may not be covered by Ansible itself or the role should be mentioned here. For instance, if the role uses the EC2 module, it may be a good idea to mention in this section that the boto package is required.
+## What this role does
 
-Role Variables
---------------
+- Enables the Ubuntu `universe` and `multiverse` repositories
+- Installs BitCurator-related Ubuntu packages
+- Installs optional Python packages
+- Creates the BitCurator admin user and home directories
+- Sets the admin password when provided
+- Configures XFCE power management for the admin user
+- Downloads and installs:
+  - BitCurator CLI
+  - Bagger
+  - DROID
+  - Siegfried
+- Installs workstation helper scripts into the desktop scripts directory
+- Creates common mount points:
+  - `/mnt/data`
+  - `/mnt/rbrr`
+  - `/mnt/archives_bd`
+  - `/mnt/raid`
+- Writes the deployed BitCurator version to `/etc/bitcurator-version`
 
-A description of the settable variables for this role should go here, including any variables that are in defaults/main.yml, vars/main.yml, and any variables that can/should be set via parameters to the role. Any variables that are read from other roles and/or the global scope (ie. hostvars, group vars, etc.) should be mentioned here as well.
+## Requirements
 
-Dependencies
-------------
+- Ubuntu 22.04 (Jammy)
+- Internet access from the managed host to download release artifacts
+- Supporting roles available in the same Ansible repository:
+  - `common`
+  - `clamav`
+  - `xrdp`
 
-A list of other roles hosted on Galaxy should go here, plus any details in regards to parameters that may need to be set for other roles, or variables that are used from other roles.
+## Role Variables
 
-Example Playbook
-----------------
+### Commonly overridden
 
-Including an example of how to use your role (for instance, with variables passed in as parameters) is always nice for users too:
+```yaml
+admin_user: bcadmin
+admin_home: "/home/{{ admin_user }}"
+apps_dir: "{{ admin_home }}/apps"
+download_dir: /tmp/bitcurator
+scripts_dir: "{{ admin_home }}/Desktop/scripts/code"
 
-    - hosts: servers
-      roles:
-         - { role: username.rolename, x: 42 }
+bitcurator_version: v3.0.0
+bagger_version: 2.8.1
+droid_version: 6.8
+siegfried_version: "1.11.4"
+siegfried_deb_arch: "amd64"
+siegfried_deb_url: "https://github.com/richardlehane/siegfried/releases/download/v{{ siegfried_version }}/siegfried_{{ siegfried_version }}-1_{{ siegfried_deb_arch }}.deb"
+```
 
-License
--------
+### Optional
 
-BSD
+admin_user_password: "{{ vault_admin_user_password }}"  
+bitcurator_python_packages: []
 
-Author Information
-------------------
+`admin_user_password` should be provided as a hashed password, usually from vault.
 
-An optional section for the role authors to include contact information, or a website (HTML is not allowed).
+## Default package lists
+
+This role installs a base set of Ubuntu packages through APT using `bitcurator_apt_packages` and `bitcurator_dependencies`.
+
+Examples include tools such as:
+
+- `xmount`
+- `antiword`
+- `avfs`
+- `dcfldd`
+- `ewf-tools`
+- `gddrescue`
+- `guymager`
+- `sleuthkit`
+- `smartmontools`
+- `testdisk`
+- `vlc`
+
+The exact package list is defined in `defaults/main.yml`.
+
+## Helper scripts
+
+This role installs helper scripts from `roles/bitcurator/files/` into:
+
+```yaml
+{{ scripts_dir }}
+```
+
+These scripts support common workstation workflows such as:
+
+- acquiring digital archives
+- mounting and unmounting storage
+- generating reports
+- validating bags
+- copying files with rsync
+- preparing processing directories
+
+The script list is controlled by `bitcurator_helper_scripts` in `defaults/main.yml`.
+
+## Dependencies
+
+Declared role dependencies:
+
+```yaml
+dependencies:  
+
+- role: common  
+- role: clamav  
+- role: xrdp
+```
+
+## Example Playbook
+
+---
+
+```yaml
+- name: BitCurator Environment Setup  
+  hosts: bitcurator_hosts  
+  remote_user: pulsys  
+  become: true  
+
+  vars_files:  
+
+  - ../group_vars/bitcurator/shared.yml  
+  - ../group_vars/bitcurator/vault.yml  
+
+  roles:  
+
+  - bitcurator
+```
+
+## Example Group Variables
+
+---  
+
+admin_user: bcadmin  
+admin_user_password: "{{ vault_admin_user_password }}"  
+admin_home: "/home/{{ admin_user }}"  
+download_dir: "/tmp/bitcurator"  
+apps_dir: "{{ admin_home }}/apps"  
+bitcurator_version: "v3.0.0"  
+bagger_version: "2.8.1"  
+droid_version: "6.8.1"
+
+## Files and directories created
+
+Examples of paths created or managed by this role:
+
+- `{{ admin_home }}`
+- `{{ admin_home }}/Desktop`
+- `{{ apps_dir }}`
+- `{{ scripts_dir }}`
+- `{{ admin_home }}/.config/xfce4/xfconf/xfce-perchannel-xml`
+- `/var/lib/bitcurator/.installed`
+- `/etc/bitcurator-version`
+
+## Notes
+
+- BitCurator CLI installation is guarded by a local marker file at `/var/lib/bitcurator/.installed`.
+- Bagger, DROID, and Siegfried are installed from upstream release artifacts rather than Ubuntu packages.
+- The role currently includes a `theme.yml` task file pattern in earlier planning, but the current task layout shown here does not actively use a theme task.
+- Several legacy files remain in `roles/bitcurator/files/`; only scripts referenced by `bitcurator_helper_scripts` are installed by the role.

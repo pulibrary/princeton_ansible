@@ -1,135 +1,36 @@
 ---
-# tasks file for roles/bitcurator
-- name: Bitcurator - update apt cache
-  ansible.builtin.apt:
-    update_cache: true
-    cache_valid_time: 3600
 
-- name: Bitcurator - create bcadmin user
-  ansible.builtin.user:
-    name: "{{ admin_user }}"
-    state: present
-    createhome: true
-    shell: /bin/bash
-    groups: sudo
-    append: true
+- name: Include repository setup
+  ansible.builtin.import_tasks: repos.yml
 
-- name: Bitcurator - set password for bcadmin user (optional - change or remove as needed)
-  ansible.builtin.user:
-    name: "{{ admin_user }}"
-    password: "{{ admin_user_password }}"
+- name: Include OS package installation
+  ansible.builtin.import_tasks: packages.yml
 
-- name: bitcurator - ensure bcadmin xfconf dir exists
-  ansible.builtin.file:
-    path: /home/bcadmin/.config/xfce4/xfconf/xfce-perchannel-xml
-    state: directory
-    owner: bcadmin
-    group: bcadmin
-    mode: "0755"
+- name: Include Python package installation
+  ansible.builtin.import_tasks: python_packages.yml
 
-- name: bitcurator - disable power management for bcadmin user
+- name: Bitcurator | user
+  ansible.builtin.import_tasks: user.yml
+
+- name: Include configuration
+  ansible.builtin.import_tasks: config.yml
+
+- name: Include environment files
+  ansible.builtin.import_tasks: env.yml
+
+- name: Include tools setup
+  ansible.builtin.import_tasks: tools.yml
+
+- name: Include mounter setup
+  ansible.builtin.import_tasks: mounter.yml
+
+- name: Bitcurator | install version marker
   ansible.builtin.copy:
-    dest: /home/bcadmin/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-power-manager.xml
-    owner: bcadmin
-    group: bcadmin
-    mode: "0644"
-    content: |
-      <?xml version="1.0" encoding="UTF-8"?>
-      <channel name="xfce4-power-manager" version="1.0">
-        <property name="xfce4-power-manager" type="empty">
-          <property name="blank-on-ac"           type="int"  value="0"/>
-          <property name="dpms-enabled"           type="bool" value="false"/>
-          <property name="dpms-on-ac-off"         type="int"  value="0"/>
-          <property name="dpms-on-ac-sleep"       type="int"  value="0"/>
-          <property name="logind-handle-lid-switch" type="bool" value="false"/>
-        </property>
-      </channel>
-
-- name: Bitcurator - create apps directory
-  ansible.builtin.file:
-    path: "{{ apps_dir }}"
-    state: directory
-    owner: "{{ admin_user }}"
-    group: "{{ admin_user }}"
-    mode: '0755'
-
-- name: Bitcurator - install BitCurator dependencies
-  ansible.builtin.apt:
-    name: "{{ item }}"
-    state: present
-  loop: "{{ bitcurator_dependencies }}"
-
-- name: Bitcurator - download BitCurator CLI
-  ansible.builtin.get_url:
-    url: "https://github.com/BitCurator/bitcurator-cli/releases/download/{{ bitcurator_version }}/bitcurator-cli-linux"
-    dest: "{{ download_dir }}/bitcurator-cli-linux"
-    mode: '0644'
-    owner: "{{ admin_user }}"
-    group: "{{ admin_user }}"
-
-- name: Bitcurator - move to /usr/local/bin
-  ansible.builtin.copy:
-    src: "{{ download_dir }}/bitcurator-cli-linux"
-    dest: /usr/local/bin/bitcurator
-    remote_src: true
-    mode: '0755'
+    dest: /etc/bitcurator-version
+    content: "{{ bitcurator_version }}\n"
     owner: root
     group: root
-
-- name: Bitcurator - run installer
-  ansible.builtin.command: bitcurator install
-  args:
-    creates: /usr/local/bin/bitcurator
-  register: bitcurator_install
-
-- name: Bitcurator - download Bagger
-  ansible.builtin.get_url:
-    url: "https://github.com/LibraryOfCongress/bagger/releases/download/v{{ bagger_version }}/bagger-{{ bagger_version }}.zip"
-    dest: "{{ download_dir }}/bagger-{{ bagger_version }}.zip"
-    owner: "{{ admin_user }}"
-    group: "{{ admin_user }}"
-
-- name: Bitcurator - unzip Bagger to apps directory
-  ansible.builtin.unarchive:
-    src: "{{ download_dir }}/bagger-{{ bagger_version }}.zip"
-    dest: "{{ apps_dir }}"
-    remote_src: true
-    owner: "{{ admin_user }}"
-    group: "{{ admin_user }}"
-
-- name: Bitcurator - download Droid
-  ansible.builtin.get_url:
-    url: "https://cdn.nationalarchives.gov.uk/documents/droid-binary-{{ droid_version }}-bin.zip"
-    dest: "{{ download_dir }}/"
-    owner: "{{ admin_user }}"
-    group: "{{ admin_user }}"
-
-- name: Bitcurator - unzip Droid to apps directory
-  ansible.builtin.unarchive:
-    src: "{{ download_dir }}/droid-binary-{{ droid_version }}-bin.zip"
-    dest: "{{ apps_dir }}"
-    remote_src: true
-    owner: "{{ admin_user }}"
-    group: "{{ admin_user }}"
-
-- name: Bitcurator - create Desktop directory if it doesn't exist
-  ansible.builtin.file:
-    path: "{{ admin_home }}/Desktop"
-    state: directory
-    owner: "{{ admin_user }}"
-    group: "{{ admin_user }}"
-    mode: '0755'
-
-- name: Bitcurator - ensure snapd service is running
-  ansible.builtin.systemd:
-    name: snapd
-    state: started
-    enabled: true
-
-- name: Bitcurator - install FSLint via snap
-  community.general.snap:
-    name: fslint-unofficial
-    state: present
+    mode: "0644"
 
 - name: Bitcurator - display completion message
   ansible.builtin.debug:
