@@ -12,11 +12,23 @@
 
 - name: bibdata | Create data directory
   ansible.builtin.file:
-    path: '{{ bibdata_data_dir | dirname }}'
+    path: '{{ bibdata_data_dir }}'
     state: directory
     recurse: true
     owner: '{{ deploy_user }}'
     group: 'www-data'
+
+- name: bibdata | Create mount directory structure
+  ansible.builtin.file:
+    path: '/{{ item }}'
+    state: 'directory'
+    owner: '{{ deploy_user }}'
+    group: 'www-data'
+    mode: 0755
+  when: running_on_server
+  with_items:
+    - '{{ bibdata_data_dir }}/scsb_update_files'
+    - '{{ bibdata_data_dir }}/figgy_ark_cache'
 
 # New: Create symlink to nfs mount
 - name: bibdata | Create symlink to nfs mount
@@ -31,15 +43,3 @@
   with_items:
     - src: '/mnt/nfs/bibdata'
       link: '{{ bibdata_data_dir }}'
-
-- name: bibdata | Create mount directory structure
-  ansible.builtin.file:
-    path: '/{{ item }}'
-    state: 'directory'
-    owner: '{{ deploy_user }}'
-    group: 'www-data'
-    mode: 0755
-  when: running_on_server
-  with_items:
-    - '{{ bibdata_data_dir }}/scsb_update_files'
-    - '{{ bibdata_data_dir }}/figgy_ark_cache'
