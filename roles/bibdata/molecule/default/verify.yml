@@ -18,12 +18,14 @@
       that:
         - not pkg_status.changed
 
-  - name: test for isilon mount dir
-    stat:
-      path: "{{ item }}"
-    loop:
-      - "/mnt/isilon"
-    register: isilon_mount
-    failed_when:
-      - not isilon_mount.stat.exists
-      - not isilon_mount.stat.isdir
+  - name: Check if bibdata mount directory exists when running_on_server is true
+    ansible.builtin.stat:
+     path: "{{ bibdata_data_dir | default('/data/bibdata_files') }}"
+    register: bibdata_mount_stat
+
+  - name: Assert that bibdata mount directory exists
+    ansible.builtin.assert:
+      that:
+        - bibdata_mount_stat.stat.exists
+        - bibdata_mount_stat.stat.isdir
+      fail_msg: "Mount directory {{ bibdata_data_dir }} does not exist"
