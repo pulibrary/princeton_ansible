@@ -29,27 +29,33 @@
 
 - name: bibdata | create directory for symlink
   ansible.builtin.file:
-    path: '{{ capistrano_base_dir }}/{{ capistrano_directory }}/shared/marc_to_solr/translation_maps/'
+    path: "{{ capistrano_base_dir }}/{{ capistrano_directory }}/shared/marc_to_solr/translation_maps/"
     state: directory
     recurse: yes
-    owner: '{{ deploy_user }}'
-    group: '{{ deploy_user }}'
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
     mode: "0755"
     modification_time: preserve
     access_time: preserve
 
 - name: bibdata | create file for symlink
   ansible.builtin.file:
-    path: '{{ capistrano_base_dir }}/figgy_mms_ids.yaml'
+    path: "{{ capistrano_base_dir }}/figgy_mms_ids.yaml"
     state: touch
-    owner: '{{ deploy_user }}'
-    group: '{{ deploy_user }}'
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
     mode: "0755"
     modification_time: preserve
     access_time: preserve
 
 - name: bibdata | add deploy user to the rustup group
   ansible.builtin.user:
-    name: '{{ deploy_user }}'
+    name: "{{ deploy_user }}"
     groups: rustup
+    append: true
+
+- name: Bibdata - Add existing user www-data to group deploy
+  ansible.builtin.user:
+    name: www-data
+    groups: deploy
     append: true

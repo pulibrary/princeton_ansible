@@ -3,22 +3,36 @@
 - name: bibdata | ensure presence of nfs mount
   ansible.posix.mount:
     src: "{{ nfs_server }}:/var/nfs/bibdata"
-    path: "/mnt/nfs/bibdata"
+    path: "/data/bibdata_files"
     state: mounted
     fstype: nfs
     opts: rw,sync,hard
   become: true
   when: running_on_server
 
-# New: Create symlink to nfs mount
-- name: Create a symbolic link
+- name: bibdata | Create mount directory structure
   ansible.builtin.file:
-    src: '/mnt/nfs/bibdata'
-    dest: '/data/bibdata_files'
-    # owner: '{{ deploy_user }}'
-    # group: '{{ deploy_user }}'
-    state: link
+    path: "{{ item }}"
+    state: "directory"
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+    mode: "0775"
+  delegate_to: "{{ nfs_server }}"
+  become: true
+  with_items:
+    - "/var/nfs/bibdata/scsb_update_files"
+    - "/var/nfs/bibdata/figgy_ark_cache"
+  when: running_on_server
 
+    ## New: Create symlink to nfs mount
+    #- name: Create a symbolic link
+    #  ansible.builtin.file:
+    #    src: '/mnt/nfs/bibdata'
+    #    dest: '/data/bibdata_files'
+    #    # owner: '{{ deploy_user }}'
+    #    # group: '{{ deploy_user }}'
+    #    state: link
+    #
 # - name: bibdata | Create symlink to nfs mount
 #   ansible.builtin.file:
 #     src: '{{ item.src }}'
@@ -37,17 +51,3 @@
 #     path: '/data/bibdata_files'
 #     state: directory
 #     recurse: true
-
-- name: bibdata | Create mount directory structure
-  ansible.builtin.file:
-    path: '/{{ item }}'
-    state: 'directory'
-    owner: '{{ deploy_user }}'
-    group: 'www-data'
-    mode: 0755
-  when: running_on_server
-  with_items:
-    - '/data/bibdata_files/scsb_update_files'
-    - '/data/bibdata_files/figgy_ark_cache'
-
-
