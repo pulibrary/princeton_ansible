@@ -17,12 +17,14 @@
     owner: "{{ deploy_user }}"
     group: "{{ deploy_user }}"
     mode: "0775"
-  delegate_to: "{{ nfs_server }}"
+  delegate_to: "{{ nfs_server | default('localhost') }}"
   become: true
   with_items:
     - "/var/nfs/bibdata/scsb_update_files"
     - "/var/nfs/bibdata/figgy_ark_cache"
-  when: running_on_server
+  when:
+    - running_on_server
+    - nfs_server is defined
 
     ## New: Create symlink to nfs mount
     #- name: Create a symbolic link
