@@ -1,0 +1,48 @@
+---
+
+- name: Include repository setup
+  ansible.builtin.import_tasks: repos.yml
+
+- name: Include OS package installation
+  ansible.builtin.import_tasks: packages.yml
+
+- name: Include Python package installation
+  ansible.builtin.import_tasks: python_packages.yml
+
+- name: Bitcurator | user
+  ansible.builtin.import_tasks: user.yml
+
+- name: Include configuration
+  ansible.builtin.import_tasks: config.yml
+
+- name: Include environment files
+  ansible.builtin.import_tasks: env.yml
+
+- name: Include tools setup
+  ansible.builtin.import_tasks: tools.yml
+
+- name: Include mounter setup
+  ansible.builtin.import_tasks: mounter.yml
+
+- name: Bitcurator | install version marker
+  ansible.builtin.copy:
+    dest: /etc/bitcurator-version
+    content: "{{ bitcurator_version }}\n"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Bitcurator - display completion message
+  ansible.builtin.debug:
+    msg:
+      - "=========================================="
+      - "BitCurator Environment Setup Complete!"
+      - "=========================================="
+      - ""
+      - "Next Steps:"
+      - "1. Change bcadmin password: sudo passwd bcadmin"
+      - "2. Reboot the system: sudo reboot"
+      - "3. After reboot, verify BitCurator: bitcurator --version"
+      - "4. Test XRDP connection to this system"
+      - ""
+      - "=========================================="

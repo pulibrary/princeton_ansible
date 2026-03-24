@@ -1,0 +1,38 @@
+---
+- name: Bitcurator | create admin user
+  ansible.builtin.user:
+    name: "{{ admin_user }}"
+    state: present
+    create_home: true
+    shell: /bin/bash
+    groups: sudo
+    append: true
+
+- name: Bitcurator | set admin password when provided
+  ansible.builtin.user:
+    name: "{{ admin_user }}"
+    password: "{{ admin_user_password }}"
+  when: admin_user_password is defined
+  no_log: true
+
+- name: Bitcurator | create base directories
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner | default(admin_user) }}"
+    group: "{{ item.group | default(admin_user) }}"
+    mode: "{{ item.mode | default('0755') }}"
+  loop:
+    - { path: "{{ admin_home }}" }
+    - { path: "{{ admin_home }}/Desktop" }
+    - { path: "{{ apps_dir }}" }
+    - { path: "{{ download_dir }}", owner: "root", group: "root" }
+    - { path: "{{ scripts_dir }}" }
+
+- name: Bitcurator | ensure xfconf directory exists
+  ansible.builtin.file:
+    path: "{{ admin_home }}/.config/xfce4/xfconf/xfce-perchannel-xml"
+    state: directory
+    owner: "{{ admin_user }}"
+    group: "{{ admin_user }}"
+    mode: "0755"

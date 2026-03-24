@@ -1,0 +1,243 @@
+---
+# roles/xrdp
+
+- name: Xrdp - disable logind idle sleep and suspend
+  ansible.builtin.lineinfile:
+    path: /etc/systemd/logind.conf
+    regexp: "{{ item.regexp }}"
+    line: "{{ item.line }}"
+    state: present
+  loop:
+    - { regexp: '^#?IdleAction=',             line: 'IdleAction=ignore' }
+    - { regexp: '^#?IdleActionSec=',           line: 'IdleActionSec=0' }
+    - { regexp: '^#?HandleSuspendKey=',        line: 'HandleSuspendKey=ignore' }
+    - { regexp: '^#?HandleHibernateKey=',      line: 'HandleHibernateKey=ignore' }
+    - { regexp: '^#?HandleLidSwitch=',         line: 'HandleLidSwitch=ignore' }
+    - { regexp: '^#?HandleLidSwitchDocked=',   line: 'HandleLidSwitchDocked=ignore' }
+  notify: restart logind
+
+- name: Xrdp - mask sleep/suspend/hibernate targets
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    masked: true
+  loop:
+    - sleep.target
+    - suspend.target
+    - hibernate.target
+    - hybrid-sleep.target
+
+- name: Xrdp - install XRDP common packages
+  ansible.builtin.apt:
+    name: "{{ xrdp_packages_common }}"
+    state: present
+    update_cache: true
+
+- name: Xrdp - install XFCE packages
+  ansible.builtin.apt:
+    name: "{{ xrdp_packages_xfce }}"
+    state: present
+    update_cache: true
+
+- name: Xrdp - ensure /etc/xdg/autostart exists
+  ansible.builtin.file:
+    path: /etc/xdg/autostart
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Xrdp - find gvfs / vfs autostart entries (system)
+  ansible.builtin.find:
+    paths: /usr/share/xdg/autostart
+    patterns:
+      - "gvfs*.desktop"
+      - "org.gtk.vfs*.desktop"
+    file_type: file
+  register: _vfs_autostart
+
+- name: Xrdp - copy vfs autostart entries into /etc/xdg/autostart (override)
+  ansible.builtin.copy:
+    src: "{{ item.path }}"
+    dest: "/etc/xdg/autostart/{{ item.path | basename }}"
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ _vfs_autostart.files }}"
+  when: (_vfs_autostart.matched | int) > 0
+
+- name: Xrdp - disable vfs autostart overrides
+  ansible.builtin.lineinfile:
+    path: "/etc/xdg/autostart/{{ item.path | basename }}"
+    regexp: '^(Hidden|X-GNOME-Autostart-enabled)='
+    line: 'Hidden=true'
+  loop: "{{ _vfs_autostart.files }}"
+  when: (_vfs_autostart.matched | int) > 0
+
+- name: Xrdp - remove gvfs-fuse
+  ansible.builtin.apt:
+    name:
+      - gvfs
+      - gvfs-backends
+      - gvfs-daemons
+      - gvfs-fuse
+    state: absent
+    purge: true
+    autoremove: true
+
+- name: Xrdp - read current default terminal emulator
+  ansible.builtin.command: readlink -f /usr/bin/x-terminal-emulator
+  register: _xterm_link
+  changed_when: false
+  failed_when: false
+
+- name: Xrdp - set default terminal emulator to xfce4-terminal
+  ansible.builtin.command: update-alternatives --set x-terminal-emulator /usr/bin/xfce4-terminal.wrapper
+  when:
+    - _xterm_link.stdout is defined
+    - _xterm_link.stdout != '/usr/bin/xfce4-terminal.wrapper'
+  changed_when: true
+  failed_when: false
+
+- name: Xrdp - ensure XFCE session defaults directory exists
+  ansible.builtin.file:
+    path: /etc/xdg/xfce4/xfconf/xfce-perchannel-xml
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Xrdp - set XFCE TerminalEmulator default to xfce4-terminal
+  ansible.builtin.copy:
+    dest: /etc/xdg/xfce4/xfconf/xfce-perchannel-xml/xfce4-session.xml
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      <?xml version="1.0" encoding="UTF-8"?>
+      <channel name="xfce4-session" version="1.0">
+        <property name="general" type="empty">
+          <property name="TerminalEmulator" type="string" value="xfce4-terminal"/>
+        </property>
+      </channel>
+
+- name: Xrdp - disable XFCE power management / DPMS (system defaults)
+  ansible.builtin.copy:
+    dest: /etc/xdg/xfce4/xfconf/xfce-perchannel-xml/xfce4-power-manager.xml
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      <?xml version="1.0" encoding="UTF-8"?>
+      <channel name="xfce4-power-manager" version="1.0">
+        <property name="xfce4-power-manager" type="empty">
+          <property name="blank-on-ac"              type="int"  value="0"/>
+          <property name="blank-on-battery"         type="int"  value="0"/>
+          <property name="dpms-enabled"             type="bool" value="false"/>
+          <property name="dpms-on-ac-off"           type="int"  value="0"/>
+          <property name="dpms-on-ac-sleep"         type="int"  value="0"/>
+          <property name="dpms-on-battery-off"      type="int"  value="0"/>
+          <property name="dpms-on-battery-sleep"    type="int"  value="0"/>
+          <property name="logind-handle-lid-switch" type="bool" value="false"/>
+        </property>
+      </channel>
+
+- name: Xrdp - disable screensaver lock (system defaults)
+  ansible.builtin.copy:
+    dest: /etc/xdg/xfce4/xfconf/xfce-perchannel-xml/xfce4-screensaver.xml
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      <?xml version="1.0" encoding="UTF-8"?>
+      <channel name="xfce4-screensaver" version="1.0">
+        <property name="saver" type="empty">
+          <property name="enabled"  type="bool" value="false"/>
+          <property name="lock"     type="bool" value="false"/>
+          <property name="mode"     type="int"  value="0"/>
+        </property>
+        <property name="lock" type="empty">
+          <property name="enabled"  type="bool" value="false"/>
+        </property>
+      </channel>
+
+- name: Xrdp - configure XRDP Globals port
+  ansible.builtin.ini_file:
+    path: /etc/xrdp/xrdp.ini
+    section: Globals
+    option: port
+    value: "{{ xrdp_port | int }}"
+    no_extra_spaces: true
+  notify: restart xrdp
+
+- name: Configure XRDP logging (syslog)
+  ansible.builtin.ini_file:
+    path: /etc/xrdp/xrdp.ini
+    section: Logging
+    option: "{{ item.option }}"
+    value: "{{ item.value }}"
+    no_extra_spaces: true
+  loop:
+    - { option: LogLevel,     value: "INFO" }
+    - { option: EnableSyslog, value: "true" }
+    - { option: SyslogLevel,  value: "INFO" }
+  notify: restart xrdp
+
+- name: Xrdp - configure XRDP Xorg backend
+  ansible.builtin.ini_file:
+    path: /etc/xrdp/xrdp.ini
+    section: Xorg
+    option: "{{ item.option }}"
+    value: "{{ item.value }}"
+    no_extra_spaces: true
+  loop:
+    - { option: lib,  value: "libxup.so" }
+    - { option: ip,   value: "127.0.0.1" }
+    - { option: port, value: "-1" }
+    - { option: code, value: "20" }
+  notify: restart xrdp
+
+- name: Xrdp - configure startwm.sh for XFCE
+  ansible.builtin.template:
+    src: startwm.sh.j2
+    dest: /etc/xrdp/startwm.sh
+    owner: root
+    group: root
+    mode: "0755"
+  notify: restart xrdp
+
+- name: Xrdp - open firewall via ufw
+  when: xrdp_manage_ufw | bool
+  block:
+    - name: Check ufw exists
+      ansible.builtin.command: "command -v ufw"
+      register: _ufw
+      changed_when: false
+      failed_when: false
+
+    - name: Allow XRDP port (no source restriction)
+      ansible.builtin.command: "ufw allow {{ xrdp_port | int }}/tcp"
+      when:
+        - _ufw.rc == 0
+        - xrdp_ufw_allow_from | length == 0
+      register: _ufw_allow
+      changed_when: "'Skipping' not in (_ufw_allow.stdout | default(''))"
+      failed_when: false
+
+    - name: Allow XRDP port (source restricted)
+      ansible.builtin.command: "ufw allow from {{ xrdp_ufw_allow_from }} to any port {{ xrdp_port | int }} proto tcp"
+      when:
+        - _ufw.rc == 0
+        - xrdp_ufw_allow_from | length > 0
+      register: _ufw_allow_src
+      changed_when: "'Skipping' not in (_ufw_allow_src.stdout | default(''))"
+      failed_when: false
+
+- name: Xrdp - enable and start XRDP services
+  ansible.builtin.service:
+    name: "{{ item }}"
+    enabled: true
+    state: started
+  loop:
+    - xrdp-sesman
+    - xrdp
