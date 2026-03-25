@@ -2,17 +2,17 @@
 ## Create Mounts
 - name: bibdata | ensure mount point directory exists
   ansible.builtin.file:
-    path: "{{ bibdata_data_dir }}"
+    path: "/data/bibdata_files"
     state: directory
-    owner: "{{ deploy_user }}"
-    group: "{{ deploy_user }}"
+    owner: "deploy"
+    group: "deploy"
     mode: "0775"
   become: true
 
 - name: bibdata | ensure presence of nfs mount
   ansible.posix.mount:
     src: "{{ nfs_server }}:/var/nfs/bibdata"
-    path: "{{ bibdata_data_dir }}"
+    path: "/data/bibdata_files"
     state: mounted
     fstype: nfs
     opts: rw,sync,hard
@@ -23,8 +23,8 @@
   ansible.builtin.file:
     path: "{{ item }}"
     state: "directory"
-    owner: "{{ deploy_user }}"
-    group: "{{ deploy_user }}"
+    owner: "deploy"
+    group: "deploy"
     mode: "0775"
   delegate_to: "{{ nfs_server | default('localhost') }}"
   become: true
