@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+# Managed by Ansible (roles/xrdp)
+#
+# xfce4-session is intentionally NOT used here.
+# xfce4-session 4.16 has mandatory logind integration: it calls
+# GetSessionByPID(getpid()) on org.freedesktop.login1 during startup.
+# Under xrdp on Ubuntu 22.04, pam_systemd does not place child processes
+# into the logind cgroup scope, so GetSessionByPID returns NULL and
+# xfce4-session exits 1. XFCE components are launched directly instead.
+
+set -u
+
+LOG="/tmp/xrdp-startwm-${USER:-unknown}-${DISPLAY:-no_display}.log"
+exec >>"$LOG" 2>&1
+echo "---- $(date -Is) startwm.sh starting: user=${USER:-} display=${DISPLAY:-} uid=$(id -u) ----"
+
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+export XDG_SESSION_TYPE=x11
+export GDK_BACKEND=x11
+export DESKTOP_SESSION=xfce
+export XDG_CURRENT_DESKTOP=XFCE
+export XDG_SESSION_DESKTOP=xfce
+
+uid="$(id -u)"
+gid="$(id -g)"
+
+[[ -d /run/user/${uid} ]] || mkdir -p "/run/user/${uid}"
+chown "${uid}:${gid}" "/run/user/${uid}" || true
+chmod 0700 "/run/user/${uid}" || true
+export XDG_RUNTIME_DIR="/run/user/${uid}"
+
+[[ -z "${XAUTHORITY:-}" ]] && export XAUTHORITY="${HOME}/.Xauthority"
+[[ -z "${DBUS_SESSION_BUS_ADDRESS:-}" ]] && \
+  export DBUS_SESSION_BUS_ADDRESS="unix:path=${XDG_RUNTIME_DIR}/bus"
+
+# Prevent xfce4-session (if ever called) from reconnecting to a dead ICE socket
+unset SESSION_MANAGER 2>/dev/null || true
+
+# Clean stale ICE sockets from previous crashed sessions
+find /tmp/.ICE-unix -user "${uid}" -delete 2>/dev/null || true
+
+# Kill any xfconfd left over from a previous session so the new session
+# bus can register org.xfce.Xfconf cleanly
+pkill -u "${uid}" -x xfconfd 2>/dev/null && sleep 1 || true
+
+xset s off    || true
+xset s noblank || true
+xset -dpms    || true
+
+cleanup() {
+  echo "$(date -Is) cleanup: terminating XFCE components"
+  pkill -u "${uid}" -x xfce4-screensaver 2>/dev/null || true
+  pkill -u "${uid}" -x xfce4-panel       2>/dev/null || true
+  pkill -u "${uid}" -x xfdesktop         2>/dev/null || true
+  pkill -u "${uid}" -x xfsettingsd       2>/dev/null || true
+  pkill -u "${uid}" -x xfwm4             2>/dev/null || true
+}
+trap cleanup EXIT
+
+echo "$(date -Is) starting XFCE components"
+xfsettingsd --no-daemon &
+xfwm4 --compositor=off &
+xfwm4_pid=$!
+xfce4-panel --disable-wm-check &
+xfdesktop &
+xfce4-screensaver &
+
+echo "$(date -Is) waiting for xfwm4 (pid ${xfwm4_pid})"
+wait "${xfwm4_pid}"
+echo "$(date -Is) xfwm4 exited, ending session"
