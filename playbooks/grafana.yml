@@ -1,0 +1,79 @@
+---
+# by default this playbook runs in the staging environment
+# to run in production, pass '-e runtime_env=production'
+- name: Grafana | Provision Variables & Infrastructure
+  # Both staging and production grafana deploys run on the production Nomad infrastructure.
+  # The [0] picks the first host, since we just run the nomad commands there.
+  hosts: "nomad_production[0]"
+  remote_user: pulsys
+  become: true
+
+  # Vault files (env-agnostic secrets or per-env keys within)
+  vars_files:
+    # This will auto include group_vars/nomad_production.yml
+    # This will auto include group_vars/nomad_servers.yml
+    - ../group_vars/nomad/vault.yml
+    - "../group_vars/grafana/{{ runtime_env | default('staging') }}.yml"
+    - ../group_vars/grafana/vault.yml
+    # Need postgres info.
+    - ../group_vars/postgresql/vault.yml
+    - ../group_vars/postgresql/{{ runtime_env | default('staging') }}.yml
+  handlers:
+    - name: reload postgresql
+      ansible.builtin.service:
+        name: postgresql
+        state: reloaded
+      delegate_to: "{{ grafana_db_host }}"
+      become: true
+  tasks:
+    - name: 'Grafana | create postgresql db users'
+      community.postgresql.postgresql_user:
+        name: '{{ grafana_db_user }}'
+        password: '{{ grafana_db_password }}'
+        encrypted: true
+        state: 'present'
+      delegate_to: '{{ grafana_db_host }}'
+      become: true
+      become_user: '{{ grafana_db_admin_user }}'
+      run_once: true
+
+    - name: 'Grafana | create postgresql database'
+      community.postgresql.postgresql_db:
+        name: '{{ grafana_db_name }}'
+        encoding: 'UTF-8'
+        state: 'present'
+        owner: "{{ grafana_db_user }}"
+      delegate_to: '{{ grafana_db_host }}'
+      become: true
+      become_user: '{{ grafana_db_admin_user }}'
+      run_once: true
+
+    - name: 'Grafana | ensure all nomad clients are in pg_hba'
+      ansible.builtin.lineinfile:
+        path: "/etc/postgresql/{{ postgres_version }}/main/pg_hba.conf"
+        line: "host  all  all  {{ item }}/32  md5"
+      delegate_to: "{{ grafana_db_host }}"
+      run_once: true
+      loop: "{{ groups['nomad_clients_production_staging'] }}"
+      when: "item in groups['nomad_clients_production_staging']"
+      notify: reload postgresql
+
+    - name: 'Grafana | set nomad variables'
+      ansible.builtin.shell:
+        cmd: >
+          /usr/local/bin/nomad var put -force 
+          nomad/jobs/grafana-{{ runtime_env | default('staging') }}/grafana
+          {{ grafana_nomad_env_vars.keys() | zip(grafana_nomad_env_vars.values()) | map("join", "=") | join(" ") }}
+      environment:
+        NOMAD_TOKEN: '{{ pul_nomad_management_token }}'
+        run_once: true
+
+    - name: 'Grafana | Prometheus | set nomad variables'
+      ansible.builtin.shell:
+        cmd: >
+          /usr/local/bin/nomad var put -force 
+          nomad/jobs/grafana-{{ runtime_env | default('staging') }}/monitoring
+          {{ grafana_prometheus_nomad_env_vars.keys() | zip(grafana_prometheus_nomad_env_vars.values()) | map("join", "=") | join(" ") }}
+      environment:
+        NOMAD_TOKEN: '{{ pul_nomad_management_token }}'
+        run_once: true
