@@ -1,4 +1,4 @@
-# Traefik Wall
+# Grafana + Observability
 
 This contains infrastructure for observability of some of our applications hosted on Nomad. It's mostly here to provide logging and metrics for staging resources that we can't put on Datadog, but need observability for during development.
 
@@ -27,6 +27,6 @@ We're using Promtail to ship logs from containers to Loki. Now that Podman has s
 
 ## Deployment
 
-From `nomad` directory: `BRANCH=main ./bin/deploy observability <prometheus/loki/grafana/log-shipping>`
+From `nomad` directory: `BRANCH=main ./bin/deploy grafana staging
 
 You can track progress and status of nomad apps by looking at the Nomad UI, accessible from `./bin/login`
