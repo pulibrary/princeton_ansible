@@ -1,7 +1,7 @@
 #!/usr/bin/bash
 {{ ansible_managed | comment }}
 # Checkmk local check — Solr 9 backup verification
-# Looks for: /solr/data/cloud_backup/solr9/<env>/YYYYMMDD/*-YYYYMMDD.bk
+# Looks for: /solr/backups/cloud_backup/solr9/<env>/YYYYMMDD/*-YYYYMMDD.bk
 
 STATE_OK=0
 STATE_WARN=1
@@ -11,7 +11,7 @@ STATE_UNKNOWN=3
 CURRENT_DATE=$(date +%Y%m%d)
 BACKUP_ENV="{{ runtime_env | default('staging') }}"
 
-backup_dir="/solr/data/cloud_backup/solr9/${BACKUP_ENV}/${CURRENT_DATE}"
+backup_dir="/solr/backups/cloud_backup/solr9/${BACKUP_ENV}/${CURRENT_DATE}"
 service_name="solr9_backup_${BACKUP_ENV}"
 
 if [ ! -d "$backup_dir" ]; then
@@ -35,4 +35,3 @@ collections=$(find "$backup_dir" -name "*-${CURRENT_DATE}.bk" \
 echo "${STATE_OK} ${service_name} count=${backup_count} - OK: Found ${backup_count} backups for solr9 ${BACKUP_ENV} on ${CURRENT_DATE}: ${collections}"
 echo "${STATE_OK} solr_backup_summary count=${backup_count} - OK: All Solr 9 backups completed successfully for ${CURRENT_DATE}"
 exit 0
-
