@@ -1,0 +1,36 @@
+---
+- name: Himmelblau (Rocky) | enforce NSS + verify resolution
+  block:
+    - name: Ensure nss-himmelblau package is installed
+      ansible.builtin.dnf:
+        name: nss-himmelblau
+        state: present
+
+    - name: Ensure nsswitch uses himmelblau for passwd/group
+      ansible.builtin.lineinfile:
+        path: /etc/nsswitch.conf
+        regexp: '^{{ item.key }}:\s*'
+        line: '{{ item.key }}: files himmelblau systemd'
+        backup: true
+      loop:
+        - { key: 'passwd' }
+        - { key: 'group' }
+
+    - name: Make /etc/pam.d/ssh symlink to sshd (so both names hit same stack)
+      ansible.builtin.file:
+        src: sshd
+        dest: /etc/pam.d/ssh
+        state: link
+        force: true
+
+    - name: Bounce himmelblaud (ensure broker ready for NSS lookups)
+      ansible.builtin.systemd:
+        name: himmelblaud
+        state: restarted
+        enabled: true
+
+    - name: Restart nscd if present to clear caches
+      ansible.builtin.systemd:
+        name: nscd
+        state: restarted
+      ignore_errors: true
