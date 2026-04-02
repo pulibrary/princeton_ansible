@@ -1,0 +1,25 @@
+---
+- name: 'pul_nomad_reservoir | ensure access to postgres server for client connections'
+  ansible.builtin.lineinfile:
+    path: '/etc/postgresql/{{ reservoir_db_version }}/main/pg_hba.conf'
+    line: 'host  all      all {{ ansible_default_ipv4.address }}/32       md5'
+  delegate_to: '{{ reservoir_db_host }}'
+  register: remote_postgres_configured
+  throttle: 1 # have this task run one machine at a time to avoid race condition
+  when:
+    - "pul_nomad_role == 'client'"
+
+- name: 'pul_nomad_reservoir | reload postgresql'
+  ansible.builtin.service:
+    name: postgresql
+    state: reloaded
+  when:
+    - remote_postgres_configured.changed
+  delegate_to: '{{ reservoir_db_host }}'
+
+- name: 'pul_nomad_reservoir | add the application environment variables'
+  ansible.builtin.shell:
+    cmd: '/usr/local/bin/nomad var put -force nomad/jobs/reservoir-sandbox {{ reservoir_sandbox_nomad_env_vars.keys() | zip(reservoir_sandbox_nomad_env_vars.values()) | map("join", "=") | join(" ") }}'
+  environment:
+    NOMAD_TOKEN: '{{ pul_nomad_management_token }}'
+  run_once: true
