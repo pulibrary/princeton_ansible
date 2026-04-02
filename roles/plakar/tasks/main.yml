@@ -1,0 +1,136 @@
+---
+# roles/plakar
+- name: Plakar | Ensure apt dependencies are present
+  ansible.builtin.apt:
+    name:
+      - curl
+      - gnupg2
+      - ca-certificates
+    state: present
+
+- name: Plakar | Download repo GPG key (ASCII)
+  ansible.builtin.get_url:
+    url: "{{ plakar_apt_key_url }}"
+    dest: "{{ plakar_apt_key_path }}.asc"
+    mode: "0644"
+
+- name: Plakar | Dearmor repo GPG key
+  ansible.builtin.command: >
+    gpg --dearmor -o {{ plakar_apt_key_path }} {{ plakar_apt_key_path }}.asc
+  args:
+    creates: "{{ plakar_apt_key_path }}"
+
+- name: Plakar | Configure apt repository
+  ansible.builtin.apt_repository:
+    repo: "deb [signed-by={{ plakar_apt_key_path }}] {{ plakar_apt_repo_url }} {{ plakar_apt_repo_suite }} {{ plakar_apt_repo_component }}"
+    filename: "plakar"
+    state: present
+
+- name: Plakar | Clean apt cache
+  ansible.builtin.command: apt-get clean
+  changed_when: false
+
+- name: Plakar | Update apt cache after adding repository
+  ansible.builtin.command: apt-get update
+  register: cache_update
+  retries: 3
+  delay: 5
+  until: cache_update.rc == 0
+  changed_when: false
+  failed_when: false
+
+- name: Plakar | Display cache update errors
+  ansible.builtin.debug:
+    msg: |
+      Return code: {{ cache_update.rc }}
+      STDOUT: {{ cache_update.stdout }}
+      STDERR: {{ cache_update.stderr }}
+  when: cache_update.rc != 0
+
+- name: Plakar | Fail if cache update failed
+  ansible.builtin.fail:
+    msg: "apt-get update failed. See debug output above."
+  when: cache_update.rc != 0
+
+- name: Plakar | Install plakar package
+  ansible.builtin.apt:
+    name: plakar
+    state: present
+    update_cache: true
+
+- name: Plakar | Ensure build directory exists for S3 plugin
+  ansible.builtin.file:
+    path: "{{ plakar_s3_build_dir }}"
+    state: directory
+    mode: "0755"
+    owner: "{{ plakar_user }}"
+    group: "{{ plakar_user }}"
+
+# Check if S3 plugin already installed
+- name: Plakar | Check installed plugins
+  ansible.builtin.command: plakar pkg show
+  register: plakar_pkg_show
+  become: true
+  become_user: "{{ plakar_user }}"
+  changed_when: false
+  failed_when: plakar_pkg_show.rc not in [0, 1]
+  # rc==1 could mean "no plugins installed yet" depending on version
+
+- name: Plakar | Determine if S3 plugin is already installed
+  ansible.builtin.set_fact:
+    plakar_s3_installed: "{{ 's3' in (plakar_pkg_show.stdout | default('')) }}"
+
+# Build S3 plugin (if missing)
+- name: Plakar | Build S3 plugin from upstream recipe
+  ansible.builtin.command: plakar pkg build s3
+  become: true
+  become_user: "{{ plakar_user }}"
+  args:
+    chdir: "{{ plakar_s3_build_dir }}"
+  when: not plakar_s3_installed
+
+- name: Plakar | Ensure S3 plugin ptar exists
+  ansible.builtin.stat:
+    path: "{{ plakar_s3_build_dir }}/{{ plakar_s3_plugin_filename }}"
+  register: plakar_s3_ptar
+  when: not plakar_s3_installed
+
+- name: Plakar | Fail if expected S3 plugin file is missing
+  ansible.builtin.fail:
+    msg: >
+      Expected {{ plakar_s3_build_dir }}/{{ plakar_s3_plugin_filename }}
+      but it does not exist. Check plakar pkg build s3 output and adjust
+      plakar_s3_plugin_version/arch if needed.
+  when:
+    - not plakar_s3_installed
+    - not plakar_s3_ptar.stat.exists | default(false)
+
+# Install S3 plugin via local ptar
+- name: Plakar | Install S3 plugin from local ptar
+  ansible.builtin.command: >
+    plakar pkg add {{ plakar_s3_build_dir }}/{{ plakar_s3_plugin_filename }}
+  args:
+    chdir: "{{ plakar_s3_build_dir }}"
+  become: true
+  become_user: "{{ plakar_user }}"
+  when: not plakar_s3_installed
+
+# Verify plugin is now installed
+- name: Plakar | Verify S3 plugin is installed
+  ansible.builtin.command: plakar pkg show
+  register: plakar_pkg_show_after
+  become: true
+  become_user: "{{ plakar_user }}"
+  changed_when: false
+
+- name: Plakar | Assert S3 shows up in plugin list
+  ansible.builtin.assert:
+    that:
+      - "'s3' in (plakar_pkg_show_after.stdout | default(''))"
+    fail_msg: "S3 plugin did not appear in 'plakar pkg show' after install."
+
+- name: Plakar | Configure repository and initial backup
+  ansible.builtin.include_tasks: configure_backup.yml
+  when:
+    - running_on_server
+    - plakar_configure_backup | default(false)

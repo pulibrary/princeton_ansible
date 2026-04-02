@@ -1,0 +1,19 @@
+# {{ ansible_managed | comment }}
+version: 1.0.0
+
+# 1. Define the storage backend (S3 API)
+repository:
+  backend: s3
+  config:
+    bucket: "{{ plakar_repo_bucket }}"
+    region: "{{ plakar_repo_region }}"
+    access_key: "{{ plakar_repo_access_key }}"
+    secret_key: "{{ plakar_repo_secret_key }}"
+
+# 2. Define the backup job
+snapshot:
+  root: "{{ plakar_snapshot_root }}"                 # The directory you want backed up
+  excludes:
+{% for pattern in plakar_snapshot_excludes %}
+    - "{{ pattern }}"
+{% endfor %}

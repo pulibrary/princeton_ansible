@@ -1,0 +1,34 @@
+---
+- name: Verify
+  hosts: all
+  gather_facts: false
+  become: true
+  vars:
+    # Mirror defaults for verification logic
+    plakar_s3_build_dir: "/var/lib/plakar/plugins-build"
+    plakar_s3_plugin_version: "1.0.7"
+    plakar_s3_plugin_arch: "linux_amd64"
+    plakar_s3_plugin_filename: "s3_v{{ plakar_s3_plugin_version }}_{{ plakar_s3_plugin_arch }}.ptar"
+  tasks:
+    - name: Check if Plakar binary exists
+      ansible.builtin.stat:
+        path: /usr/bin/plakar
+      register: plakar_binary
+
+    - name: Assert Plakar binary is present and executable
+      ansible.builtin.assert:
+        that:
+          - plakar_binary.stat.exists
+          - plakar_binary.stat.executable
+        fail_msg: "Plakar binary not found or not executable at /usr/bin/plakar"
+
+    - name: Get Plakar version
+      ansible.builtin.command: plakar version
+      register: plakar_version_output
+      changed_when: false
+
+    - name: Assert Plakar runs successfully
+      ansible.builtin.assert:
+        that:
+          - plakar_version_output.rc == 0
+        fail_msg: "Plakar version command failed with exit code {{ plakar_version_output.rc }}"
