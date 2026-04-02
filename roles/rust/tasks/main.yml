@@ -1,5 +1,5 @@
 ---
-- name: rust | ensure dependencies are present (Debian)
+- name: Rust | ensure dependencies are present (Debian)
   ansible.builtin.apt:
     name:
       - ca-certificates
@@ -8,44 +8,43 @@
     update_cache: true
   when: ansible_os_family == "Debian"
 
-- name: rust | set system-wide rustup locations
+- name: Rust | set system-wide rustup locations
   ansible.builtin.set_fact:
     rust_cargo_home: /usr/local/cargo
     rust_rustup_home: /usr/local/rustup
     rust_tmpdir: /var/tmp
 
-- name: rust | ensure the rustup group exists
+- name: Rust | ensure the rustup group exists
   ansible.builtin.group:
     name: rustup
     state: present
 
-- name: rust | ensure rustup directories exist
+- name: Rust | ensure rustup directories exist
   ansible.builtin.file:
     path: "{{ item }}"
     state: directory
     owner: root
     group: rustup
-    mode: "0775"
-    recurse: true
+    mode: "2775"
   loop:
     - "{{ rust_cargo_home }}"
     - "{{ rust_rustup_home }}"
     - "{{ rust_tmpdir }}/rustup"
   tags: molecule-idempotence-notest
 
-- name: rust | check if system cargo exists
+- name: Rust | check if system cargo exists
   ansible.builtin.stat:
     path: "{{ rust_cargo_home }}/bin/cargo"
   register: system_cargo
 
-- name: rust | download rustup installer script
+- name: Rust | download rustup installer script
   ansible.builtin.get_url:
     url: https://sh.rustup.rs
     dest: "{{ rust_tmpdir }}/rustup/rustup-init.sh"
     mode: "0644"
   when: not system_cargo.stat.exists
 
-- name: rust | install rustup + stable toolchain (system-wide)
+- name: Rust | install rustup + stable toolchain (system-wide)
   ansible.builtin.command:
     argv:
       - sh
@@ -57,12 +56,53 @@
   environment:
     CARGO_HOME: "{{ rust_cargo_home }}"
     RUSTUP_HOME: "{{ rust_rustup_home }}"
-    TMPDIR: "{{ rust_tmpdir }}/rustup"   # <-- avoids /tmp noexec
+    TMPDIR: "{{ rust_tmpdir }}/rustup"
   args:
     creates: "{{ rust_cargo_home }}/bin/rustc"
   when: not system_cargo.stat.exists
+- name: rust | fix rustup and cargo group ownership after install
+  ansible.builtin.file:
+    path: "{{ item }}"
+    owner: root
+    group: rustup
+    recurse: true
+  loop:
+    - "{{ rust_cargo_home }}"
+    - "{{ rust_rustup_home }}"
+  tags: molecule-idempotence-notest
 
-- name: rust | make system-wide env available to all users
+- name: rust | ensure rustup and cargo directories stay group writable
+  ansible.builtin.shell: |
+    find {{ item }} -type d -exec chmod 2775 {} +
+  args:
+    executable: /bin/bash
+  loop:
+    - "{{ rust_cargo_home }}"
+    - "{{ rust_rustup_home }}"
+  changed_when: false
+  tags: molecule-idempotence-notest
+
+- name: rust | ensure cargo proxy binaries are executable
+  ansible.builtin.shell: |
+    if [ -d "{{ rust_cargo_home }}/bin" ]; then
+      find "{{ rust_cargo_home }}/bin" -type f -exec chmod 755 {} +
+    fi
+  args:
+    executable: /bin/bash
+  changed_when: false
+  tags: molecule-idempotence-notest
+
+- name: rust | ensure rustup toolchain binaries are executable
+  ansible.builtin.shell: |
+    if [ -d "{{ rust_rustup_home }}/toolchains" ]; then
+      find "{{ rust_rustup_home }}/toolchains" -path '*/bin/*' -type f -exec chmod 755 {} +
+    fi
+  args:
+    executable: /bin/bash
+  changed_when: false
+  tags: molecule-idempotence-notest
+
+- name: Rust | make system-wide env available to all users
   ansible.builtin.copy:
     dest: /etc/profile.d/rust.sh
     owner: root
@@ -73,10 +113,9 @@
       export RUSTUP_HOME={{ rust_rustup_home }}
       export PATH={{ rust_cargo_home }}/bin:$PATH
 
-- name: rust | verify cargo works (with explicit env)
+- name: Rust | verify cargo works (with explicit env)
   ansible.builtin.command: "{{ rust_cargo_home }}/bin/cargo --version"
   environment:
     CARGO_HOME: "{{ rust_cargo_home }}"
     RUSTUP_HOME: "{{ rust_rustup_home }}"
   changed_when: false
-
