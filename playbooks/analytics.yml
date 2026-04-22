@@ -51,23 +51,23 @@
     - name: 'Analytics | ensure all nomad clients are in pg_hba'
       ansible.builtin.lineinfile:
         path: "/etc/postgresql/{{ postgres_version }}/main/pg_hba.conf"
-        line: "host  all  all  {{ item }}/32  md5"
+        line: "host  all  all  {{ item }} md5"
       delegate_to: "{{ analytics_db_host }}"
       run_once: true
       loop: "{{ groups['nomad_clients_production_staging'] }}"
       when:
-        - "runtime_env == 'staging'"
+        - "(runtime_env | default('staging')) == 'staging'"
       notify: reload postgresql
 
     - name: 'Analytics | ensure all nomad clients are in pg_hba'
       ansible.builtin.lineinfile:
         path: "/etc/postgresql/{{ postgres_version }}/main/pg_hba.conf"
-        line: "host  all  all  {{ item }}/32  md5"
+        line: "host  all  all  {{ item }} md5"
       delegate_to: "{{ analytics_db_host }}"
       run_once: true
       loop: "{{ groups['nomad_clients_production'] }}"
       when:
-        - "runtime_env == 'production'"
+        - "(runtime_env | default('staging')) == 'production'"
       notify: reload postgresql
 
     - name: 'Analytics | set nomad variables'
