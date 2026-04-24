@@ -1,0 +1,55 @@
+server {
+    listen 80;
+    server_name {{ pulmirror_domains | join(' ') }};
+
+    location ^~ /.well-known/acme-challenge/ {
+        root {{ pulmirror_webroot | dirname }};
+        default_type "text/plain";
+        try_files $uri =404;
+    }
+
+{% if pulmirror_template_enable_https %}
+    location / {
+        return 301 https://$host$request_uri;
+    }
+{% else %}
+    location / {
+{% if pulmirror_proxy_pass | length > 0 %}
+        proxy_pass {{ pulmirror_proxy_pass }};
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+{% else %}
+        root {{ pulmirror_server_root }};
+        index index.html;
+{% endif %}
+    }
+{% endif %}
+}
+
+{% if pulmirror_template_enable_https %}
+server {
+    listen 443 ssl http2;
+    server_name {{ pulmirror_domains | join(' ') }};
+
+    ssl_certificate {{ pulmirror_ssl_certificate }};
+    ssl_certificate_key {{ pulmirror_ssl_certificate_key }};
+
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers off;
+
+    location / {
+{% if pulmirror_proxy_pass | length > 0 %}
+        proxy_pass {{ pulmirror_proxy_pass }};
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+{% else %}
+        root {{ pulmirror_server_root }};
+        index index.html;
+{% endif %}
+    }
+}
+{% endif %}

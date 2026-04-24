@@ -1,0 +1,19 @@
+#!/bin/sh
+set -eu
+
+set -a
+. /usr/local/etc/lego-dnsimple.env
+set +a
+
+lego \
+  --accept-tos \
+  --email "{{ pulmirror_email }}" \
+  --dns "{{ pulmirror_dns_provider }}" \
+  --path "{{ pulmirror_path }}" \
+  --server "{{ pulmirror_acme_server }}" \
+{% for domain in pulmirror_domains %}
+  --domains "{{ domain }}" \
+{% endfor %}
+  renew \
+  --days 30 \
+  --renew-hook "service nginx reload"
