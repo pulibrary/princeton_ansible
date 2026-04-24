@@ -95,10 +95,21 @@
     group: wheel
     mode: "0750"
 
-- name: nginx lego | install renewal cron
+- name: Pulmirror | install renewal cron
   ansible.builtin.cron:
     name: "renew lego certificate for {{ pulmirror_domain }}"
     user: root
     minute: "{{ pulmirror_cron_minute }}"
     hour: "{{ pulmirror_cron_hour }}"
     job: "{{ pulmirror_renew_script }} >/var/log/lego-renew-{{ pulmirror_domain }}.log 2>&1"
+
+- name: Pulmirror | Ensure newsyslog.conf.d directory exists
+  ansible.builtin.file:
+    path: /usr/local/etc/newsyslog.conf.d
+    state: directory
+    owner: root
+    group: wheel
+    mode: "0755"
+
+- name: Pulmirror | nodejs
+  ansible.builtin.include_tasks: nodejs.yml

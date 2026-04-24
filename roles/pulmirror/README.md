@@ -1,122 +1,195 @@
-# Example Role
+# pulmirror
 
-This role is a placeholder for creation of molecule roles
+An Ansible role to provision a FreeBSD-based mirror host with:  
 
-1. From your new role create a molecule directory
+- nginx (HTTPS-enabled)  
+- ACME certificates via lego (DNS-01 using DNSimple)  
+- Automated certificate renewal  
+- Node.js distribution mirror (wget-based)  
+- Log rotation and scheduled sync  
 
-  ```bash
-  cd roles/<your_role_name>
-  mkdir -p molecule/default
+---  
+
+## Requirements
+
+- FreeBSD host  
+- DNS hosted in DNSimple (or delegated for DNS-01)  
+- DNSimple API token with access to the zone  
+- Ansible with `community.general` collection  
+
+```bash  
+ansible-galaxy collection install community.general
+```
+
+---
+
+## What this role does
+
+### TLS (lego + DNSimple)
+
+- Uses lego with DNS-01 challenge
+- Stores certs under:
+
+  ```sh
+  /usr/local/etc/lego/certificates/
   ```
 
-1. Copy the files from the example role from the root of the repo:
+- Automatically renews via cron
+- Reloads nginx on renewal
 
-  ```bash
-  cp -a roles/example/* roles/your_role_name
+### nginx
+
+- Installs nginx
+- Creates:
+
+  ```sh
+  /usr/local/etc/nginx/conf.d/
   ```
 
-1. Edit the following files:
-   * `molecule/default/converge.yml`
+- Ensures `nginx.conf` includes:
 
-    ```yaml
-    roles:
-      - role: <your_role_name>
-    ```
+  ```sh
+  include /usr/local/etc/nginx/conf.d/*.conf;
+  ```
 
-   * `meta/main.yml`
+- Configures HTTP → HTTPS redirect
+- Serves either static content or reverse proxy
 
-    ```yaml
-    role_name: <your_role_name>
-    ...
-    description: <Description of your role>
-    ...
-    dependencies: []
-    ### or if your role depends on another
-      - role: other_role
-    ```
+### Node.js mirror
 
-2. Run:
+- Mirrors:
 
-    ```bash
-    cd roles/<your_role_name>
-    molecule converge
-    molecule verify
-    ```
+  ```sh
+  https://nodejs.org/dist/
+  ```
 
-## Architecture/platform notes (Apple Silicon vs GHA CI)
+- Stores content under:
 
-We use a multi-arch Docker image:
+  ```sh
+  /usr/local/www/nginx-dist/mirror/nodejs
+  ```
 
-  * ghcr.io/pulibrary/vm-builds/ubuntu-22.04
+- Uses `wget --mirror`
+- Runs via cron
+- Uses lockfile to prevent concurrent runs
+- Rotates logs via `newsyslog`
 
-  * It has linux/amd64 and linux/arm64 manifests.
+---
 
-  * GitHub Actions runners are amd64.
+## Variables
 
-  * Local Macs (M1/M2/M3) are arm64.
+### Core
 
-Molecule’s Docker driver honors the MOLECULE_DOCKER_PLATFORM environment variable:
+```yaml
+pulmirror_domain: "example.org"  
+pulmirror_domains:  
 
-  * If not set, Docker chooses a platform based on the host.
+- "example.org"  
 
-  * If set, Molecule passes it to Docker as the platform= option.
+pulmirror_email: "admin@example.org"
+```
 
-### Important: `.env.yml` vs GitHub Actions `env`:
+### ACME / DNSimple
 
-Molecule will load environment variables from `.env.yml` (or whatever `MOLECULE_ENV_FILE` points to) **inside the runner/container.**
+```yaml
+pulmirror_dns_provider: "dnsimple"  
+pulmirror_dnsimple_oauth_token: "{{ vault_dnsimple_oauth_token }}"  
+pulmirror_dnsimple_ttl: 300  
+```
 
-That means:
+### Paths
 
-  * If you commit:
+```yaml
+pulmirror_path: "/usr/local/etc/lego"  
 
-    ```yaml
-    # roles/<role>/.env.yml
-      ---
-      MOLECULE_DOCKER_PLATFORM: linux/arm64
-      ```
+pulmirror_ssl_certificate: "/usr/local/etc/lego/certificates/<domain>.crt"  
+pulmirror_ssl_certificate_key: "/usr/local/etc/lego/certificates/<domain>.key"  
 
+pulmirror_nginx_conf: "/usr/local/etc/nginx/conf.d/<domain>.conf"
+```
 
-  * And in GitHub Actions you also set:
+### Node mirror
 
-      ```yaml
-      env:
-        MOLECULE_DOCKER_PLATFORM: linux/amd64
-      ```
+```yaml
+nodejs_mirror_root: /usr/local/www/nginx-dist/mirror/nodejs  
+nodejs_mirror_source: https://nodejs.org/dist/  
 
+nodejs_mirror_cron_hour: "*/6"  
+nodejs_mirror_cron_minute: "17"
+```
 
-Then the value from `.env.yml` wins inside Molecule, and CI will still use `linux/arm64`.
+---
 
-#### Rule of thumb:
+## Example
 
-Let CI control the platform, so **do not commit** `MOLECULE_DOCKER_PLATFORM` in `.env.yml.`
+```yaml
+- hosts: pulmirror_staging  
+  become: true  
+  roles:  
 
-### Recommended patterns
+  - role: pulmirror  
+    vars:  
+      pulmirror_domain: "pultestmirror.pulcloud.io"  
+      pulmirror_domains:  
 
-Local Apple Silicon (M1/M2/M3)
+        - "pultestmirror.pulcloud.io"  
 
-Use:
+      pulmirror_email: "lsupport@princeton.edu"  
+      pulmirror_use_staging: true  
 
-Export the variable when you run Molecule:
+      pulmirror_dnsimple_oauth_token: "{{ vault_dnsimple_oauth_token }}"
+```
 
-Use a local, untracked env file:
+---
 
-  * Depend on the global .gitignore (at repo root):
+## Troubleshooting
 
-  * Create `roles/<your_role_name>/.env.local.yml`:
+### Certificate issuance fails
 
-    ```yaml
-    ---
-    MOLECULE_DOCKER_PLATFORM: linux/arm64
-    ```
+Run manually on host:
 
+set -a  
+. /usr/local/etc/lego-dnsimple.env  
+set +a  
 
-  * Run Molecule with:
+lego --dns dnsimple ...
 
-    ```bash
-    cd roles/<your_role_name>
-    MOLECULE_ENV_FILE=.env.local.yml molecule test
-    ```
+Common issues:
 
-#### GitHub Actions (CI)
+- Token lacks access to DNS zone
+- Wrong domain (zone mismatch)
+- Missing DNS delegation for `_acme-challenge`
 
-  * The workflow sets MOLECULE_DOCKER_PLATFORM=linux/amd64 (or relies on the default amd64 runner).
+---
+
+### DNS-01 caveat
+
+ACME validation happens at:
+
+_acme-challenge.<domain>
+
+If your public name is:
+
+pultestmirror.princeton.edu
+
+but DNS is hosted in:
+
+pulcloud.io
+
+you must either:
+
+- issue cert for `pulcloud.io` name  
+  **or**
+- delegate `_acme-challenge` via CNAME
+
+---
+
+## Notes
+
+- Role is FreeBSD-specific
+- Uses `pkg` (not apt/yum)
+- nginx runs as `www`
+-
+
+```text
+```

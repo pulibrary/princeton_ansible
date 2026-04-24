@@ -1,0 +1,45 @@
+---
+- name: Pulmirror | Ensure mirror target directory exists
+  ansible.builtin.file:
+    path: "{{ nodejs_mirror_root }}"
+    state: directory
+    owner: "{{ nodejs_mirror_owner }}"
+    group: "{{ nodejs_mirror_group }}"
+    mode: "0755"
+
+- name: Pulmirror | Deploy nodejs mirror sync script
+  ansible.builtin.template:
+    src: sync-nodejs-mirror.sh.j2
+    dest: "{{ nodejs_mirror_script }}"
+    owner: root
+    group: wheel
+    mode: "0755"
+
+- name: Pulmirror | Ensure log file exists with correct ownership
+  ansible.builtin.file:
+    path: "{{ nodejs_mirror_log }}"
+    state: touch
+    owner: root
+    group: wheel
+    mode: "0644"
+    modification_time: preserve
+    access_time: preserve
+
+- name: Pulmirror | Configure newsyslog rotation for mirror log
+  ansible.builtin.copy:
+    dest: /usr/local/etc/newsyslog.conf.d/nodejs-mirror.conf
+    owner: root
+    group: wheel
+    mode: "0644"
+    content: |
+      # logfilename          [owner:group]    mode count size when  flags
+      {{ nodejs_mirror_log }}  root:wheel       644  7     10000 *     JC
+
+- name: Pulmirror | Install cron entry for nodejs mirror sync
+  ansible.builtin.cron:
+    name: "sync nodejs.org/dist mirror"
+    user: root
+    minute: "{{ nodejs_mirror_cron_minute }}"
+    hour: "{{ nodejs_mirror_cron_hour }}"
+    job: "{{ nodejs_mirror_script }}"
+    cron_file: nodejs-mirror

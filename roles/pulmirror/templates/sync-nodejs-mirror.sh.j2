@@ -1,0 +1,38 @@
+#!/bin/sh
+# {{ ansible_managed }}
+# Mirror {{ nodejs_mirror_source }} to {{ nodejs_mirror_root }}
+# Uses wget timestamping so repeat runs only pull changes.
+
+MIRROR_ROOT="{{ nodejs_mirror_root }}"
+LOG_FILE="{{ nodejs_mirror_log }}"
+LOCK_FILE="{{ nodejs_mirror_lock }}"
+SOURCE_URL="{{ nodejs_mirror_source }}"
+OWNER="{{ nodejs_mirror_owner }}:{{ nodejs_mirror_group }}"
+
+# Acquire lock or exit quietly (75 = EX_TEMPFAIL from lockf)
+lockf -t 0 "$LOCK_FILE" /usr/local/bin/wget \
+    --mirror \
+    --no-parent \
+    --no-host-directories \
+    --cut-dirs=1 \
+    --reject "index.html*" \
+    --directory-prefix="$MIRROR_ROOT" \
+    --wait={{ nodejs_mirror_wait }} \
+    --random-wait \
+    --limit-rate={{ nodejs_mirror_rate_limit }} \
+    --tries=5 \
+    --timeout=120 \
+    --append-output="$LOG_FILE" \
+    "$SOURCE_URL"
+
+rc=$?
+
+# 75 = another sync already running, not an error
+if [ $rc -eq 75 ]; then
+    exit 0
+fi
+
+# Keep ownership aligned with nginx user after pulling new files
+chown -R "$OWNER" "$MIRROR_ROOT" 2>/dev/null || true
+
+exit $rc
