@@ -1,35 +1,44 @@
 #!/bin/sh
 # {{ ansible_managed }}
-# Mirror {{ nodejs_mirror_source }} to {{ nodejs_mirror_root }}
-# Uses wget timestamping so repeat runs only pull changes.
+# Mirror nodejs.org /dist/ via rsync from mirrors.dotsrc.org (Aalborg University).
+# Dotsrc is a tier-1 mirror of nodejs.org and syncs from upstream every 6 hours.
 
 MIRROR_ROOT="{{ nodejs_mirror_root }}"
 LOG_FILE="{{ nodejs_mirror_log }}"
 LOCK_FILE="{{ nodejs_mirror_lock }}"
 SOURCE_URL="{{ nodejs_mirror_source }}"
 OWNER="{{ nodejs_mirror_owner }}:{{ nodejs_mirror_group }}"
+RSYNC=/usr/local/bin/rsync
 
 # Acquire lock or exit quietly (75 = EX_TEMPFAIL from lockf)
-lockf -t 0 "$LOCK_FILE" /usr/local/bin/wget \
-    --mirror \
-    --no-parent \
-    --no-host-directories \
-    --cut-dirs=1 \
-    --reject "index.html*" \
-    --directory-prefix="$MIRROR_ROOT" \
-    --wait={{ nodejs_mirror_wait }} \
-    --random-wait \
-    --limit-rate={{ nodejs_mirror_rate_limit }} \
-    --tries=5 \
-    --timeout=120 \
-    --append-output="$LOG_FILE" \
-    "$SOURCE_URL"
+lockf -t 0 "$LOCK_FILE" "$RSYNC" \
+    --archive \
+    --hard-links \
+    --itemize-changes \
+    --human-readable \
+    --stats \
+    --delete \
+    --delete-after \
+    --delay-updates \
+    --partial \
+    --timeout=600 \
+    --contimeout=60 \
+    --bwlimit={{ nodejs_mirror_bwlimit }} \
+    --log-file="$LOG_FILE" \
+    "$SOURCE_URL" \
+    "$MIRROR_ROOT/"
 
 rc=$?
 
 # 75 = another sync already running, not an error
 if [ $rc -eq 75 ]; then
     exit 0
+fi
+
+# Partial-transfer codes on busy upstream mirrors: non-fatal, next run catches up
+if [ $rc -eq 23 ] || [ $rc -eq 24 ]; then
+    echo "$(date '+%Y-%m-%d %H:%M:%S') rsync partial-transfer (rc=$rc), non-fatal" >> "$LOG_FILE"
+    rc=0
 fi
 
 # Keep ownership aligned with nginx user after pulling new files

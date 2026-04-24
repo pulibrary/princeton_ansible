@@ -57,11 +57,13 @@ ansible-galaxy collection install community.general
 
 ### Node.js mirror
 
-- Mirrors:
+This role mirrors Node.js distribution files using `rsync` from a tier-1 upstream mirror:
 
-  ```sh
-  https://nodejs.org/dist/
-  ```
+```text
+rsync://mirrors.dotsrc.org/nodejs/dist/
+```
+
+Dotsrc (Aalborg University) is a public mirror that syncs from nodejs.org approximately every 6 hours.
 
 - Stores content under:
 
@@ -69,10 +71,17 @@ ansible-galaxy collection install community.general
   /usr/local/www/nginx-dist/mirror/nodejs
   ```
 
-- Uses `wget --mirror`
-- Runs via cron
+- Uses `rsync`
+- Efficient delta transfers (only changed files)
+- Preserves hard links (--hard-links)
+- Deletes removed upstream files (--delete)
 - Uses lockfile to prevent concurrent runs
-- Rotates logs via `newsyslog`
+- Handles partial transfers gracefully
+- Logs to:
+
+  ```sh
+  /var/log/nodejs-mirror.log
+  ```
 
 ---
 
