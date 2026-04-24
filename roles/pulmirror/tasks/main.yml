@@ -2,7 +2,7 @@
 # roles/pulmirror
 - name: Pulmirror | install packages
   community.general.pkgng:
-    name: "{{ pulmirror_nginx_lego_packages }}"
+    name: "{{ pulmirror_packages }}"
     state: present
 
 - name: Pulmirror | enable nginx
@@ -58,6 +58,22 @@
     creates: "{{ pulmirror_ssl_certificate }}"
   when: not pulmirror_cert.stat.exists
   no_log: true
+  notify: reload nginx
+
+- name: Pulmirror | create nginx conf.d directory
+  ansible.builtin.file:
+    path: /usr/local/etc/nginx/conf.d
+    state: directory
+    owner: root
+    group: wheel
+    mode: "0755"
+
+- name: Pulmirror | include nginx conf.d files
+  ansible.builtin.lineinfile:
+    path: /usr/local/etc/nginx/nginx.conf
+    insertafter: '^\s*include\s+mime.types;'
+    line: '    include /usr/local/etc/nginx/conf.d/*.conf;'
+    state: present
   notify: reload nginx
 
 - name: Pulmirror | install final nginx vhost
