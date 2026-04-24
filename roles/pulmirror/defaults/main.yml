@@ -1,0 +1,40 @@
+#SPDX-License-Identifier: MIT-0
+# defaults file for roles/pulmirror
+---
+pulmirror_packages:
+  - nginx
+  - lego
+
+pulmirror_domain: "example.org"
+pulmirror_email: "admin@example.org"
+
+pulmirror_domains:
+  - "{{ pulmirror_domain }}"
+
+pulmirror_path: "/usr/local/etc/lego"
+pulmirror_cert_dir: "{{ pulmirror_path }}/certificates"
+
+pulmirror_nginx_conf: "/usr/local/etc/nginx/conf.d/{{ pulmirror_domain }}.conf"
+
+pulmirror_ssl_certificate: "{{ pulmirror_cert_dir }}/{{ pulmirror_domain }}.crt"
+pulmirror_ssl_certificate_key: "{{ pulmirror_cert_dir }}/{{ pulmirror_domain }}.key"
+
+pulmirror_use_staging: false
+pulmirror_acme_server: >-
+  {{ 'https://acme-staging-v02.api.letsencrypt.org/directory'
+     if pulmirror_use_staging
+     else 'https://acme-v02.api.letsencrypt.org/directory' }}
+
+pulmirror_enable_https: true
+
+pulmirror_proxy_pass: ""
+pulmirror_server_root: "/usr/local/www/nginx"
+
+pulmirror_renew_script: "/usr/local/sbin/lego-renew-{{ pulmirror_domain }}.sh"
+
+pulmirror_cron_minute: "17"
+pulmirror_cron_hour: "3"
+
+pulmirror_dns_provider: "dnsimple"
+pulmirror_dnsimple_oauth_token: "{{ vault_dnsimple_oauth_token }}"
+pulmirror_dnsimple_ttl: 300

@@ -1,0 +1,88 @@
+---
+# roles/pulmirror
+- name: Pulmirror | install packages
+  community.general.pkgng:
+    name: "{{ pulmirror_nginx_lego_packages }}"
+    state: present
+
+- name: Pulmirror | enable nginx
+  ansible.builtin.service:
+    name: nginx
+    enabled: true
+
+- name: Pulmirror | install dnsimple environment file
+  ansible.builtin.copy:
+    dest: /usr/local/etc/lego-dnsimple.env
+    owner: root
+    group: wheel
+    mode: "0600"
+    content: |
+      DNSIMPLE_OAUTH_TOKEN={{ pulmirror_dnsimple_oauth_token }}
+      DNSIMPLE_TTL={{ pulmirror_dnsimple_ttl }}
+
+- name: Pulmirror | start nginx
+  ansible.builtin.service:
+    name: nginx
+    state: started
+
+- name: Pulmirror | create lego state directory
+  ansible.builtin.file:
+    path: "{{ pulmirror_path }}"
+    state: directory
+    owner: root
+    group: wheel
+    mode: "0700"
+
+- name: Pulmirror | check whether certificate exists
+  ansible.builtin.stat:
+    path: "{{ pulmirror_ssl_certificate }}"
+  register: pulmirror_cert
+
+- name: Pulmirror | issue initial certificate with DNSimple
+  ansible.builtin.shell: |
+    set -a
+    . /usr/local/etc/lego-dnsimple.env
+    set +a
+
+    lego \
+      --accept-tos \
+      --email "{{ pulmirror_email }}" \
+      --dns dnsimple \
+      --path "{{ pulmirror_path }}" \
+      --server "{{ pulmirror_acme_server }}" \
+      {% for domain in pulmirror_domains %}
+      --domains "{{ domain }}" \
+      {% endfor %}
+      run
+  args:
+    creates: "{{ pulmirror_ssl_certificate }}"
+  when: not pulmirror_cert.stat.exists
+  no_log: true
+  notify: reload nginx
+
+- name: Pulmirror | install final nginx vhost
+  ansible.builtin.template:
+    src: nginx-vhost.conf.j2
+    dest: "{{ pulmirror_nginx_conf }}"
+    owner: root
+    group: wheel
+    mode: "0644"
+  vars:
+    freebsd_nginx_lego_template_enable_https: "{{ pulmirror_enable_https }}"
+  notify: reload nginx
+
+- name: Pulmirror | install renewal script
+  ansible.builtin.template:
+    src: lego-renew.sh.j2
+    dest: "{{ pulmirror_renew_script }}"
+    owner: root
+    group: wheel
+    mode: "0750"
+
+- name: nginx lego | install renewal cron
+  ansible.builtin.cron:
+    name: "renew lego certificate for {{ pulmirror_domain }}"
+    user: root
+    minute: "{{ pulmirror_cron_minute }}"
+    hour: "{{ pulmirror_cron_hour }}"
+    job: "{{ pulmirror_renew_script }} >/var/log/lego-renew-{{ pulmirror_domain }}.log 2>&1"
