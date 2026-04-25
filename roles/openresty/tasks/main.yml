@@ -1,0 +1,99 @@
+---
+# roles/openresty
+- name: Openresty | install packages on FreeBSD
+  ansible.builtin.pkgng:
+    name:
+      - "{{ openresty_package }}"
+      - "{{ openresty_package }}"
+      - npm
+    state: present
+
+- name: Openresty | create group
+  ansible.builtin.group:
+    name: "{{ openresty_group }}"
+    system: true
+
+- name: Openresty | create user
+  ansible.builtin.user:
+    name: "{{ openresty_user }}"
+    group: "{{ openresty_group }}"
+    home: "{{ openresty_altcha_home }}"
+    shell: /usr/sbin/nologin
+    system: true
+    create_home: true
+
+- name: Openresty | create app directory
+  ansible.builtin.file:
+    path: "{{ openresty_home }}"
+    state: directory
+    owner: "{{ openresty_user }}"
+    group: "{{ openresty_group }}"
+    mode: "0750"
+
+- name: Openresty | install altcha npm package
+  community.general.npm:
+    name: altcha
+    path: "{{ openresty_altcha_home }}"
+    state: present
+  become: true
+  become_user: "{{ openresty_user }}"
+
+- name: Openresty | install express npm package
+  community.general.npm:
+    name: express
+    path: "{{ openresty_altcha_home }}"
+    state: present
+  become: true
+  become_user: "{{ openresty_user }}"
+
+- name: Openresty | install cookie-parser npm package
+  community.general.npm:
+    name: cookie-parser
+    path: "{{ openresty_altcha_home }}"
+    state: present
+  become: true
+  become_user: "{{ openresty_user }}"
+
+- name: Openresty | install local altcha server
+  ansible.builtin.template:
+    src: altcha-server.mjs.j2
+    dest: "{{ openresty_home }}/server.mjs"
+    owner: "{{ openresty_user }}"
+    group: "{{ openresty_group }}"
+    mode: "0640"
+  notify: restart altcha server
+
+- name: Openresty | install FreeBSD rc.d service
+  ansible.builtin.template:
+    src: altcha-server.rc.j2
+    dest: /usr/local/etc/rc.d/altcha_server
+    owner: root
+    group: wheel
+    mode: "0755"
+  notify: restart altcha server
+
+- name: Openresty | enable altcha server
+  ansible.builtin.lineinfile:
+    path: /etc/rc.conf
+    regexp: '^altcha_server_enable='
+    line: 'altcha_server_enable="YES"'
+    create: true
+    mode: "0644"
+
+- name: Openresty | configure OpenResty site
+  ansible.builtin.template:
+    src: altcha-proxy.conf.j2
+    dest: /usr/local/etc/openresty/nginx.conf
+    owner: root
+    group: wheel
+    mode: "0644"
+  notify: reload openresty
+
+- name: Openresty | enable services
+  ansible.builtin.service:
+    name: "{{ item }}"
+    enabled: true
+    state: started
+  loop:
+    - "{{ 'altcha_server' }}"
+    - "{{ 'openresty' }}"
