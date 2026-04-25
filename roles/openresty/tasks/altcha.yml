@@ -1,0 +1,65 @@
+---
+- name: Openresty altcha | install node
+  ansible.builtin.pkgng:
+    name:
+      - node
+      - npm
+    state: present
+
+- name: Openresty altcha | create group
+  ansible.builtin.group:
+    name: "{{ openresty_altcha_group }}"
+    system: true
+
+- name: Openresty altcha | create user
+  ansible.builtin.user:
+    name: "{{ openresty_altcha_user }}"
+    group: "{{ openresty_altcha_group }}"
+    home: "{{ openresty_altcha_home }}"
+    shell: /usr/sbin/nologin
+    system: true
+    create_home: true
+
+- name: Openresty altcha | install npm packages
+  community.general.npm:
+    name: "{{ item }}"
+    path: "{{ openresty_altcha_home }}"
+    state: present
+  loop:
+    - altcha
+    - express
+    - cookie-parser
+  become: true
+  become_user: "{{ openresty_altcha_user }}"
+
+- name: Openresty altcha | install server.mjs
+  ansible.builtin.template:
+    src: altcha-server.mjs.j2
+    dest: "{{ openresty_altcha_home }}/server.mjs"
+    owner: "{{ openresty_altcha_user }}"
+    group: "{{ openresty_altcha_group }}"
+    mode: "0640"
+  notify: restart altcha server
+
+- name: Openresty altcha | install rc.d service
+  ansible.builtin.template:
+    src: altcha-server.rc.j2
+    dest: /usr/local/etc/rc.d/altcha_server
+    owner: root
+    group: wheel
+    mode: "0755"
+  notify: restart altcha server
+
+- name: Openresty altcha | enable rc service
+  ansible.builtin.lineinfile:
+    path: /etc/rc.conf
+    regexp: '^altcha_server_enable='
+    line: 'altcha_server_enable="YES"'
+    create: true
+    mode: "0644"
+
+- name: Openresty altcha | start altcha_server
+  ansible.builtin.service:
+    name: altcha_server
+    state: started
+    enabled: true
