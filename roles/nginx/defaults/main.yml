@@ -1,3 +1,44 @@
 ---
 # defaults file for roles/nginx
-nginx_config_file: default.conf
+nginx_package_name: nginx
+nginx_service_name: nginx
+
+nginx_user: "{{ 'www' if ansible_os_family == 'FreeBSD' else 'nginx' }}"
+nginx_group: "{{ 'www' if ansible_os_family == 'FreeBSD' else 'nginx' }}"
+
+nginx_config_file: >-
+  {{
+    '/usr/local/etc/nginx/nginx.conf'
+    if ansible_os_family == 'FreeBSD'
+    else '/etc/nginx/nginx.conf'
+  }}
+
+nginx_conf_dir: >-
+  {{
+    '/usr/local/etc/nginx'
+    if ansible_os_family == 'FreeBSD'
+    else '/etc/nginx'
+  }}
+
+nginx_mime_types_file: >-
+  {{
+    '/usr/local/etc/nginx/mime.types'
+    if ansible_os_family == 'FreeBSD'
+    else '/etc/nginx/mime.types'
+  }}
+
+nginx_pid_file: >-
+  {{
+    '/var/run/nginx.pid'
+    if ansible_os_family == 'FreeBSD'
+    else '/run/nginx.pid'
+  }}
+
+nginx_error_log: /var/log/nginx/error.log
+nginx_access_log: /var/log/nginx/access.log
+
+nginx_manage_config: true
+nginx_enable_service: true
+nginx_start_service: true
+
+running_on_server: true
