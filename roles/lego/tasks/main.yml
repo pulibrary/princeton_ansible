@@ -1,0 +1,76 @@
+#SPDX-License-Identifier: MIT-0
+---
+# tasks file for roles/lego
+- name: Lego | install package
+  ansible.builtin.pkgng:
+    name: "{{ lego_package }}"
+    state: present
+
+- name: Lego | sanity check email
+  ansible.builtin.assert:
+    that: lego_email | length > 0
+    fail_msg: "lego_email must be set (use a vault var)"
+
+- name: Lego | ensure data dir exists
+  ansible.builtin.file:
+    path: "{{ lego_data_dir }}"
+    state: directory
+    owner: root
+    group: wheel
+    mode: "0750"
+
+- name: Lego | ensure certificates dir exists
+  ansible.builtin.file:
+    path: "{{ lego_cert_dir }}"
+    state: directory
+    owner: root
+    group: wheel
+    mode: "0750"
+
+- name: Lego | ensure webroot exists
+  ansible.builtin.file:
+    path: "{{ lego_webroot }}"
+    state: directory
+    owner: www
+    group: www
+    mode: "0755"
+
+- name: Lego | bootstrap self-signed placeholder cert
+  ansible.builtin.command:
+    cmd: >-
+      openssl req -x509 -newkey rsa:2048 -nodes
+      -days {{ lego_bootstrap_days }}
+      -subj "/CN={{ item.primary | default(item.domains[0]) }}"
+      -keyout {{ lego_cert_dir }}/{{ item.primary | default(item.domains[0]) }}.key
+      -out    {{ lego_cert_dir }}/{{ item.primary | default(item.domains[0]) }}.crt
+    creates: "{{ lego_cert_dir }}/{{ item.primary | default(item.domains[0]) }}.crt"
+  loop: "{{ lego_certificates }}"
+  loop_control:
+    label: "{{ item.primary | default(item.domains[0]) }}"
+  when: lego_bootstrap_self_signed | bool
+
+- name: Lego | install renewal/issuance wrapper
+  ansible.builtin.template:
+    src: lego-renew.sh.j2
+    dest: /usr/local/sbin/lego-renew.sh
+    owner: root
+    group: wheel
+    mode: "0750"
+
+- name: Lego | install renewal cron
+  ansible.builtin.cron:
+    name: lego renew certs
+    user: root
+    minute: "{{ lego_renew_cron.minute }}"
+    hour: "{{ lego_renew_cron.hour }}"
+    job: "/usr/local/sbin/lego-renew.sh >> {{ lego_renew_log }} 2>&1"
+
+- name: Lego | ensure renewal log exists
+  ansible.builtin.file:
+    path: "{{ lego_renew_log }}"
+    state: touch
+    owner: root
+    group: wheel
+    mode: "0640"
+    modification_time: preserve
+    access_time: preserve

@@ -1,0 +1,64 @@
+#!/bin/sh
+# Managed by ansible role: lego
+set -u
+
+LEGO=/usr/local/bin/lego
+DATA="{{ lego_data_dir }}"
+EMAIL="{{ lego_email }}"
+KEY_TYPE="{{ lego_key_type }}"
+WEBROOT="{{ lego_webroot }}"
+RENEW_DAYS="{{ lego_renew_days }}"
+RENEW_HOOK="{{ lego_renew_hook }}"
+{% if lego_acme_server %}
+SERVER_FLAG="--server {{ lego_acme_server }}"
+{% else %}
+SERVER_FLAG=""
+{% endif %}
+
+ts() { date '+%Y-%m-%dT%H:%M:%S%z'; }
+log() { echo "[$(ts)] $*"; }
+
+log "lego-renew starting"
+
+{% for cert in lego_certificates %}
+{%   set primary = cert.primary | default(cert.domains[0]) %}
+PRIMARY="{{ primary }}"
+META="${DATA}/certificates/${PRIMARY}.json"
+
+DOMAIN_FLAGS=""
+{% for d in cert.domains %}
+DOMAIN_FLAGS="${DOMAIN_FLAGS} --domains {{ d }}"
+{% endfor %}
+
+if [ -f "${META}" ]; then
+    log "renewing ${PRIMARY}"
+    ${LEGO} \
+        --path "${DATA}" \
+        --email "${EMAIL}" \
+        --key-type "${KEY_TYPE}" \
+        --http.webroot "${WEBROOT}" \
+        ${SERVER_FLAG} \
+        ${DOMAIN_FLAGS} \
+        renew \
+        --days "${RENEW_DAYS}" \
+        --renew-hook "${RENEW_HOOK}" \
+        || log "renew of ${PRIMARY} failed (rc=$?)"
+else
+    log "issuing ${PRIMARY} (first run)"
+    ${LEGO} \
+        --path "${DATA}" \
+        --email "${EMAIL}" \
+        --key-type "${KEY_TYPE}" \
+        --http.webroot "${WEBROOT}" \
+        --accept-tos \
+        ${SERVER_FLAG} \
+        ${DOMAIN_FLAGS} \
+        run \
+        || { log "issue of ${PRIMARY} failed (rc=$?)"; continue; }
+    log "issuance of ${PRIMARY} succeeded; reloading"
+    sh -c "${RENEW_HOOK}" || log "renew-hook after issue failed"
+fi
+
+{% endfor %}
+
+log "lego-renew finished"
