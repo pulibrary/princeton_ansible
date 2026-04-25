@@ -1,0 +1,46 @@
+---
+- name: Pulmirror | Ensure solr mirror target directories exist
+  ansible.builtin.file:
+    path: "{{ solr_mirror_root }}/{{ item.local }}"
+    state: directory
+    owner: "{{ solr_mirror_owner }}"
+    group: "{{ solr_mirror_group }}"
+    mode: "0755"
+  loop: "{{ solr_mirror_paths }}"
+
+- name: Pulmirror | Deploy solr mirror sync script
+  ansible.builtin.template:
+    src: sync-solr-mirror.sh.j2
+    dest: "{{ solr_mirror_script }}"
+    owner: root
+    group: wheel
+    mode: "0755"
+
+- name: Pulmirror | Ensure solr mirror log file exists with correct ownership
+  ansible.builtin.file:
+    path: "{{ solr_mirror_log }}"
+    state: touch
+    owner: root
+    group: wheel
+    mode: "0644"
+    modification_time: preserve
+    access_time: preserve
+
+- name: Pulmirror | Configure newsyslog rotation for solr mirror log
+  ansible.builtin.copy:
+    dest: /usr/local/etc/newsyslog.conf.d/solr-mirror.conf
+    owner: root
+    group: wheel
+    mode: "0644"
+    content: |
+      # logfilename          [owner:group]    mode count size when  flags
+      {{ solr_mirror_log }}  root:wheel       644  7     10000 *     JC
+
+- name: Pulmirror | Install cron entry for solr mirror sync
+  ansible.builtin.cron:
+    name: "sync apache solr mirror"
+    user: root
+    minute: "{{ solr_mirror_cron_minute }}"
+    hour: "{{ solr_mirror_cron_hour }}"
+    job: "{{ solr_mirror_script }}"
+    cron_file: solr-mirror
