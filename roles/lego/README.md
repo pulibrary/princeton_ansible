@@ -1,6 +1,6 @@
 # Lego
 
-Installs and configures [Lego](https://www.google.com/search?q=https://go-acme.github.io/lego/), a Let's Encrypt client and ACME library, specifically tailored for  our **FreeBSD** systems (using `pkgng`).
+Installs and configures [Lego](https://www.google.com/search?q=https://go-acme.github.io/lego/), a Let's Encrypt client and ACME library, specifically tailored for our **FreeBSD** systems (using `pkgng`).
 
 It manages certificate issuance via the HTTP-01 challenge, handles automated renewals via cron, and provides a "bootstrap" feature to generate self-signed certificates so that our [OpenResty/Nginx](../openresty) can start before the real certificates are issued.
 
@@ -53,7 +53,6 @@ lego_certificates:
 
 ## Example Playbook
 
-
 ```yaml
 - hosts: loadbalancers
   vars:
@@ -72,7 +71,6 @@ lego_certificates:
 ## OpenResty/Nginx Configuration Hint
 
 To use the HTTP-01 challenge, ensure your web server configuration includes a block similar to this:
-
 
 ```nginx
 server {
