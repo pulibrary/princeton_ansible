@@ -18,46 +18,62 @@ SERVER_FLAG=""
 ts() { date '+%Y-%m-%dT%H:%M:%S%z'; }
 log() { echo "[$(ts)] $*"; }
 
+issue_or_renew() {
+    primary="$1"
+    shift
+    domain_flags=""
+    for d in "$@"; do
+        domain_flags="${domain_flags} --domains ${d}"
+    done
+
+    meta="${DATA}/certificates/${primary}.json"
+
+    if [ -f "${meta}" ]; then
+        log "renewing ${primary}"
+        ${LEGO} \
+            --path "${DATA}" \
+            --email "${EMAIL}" \
+            --key-type "${KEY_TYPE}" \
+            --http \
+            --http.webroot "${WEBROOT}" \
+            ${SERVER_FLAG} \
+            ${domain_flags} \
+            renew \
+            --days "${RENEW_DAYS}" \
+            --renew-hook "${RENEW_HOOK}"
+        rc=$?
+        if [ "${rc}" -ne 0 ]; then
+            log "renew of ${primary} failed (rc=${rc})"
+            return 1
+        fi
+        log "renewal of ${primary} succeeded"
+    else
+        log "issuing ${primary} (first run)"
+        ${LEGO} \
+            --path "${DATA}" \
+            --email "${EMAIL}" \
+            --key-type "${KEY_TYPE}" \
+            --http \
+            --http.webroot "${WEBROOT}" \
+            --accept-tos \
+            ${SERVER_FLAG} \
+            ${domain_flags} \
+            run
+        rc=$?
+        if [ "${rc}" -ne 0 ]; then
+            log "issue of ${primary} failed (rc=${rc})"
+            return 1
+        fi
+        log "issuance of ${primary} succeeded; reloading"
+        sh -c "${RENEW_HOOK}" || log "renew-hook after issue failed"
+    fi
+    return 0
+}
+
 log "lego-renew starting"
 
 {% for cert in lego_certificates %}
-{%   set primary = cert.primary | default(cert.domains[0]) %}
-PRIMARY="{{ primary }}"
-META="${DATA}/certificates/${PRIMARY}.json"
-
-DOMAIN_FLAGS=""
-{% for d in cert.domains %}
-DOMAIN_FLAGS="${DOMAIN_FLAGS} --domains {{ d }}"
-{% endfor %}
-
-if [ -f "${META}" ]; then
-    log "renewing ${PRIMARY}"
-    ${LEGO} \
-        --path "${DATA}" \
-        --email "${EMAIL}" \
-        --key-type "${KEY_TYPE}" \
-        --http.webroot "${WEBROOT}" \
-        ${SERVER_FLAG} \
-        ${DOMAIN_FLAGS} \
-        renew \
-        --days "${RENEW_DAYS}" \
-        --renew-hook "${RENEW_HOOK}" \
-        || log "renew of ${PRIMARY} failed (rc=$?)"
-else
-    log "issuing ${PRIMARY} (first run)"
-    ${LEGO} \
-        --path "${DATA}" \
-        --email "${EMAIL}" \
-        --key-type "${KEY_TYPE}" \
-        --http.webroot "${WEBROOT}" \
-        --accept-tos \
-        ${SERVER_FLAG} \
-        ${DOMAIN_FLAGS} \
-        run \
-        || { log "issue of ${PRIMARY} failed (rc=$?)"; continue; }
-    log "issuance of ${PRIMARY} succeeded; reloading"
-    sh -c "${RENEW_HOOK}" || log "renew-hook after issue failed"
-fi
+issue_or_renew "{{ cert.primary | default(cert.domains[0]) }}" {% for d in cert.domains %}"{{ d }}" {% endfor %}
 
 {% endfor %}
 
