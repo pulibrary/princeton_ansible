@@ -1,0 +1,14 @@
+# 
+- name: update loadbalancer configuration
+  hosts: gcploadbalancer_{{ runtime_env | default('staging') }}
+  remote_user: pulsys
+  become: true
+  vars_files:
+    - ../group_vars/gcploadbalancer/{{ runtime_env | default('staging') }}.yml
+  roles:
+    - lego        # bootstrap self-signed placeholders + cron
+    - openresty   # render nginx.conf, start service (uses placeholders)
+  post_tasks:
+    - name: Trigger initial cert issuance
+      ansible.builtin.command: /usr/local/sbin/lego-renew.sh
+      changed_when: false
