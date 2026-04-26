@@ -1,38 +1,90 @@
-Role Name
-=========
+# Lego
 
-A brief description of the role goes here.
+Installs and configures [Lego](https://www.google.com/search?q=https://go-acme.github.io/lego/), a Let's Encrypt client and ACME library, specifically tailored for  our **FreeBSD** systems (using `pkgng`).
 
-Requirements
-------------
+It manages certificate issuance via the HTTP-01 challenge, handles automated renewals via cron, and provides a "bootstrap" feature to generate self-signed certificates so that our [OpenResty/Nginx](../openresty) can start before the real certificates are issued.
 
-Any pre-requisites that may not be covered by Ansible itself or the role should be mentioned here. For instance, if the role uses the EC2 module, it may be a good idea to mention in this section that the boto package is required.
+> Note: This role has a tight coupling with the [OpenResty Role](../openresty) and expects it
 
-Role Variables
---------------
+## Requirements
 
-A description of the settable variables for this role should go here, including any variables that are in defaults/main.yml, vars/main.yml, and any variables that can/should be set via parameters to the role. Any variables that are read from other roles and/or the global scope (ie. hostvars, group vars, etc.) should be mentioned here as well.
+- **FreeBSD**: This role uses `pkgng` and paths common to FreeBSD (like `/usr/local/etc`).
 
-Dependencies
-------------
+- **OpenResty/Nginx**: Designed to work alongside a web server configured to serve the `.well-known/acme-challenge/` directory from the defined webroot.
 
-A list of other roles hosted on Galaxy should go here, plus any details in regards to parameters that may need to be set for other roles, or variables that are used from other roles.
+## Role Variables
 
-Example Playbook
-----------------
+Available variables are listed below, along with default values (see `defaults/main.yml`):
 
-Including an example of how to use your role (for instance, with variables passed in as parameters) is always nice for users too:
+| **Variable**                 | **Default**                 | **Description**                                                                       |
+| ---------------------------- | --------------------------- | ------------------------------------------------------------------------------------- |
+| `lego_package`               | `lego`                      | The name of the package to install.                                                   |
+| `lego_email`                 | `""`                        | **Required.** The email address associated with the ACME account.                     |
+| `lego_data_dir`              | `/var/db/lego`              | Directory where Lego stores account data and certificates.                            |
+| `lego_cert_dir`              | `/var/db/lego/certificates` | Final destination for `.crt` and `.key` files.                                        |
+| `lego_webroot`               | `/usr/local/www/acme`       | Path used for HTTP-01 challenges.                                                     |
+| `lego_acme_server`           | `staging`                   | ACME directory URL or shorthand. Set to `null` or empty for Let's Encrypt Production. |
+| `lego_key_type`              | `ec384`                     | Key type to generate (e.g., `rsa2048`, `ec256`, `ec384`).                             |
+| `lego_renew_days`            | `30`                        | Number of days before expiry to attempt renewal.                                      |
+| `lego_renew_hook`            | `service openresty reload`  | Command executed after a successful certificate renewal.                              |
+| `lego_renew_log`             | `/var/log/lego-renew.log`   | Path to the renewal script log file.                                                  |
+| `lego_bootstrap_self_signed` | `true`                      | Generate temporary self-signed certs if real ones don't exist.                        |
+| `lego_certificates`          | `[]`                        | List of certificates to manage (see Example below).                                   |
 
-    - hosts: servers
-      roles:
-         - { role: username.rolename, x: 42 }
+### The `lego_certificates` List
 
-License
--------
+Each item in the list should follow this structure:
 
-BSD
+```yaml
+lego_certificates:
+  - primary: "example.com"                # Used for filename (defaults to first domain)
+    domains: ["example.com", "www.example.com"] 
+```
 
-Author Information
-------------------
+## How It Works
 
-An optional section for the role authors to include contact information, or a website (HTML is not allowed).
+1. **Installation**: Installs the `lego` package via `pkgng`.
+
+2. **Bootstrapping**: If `lego_bootstrap_self_signed` is true, it creates a self-signed cert/key pair for every entry in `lego_certificates`. This prevents web servers from failing to start due to missing files.
+
+3. **Renewal Script**: Deploys a wrapper script to `/usr/local/sbin/lego-renew.sh`. This script checks for existing Lego metadata; if missing, it performs an initial `run` (issuance). If present, it performs a `renew`.
+
+4. **Automation**: Sets up a cron job to run the renewal script daily.
+
+## Example Playbook
+
+
+```yaml
+- hosts: loadbalancers
+  vars:
+    lego_email: "admin@example.com"
+    lego_acme_server: "" # Use production
+    lego_certificates:
+      - primary: "app.example.com"
+        domains:
+          - "app.example.com"
+          - "assets.example.com"
+  roles:
+    - role: lego
+    - role: openresty
+```
+
+## OpenResty/Nginx Configuration Hint
+
+To use the HTTP-01 challenge, ensure your web server configuration includes a block similar to this:
+
+
+```nginx
+server {
+    listen 80;
+    server_name .example.com;
+
+    location /.well-known/acme-challenge/ {
+        alias /usr/local/www/acme/.well-known/acme-challenge/;
+    }
+}
+```
+
+## License
+
+MIT-0
