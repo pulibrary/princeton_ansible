@@ -1,0 +1,97 @@
+import express from "express";
+import cookieParser from "cookie-parser";
+import crypto from "crypto";
+import { createChallenge, verifySolution } from "altcha-lib/v1";
+
+const app = express();
+
+const secret = process.env.ALTCHA_SECRET;
+const port = Number(process.env.ALTCHA_PORT || "{{ openresty_altcha_port }}");
+const cookieName = "{{ openresty_altcha_cookie_name }}";
+const cookieTtl = Number("{{ openresty_altcha_cookie_ttl }}");
+
+if (!secret) {
+  throw new Error("ALTCHA_SECRET is required");
+}
+
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
+
+function sign(value) {
+  return crypto
+    .createHmac("sha256", secret)
+    .update(value)
+    .digest("hex");
+}
+
+function makeCookieValue() {
+  const expires = Math.floor(Date.now() / 1000) + cookieTtl;
+  const value = String(expires);
+  return `${value}.${sign(value)}`;
+}
+
+function verifyCookie(cookieValue) {
+  if (!cookieValue) return false;
+
+  const [expires, signature] = cookieValue.split(".");
+  if (!expires || !signature) return false;
+
+  const expected = sign(expires);
+
+  if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) {
+    return false;
+  }
+
+  return Number(expires) > Math.floor(Date.now() / 1000);
+}
+
+app.get("/altcha/challenge", async (_req, res) => {
+  const challenge = await createChallenge({
+    hmacKey: secret,
+    algorithm: "SHA-256",
+    maxNumber: 100000,
+  });
+
+  res.json(challenge);
+});
+
+app.post("/altcha/verify", async (req, res) => {
+  const payload = req.body.altcha || req.body.payload || req.body;
+
+  const verified = await verifySolution(payload, secret);
+
+  if (!verified) {
+    return res.status(403).json({ ok: false });
+  }
+
+  res.cookie(cookieName, makeCookieValue(), {
+    httpOnly: true,
+    sameSite: "Lax",
+    secure: false,
+    maxAge: cookieTtl * 1000,
+    path: "/",
+  });
+
+  // If the request came from a browser form submit, redirect to referer.
+  // If it came from JS fetch, return JSON.
+  const wantsJson = req.is("json") || (req.get("accept") || "").includes("json");
+  if (wantsJson) {
+    return res.json({ ok: true });
+  }
+
+  const referer = req.get("referer");
+  return res.redirect(303, referer || "/");
+});
+
+app.get("/altcha/check", (req, res) => {
+  if (verifyCookie(req.cookies[cookieName])) {
+    return res.status(204).end();
+  }
+
+  return res.status(401).end();
+});
+
+app.listen(port, "127.0.0.1", () => {
+  console.log(`ALTCHA server listening on 127.0.0.1:${port}`);
+});

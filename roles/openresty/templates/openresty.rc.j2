@@ -1,0 +1,44 @@
+#!/bin/sh
+
+# PROVIDE: openresty
+# REQUIRE: LOGIN cleanvar
+# KEYWORD: shutdown
+
+. /etc/rc.subr
+
+name="openresty"
+rcvar="openresty_enable"
+
+load_rc_config "$name"
+
+: ${openresty_enable:="NO"}
+: ${openresty_pid:="{{ openresty_pid_path }}"}
+: ${openresty_config:="{{ openresty_etc_dir }}/nginx.conf"}
+
+command="{{ openresty_sbin }}"
+command_args="-g 'pid ${openresty_pid};'"
+required_files="${openresty_config}"
+
+start_cmd="openresty_start"
+stop_cmd="openresty_stop"
+reload_cmd="openresty_reload"
+configtest_cmd="openresty_configtest"
+extra_commands="reload configtest"
+
+openresty_start() {
+    {{ openresty_sbin }} -c "${openresty_config}"
+}
+
+openresty_stop() {
+    {{ openresty_sbin }} -c "${openresty_config}" -s quit
+}
+
+openresty_reload() {
+    {{ openresty_sbin }} -c "${openresty_config}" -s reload
+}
+
+openresty_configtest() {
+    {{ openresty_sbin }} -t -c "${openresty_config}"
+}
+
+run_rc_command "$1"

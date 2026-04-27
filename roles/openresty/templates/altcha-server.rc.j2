@@ -1,0 +1,23 @@
+#!/bin/sh
+
+# PROVIDE: altcha_server
+# REQUIRE: NETWORKING
+# KEYWORD: shutdown
+
+. /etc/rc.subr
+
+name="altcha_server"
+rcvar="altcha_server_enable"
+
+load_rc_config "$name"
+
+: ${altcha_server_enable:="NO"}
+
+pidfile="/var/run/${name}.pid"
+command="/usr/sbin/daemon"
+command_args="-f -P ${pidfile} -r /usr/local/bin/node {{ openresty_altcha_home }}/server.mjs"
+
+export ALTCHA_SECRET="{{ openresty_altcha_secret }}"
+export ALTCHA_PORT="{{ openresty_altcha_port }}"
+
+run_rc_command "$1"

@@ -1,0 +1,60 @@
+#SPDX-License-Identifier: MIT-0
+---
+# defaults file for roles/openresty
+openresty_package: openresty
+openresty_node_package: node
+
+openresty_etc_dir: /usr/local/etc/openresty
+openresty_log_dir: /var/log/openresty
+openresty_ssl_cert_dir: /var/db/lego/certificates
+openresty_ssl_key_dir:  /var/db/lego/certificates
+openresty_acme_webroot: /usr/local/www/acme
+openresty_pid_path: /var/run/openresty.pid
+openresty_sbin: /usr/local/nginx/sbin/nginx
+openresty_mime_types: /usr/local/nginx/conf/mime.types
+
+# Top-level nginx
+openresty_user: www
+openresty_group: www
+openresty_worker_processes: auto
+openresty_worker_rlimit_nofile: 1024
+openresty_worker_connections: 800
+
+# Logging
+openresty_error_log_path: "{{ openresty_log_dir }}/error.log"
+openresty_logger_json_enable: true
+openresty_syslog_enable: false
+openresty_syslog_socket: /var/run/log
+openresty_syslog_severity: notice
+
+# Hash sizing — set in http context to silence per-server warnings
+openresty_proxy_headers_hash_max_size: 1024
+openresty_proxy_headers_hash_bucket_size: 128
+
+# Default SSL
+openresty_ssl_protocols: "TLSv1.2 TLSv1.3"
+openresty_ssl_ciphers: >-
+  ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384
+
+# IP allowlist used by vhosts that set restrict: true
+openresty_altcha_bypass_networks: "{{ openresty_restrict_networks }}"
+openresty_restrict_networks:
+  - 128.112.0.0/16
+  - 140.180.0.0/16
+  - 172.20.95.0/24
+  - 172.20.192.0/19
+  - 10.8.0.0/15
+  - 137.83.0.0/16
+
+# Vhost list — define in group_vars
+openresty_vhosts: []
+
+# Altcha
+openresty_altcha_enable: false
+openresty_altcha_user: altcha
+openresty_altcha_group: altcha
+openresty_altcha_home: /opt/altcha-server
+openresty_altcha_port: 8787
+openresty_altcha_secret: "{{ vault_openresty_altcha_secret | default('') }}"
+openresty_altcha_cookie_name: altcha_verified
+openresty_altcha_cookie_ttl: 3600

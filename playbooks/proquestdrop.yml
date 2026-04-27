@@ -1,0 +1,98 @@
+---
+- name: Ensure proquest user and SSH keys exist
+  hosts: proquestdrop_{{ runtime_env | default('staging') }}
+  remote_user: pulsys
+  become: true
+
+  vars:
+    proquest_user: proquest
+    proquest_uid: 1056
+    proquest_group: proquest
+    proquest_gid: 1056
+    proquest_home: /pultheses/proquest
+    proquest_shell: /usr/local/bin/zsh
+
+  tasks:
+    - name: Ensure zsh is installed
+      community.general.pkgng:
+        name: zsh
+        state: present
+
+    - name: Ensure proquest group exists
+      ansible.builtin.group:
+        name: "{{ proquest_group }}"
+        gid: "{{ proquest_gid }}"
+        state: present
+
+    - name: Ensure proquest home parent exists
+      ansible.builtin.file:
+        path: /pultheses
+        state: directory
+        owner: root
+        group: wheel
+        mode: "0755"
+
+    - name: Ensure proquest user exists
+      ansible.builtin.user:
+        name: "{{ proquest_user }}"
+        uid: "{{ proquest_uid }}"
+        group: "{{ proquest_group }}"
+        home: "{{ proquest_home }}"
+        shell: "{{ proquest_shell }}"
+        comment: "User &"
+        create_home: true
+        state: present
+
+    - name: Ensure proquest home permissions are correct
+      ansible.builtin.file:
+        path: "{{ proquest_home }}"
+        state: directory
+        owner: "{{ proquest_user }}"
+        group: "{{ proquest_group }}"
+        mode: "0750"
+
+    - name: Ensure proquest .ssh directory exists
+      ansible.builtin.file:
+        path: "{{ proquest_home }}/.ssh"
+        state: directory
+        owner: "{{ proquest_user }}"
+        group: "{{ proquest_group }}"
+        mode: "0700"
+
+    - name: Ensure proquest authorized_keys exists
+      ansible.builtin.file:
+        path: "{{ proquest_home }}/.ssh/authorized_keys"
+        state: touch
+        owner: "{{ proquest_user }}"
+        group: "{{ proquest_group }}"
+        mode: "0600"
+
+    - name: Ensure ProQuest SSH keys are present
+      ansible.builtin.blockinfile:
+        path: "{{ proquest_home }}/.ssh/authorized_keys"
+        owner: "{{ proquest_user }}"
+        group: "{{ proquest_group }}"
+        mode: "0600"
+        marker: "# {mark} managed by Ansible - proquest SSH keys"
+        block: |
+          # proquest user
+          ssh-rsa AAAAB3NzaC1yc2EAAAABIwAAAgEAwztqT+jpce1Is0FbrRWIYpo0OiAkdWibPcfL2uXRVeVF1CB/phskiBBndx2+s4JpKpQReclYCj0PB2/nj7iBa9o6kQVz2nVhb3qxizQHjikbMszyWQ1sqbUniAmyfhbDqvrcjztp1a5eGsOM4FpSb8fCvUrDLatovQYPx9XULe16zGfbUX1Autg8EzCrqy8+RUOXrv+oNWcF7cFKOoAgbRLR3Ihq8ZZ5MFAva+jmRCv7Royx8J9jjFP3cAfv9mLH3A2+ajytZpQutCNruYDtMrWWZtxQu7eE0uKWRvJ4iLxNYBatpbcovvNhhmAncv5jE2W3Hr1FkMLSTceeX7pZUr220N/z/Txy1NGi2bNeSjjR7I68gKGLy3KmD9D6ulrRliTHyvvzkZIUbmfXs5uIrFO2zpkUcNdDGuV/uuBoh/qC6ldPxYuHmuheJXJgzkSF4ulJkTF7zVY+9KL4vNnpSMTI/SiuG4DoCpnnF1PaSRD1HuB6/FEwa6D83qKVgfR/7ZSHWc6cvouJJLtAVAMZ1/37Vdf/3C1iswq2koUlcRsbQWohUmj6jiP33geTLSmakUIEt4xRsunD7FMhr10oNIHX8Wx2/o5opXb9KZsK3Zt6zyqKMx09RrKpibBgUoXNFElT+UGTam7IDyIQBOk4j9u4k6XGnNPH+aT7qleqwC8=
+          ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDBkidevMWKVilh1NJNrcSszjXdRylLvU1+yTh68JAP/
+          ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDBkidevMWKVilh1NJNrcSszjXdRylLvU1+yTh68JAP
+          # Updated ProQuest Key as of 30 March 2023
+          ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPiw1Q68UOL0choLTdAV2rj/nxm6qY3RZdXkBn4rlgYT ETD Admin Delivery
+
+    - name: Ensure final AllowUsers block includes proquest
+      ansible.builtin.blockinfile:
+        path: /etc/ssh/sshd_config
+        marker: "# {mark} managed by Ansible (final AllowUsers)"
+        block: |
+          AllowUsers pulsys proquest
+        validate: /usr/sbin/sshd -t -f %s
+      notify: Reload sshd
+
+  handlers:
+    - name: Reload sshd
+      ansible.builtin.service:
+        name: sshd
+        state: reloaded
