@@ -48,6 +48,6 @@ elif (( queue >= WARN )); then
 fi
 
 # output: <state> <item> - <text>: <msg> | perfdata
-echo "${state} passenger_queue - ${state_txt}: ${queue} requests in queue | requests=${queue};${WARN};${CRIT};0;"
+echo "${state} \"passenger_queue\" requests=${queue};${WARN};${CRIT};0;100 ${state_txt}: ${queue} requests in queue"
 exit 0
 
