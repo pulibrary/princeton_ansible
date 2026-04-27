@@ -1,7 +1,7 @@
 import express from "express";
 import cookieParser from "cookie-parser";
 import crypto from "crypto";
-import { createChallenge, verifySolution } from "altcha";
+import { createChallenge, verifySolution } from "altcha-lib/v1";
 
 const app = express();
 
@@ -73,7 +73,15 @@ app.post("/altcha/verify", async (req, res) => {
     path: "/",
   });
 
-  res.json({ ok: true });
+  // If the request came from a browser form submit, redirect to referer.
+  // If it came from JS fetch, return JSON.
+  const wantsJson = req.is("json") || (req.get("accept") || "").includes("json");
+  if (wantsJson) {
+    return res.json({ ok: true });
+  }
+
+  const referer = req.get("referer");
+  return res.redirect(303, referer || "/");
 });
 
 app.get("/altcha/check", (req, res) => {
