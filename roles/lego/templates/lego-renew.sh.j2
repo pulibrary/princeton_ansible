@@ -1,0 +1,80 @@
+#!/bin/sh
+# Managed by ansible role: lego
+set -u
+
+LEGO=/usr/local/bin/lego
+DATA="{{ lego_data_dir }}"
+EMAIL="{{ lego_email }}"
+KEY_TYPE="{{ lego_key_type }}"
+WEBROOT="{{ lego_webroot }}"
+RENEW_DAYS="{{ lego_renew_days }}"
+RENEW_HOOK="{{ lego_renew_hook }}"
+{% if lego_acme_server %}
+SERVER_FLAG="--server {{ lego_acme_server }}"
+{% else %}
+SERVER_FLAG=""
+{% endif %}
+
+ts() { date '+%Y-%m-%dT%H:%M:%S%z'; }
+log() { echo "[$(ts)] $*"; }
+
+issue_or_renew() {
+    primary="$1"
+    shift
+    domain_flags=""
+    for d in "$@"; do
+        domain_flags="${domain_flags} --domains ${d}"
+    done
+
+    meta="${DATA}/certificates/${primary}.json"
+
+    if [ -f "${meta}" ]; then
+        log "renewing ${primary}"
+        ${LEGO} \
+            --path "${DATA}" \
+            --email "${EMAIL}" \
+            --key-type "${KEY_TYPE}" \
+            --http \
+            --http.webroot "${WEBROOT}" \
+            ${SERVER_FLAG} \
+            ${domain_flags} \
+            renew \
+            --days "${RENEW_DAYS}" \
+            --renew-hook "${RENEW_HOOK}"
+        rc=$?
+        if [ "${rc}" -ne 0 ]; then
+            log "renew of ${primary} failed (rc=${rc})"
+            return 1
+        fi
+        log "renewal of ${primary} succeeded"
+    else
+        log "issuing ${primary} (first run)"
+        ${LEGO} \
+            --path "${DATA}" \
+            --email "${EMAIL}" \
+            --key-type "${KEY_TYPE}" \
+            --http \
+            --http.webroot "${WEBROOT}" \
+            --accept-tos \
+            ${SERVER_FLAG} \
+            ${domain_flags} \
+            run
+        rc=$?
+        if [ "${rc}" -ne 0 ]; then
+            log "issue of ${primary} failed (rc=${rc})"
+            return 1
+        fi
+        log "issuance of ${primary} succeeded; reloading"
+        sh -c "${RENEW_HOOK}" || log "renew-hook after issue failed"
+    fi
+    return 0
+}
+
+log "lego-renew starting"
+
+{% for cert in lego_certificates %}
+issue_or_renew "{{ cert.primary | default(cert.domains[0]) }}" {% for d in cert.domains %}"{{ d }}" {% endfor %}
+
+{% endfor %}
+
+log "lego-renew finished"

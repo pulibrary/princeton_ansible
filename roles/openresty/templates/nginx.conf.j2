@@ -1,0 +1,193 @@
+user  {{ openresty_user }};
+worker_processes  {{ openresty_worker_processes }};
+worker_rlimit_nofile {{ openresty_worker_rlimit_nofile }};
+
+events {
+    worker_connections  {{ openresty_worker_connections }};
+}
+
+error_log  {{ openresty_error_log_path }};
+{% if openresty_syslog_enable %}
+error_log  syslog:server=unix:{{ openresty_syslog_socket }},severity={{ openresty_syslog_severity }};
+{% endif %}
+
+pid  {{ openresty_pid_path }};
+
+http {
+    include       {{ openresty_mime_types }};
+    default_type  application/octet-stream;
+    sendfile      on;
+    keepalive_timeout 65;
+    recursive_error_pages on;
+
+    proxy_headers_hash_max_size    {{ openresty_proxy_headers_hash_max_size }};
+    proxy_headers_hash_bucket_size {{ openresty_proxy_headers_hash_bucket_size }};
+
+{% if openresty_logger_json_enable %}
+    log_format logger-json escape=json '{"source": "nginx","message":"nginx log captured","time": $time_iso8601, "resp_body_size": $body_bytes_sent, "host": "$http_host", "address": "$remote_addr", "request_length": $request_length, "method": "$request_method", "uri": "$request_uri", "status": $status, "user_agent": "$http_user_agent", "resp_time": $request_time, "upstream_addr": "$upstream_addr"}';
+{% endif %}
+
+{% if openresty_altcha_enable %}
+    # Map of trusted IPs that bypass altcha on opted-in vhosts
+    geo $altcha_bypass {
+        default 0;
+{% for cidr in openresty_altcha_bypass_networks %}
+        {{ cidr }} 1;
+{% endfor %}
+    }
+{% endif %}
+
+{% for vhost in openresty_vhosts %}
+    upstream {{ vhost.upstream.name }} {
+        server {{ vhost.upstream.server }};
+    }
+{% endfor %}
+
+{% macro proxy_block(vhost) %}
+        proxy_pass http://{{ vhost.upstream.name }};
+        proxy_buffering          on;
+        proxy_busy_buffers_size  512k;
+        proxy_buffers            4 512k;
+        proxy_buffer_size        256k;
+        proxy_http_version       1.1;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-Host  $host;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Upgrade           $http_upgrade;
+        proxy_set_header Connection        "upgrade";
+{% endmacro %}
+
+{% for vhost in openresty_vhosts %}
+    # ---------- {{ vhost.name }} ----------
+    server {
+        listen 80;
+        server_name {{ vhost.name }};
+
+        location / {
+            return 301 https://$server_name$request_uri;
+        }
+
+        include {{ openresty_etc_dir }}/conf.d/acme-challenge.conf;
+    }
+
+    server {
+        listen 443 ssl;
+        server_name {{ vhost.name }};
+
+        ssl_certificate     {{ openresty_ssl_cert_dir }}/{{ vhost.ssl_cert }};
+        ssl_certificate_key {{ openresty_ssl_key_dir }}/{{ vhost.ssl_key }};
+        ssl_session_cache   shared:SSL:1m;
+        ssl_prefer_server_ciphers on;
+        ssl_protocols       {{ openresty_ssl_protocols }};
+        ssl_ciphers         {{ openresty_ssl_ciphers }};
+
+{% if vhost.access_log is defined %}
+        access_log {{ openresty_log_dir }}/{{ vhost.access_log }} logger-json;
+{% endif %}
+
+        client_max_body_size {{ vhost.client_max_body_size | default('100M') }};
+
+{% if vhost.altcha | default(false) %}
+        # ALTCHA endpoints proxied to local sidecar
+        location = /altcha/challenge {
+            proxy_pass http://127.0.0.1:{{ openresty_altcha_port }}/altcha/challenge;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+        }
+
+        location = /altcha/verify {
+            proxy_pass http://127.0.0.1:{{ openresty_altcha_port }}/altcha/verify;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+        }
+
+        location = /altcha/check {
+            internal;
+            proxy_pass http://127.0.0.1:{{ openresty_altcha_port }}/altcha/check;
+            proxy_pass_request_body off;
+            proxy_set_header Content-Length "";
+            proxy_set_header Cookie $http_cookie;
+        }
+
+        location = /altcha/required {
+            internal;
+            default_type text/html;
+            return 401 '<!doctype html>
+<html>
+<head>
+    <title>Verification required</title>
+    <script type="module" src="https://cdn.jsdelivr.net/npm/altcha/dist/altcha.min.js"></script>
+  </head>
+  <body>
+    <h1>Verification required</h1>
+    <p>Please wait while we verify your browser.</p>
+    <altcha-widget challengeurl="/altcha/challenge" auto="onload"></altcha-widget>
+    <script>
+      async function submitAltcha(payload) {
+        const res = await fetch("/altcha/verify", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({altcha: payload}),
+          credentials: "same-origin"
+        });
+        if (res.ok) {
+          window.location.reload();
+        } else {
+          document.body.insertAdjacentHTML("beforeend",
+            "<p style=\\"color:red\\">Verification failed. Please reload to try again.</p>");
+        }
+      }
+      const widget = document.querySelector("altcha-widget");
+      let submitted = false;
+      const tick = setInterval(() => {
+        if (submitted) { clearInterval(tick); return; }
+        const input = widget && widget.querySelector("input[name=\\"altcha\\"]");
+        const val = input && input.value;
+        if (val) {
+          submitted = true;
+          clearInterval(tick);
+          submitAltcha(val);
+        }
+      }, 250);
+    </script>
+  </body>
+</html>';
+        }
+{% endif %}
+
+        location / {
+{% if vhost.altcha | default(false) %}
+{% if vhost.altcha_bypass_internal | default(false) %}
+            if ($altcha_bypass = 0) {
+                error_page 418 = @altcha_gate;
+                return 418;
+            }
+{% else %}
+            error_page 418 = @altcha_gate;
+            return 418;
+{% endif %}
+{% endif %}
+
+{{ proxy_block(vhost) }}
+        }
+
+{% if vhost.altcha | default(false) %}
+        location @altcha_gate {
+            auth_request /altcha/check;
+            error_page 401 /altcha/required;
+
+{{ proxy_block(vhost) }}
+        }
+{% endif %}
+
+{% if vhost.restrict | default(false) %}
+        # IP allowlist (legacy — kept for hard restriction beyond altcha)
+        include {{ openresty_etc_dir }}/conf.d/restrict.conf;
+        deny all;
+{% endif %}
+    }
+
+{% endfor %}
+}

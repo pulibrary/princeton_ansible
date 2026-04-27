@@ -1,0 +1,74 @@
+worker_processes auto;
+
+events {
+  worker_connections 1024;
+}
+
+http {
+  include       mime.types;
+  default_type  application/octet-stream;
+
+  sendfile on;
+  keepalive_timeout 65;
+
+  upstream protected_app {
+    server {{ openresty_altcha_upstream | regex_replace('^http://', '') }};
+  }
+
+  server {
+    listen {{ openresty_altcha_listen_port }};
+    server_name {{ openresty_altcha_server_name }};
+
+    location = /altcha/challenge {
+      proxy_pass http://127.0.0.1:{{ openresty_altcha_port }}/altcha/challenge;
+      proxy_set_header Host $host;
+      proxy_set_header X-Real-IP $remote_addr;
+    }
+
+    location = /altcha/verify {
+      proxy_pass http://127.0.0.1:{{ openresty_altcha_port }}/altcha/verify;
+      proxy_set_header Host $host;
+      proxy_set_header X-Real-IP $remote_addr;
+    }
+
+    location = /altcha/check {
+      internal;
+      proxy_pass http://127.0.0.1:{{ openresty_altcha_port }}/altcha/check;
+      proxy_pass_request_body off;
+      proxy_set_header Content-Length "";
+      proxy_set_header Cookie $http_cookie;
+    }
+
+{% for location_path in openresty_altcha_protected_locations %}
+    location {{ location_path }} {
+      auth_request /altcha/check;
+
+      error_page 401 = @altcha_required;
+
+      proxy_pass {{ openresty_altcha_upstream }};
+      proxy_set_header Host $host;
+      proxy_set_header X-Real-IP $remote_addr;
+      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+      proxy_set_header X-Forwarded-Proto $scheme;
+    }
+{% endfor %}
+
+    location @altcha_required {
+      default_type text/html;
+      return 401 '<!doctype html>
+<html>
+  <head>
+    <title>Verification required</title>
+    <script type="module" src="https://cdn.jsdelivr.net/npm/altcha/dist/altcha.min.js"></script>
+  </head>
+  <body>
+    <h1>Verification required</h1>
+    <form method="post" action="/altcha/verify">
+      <altcha-widget challenge="/altcha/challenge"></altcha-widget>
+      <button type="submit">Continue</button>
+    </form>
+  </body>
+</html>';
+    }
+  }
+}

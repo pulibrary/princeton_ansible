@@ -1,0 +1,83 @@
+---
+# roles/openresty
+- name: Openresty | install package on FreeBSD
+  ansible.builtin.pkgng:
+    name: "{{ openresty_package }}"
+    state: present
+
+- name: Openresty | ensure log directory exists
+  ansible.builtin.file:
+    path: "{{ openresty_log_dir }}"
+    state: directory
+    owner: "{{ openresty_user }}"
+    group: "{{ openresty_group }}"
+    mode: "0755"
+
+- name: Openresty | ensure conf.d directory exists
+  ansible.builtin.file:
+    path: "{{ openresty_etc_dir }}/conf.d"
+    state: directory
+    owner: root
+    group: wheel
+    mode: "0755"
+
+- name: Openresty | ensure ACME webroot exists
+  ansible.builtin.file:
+    path: "{{ openresty_acme_webroot }}"
+    state: directory
+    owner: "{{ openresty_user }}"
+    group: "{{ openresty_group }}"
+    mode: "0755"
+
+- name: Openresty | install acme-challenge include
+  ansible.builtin.template:
+    src: acme-challenge.conf.j2
+    dest: "{{ openresty_etc_dir }}/conf.d/acme-challenge.conf"
+    owner: root
+    group: wheel
+    mode: "0644"
+  notify: reload openresty
+
+- name: Openresty | install restrict include
+  ansible.builtin.template:
+    src: restrict.conf.j2
+    dest: "{{ openresty_etc_dir }}/conf.d/restrict.conf"
+    owner: root
+    group: wheel
+    mode: "0644"
+  notify: reload openresty
+
+- name: Openresty | configure altcha sidecar
+  ansible.builtin.include_tasks: altcha.yml
+  when: openresty_altcha_enable | bool
+
+- name: Openresty | render main nginx.conf
+  ansible.builtin.template:
+    src: nginx.conf.j2
+    dest: "{{ openresty_etc_dir }}/nginx.conf"
+    owner: root
+    group: wheel
+    mode: "0644"
+  notify: reload openresty
+
+- name: Openresty | install rc.d service script
+  ansible.builtin.template:
+    src: openresty.rc.j2
+    dest: /usr/local/etc/rc.d/openresty
+    owner: root
+    group: wheel
+    mode: "0755"
+
+- name: Openresty | enable openresty service
+  ansible.builtin.lineinfile:
+    path: /etc/rc.conf
+    regexp: '^openresty_enable='
+    line: 'openresty_enable="YES"'
+    create: true
+    mode: "0644"
+
+- name: Openresty | start openresty
+  ansible.builtin.service:
+    name: openresty
+    state: started
+    enabled: true
