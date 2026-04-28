@@ -1,0 +1,38 @@
+---
+- name: Nginx | Install prerequisites
+  ansible.builtin.apt:
+    name:
+      - curl
+      - gnupg2
+      - ca-certificates
+      - lsb-release
+      - ubuntu-keyring
+    state: present
+    update_cache: true
+    cache_valid_time: 600
+
+- name: Nginx | Import nginx.org signing key
+  ansible.builtin.apt_key:
+    state: present
+    url: https://nginx.org/keys/nginx_signing.key
+
+- name: Nginx | Add nginx.org repository
+  ansible.builtin.apt_repository:
+    repo: "deb http://nginx.org/packages/ubuntu/ {{ ansible_distribution_release }} nginx"
+    state: present
+    filename: nginx
+    update_cache: false
+
+- name: Nginx | Update apt cache after adding repository
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 0
+  register: nginx_repo_cache_update
+  retries: 3
+  delay: 5
+  until: nginx_repo_cache_update is succeeded
+
+- name: Nginx | Install nginx
+  ansible.builtin.apt:
+    name: "{{ nginx_package_name }}"
+    state: present

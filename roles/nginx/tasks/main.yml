@@ -1,54 +1,15 @@
 ---
 # tasks file for roles/nginx
-- name: Nginx | Install prerequisites
-  ansible.builtin.apt:
-    name: "{{ item }}"
-    state: present
-  loop:
-    - curl
-    - gnupg2
-    - ca-certificates
-    - lsb-release
-    - ubuntu-keyring
+- name: Nginx | Include Ubuntu tasks
+  ansible.builtin.include_tasks: ubuntu.yml
+  when: ansible_distribution == "Ubuntu"
 
-- name: Nginx | import signing key
-  ansible.builtin.apt_key:
-    state: present
-    url: https://nginx.org/keys/nginx_signing.key
+- name: Nginx | Include FreeBSD tasks
+  ansible.builtin.include_tasks: freebsd.yml
+  when: ansible_os_family == "FreeBSD"
 
-- name: Nginx - add repository
-  ansible.builtin.apt_repository:
-    repo: deb http://nginx.org/packages/ubuntu/ {{ ansible_distribution_release }} nginx
-    state: present
-    filename: nginx
-    update_cache: false
+- name: Nginx | Include config tasks
+  ansible.builtin.include_tasks: config.yml
 
-- name: Nginx | Update apt cache after adding repository
-  ansible.builtin.apt:
-    update_cache: true
-    cache_valid_time: 0
-  register: repo_cache_update
-  retries: 3
-  delay: 5
-  until: repo_cache_update is succeeded
-
-- name: Nginx | Install Nginx
-  ansible.builtin.apt:
-    name: nginx
-    state: present
-
-- name: Nginx | copy configuration
-  ansible.builtin.template:
-    src: default.conf.j2
-    dest: "{{ nginx_config_file }}"
-    mode: "0755"
-  notify:
-    - Restart Nginx
-  when: running_on_server
-
-- name: Nginx | Ensure Nginx is running
-  ansible.builtin.service:
-    name: nginx
-    state: started
-    enabled: true
-  when: running_on_server
+- name: Nginx | Include service tasks
+  ansible.builtin.include_tasks: service.yml

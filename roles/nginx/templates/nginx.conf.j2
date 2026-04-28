@@ -1,0 +1,28 @@
+{{ ansible_managed | comment }}
+
+user {{ nginx_user }};
+worker_processes auto;
+
+error_log {{ nginx_error_log }} notice;
+pid {{ nginx_pid_file }};
+
+events {
+    worker_connections 1024;
+}
+
+http {
+    include {{ nginx_mime_types_file }};
+    default_type application/octet-stream;
+
+    log_format main '$remote_addr - $remote_user [$time_local] "$request" '
+                    '$status $body_bytes_sent "$http_referer" '
+                    '"$http_user_agent" "$http_x_forwarded_for"';
+
+    access_log {{ nginx_access_log }} main;
+
+    sendfile on;
+
+    keepalive_timeout 65;
+
+    include {{ nginx_conf_dir }}/conf.d/*.conf;
+}
