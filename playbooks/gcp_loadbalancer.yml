@@ -8,8 +8,12 @@
     - ../group_vars/gcploadbalancer/vault.yml
   roles:
     - lego        # bootstrap self-signed placeholders + cron
+    - globalprotect_updater
     - openresty   # render nginx.conf, start service (uses placeholders)
   post_tasks:
+    - name: First-time GP IP resolve (populate include before openresty serves real traffic)
+      ansible.builtin.command: "{{ gp_updater_binary }}"
+      changed_when: false
     - name: Trigger initial cert issuance
       ansible.builtin.command: /usr/local/sbin/lego-renew.sh
       changed_when: false
