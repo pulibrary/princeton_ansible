@@ -49,6 +49,8 @@ job "analytics-staging" {
         # Maps root to a random permissionless user on the host, prevents someone breaking out of container from having any permissions on the host.
         # REQUIRES size=65536, otherwise it doesn't do the mapping and silently fails.
         userns = "auto:size=65536"
+        # Don't allow writing anything to the file system.
+        readonly_rootfs = true
       }
 
       template {
