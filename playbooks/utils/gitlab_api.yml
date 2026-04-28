@@ -6,10 +6,21 @@
   tasks:
     - name: call issue API for team handbook
       ansible.builtin.uri:
-        url: "https://gitlab.lib.princeton.edu/api/v4/projects/5/issues?per_page=100&state=opened&access_token={{ vault_gitlab_issue_access_token }}"
+        url: "https://gitlab.lib.princeton.edu/api/v4/projects/5/issues?page={{ item }}&per_page=100&state=opened&access_token={{ vault_gitlab_issue_access_token }}"
         method: GET
         # 'scope=all' pulls issues created by all users
       register: team_handbook_issues
+      loop: "{{ range(1, 6) | list }}"
+      until: team_handbook_issues.json.data | length == 0
+      retries: 5
+
+    - name: Combine all page results
+      ansible.builtin.set_fact:
+        all_issues: "{{ team_handbook_issues.results | map(attribute='json') | map(attribute='data') | flatten | list }}"
+
+    - name: view all page results
+      ansible.builtin.debug:
+        var: all_issues
 
     - name: write CSV headers for team handbook
       ansible.builtin.lineinfile:
@@ -25,7 +36,7 @@
         line: GitLab,"{{ item.title }}",{{ item.iid }},{{ item.state }},{{ item.assignee.name | default('') }},{{ item.created_at }},{{ item.labels | default('') }},{{ item.web_url }}
         insertafter: EOF
         state: present
-      loop: "{{ team_handbook_issues | community.general.json_query('json[*]') }}"
+      loop: "{{ all_issues | community.general.json_query('json[*]') }}"
       # we assume every issue will have a title, an issue ID, a state, a created_at timestamp, and a URL
       # we allow null values for assignee and labels
 
