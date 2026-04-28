@@ -2,6 +2,16 @@
 # {{ ansible_managed }}
 # Mirror nodejs.org /dist/ via rsync from mirrors.dotsrc.org (Aalborg University).
 # Dotsrc is a tier-1 mirror of nodejs.org and syncs from upstream every 6 hours.
+#
+# Modes:
+#   Default (steady-state):  uses --delay-updates --partial for atomic publishing.
+#                            Safe to run while nginx is serving the tree.
+#   Initial seed:            invoke with NODEJS_MIRROR_INITIAL_SEED=1 in env.
+#                            Drops --delay-updates and --partial for speed.
+#                            Use ONLY when nginx is not yet serving content,
+#                            because in-flight files are visible mid-transfer.
+
+set -u
 
 MIRROR_ROOT="{{ nodejs_mirror_root }}"
 LOG_FILE="{{ nodejs_mirror_log }}"
@@ -10,7 +20,25 @@ SOURCE_URL="{{ nodejs_mirror_source }}"
 OWNER="{{ nodejs_mirror_owner }}:{{ nodejs_mirror_group }}"
 RSYNC=/usr/local/bin/rsync
 
+# Defensive: refuse to start if another rsync is already targeting our tree.
+# lockf alone protects script-vs-script; this also protects against a stray
+# bare rsync invocation.
+if pgrep -f "rsync.*${MIRROR_ROOT}" > /dev/null 2>&1; then
+    echo "$(date '+%Y-%m-%d %H:%M:%S') another rsync is already targeting ${MIRROR_ROOT}, exiting" >> "$LOG_FILE"
+    exit 0
+fi
+
+# Mode selection. Steady-state is safe for a live, serving mirror.
+# Initial seed is faster but exposes partial files mid-transfer.
+if [ "${NODEJS_MIRROR_INITIAL_SEED:-0}" = "1" ]; then
+    PUBLISH_FLAGS=""
+    echo "$(date '+%Y-%m-%d %H:%M:%S') running in INITIAL SEED mode (no --delay-updates, no --partial)" >> "$LOG_FILE"
+else
+    PUBLISH_FLAGS="--delay-updates --partial"
+fi
+
 # Acquire lock or exit quietly (75 = EX_TEMPFAIL from lockf)
+# shellcheck disable=SC2086
 lockf -t 0 "$LOCK_FILE" "$RSYNC" \
     --archive \
     --hard-links \
@@ -19,8 +47,7 @@ lockf -t 0 "$LOCK_FILE" "$RSYNC" \
     --stats \
     --delete \
     --delete-after \
-    --delay-updates \
-    --partial \
+    ${PUBLISH_FLAGS} \
     --timeout=600 \
     --contimeout=60 \
     --bwlimit={{ nodejs_mirror_bwlimit }} \
