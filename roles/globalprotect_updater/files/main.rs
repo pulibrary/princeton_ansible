@@ -1,0 +1,320 @@
+use std::collections::HashSet;
+use std::fs;
+use std::net::{IpAddr, ToSocketAddrs};
+use std::path::Path;
+use std::process::Command;
+use chrono::Local;
+use serde::{Deserialize, Serialize};
+
+/// Configuration for the script
+#[derive(Debug, Deserialize, Serialize)]
+struct Config {
+    /// Path to the nginx include file to generate
+    nginx_include_path: String,
+    /// Path to cache resolved IPs (for comparison)
+    cache_file_path: String,
+    /// Whether to reload nginx after updating
+    auto_reload_nginx: bool,
+    /// Additional static IPs to always include
+    static_ips: Vec<String>,
+    /// Domain pattern for GlobalProtect gateways
+    domain_pattern: String,
+    /// Path to the openresty/nginx binary used for config testing
+    nginx_binary: String,
+    /// Path to the live nginx config file (passed to nginx -t -c)
+    nginx_config_path: String,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Config {
+            nginx_include_path:
+                "/usr/local/etc/openresty/conf.d/globalprotect_ips.conf".to_string(),
+            cache_file_path: "/var/cache/globalprotect_ips.json".to_string(),
+            auto_reload_nginx: true,
+            static_ips: vec![
+                "137.83.217.148/32".to_string(), // Clientless VPN Portal
+                "35.245.45.3/32".to_string(),    // LB SNAT
+                "140.180.242.46/32".to_string(), // Campus SNAT
+            ],
+            domain_pattern: "princeto.gpogn2y5gg2j.gw.gpcloudservice.com".to_string(),
+            nginx_binary: "/usr/local/nginx/sbin/nginx".to_string(),
+            nginx_config_path: "/usr/local/etc/openresty/nginx.conf".to_string(),
+        }
+    }
+}
+
+/// Cached IP data
+#[derive(Debug, Deserialize, Serialize, Default)]
+struct IpCache {
+    ips: HashSet<String>,
+    last_updated: String,
+}
+
+/// List of GlobalProtect gateway regions
+fn get_gateway_regions() -> Vec<&'static str> {
+    vec![
+        // North America
+        "us-west-g",
+        "us-southeast-g",
+        "mexico-central",
+        "us-central-g",
+        "canada-east",
+        "costa-rica",
+        "us-northeast",
+        "canada-west",
+        "us-east-g",
+        "us-south",
+        "us-northwest-g",
+        "us-southwest-g",
+    ]
+}
+
+/// Resolve a domain name to its IP addresses
+fn resolve_domain(domain: &str) -> Vec<IpAddr> {
+    let mut ips = Vec::new();
+
+    // Append :443 because ToSocketAddrs requires a port
+    let addr_with_port = format!("{}:443", domain);
+
+    match addr_with_port.to_socket_addrs() {
+        Ok(addrs) => {
+            for addr in addrs {
+                ips.push(addr.ip());
+            }
+        }
+        Err(e) => {
+            eprintln!("Failed to resolve {}: {}", domain, e);
+        }
+    }
+
+    ips
+}
+
+/// Convert IP to CIDR notation with /32 for IPv4 and /128 for IPv6
+fn ip_to_cidr(ip: &IpAddr) -> String {
+    match ip {
+        IpAddr::V4(ipv4) => format!("{}/32", ipv4),
+        IpAddr::V6(ipv6) => format!("{}/128", ipv6),
+    }
+}
+
+/// Get a /24 network block for a v4 IP. /24 instead of /16 keeps the
+/// trust list narrowly scoped — a single resolution doesn't pull a
+/// whole provider's /16 into set_real_ip_from.
+fn get_network_block(ip: &IpAddr) -> Option<String> {
+    match ip {
+        IpAddr::V4(ipv4) => {
+            let octets = ipv4.octets();
+            Some(format!("{}.{}.{}.0/24", octets[0], octets[1], octets[2]))
+        }
+        IpAddr::V6(_) => None,
+    }
+}
+
+/// Resolve all GlobalProtect gateway domains
+fn resolve_all_gateways(config: &Config) -> HashSet<String> {
+    let mut all_ips = HashSet::new();
+    let mut network_blocks = HashSet::new();
+
+    // Add static IPs
+    for ip in &config.static_ips {
+        all_ips.insert(ip.clone());
+    }
+
+    println!("Resolving GlobalProtect gateway domains...");
+
+    for region in get_gateway_regions() {
+        let domain = format!("{}-{}", region, config.domain_pattern);
+        print!("  Resolving {}... ", domain);
+
+        let ips = resolve_domain(&domain);
+
+        if ips.is_empty() {
+            println!("No IPs found");
+        } else {
+            println!("Found {} IPs", ips.len());
+            for ip in ips {
+                all_ips.insert(ip_to_cidr(&ip));
+                if let Some(block) = get_network_block(&ip) {
+                    network_blocks.insert(block);
+                }
+            }
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+
+    println!("\nDetected network blocks:");
+    for block in &network_blocks {
+        println!("  {}", block);
+        all_ips.insert(block.clone());
+    }
+    all_ips
+}
+
+/// Generate nginx configuration content
+fn generate_nginx_config(ips: &HashSet<String>) -> String {
+    let mut config = String::new();
+    config.push_str("# GlobalProtect Gateway IPs - Auto-generated\n");
+    config.push_str(&format!(
+        "# Generated at: {}\n",
+        Local::now().format("%Y-%m-%d %H:%M:%S")
+    ));
+    config.push_str("# This file is automatically generated. Do not edit manually.\n\n");
+
+    let mut sorted_ips: Vec<_> = ips.iter().collect();
+    sorted_ips.sort();
+    for ip in sorted_ips {
+        config.push_str(&format!("set_real_ip_from    {};\n", ip));
+    }
+    config
+}
+
+/// Load cached IPs from file
+fn load_cache(path: &str) -> IpCache {
+    if Path::new(path).exists() {
+        match fs::read_to_string(path) {
+            Ok(content) => match serde_json::from_str(&content) {
+                Ok(cache) => return cache,
+                Err(e) => eprintln!("Failed to parse cache: {}", e),
+            },
+            Err(e) => eprintln!("Failed to read cache: {}", e),
+        }
+    }
+    IpCache::default()
+}
+
+/// Save IPs to cache file
+fn save_cache(
+    path: &str,
+    ips: &HashSet<String>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let cache = IpCache {
+        ips: ips.clone(),
+        last_updated: Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
+    };
+    let json = serde_json::to_string_pretty(&cache)?;
+    fs::write(path, json)?;
+    Ok(())
+}
+
+/// Test nginx configuration using the configured binary + config path.
+/// On FreeBSD with openresty pkg, the default `nginx -t` uses the
+/// compiled-in prefix path (/usr/local/nginx/conf/nginx.conf), which is
+/// not the file we actually run with. Pass -c explicitly.
+fn test_nginx_config(config: &Config) -> bool {
+    match Command::new(&config.nginx_binary)
+        .args(["-t", "-c", &config.nginx_config_path])
+        .output()
+    {
+        Ok(output) => {
+            if !output.status.success() {
+                eprintln!(
+                    "nginx -t failed:\nstdout: {}\nstderr: {}",
+                    String::from_utf8_lossy(&output.stdout),
+                    String::from_utf8_lossy(&output.stderr),
+                );
+            }
+            output.status.success()
+        }
+        Err(e) => {
+            eprintln!("Failed to test nginx config: {}", e);
+            false
+        }
+    }
+}
+
+/// Reload nginx, trying FreeBSD `service` first, then OpenBSD `rcctl`,
+/// then a direct `nginx -s reload`.
+fn reload_nginx() -> bool {
+    let commands = vec![
+        ("service", vec!["openresty", "reload"]),
+        ("rcctl", vec!["reload", "nginx"]),
+        ("nginx", vec!["-s", "reload"]),
+    ];
+    for (cmd, args) in commands {
+        match Command::new(cmd).args(&args).output() {
+            Ok(output) => {
+                if output.status.success() {
+                    println!(
+                        "Successfully reloaded nginx using: {} {}",
+                        cmd,
+                        args.join(" ")
+                    );
+                    return true;
+                }
+            }
+            Err(_) => continue,
+        }
+    }
+    eprintln!("Failed to reload nginx - please reload manually");
+    false
+}
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let config = Config::default();
+
+    let cache = load_cache(&config.cache_file_path);
+    let current_ips = resolve_all_gateways(&config);
+
+    println!("\nTotal unique IPs/ranges: {}", current_ips.len());
+
+    if cache.ips == current_ips {
+        println!(
+            "No changes detected since last update ({})",
+            cache.last_updated
+        );
+        return Ok(());
+    }
+
+    let nginx_config = generate_nginx_config(&current_ips);
+
+    // Backup existing config before overwriting
+    if Path::new(&config.nginx_include_path).exists() {
+        let backup_path = format!("{}.backup", config.nginx_include_path);
+        fs::copy(&config.nginx_include_path, &backup_path)?;
+        println!("Backed up existing config to: {}", backup_path);
+    }
+
+    fs::write(&config.nginx_include_path, nginx_config)?;
+    println!("Written nginx config to: {}", config.nginx_include_path);
+
+    save_cache(&config.cache_file_path, &current_ips)?;
+
+    // Verify nginx accepts the new include before reloading
+    if !test_nginx_config(&config) {
+        eprintln!("Nginx configuration test failed! Restoring backup...");
+        let backup_path = format!("{}.backup", config.nginx_include_path);
+        if Path::new(&backup_path).exists() {
+            fs::copy(&backup_path, &config.nginx_include_path)?;
+        }
+        return Err("Nginx configuration test failed".into());
+    }
+
+    if config.auto_reload_nginx {
+        println!("Reloading nginx...");
+        reload_nginx();
+    } else {
+        println!("Skipping nginx reload (auto_reload_nginx = false)");
+        println!("Please reload nginx manually: service openresty reload");
+    }
+
+    let added: HashSet<_> = current_ips.difference(&cache.ips).collect();
+    let removed: HashSet<_> = cache.ips.difference(&current_ips).collect();
+
+    if !added.is_empty() {
+        println!("\nNew IPs added:");
+        for ip in added {
+            println!("  + {}", ip);
+        }
+    }
+
+    if !removed.is_empty() {
+        println!("\nIPs removed:");
+        for ip in removed {
+            println!("  - {}", ip);
+        }
+    }
+
+    Ok(())
+}
