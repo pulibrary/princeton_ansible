@@ -1,0 +1,22 @@
+---
+- name: Nginx | Ensure log directory exists
+  ansible.builtin.file:
+    path: /var/log/nginx
+    state: directory
+    owner: root
+    group: "{{ 'wheel' if ansible_os_family == 'FreeBSD' else 'root' }}"
+    mode: "0755"
+  when: running_on_server
+
+- name: Nginx | Deploy nginx configuration
+  ansible.builtin.template:
+    src: nginx.conf.j2
+    dest: "{{ nginx_config_file }}"
+    owner: root
+    group: "{{ 'wheel' if ansible_os_family == 'FreeBSD' else 'root' }}"
+    mode: "0644"
+    validate: "nginx -t -c %s"
+  notify: Restart Nginx
+  when:
+    - running_on_server
+    - nginx_manage_config
