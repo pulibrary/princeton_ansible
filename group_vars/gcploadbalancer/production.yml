@@ -1,0 +1,59 @@
+---
+lego_email: lsupport@princeton.edu
+openresty_altcha_enable: true
+openresty_altcha_bypass_networks:
+  - 10.249.64.0/18           # Princeton Wired Private-1
+  - 10.249.0.0/18            # Princeton Wired Private-2
+  - 128.112.0.0/16           # Princeton Wired
+  - 172.20.80.0/22           # PU Subnet LibNetPvt
+  - 172.20.95.0/24           # GlobalProtect internal
+  - 172.20.192.0/19          # GlobalProtect internal
+  - 128.112.200.0/21         # PU LibNet extension
+  - 137.108.70.0/24          # PU CORE Team
+  - 140.180.0.0/16           # PU Eduroam
+  - 128.112.64.96/27         # SonicWALL SRA
+  - 128.112.64.224/27        # SonicWALL SRA
+  - 128.112.65.0/24          # SonicWALL SRA
+  - 128.112.66.0/23          # SonicWALL SRA
+  - 128.112.68.0/22          # SonicWALL SRA
+  # specific service IPs that should bypass:
+  - 172.20.80.110/32         # figgy-web-staging2
+  - 172.20.80.67/32          # bibdata-worker-staging1
+  - 128.112.203.105/32       # bibdata-worker-prod1
+  - 128.112.203.109/32       # bibdata-worker-prod2
+
+openresty_real_ip_enable: true
+openresty_real_ip_from:
+  - 34.85.237.83/32
+  - 130.41.0.0/16            # GlobalProtect ranges
+  - 134.238.0.0/16
+  - 137.83.0.0/16
+  - 165.1.0.0/16
+  - 208.127.0.0/16
+  - 140.180.242.46/32
+
+
+lego_certificates:
+  - primary: dataspace.princeton.edu
+    domains: [dataspace.princeton.edu]
+  - primary: oar.princeton.edu
+    domains: [oar.princeton.edu]
+
+openresty_vhosts:
+  - name: dataspace.princeton.edu
+    upstream: { name: dataspace, server: 10.244.0.2:81 }
+    ssl_cert: dataspace.princeton.edu.crt
+    ssl_key:  dataspace.princeton.edu.key
+    access_log: dataspace.access.log
+    client_max_body_size: 100M
+    altcha: true
+    altcha_bypass_internal: true
+
+  - name: oar.princeton.edu
+    upstream: { name: oar, server: 10.244.0.3:81 }
+    ssl_cert: oar.princeton.edu.crt
+    ssl_key:  oar.princeton.edu.key
+    access_log: oar.access.log
+    client_max_body_size: 100M
+    altcha: true
+    altcha_bypass_internal: true

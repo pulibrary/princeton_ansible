@@ -21,6 +21,16 @@
     group: wheel
     mode: "0755"
 
+- name: Openresty | ensure globalprotect_ips.conf exists
+  ansible.builtin.copy:
+    dest: "{{ openresty_etc_dir }}/conf.d/globalprotect_ips.conf"
+    content: "# placeholder; populated by globalprotect-updater\n"
+    force: false
+    owner: root
+    group: wheel
+    mode: "0644"
+  when: openresty_real_ip_enable | default(false)
+
 - name: Openresty | ensure ACME webroot exists
   ansible.builtin.file:
     path: "{{ openresty_acme_webroot }}"
@@ -60,24 +70,16 @@
     mode: "0644"
   notify: reload openresty
 
-- name: Openresty | install rc.d service script
-  ansible.builtin.template:
-    src: openresty.rc.j2
-    dest: /usr/local/etc/rc.d/openresty
-    owner: root
-    group: wheel
-    mode: "0755"
-
-- name: Openresty | enable openresty service
+- name: Openresty | enable nginx service in rc.conf
   ansible.builtin.lineinfile:
     path: /etc/rc.conf
-    regexp: '^openresty_enable='
-    line: 'openresty_enable="YES"'
+    regexp: '^nginx_enable='
+    line: 'nginx_enable="YES"'
     create: true
     mode: "0644"
 
-- name: Openresty | start openresty
+- name: Openresty | start nginx
   ansible.builtin.service:
-    name: openresty
+    name: "{{ openresty_service }}"
     state: started
     enabled: true

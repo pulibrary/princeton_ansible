@@ -1,0 +1,85 @@
+#SPDX-License-Identifier: MIT-0
+---
+# tasks file for roles/globalprotect_updater
+- name: Gp_updater | install rust toolchain
+  ansible.builtin.pkgng:
+    name: rust
+    state: present
+
+- name: Gp_updater | ensure build dir exists
+  ansible.builtin.file:
+    path: "{{ gp_updater_install_dir }}"
+    state: directory
+    owner: root
+    group: wheel
+    mode: "0755"
+
+- name: Gp_updater | ensure src dir exists
+  ansible.builtin.file:
+    path: "{{ gp_updater_install_dir }}/src"
+    state: directory
+    owner: root
+    group: wheel
+    mode: "0755"
+
+- name: Gp_updater | copy source
+  ansible.builtin.copy:
+    src: "{{ item.src }}"
+    dest: "{{ gp_updater_install_dir }}/{{ item.dest }}"
+    owner: root
+    group: wheel
+    mode: "0644"
+  loop:
+    - { src: Cargo.toml, dest: Cargo.toml }
+    - { src: main.rs, dest: src/main.rs }
+  register: gp_updater_source
+
+- name: Gp_updater | ensure src dir exists
+  ansible.builtin.file:
+    path: "{{ gp_updater_install_dir }}/src"
+    state: directory
+
+- name: Gp_updater | build release binary
+  ansible.builtin.command:
+    cmd: cargo build --release
+    chdir: "{{ gp_updater_install_dir }}"
+    creates: "{{ gp_updater_install_dir }}/target/release/globalprotect-ip-updater"
+  when: gp_updater_source.changed
+  environment:
+    CARGO_HOME: "{{ gp_updater_install_dir }}/.cargo"
+
+- name: Gp_updater | install binary
+  ansible.builtin.copy:
+    src: "{{ gp_updater_install_dir }}/target/release/globalprotect-ip-updater"
+    dest: "{{ gp_updater_binary }}"
+    remote_src: true
+    owner: root
+    group: wheel
+    mode: "0755"
+  when: gp_updater_source.changed
+
+- name: gp_updater | ensure cache parent dir exists
+  ansible.builtin.file:
+    path: /var/db
+    state: directory
+    owner: root
+    group: wheel
+    mode: "0755"
+
+- name: Gp_updater | install cron job
+  ansible.builtin.cron:
+    name: globalprotect ip updater
+    user: root
+    minute: "{{ gp_updater_cron.minute }}"
+    hour: "{{ gp_updater_cron.hour }}"
+    job: "{{ gp_updater_binary }} >> {{ gp_updater_log }} 2>&1"
+
+- name: Gp_updater | ensure log exists
+  ansible.builtin.file:
+    path: "{{ gp_updater_log }}"
+    state: touch
+    owner: root
+    group: wheel
+    mode: "0640"
+    modification_time: preserve
+    access_time: preserve
