@@ -3,11 +3,11 @@ variable "branch_or_sha" {
   default = "main"
 }
 
-job "analytics-production" {
+job "analytics-staging" {
   region      = "global"
   datacenters = ["dc1"]
   type        = "service"
-  node_pool = "production"
+  node_pool = "staging"
 
   group "web" {
     count = 2
@@ -53,7 +53,7 @@ job "analytics-production" {
         env = true
         change_mode = "restart"
         data = <<EOF
-        {{- with nomadVar "nomad/jobs/analytics-production" -}}
+        {{- with nomadVar "nomad/jobs/analytics-staging" -}}
         DATABASE_TYPE = 'postgresql'
         APP_SECRET = '{{ .SECRET_KEY_BASE }}'
         DATABASE_URL = 'postgresql://{{ .DB_USER }}:{{ .DB_PASSWORD }}@{{ .POSTGRES_HOST }}:5432/{{ .DB_NAME }}'
