@@ -28,18 +28,23 @@ struct Config {
 impl Default for Config {
     fn default() -> Self {
         Config {
-            nginx_include_path:
-                "/usr/local/etc/openresty/conf.d/globalprotect_ips.conf".to_string(),
-            cache_file_path: "/var/cache/globalprotect_ips.json".to_string(),
+            nginx_include_path: std::env::var("GP_NGINX_INCLUDE")
+                .unwrap_or_else(|_| {
+                    "/usr/local/etc/nginx/conf.d/globalprotect_ips.conf".to_string()
+                }),
+            cache_file_path: std::env::var("GP_CACHE_PATH")
+                .unwrap_or_else(|_| "/var/db/globalprotect_ips.json".to_string()),
             auto_reload_nginx: true,
             static_ips: vec![
-                "137.83.217.148/32".to_string(), // Clientless VPN Portal
-                "35.245.45.3/32".to_string(),    // LB SNAT
-                "140.180.242.46/32".to_string(), // Campus SNAT
+                "137.83.217.148/32".to_string(),
+                "35.85.237.83/32".to_string(),
+                "140.180.242.46/32".to_string(),
             ],
             domain_pattern: "princeto.gpogn2y5gg2j.gw.gpcloudservice.com".to_string(),
-            nginx_binary: "/usr/local/nginx/sbin/nginx".to_string(),
-            nginx_config_path: "/usr/local/etc/openresty/nginx.conf".to_string(),
+            nginx_binary: std::env::var("GP_NGINX_BINARY")
+                .unwrap_or_else(|_| "/usr/local/sbin/nginx".to_string()),
+            nginx_config_path: std::env::var("GP_NGINX_CONFIG")
+                .unwrap_or_else(|_| "/usr/local/etc/nginx/nginx.conf".to_string()),
         }
     }
 }
