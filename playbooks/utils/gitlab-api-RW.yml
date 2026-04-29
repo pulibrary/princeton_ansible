@@ -11,7 +11,9 @@
     - name: write selected output to CSV for team handbook
       ansible.builtin.lineinfile:
         dest: /opt/gitlab_issues/team_handbook_issues.csv
-        line: GitLab,"{{ item.title }}",{{ item.iid }},{{ item.state }},{{ item.assignee.name | default('') }},{{ item.created_at }},{{ item.labels | default('') }},{{ item.web_url }}
+        line: GitLab,"{{ GLissue.title }}",{{ GLissue.iid }},{{ GLissue.state }},{{ GLissue.assignee.name | default('') }},{{ GLissue.created_at }},{{ GLissue.labels | default('') }},{{ GLissue.web_url }}
         insertafter: EOF
         state: present
       loop: "{{ current_page | community.general.json_query('json[*]') }}"
+      loop_control:
+        loop_var: GLissue
