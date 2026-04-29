@@ -43,6 +43,9 @@ job "analytics-staging" {
     task "app" {
       driver = "podman"
 
+      # This is set in the Dockerfile, but set it explicitly in case they change that.
+      user = "1001:1001"
+
       config {
         image        = "ghcr.io/umami-software/umami:3.1.0"
         ports = ["http"]
@@ -51,6 +54,11 @@ job "analytics-staging" {
         userns = "auto:size=65536"
         # Don't allow writing anything to the file system.
         readonly_rootfs = true
+        # We don't need any CAP privileges - don't allow any privilege escalation.
+        cap_drop = ["ALL"]
+        security_opt = [
+          "no-new-privileges"
+        ]
       }
 
       template {
