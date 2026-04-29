@@ -28,26 +28,9 @@
 # then run the loop on the include (or import, whichever it is)
 # then this should work
 # also, set the items per page as a var so we don't have a future mismatch
+    - name: iterate over API results
+      ansible.builtin.include_tasks: gitlab-api-RW.yml
       with_sequence: start=1 end="{{ pages }}"
-
-    - name: get all pages of issues from team handbook
-      ansible.builtin.uri:
-        url: "https://gitlab.lib.princeton.edu/api/v4/projects/5/issues?per_page=10&page={{ item }}&state=opened&access_token={{ vault_gitlab_issue_access_token }}"
-        method: GET
-        # 'scope=all' pulls issues created by all users
-      register: page_of_issues
-
-    # - name: Combine all page results
-    #   ansible.builtin.set_fact:
-    #     all_issues: "{{ team_handbook_issues.results | map(attribute='json') | map(attribute='data') | flatten | list }}"
-
-    - name: write selected output to CSV for team handbook
-      ansible.builtin.lineinfile:
-        dest: /opt/gitlab_issues/team_handbook_issues1.csv
-        line: GitLab,"{{ item.title }}",{{ item.iid }},{{ item.state }},{{ item.assignee.name | default('') }},{{ item.created_at }},{{ item.labels | default('') }},{{ item.web_url }}
-        insertafter: EOF
-        state: present
-      loop: "{{ page_of_issues | community.general.json_query('json[*]') }}"
 
     # - name: Send e-mail with CSV attached
     #   community.general.mail:
