@@ -1,15 +1,22 @@
 ---
 - name: get issues from GitLab
   hosts: localhost
+  vars:
+    issues_per_page: 25
   vars_files:
     - ../../group_vars/gitlab/vault.yml
   tasks:
     - name: call issue API for team handbook
       ansible.builtin.uri:
-        url: "https://gitlab.lib.princeton.edu/api/v4/projects/5/issues?per_page=100&state=opened&access_token={{ vault_gitlab_issue_access_token }}"
+        url: "https://gitlab.lib.princeton.edu/api/v4/projects/5/issues?per_page={{ issues_per_page }}&state=opened&access_token={{ vault_gitlab_issue_access_token }}"
         method: GET
         # 'scope=all' pulls issues created by all users
+        # return values include the total number of pages
       register: team_handbook_issues
+
+    - name: set number of pages
+      ansible.builtin.set_fact:
+        pages: "{{ team_handbook_issues.x_total_pages }}"
 
     - name: write CSV headers for team handbook
       ansible.builtin.lineinfile:
@@ -19,15 +26,9 @@
         insertbefore: BOF
         state: present
 
-    - name: write selected output to CSV for team handbook
-      ansible.builtin.lineinfile:
-        dest: /opt/gitlab_issues/team_handbook_issues.csv
-        line: GitLab,"{{ item.title }}",{{ item.iid }},{{ item.state }},{{ item.assignee.name | default('') }},{{ item.created_at }},{{ item.labels | default('') }},{{ item.web_url }}
-        insertafter: EOF
-        state: present
-      loop: "{{ team_handbook_issues | community.general.json_query('json[*]') }}"
-      # we assume every issue will have a title, an issue ID, a state, a created_at timestamp, and a URL
-      # we allow null values for assignee and labels
+    - name: iterate over API results
+      ansible.builtin.include_tasks: gitlab-api-RW.yml
+      with_sequence: start=1 end="{{ pages }}"
 
     - name: Send e-mail with CSV attached
       community.general.mail:

@@ -1,0 +1,19 @@
+---
+    # this tasks file is included in the gitlab_api.yml playbook
+    # it handles pagination for results from the GitLab issues API
+    - name: get a page of issues from team handbook
+      ansible.builtin.uri:
+        url: "https://gitlab.lib.princeton.edu/api/v4/projects/5/issues?per_page={{ issues_per_page }}&page={{ item }}&state=opened&access_token={{ vault_gitlab_issue_access_token }}"
+        method: GET
+        # 'scope=all' pulls issues created by all users
+      register: current_page
+
+    - name: write selected output to CSV for team handbook
+      ansible.builtin.lineinfile:
+        dest: /opt/gitlab_issues/team_handbook_issues.csv
+        line: GitLab,"{{ GLissue.title }}",{{ GLissue.iid }},{{ GLissue.state }},{{ GLissue.assignee.name | default('') }},{{ GLissue.created_at }},{{ GLissue.labels | default('') }},{{ GLissue.web_url }}
+        insertafter: EOF
+        state: present
+      loop: "{{ current_page | community.general.json_query('json[*]') }}"
+      loop_control:
+        loop_var: GLissue
