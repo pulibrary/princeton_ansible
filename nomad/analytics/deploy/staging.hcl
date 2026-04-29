@@ -59,6 +59,11 @@ job "analytics-staging" {
         security_opt = [
           "no-new-privileges"
         ]
+        # Give some tmpfs space for temp/pid files if necessary.
+        tmpfs = [
+          "/tmp",
+          "/var/run"
+        ]
       }
 
       template {
