@@ -1,0 +1,167 @@
+---
+- name: Remove math mirror and clean up APT configuration
+  hosts: all
+  remote_user: pulsys
+  become: true
+  gather_facts: true
+  
+  pre_tasks:
+    - name: Stop playbook if you didn't pass --limit
+      fail:
+        msg: "you must use -l or --limit"
+      when: ansible_limit is not defined
+      run_once: true
+  
+  tasks:
+    - name: Remove Princeton math mirror repository files
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /etc/apt/sources.list.d/00-princeton.list
+        - /etc/apt/sources.list.d/pul_postgresql.list
+      register: repo_files_removed
+
+    - name: Remove any other Princeton mirror files
+      ansible.builtin.find:
+        paths: /etc/apt/sources.list.d/
+        patterns: "*princeton*"
+        file_type: file
+      register: princeton_files
+
+    - name: Delete found Princeton mirror files
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: absent
+      loop: "{{ princeton_files.files }}"
+      when: princeton_files.files | length > 0
+
+    - name: Backup original sources.list
+      ansible.builtin.copy:
+        src: /etc/apt/sources.list
+        dest: "/etc/apt/sources.list.backup.{{ ansible_date_time.epoch }}"
+        remote_src: true
+        backup: true
+      when: ansible_os_family == "Debian"
+
+    - name: Remove duplicate Ubuntu archive entries from main sources.list
+      ansible.builtin.replace:
+        path: /etc/apt/sources.list
+        regexp: '^(deb(?:-src)?\s+https?://(?:[a-z]+\.)?archive\.ubuntu\.com/ubuntu)\s+'
+        replace: '# \1'
+      when: ansible_os_family == "Debian"
+
+    - name: Remove duplicate security.ubuntu.com entries from main sources.list
+      ansible.builtin.replace:
+        path: /etc/apt/sources.list
+        regexp: '^(deb(?:-src)?\s+https?://security\.ubuntu\.com/ubuntu)\s+'
+        replace: '# \1'
+      when: ansible_os_family == "Debian"
+
+    - name: Remove duplicate us.archive.ubuntu.com entries from main sources.list
+      ansible.builtin.replace:
+        path: /etc/apt/sources.list
+        regexp: '^(deb(?:-src)?\s+https?://us\.archive\.ubuntu\.com/ubuntu)\s+'
+        replace: '# \1'
+      when: ansible_os_family == "Debian"
+
+    - name: Configure Ubuntu archive repositories (primary source)
+      ansible.builtin.copy:
+        dest: /etc/apt/sources.list.d/99-ubuntu-archive.list
+        mode: '0644'
+        content: |
+          # Managed by Ansible
+          # Ubuntu Archive repositories - No Princeton math mirror
+          # Configured on {{ ansible_date_time.iso8601 }}
+          
+          deb http://archive.ubuntu.com/ubuntu {{ ansible_distribution_release }} main restricted universe multiverse
+          deb http://archive.ubuntu.com/ubuntu {{ ansible_distribution_release }}-updates main restricted universe multiverse
+          deb http://archive.ubuntu.com/ubuntu {{ ansible_distribution_release }}-backports main restricted universe multiverse
+          deb http://security.ubuntu.com/ubuntu {{ ansible_distribution_release }}-security main restricted universe multiverse
+
+    - name: Force IPv4 for APT (fixes Launchpad PPA timeouts)
+      ansible.builtin.copy:
+        dest: /etc/apt/apt.conf.d/99force-ipv4
+        mode: '0644'
+        content: |
+          # Force IPv4 for APT to avoid IPv6 connection timeouts
+          Acquire::ForceIPv4 "true";
+
+    - name: Remove problematic Redis PPA (connection issues)
+      ansible.builtin.file:
+        path: /etc/apt/sources.list.d/ppa_redislabs_redis_jammy.list
+        state: absent
+      ignore_errors: true
+
+    - name: Fix PostgreSQL GPG key (migrate from legacy trusted.gpg)
+      block:
+        - name: Check if PostgreSQL repo exists
+          ansible.builtin.stat:
+            path: /etc/apt/sources.list.d/apt_postgresql_org_pub_repos_apt.list
+          register: postgres_repo
+
+        - name: Download PostgreSQL GPG key
+          ansible.builtin.get_url:
+            url: https://www.postgresql.org/media/keys/ACCC4CF8.asc
+            dest: /tmp/postgresql-key.asc
+            mode: '0644'
+          when: postgres_repo.stat.exists
+
+        - name: Convert and install PostgreSQL GPG key
+          ansible.builtin.shell: |
+            gpg --dearmor < /tmp/postgresql-key.asc | sudo tee /usr/share/keyrings/postgresql-archive-keyring.gpg > /dev/null
+          when: postgres_repo.stat.exists
+          args:
+            creates: /usr/share/keyrings/postgresql-archive-keyring.gpg
+
+        - name: Update PostgreSQL repo to use new keyring
+          ansible.builtin.replace:
+            path: /etc/apt/sources.list.d/apt_postgresql_org_pub_repos_apt.list
+            regexp: '^deb http://apt\.postgresql\.org/pub/repos/apt'
+            replace: 'deb [signed-by=/usr/share/keyrings/postgresql-archive-keyring.gpg] http://apt.postgresql.org/pub/repos/apt'
+          when: postgres_repo.stat.exists
+
+        - name: Clean up temporary key file
+          ansible.builtin.file:
+            path: /tmp/postgresql-key.asc
+            state: absent
+          when: postgres_repo.stat.exists
+
+    - name: Clean apt cache
+      ansible.builtin.command: apt-get clean
+      changed_when: false
+
+    - name: Update apt cache
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 0
+      register: apt_update
+      retries: 5
+      delay: 5
+      until: apt_update is success
+
+    - name: Verify math mirror is completely removed
+      ansible.builtin.command: grep -r "mirror.math.princeton.edu" /etc/apt/
+      register: grep_result
+      failed_when: false
+      changed_when: false
+
+    - name: Check for duplicate warnings
+      ansible.builtin.shell: |
+        apt-get update 2>&1 | grep -c "configured multiple times" || echo "0"
+      register: duplicate_count
+      changed_when: false
+      failed_when: false
+
+    - name: Display results
+      ansible.builtin.debug:
+        msg: |
+          ===================================
+          REMOVAL SUMMARY FOR {{ inventory_hostname }}
+          ===================================
+          Math mirror removed: {{ 'YES' if grep_result.rc != 0 else 'NO' }}
+          Duplicate warnings: {{ duplicate_count.stdout | trim }}
+          APT update status: {{ 'SUCCESS' if apt_update is success else 'FAILED' }}
+          ===================================
+      run_once: true
+      delegate_to: localhost
