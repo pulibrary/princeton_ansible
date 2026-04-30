@@ -1,0 +1,53 @@
+---
+- name: Entraid_join | Configure SSH for headless Himmelblau login
+  ansible.builtin.template:
+    src: sshd_himmelblau.conf.j2
+    dest: /etc/ssh/sshd_config.d/99-himmelblau-headless-pilot.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - restart ssh ubuntu
+    - restart ssh rocky
+
+# Rocky/RHEL can ship an earlier ChallengeResponseAuthentication no.
+# OpenSSH first-value behavior means a later yes may not override it.
+- name: Entraid_join | Comment out RedHat ChallengeResponseAuthentication no
+  ansible.builtin.replace:
+    path: /etc/ssh/sshd_config.d/50-redhat.conf
+    regexp: '^(ChallengeResponseAuthentication\s+no)$'
+    replace: '# \1'
+    backup: true
+  when:
+    - ansible_os_family == "RedHat"
+    - entraid_join_kbd_interactive_authentication | bool
+  notify:
+    - restart ssh rocky
+
+- name: Entraid_join | Find sshd config files
+  ansible.builtin.find:
+    paths:
+      - /etc/ssh
+      - /etc/ssh/sshd_config.d
+    patterns:
+      - sshd_config
+      - "*.conf"
+    file_type: file
+  register: entraid_join_sshd_config_files
+  when: entraid_join_disable_allowusers | bool
+
+- name: Entraid_join | Comment out active AllowUsers lines for Himmelblau pilot
+  ansible.builtin.replace:
+    path: "{{ item.path }}"
+    regexp: '^(AllowUsers\s+.*)$'
+    replace: '# \1'
+    backup: true
+  loop: "{{ entraid_join_sshd_config_files.files }}"
+  when: entraid_join_disable_allowusers | bool
+  notify:
+    - restart ssh ubuntu
+    - restart ssh rocky
+
+- name: Entraid_join | Validate sshd configuration
+  ansible.builtin.command: sshd -t
+  changed_when: false

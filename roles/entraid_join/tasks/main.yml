@@ -1,0 +1,58 @@
+#SPDX-License-Identifier: MIT-0
+---
+# tasks file for roles/entraid_join
+- name: Entraid_join | Install and configure Himmelblau packages on Ubuntu
+  ansible.builtin.include_tasks: ubuntu.yml
+  when: ansible_os_family == "Debian"
+
+- name: Entraid_join | Install and configure Himmelblau packages on Rocky
+  ansible.builtin.include_tasks: rocky.yml
+  when: ansible_os_family == "RedHat"
+
+- name: Entraid_join | Ensure krb5 include directory exists
+  ansible.builtin.file:
+    path: /etc/krb5.conf.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: entraid_join_create_krb5_conf_d | bool
+  notify:
+    - restart himmelblaud
+    - restart himmelblaud-tasks
+
+- name: Entraid_join | Configure Himmelblau
+  ansible.builtin.template:
+    src: himmelblau.conf.j2
+    dest: /etc/himmelblau/himmelblau.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - restart himmelblaud
+    - restart himmelblaud-tasks
+
+- name: Entraid_join | Configure NSS
+  ansible.builtin.include_tasks: nss.yml
+  when: entraid_join_configure_nsswitch | bool
+
+- name: Entraid_join | Configure PAM
+  ansible.builtin.include_tasks: pam.yml
+  when: entraid_join_configure_pam | bool
+
+- name: Entraid_join | Configure SSH
+  ansible.builtin.include_tasks: ssh.yml
+  when: entraid_join_configure_sshd | bool
+
+- name: Entraid_join | Enable and start himmelblaud
+  ansible.builtin.service:
+    name: "{{ entraid_join_himmelblau_service }}"
+    enabled: true
+    state: started
+
+- name: Entraid_join | Enable and start himmelblaud-tasks if present
+  ansible.builtin.service:
+    name: "{{ entraid_join_himmelblau_tasks_service }}"
+    enabled: true
+    state: started
+  failed_when: false

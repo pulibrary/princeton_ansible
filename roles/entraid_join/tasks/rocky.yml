@@ -1,0 +1,31 @@
+---
+- name: Entraid_join | Install Rocky prerequisites
+  ansible.builtin.dnf:
+    name:
+      - dnf-plugins-core
+      - ca-certificates
+    state: present
+
+- name: Entraid_join | Import Himmelblau RPM signing key
+  ansible.builtin.rpm_key:
+    key: https://packages.himmelblau-idm.org/himmelblau.asc
+    state: present
+
+- name: Entraid_join | Configure Himmelblau dnf repository
+  ansible.builtin.yum_repository:
+    name: himmelblau
+    description: Himmelblau packages
+    baseurl: "https://packages.himmelblau-idm.org/{{ entraid_join_himmelblau_channel }}/rpm/{{ entraid_join_rocky_repo_release }}"
+    enabled: true
+    gpgcheck: true
+    gpgkey: https://packages.himmelblau-idm.org/himmelblau.asc
+    state: present
+
+- name: Entraid_join | Refresh dnf metadata
+  ansible.builtin.dnf:
+    update_cache: true
+
+- name: Entraid_join | Install Himmelblau packages on Rocky
+  ansible.builtin.dnf:
+    name: "{{ entraid_join_rocky_packages }}"
+    state: present
