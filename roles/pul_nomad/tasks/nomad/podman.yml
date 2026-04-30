@@ -6,6 +6,22 @@
   when:
     - "ansible_os_family == 'RedHat'"
   block:
+    - name: 'pul_nomad | nomad | podman | add subuid'
+      ansible.builtin.lineinfile:
+        path: /etc/subuid
+        regexp: '^containers:'
+        line: 'containers:1000000:10000000'
+        state: present
+      notify: migrate podman
+
+    - name: 'pul_nomad | nomad | podman | add subgid'
+      ansible.builtin.lineinfile:
+        path: /etc/subgid
+        regexp: '^containers:'
+        line: 'containers:1000000:10000000'
+        state: present
+      notify: migrate podman
+
     - name: 'pul_nomad | nomad | podman | Install Podman'
       ansible.builtin.dnf:
         name: podman
