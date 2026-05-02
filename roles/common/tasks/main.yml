@@ -7,6 +7,11 @@
     - "ansible_hostname not in inventory_hostname"
   tags: "update_hostname"
 
+# Must run BEFORE any package install: pre-built images may carry
+# stale Princeton math mirror entries that would break apt-get update.
+- name: Common | Configure package mirrors
+  ansible.builtin.include_tasks: mirrors.yml
+
 - name: Common | Install common shared packages
   ansible.builtin.package:
     name: "{{ item }}"

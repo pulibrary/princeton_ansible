@@ -1,20 +1,4 @@
 ---
-- name: Common - Ensure repo tools present
-  ansible.builtin.package:
-    name: dnf-plugins-core
-    state: present
-  when: ansible_pkg_mgr == 'dnf'
-
-- name: Common - Add Princeton Rocky repo (preferred by low cost)
-  ansible.builtin.template:
-    src: rocky-princeton.repo.j2
-    dest: "/etc/yum.repos.d/{{ item.priority }}-{{ item.name }}-rocky.repo"
-    owner: root
-    group: root
-    mode: '0644'
-  loop: "{{ preferred_mirrors }}"
-  when: ansible_os_family == 'RedHat'
-
 # Build cache using the package module, with retries
 - name: Common - Build package metadata cache
   ansible.builtin.dnf:
@@ -40,155 +24,179 @@
   when:
     - ansible_os_family == "Debian"
 
-- name: Common | Determine if architecture is supported by Princeton mirror
-  ansible.builtin.set_fact:
-    use_princeton_mirror: "{{ ansible_architecture in ['x86_64', 'amd64'] }}"
-  when:
-    - ansible_os_family == "Debian"
-
-- name: Common | Prefer Princeton mirror for apt (x86_64/amd64 only)
-  ansible.builtin.apt_repository:
-    repo: deb [arch=amd64] https://{{ item.base }}/pub/ubuntu {{ ubuntu_codename }} main restricted universe multiverse
-    state: present
-    filename: "{{ item.priority }}-{{ item.name }}"
-    update_cache: false
-  loop: "{{ preferred_mirrors }}"
-  when:
-    - ansible_os_family == "Debian"
-    - use_princeton_mirror | bool
-  register: princeton_mirror_apt
-  failed_when:
-    - princeton_mirror_apt is failed
-    - "'does not have a Release file' not in princeton_mirror_apt.msg | default('')"
-    - "'Failed to fetch' not in princeton_mirror_apt.msg | default('')"
-    - "'Connection failed' not in princeton_mirror_apt.msg | default('')"
-    - "'Unable to connect' not in princeton_mirror_apt.msg | default('')"
-    - "'Could not resolve' not in princeton_mirror_apt.msg | default('')"
-    - "'Temporary failure' not in princeton_mirror_apt.msg | default('')"
-
-- name: Common | Prefer Princeton mirror for apt updates (x86_64/amd64 only)
-  ansible.builtin.apt_repository:
-    repo: deb [arch=amd64] https://{{ item.base }}/pub/ubuntu {{ ubuntu_codename }}-updates main restricted universe multiverse
-    state: present
-    filename: "{{ item.priority }}-{{ item.name }}"
-    update_cache: false
-  loop: "{{ preferred_mirrors }}"
-  when:
-    - ansible_os_family == "Debian"
-    - use_princeton_mirror | bool
-  register: princeton_mirror_updates
-  failed_when:
-    - princeton_mirror_updates is failed
-    - "'does not have a Release file' not in princeton_mirror_updates.msg | default('')"
-    - "'Failed to fetch' not in princeton_mirror_updates.msg | default('')"
-    - "'Connection failed' not in princeton_mirror_updates.msg | default('')"
-    - "'Unable to connect' not in princeton_mirror_updates.msg | default('')"
-    - "'Could not resolve' not in princeton_mirror_updates.msg | default('')"
-    - "'Temporary failure' not in princeton_mirror_updates.msg | default('')"
-
-- name: Common | Prefer Princeton mirror for apt backports (x86_64/amd64 only)
-  ansible.builtin.apt_repository:
-    repo: deb [arch=amd64] https://{{ item.base }}/pub/ubuntu {{ ubuntu_codename }}-backports main restricted universe multiverse
-    state: present
-    filename: "{{ item.priority }}-{{ item.name }}"
-    update_cache: false
-  loop: "{{ preferred_mirrors }}"
-  when:
-    - ansible_os_family == "Debian"
-    - use_princeton_mirror | bool
-  register: princeton_mirror_backports
-  failed_when:
-    - princeton_mirror_backports is failed
-    - "'does not have a Release file' not in princeton_mirror_backports.msg | default('')"
-    - "'Failed to fetch' not in princeton_mirror_backports.msg | default('')"
-    - "'Connection failed' not in princeton_mirror_backports.msg | default('')"
-    - "'Unable to connect' not in princeton_mirror_backports.msg | default('')"
-    - "'Could not resolve' not in princeton_mirror_backports.msg | default('')"
-    - "'Temporary failure' not in princeton_mirror_backports.msg | default('')"
-- name: Common | Add fallback Ubuntu archive for apt (all suites)
-  ansible.builtin.apt_repository:
-    repo: "{{ item }}"
-    state: present
-    filename: "99-ubuntu-archive"
-    update_cache: false
+    # remove math mirror repo - we should delete this eventually
+- name: Common | Remove Princeton math mirror repository files
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
   loop:
-    - "deb http://archive.ubuntu.com/ubuntu {{ ubuntu_codename }} main restricted universe multiverse"
-    - "deb http://archive.ubuntu.com/ubuntu {{ ubuntu_codename }}-updates main restricted universe multiverse"
-    - "deb http://archive.ubuntu.com/ubuntu {{ ubuntu_codename }}-backports main restricted universe multiverse"
+    - /etc/apt/sources.list.d/00-princeton.list
+    - /etc/apt/sources.list.d/pul_postgresql.list
+    - /etc/apt/sources.list.d/pul_redis.list
+    - /etc/apt/sources.list.d/pul_yarn.list
   when:
     - ansible_os_family == "Debian"
-    - ansible_architecture in ['x86_64', 'amd64']
+  register: math_mirror_files_removed
+  ignore_errors: true
 
-- name: Common | Clean apt cache before update
+- name: Common | Remove any remaining Princeton mirror files
+  ansible.builtin.find:
+    paths: /etc/apt/sources.list.d/
+    patterns: "*princeton*"
+    file_type: file
+  register: princeton_files
+  when:
+    - ansible_os_family == "Debian"
+
+- name: Common | Delete found Princeton mirror files
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: absent
+  loop: "{{ princeton_files.files }}"
+  when:
+    - ansible_os_family == "Debian"
+    - princeton_files.files | length > 0
+
+- name: Common | Backup original sources.list
+  ansible.builtin.copy:
+    src: /etc/apt/sources.list
+    dest: "/etc/apt/sources.list.backup.{{ ansible_date_time.epoch }}"
+    remote_src: true
+    backup: true
+  when:
+    - ansible_os_family == "Debian"
+
+- name: Common | Remove duplicate Ubuntu archive entries from main sources.list
+  ansible.builtin.replace:
+    path: /etc/apt/sources.list
+    regexp: '^(deb(?:-src)?\s+https?://(?:[a-z]+\.)?archive\.ubuntu\.com/ubuntu)\s+'
+    replace: '# \1'
+  when:
+    - ansible_os_family == "Debian"
+
+- name: Common | Remove duplicate security.ubuntu.com entries from main sources.list
+  ansible.builtin.replace:
+    path: /etc/apt/sources.list
+    regexp: '^(deb(?:-src)?\s+https?://security\.ubuntu\.com/ubuntu)\s+'
+    replace: '# \1'
+  when:
+    - ansible_os_family == "Debian"
+
+- name: Common | Remove duplicate us.archive.ubuntu.com entries from main sources.list
+  ansible.builtin.replace:
+    path: /etc/apt/sources.list
+    regexp: '^(deb(?:-src)?\s+https?://us\.archive\.ubuntu\.com/ubuntu)\s+'
+    replace: '# \1'
+  when:
+    - ansible_os_family == "Debian"
+
+- name: Common | Configure Ubuntu archive repositories as primary source
+  ansible.builtin.copy:
+    dest: /etc/apt/sources.list.d/99-ubuntu-archive.list
+    mode: '0644'
+    content: |
+      # Managed by Ansible - common role
+      # Ubuntu Archive repositories - No Princeton math mirror
+      # Configured on {{ ansible_date_time.iso8601 }}
+      
+      deb http://archive.ubuntu.com/ubuntu {{ ubuntu_codename }} main restricted universe multiverse
+      deb http://archive.ubuntu.com/ubuntu {{ ubuntu_codename }}-updates main restricted universe multiverse
+      deb http://archive.ubuntu.com/ubuntu {{ ubuntu_codename }}-backports main restricted universe multiverse
+      deb http://security.ubuntu.com/ubuntu {{ ubuntu_codename }}-security main restricted universe multiverse
+  when:
+    - ansible_os_family == "Debian"
+
+# fix redis
+- name: Common | Force IPv4 for APT (fixes Launchpad PPA timeouts)
+  ansible.builtin.copy:
+    dest: /etc/apt/apt.conf.d/99force-ipv4
+    mode: '0644'
+    content: |
+      # Force IPv4 for APT to avoid IPv6 connection timeouts
+      Acquire::ForceIPv4 "true";
+  when:
+    - ansible_os_family == "Debian"
+
+- name: Common | Remove problematic Redis PPA if it exists (connection issues)
+  ansible.builtin.file:
+    path: /etc/apt/sources.list.d/ppa_redislabs_redis_jammy.list
+    state: absent
+  when:
+    - ansible_os_family == "Debian"
+  ignore_errors: true
+
+# fix postgresql
+- name: Common | Fix PostgreSQL GPG key (migrate from legacy trusted.gpg)
+  block:
+    - name: Common | Check if PostgreSQL repo exists
+      ansible.builtin.stat:
+        path: /etc/apt/sources.list.d/apt_postgresql_org_pub_repos_apt.list
+      register: postgres_repo
+
+    - name: Common | Download and install PostgreSQL GPG key
+      ansible.builtin.get_url:
+        url: https://www.postgresql.org/media/keys/ACCC4CF8.asc
+        dest: /tmp/postgresql-key.asc
+        mode: '0644'
+      when: postgres_repo.stat.exists
+
+    - name: Common | Convert and install PostgreSQL GPG key
+      ansible.builtin.shell: |
+        gpg --dearmor < /tmp/postgresql-key.asc | sudo tee /usr/share/keyrings/postgresql-archive-keyring.gpg > /dev/null
+      when: postgres_repo.stat.exists
+      args:
+        creates: /usr/share/keyrings/postgresql-archive-keyring.gpg
+
+    - name: Common | Update PostgreSQL repo to use new keyring
+      ansible.builtin.replace:
+        path: /etc/apt/sources.list.d/apt_postgresql_org_pub_repos_apt.list
+        regexp: '^deb http://apt\.postgresql\.org/pub/repos/apt'
+        replace: 'deb [signed-by=/usr/share/keyrings/postgresql-archive-keyring.gpg] http://apt.postgresql.org/pub/repos/apt'
+      when: postgres_repo.stat.exists
+
+    - name: Common | Clean up temporary key file
+      ansible.builtin.file:
+        path: /tmp/postgresql-key.asc
+        state: absent
+      when: postgres_repo.stat.exists
+  when:
+    - ansible_os_family == "Debian"
+  ignore_errors: true
+
+- name: Common | Clean apt cache
   ansible.builtin.command: apt-get clean
   when:
     - ansible_os_family == "Debian"
   changed_when: false
 
-- name: Common | Update apt cache after configuring all repositories
-  ansible.builtin.command: apt-get update -o Debug::Acquire::http=true
+- name: Common | Update apt cache
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 0
   when:
     - ansible_os_family == "Debian"
   register: apt_cache_update
-  retries: 3
+  retries: 5
   delay: 5
-  until: apt_cache_update.rc == 0
+  until: apt_cache_update is success
+
+- name: Common | Verify math mirror is removed
+  ansible.builtin.command: grep -r "mirror.math.princeton.edu" /etc/apt/
+  register: math_mirror_check
   changed_when: false
   failed_when: false
+  when:
+    - ansible_os_family == "Debian"
 
-- name: Common | Show apt-get update output for debugging
+- name: Common | Display math mirror status
   ansible.builtin.debug:
-    msg: |
-      Return code: {{ apt_cache_update.rc }}
-      STDOUT:
-      {{ apt_cache_update.stdout }}
-      STDERR:
-      {{ apt_cache_update.stderr }}
+    msg: "Math mirror status: {{ 'REMOVED' if math_mirror_check.rc != 0 else 'STILL PRESENT' }}"
   when:
     - ansible_os_family == "Debian"
 
-- name: Common | Check what repository files were created
-  ansible.builtin.command: cat /etc/apt/sources.list.d/00-princeton.list
-  when:
-    - ansible_os_family == "Debian"
-    - use_princeton_mirror | bool
-  register: princeton_list_content
-  changed_when: false
-  failed_when: false
-
-- name: Common | Show Princeton repository file content
+- name: Common | Display apt cache update status
   ansible.builtin.debug:
-    var: princeton_list_content.stdout_lines
+    msg: "APT cache updated successfully using Ubuntu archives"
   when:
     - ansible_os_family == "Debian"
-    - use_princeton_mirror | bool
-    - princeton_list_content.stdout is defined
-
-- name: Common | Check Ubuntu archive repository file
-  ansible.builtin.command: cat /etc/apt/sources.list.d/99-ubuntu-archive.list
-  when:
-    - ansible_os_family == "Debian"
-  register: ubuntu_archive_content
-  changed_when: false
-  failed_when: false
-
-- name: Common | Show Ubuntu archive file content
-  ansible.builtin.debug:
-    var: ubuntu_archive_content.stdout_lines
-  when:
-    - ansible_os_family == "Debian"
-    - ubuntu_archive_content.stdout is defined
-
-- name: Common | Fail if apt update didn't succeed
-  ansible.builtin.fail:
-    msg: "apt-get update failed with return code {{ apt_cache_update.rc }}. Check the debug output above for details."
-  when:
-    - ansible_os_family == "Debian"
-    - apt_cache_update.rc != 0
-
-- name: Common | Display apt update status
-  ansible.builtin.debug:
-    msg: "apt cache updated successfully"
-  when:
-    - ansible_os_family == "Debian"
-    - apt_cache_update.rc == 0
+    - apt_cache_update is success
