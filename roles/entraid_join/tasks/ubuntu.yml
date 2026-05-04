@@ -1,0 +1,32 @@
+---
+- name: Entraid_join | Install Ubuntu prerequisites
+  ansible.builtin.apt:
+    name:
+      - curl
+      - ca-certificates
+      - gnupg
+      - software-properties-common
+    state: present
+    update_cache: true
+
+- name: Entraid_join | Install Himmelblau apt signing key
+  ansible.builtin.shell: |
+    set -euo pipefail
+    curl -fsSL https://packages.himmelblau-idm.org/himmelblau.asc \
+      | gpg --dearmor -o /etc/apt/trusted.gpg.d/himmelblau.gpg
+  args:
+    executable: /bin/bash
+    creates: /etc/apt/trusted.gpg.d/himmelblau.gpg
+
+- name: Entraid_join | Configure Himmelblau apt repository
+  ansible.builtin.apt_repository:
+    repo: "deb [arch=amd64] https://packages.himmelblau-idm.org/{{ entraid_join_himmelblau_channel }}/deb/{{ entraid_join_ubuntu_repo_release }}/ ./"
+    filename: himmelblau
+    state: present
+    update_cache: true
+
+- name: Entraid_join | Install Himmelblau packages on Ubuntu
+  ansible.builtin.apt:
+    name: "{{ entraid_join_ubuntu_packages }}"
+    state: present
+    update_cache: true

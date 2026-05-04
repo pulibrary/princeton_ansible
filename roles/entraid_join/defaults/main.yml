@@ -1,0 +1,71 @@
+#SPDX-License-Identifier: MIT-0
+---
+# defaults file for roles/entraid_join
+# Domain allowed for Himmelblau/Entra ID authentication.
+entraid_join_domain: princeton.edu
+
+# Himmelblau package repositories.
+entraid_join_himmelblau_channel: stable/latest
+
+# Ubuntu repo target. Override for ubuntu24.04 when needed.
+# https://himmelblau-idm.org/downloads/index.html
+entraid_join_ubuntu_repo_release: ubuntu22.04
+
+# Rocky repo target. Override for rocky8/rocky10 when needed.
+entraid_join_rocky_repo_release: rocky9
+
+# Himmelblau config.
+entraid_join_enable_hello: false
+entraid_join_shell: /bin/bash
+entraid_join_home_prefix: /home/
+entraid_join_home_attr: CN
+entraid_join_home_alias: CN
+entraid_join_use_etc_skel: true
+entraid_join_debug: false
+
+# Optional Entra group object IDs or UPNs allowed to authenticate.
+# Keep empty for initial pilot, then restrict later.
+entraid_join_pam_allow_groups: []
+
+# SSH pilot behavior.
+# This role disables AllowUsers by commenting out active AllowUsers lines,
+# because OpenSSH AllowUsers does not work well with Entra UPN-style logins.
+entraid_join_disable_allowusers: true
+
+# Manage SSH settings required for headless MFA.
+entraid_join_configure_sshd: true
+entraid_join_password_authentication: true
+entraid_join_kbd_interactive_authentication: true
+
+# Manage PAM auth lines for headless MFA.
+entraid_join_configure_pam: true
+
+# Manage NSS passwd/group resolution.
+entraid_join_configure_nsswitch: true
+
+# Create /etc/krb5.conf.d to avoid Himmelblau task warnings.
+entraid_join_create_krb5_conf_d: true
+
+# Packages.
+entraid_join_ubuntu_packages:
+  - curl
+  - ca-certificates
+  - gnupg
+  - software-properties-common
+  - himmelblau
+  - pam-himmelblau
+  - nss-himmelblau
+  - himmelblau-sso
+
+entraid_join_rocky_packages:
+  - dnf-plugins-core
+  - ca-certificates
+  - himmelblau
+  - pam-himmelblau
+  - nss-himmelblau
+  - himmelblau-sshd-config
+  - himmelblau-selinux
+
+# Service names.
+entraid_join_himmelblau_service: himmelblaud
+entraid_join_himmelblau_tasks_service: himmelblaud-tasks

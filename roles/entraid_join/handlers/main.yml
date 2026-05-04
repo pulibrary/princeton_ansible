@@ -1,0 +1,25 @@
+#SPDX-License-Identifier: MIT-0
+---
+# handlers file for roles/entraid_join
+- name: restart himmelblaud
+  ansible.builtin.service:
+    name: "{{ entraid_join_himmelblau_service }}"
+    state: restarted
+
+- name: restart himmelblaud-tasks
+  ansible.builtin.service:
+    name: "{{ entraid_join_himmelblau_tasks_service }}"
+    state: restarted
+  failed_when: false
+
+- name: restart ssh ubuntu
+  ansible.builtin.service:
+    name: ssh
+    state: restarted
+  when: ansible_os_family == "Debian"
+
+- name: restart ssh rocky
+  ansible.builtin.service:
+    name: sshd
+    state: restarted
+  when: ansible_os_family == "RedHat"
