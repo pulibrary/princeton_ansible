@@ -126,7 +126,7 @@ Approximate storage requirements based on observed usage:
 
 | Mirror | Initial seed | Steady-state growth |
 |--------|--------------|---------------------|
-| nodejs | ~1.0–1.1 TB  | ~5–10 GB/month      |
+| nodejs | ~2.5 TB      | ~5–10 GB/month      |
 | solr   | ~1.6 GB      | <1 GB/month         |
 
 A 2 TB GCP `pd-balanced` disk (~1.86 TiB usable) is sufficient for both
