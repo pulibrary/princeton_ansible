@@ -1,32 +1,33 @@
 variable "branch_or_sha" {
   type    = string
-  default = "main"
+  default = "latest-02-27-2026"
 }
 
-
 job "reservoir" {
-  region = "global"
+  region      = "global"
   datacenters = ["dc1"]
-  type = "service"
-  node_pool = "sandbox"
+  type        = "service"
+  node_pool   = "sandbox"
 
   group "reservoir-all" {
     count = 1
 
     network {
+      mode = "host"
       port "http" {
-        to = 8081
+        static = 8081
       }
-      port "https" {}
     }
 
     service {
-      port = "http"
+      name     = "reservoir-sandbox"
+      provider = "consul"
+      port     = "http"
 
       check {
-        type = "http"
-        port = "http"
-        path = "/reservoir"
+        type     = "http"
+        port     = "http"
+        path     = "/reservoir"
         interval = "10s"
         timeout  = "2s"
       }
@@ -35,23 +36,23 @@ job "reservoir" {
     task "reservoir" {
       driver = "podman"
 
-      env {
-        DB_USERNAME= "reservoir_db_user"
-        DB_PASSWORD= "reservoir_db_password"
-        DB_DATABASE= "reservoir_db"
-        DB_HOST= "lib-postgres-staging1.princeton.edu"
+      template {
+        data        = file("sandbox.env")
+        destination = "secrets/db.env"
+        env         = true
+        change_mode = "restart"
       }
 
       config {
-        image = "ghcr.io/pulibrary/reservoir-jit:latest-02-27-2026"
-        force_pull = true
+        image        = "ghcr.io/pulibrary/reservoir-jit:${var.branch_or_sha}"
+        force_pull   = true
+        network_mode = "host"
       }
 
       resources {
-        cpu = 2000
+        cpu    = 2000
         memory = 2048
       }
-
     }
   }
 }
