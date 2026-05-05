@@ -6,7 +6,10 @@
   ansible.builtin.set_fact:
     chrony_service_name: chrony
     chrony_config_path: /etc/chrony
+    chrony_config_file: /etc/chrony/chrony.conf
     chrony_keyfile: /etc/chrony/chrony.keys
+    chrony_owner: root
+    chrony_group: root
   when:
     - ansible_os_family == "Debian"
 
@@ -14,14 +17,30 @@
   ansible.builtin.set_fact:
     chrony_service_name: chronyd
     chrony_config_path: /etc
+    chrony_config_file: /etc/chrony.conf
     chrony_keyfile: /etc/chrony.keys
+    chrony_owner: root
+    chrony_group: root
   when:
     - ansible_os_family == "RedHat"
+
+- name: Common - set chrony facts FreeBSD
+  ansible.builtin.set_fact:
+    chrony_service_name: chronyd
+    chrony_config_path: /usr/local/etc
+    chrony_config_file: /usr/local/etc/chrony.conf
+    chrony_keyfile: /usr/local/etc/chrony.keys
+    chrony_owner: root
+    chrony_group: wheel
+  when:
+    - ansible_os_family == "FreeBSD"
 
 - name: Common - Uninstall NTP package
   ansible.builtin.package:
     name: ntp
     state: absent
+  when:
+    - ansible_os_family != "FreeBSD"
 
 - name: Common - Install Chrony package
   ansible.builtin.package:
@@ -32,23 +51,23 @@
   ansible.builtin.file:
     path: "{{ chrony_config_path }}/sources.d"
     state: directory
-    owner: root
-    group: root
-    mode: '0755'
+    owner: "{{ chrony_owner }}"
+    group: "{{ chrony_group }}"
+    mode: "0755"
   when:
-    - ansible_os_family == "Debian"
+    - ansible_os_family in ["Debian", "FreeBSD"]
 
 - name: Common - configure chronyd in chrony.conf
   ansible.builtin.template:
     src: chrony.conf
-    dest: "{{ chrony_config_path }}/chrony.conf"
-    owner: root
-    group: root
-    mode: '0644'
+    dest: "{{ chrony_config_file }}"
+    owner: "{{ chrony_owner }}"
+    group: "{{ chrony_group }}"
+    mode: "0644"
     backup: true
   notify: restart chrony
 
-- name: Common - ensure duplicate chrony.conf file is gone (Ubuntu)
+- name: Common - ensure duplicate chrony.conf file is gone Ubuntu
   ansible.builtin.file:
     path: /etc/chrony.conf
     state: absent
@@ -56,17 +75,26 @@
   when:
     - ansible_os_family == "Debian"
 
-- name: Common - add pool.ntp.org to sources.d (Ubuntu)
+- name: Common - add pool.ntp.org to sources.d
   ansible.builtin.blockinfile:
     path: "{{ chrony_config_path }}/sources.d/ntp-server.sources"
     create: true
     block: |
       pool pool.ntp.org iburst minpoll 8 maxpoll 9
     marker: "# {mark} ANSIBLE MANAGED CHRONY CONFIG"
-    mode: "0755"
+    mode: "0644"
+    owner: "{{ chrony_owner }}"
+    group: "{{ chrony_group }}"
   notify: restart chrony
   when:
-    - ansible_os_family == "Debian"
+    - ansible_os_family in ["Debian", "FreeBSD"]
+
+- name: Common - enable chronyd in rc.conf on FreeBSD
+  community.general.sysrc:
+    name: chronyd_enable
+    value: "YES"
+  when:
+    - ansible_os_family == "FreeBSD"
 
 - name: Common - ensure Chronyd service is enabled and started
   ansible.builtin.service:
@@ -80,7 +108,3 @@
   register: chrony_sources
   changed_when: false
   failed_when: "'System clock wrong' in chrony_sources.stderr"
-
-    # - name: Display Chronyd sources
-    #   ansible.builtin.debug:
-    #     var: chrony_sources.stdout_lines

@@ -57,6 +57,25 @@
     - ansible_os_family == "Debian"
     - princeton_files.files | length > 0
 
+- name: Common | Check whether sources.list backup exists
+  ansible.builtin.stat:
+    path: /etc/apt/sources.list.pre-ansible
+  register: sources_list_backup
+  when:
+    - ansible_os_family == "Debian"
+
+- name: Common | Backup original sources.list (one-time)
+  ansible.builtin.copy:
+    src: /etc/apt/sources.list
+    dest: /etc/apt/sources.list.pre-ansible
+    remote_src: true
+    mode: '0644'
+    owner: root
+    group: root
+  when:
+    - ansible_os_family == "Debian"
+    - not sources_list_backup.stat.exists
+
 - name: Common | Backup original sources.list
   ansible.builtin.copy:
     src: /etc/apt/sources.list
@@ -98,7 +117,6 @@
       # Managed by Ansible - common role
       # Ubuntu Archive repositories - No Princeton math mirror
       # Configured on {{ ansible_date_time.iso8601 }}
-      
       deb http://archive.ubuntu.com/ubuntu {{ ubuntu_codename }} main restricted universe multiverse
       deb http://archive.ubuntu.com/ubuntu {{ ubuntu_codename }}-updates main restricted universe multiverse
       deb http://archive.ubuntu.com/ubuntu {{ ubuntu_codename }}-backports main restricted universe multiverse

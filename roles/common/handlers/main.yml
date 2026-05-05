@@ -1,18 +1,26 @@
 ---
-# handlers file for roles/common
-
 - name: restart chrony
   ansible.builtin.service:
     name: "{{ chrony_service_name }}"
     state: restarted
-  when: running_on_server
+  when:
+    - running_on_server | default(true)
 
 - name: test logrotate configuration
   ansible.builtin.command: logrotate -f /etc/logrotate.conf
   register: logrotate_test
   failed_when: logrotate_test.rc != 0
   when:
-    - running_on_server
+    - running_on_server | default(true)
+    - ansible_os_family != "FreeBSD"
+
+- name: test logrotate configuration
+  ansible.builtin.command: logrotate -f /usr/local/etc/logrotate.conf
+  register: freebsd_logrotate_test
+  failed_when: freebsd_logrotate_test.rc != 0
+  when:
+    - running_on_server | default(true)
+    - ansible_os_family == "FreeBSD"
 
 - name: reload logrotate timer settings
   ansible.builtin.systemd:
@@ -20,9 +28,12 @@
     name: logrotate.timer
     enabled: true
   when:
-    - running_on_server
+    - running_on_server | default(true)
+    - ansible_service_mgr == "systemd"
 
 - name: restart journald
   ansible.builtin.systemd:
     name: systemd-journald
     state: restarted
+  when:
+    - ansible_service_mgr == "systemd"

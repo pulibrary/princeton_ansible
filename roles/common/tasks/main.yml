@@ -4,6 +4,7 @@
     name: "{{ inventory_hostname }}"
   when:
     - running_on_server
+    - ansible_os_family != "FreeBSD"
     - "ansible_hostname not in inventory_hostname"
   tags: "update_hostname"
 
@@ -11,6 +12,8 @@
 # stale Princeton math mirror entries that would break apt-get update.
 - name: Common | Configure package mirrors
   ansible.builtin.include_tasks: mirrors.yml
+  when:
+    - ansible_os_family != "FreeBSD"
 
 - name: Common | Install common shared packages
   ansible.builtin.package:
@@ -20,9 +23,7 @@
   loop:
     - "{{ common_shared_packages }}"
   when:
-    - ansible_os_family != "OpenBSD"
-    # our openBSD servers are minimalist
-    # we don't install tools on them
+    - ansible_os_family != "FreeBSD"
 
 - name: Common | Install common ubuntu packages
   ansible.builtin.package:
@@ -41,6 +42,15 @@
     - "{{ common_rhel_packages }}"
   when:
     - ansible_os_family == "RedHat"
+
+- name: Common | Install common FreeBSD packages
+  ansible.builtin.package:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - "{{ common_freebsd_packages }}"
+  when:
+    - ansible_os_family == "FreeBSD"
 
 - name: Common | copy tmux.conf
   ansible.builtin.template:
@@ -131,6 +141,7 @@
     mode: '0755'
   when:
     - running_on_server
+    - ansible_os_family != "FreeBSD"
 
 - name: Common | Check if dua is already installed system-wide
   ansible.builtin.stat:
@@ -138,6 +149,7 @@
   register: dua_system_stat_result
   when:
     - running_on_server
+    - ansible_os_family != "FreeBSD"
 
 - name: Common | Install dua-cli system-wide if not already present
   ansible.builtin.shell: "{{ dua_system_install_command }}"
@@ -145,6 +157,7 @@
     creates: "{{ dua_system_executable }}"
   when:
     - running_on_server
+    - ansible_os_family != "FreeBSD"
     - not dua_system_stat_result.stat.exists
 
 - name: Common | Verify dua installation
@@ -153,6 +166,7 @@
   changed_when: false
   when:
     - running_on_server
+    - ansible_os_family != "FreeBSD"
     - not dua_system_stat_result.stat.exists
   failed_when: dua_version_result.rc != 0
 
@@ -161,6 +175,7 @@
     msg: "dua-cli version: {{ dua_version_result.stdout }}"
   when:
     - running_on_server
+    - ansible_os_family != "FreeBSD"
     - dua_version_result.stdout is defined and dua_version_result.rc == 0
 
 - name: Common | Check for checkmk agent binary
@@ -178,6 +193,7 @@
     group: root
   when:
     - running_on_server
+    - ansible_os_family != "FreeBSD"
     - checkmk_binary_stat.stat.exists
 
 - name: Common | install and update chronyd
@@ -196,7 +212,4 @@
     dest: /etc/profile.d/history-timestamp.sh
     mode: "0644"
     owner: root
-    group: root
-
-- name: Configure preferred mirrors
-  include_tasks: mirrors.yml
+    group: "{{ 'wheel' if ansible_os_family == 'FreeBSD' else 'root' }}"
