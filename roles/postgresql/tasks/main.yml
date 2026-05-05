@@ -35,12 +35,22 @@
     state: file
   when: ansible_os_family == "Debian"
 
-- name: PostgreSQL | add postgresql repository for latest ubuntu
+- name: PostgreSQL | Remove legacy/conflicting repository files
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /etc/apt/sources.list.d/apt_postgresql_org_pub_repos_apt.list
+    - /etc/apt/sources.list.d/pul_postgresql.list
+  become: true
+  when: ansible_os_family == "Debian"
+
+- name: PostgreSQL | Add PostgreSQL APT repository
   ansible.builtin.apt_repository:
     repo: "{{ postgres_apt_repository }}"
     state: present
-    filename: pul_postgresql
-    update_cache: false
+    filename: postgresql
+    update_cache: true
   when: ansible_os_family == "Debian"
 
 - name: PostgreSQL | add postgres:13 appstream
@@ -50,40 +60,6 @@
   when:
     - running_on_server
     - ansible_os_family == "RedHat"
-
-- name: PostgreSQL | add postgresql repository for latest ubuntu
-  ansible.builtin.apt_repository:
-    repo: 'deb http://apt.postgresql.org/pub/repos/apt/ {{ ansible_distribution_release }}-pgdg main'
-    state: present
-    update_cache: false
-  when:
-    - ansible_os_family == "Debian"
-
-- name: PostgreSQL | Clean apt cache
-  ansible.builtin.command: apt-get clean
-  changed_when: false
-
-- name: PostgreSQL | Update apt cache after adding repository
-  ansible.builtin.command: apt-get update
-  register: cache_update
-  retries: 3
-  delay: 5
-  until: cache_update.rc == 0
-  changed_when: false
-  failed_when: false
-
-- name: PostgreSQL | Display cache update errors
-  ansible.builtin.debug:
-    msg: |
-      Return code: {{ cache_update.rc }}
-      STDOUT: {{ cache_update.stdout }}
-      STDERR: {{ cache_update.stderr }}
-  when: cache_update.rc != 0
-
-- name: PostgreSQL | Fail if cache update failed
-  ansible.builtin.fail:
-    msg: "apt-get update failed. See debug output above."
-  when: cache_update.rc != 0
 
 - name: PostgreSQL | install postgresql server packages (Ubuntu)
   ansible.builtin.apt:
@@ -318,3 +294,4 @@
   ansible.builtin.include_tasks: create_read_only_user.yml
   when: application_dbuser_ro_name is defined
   tags: grant_ro_privs
+
