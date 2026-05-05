@@ -4,6 +4,9 @@ ansible_distribution_release: jammy
 dua_install_tag: "v2.30.0"
 duf_version: "0.8.1"
 fd_find_version: "9.0.0"
+common_logrotate_dir: "{{ '/usr/local/etc/logrotate.d' if ansible_os_family == 'FreeBSD' else '/etc/logrotate.d' }}"
+common_logrotate_conf: "{{ '/usr/local/etc/logrotate.conf' if ansible_os_family == 'FreeBSD' else '/etc/logrotate.conf' }}"
+common_vim_config_dir: "{{ '/usr/local/etc/vim' if ansible_os_family == 'FreeBSD' else '/etc/vim' }}"
 configured_dependencies: []
 common_shared_packages:
   - curl
@@ -16,6 +19,23 @@ common_shared_packages:
   - vim
   - wget
   - zip
+
+common_freebsd_packages:
+  - bash
+  - curl
+  - git
+  - htop
+  - jq
+  - logrotate
+  - tmux
+  - tree
+  - unzip
+  - vim
+  - wget
+  - zip
+  - the_silver_searcher
+  - chrony
+
 common_ubuntu_packages:
   - acl
   - build-essential
@@ -54,7 +74,8 @@ logrotate_global_defaults:
   su_user:    "root"
   su_group:   "root"
 # Default logrotate rules - can be completely overridden
-logrotate_rules:
+logrorate_rules: "{{ common_default_logrotate_rules }}"
+common_default_logrotate_rules:
   - name: "falcon-sensor"
     paths:
       - "/var/log/falcon-sensor.log"
