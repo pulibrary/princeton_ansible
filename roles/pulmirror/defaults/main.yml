@@ -1,0 +1,84 @@
+#SPDX-License-Identifier: MIT-0
+# defaults file for roles/pulmirror
+---
+pulmirror_packages:
+  - nginx
+  - lego
+  - wget
+  - rsync
+
+pulmirror_domain: "example.org"
+pulmirror_email: "admin@example.org"
+
+pulmirror_domains:
+  - "{{ pulmirror_domain }}"
+
+pulmirror_webroot: "/usr/local/www/acme"
+pulmirror_path: "/usr/local/etc/lego"
+pulmirror_cert_dir: "{{ pulmirror_path }}/certificates"
+
+pulmirror_nginx_conf: "/usr/local/etc/nginx/conf.d/{{ pulmirror_domain }}.conf"
+
+pulmirror_ssl_certificate: "{{ pulmirror_cert_dir }}/{{ pulmirror_domain }}.crt"
+pulmirror_ssl_certificate_key: "{{ pulmirror_cert_dir }}/{{ pulmirror_domain }}.key"
+pulmirror_template_enable_https: true
+
+pulmirror_use_staging: false
+pulmirror_acme_server: >-
+  {{ 'https://acme-staging-v02.api.letsencrypt.org/directory'
+     if pulmirror_use_staging
+     else 'https://acme-v02.api.letsencrypt.org/directory' }}
+
+pulmirror_enable_https: true
+
+pulmirror_proxy_pass: ""
+pulmirror_server_root: "/usr/local/www/nginx"
+
+pulmirror_renew_script: "/usr/local/sbin/lego-renew-{{ pulmirror_domain }}.sh"
+
+pulmirror_cron_minute: "17"
+pulmirror_cron_hour: "3"
+
+pulmirror_dns_provider: "dnsimple"
+pulmirror_dnsimple_oauth_token: "{{ vault_dnsimple_oauth_token }}"
+pulmirror_dnsimple_ttl: 300
+
+# nodejs
+nodejs_mirror_root: /usr/local/www/nginx-dist/mirror/nodejs
+nodejs_mirror_source: rsync://mirrors.dotsrc.org/nodejs/
+nodejs_mirror_owner: www
+nodejs_mirror_group: www
+
+# Throttle + politeness
+# Bandwidth cap in KB/s (10000 ≈ 80 Mbit/s). Set to 0 for unlimited.
+nodejs_mirror_bwlimit: 10000
+
+# Cron: every 6 hours by default. Adjust when we get throttled.
+nodejs_mirror_cron_hour: "*/6"
+nodejs_mirror_cron_minute: "17"
+
+nodejs_mirror_script: /usr/local/sbin/sync-nodejs-mirror
+nodejs_mirror_log: /var/log/nodejs-mirror.log
+nodejs_mirror_lock: /var/run/nodejs-mirror.lock
+
+# solr
+solr_mirror_root: /usr/local/www/nginx-dist/mirror/solr
+solr_mirror_owner: www
+solr_mirror_group: www
+
+solr_mirror_source_host: "rsync.us.apache.org"
+solr_mirror_paths:
+  - { remote: "solr/", local: "current" }
+  - { remote: "lucene/solr/", local: "legacy" }
+
+# Bandwidth cap in KB/s. Be polite to upstream.
+solr_mirror_bwlimit: 5000
+
+# Cron: ASF asks for at most 4-6 syncs/day, never at minute 0.
+# Minute 23 keeps us offset from the nodejs job at :17.
+solr_mirror_cron_hour: "*/6"
+solr_mirror_cron_minute: "23"
+
+solr_mirror_script: /usr/local/sbin/sync-solr-mirror
+solr_mirror_log: /var/log/solr-mirror.log
+solr_mirror_lock: /var/run/solr-mirror.lock

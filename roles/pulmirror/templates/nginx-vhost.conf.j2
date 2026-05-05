@@ -1,0 +1,97 @@
+# {{ ansible_managed }}
+
+{% macro solr_locations() %}
+    # Canonical Solr URL: /mirror/solr/<version>/<file>
+    # Resolves across physical trees in this order:
+    #   1. current/<ver>/<file>          (live Apache solr/)
+    #   2. legacy/<ver>/<file>           (live Apache lucene/solr/)
+    #   3. archive/solr/9x/<ver>/<file>  (retired mirror, archived 9.x)
+    #   4. archive/solr/legacy/<ver>/<file>  (retired mirror, archived 5–8.x)
+    location ~ ^/mirror/solr/(?<ver>[0-9]+\.[0-9]+(?:\.[0-9]+)?(?:-[A-Za-z0-9.-]+)?)/(?<file>.+)$ {
+        root /usr/local/www/nginx-dist;
+        try_files
+            /mirror/solr/current/$ver/$file
+            /mirror/solr/legacy/$ver/$file
+            /mirror/solr/archive/solr/9x/$ver/$file
+            /mirror/solr/archive/solr/legacy/$ver/$file
+            =404;
+    }
+
+    # Legacy URLs from the retired mirror, redirected to canonical form.
+    location ~ ^/mirror/apache/solr/solr/(?<lver>[0-9]+\.[0-9]+(?:\.[0-9]+)?(?:-[A-Za-z0-9.-]+)?)/(?<lfile>.+)$ {
+        return 301 /mirror/solr/$lver/$lfile;
+    }
+    location ~ ^/mirror/solr/dist/lucene/solr/(?<lver>[0-9]+\.[0-9]+(?:\.[0-9]+)?(?:-[A-Za-z0-9.-]+)?)/(?<lfile>.+)$ {
+        return 301 /mirror/solr/$lver/$lfile;
+    }
+
+    # Browseable directory listings under the mirror tree.
+    location /mirror/ {
+        root /usr/local/www/nginx-dist;
+        autoindex on;
+        autoindex_exact_size off;
+        autoindex_localtime on;
+    }
+{% endmacro %}
+
+server {
+    listen 80;
+    server_name {{ pulmirror_domains | join(' ') }};
+
+    location ^~ /.well-known/acme-challenge/ {
+        root {{ pulmirror_webroot }};
+        default_type "text/plain";
+        try_files $uri =404;
+    }
+
+{% if pulmirror_template_enable_https %}
+    location / {
+        return 301 https://$host$request_uri;
+    }
+{% else %}
+    {{ solr_locations() }}
+
+    location / {
+{% if pulmirror_proxy_pass | length > 0 %}
+        proxy_pass {{ pulmirror_proxy_pass }};
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+{% else %}
+        root {{ pulmirror_server_root }};
+        index index.html;
+{% endif %}
+    }
+{% endif %}
+}
+
+{% if pulmirror_template_enable_https %}
+server {
+    listen 443 ssl http2;
+    server_name {{ pulmirror_domains | join(' ') }};
+
+    ssl_certificate {{ pulmirror_ssl_certificate }};
+    ssl_certificate_key {{ pulmirror_ssl_certificate_key }};
+
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers off;
+
+    {{ solr_locations() }}
+
+    location / {
+{% if pulmirror_proxy_pass | length > 0 %}
+        proxy_pass {{ pulmirror_proxy_pass }};
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+{% else %}
+        root {{ pulmirror_server_root }};
+        index index.html;
+{% endif %}
+    }
+
+    include /usr/local/etc/nginx/server.d/*.conf;
+}
+{% endif %}

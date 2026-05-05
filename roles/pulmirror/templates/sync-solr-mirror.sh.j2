@@ -1,0 +1,64 @@
+#!/bin/sh
+# {{ ansible_managed }}
+# Mirror Apache Solr releases via rsync from {{ solr_mirror_source_host }}.
+# Two source paths: solr/ (9.0+) and lucene/solr/ (legacy 8.x and earlier).
+# Follows ASF mirror etiquette: --safe-links, off-the-hour, polite bwlimit.
+
+MIRROR_ROOT="{{ solr_mirror_root }}"
+LOG_FILE="{{ solr_mirror_log }}"
+LOCK_FILE="{{ solr_mirror_lock }}"
+SOURCE_HOST="{{ solr_mirror_source_host }}"
+OWNER="{{ solr_mirror_owner }}:{{ solr_mirror_group }}"
+RSYNC=/usr/local/bin/rsync
+
+# Self-re-exec under lockf so we can run multiple rsync invocations under
+# one lock. lockf -t 0 returns 75 (EX_TEMPFAIL) immediately if held.
+if [ "${SOLR_MIRROR_LOCKED:-}" != "1" ]; then
+    SOLR_MIRROR_LOCKED=1
+    export SOLR_MIRROR_LOCKED
+    lockf -t 0 "$LOCK_FILE" "$0" "$@"
+    rc=$?
+    [ $rc -eq 75 ] && exit 0   # already running, silent exit
+    exit $rc
+fi
+
+run_rsync() {
+    remote_path="$1"
+    local_path="$2"
+
+    "$RSYNC" \
+        --archive \
+        --hard-links \
+        --safe-links \
+        --itemize-changes \
+        --human-readable \
+        --stats \
+        --delete \
+        --delete-after \
+        --delay-updates \
+        --partial \
+        --timeout=600 \
+        --contimeout=60 \
+        --bwlimit={{ solr_mirror_bwlimit }} \
+        --log-file="$LOG_FILE" \
+        "rsync://${SOURCE_HOST}/apache-dist/${remote_path}" \
+        "${MIRROR_ROOT}/${local_path}/"
+
+    rc=$?
+    # 23/24 = partial transfer, non-fatal — next run catches up
+    if [ $rc -eq 23 ] || [ $rc -eq 24 ]; then
+        echo "$(date '+%Y-%m-%d %H:%M:%S') ${remote_path} partial-transfer (rc=$rc), non-fatal" >> "$LOG_FILE"
+        rc=0
+    fi
+    return $rc
+}
+
+overall_rc=0
+{% for item in solr_mirror_paths %}
+run_rsync "{{ item.remote }}" "{{ item.local }}" || overall_rc=$?
+{% endfor %}
+
+# Keep ownership aligned with nginx user
+chown -R "$OWNER" "$MIRROR_ROOT" 2>/dev/null || true
+
+exit $overall_rc

@@ -1,0 +1,135 @@
+---
+# roles/pulmirror
+- name: Pulmirror | install packages
+  community.general.pkgng:
+    name: "{{ pulmirror_packages }}"
+    state: present
+
+- name: Pulmirror | enable nginx
+  ansible.builtin.service:
+    name: nginx
+    enabled: true
+
+- name: Pulmirror | create ACME webroot
+  ansible.builtin.file:
+    path: "{{ pulmirror_webroot }}/.well-known/acme-challenge"
+    state: directory
+    owner: www
+    group: www
+    mode: "0755"
+
+- name: Pulmirror | start nginx
+  ansible.builtin.service:
+    name: nginx
+    state: started
+
+- name: Pulmirror | create lego state directory
+  ansible.builtin.file:
+    path: "{{ pulmirror_path }}"
+    state: directory
+    owner: root
+    group: wheel
+    mode: "0700"
+
+- name: Pulmirror | check whether certificate exists
+  ansible.builtin.stat:
+    path: "{{ pulmirror_ssl_certificate }}"
+  register: pulmirror_cert
+
+- name: Pulmirror | create nginx server.d directory for location-only drop-ins
+  ansible.builtin.file:
+    path: /usr/local/etc/nginx/server.d
+    state: directory
+    owner: root
+    group: wheel
+    mode: "0755"
+
+- name: Pulmirror | create nginx conf.d directory
+  ansible.builtin.file:
+    path: /usr/local/etc/nginx/conf.d
+    state: directory
+    owner: root
+    group: wheel
+    mode: "0755"
+
+- name: Pulmirror | include nginx conf.d files
+  ansible.builtin.lineinfile:
+    path: /usr/local/etc/nginx/nginx.conf
+    insertafter: '^\s*include\s+mime.types;'
+    line: '    include /usr/local/etc/nginx/conf.d/*.conf;'
+    state: present
+  notify: reload nginx
+
+- name: Pulmirror | install temporary HTTP vhost for ACME
+  ansible.builtin.template:
+    src: nginx-vhost.conf.j2
+    dest: "{{ pulmirror_nginx_conf }}"
+    owner: root
+    group: wheel
+    mode: "0644"
+  vars:
+    pulmirror_template_enable_https: false
+  notify: reload nginx
+
+- name: Pulmirror | reload nginx before ACME challenge
+  ansible.builtin.meta: flush_handlers
+
+- name: Pulmirror | issue initial certificate with HTTP-01 webroot
+  ansible.builtin.command:
+    argv: >-
+      {{
+        ['lego',
+         '--accept-tos',
+         '--email', pulmirror_email,
+         '--http',
+         '--http.webroot', pulmirror_webroot,
+         '--path', pulmirror_path,
+         '--server', pulmirror_acme_server]
+        + (pulmirror_domains | map('regex_replace', '^(.*)$', '--domains=\1') | list)
+        + ['run']
+      }}
+  args:
+    creates: "{{ pulmirror_ssl_certificate }}"
+  when: not pulmirror_cert.stat.exists
+  notify: reload nginx
+
+- name: Pulmirror | install final nginx vhost
+  ansible.builtin.template:
+    src: nginx-vhost.conf.j2
+    dest: "{{ pulmirror_nginx_conf }}"
+    owner: root
+    group: wheel
+    mode: "0644"
+  vars:
+    pulmirror_template_enable_https: "{{ pulmirror_enable_https }}"
+  notify: reload nginx
+
+- name: Pulmirror | install renewal script
+  ansible.builtin.template:
+    src: lego-renew.sh.j2
+    dest: "{{ pulmirror_renew_script }}"
+    owner: root
+    group: wheel
+    mode: "0750"
+
+- name: Pulmirror | install renewal cron
+  ansible.builtin.cron:
+    name: "renew lego certificate for {{ pulmirror_domain }}"
+    user: root
+    minute: "{{ pulmirror_cron_minute }}"
+    hour: "{{ pulmirror_cron_hour }}"
+    job: "{{ pulmirror_renew_script }} >/var/log/lego-renew-{{ pulmirror_domain }}.log 2>&1"
+
+- name: Pulmirror | Ensure newsyslog.conf.d directory exists
+  ansible.builtin.file:
+    path: /usr/local/etc/newsyslog.conf.d
+    state: directory
+    owner: root
+    group: wheel
+    mode: "0755"
+
+- name: Pulmirror | nodejs
+  ansible.builtin.include_tasks: nodejs.yml
+
+- name: Pulmirror | solr
+  ansible.builtin.include_tasks: solr.yml
