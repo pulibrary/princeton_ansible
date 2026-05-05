@@ -88,17 +88,29 @@
   notify:
     - reload logrotate timer settings
 
+- name: Common | Ensure logrotate rules directory exists
+  ansible.builtin.file:
+    path: "{{ common_logrotate_dir }}"
+    state: directory
+    mode: "0755"
+    owner: root
+    group: "{{ 'wheel' if ansible_os_family == 'FreeBSD' else 'root' }}"
+  when:
+    - logrotate_rules is defined
+    - logrotate_rules | selectattr('enabled', 'undefined') | list | length > 0
+      or logrotate_rules | selectattr('enabled', 'equalto', true) | list | length > 0
+
 - name: Common | Configure custom logrotate rules
   ansible.builtin.template:
     src: "logrotate_rules.j2"
-    dest: "/etc/logrotate.d/{{ item.name }}"
+    dest: "{{ common_logrotate_dir }}/{{ item.name }}"
     mode: "0644"
     owner: root
-    group: root
+    group: "{{ 'wheel' if ansible_os_family == 'FreeBSD' else 'root' }}"
   loop: "{{ logrotate_rules }}"
   when:
     - logrotate_rules is defined
-    - logrotate_rules | length > 0
+    - item.enabled | default(true) | bool
   notify:
     - test logrotate configuration
 

@@ -7,20 +7,11 @@
     - running_on_server | default(true)
 
 - name: test logrotate configuration
-  ansible.builtin.command: logrotate -f /etc/logrotate.conf
+  ansible.builtin.command: "logrotate -f {{ common_logrotate_conf }}"
   register: logrotate_test
   failed_when: logrotate_test.rc != 0
   when:
     - running_on_server | default(true)
-    - ansible_os_family != "FreeBSD"
-
-- name: test logrotate configuration
-  ansible.builtin.command: logrotate -f /usr/local/etc/logrotate.conf
-  register: freebsd_logrotate_test
-  failed_when: freebsd_logrotate_test.rc != 0
-  when:
-    - running_on_server | default(true)
-    - ansible_os_family == "FreeBSD"
 
 - name: reload logrotate timer settings
   ansible.builtin.systemd:
