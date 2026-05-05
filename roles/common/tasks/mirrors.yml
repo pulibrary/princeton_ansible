@@ -24,7 +24,7 @@
   when:
     - ansible_os_family == "Debian"
 
-    # remove math mirror repo - we should delete this eventually
+# remove math mirror repo - we should delete this eventually
 - name: Common | Remove Princeton math mirror repository files
   ansible.builtin.file:
     path: "{{ item }}"
@@ -76,15 +76,6 @@
     - ansible_os_family == "Debian"
     - not sources_list_backup.stat.exists
 
-- name: Common | Backup original sources.list
-  ansible.builtin.copy:
-    src: /etc/apt/sources.list
-    dest: "/etc/apt/sources.list.backup.{{ ansible_date_time.epoch }}"
-    remote_src: true
-    backup: true
-  when:
-    - ansible_os_family == "Debian"
-
 - name: Common | Remove duplicate Ubuntu archive entries from main sources.list
   ansible.builtin.replace:
     path: /etc/apt/sources.list
@@ -113,10 +104,11 @@
   ansible.builtin.copy:
     dest: /etc/apt/sources.list.d/99-ubuntu-archive.list
     mode: '0644'
+    owner: root
+    group: root
     content: |
       # Managed by Ansible - common role
-      # Ubuntu Archive repositories - No Princeton math mirror
-      # Configured on {{ ansible_date_time.iso8601 }}
+      # Ubuntu Archive repositories
       deb http://archive.ubuntu.com/ubuntu {{ ubuntu_codename }} main restricted universe multiverse
       deb http://archive.ubuntu.com/ubuntu {{ ubuntu_codename }}-updates main restricted universe multiverse
       deb http://archive.ubuntu.com/ubuntu {{ ubuntu_codename }}-backports main restricted universe multiverse
