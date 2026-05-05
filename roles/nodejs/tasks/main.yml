@@ -1,23 +1,16 @@
 ---
-- name: Nodejs | Check for legacy Yarn repository files
-  ansible.builtin.stat:
-    path: "{{ item }}"
-  register: legacy_yarn_files
-  loop:
-    - /etc/apt/sources.list.d/yarn.list
-
 - name: Nodejs | Remove legacy Yarn repository files
   ansible.builtin.file:
-    path: "{{ item.item }}"
+    path: "{{ item }}"
     state: absent
-  when: item.stat.exists
-  loop: "{{ legacy_yarn_files.results }}"
+  loop:
+    - /etc/apt/sources.list.d/pul_yarn.list
   become: true
 
 - name: Nodejs | Download Yarn GPG key (ASCII)
   ansible.builtin.get_url:
     url: "{{ nodejs__yarn_key_url }}"
-    dest: "/tmp/yarnpkg.gpg.key"
+    dest: /tmp/yarnpkg.gpg.key
     mode: '0644'
   when: use_yarn
 
@@ -41,41 +34,15 @@
   ansible.builtin.apt_repository:
     repo: "{{ nodejs__yarn_upstream_repository }}"
     state: present
-    filename: pul_yarn
-    update_cache: false
+    filename: yarn
+    update_cache: true
   when: use_yarn
 
-- name: Nodejs | Clean apt cache
-  ansible.builtin.command: apt-get clean
-  changed_when: false
-
-- name: Nodejs | Update apt cache after adding repository
-  ansible.builtin.command: apt-get update
-  register: cache_update
-  retries: 5
-  delay: 10
-  until: cache_update.rc == 0
-  changed_when: false
-  failed_when: false
-
-- name: Nodejs | Display cache update errors
-  ansible.builtin.debug:
-    msg: |
-      Return code: {{ cache_update.rc }}
-      STDOUT: {{ cache_update.stdout }}
-      STDERR: {{ cache_update.stderr }}
-  when: cache_update.rc != 0
-
-- name: Nodejs | Fail if cache update failed
-  ansible.builtin.fail:
-    msg: "apt-get update failed. See debug output above."
-  when: cache_update.rc != 0
-
-- name: Nodejs | uninstall any apt installed node
+- name: Nodejs | uninstall any apt-installed node
   ansible.builtin.apt:
-    name: ["nodejs"]
+    name: nodejs
     state: absent
-  changed_when: false
+  when: running_on_server
 
 - name: Nodejs | download nodejs version
   ansible.builtin.unarchive:
