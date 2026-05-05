@@ -2,7 +2,7 @@
 - name: Redis | Download Redis GPG key (ASCII)
   ansible.builtin.get_url:
     url: "{{ redis_apt_key_url }}"
-    dest: "/tmp/redis.gpg.key"
+    dest: /tmp/redis.gpg.key
     mode: '0644'
 
 - name: Redis | De-armor Redis GPG key to binary keyring
@@ -20,44 +20,18 @@
     state: file
   become: true
 
-- name: Redis | Remove legacy repository file if it exists
+- name: Redis | Remove legacy repository file (pre-rename)
   ansible.builtin.file:
-    path: /etc/apt/sources.list.d/redis.list
+    path: /etc/apt/sources.list.d/pul_redis.list
     state: absent
   become: true
 
-- name: Redis | Add Redis Labs repository (Modern)
+- name: Redis | Add Redis Labs repository
   ansible.builtin.apt_repository:
     repo: "{{ redis_apt_repository }}"
     state: present
-    filename: pul_redis
-    update_cache: false
-
-- name: Redis | Clean apt cache before update
-  ansible.builtin.command: apt-get clean
-  changed_when: false
-
-- name: Redis | Update apt cache after adding Redis repository
-  ansible.builtin.command: apt-get update
-  register: redis_cache_update
-  retries: 3
-  delay: 5
-  until: redis_cache_update.rc == 0
-  changed_when: false
-  failed_when: false
-
-- name: Redis | Display cache update output for debugging
-  ansible.builtin.debug:
-    msg: |
-      apt-get update return code: {{ redis_cache_update.rc }}
-      STDOUT: {{ redis_cache_update.stdout }}
-      STDERR: {{ redis_cache_update.stderr }}
-  when: redis_cache_update.rc != 0
-
-- name: Redis | Fail if cache update didn't succeed
-  ansible.builtin.fail:
-    msg: "Failed to update apt cache after adding Redis repository. See debug output above."
-  when: redis_cache_update.rc != 0
+    filename: redis
+    update_cache: true
 
 - name: Redis | install redis packages
   ansible.builtin.apt:
@@ -66,32 +40,30 @@
 
 - name: Redis | configure redis
   ansible.builtin.template:
-    src: "redis.conf.j2"
-    dest: "/etc/redis/redis.conf"
-    owner: "redis"
-    group: "redis"
-    mode: "0644"
-  changed_when: false
+    src: redis.conf.j2
+    dest: /etc/redis/redis.conf
+    owner: redis
+    group: redis
+    mode: '0644'
   notify:
     - restart redis
 
 - name: Redis | ulimit value for redis
   ansible.builtin.template:
-    src: "redis_ulimit.conf.j2"
-    dest: "/etc/security/limits.d/redis.conf"
-    force: true
-    mode: "0644"
+    src: redis_ulimit.conf.j2
+    dest: /etc/security/limits.d/redis.conf
+    mode: '0644'
 
 - name: Redis | Set vm.overcommit
   ansible.posix.sysctl:
-    name: "vm.overcommit_memory"
+    name: vm.overcommit_memory
     value: 1
-    sysctl_file: "/etc/sysctl.d/30-redis.conf"
-  when: redis__overcommit_memory_enable|bool
+    sysctl_file: /etc/sysctl.d/30-redis.conf
+  when: redis__overcommit_memory_enable | bool
 
 - name: Redis | ensure Redis Server service enabled
   ansible.builtin.service:
-    name: "redis-server"
+    name: redis-server
     state: started
     enabled: true
   when: running_on_server
