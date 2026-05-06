@@ -1,0 +1,29 @@
+#!/bin/sh
+# {{ ansible_managed }}
+# Ubuntu mirror sync wrapper using ftpsync.
+
+set -u
+
+MIRROR_ROOT="{{ ubuntu_mirror_root }}"
+LOG_FILE="{{ ubuntu_mirror_log }}"
+LOCK_FILE="{{ ubuntu_mirror_lock }}"
+OWNER="{{ ubuntu_mirror_owner }}:{{ ubuntu_mirror_group }}"
+FTPSYNC="{{ ubuntu_mirror_ftpsync_bin }}"
+
+if pgrep -f "rsync.*${MIRROR_ROOT}" > /dev/null 2>&1; then
+    echo "$(date '+%Y-%m-%d %H:%M:%S') another rsync is already targeting ${MIRROR_ROOT}, exiting" >> "$LOG_FILE"
+    exit 0
+fi
+
+if [ "${UBUNTU_MIRROR_INITIAL_SEED:-0}" = "1" ]; then
+    echo "$(date '+%Y-%m-%d %H:%M:%S') running INITIAL SEED" >> "$LOG_FILE"
+fi
+
+lockf -t 0 "$LOCK_FILE" "$FTPSYNC"
+rc=$?
+
+[ $rc -eq 75 ] && exit 0
+
+chown -R "$OWNER" "$MIRROR_ROOT" 2>/dev/null || true
+
+exit $rc
