@@ -197,7 +197,7 @@ scrape_configs:
       regex: '(.*)metrics(.*)'
       action: keep
     - source_labels: ['__meta_consul_service']
-      target_label: instance
+      target_label: exported_job
     - source_labels: ['__meta_consul_service']
       regex: '.*(staging|production).*'
       replacement: '$${1}'
