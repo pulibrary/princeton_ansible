@@ -41,6 +41,13 @@ include {{ openresty_etc_dir }}/conf.d/globalprotect_ips.conf;
         {{ cidr }} 1;
 {% endfor %}
     }
+    # Maps of trusted user agents that bypass
+    map $http_user_agent $altcha_bypass_ua {
+        default 0;
+{% for ua_pattern in openresty_altcha_bypass_user_agents | default([]) %}
+        "~*{{ ua_pattern }}" 1;
+{% endfor %}
+    }
 {% endif %}
 
 {% for vhost in openresty_vhosts %}
@@ -166,13 +173,17 @@ include {{ openresty_etc_dir }}/conf.d/globalprotect_ips.conf;
         location / {
 {% if vhost.altcha | default(false) %}
 {% if vhost.altcha_bypass_internal | default(false) %}
-            if ($altcha_bypass = 0) {
+            # Bypass if trusted IP OR trusted UA
+            if ($altcha_bypass-$altcha_bypass_ua = "0-0") {
                 error_page 418 = @altcha_gate;
                 return 418;
             }
 {% else %}
-            error_page 418 = @altcha_gate;
-            return 418;
+            # Bypass only if trusted UA
+            if ($altcha_bypass_ua = "0") {
+                error_page 418 = @altcha_gate;
+                return 418;
+            }
 {% endif %}
 {% endif %}
 
