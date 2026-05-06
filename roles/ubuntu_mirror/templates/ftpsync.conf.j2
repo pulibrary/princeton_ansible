@@ -1,0 +1,37 @@
+# {{ ansible_managed }}
+# ftpsync configuration for Ubuntu archive mirror.
+# Reference: https://salsa.debian.org/mirror-team/archvsync/-/blob/main/etc/ftpsync.conf.sample
+
+# Mirror destination
+TO="{{ ubuntu_mirror_root }}"
+
+# Upstream rsync source
+RSYNC_HOST="{{ ubuntu_mirror_upstream | regex_replace('^rsync://([^/]+)/.*$', '\\1') }}"
+RSYNC_PATH="{{ ubuntu_mirror_upstream | regex_replace('^rsync://[^/]+/(.*)/$', '\\1') }}"
+
+# We don't authenticate to dotsrc — public mirror
+RSYNC_USER=""
+RSYNC_PASSWORD=""
+
+# Architectures to include. Anything not listed is skipped.
+ARCH_INCLUDE="{{ ubuntu_mirror_architectures | join(' ') }}"
+
+# Bandwidth cap (KB/s)
+RSYNC_BW={{ ubuntu_mirror_bwlimit }}
+
+# Required: where to write trace + lock files
+LOCKDIR="{{ ubuntu_mirror_root }}/project/trace"
+LOGDIR="/var/log"
+LOG="{{ ubuntu_mirror_log }}"
+
+# Mirror this hostname's identity in the trace file
+MIRRORNAME="{{ inventory_hostname }}"
+INFO_MAINTAINER="Princeton University Library <{{ ubuntu_mirror_email }}>"
+INFO_SPONSOR="Princeton University Library"
+INFO_COUNTRY="US"
+INFO_LOCATION="Princeton, NJ"
+INFO_THROUGHPUT="1Gb"
+
+# Two-stage sync — packages first, then metadata.
+# This is the whole point of using ftpsync over plain rsync.
+HUB=false
