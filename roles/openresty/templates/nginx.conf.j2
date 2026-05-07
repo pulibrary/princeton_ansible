@@ -30,7 +30,7 @@ include {{ openresty_etc_dir }}/conf.d/globalprotect_ips.conf;
 {% endif %}
 
 {% if openresty_logger_json_enable %}
-    log_format logger-json escape=json '{"source": "nginx","message":"nginx log captured","time": $time_iso8601, "resp_body_size": $body_bytes_sent, "host": "$http_host", "address": "$remote_addr", "request_length": $request_length, "method": "$request_method", "uri": "$request_uri", "status": $status, "user_agent": "$http_user_agent", "resp_time": $request_time, "upstream_addr": "$upstream_addr"}';
+    log_format logger-json escape=json '{"source": "nginx","message":"nginx log captured","time": $time_iso8601, "resp_body_size": $body_bytes_sent, "host": "$http_host", "address": "$remote_addr", "request_length": $request_length, "method": "$request_method", "uri": "$request_uri", "status": $status, "user_agent": "$http_user_agent", "resp_time": $request_time, "upstream_addr": "$upstream_addr", "altcha_bypass": "$altcha_bypass", "altcha_bypass_ua": "$altcha_bypass_ua", "altcha_needs_gate": "$altcha_needs_gate"}';
 {% endif %}
 
 {% if openresty_altcha_enable %}
@@ -40,6 +40,21 @@ include {{ openresty_etc_dir }}/conf.d/globalprotect_ips.conf;
 {% for cidr in openresty_altcha_bypass_networks %}
         {{ cidr }} 1;
 {% endfor %}
+    }
+
+    # Map of trusted user agents that bypass altcha on opted-in vhosts
+    map $http_user_agent $altcha_bypass_ua {
+        default 0;
+{% for ua_pattern in openresty_altcha_bypass_user_agents | default([]) %}
+        "~*{{ ua_pattern }}" 1;
+{% endfor %}
+    }
+
+    # Require the altcha gate only when neither IP nor user-agent is trusted.
+    # This avoids fragile inline variable concatenation in nginx `if`.
+    map "$altcha_bypass:$altcha_bypass_ua" $altcha_needs_gate {
+        default 0;
+        "0:0" 1;
     }
 {% endif %}
 
@@ -166,13 +181,17 @@ include {{ openresty_etc_dir }}/conf.d/globalprotect_ips.conf;
         location / {
 {% if vhost.altcha | default(false) %}
 {% if vhost.altcha_bypass_internal | default(false) %}
-            if ($altcha_bypass = 0) {
+            # Bypass ALTCHA if trusted IP OR trusted user-agent
+            if ($altcha_needs_gate = 1) {
                 error_page 418 = @altcha_gate;
                 return 418;
             }
 {% else %}
-            error_page 418 = @altcha_gate;
-            return 418;
+            # Bypass ALTCHA only if trusted user-agent
+            if ($altcha_bypass_ua = 0) {
+                error_page 418 = @altcha_gate;
+                return 418;
+            }
 {% endif %}
 {% endif %}
 
