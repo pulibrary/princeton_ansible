@@ -34,6 +34,26 @@
     }
 {% endmacro %}
 
+{% macro nodejs_locations() %}
+    # Canonical Node.js URL: /mirror/nodejs/release/<version>/<file>
+    # Consumers across the org expect this path; on disk we mirror nodejs.org's
+    # actual layout where versions live at /mirror/nodejs/<version>/.
+    # Rewrite the consumer URL to the on-disk location.
+    location ~ ^/mirror/nodejs/release/(?<nver>v[0-9]+\.[0-9]+\.[0-9]+(?:-[A-Za-z0-9.-]+)?)/(?<nfile>.+)$ {
+        root /usr/local/www/nginx-dist;
+        try_files /mirror/nodejs/$nver/$nfile =404;
+    }
+
+    # Bare /mirror/nodejs/release/ → directory listing of all versions.
+    location = /mirror/nodejs/release/ {
+        root /usr/local/www/nginx-dist;
+        try_files /mirror/nodejs/ =404;
+        autoindex on;
+        autoindex_exact_size off;
+        autoindex_localtime on;
+    }
+{% endmacro %}
+
 server {
     listen 80;
     server_name {{ pulmirror_domains | join(' ') }};
@@ -50,6 +70,7 @@ server {
     }
 {% else %}
     {{ solr_locations() }}
+    {{ nodejs_locations() }}
 
     location / {
 {% if pulmirror_proxy_pass | length > 0 %}
@@ -78,6 +99,7 @@ server {
     ssl_prefer_server_ciphers off;
 
     {{ solr_locations() }}
+    {{ nodejs_locations() }}
 
     location / {
 {% if pulmirror_proxy_pass | length > 0 %}
