@@ -1,15 +1,11 @@
 #!/bin/sh
 # {{ ansible_managed }}
-# Mirror nodejs.org /dist/ via rsync from mirrors.dotsrc.org (Aalborg University).
-# Dotsrc is a tier-1 mirror of nodejs.org and syncs from upstream every 6 hours.
+# Mirror nodejs.org /dist/ directly via wget (HTTP).
+# nodejs.org doesn't offer rsync. Previous dotsrc upstream fell behind.
 #
 # Modes:
-#   Default (steady-state):  uses --delay-updates --partial for atomic publishing.
-#                            Safe to run while nginx is serving the tree.
-#   Initial seed:            invoke with NODEJS_MIRROR_INITIAL_SEED=1 in env.
-#                            Drops --delay-updates and --partial for speed.
-#                            Use ONLY when nginx is not yet serving content,
-#                            because in-flight files are visible mid-transfer.
+#   Default (steady-state):  wget mirror with timestamping (-N).
+#   Initial seed:            same flags, but logs SEED to make intent clear.
 
 set -u
 
@@ -18,57 +14,64 @@ LOG_FILE="{{ nodejs_mirror_log }}"
 LOCK_FILE="{{ nodejs_mirror_lock }}"
 SOURCE_URL="{{ nodejs_mirror_source }}"
 OWNER="{{ nodejs_mirror_owner }}:{{ nodejs_mirror_group }}"
-RSYNC=/usr/local/bin/rsync
+WGET=/usr/local/bin/wget
+USER_AGENT="PrincetonUniversityLibrary-mirror/1.0 (+https://{{ pulmirror_domain }})"
 
-# Defensive: refuse to start if another rsync is already targeting our tree.
-# lockf alone protects script-vs-script; this also protects against a stray
-# bare rsync invocation.
-if pgrep -f "rsync.*${MIRROR_ROOT}" > /dev/null 2>&1; then
-    echo "$(date '+%Y-%m-%d %H:%M:%S') another rsync is already targeting ${MIRROR_ROOT}, exiting" >> "$LOG_FILE"
+# Defensive: refuse to start if another wget/rsync is already targeting our tree.
+if pgrep -f "(wget|rsync).*${MIRROR_ROOT}" > /dev/null 2>&1; then
+    echo "$(date '+%Y-%m-%d %H:%M:%S') another sync is already targeting ${MIRROR_ROOT}, exiting" >> "$LOG_FILE"
     exit 0
 fi
 
-# Mode selection. Steady-state is safe for a live, serving mirror.
-# Initial seed is faster but exposes partial files mid-transfer.
 if [ "${NODEJS_MIRROR_INITIAL_SEED:-0}" = "1" ]; then
-    PUBLISH_FLAGS=""
-    echo "$(date '+%Y-%m-%d %H:%M:%S') running in INITIAL SEED mode (no --delay-updates, no --partial)" >> "$LOG_FILE"
-else
-    PUBLISH_FLAGS="--delay-updates --partial"
+    echo "$(date '+%Y-%m-%d %H:%M:%S') running INITIAL SEED" >> "$LOG_FILE"
 fi
 
-# Acquire lock or exit quietly (75 = EX_TEMPFAIL from lockf)
-# shellcheck disable=SC2086
-lockf -t 0 "$LOCK_FILE" "$RSYNC" \
-    --archive \
-    --hard-links \
-    --itemize-changes \
-    --human-readable \
-    --stats \
-    --delete \
-    --delete-after \
-    ${PUBLISH_FLAGS} \
-    --timeout=600 \
-    --contimeout=60 \
-    --bwlimit={{ nodejs_mirror_bwlimit }} \
-    --log-file="$LOG_FILE" \
-    "$SOURCE_URL" \
-    "$MIRROR_ROOT/"
+# wget mirroring flags:
+#   -m            mirror mode: -r -N -l inf --no-remove-listing
+#   -np           don't ascend to parent directories
+#   -nH           don't create host-named directory
+#   --cut-dirs=1  drop /dist/ from the local path (we're mirroring INTO nodejs/)
+#   -R index.html* reject directory index files (wget parses them then deletes)
+#   -e robots=off ignore robots.txt (we're a legitimate institutional mirror)
+#   -U            user agent identifying us
+#   --tries=5     retry failed connections
+#   --timeout     per-operation timeout
+#   --waitretry   exponential backoff on retries
+#   --random-wait small randomized delay between requests
+#   --limit-rate  bandwidth cap
+
+lockf -t 0 "$LOCK_FILE" "$WGET" \
+    --mirror \
+    --no-parent \
+    --no-host-directories \
+    --cut-dirs=1 \
+    --reject "index.html*" \
+    --execute robots=off \
+    --user-agent="$USER_AGENT" \
+    --directory-prefix="$MIRROR_ROOT" \
+    --tries=5 \
+    --timeout=120 \
+    --waitretry=30 \
+    --random-wait \
+    --wait={{ nodejs_mirror_wait | default(1) }} \
+    --limit-rate={{ nodejs_mirror_rate_limit | default('10M') }} \
+    --append-output="$LOG_FILE" \
+    "$SOURCE_URL"
 
 rc=$?
 
-# 75 = another sync already running, not an error
-if [ $rc -eq 75 ]; then
-    exit 0
-fi
+# 75 = lockf says another instance running
+[ $rc -eq 75 ] && exit 0
 
-# Partial-transfer codes on busy upstream mirrors: non-fatal, next run catches up
-if [ $rc -eq 23 ] || [ $rc -eq 24 ]; then
-    echo "$(date '+%Y-%m-%d %H:%M:%S') rsync partial-transfer (rc=$rc), non-fatal" >> "$LOG_FILE"
+# wget exit codes: 0=ok, 1-3=client errors, 4=network, 5=ssl, 6=auth, 7=protocol, 8=server-issued
+# Treat 4 (network) and 8 (transient server) as non-fatal — next run will catch up
+if [ $rc -eq 4 ] || [ $rc -eq 8 ]; then
+    echo "$(date '+%Y-%m-%d %H:%M:%S') wget transient error (rc=$rc), non-fatal" >> "$LOG_FILE"
     rc=0
 fi
 
-# Keep ownership aligned with nginx user after pulling new files
+# Keep ownership aligned with nginx user
 chown -R "$OWNER" "$MIRROR_ROOT" 2>/dev/null || true
 
 exit $rc
