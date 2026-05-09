@@ -1,0 +1,42 @@
+---
+- name: Enable base MicroK8s addons
+  ansible.builtin.command: "microk8s enable {{ item }}"
+  register: microk8s_enable_addon
+  changed_when:
+    - "'already enabled' not in microk8s_enable_addon.stdout"
+    - "'is already enabled' not in microk8s_enable_addon.stdout"
+  loop: "{{ microk8s_base_addons }}"
+
+- name: Enable MicroK8s community addon repository
+  ansible.builtin.command: microk8s enable community
+  register: microk8s_enable_community
+  changed_when:
+    - "'already enabled' not in microk8s_enable_community.stdout"
+    - "'is already enabled' not in microk8s_enable_community.stdout"
+  when:
+    - microk8s_enable_community_addons | bool
+    - microk8s_enable_nfs_addon | bool
+
+- name: Enable MicroK8s NFS addon
+  ansible.builtin.command: microk8s enable nfs
+  register: microk8s_enable_nfs
+  changed_when:
+    - "'already enabled' not in microk8s_enable_nfs.stdout"
+    - "'is already enabled' not in microk8s_enable_nfs.stdout"
+  when: microk8s_enable_nfs_addon | bool
+
+- name: Wait for MicroK8s after addon enablement
+  ansible.builtin.command: microk8s status --wait-ready
+  changed_when: false
+
+- name: Enable MicroK8s HA cluster
+  ansible.builtin.command: microk8s enable ha-cluster
+  register: microk8s_enable_ha
+  changed_when:
+    - "'already enabled' not in microk8s_enable_ha.stdout"
+    - "'is already enabled' not in microk8s_enable_ha.stdout"
+  when: microk8s_enable_ha_cluster | bool
+
+- name: Wait for MicroK8s after HA enablement
+  ansible.builtin.command: microk8s status --wait-ready
+  changed_when: false

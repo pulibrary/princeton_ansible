@@ -1,0 +1,22 @@
+---
+- name: Configure NFS server for MicroK8s
+  hosts: k8s_nfs
+  remote_user: pulsys
+  become: true
+  roles:
+    - role: microk8s_cluster
+
+- name: Bootstrap first MicroK8s node
+  hosts: k8s_microk8s_primary
+  remote_user: pulsys
+  become: true
+  roles:
+    - role: microk8s_cluster
+
+- name: Join remaining MicroK8s nodes
+  hosts: k8s_microk8s_secondaries
+  remote_user: pulsys
+  become: true
+  serial: 1
+  roles:
+    - role: microk8s_cluster

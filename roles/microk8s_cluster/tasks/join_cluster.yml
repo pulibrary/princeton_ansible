@@ -1,0 +1,65 @@
+---
+- name: Set MicroK8s primary host
+  ansible.builtin.set_fact:
+    microk8s_primary_host: "{{ groups[microk8s_primary_group][0] }}"
+
+- name: Check whether this node is already in the cluster
+  ansible.builtin.command: "microk8s kubectl get node {{ inventory_hostname }} --no-headers"
+  delegate_to: "{{ microk8s_primary_host }}"
+  register: microk8s_node_lookup
+  changed_when: false
+  failed_when: false
+
+- name: Generate MicroK8s join command on primary
+  ansible.builtin.command: microk8s add-node
+  delegate_to: "{{ microk8s_primary_host }}"
+  register: microk8s_add_node
+  changed_when: true
+  when: microk8s_node_lookup.rc != 0
+
+- name: Extract MicroK8s join command
+  ansible.builtin.set_fact:
+    microk8s_join_command_raw: "{{ microk8s_add_node.stdout | regex_search('microk8s join\\s+\\S+') }}"
+  when: microk8s_node_lookup.rc != 0
+
+- name: Build MicroK8s join command using primary hostname
+  ansible.builtin.set_fact:
+    microk8s_join_command: >-
+      {{
+        microk8s_join_command_raw
+        | regex_replace('microk8s join\\s+[^:]+:', 'microk8s join ' ~ microk8s_primary_host ~ ':')
+      }}
+  when: microk8s_node_lookup.rc != 0
+
+- name: Fail if join command could not be parsed
+  ansible.builtin.fail:
+    msg: "Could not parse microk8s join command from primary output."
+  when:
+    - microk8s_node_lookup.rc != 0
+    - microk8s_join_command is not defined or microk8s_join_command | length == 0
+
+- name: Verify secondary can reach MicroK8s join endpoint
+  ansible.builtin.wait_for:
+    host: "{{ microk8s_primary_host }}"
+    port: 25000
+    timeout: 15
+  when: microk8s_node_lookup.rc != 0
+
+- name: Join node to MicroK8s cluster
+  ansible.builtin.command: "{{ microk8s_join_command }}"
+  register: microk8s_join_result
+  changed_when: true
+  when: microk8s_node_lookup.rc != 0
+
+- name: Wait for MicroK8s to become ready after join
+  ansible.builtin.command: microk8s status --wait-ready
+  changed_when: false
+
+- name: Wait until node appears in cluster
+  ansible.builtin.command: "microk8s kubectl get node {{ inventory_hostname }} --no-headers"
+  delegate_to: "{{ microk8s_primary_host }}"
+  register: microk8s_joined_node_lookup
+  changed_when: false
+  retries: 30
+  delay: 10
+  until: microk8s_joined_node_lookup.rc == 0
