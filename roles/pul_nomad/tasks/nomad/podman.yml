@@ -1,10 +1,7 @@
 ---
 # Podman is a container runtime that Nomad uses to run containers.
-# We only install it on Rocky because it has the most up to date version of
-# podman.
 - name: 'pul_nomad | nomad | podman | Install & Configure Podman'
   when:
-    - "ansible_os_family == 'RedHat'"
   block:
     - name: 'pul_nomad | nomad | podman | add subuid'
       ansible.builtin.lineinfile:
@@ -23,13 +20,12 @@
       notify: migrate podman
 
     - name: 'pul_nomad | nomad | podman | Install Podman'
-      ansible.builtin.dnf:
+      ansible.builtin.apt:
         name: podman
         state: latest
 
-    # DMIDecode is needed for Rocky boxes, it makes cpu fingerprinting work.
     - name: 'pul_nomad | nomad | podman | Install dmidecode'
-      ansible.builtin.dnf:
+      ansible.builtin.apt:
         name: dmidecode
         state: latest
 
