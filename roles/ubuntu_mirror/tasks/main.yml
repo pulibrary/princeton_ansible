@@ -1,0 +1,93 @@
+#SPDX-License-Identifier: MIT-0
+---
+# tasks file for roles/ubuntu_mirror
+- name: Ubuntu mirror | install packages
+  community.general.pkgng:
+    name: "{{ ubuntu_mirror_packages }}"
+    state: present
+
+- name: Ubuntu mirror | ensure ZFS dataset exists
+  community.general.zfs:
+    name: "{{ ubuntu_mirror_dataset }}"
+    state: present
+    extra_zfs_properties:
+      mountpoint: "{{ ubuntu_mirror_root }}"
+      compression: "lz4"
+      atime: "off"
+
+- name: Ubuntu mirror | set ownership on mirror root
+  ansible.builtin.file:
+    path: "{{ ubuntu_mirror_root }}"
+    state: directory
+    owner: "{{ ubuntu_mirror_owner }}"
+    group: "{{ ubuntu_mirror_group }}"
+    mode: "0755"
+
+- name: Ubuntu mirror | install git (needed to clone ftpsync)
+  community.general.pkgng:
+    name: git
+    state: present
+
+- name: Ubuntu mirror | clone ftpsync from upstream
+  ansible.builtin.git:
+    repo: https://salsa.debian.org/mirror-team/archvsync.git
+    dest: /usr/local/share/archvsync
+    version: master
+    update: true
+    force: false
+  register: ftpsync_clone
+
+- name: Ubuntu mirror | symlink ftpsync to /usr/local/bin
+  ansible.builtin.file:
+    src: /usr/local/share/archvsync/bin/ftpsync
+    dest: "{{ ubuntu_mirror_ftpsync_bin }}"
+    state: link
+    force: true
+
+- name: Ubuntu mirror | install ftpsync config
+  ansible.builtin.template:
+    src: ftpsync.conf.j2
+    dest: "{{ ubuntu_mirror_ftpsync_conf }}"
+    owner: root
+    group: wheel
+    mode: "0644"
+
+- name: Ubuntu mirror | install sync wrapper script
+  ansible.builtin.template:
+    src: sync-ubuntu-mirror.sh.j2
+    dest: "{{ ubuntu_mirror_script }}"
+    owner: root
+    group: wheel
+    mode: "0755"
+
+- name: Ubuntu mirror | ensure log file exists
+  ansible.builtin.file:
+    path: "{{ ubuntu_mirror_log }}"
+    state: touch
+    owner: root
+    group: wheel
+    mode: "0644"
+    modification_time: preserve
+    access_time: preserve
+
+- name: Ubuntu mirror | configure newsyslog rotation
+  ansible.builtin.copy:
+    dest: /usr/local/etc/newsyslog.conf.d/ubuntu-mirror.conf
+    owner: root
+    group: wheel
+    mode: "0644"
+    content: |
+      # logfilename          [owner:group]    mode count size when  flags
+      {{ ubuntu_mirror_log }}  root:wheel       644  7     10000 *     JC
+
+- name: Ubuntu mirror | install cron entry
+  ansible.builtin.cron:
+    name: "sync ubuntu mirror"
+    user: root
+    minute: "{{ ubuntu_mirror_cron_minute }}"
+    hour: "{{ ubuntu_mirror_cron_hour }}"
+    job: "{{ ubuntu_mirror_script }}"
+    cron_file: ubuntu-mirror
+
+- name: Ubuntu mirror | install nginx location drop-in
+  ansible.builtin.include_tasks: nginx.yml

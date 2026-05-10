@@ -1,0 +1,58 @@
+#SPDX-License-Identifier: MIT-0
+---
+# defaults file for roles/ubuntu_mirror
+
+ubuntu_mirror_packages:
+  - rsync
+  - git
+
+# Storage
+ubuntu_mirror_dataset: pubmirror/ubuntu
+ubuntu_mirror_root: /usr/local/www/nginx-dist/mirror/ubuntu
+ubuntu_mirror_owner: www
+ubuntu_mirror_group: www
+
+# Upstream — dotsrc tier-1 mirror same trust pattern as nodejs
+ubuntu_mirror_upstream: "rsync://mirrors.dotsrc.org/ubuntu/"
+
+# What to mirror — Princeton Library defaults.
+# These map to ftpsync's ARCH_INCLUDE / RELEASE / etc. variables below.
+ubuntu_mirror_releases:
+  - jammy
+  - noble
+
+ubuntu_mirror_architectures:
+  - amd64
+  - arm64
+
+ubuntu_mirror_components:
+  - main
+  - restricted
+  - universe
+  - multiverse
+
+ubuntu_mirror_pockets:
+  - release
+  - updates
+  - security
+  - backports
+
+# Operational
+ubuntu_mirror_bwlimit: 20000
+ubuntu_mirror_email: "lsupport@princeton.edu"
+
+# ftpsync paths
+ubuntu_mirror_ftpsync_conf: "/usr/local/etc/ftpsync.conf"
+ubuntu_mirror_ftpsync_bin: /usr/local/bin/ftpsync
+
+# Wrapper script + lock + log
+ubuntu_mirror_script: /usr/local/sbin/sync-ubuntu-mirror
+ubuntu_mirror_log: /var/log/ubuntu-mirror.log
+ubuntu_mirror_lock: /var/run/ubuntu-mirror.lock
+
+# Cron — Ubuntu releases security updates daily; sync 4x/day off-hour
+ubuntu_mirror_cron_hour: "*/6"
+ubuntu_mirror_cron_minute: "37"
+
+# nginx drop-in (location-only, served by pulmirror's vhost)
+ubuntu_mirror_nginx_dropin: /usr/local/etc/nginx/server.d/ubuntu-locations.conf
