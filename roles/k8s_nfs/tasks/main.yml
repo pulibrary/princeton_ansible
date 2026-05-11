@@ -1,0 +1,64 @@
+---
+- name: Install NFS server packages
+  ansible.builtin.apt:
+    name:
+      - nfs-common
+      - nfs-kernel-server
+    state: present
+    update_cache: true
+
+- name: Ensure NFS export root exists
+  ansible.builtin.file:
+    path: /var/nfs
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Ensure Kubernetes NFS export exists
+  ansible.builtin.file:
+    path: /var/nfs/k8s
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Configure Kubernetes NFS export
+  ansible.builtin.lineinfile:
+    path: /etc/exports
+    regexp: '^/var/nfs/k8s\s+'
+    line: "/var/nfs/k8s 172.20.80.0/24(rw,sync,no_subtree_check,no_root_squash)"
+    create: true
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - reload nfs exports
+    - restart nfs server
+
+- name: Allow NFS from MicroK8s subnet
+  community.general.ufw:
+    rule: allow
+    from_ip: "172.20.80.0/24"
+    port: "{{ item.port }}"
+    proto: "{{ item.proto }}"
+    comment: "{{ item.comment }}"
+  loop:
+    - port: "2049"
+      proto: tcp
+      comment: "NFS from MicroK8s"
+    - port: "2049"
+      proto: udp
+      comment: "NFS UDP from MicroK8s"
+    - port: "111"
+      proto: tcp
+      comment: "rpcbind from MicroK8s"
+    - port: "111"
+      proto: udp
+      comment: "rpcbind UDP from MicroK8s"
+
+- name: Enable and start NFS server
+  ansible.builtin.service:
+    name: nfs-kernel-server
+    state: started
+    enabled: true

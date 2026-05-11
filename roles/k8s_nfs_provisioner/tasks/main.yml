@@ -1,0 +1,57 @@
+#SPDX-License-Identifier: MIT-0
+---
+# tasks file for roles/k8s_nfs
+- name: Add NFS external provisioner Helm repo
+  ansible.builtin.command: >-
+    microk8s helm3 repo add
+    {{ k8s_nfs_chart_repo_name }}
+    {{ k8s_nfs_chart_repo_url }}
+  register: k8s_nfs_repo_add
+  changed_when: "'has been added' in k8s_nfs_repo_add.stdout"
+  failed_when:
+    - k8s_nfs_repo_add.rc != 0
+    - "'already exists' not in k8s_nfs_repo_add.stderr"
+
+- name: Update Helm repos
+  ansible.builtin.command: microk8s helm3 repo update
+  changed_when: false
+
+- name: Write NFS external provisioner values
+  ansible.builtin.template:
+    src: values.yaml.j2
+    dest: /etc/signoz-nfs-provisioner-values.yaml
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Install NFS external provisioner
+  ansible.builtin.command:
+    argv:
+      - microk8s
+      - helm3
+      - upgrade
+      - --install
+      - "{{ k8s_nfs_release_name }}"
+      - "{{ k8s_nfs_chart_ref }}"
+      - --namespace
+      - "{{ k8s_nfs_namespace }}"
+      - --create-namespace
+      - --wait
+      - --timeout
+      - 10m
+      - -f
+      - /etc/signoz-nfs-provisioner-values.yaml
+  register: k8s_nfs_install
+  changed_when:
+    - "'has been installed' in k8s_nfs_install.stdout or 'has been upgraded' in k8s_nfs_install.stdout"
+
+- name: Verify external NFS storage class exists
+  ansible.builtin.command: "microk8s kubectl get storageclass {{ k8s_nfs_storage_class }}"
+  changed_when: false
+
+- name: Verify NFS provisioner pod is running
+  ansible.builtin.command: >-
+    microk8s kubectl -n {{ k8s_nfs_namespace }}
+    rollout status deployment/{{ k8s_nfs_release_name }}
+    --timeout=5m
+  changed_when: false
