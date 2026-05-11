@@ -1,38 +1,67 @@
-Role Name
-=========
+## k8s_nfs
 
-A brief description of the role goes here.
+Install and configure an **NFS Server** specifically tailored for **MicroK8s** storage. This role sets up the necessary exports, permissions, and firewall rules to allow a Kubernetes cluster to use the host as a persistent storage backend.
 
-Requirements
-------------
+---
 
-Any pre-requisites that may not be covered by Ansible itself or the role should be mentioned here. For instance, if the role uses the EC2 module, it may be a good idea to mention in this section that the boto package is required.
+## Features
 
-Role Variables
---------------
+- Installs `nfs-kernel-server` and `nfs-common`.
 
-A description of the settable variables for this role should go here, including any variables that are in defaults/main.yml, vars/main.yml, and any variables that can/should be set via parameters to the role. Any variables that are read from other roles and/or the global scope (ie. hostvars, group vars, etc.) should be mentioned here as well.
+- Creates a dedicated NFS export directory (default: `/var/nfs/k8s`).
 
-Dependencies
-------------
+- Configures `/etc/exports` with optimized flags for Kubernetes (`no_root_squash`).
 
-A list of other roles hosted on Galaxy should go here, plus any details in regards to parameters that may need to be set for other roles, or variables that are used from other roles.
+---
 
-Example Playbook
-----------------
+## Role Variables
 
-Including an example of how to use your role (for instance, with variables passed in as parameters) is always nice for users too:
+The following variables are defined in `defaults/main.yml`. You can override these in your playbook or host variables.
 
-    - hosts: servers
-      roles:
-         - { role: username.rolename, x: 42 }
+| Variable                     | Default Value                                  | Description                            |
+| ---------------------------- | ---------------------------------------------- | -------------------------------------- |
+| `nfs_export_path`            | `/var/nfs/k8s`                                 | The directory shared over NFS.         |
+| `nfs_export_allowed_clients` | `172.20.80.0/24`                               | The CIDR block of your MicroK8s nodes. |
+| `nfs_export_options`         | `[rw, sync, no_subtree_check, no_root_squash]` | Export configuration flags.            |
+| `nfs_export_mode`            | `"0755"`                                       | Permissions for the export directory.  |
 
-License
--------
+---
 
-BSD
+## Requirements
 
-Author Information
-------------------
+- **OS:** Ubuntu/Debian (uses `apt` and `ufw`).
 
-An optional section for the role authors to include contact information, or a website (HTML is not allowed).
+- **Privileges:** Must be run with `become: true`.
+
+---
+
+## Dependencies
+
+- `community.general` collection (for `ufw` module support).
+
+---
+
+## Example Playbook
+
+```yaml
+- hosts: storage_servers
+  become: true
+  roles:
+    - role: k8s_nfs
+      vars:
+        nfs_export_path: "/data/k8s_storage"
+        nfs_export_allowed_clients: "10.0.0.0/24"
+```
+
+---
+
+## File Structure Explained
+
+- **`tasks/main.yml`**: Handles package installation, directory creation, and service management.
+
+- **`templates/exports.j2`**: A dynamic template for `/etc/exports` using the variables defined in defaults.
+
+- **`handlers/main.yml`**: Ensures that the NFS server restarts or reloads exports only when configuration changes occur.
+
+---
+
