@@ -36,3 +36,137 @@ postgresql_logrotate_rules:
       create_group: postgres
       su_user: "{{ logrotate_global_defaults.su_user }}"
       su_group: "{{ logrotate_global_defaults.su_group }}"
+
+# signoz / otel collector for PostgreSQL
+otel_default_resource_attributes:
+  host.name: "{{ inventory_hostname }}"
+  service.name: postgresql
+  service.version: staging
+  environment: staging
+  deployment.environment: staging
+
+otel_receivers:
+  filelog/postgresql-json:
+    include:
+      - /var/lib/postgresql/15/main/pg_log/pg.json
+
+      - /var/lib/postgresql/15/main/pg_log/pg.json-[0-9]*
+    exclude:
+      - /var/lib/postgresql/15/main/pg_log/*.gz
+    start_at: end
+    include_file_path: true
+    include_file_name: true
+    operators:
+      - type: json_parser
+        id: parse_postgresql_json
+        parse_from: body
+        on_error: send
+
+      - type: time_parser
+        id: parse_postgresql_timestamp
+        parse_from: attributes.timestamp
+        layout_type: strptime
+        layout: '%Y-%m-%d %H:%M:%S.%L %Z'
+        on_error: send
+
+      - type: severity_parser
+        id: parse_postgresql_severity
+        parse_from: attributes.error_severity
+        mapping:
+          debug:
+            - DEBUG
+            - DEBUG1
+            - DEBUG2
+            - DEBUG3
+            - DEBUG4
+            - DEBUG5
+          info:
+            - LOG
+            - INFO
+            - NOTICE
+          warn:
+            - WARNING
+          error:
+            - ERROR
+          fatal:
+            - FATAL
+            - PANIC
+        on_error: send
+
+      - type: move
+        id: move_postgresql_message_to_body
+        from: attributes.message
+        to: body
+        on_error: send
+
+      - type: add
+        field: attributes.log_type
+        value: postgresql_json
+
+      - type: add
+        field: attributes.service_name
+        value: postgresql
+
+  hostmetrics:
+    collection_interval: 30s
+    scrapers:
+      cpu: {}
+      disk: {}
+      filesystem: {}
+      load: {}
+      memory: {}
+      network: {}
+
+otel_processors:
+  batch:
+    send_batch_max_size: 1024
+    send_batch_size: 512
+    timeout: 30s
+
+otel_exporters:
+  loadbalancing:
+    routing_key: service
+    protocol:
+      otlp:
+        timeout: 10s
+        tls:
+          insecure: true
+        sending_queue:
+          enabled: true
+          num_consumers: 10
+          queue_size: 5000
+        retry_on_failure:
+          enabled: true
+          initial_interval: 5s
+          max_interval: 30s
+          max_elapsed_time: 300s
+    resolver:
+      static:
+        hostnames:
+          - k8s-staging1.lib.princeton.edu:30374
+          - k8s-staging2.lib.princeton.edu:30374
+          - k8s-staging3.lib.princeton.edu:30374
+
+  debug:
+    verbosity: basic
+
+otel_service_pipelines:
+  logs:
+    receivers:
+      - filelog/postgresql-json
+    processors:
+      - resource
+      - batch
+    exporters:
+      - loadbalancing
+      - debug
+
+  metrics:
+    receivers:
+      - hostmetrics
+    processors:
+      - resource
+      - batch
+    exporters:
+      - loadbalancing
+      - debug
