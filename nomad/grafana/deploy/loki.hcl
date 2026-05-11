@@ -67,12 +67,13 @@ job "loki" {
       template {
         data = <<EOH
 auth_enabled: false
-
 server:
   http_listen_port: 3100
   grpc_listen_port: 9096
-  log_level: debug
+  log_level: info
   grpc_server_max_concurrent_streams: 1000
+  grpc_server_max_recv_msg_size: 16777216 # 16MB
+  grpc_server_max_send_msg_size: 16777216 # 16MB
 
 common:
   instance_addr: 127.0.0.1
@@ -106,6 +107,8 @@ compactor:
   delete_request_store: filesystem
 limits_config:
   retention_period: 360h
+  ingestion_rate_mb: 10
+  ingestion_burst_size_mb: 20
 schema_config:
   configs:
     - from: 2020-10-24
@@ -131,8 +134,8 @@ EOH
         destination = "local/loki/local-config.yaml"
       }
       resources {
-        cpu    = 512
-        memory = 256
+        cpu    = 1024
+        memory = 2048
       }
     }
   }
