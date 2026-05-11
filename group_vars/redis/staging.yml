@@ -10,3 +10,119 @@ redis__server_default_configuration:
   maxmemory: "{{ redis__server_maxmemory }}"
   maxmemory-policy: "{{ redis__server_maxmemory_policy }}"
   maxmemory-samples: "{{ redis__server_maxmemory_samples }}"
+
+# signoz / otel collector for Redis
+otel_default_resource_attributes:
+  host.name: "{{ inventory_hostname }}"
+  service.name: redis
+  service.version: production
+  environment: production
+  deployment.environment: production
+
+otel_receivers:
+  filelog/redis-server:
+    include:
+      - /var/log/redis/redis-server.log
+    exclude:
+      - /var/log/redis/*.gz
+    start_at: end
+    include_file_path: true
+    include_file_name: true
+    operators:
+      - type: regex_parser
+        id: parse_redis_log
+        regex: '^(?P<pid>\d+):(?P<role>[A-Z]) (?P<time_local>\d{1,2} \w{3} \d{4} \d{2}:\d{2}:\d{2}\.\d{3}) (?P<redis_severity>[*#\-.]) (?P<message>[\s\S]*)$'
+        parse_from: body
+        on_error: send
+
+      - type: time_parser
+        id: parse_redis_timestamp
+        parse_from: attributes.time_local
+        layout_type: strptime
+        layout: '%d %b %Y %H:%M:%S.%L'
+        on_error: send
+
+      - type: severity_parser
+        id: parse_redis_severity
+        parse_from: attributes.redis_severity
+        mapping:
+          debug:
+            - '.'
+          info:
+            - '-'
+            - '*'
+          warn:
+            - '#'
+        on_error: send
+
+      - type: add
+        field: attributes.log_type
+        value: redis_server
+
+      - type: add
+        field: attributes.service_name
+        value: redis
+
+  hostmetrics:
+    collection_interval: 30s
+    scrapers:
+      cpu: {}
+      disk: {}
+      filesystem: {}
+      load: {}
+      memory: {}
+      network: {}
+
+otel_processors:
+  batch:
+    send_batch_max_size: 1024
+    send_batch_size: 512
+    timeout: 30s
+
+otel_exporters:
+  loadbalancing:
+    routing_key: service
+    protocol:
+      otlp:
+        timeout: 10s
+        tls:
+          insecure: true
+        sending_queue:
+          enabled: true
+          num_consumers: 10
+          queue_size: 5000
+        retry_on_failure:
+          enabled: true
+          initial_interval: 5s
+          max_interval: 30s
+          max_elapsed_time: 300s
+    resolver:
+      static:
+        hostnames:
+          - k8s-staging1.lib.princeton.edu:30374
+          - k8s-staging2.lib.princeton.edu:30374
+          - k8s-staging3.lib.princeton.edu:30374
+
+  debug:
+    verbosity: basic
+
+otel_service_pipelines:
+  logs:
+    receivers:
+      - filelog/redis-server
+    processors:
+      - resource
+      - batch
+    exporters:
+      - loadbalancing
+      - debug
+
+  metrics:
+    receivers:
+      - hostmetrics
+    processors:
+      - resource
+      - batch
+    exporters:
+      - loadbalancing
+      - debug
