@@ -47,6 +47,12 @@ otel_default_resource_attributes:
   environment: staging
 
 otel_receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 127.0.0.1:4317
+      http:
+        endpoint: 127.0.0.1:4318
   filelog/nginx-access:
     include: ["/var/log/nginx/access.log*"]
     start_at: end
@@ -140,3 +146,12 @@ otel_service_pipelines:
     exporters:
       - loadbalancing
       - debug
+
+  traces:
+    receivers:
+      - otlp
+    processors:
+      - resource
+      - batch
+    exporters:
+      - loadbalancing
