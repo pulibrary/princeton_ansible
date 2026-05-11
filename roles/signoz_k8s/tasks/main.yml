@@ -1,0 +1,95 @@
+#SPDX-License-Identifier: MIT-0
+---
+# tasks file for roles/signoz_k8s
+- name: Ensure SigNoz values directory exists
+  ansible.builtin.file:
+    path: /etc/signoz
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Write SigNoz Helm values
+  ansible.builtin.template:
+    src: signoz-values.yaml.j2
+    dest: /etc/signoz/values.yaml
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Add SigNoz Helm repo
+  ansible.builtin.command: "microk8s helm3 repo add {{ signoz_chart_repo_name }} {{ signoz_chart_repo_url }}"
+  register: signoz_helm_repo_add
+  changed_when:
+    - "'has been added' in signoz_helm_repo_add.stdout"
+  failed_when:
+    - signoz_helm_repo_add.rc != 0
+    - "'already exists' not in signoz_helm_repo_add.stderr"
+
+- name: Update Helm repos
+  ansible.builtin.command: microk8s helm3 repo update
+  changed_when: false
+
+- name: Build SigNoz Helm command without chart version
+  ansible.builtin.set_fact:
+    signoz_helm_command:
+      - microk8s
+      - helm3
+      - upgrade
+      - --install
+      - "{{ signoz_release_name }}"
+      - "{{ signoz_chart_ref }}"
+      - --namespace
+      - "{{ signoz_namespace }}"
+      - --create-namespace
+      - --wait
+      - --timeout
+      - 1h
+      - -f
+      - /etc/signoz/values.yaml
+  when: signoz_chart_version | length == 0
+
+- name: Build SigNoz Helm command with chart version
+  ansible.builtin.set_fact:
+    signoz_helm_command:
+      - microk8s
+      - helm3
+      - upgrade
+      - --install
+      - "{{ signoz_release_name }}"
+      - "{{ signoz_chart_ref }}"
+      - --version
+      - "{{ signoz_chart_version }}"
+      - --namespace
+      - "{{ signoz_namespace }}"
+      - --create-namespace
+      - --wait
+      - --timeout
+      - 1h
+      - -f
+      - /etc/signoz/values.yaml
+  when: signoz_chart_version | length > 0
+
+- name: Install or upgrade SigNoz
+  ansible.builtin.command:
+    argv: "{{ signoz_helm_command }}"
+  register: signoz_helm_install
+  changed_when:
+    - "'has been upgraded' in signoz_helm_install.stdout or 'has been installed' in signoz_helm_install.stdout"
+
+- name: Wait for SigNoz service
+  ansible.builtin.command: "microk8s kubectl -n {{ signoz_namespace }} get svc {{ signoz_release_name }}"
+  register: signoz_service_lookup
+  changed_when: false
+  retries: 30
+  delay: 10
+  until: signoz_service_lookup.rc == 0
+
+- name: Check SigNoz pods
+  ansible.builtin.command: "microk8s kubectl -n {{ signoz_namespace }} get pods"
+  changed_when: false
+  register: signoz_pods
+
+- name: Show SigNoz pods
+  ansible.builtin.debug:
+    var: signoz_pods.stdout_lines

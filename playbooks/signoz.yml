@@ -1,0 +1,28 @@
+---
+- name: Configure k8s NFS
+  hosts: k8s_nfs
+  remote_user: pulsys
+  become: true
+  roles:
+    - role: k8s_nfs
+
+- name: Configure Microk8s Cluster
+  hosts: k8s_microk8s_primary
+  remote_user: pulsys
+  become: true
+  roles:
+    - role: microk8s_cluster
+
+- name: Configure Microk8s Provisioner
+  hosts: k8s_microk8s_primary
+  remote_user: pulsys
+  become: true
+  roles:
+    - role: k8s_nfs_provisioner
+
+- name: Deploy Signoz
+  hosts: k8s_microk8s_primary
+  remote_user: pulsys
+  become: true
+  roles:
+    - role: signoz_k8s
