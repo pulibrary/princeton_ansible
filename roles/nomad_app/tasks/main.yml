@@ -50,14 +50,15 @@
       notify: reload postgresql
 - name: 'Nomad App | set nomad variables'
   when:
-    - nomad_job is defined
     - nomad_vars is defined
     - running_on_server
+  loop: "{{ nomad_vars | dict2items }}"
+  no_log: true
   ansible.builtin.shell:
     cmd: >
       /usr/local/bin/nomad var put -force 
-      nomad/jobs/{{ nomad_job }}
-      {{ nomad_vars.keys() | zip(nomad_vars.values()) | map("join", "=") | join(" ") }}
+      nomad/jobs/{{ item.key }}
+      {{ item.value.keys() | zip(item.value.values()) | map("join", "=") | join(" ") }}
   environment:
     NOMAD_TOKEN: '{{ pul_nomad_management_token }}'
     run_once: true
