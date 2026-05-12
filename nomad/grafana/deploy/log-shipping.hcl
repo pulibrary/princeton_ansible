@@ -138,7 +138,7 @@ job "log-shipping" {
 
               output {
                   traces  = [otelcol.exporter.loadbalancing.signoz_staging.input]
-                  metrics = [otelcol.exporter.loadbalancing.signoz_staging.input]
+                  metrics = [otelcol.exporter.otlp.signoz_metrics.input]
                   logs    = [otelcol.exporter.loadbalancing.signoz_staging.input]
               }
           }
@@ -166,6 +166,14 @@ job "log-shipping" {
               }
               output {
                   logs = [otelcol.exporter.loadbalancing.signoz_staging.input]
+              }
+          }
+          otelcol.exporter.otlp "signoz_metrics" {
+              client {
+                  endpoint = "k8s-staging1.lib.princeton.edu:30374"
+                  tls { 
+                      insecure = true 
+                  }
               }
           }
           otelcol.exporter.loadbalancing "signoz_staging" {
