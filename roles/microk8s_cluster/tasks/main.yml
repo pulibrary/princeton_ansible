@@ -1,0 +1,23 @@
+#SPDX-License-Identifier: MIT-0
+---
+# tasks file for roles/microk8s_cluster
+
+- name: Install MicroK8s on cluster nodes
+  ansible.builtin.include_tasks: install_microk8s.yml
+  when: inventory_hostname in groups[microk8s_cluster_group] | default([])
+
+- name: Configure MicroK8s firewall rules
+  ansible.builtin.include_tasks: firewall.yml
+  when: inventory_hostname in groups[microk8s_cluster_group] | default([])
+
+- name: Configure primary MicroK8s node
+  ansible.builtin.include_tasks: primary.yml
+  when: inventory_hostname in groups[microk8s_primary_group] | default([])
+
+- name: Join secondary MicroK8s nodes
+  ansible.builtin.include_tasks: join_cluster.yml
+  when: inventory_hostname in groups[microk8s_secondary_group] | default([])
+
+- name: Configure kubeconfig for admin user
+  ansible.builtin.include_tasks: configure_kubeconfig.yml
+  when: inventory_hostname in groups[microk8s_cluster_group] | default([])

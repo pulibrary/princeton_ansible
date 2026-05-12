@@ -1,0 +1,48 @@
+---
+- name: Install snapd
+  ansible.builtin.apt:
+    name:
+      - snapd
+      - nfs-common
+    state: present
+    update_cache: true
+
+- name: Install MicroK8s from default snap channel
+  community.general.snap:
+    name: microk8s
+    classic: true
+    state: present
+  when: microk8s_snap_channel | length == 0
+
+- name: Install MicroK8s from pinned snap channel
+  community.general.snap:
+    name: microk8s
+    classic: true
+    channel: "{{ microk8s_snap_channel }}"
+    state: present
+  when: microk8s_snap_channel | length > 0
+
+- name: Install kubectl snap
+  community.general.snap:
+    name: kubectl
+    classic: true
+    state: present
+  when: microk8s_install_kubectl_snap | bool
+
+- name: Add admin user to microk8s group
+  ansible.builtin.user:
+    name: "{{ microk8s_admin_user }}"
+    groups: microk8s
+    append: true
+
+- name: Ensure admin home ownership matches runbook
+  ansible.builtin.file:
+    path: "{{ microk8s_admin_home }}"
+    owner: "{{ microk8s_admin_user }}"
+    group: "{{ microk8s_admin_user }}"
+    recurse: true
+  when: microk8s_manage_admin_home_owner | bool
+
+- name: Wait for MicroK8s to become ready
+  ansible.builtin.command: microk8s status --wait-ready
+  changed_when: false

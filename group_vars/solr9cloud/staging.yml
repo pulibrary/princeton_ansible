@@ -49,3 +49,145 @@ solr9_gcsfuse_logrotate_rules:
       su_group: "{{ logrotate_global_defaults.su_group }}"
       postrotate: |
         systemctl reload solr-gcsfuse.service 2>/dev/null || true
+
+# signoz / otel collector for Solr
+otel_default_resource_attributes:
+  host.name: "{{ inventory_hostname }}"
+  service.name: solr
+  service.version: staging
+  environment: staging
+
+otel_receivers:
+  filelog/solr-main:
+    include:
+      - /solr/logs/solr.log
+    start_at: end
+    include_file_path: true
+    include_file_name: true
+    operators:
+      - type: recombine
+        id: recombine_solr_stacktraces
+        combine_field: body
+        source_identifier: attributes["log.file.path"]
+        is_first_entry: 'body matches "^\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}\\.\\d{3} "'
+        force_flush_period: 5s
+
+      - type: regex_parser
+        id: parse_solr_log
+        regex: '^(?P<timestamp>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}) (?P<level>[A-Z]+)\s+\((?P<thread>[^)]*)\) \[(?P<collection>[^\]]*)\] (?P<logger>\S+) (?P<message>[\s\S]*)$'
+        parse_from: body
+        on_error: send
+
+      - type: time_parser
+        parse_from: attributes.timestamp
+        layout_type: strptime
+        layout: '%Y-%m-%d %H:%M:%S.%L'
+        on_error: send
+
+      - type: severity_parser
+        parse_from: attributes.level
+        on_error: send
+
+      - type: add
+        field: attributes.log_type
+        value: solr_main
+
+      - type: add
+        field: attributes.service_name
+        value: solr
+
+  filelog/solr-request:
+    include:
+      - /solr/logs/*.request.log
+    start_at: end
+    include_file_path: true
+    include_file_name: true
+    operators:
+      - type: add
+        field: attributes.log_type
+        value: solr_request
+
+      - type: add
+        field: attributes.service_name
+        value: solr
+
+  filelog/solr-gc:
+    include:
+      - /solr/logs/solr_gc.log
+    start_at: end
+    include_file_path: true
+    include_file_name: true
+    operators:
+      - type: add
+        field: attributes.log_type
+        value: solr_gc
+
+      - type: add
+        field: attributes.service_name
+        value: solr
+
+  hostmetrics:
+    collection_interval: 30s
+    scrapers:
+      cpu: {}
+      disk: {}
+      filesystem: {}
+      load: {}
+      memory: {}
+      network: {}
+
+otel_processors:
+  batch:
+    send_batch_max_size: 1024
+    send_batch_size: 512
+    timeout: 30s
+
+otel_exporters:
+  loadbalancing:
+    routing_key: service
+    protocol:
+      otlp:
+        timeout: 10s
+        tls:
+          insecure: true
+        sending_queue:
+          enabled: true
+          num_consumers: 10
+          queue_size: 5000
+        retry_on_failure:
+          enabled: true
+          initial_interval: 5s
+          max_interval: 30s
+          max_elapsed_time: 300s
+    resolver:
+      static:
+        hostnames:
+          - k8s-staging1.lib.princeton.edu:30374
+          - k8s-staging2.lib.princeton.edu:30374
+          - k8s-staging3.lib.princeton.edu:30374
+
+  debug:
+    verbosity: basic
+
+otel_service_pipelines:
+  logs:
+    receivers:
+      - filelog/solr-main
+      - filelog/solr-request
+      - filelog/solr-gc
+    processors:
+      - resource
+      - batch
+    exporters:
+      - loadbalancing
+      - debug
+
+  metrics:
+    receivers:
+      - hostmetrics
+    processors:
+      - resource
+      - batch
+    exporters:
+      - loadbalancing
+      - debug

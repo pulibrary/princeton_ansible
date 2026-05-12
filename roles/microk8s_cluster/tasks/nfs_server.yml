@@ -1,0 +1,41 @@
+---
+- name: Install NFS packages
+  ansible.builtin.apt:
+    name:
+      - nfs-common
+      - nfs-kernel-server
+    state: present
+    update_cache: true
+
+- name: Create NFS export root
+  ansible.builtin.file:
+    path: "{{ nfs_export_root }}"
+    state: directory
+    owner: "{{ nfs_export_owner }}"
+    group: "{{ nfs_export_group }}"
+    mode: "{{ nfs_export_mode }}"
+
+- name: Create Kubernetes NFS export path
+  ansible.builtin.file:
+    path: "{{ nfs_export_path }}"
+    state: directory
+    owner: "{{ nfs_export_owner }}"
+    group: "{{ nfs_export_group }}"
+    mode: "{{ nfs_export_mode }}"
+
+- name: Configure NFS exports
+  ansible.builtin.template:
+    src: exports.j2
+    dest: /etc/exports
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - reload nfs exports
+    - restart nfs server
+
+- name: Enable and start NFS server
+  ansible.builtin.service:
+    name: nfs-kernel-server
+    state: started
+    enabled: true

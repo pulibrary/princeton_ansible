@@ -10,8 +10,167 @@ nginx_modules:
   perl: true
   image_filter: true
   rtmp: true
+  otel: true
   xslt: true
 # dos: true
 # app_protect logs
 app_protect_dir: "/var/log/app_protect/*.log"
 sites: []
+
+# signoz / otel collector for nginxplus load balancers
+otel_default_resource_attributes:
+  host.name: "{{ inventory_hostname }}"
+  service.name: nginxplus-lb
+  service.version: staging
+  environment: staging
+  deployment.environment: staging
+
+otel_receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 127.0.0.1:4317
+      http:
+        endpoint: 127.0.0.1:4318
+
+  filelog/nginxplus-access:
+    include:
+      - /var/log/nginx/access.log
+    start_at: end
+    include_file_path: true
+    include_file_name: true
+    operators:
+      - type: regex_parser
+        id: parse_nginxplus_access
+        regex: '^(?P<remote_addr>[^\s]+) - (?P<remote_user>[^\s]+) \[(?P<time_local>[^\]]+)\] "(?P<method>\S+) (?P<path>\S+)(?: (?P<protocol>[^"]+))?" (?P<status>\d+) (?P<body_bytes_sent>\d+) "(?P<http_referer>[^"]*)" "(?P<http_user_agent>[^"]*)"(?: "(?P<http_x_forwarded_for>[^"]*)")?.*$'
+        parse_from: body
+
+      - type: time_parser
+        parse_from: attributes.time_local
+        layout_type: strptime
+        layout: '%d/%b/%Y:%H:%M:%S %z'
+
+      - type: severity_parser
+        parse_from: attributes.status
+        mapping:
+          info:
+            - '^2\d\d$'
+            - '^3\d\d$'
+          warn:
+            - '^4\d\d$'
+          error:
+            - '^5\d\d$'
+
+      - type: add
+        field: attributes.log_type
+        value: nginxplus_access
+
+      - type: add
+        field: attributes.service_name
+        value: nginxplus-lb
+
+  filelog/nginxplus-error:
+    include:
+      - /var/log/nginx/error.log
+    start_at: end
+    include_file_path: true
+    include_file_name: true
+    operators:
+      - type: regex_parser
+        id: parse_nginxplus_error
+        regex: '^(?P<time_local>\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}) \[(?P<level>\w+)\] (?P<pid>\d+)#(?P<tid>\d+): \*(?P<connection>\d+) (?P<message>[\s\S]*)$'
+        parse_from: body
+        on_error: send
+
+      - type: time_parser
+        parse_from: attributes.time_local
+        layout_type: strptime
+        layout: '%Y/%m/%d %H:%M:%S'
+        on_error: send
+
+      - type: severity_parser
+        parse_from: attributes.level
+        on_error: send
+
+      - type: add
+        field: attributes.log_type
+        value: nginxplus_error
+
+      - type: add
+        field: attributes.service_name
+        value: nginxplus-lb
+
+  hostmetrics:
+    collection_interval: 30s
+    scrapers:
+      cpu: {}
+      disk: {}
+      filesystem: {}
+      load: {}
+      memory: {}
+      network: {}
+
+otel_processors:
+  batch:
+    send_batch_max_size: 1024
+    send_batch_size: 512
+    timeout: 30s
+
+otel_exporters:
+  loadbalancing:
+    routing_key: service
+    protocol:
+      otlp:
+        timeout: 10s
+        tls:
+          insecure: true
+        sending_queue:
+          enabled: true
+          num_consumers: 10
+          queue_size: 5000
+        retry_on_failure:
+          enabled: true
+          initial_interval: 5s
+          max_interval: 30s
+          max_elapsed_time: 300s
+    resolver:
+      static:
+        hostnames:
+          - k8s-staging1.lib.princeton.edu:30374
+          - k8s-staging2.lib.princeton.edu:30374
+          - k8s-staging3.lib.princeton.edu:30374
+
+  debug:
+    verbosity: basic
+
+otel_service_pipelines:
+  logs:
+    receivers:
+      - filelog/nginxplus-access
+      - filelog/nginxplus-error
+    processors:
+      - resource
+      - batch
+    exporters:
+      - loadbalancing
+      - debug
+
+  metrics:
+    receivers:
+      - hostmetrics
+    processors:
+      - resource
+      - batch
+    exporters:
+      - loadbalancing
+      - debug
+
+  traces:
+    receivers:
+      - otlp
+    processors:
+      - resource
+      - batch
+    exporters:
+      - loadbalancing
+      - debug
