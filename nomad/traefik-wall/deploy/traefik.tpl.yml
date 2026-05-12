@@ -3,6 +3,9 @@ ping: {}
 defaultEntryPoints:
   - http
 log:
+  otlp:
+    http:
+      endpoint: http://{{ env "NOMAD_IP_traefik" }}:4318/v1/logs
   level: ERROR
 entryPoints:
   http:
@@ -25,9 +28,6 @@ metrics:
     addServicesLabels: true
     manualRouting: true
   otlp:
-    addEntryPointsLabels: true
-    addRoutersLabels: true
-    addServicesLabels: true
     http:
       endpoint: http://{{ env "NOMAD_IP_traefik" }}:4318/v1/metrics
 api:
@@ -37,6 +37,8 @@ tracing:
   otlp:
     http:
       endpoint: http://{{ env "NOMAD_IP_traefik" }}:4318/v1/traces
+experimental:
+  otlpLogs: true
 providers:
   file:
     directory: /etc/traefik/config.d
