@@ -10,6 +10,7 @@ nginx_modules:
   perl: true
   image_filter: true
   rtmp: true
+  otel: true
   xslt: true
 # dos: true
 # app_protect logs
@@ -25,6 +26,13 @@ otel_default_resource_attributes:
   deployment.environment: staging
 
 otel_receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 127.0.0.1:4317
+      http:
+        endpoint: 127.0.0.1:4318
+
   filelog/nginxplus-access:
     include:
       - /var/log/nginx/access.log
@@ -150,6 +158,16 @@ otel_service_pipelines:
   metrics:
     receivers:
       - hostmetrics
+    processors:
+      - resource
+      - batch
+    exporters:
+      - loadbalancing
+      - debug
+
+  traces:
+    receivers:
+      - otlp
     processors:
       - resource
       - batch
