@@ -7,6 +7,8 @@ SOLR_HEAP="{{ solr_heap_setting }}"
 SOLR_HEAP="{{ solr_heap }}"
 {% endif %}
 
+{% set solr_enabled_modules = solr_modules | default(['analysis-extras', 'scripting', 'langid']) %}
+
 # GC tune var
 GC_TUNE="{{ solr_gc_tune }}"
 
@@ -29,7 +31,7 @@ ENABLE_REMOTE_JMX_OPTS="true"
 RMI_PORT="1099"
 
 # All system properties on ONE line
-SOLR_OPTS="-Xss256k -Dsolr.solr.home={{ solr_data_dir }} -Dsolr.log.dir={{ solr_log_dir }} -Dsolr.install.symDir={{ solr_installation }} -Dsolr.allowPaths={{ solr_data_dir }},/solr/backups -Dlog4j.configurationFile={{ solr_data_home }}/log4j2.xml -Dsolr.jetty.host=0.0.0.0 -Djetty.home={{ solr_installation }}/server -Dsolr.jetty.threads.idle.timeout=1800000 -Dsolr.cloud.client.stallTime=1800000 -Dlog4j2.formatMsgNoLookups=true -Djava.security.egd=file:/dev/./urandom -Dsolr.modules=analysis-extras,scripting,langid -DzkClientTimeout=${ZK_CLIENT_TIMEOUT} -XX:+AlwaysPreTouch -XX:MaxGCPauseMillis=200 -javaagent:/opt/solr/lib/jolokia-agent-jvm-{{ jolokia_agent_version }}-javaagent.jar=port=8778,host=127.0.0.1"
+SOLR_OPTS="-Xss256k -Dsolr.solr.home={{ solr_data_dir }} -Dsolr.log.dir={{ solr_log_dir }} -Dsolr.install.symDir={{ solr_installation }} -Dsolr.allowPaths={{ solr_data_dir }},/solr/backups -Dlog4j.configurationFile={{ solr_data_home }}/log4j2.xml -Dsolr.jetty.host=0.0.0.0 -Djetty.home={{ solr_installation }}/server -Dsolr.jetty.threads.idle.timeout=1800000 -Dsolr.cloud.client.stallTime=1800000 -Dlog4j2.formatMsgNoLookups=true -Djava.security.egd=file:/dev/./urandom -Dsolr.modules={{ solr_enabled_modules | join(',') }} -DzkClientTimeout=${ZK_CLIENT_TIMEOUT} -XX:+AlwaysPreTouch -XX:MaxGCPauseMillis=200 -javaagent:/opt/solr/lib/jolokia-agent-jvm-{{ jolokia_agent_version }}-javaagent.jar=port=8778,host=127.0.0.1{% if solr_otel_enabled | default(false) %} -Dotel.service.name={{ solr_otel_service_name | default('solr') }} -Dotel.sdk.disabled=false -Dotel.traces.exporter=otlp -Dotel.exporter.otlp.protocol={{ solr_otel_protocol | default('grpc') }} -Dotel.exporter.otlp.endpoint={{ solr_otel_endpoint | default('http://127.0.0.1:4317') }} -Dotel.traces.sampler={{ solr_otel_sampler | default('parentbased_always_on') }}{% if solr_otel_sampler_arg is defined %} -Dotel.traces.sampler.arg={{ solr_otel_sampler_arg }}{% endif %} -Dotel.propagators={{ solr_otel_propagators | default('tracecontext,baggage') }} -Dotel.resource.attributes=service.name={{ solr_otel_service_name | default('solr') }},service.version={{ runtime_env | default('staging') }},environment={{ runtime_env | default('staging') }},host.name={{ inventory_hostname }}{% endif %}"
 
 # SSL (disabled here; enable if needed)
 SOLR_SSL_ENABLED=false
