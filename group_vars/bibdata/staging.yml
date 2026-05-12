@@ -124,6 +124,14 @@ rails_app_vars:
     value: "/data/bibdata_files/partner_update_scratch"
   - name: RUST_LOG
     value: "debug"
+  - name: OTEL_SERVICE_NAME
+    value: 'bibdata'
+  - name: OTEL_EXPORTER_OTLP_ENDPOINT
+    value: 'http://127.0.0.1:4318/v1/traces'
+  - name: OTEL_EXPORTER_OTLP_INSECURE
+    value: 'true'
+  - name: OTEL_EXPORTER_OTLP_TRACES_PROTOCOL
+    value: 'http/protobuf'
 sidekiq_worker_name: bibdata-workers
 sidekiq_worker_threads: 3
 bibdata_mount_env: 'staging'
@@ -153,6 +161,12 @@ otel_default_resource_attributes:
   environment: staging
 
 otel_receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 127.0.0.1:4317
+      http:
+        endpoint: 127.0.0.1:4318
   filelog/nginx-access:
     include: ["/var/log/nginx/access.log*"]
     start_at: end
@@ -246,3 +260,12 @@ otel_service_pipelines:
     exporters:
       - loadbalancing
       - debug
+
+  traces:
+    receivers:
+      - otlp
+    processors:
+      - resource
+      - batch
+    exporters:
+      - loadbalancing
