@@ -86,6 +86,7 @@ job "log-shipping" {
               targets               = local.file_match.logs.targets
               forward_to            = [loki.process.logs.receiver]
               tail_from_end         = true
+              on_positions_file_error = "restart_from_end"
           }
 
           loki.process "logs" {
