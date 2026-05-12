@@ -15,6 +15,12 @@ job "log-shipping" {
       dns {
         servers = ["10.88.0.1", "128.112.129.209", "8.8.8.8", "8.8.4.4"]
       }
+      port "otlp_grpc" {
+        static = 4317
+      }
+      port "otlp_http" {
+        static = 4318
+      }
     }
     restart {
       attempts = 2
@@ -56,6 +62,7 @@ job "log-shipping" {
       driver = "podman"
       config {
         image = "docker.io/grafana/alloy:latest"
+        ports = ["otlp_grpc", "otlp_http"]
         args = [
           "run",
           "local/config.alloy",
@@ -78,7 +85,7 @@ job "log-shipping" {
           loki.source.file "logs" {
               targets               = local.file_match.logs.targets
               forward_to            = [loki.process.logs.receiver]
-              legacy_positions_file = "local/positions.yaml"
+              legacy_positions_file = "{{ env "NOMAD_ALLOC_DIR" }}/positions.yaml"
           }
 
           loki.process "logs" {
@@ -118,6 +125,21 @@ job "log-shipping" {
           loki.write "destination" {
               endpoint {
                   url = "http://loki.service.consul:3100/loki/api/v1/push"
+              }
+          }
+
+          otelcol.receiver.otlp "default" {
+              grpc {
+                  endpoint = "0.0.0.0:4317"
+              }
+              http {
+                  endpoint = "0.0.0.0:4318"
+              }
+
+              output {
+                  traces  = [otelcol.exporter.loadbalancing.signoz_staging.input]
+                  metrics = [otelcol.exporter.loadbalancing.signoz_staging.input]
+                  logs    = [otelcol.exporter.loadbalancing.signoz_staging.input]
               }
           }
 
