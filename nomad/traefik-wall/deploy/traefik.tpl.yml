@@ -4,6 +4,10 @@ defaultEntryPoints:
   - http
 log:
   level: ERROR
+accesslog:
+  otlp:
+    http:
+      endpoint: http://{{ env "NOMAD_IP_traefik" }}:4318/v1/logs
 entryPoints:
   http:
     address: ":{{ env "NOMAD_PORT_http" }}"
@@ -24,9 +28,16 @@ metrics:
     addRoutersLabels: true
     addServicesLabels: true
     manualRouting: true
+  otlp:
+    http:
+      endpoint: http://{{ env "NOMAD_IP_traefik" }}:4318/v1/metrics
 api:
   dashboard: false
   insecure: false
+tracing:
+  otlp:
+    http:
+      endpoint: http://{{ env "NOMAD_IP_traefik" }}:4318/v1/traces
 providers:
   file:
     directory: /etc/traefik/config.d
@@ -36,6 +47,7 @@ providers:
       address: "host.containers.internal:8500"
       scheme: "http"
 experimental:
+  otlpLogs: true
   plugins:
     captcha-protect:
       modulename: github.com/libops/captcha-protect
