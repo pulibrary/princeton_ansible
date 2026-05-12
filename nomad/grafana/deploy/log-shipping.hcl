@@ -85,7 +85,7 @@ job "log-shipping" {
           loki.source.file "logs" {
               targets               = local.file_match.logs.targets
               forward_to            = [loki.process.logs.receiver]
-              legacy_positions_file = "{{ env "NOMAD_ALLOC_DIR" }}/positions.yaml"
+              tail_from_end         = true
           }
 
           loki.process "logs" {
@@ -169,7 +169,6 @@ job "log-shipping" {
               }
           }
           otelcol.exporter.loadbalancing "signoz_staging" {
-              routing_key = "service"
               resolver {
                   static {
                       hostnames = [
