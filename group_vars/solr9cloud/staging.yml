@@ -7,6 +7,19 @@ ruby_version_override: "ruby-3.4.1"
 solr_heap_setting: '20g'
 jardirectory: "/opt/solr/lib"
 jolokia_agent_version: "2.5.1"
+# modularize modules
+solr_modules:
+  - analysis-extras
+  - scripting
+  - langid
+  - opentelemetry
+
+solr_otel_enabled: true
+solr_otel_service_name: solr
+solr_otel_endpoint: "http://127.0.0.1:4317"
+solr_otel_protocol: grpc
+solr_otel_sampler: parentbased_always_on
+solr_otel_propagators: "tracecontext,baggage"
 # more granular option would be:
 # solr_java_memory: '-Xms16g -Xmx20g'
 # solr shards
@@ -58,6 +71,13 @@ otel_default_resource_attributes:
   environment: staging
 
 otel_receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 127.0.0.1:4317
+      http:
+        endpoint: 127.0.0.1:4318
+
   filelog/solr-main:
     include:
       - /solr/logs/solr.log
@@ -191,3 +211,12 @@ otel_service_pipelines:
     exporters:
       - loadbalancing
       - debug
+
+  traces:
+    receivers:
+      - otlp
+    processors:
+      - resource
+      - batch
+    exporters:
+      - loadbalancing
