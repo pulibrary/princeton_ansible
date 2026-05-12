@@ -62,7 +62,7 @@ job "traefik-wall-staging" {
       }
 
       config {
-        image        = "docker.io/library/traefik:v3.3"
+        image        = "docker.io/library/traefik:v3.7"
         ports = ["http", "traefik", "metrics"]
 
         volumes = [

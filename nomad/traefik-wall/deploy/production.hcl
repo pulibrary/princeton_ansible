@@ -63,7 +63,7 @@ job "traefik-wall-production" {
       }
 
       config {
-        image        = "docker.io/library/traefik:v3.3"
+        image        = "docker.io/library/traefik:v3.7"
         ports = ["http", "traefik", "metrics"]
 
         volumes = [
@@ -179,7 +179,7 @@ job "traefik-wall-production" {
       }
 
       config {
-        image        = "docker.io/library/traefik:v3.3"
+        image        = "docker.io/library/traefik:v3.7"
         ports = ["http", "traefik", "metrics"]
 
         volumes = [
@@ -290,7 +290,7 @@ job "traefik-wall-production" {
       }
 
       config {
-        image        = "docker.io/library/traefik:v3.3"
+        image        = "docker.io/library/traefik:v3.7"
         ports = ["http", "traefik", "metrics"]
 
         volumes = [
