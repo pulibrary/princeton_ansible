@@ -1,0 +1,22 @@
+---
+# by default this playbook runs in the staging environment
+# to run in production, pass '-e runtime_env=production'
+- name: Digital Collections | Provision Variables & Infrastructure
+  # Both staging and production dpulc deploys run on the production Nomad infrastructure.
+  # The [0] picks the first host, since we just run the nomad commands there.
+  hosts: "nomad_production[0]"
+  remote_user: pulsys
+  become: true
+
+  # Vault files (env-agnostic secrets or per-env keys within)
+  vars_files:
+    # This will auto include group_vars/nomad_production.yml
+    # This will auto include group_vars/nomad_servers.yml
+    - ../group_vars/nomad/vault.yml
+    - "../group_vars/dpulc/{{ runtime_env | default('staging') }}.yml"
+    - ../group_vars/dpulc/vault.yml
+    # Need postgres info.
+    - ../group_vars/postgresql/vault.yml
+    - ../group_vars/postgresql/{{ runtime_env | default('staging') }}.yml
+  roles:
+    - role: roles/nomad_app
