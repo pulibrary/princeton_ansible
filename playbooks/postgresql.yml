@@ -3,17 +3,19 @@
 # to run in qa, pass '-e runtime_env=qa'
 # to run in production, pass '-e runtime_env=production'
 - name: Build the postgresql project
-  hosts: postgresql_{{ runtime_env | default('staging') }}
+  hosts: tower26database1.lib.princeton.edu
+  #  hosts: postgresql_{{ runtime_env | default('staging') }}
   remote_user: pulsys
   become: true
   vars_files:
     - ../group_vars/postgresql/{{ runtime_env | default('staging') }}.yml
     - ../host_vars/lib-postgres-staging3.princeton.edu.yml
     - ../group_vars/postgresql/vault.yml
-    - ../group_vars/figgy/vault.yml # Figgy vault vars for replication user/password
+    - ../group_vars/ansible_tower/vault.yml
+    - ../group_vars/ansible_tower/main.yml
   roles:
-    - role: roles/common
-    - role: roles/otel_collector
+    # - role: roles/common
+    # - role: roles/otel_collector
     - role: ../roles/postgresql
 
   post_tasks:
