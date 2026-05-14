@@ -45,7 +45,7 @@ This role has no `meta` dependencies, but the following roles should precede it 
 ## What This Role Does
 
 1. **Installs system packages**: `nfs-common`, `cifs-utils`, `python3-psycopg2`, `clang`
-2. **Manages NFS mount**: mounts `<nfs_server>:/var/nfs/bibdata` at `/data/bibdata_files` and creates the required subdirectories on the NFS server (`scsb_update_files`, `figgy_ark_cache`)
+2. **Manages NFS mount**: mounts `<nfs_server>:/var/nfs/bibdata` at `/data/bibdata_files` and creates the required subdirectories on the NFS server (`scsb_update_files`)
 3. **Manages RubyGems**: updates RubyGems to 3.6.8 and installs Bundler 2.6.8 as the default, removing the previous default gemspec (2.6.3)
 4. **Creates Capistrano shared directory structure** for `marc_to_solr/translation_maps/`
 5. **Creates a stub file** at `/opt/figgy_mms_ids.yaml` for the deploy user
