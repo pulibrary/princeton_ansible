@@ -1,0 +1,65 @@
+---
+- name: Nomad App | Postgresql | Create User
+  community.postgresql.postgresql_user:
+    name: '{{ item.db_user }}'
+    password: '{{ item.db_password }}'
+    encrypted: true
+    state: 'present'
+  delegate_to: '{{ item.db_host }}'
+  become: true
+  become_user: '{{ item.db_admin_user }}'
+  run_once: true
+  when:
+    - item.get('db_user') is not none
+# Only make a database if an owner is set.
+- name: Nomad App | Postgresql | Create Database
+  community.postgresql.postgresql_db:
+    name: '{{ item.db_name }}'
+    encoding: 'UTF-8'
+    state: 'present'
+    owner: "{{ item.db_owner }}"
+  delegate_to: '{{ item.db_host }}'
+  become: true
+  become_user: '{{ item.db_admin_user }}'
+  run_once: true
+  when:
+    - item.get('db_owner') is not none
+- name: 'Nomad App | Postgresql | grant read-only privileges if applicable'
+  delegate_to: '{{ item.db_host }}'
+  become: true
+  become_user: '{{ item.db_admin_user }}'
+  run_once: true
+  community.postgresql.postgresql_privs:
+    database: '{{ item.db_name }}'
+    state: present
+    privs: SELECT
+    type: table
+    objs: ALL_IN_SCHEMA
+    roles: '{{ item.db_user }}'
+    grant_option: true
+  when:
+    - item.get('read_only') == true
+- name: 'Nomad App | Postgresql | ensure all nomad clients are in pg_hba'
+  ansible.builtin.lineinfile:
+    path: "/etc/postgresql/{{ postgres_version }}/main/pg_hba.conf"
+    line: "host  all  all  {{ nomad_host }} md5"
+  delegate_to: "{{ item.db_host }}"
+  run_once: true
+  loop: "{{ groups['nomad_clients_production_staging'] }}"
+  loop_control:
+    loop_var: nomad_host
+  when:
+    - "(runtime_env | default('staging')) == 'staging'"
+  notify: reload postgresql
+- name: 'Nomad App | Postgresql | ensure all nomad clients are in pg_hba'
+  ansible.builtin.lineinfile:
+    path: "/etc/postgresql/{{ postgres_version }}/main/pg_hba.conf"
+    line: "host  all  all  {{ nomad_host }} md5"
+  delegate_to: "{{ item.db_host }}"
+  run_once: true
+  loop: "{{ groups['nomad_clients_production'] }}"
+  loop_control:
+    loop_var: nomad_host
+  when:
+    - "(runtime_env | default('staging')) == 'production'"
+  notify: reload postgresql
