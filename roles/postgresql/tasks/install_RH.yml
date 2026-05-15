@@ -1,0 +1,105 @@
+---
+- name: PostgreSQL | Set log file path for RHEL
+  ansible.builtin.set_fact:
+    postgres_log_file: /var/lib/pgsql/{{ postgres_version }}/data/log/pg.csv
+  when:
+    - ansible_os_family == "RedHat"
+
+- name: Import the PG GPG key for RHEL
+  ansible.builtin.rpm_key:
+    state: present
+    key: https://apt.postgresql.org/pub/repos/yum/keys/PGDG-RPM-GPG-KEY-RHEL
+  become: true
+  when:
+    - running_on_server
+    - ansible_os_family == "RedHat"
+
+# Tower can now use PSQL 15, 16, or 17
+# RHEL 9 supports PSQL 16
+- name: Install the postgresql rpm from a remote repo
+  ansible.builtin.dnf:
+    name: 'https://download.postgresql.org/pub/repos/yum/reporpms/EL-9-x86_64/pgdg-redhat-repo-latest.noarch.rpm'
+    state: present
+  when:
+    - running_on_server
+    - ansible_os_family == "RedHat"
+
+- name: PostgreSQL | install postgresql server package (RedHat)
+  ansible.builtin.dnf:
+    name: postgresql{{ postgres_version }}-server
+    state: present
+  when:
+    - postgresql_is_local | bool
+    - ansible_os_family == "RedHat"
+
+- name: PostgreSQL | Initialize PostgreSQL database (RedHat)
+  ansible.builtin.command:
+    cmd: /usr/pgsql-{{ postgres_version }}/bin/postgresql-{{ postgres_version }}-setup initdb
+  args:
+    creates: "/var/lib/pgsql/{{ postgres_version }}/initdb.log"
+  when:
+    - ansible_os_family == "RedHat"
+    - postgresql_is_local | bool
+
+- name: PostgreSQL | Ensure PostgreSQL is enabled and started
+  ansible.builtin.service:
+   name: postgresql-{{ postgres_version }}
+   # including the version in the service name is necessary on RHEL
+   # what is the service name in Ubuntu?
+   # needs testing
+   state: started
+   enabled: true
+  when:
+   - running_on_server
+
+- name: PostgreSQL | install postgresql client packages (RedHat)
+  ansible.builtin.dnf:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - libpq-devel
+    - python3-psycopg2
+  when:
+    - running_on_server
+    - ansible_os_family == "RedHat"
+
+- name: PostgreSQL | add extensions
+  ansible.builtin.import_tasks: extensions.yml
+
+- name: PostgreSQL | install configuration file (RedHat)
+  ansible.builtin.template:
+    src: 'rh_postgresql.conf.j2'
+    dest: '/var/lib/pgsql/{{ postgres_version }}/data/postgresql.conf'
+    group: postgres
+    owner: postgres
+    mode: "0644"
+  register: configure_postgres
+  when:
+    - postgresql_is_local | bool
+    - ansible_os_family == "RedHat"
+  notify: restart local postgres
+
+- name: PostgreSQL | ensure pgpass
+  ansible.builtin.template:
+    src: pg_pass.j2
+    dest: "~/.pgpass"
+    mode: "0600"
+    owner: postgres
+  changed_when: false
+  when: postgresql_is_local | bool
+  become: true
+
+- name: PostgreSQL | ensure access to postgres server (RedHat)
+  ansible.builtin.blockinfile:
+    path: '/var/lib/pgsql/{{ postgres_version }}/data/pg_hba.conf'
+    insertafter: "# Put your actual configuration here"
+    block: |
+      # localhost - this is commented out, why?
+  when:
+    - (postgres_host | default(None)) is not none
+    - postgresql_is_local | bool
+    - ansible_os_family == "RedHat"
+    - running_on_server
+  become: true
+  notify:
+    - restart local postgres
