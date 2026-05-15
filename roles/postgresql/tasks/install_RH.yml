@@ -2,8 +2,6 @@
 - name: PostgreSQL | Set log file path for RHEL
   ansible.builtin.set_fact:
     postgres_log_file: /var/lib/pgsql/{{ postgres_version }}/data/log/pg.csv
-  when:
-    - ansible_os_family == "RedHat"
 
 - name: Import the PG GPG key for RHEL
   ansible.builtin.rpm_key:
@@ -12,7 +10,6 @@
   become: true
   when:
     - running_on_server
-    - ansible_os_family == "RedHat"
 
 # Tower can now use PSQL 15, 16, or 17
 # RHEL 9 supports PSQL 16
@@ -22,7 +19,6 @@
     state: present
   when:
     - running_on_server
-    - ansible_os_family == "RedHat"
 
 - name: PostgreSQL | install postgresql server package (RedHat)
   ansible.builtin.dnf:
@@ -30,7 +26,6 @@
     state: present
   when:
     - postgresql_is_local | bool
-    - ansible_os_family == "RedHat"
 
 - name: PostgreSQL | Initialize PostgreSQL database (RedHat)
   ansible.builtin.command:
@@ -38,7 +33,6 @@
   args:
     creates: "/var/lib/pgsql/{{ postgres_version }}/initdb.log"
   when:
-    - ansible_os_family == "RedHat"
     - postgresql_is_local | bool
 
 - name: PostgreSQL | Ensure PostgreSQL is enabled and started
@@ -58,7 +52,6 @@
     - python3-psycopg2
   when:
     - running_on_server
-    - ansible_os_family == "RedHat"
 
 - name: PostgreSQL | install configuration file (RedHat)
   ansible.builtin.template:
@@ -70,15 +63,4 @@
   register: configure_postgres
   when:
     - postgresql_is_local | bool
-    - ansible_os_family == "RedHat"
   notify: restart local postgres
-
-- name: PostgreSQL | ensure pgpass
-  ansible.builtin.template:
-    src: pg_pass.j2
-    dest: "~/.pgpass"
-    mode: "0600"
-    owner: postgres
-  changed_when: false
-  when: postgresql_is_local | bool
-  become: true
