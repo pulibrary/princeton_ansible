@@ -44,9 +44,6 @@
 - name: PostgreSQL | Ensure PostgreSQL is enabled and started
   ansible.builtin.service:
    name: postgresql-{{ postgres_version }}
-   # including the version in the service name is necessary on RHEL
-   # what is the service name in Ubuntu?
-   # needs testing
    state: started
    enabled: true
   when:
@@ -85,18 +82,3 @@
   changed_when: false
   when: postgresql_is_local | bool
   become: true
-
-- name: PostgreSQL | ensure access to postgres server (RedHat)
-  ansible.builtin.blockinfile:
-    path: '/var/lib/pgsql/{{ postgres_version }}/data/pg_hba.conf'
-    insertafter: "# Put your actual configuration here"
-    block: |
-      # localhost - this is commented out, why?
-  when:
-    - (postgres_host | default(None)) is not none
-    - postgresql_is_local | bool
-    - ansible_os_family == "RedHat"
-    - running_on_server
-  become: true
-  notify:
-    - restart local postgres
