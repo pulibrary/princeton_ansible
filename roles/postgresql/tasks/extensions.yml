@@ -1,14 +1,14 @@
 ---
+# these tasks only run on Debian/Ubuntu
+# and only when installing a local db
 - name: PostgreSQL | Extensions | Make sure the postgres contrib extensions are installed
   ansible.builtin.apt:
     name: "postgresql-contrib-{{ postgres_version }}"
     state: present
   when:
     - postgres_ext_install_contrib
-    - ansible_distribution == "Debian"
-    - postgresql_is_local
   notify:
-    - restart local postgres
+    - restart postgresql
 
 - name: PostgreSQL | Extensions | Make sure the development headers are installed
   ansible.builtin.apt:
@@ -16,10 +16,8 @@
     state: present
   when:
     - postgres_ext_install_dev_headers
-    - ansible_distribution == "Debian"
-    - postgresql_is_local
   notify:
-    - restart local postgres
+    - restart postgresql
 
 - name: PostgreSQL | Extensions | Make sure the postgis extensions are installed
   ansible.builtin.apt:
@@ -27,7 +25,5 @@
     state: present
   when:
     - postgres_ext_install_postgis
-    - ansible_distribution == "Debian"
-    - postgresql_is_local
   notify:
-    - restart local postgres
+    - restart postgresql
