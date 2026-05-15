@@ -1,4 +1,6 @@
 ---
+# we only create postgres clusters on Ubuntu
+# these tasks will create a local db on RHEL
 - name: PostgreSQL | Install postgresql on RHEL
   ansible.builtin.include_tasks: install_RH.yml
   when:
@@ -53,13 +55,6 @@
     update_cache: true
   when: ansible_os_family == "Debian"
 
-# Tower can now use PSQL 15, 16, or 17
-# RHEL 9 supports PSQL 16
-- name: Install the postgresql rpm from a remote repo
-  ansible.builtin.dnf:
-    name: 'https://download.postgresql.org/pub/repos/yum/reporpms/EL-9-x86_64/pgdg-redhat-repo-latest.noarch.rpm'
-    state: present
-
 - name: PostgreSQL | install postgresql server packages (Ubuntu)
   ansible.builtin.apt:
     name: '{{ item }}'
@@ -81,7 +76,7 @@
   when:
    - running_on_server
 
-- name: PostgreSQL | add a logrotation
+- name: PostgreSQL | add logrotate rules
   ansible.builtin.template:
     src: "../../common/templates/logrotate_rules.j2"
     dest: "/etc/logrotate.d/{{ item.name }}"
@@ -103,8 +98,11 @@
   when:
     - ansible_os_family == "Debian"
 
-- name: PostgreSQL | add extensions
+- name: PostgreSQL | add extensions (Ubuntu)
   ansible.builtin.import_tasks: extensions.yml
+  when:
+    - ansible_distribution == "Debian"
+    - postgresql_is_local | bool
 
 - name: PostgreSQL | install configuration file (Ubuntu)
   ansible.builtin.template:
@@ -143,7 +141,7 @@
     - postgresql_cluster_member == true
   notify: restart postgresql
 
-# we already enabled the service at line 112
+# we already enabled the service at line 68
 # - name: PostgreSQL | ensure postgres starts on boot
 #   ansible.builtin.service:
 #     name: postgresql-{{ postgres_version }}
