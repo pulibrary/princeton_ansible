@@ -1,0 +1,87 @@
+---
+- name: Ubuntu | Make sure the CA certificates are available
+  ansible.builtin.apt:
+    pkg: ca-certificates
+    state: present
+
+- name: Ubuntu | Download PostgreSQL GPG key (ASCII)
+  ansible.builtin.get_url:
+    url: "{{ postgres_apt_key_url }}"
+    dest: "/tmp/postgresql.key"
+    mode: '0644'
+
+- name: Ubuntu | De-armor PostgreSQL GPG key to binary keyring
+  ansible.builtin.shell: "gpg --dearmor < /tmp/postgresql.key > {{ postgres_keyring_path }}"
+  args:
+    creates: "{{ postgres_keyring_path }}"
+  become: true
+
+- name: Ubuntu | Ensure keyring permissions
+  ansible.builtin.file:
+    path: "{{ postgres_keyring_path }}"
+    mode: '0644'
+    owner: root
+    group: root
+    state: file
+
+- name: Ubuntu | Remove legacy/conflicting repository files
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /etc/apt/sources.list.d/apt_postgresql_org_pub_repos_apt.list
+    - /etc/apt/sources.list.d/pul_postgresql.list
+  become: true
+
+- name: Ubuntu | Add PostgreSQL APT repository
+  ansible.builtin.apt_repository:
+    repo: "{{ postgres_apt_repository }}"
+    state: present
+    filename: postgresql
+    update_cache: true
+
+- name: Ubuntu | install postgresql server packages (Ubuntu)
+  ansible.builtin.apt:
+    name: '{{ item }}'
+    state: present
+  loop:
+    - "{{ postgres_packages }}"
+  when:
+    - postgresql_is_local | bool
+
+- name: Ubuntu | install postgresql client packages (Ubuntu)
+  ansible.builtin.apt:
+    name: '{{ item }}'
+    state: present
+  loop:
+    - "{{ postgres_client_packages }}"
+  changed_when: false
+
+- name: Ubuntu | add extensions (Ubuntu)
+  ansible.builtin.import_tasks: extensions.yml
+  when:
+    - postgresql_is_local | bool
+
+- name: Ubuntu | install configuration file (Ubuntu)
+  ansible.builtin.template:
+    src: 'postgresql.conf.j2'
+    dest: '/etc/postgresql/{{ postgres_version }}/main/postgresql.conf'
+    group: postgres
+    owner: postgres
+    mode: "0644"
+  register: configure_postgres
+  when:
+    - postgresql_is_local | bool
+  notify: restart local postgres
+
+- name: Ubuntu | install pg_stats file
+  ansible.builtin.template:
+    src: 'statistics_conf.j2'
+    dest: '/etc/postgresql/{{ postgres_version }}/main/conf.d/statistics.conf'
+    group: postgres
+    owner: postgres
+    mode: "0644"
+  register: configure_postgres
+  when:
+    - postgresql_is_local | bool
+  notify: restart local postgres

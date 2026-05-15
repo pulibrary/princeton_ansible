@@ -1,9 +1,7 @@
 ---
-- name: PostgreSQL | Set log file path for RHEL
-  ansible.builtin.set_fact:
-    postgres_log_file: /var/lib/pgsql/{{ postgres_version }}/data/log/pg.csv
-
-- name: Import the PG GPG key for RHEL
+# we only create postgres clusters on Ubuntu
+# these tasks will create a local db on RHEL
+- name: RHEL | Import the PG GPG key for RHEL
   ansible.builtin.rpm_key:
     state: present
     key: https://apt.postgresql.org/pub/repos/yum/keys/PGDG-RPM-GPG-KEY-RHEL
@@ -13,21 +11,21 @@
 
 # Tower can now use PSQL 15, 16, or 17
 # RHEL 9 supports PSQL 16
-- name: Install the postgresql rpm from a remote repo
+- name: RHEL | Install the postgresql rpm from a remote repo
   ansible.builtin.dnf:
     name: 'https://download.postgresql.org/pub/repos/yum/reporpms/EL-9-x86_64/pgdg-redhat-repo-latest.noarch.rpm'
     state: present
   when:
     - running_on_server
 
-- name: PostgreSQL | install postgresql server package (RedHat)
+- name: RHEL | install postgresql server package (RedHat)
   ansible.builtin.dnf:
-    name: postgresql{{ postgres_version }}-server
+    name: "{{ postgres_packages }}"
     state: present
   when:
     - postgresql_is_local | bool
 
-- name: PostgreSQL | Initialize PostgreSQL database (RedHat)
+- name: RHEL | Initialize PostgreSQL database (RedHat)
   ansible.builtin.command:
     cmd: /usr/pgsql-{{ postgres_version }}/bin/postgresql-{{ postgres_version }}-setup initdb
   args:
@@ -35,28 +33,27 @@
   when:
     - postgresql_is_local | bool
 
-- name: PostgreSQL | Ensure PostgreSQL is enabled and started
+- name: RHEL | Ensure PostgreSQL is enabled and started
   ansible.builtin.service:
-   name: postgresql-{{ postgres_version }}
+   name: {{ postgres_service_name }}
    state: started
    enabled: true
   when:
    - running_on_server
 
-- name: PostgreSQL | install postgresql client packages (RedHat)
+- name: RHEL | install postgresql client packages (RedHat)
   ansible.builtin.dnf:
     name: "{{ item }}"
     state: present
   loop:
-    - libpq-devel
-    - python3-psycopg2
+    - "{{ postgres_client_packages }}"
   when:
     - running_on_server
 
-- name: PostgreSQL | install configuration file (RedHat)
+- name: RHEL | install configuration file (RedHat)
   ansible.builtin.template:
     src: 'rh_postgresql.conf.j2'
-    dest: '/var/lib/pgsql/{{ postgres_version }}/data/postgresql.conf'
+    dest: "{{ postgres_conf_directory }}/postgresql.conf"
     group: postgres
     owner: postgres
     mode: "0644"

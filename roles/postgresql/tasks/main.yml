@@ -1,76 +1,16 @@
 ---
-# we only create postgres clusters on Ubuntu
-# these tasks will create a local db on RHEL
-- name: PostgreSQL | Install postgresql on RHEL
-  ansible.builtin.include_tasks: install_RH.yml
+- name: Load OS-specific postgresql vars
+  ansible.builtin.include_vars:
+    file: "{{ ansible_os_family | lower }}.yml"
+
+- name: PostgreSQL | Include OS-specific install tasks
+  ansible.builtin.include_tasks: install_{{ ansible_os_family | lower }}.yml
   when:
-    - ansible_os_family == "RedHat"
     - running_on_server
 
-- name: PostgreSQL | Make sure the CA certificates are available
-  ansible.builtin.apt:
-    pkg: ca-certificates
-    state: present
-  when:
-    - ansible_os_family == "Debian"
-
-- name: PostgreSQL | Download PostgreSQL GPG key (ASCII)
-  ansible.builtin.get_url:
-    url: "{{ postgres_apt_key_url }}"
-    dest: "/tmp/postgresql.key"
-    mode: '0644'
-  when: ansible_os_family == "Debian"
-
-- name: PostgreSQL | De-armor PostgreSQL GPG key to binary keyring
-  ansible.builtin.shell: "gpg --dearmor < /tmp/postgresql.key > {{ postgres_keyring_path }}"
-  args:
-    creates: "{{ postgres_keyring_path }}"
-  when: ansible_os_family == "Debian"
-  become: true
-
-- name: PostgreSQL | Ensure keyring permissions
-  ansible.builtin.file:
-    path: "{{ postgres_keyring_path }}"
-    mode: '0644'
-    owner: root
-    group: root
-    state: file
-  when: ansible_os_family == "Debian"
-
-- name: PostgreSQL | Remove legacy/conflicting repository files
-  ansible.builtin.file:
-    path: "{{ item }}"
-    state: absent
-  loop:
-    - /etc/apt/sources.list.d/apt_postgresql_org_pub_repos_apt.list
-    - /etc/apt/sources.list.d/pul_postgresql.list
-  become: true
-  when: ansible_os_family == "Debian"
-
-- name: PostgreSQL | Add PostgreSQL APT repository
-  ansible.builtin.apt_repository:
-    repo: "{{ postgres_apt_repository }}"
-    state: present
-    filename: postgresql
-    update_cache: true
-  when: ansible_os_family == "Debian"
-
-- name: PostgreSQL | install postgresql server packages (Ubuntu)
-  ansible.builtin.apt:
-    name: '{{ item }}'
-    state: present
-  loop:
-    - "{{ postgres_packages }}"
-  when:
-    - postgresql_is_local | bool
-    - ansible_os_family == "Debian"
-
-- name: PostgreSQL | Ensure PostgreSQL is enabled and started
+- name: Ensure PostgreSQL is enabled and started
   ansible.builtin.service:
-   name: postgresql-{{ postgres_version }}
-   # including the version in the service name is necessary on RHEL
-   # what is the service name in Ubuntu?
-   # needs testing
+   name: "{{ postgres_service_name }}"
    state: started
    enabled: true
   when:
@@ -88,48 +28,6 @@
     - postgresql_logrotate_rules is defined
     - postgresql_logrotate_rules | length > 0
 
-- name: PostgreSQL | install postgresql client packages (Ubuntu)
-  ansible.builtin.apt:
-    name: '{{ item }}'
-    state: present
-  loop:
-    - "{{ postgres_client_packages }}"
-  changed_when: false
-  when:
-    - ansible_os_family == "Debian"
-
-- name: PostgreSQL | add extensions (Ubuntu)
-  ansible.builtin.import_tasks: extensions.yml
-  when:
-    - ansible_distribution == "Debian"
-    - postgresql_is_local | bool
-
-- name: PostgreSQL | install configuration file (Ubuntu)
-  ansible.builtin.template:
-    src: 'postgresql.conf.j2'
-    dest: '/etc/postgresql/{{ postgres_version }}/main/postgresql.conf'
-    group: postgres
-    owner: postgres
-    mode: "0644"
-  register: configure_postgres
-  when:
-    - postgresql_is_local | bool
-    - ansible_os_family == "Debian"
-  notify: restart local postgres
-
-- name: PostgreSQL | install pg_stats file
-  ansible.builtin.template:
-    src: 'statistics_conf.j2'
-    dest: '/etc/postgresql/{{ postgres_version }}/main/conf.d/statistics.conf'
-    group: postgres
-    owner: postgres
-    mode: "0644"
-  register: configure_postgres
-  when:
-    - postgresql_is_local | bool
-    - ansible_os_family == "Debian"
-  notify: restart local postgres
-
 - name: PostgreSQL | add replication postgresql configuration
   ansible.builtin.template:
     src: replication.conf.j2
@@ -141,14 +39,8 @@
     - postgresql_cluster_member == true
   notify: restart postgresql
 
-# we already enabled the service at line 68
-# - name: PostgreSQL | ensure postgres starts on boot
-#   ansible.builtin.service:
-#     name: postgresql-{{ postgres_version }}
-#     enabled: true
-#   when:
-#     - postgresql_is_local | bool
-
+# This was for Datadog; it broke and we removed it
+# see PR 4642
 # - name: PostgreSQL | add pg_stat_statements extension to the default db
 #   community.postgresql.postgresql_ext:
 #     name: pg_stat_statements
@@ -159,7 +51,7 @@
 
 - name: PostgreSQL | restart leader postgres server
   ansible.builtin.service:
-    name: postgresql
+    name: "{{ postgres_service_name }}"
     state: started
   when:
     - postgresql_is_local | bool
@@ -177,20 +69,23 @@
   when: postgresql_is_local | bool
   become: true
 
-- name: PostgreSQL | ensure access to postgres server (Ubuntu)
-  ansible.builtin.blockinfile:
-    path: '/etc/postgresql/{{ postgres_version }}/main/pg_hba.conf'
-    insertafter: "# Put your actual configuration here"
-    block: |
-      # localhost
-  when:
-    - (postgres_host | default(None)) is not none
-    - postgresql_is_local | bool
-    - ansible_os_family == "Debian"
-    - running_on_server
-  become: true
-  notify:
-    - reload local postgres
+# this is just adding a comment
+# is it needed on a local server?
+# by default, localhost has access
+# - name: PostgreSQL | ensure access to postgres server (Ubuntu)
+#   ansible.builtin.blockinfile:
+#     path: '/etc/postgresql/{{ postgres_version }}/main/pg_hba.conf'
+#     insertafter: "# Put your actual configuration here"
+#     block: |
+#       # localhost
+#   when:
+#     - (postgres_host | default(None)) is not none
+#     - postgresql_is_local | bool
+#     - ansible_os_family == "Debian"
+#     - running_on_server
+#   become: true
+#   notify:
+#     - reload local postgres
 
 - name: PostgreSQL | configure access to postgres server
   ansible.builtin.include_tasks: pg_hba.yml
