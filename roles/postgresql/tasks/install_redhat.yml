@@ -1,13 +1,12 @@
 ---
 # we only create postgres clusters on Ubuntu
 # these tasks will create a local db on RHEL
+# CI always runs on Ubuntu
 - name: RHEL | Import the PG GPG key for RHEL
   ansible.builtin.rpm_key:
     state: present
     key: https://apt.postgresql.org/pub/repos/yum/keys/PGDG-RPM-GPG-KEY-RHEL
   become: true
-  when:
-    - running_on_server
 
 # Tower can now use PSQL 15, 16, or 17
 # RHEL 9 supports PSQL 16
@@ -15,8 +14,6 @@
   ansible.builtin.dnf:
     name: 'https://download.postgresql.org/pub/repos/yum/reporpms/EL-9-x86_64/pgdg-redhat-repo-latest.noarch.rpm'
     state: present
-  when:
-    - running_on_server
 
 - name: RHEL | install postgresql server package (RedHat)
   ansible.builtin.dnf:
@@ -38,8 +35,6 @@
    name: "{{ postgres_service_name }}"
    state: started
    enabled: true
-  when:
-   - running_on_server
 
 - name: RHEL | install postgresql client packages (RedHat)
   ansible.builtin.dnf:
@@ -47,8 +42,6 @@
     state: present
   loop:
     - "{{ postgres_client_packages }}"
-  when:
-    - running_on_server
 
 - name: RHEL | install configuration file (RedHat)
   ansible.builtin.template:
@@ -60,4 +53,4 @@
   register: configure_postgres
   when:
     - postgresql_is_local | bool
-  notify: restart local postgres
+  notify: restart postgresql
