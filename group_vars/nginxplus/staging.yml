@@ -33,6 +33,10 @@ otel_receivers:
       http:
         endpoint: 127.0.0.1:4318
 
+  nginx:
+    endpoint: http://127.0.0.1:18080/nginx_status
+    collection_interval: 30s
+
   filelog/nginxplus-access:
     include:
       - /var/log/nginx/access.log
@@ -78,7 +82,7 @@ otel_receivers:
     operators:
       - type: regex_parser
         id: parse_nginxplus_error
-        regex: '^(?P<time_local>\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}) \[(?P<level>\w+)\] (?P<pid>\d+)#(?P<tid>\d+): \*(?P<connection>\d+) (?P<message>[\s\S]*)$'
+        regex: '^(?P<time_local>\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}) \[(?P<level>\w+)\] (?P<pid>\d+)#(?P<tid>\d+): (?:\*(?P<connection>\d+) )?(?P<message>[\s\S]*)$'
         parse_from: body
         on_error: send
 
@@ -157,6 +161,7 @@ otel_service_pipelines:
 
   metrics:
     receivers:
+      - nginx
       - hostmetrics
     processors:
       - resource
