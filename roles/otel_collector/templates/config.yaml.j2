@@ -7,6 +7,14 @@
 # - otel_service_pipelines (dict)
 # - otel_extensions (list)
 # Optionally add otel_default_resource_attributes (dict) to merge into processors.resource.
+#
+# Optional MySQL/MariaDB metrics receiver:
+# - otel_mysql_enabled: true
+# - otel_mysql_endpoint: "127.0.0.1:3306"
+# - otel_mysql_username: "otel"
+# - otel_mysql_password: "{{ vault_otel_mysql_password }}"
+# - otel_mysql_collection_interval: "10s"
+# - otel_mysql_initial_delay: "1s"
 
 {# ---- Build processors.resource.attributes safely #}
 {% set base_attrs =
@@ -27,8 +35,56 @@
   recursive=True
 ) %}
 
+{# ---- Optionally add MySQL/MariaDB receiver #}
+{% set mysql_receiver = {} %}
+{% if otel_mysql_enabled | default(false) | bool %}
+  {% set mysql_receiver = {
+    'mysql': {
+      'endpoint': otel_mysql_endpoint | default('127.0.0.1:3306'),
+      'username': otel_mysql_username | default('otel'),
+      'password': otel_mysql_password,
+      'collection_interval': otel_mysql_collection_interval | default('10s'),
+      'initial_delay': otel_mysql_initial_delay | default('1s')
+    }
+  } %}
+
+  {% if otel_mysql_statement_events_enabled | default(true) | bool %}
+    {% set mysql_receiver = mysql_receiver | combine({
+      'mysql': {
+        'statement_events': {
+          'digest_text_limit': otel_mysql_statement_digest_text_limit | default(120),
+          'time_limit': otel_mysql_statement_time_limit | default('24h'),
+          'limit': otel_mysql_statement_limit | default(250)
+        }
+      }
+    }, recursive=True) %}
+  {% endif %}
+{% endif %}
+
+{% set merged_receivers = (otel_receivers | default({})) | combine(mysql_receiver, recursive=True) %}
+
+{# ---- Optionally add mysql receiver to metrics pipeline #}
+{% set merged_service_pipelines = otel_service_pipelines | default({}) %}
+
+{% if otel_mysql_enabled | default(false) | bool %}
+  {% set metrics_pipeline = merged_service_pipelines.metrics | default({}) %}
+  {% set metrics_receivers = metrics_pipeline.receivers | default([]) %}
+
+  {% if 'mysql' not in metrics_receivers %}
+    {% set metrics_pipeline = metrics_pipeline | combine(
+      {'receivers': metrics_receivers + ['mysql']},
+      recursive=True
+    ) %}
+  {% endif %}
+
+  {% set merged_service_pipelines = merged_service_pipelines | combine(
+    {'metrics': metrics_pipeline},
+    recursive=True
+  ) %}
+{% endif %}
+
 receivers:
-{{ (otel_receivers | default({})) | to_nice_yaml(indent=2) | indent(2, true) }}
+{{ (merged_receivers | default({})) | to_nice_yaml(indent=2) | indent(2, true) }}
 
 processors:
 {{ (merged_processors | default({})) | to_nice_yaml(indent=2) | indent(2, true) }}
@@ -38,7 +94,6 @@ exporters:
 
 service:
   pipelines:
-{{ (otel_service_pipelines | default({})) | to_nice_yaml(indent=2) | indent(4, true) }}
+{{ (merged_service_pipelines | default({})) | to_nice_yaml(indent=2) | indent(4, true) }}
   extensions:
 {{ (otel_extensions | default([])) | to_nice_yaml(indent=2) | indent(4, true) }}
-
