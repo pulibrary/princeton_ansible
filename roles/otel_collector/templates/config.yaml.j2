@@ -12,7 +12,7 @@
 # - otel_mysql_enabled: true
 # - otel_mysql_endpoint: "127.0.0.1:3306"
 # - otel_mysql_username: "otel"
-# - otel_mysql_password: "{{ vault_otel_mysql_password }}"
+# - otel_mysql_password: "${env:OTEL_MYSQL_PASSWORD}"
 # - otel_mysql_collection_interval: "10s"
 # - otel_mysql_initial_delay: "1s"
 
@@ -37,12 +37,13 @@
 
 {# ---- Optionally add MySQL/MariaDB receiver #}
 {% set mysql_receiver = {} %}
+
 {% if otel_mysql_enabled | default(false) | bool %}
   {% set mysql_receiver = {
     'mysql': {
       'endpoint': otel_mysql_endpoint | default('127.0.0.1:3306'),
       'username': otel_mysql_username | default('otel'),
-      'password': otel_mysql_password,
+      'password': otel_mysql_password | default('${env:OTEL_MYSQL_PASSWORD}'),
       'collection_interval': otel_mysql_collection_interval | default('10s'),
       'initial_delay': otel_mysql_initial_delay | default('1s')
     }
