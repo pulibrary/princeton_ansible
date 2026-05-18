@@ -1,61 +1,151 @@
 ---
 # tasks file for roles/otel_collector
+
 - name: Otel_collector | Ensure target directory exists
   ansible.builtin.file:
     path: "{{ otel_install_dir }}"
     state: directory
-    mode: '0755'
+    mode: "0755"
     owner: root
     group: root
+  become: true
 
 - name: Otel_collector | Download and unarchive otelcol-contrib binary
   ansible.builtin.unarchive:
     src: "{{ otel_download_url }}"
     dest: "{{ otel_install_dir }}"
     remote_src: true
-    mode: '0755'
+    mode: "0755"
     owner: root
     group: root
     creates: "{{ otel_binary_path }}"
+  become: true
+
+- name: Otel_collector | Ensure collector environment directory exists
+  ansible.builtin.file:
+    path: /etc/otelcol-contrib
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+  become: true
+  when:
+    - running_on_server
+    - otel_mysql_enabled | default(false) | bool
+
+- name: Otel_collector | Template MySQL receiver environment
+  ansible.builtin.template:
+    src: otelcol-mysql.env.j2
+    dest: /etc/otelcol-contrib/mysql.env
+    owner: root
+    group: root
+    mode: "0600"
+  become: true
+  no_log: true
+  notify:
+    - Systemd daemon-reload
+    - Restart otelcol
+  when:
+    - running_on_server
+    - otel_mysql_enabled | default(false) | bool
+
+- name: Otel_collector | Ensure systemd override directory exists
+  ansible.builtin.file:
+    path: "/etc/systemd/system/{{ otel_service_name }}.service.d"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  become: true
+  when:
+    - running_on_server
+    - otel_mysql_enabled | default(false) | bool
+
+- name: Otel_collector | Configure MySQL receiver environment override
+  ansible.builtin.template:
+    src: otelcol-mysql-override.conf.j2
+    dest: "/etc/systemd/system/{{ otel_service_name }}.service.d/mysql.conf"
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  notify:
+    - Systemd daemon-reload
+    - Restart otelcol
+  when:
+    - running_on_server
+    - otel_mysql_enabled | default(false) | bool
+
+- name: Otel_collector | Remove MySQL receiver environment override
+  ansible.builtin.file:
+    path: "/etc/systemd/system/{{ otel_service_name }}.service.d/mysql.conf"
+    state: absent
+  become: true
+  notify:
+    - Systemd daemon-reload
+    - Restart otelcol
+  when:
+    - running_on_server
+    - not (otel_mysql_enabled | default(false) | bool)
+
+- name: Otel_collector | Remove MySQL receiver environment file
+  ansible.builtin.file:
+    path: /etc/otelcol-contrib/mysql.env
+    state: absent
+  become: true
+  no_log: true
+  notify:
+    - Restart otelcol
+  when:
+    - running_on_server
+    - not (otel_mysql_enabled | default(false) | bool)
 
 - name: Otel_collector | Deploy config
   ansible.builtin.template:
     src: config.yaml.j2
     dest: "{{ otel_config_path }}"
-    mode: '0644'
+    mode: "0600"
     owner: root
     group: root
+  become: true
+  no_log: true
   notify: Restart otelcol
   when:
     - running_on_server
 
 - name: Otel_collector | Validate config
   ansible.builtin.command: "{{ otel_validate_cmd }}"
+  become: true
   changed_when: false
-  when: otel_validate_config
+  when:
+    - running_on_server
+    - otel_validate_config | default(false) | bool
 
 - name: Otel_collector | Install systemd unit
   ansible.builtin.template:
     src: otelcol.service.j2
     dest: "/etc/systemd/system/{{ otel_service_name }}.service"
-    mode: '0644'
+    mode: "0644"
     owner: root
     group: root
+  become: true
   notify: Systemd daemon-reload
   when:
     - running_on_server
 
-- name: Otel_collector | Daemon-reload (if not via handler)
+- name: Otel_collector | Daemon-reload
   ansible.builtin.systemd:
     daemon_reload: true
+  become: true
   changed_when: false
   when:
     - running_on_server
 
-- name: Otel_collector | Ensure service is enabled & running
+- name: Otel_collector | Ensure service is enabled and running
   ansible.builtin.systemd:
     name: "{{ otel_service_name }}"
     state: started
     enabled: true
+  become: true
   when:
     - running_on_server
