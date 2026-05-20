@@ -179,18 +179,6 @@
         - os_update_reboot_required | default(false)
         - os_update_reboot_excluded
 
-    - name: Reboot if required
-      ansible.builtin.reboot:
-        msg: "Reboot initiated by Ansible because of {{ os_update_reboot_reason | default('OS package updates') }}."
-        connect_timeout: 5
-        reboot_timeout: 900
-        pre_reboot_delay: 0
-        post_reboot_delay: 15
-        test_command: whoami
-      when:
-        - os_update_reboot_required | default(false)
-        - not os_update_reboot_excluded
-
     - name: Determine matching stabilization delays
       ansible.builtin.set_fact:
         matching_reboot_stabilization_delays: >-
@@ -209,7 +197,7 @@
       ansible.builtin.set_fact:
         os_update_post_reboot_delay: >-
           {{
-            matching_reboot_stabilization_delays | default([]) | length > 0
+            (matching_reboot_stabilization_delays | default([]) | length > 0)
             | ternary(matching_reboot_stabilization_delays | max, 15)
           }}
       when:
@@ -224,20 +212,6 @@
         pre_reboot_delay: 0
         post_reboot_delay: "{{ os_update_post_reboot_delay | default(15) }}"
         test_command: whoami
-      when:
-        - os_update_reboot_required | default(false)
-        - not os_update_reboot_excluded
-
-    - name: Determine matching stabilization delays
-      ansible.builtin.set_fact:
-        matching_reboot_stabilization_delays: >-
-          {{
-            reboot_stabilization_delays
-            | dict2items
-            | selectattr('key', 'in', group_names)
-            | map(attribute='value')
-            | list
-          }}
       when:
         - os_update_reboot_required | default(false)
         - not os_update_reboot_excluded
