@@ -1,0 +1,62 @@
+#!/bin/sh
+# {{ ansible_managed }}
+# Rocky Linux mirror via rsync.
+# Pulls only configured releases / repos / architectures (os/ subtree only).
+# Skips debug RPMs, source RPMs, kickstart trees, ISOs, and unwanted arches.
+
+set -u
+
+MIRROR_ROOT="{{ rocky_mirror_root }}"
+LOG_FILE="{{ rocky_mirror_log }}"
+LOCK_FILE="{{ rocky_mirror_lock }}"
+SOURCE_URL="{{ rocky_mirror_upstream }}"
+OWNER="{{ rocky_mirror_owner }}:{{ rocky_mirror_group }}"
+RSYNC=/usr/local/bin/rsync
+
+if pgrep -f "rsync.*${MIRROR_ROOT}" > /dev/null 2>&1; then
+    echo "$(date '+%Y-%m-%d %H:%M:%S') another rsync is already targeting ${MIRROR_ROOT}, exiting" >> "$LOG_FILE"
+    exit 0
+fi
+
+if [ "${ROCKY_MIRROR_INITIAL_SEED:-0}" = "1" ]; then
+    echo "$(date '+%Y-%m-%d %H:%M:%S') running INITIAL SEED" >> "$LOG_FILE"
+fi
+
+lockf -t 0 "$LOCK_FILE" "$RSYNC" \
+    --archive \
+    --hard-links \
+    --quiet \
+    --delete \
+    --delete-delay \
+    --delay-updates \
+    --timeout=600 \
+    --contimeout=60 \
+    --bwlimit={{ rocky_mirror_bwlimit }} \
+    --log-file="$LOG_FILE" \
+{% for rel in rocky_mirror_releases %}
+    --include='/{{ rel }}' \
+    --include='/{{ rel }}.*' \
+{% endfor %}
+    --exclude='/*' \
+    --include='*/' \
+{% for repo in rocky_mirror_repos %}
+{% for arch in rocky_mirror_architectures %}
+    --include='/*/{{ repo }}/{{ arch }}/os/***' \
+{% endfor %}
+{% endfor %}
+    --exclude='*' \
+    "$SOURCE_URL" \
+    "$MIRROR_ROOT/"
+
+rc=$?
+
+[ $rc -eq 75 ] && exit 0
+
+if [ $rc -eq 23 ] || [ $rc -eq 24 ]; then
+    echo "$(date '+%Y-%m-%d %H:%M:%S') rsync partial-transfer (rc=$rc), non-fatal" >> "$LOG_FILE"
+    rc=0
+fi
+
+chown -R "$OWNER" "$MIRROR_ROOT" 2>/dev/null || true
+
+exit $rc

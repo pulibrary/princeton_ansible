@@ -1,0 +1,64 @@
+#SPDX-License-Identifier: MIT-0
+---
+# tasks file for roles/rocky_mirror
+- name: Rocky mirror | install packages
+  community.general.pkgng:
+    name: "{{ rocky_mirror_packages }}"
+    state: present
+
+- name: Rocky mirror | ensure ZFS dataset exists
+  community.general.zfs:
+    name: "{{ rocky_mirror_dataset }}"
+    state: present
+    extra_zfs_properties:
+      mountpoint: "{{ rocky_mirror_root }}"
+      compression: "lz4"
+      atime: "off"
+
+- name: Rocky mirror | set ownership on mirror root
+  ansible.builtin.file:
+    path: "{{ rocky_mirror_root }}"
+    state: directory
+    owner: "{{ rocky_mirror_owner }}"
+    group: "{{ rocky_mirror_group }}"
+    mode: "0755"
+
+- name: Rocky mirror | install sync script
+  ansible.builtin.template:
+    src: sync-rocky-mirror.sh.j2
+    dest: "{{ rocky_mirror_script }}"
+    owner: root
+    group: wheel
+    mode: "0755"
+
+- name: Rocky mirror | ensure log file exists
+  ansible.builtin.file:
+    path: "{{ rocky_mirror_log }}"
+    state: touch
+    owner: root
+    group: wheel
+    mode: "0644"
+    modification_time: preserve
+    access_time: preserve
+
+- name: Rocky mirror | configure newsyslog rotation
+  ansible.builtin.copy:
+    dest: /usr/local/etc/newsyslog.conf.d/rocky-mirror.conf
+    owner: root
+    group: wheel
+    mode: "0644"
+    content: |
+      # logfilename          [owner:group]    mode count size when  flags
+      {{ rocky_mirror_log }}  root:wheel       644  7     10000 *     JC
+
+- name: Rocky mirror | install cron entry
+  ansible.builtin.cron:
+    name: "sync rocky mirror"
+    user: root
+    minute: "{{ rocky_mirror_cron_minute }}"
+    hour: "{{ rocky_mirror_cron_hour }}"
+    job: "{{ rocky_mirror_script }}"
+    cron_file: rocky-mirror
+
+- name: Rocky mirror | install nginx location drop-in
+  ansible.builtin.include_tasks: nginx.yml
