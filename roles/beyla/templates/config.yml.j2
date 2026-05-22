@@ -1,0 +1,36 @@
+---
+discovery:
+  services:
+{% if beyla_open_ports | length > 0 %}
+{% for port in beyla_open_ports %}
+    - open_ports: {{ port | int }}
+{% endfor %}
+{% endif %}
+{% if beyla_executable_names | length > 0 %}
+{% for executable in beyla_executable_names %}
+    - exe_path: {{ executable | to_json }}
+{% endfor %}
+{% endif %}
+
+otel_traces_export:
+  endpoint: {{ beyla_otlp_endpoint | to_json }}
+  protocol: {{ beyla_otlp_protocol | to_json }}
+
+otel_metrics_export:
+  endpoint: {{ beyla_otlp_endpoint | to_json }}
+  protocol: {{ beyla_otlp_protocol | to_json }}
+
+routes:
+  unmatched: heuristic
+
+name:
+  resolver:
+    sources:
+      - env
+      - exec
+      - hostname
+
+resource_attributes:
+  service.name: {{ beyla_service_name | to_json }}
+  deployment.environment: {{ beyla_environment | to_json }}
+  host.name: {{ inventory_hostname | to_json }}

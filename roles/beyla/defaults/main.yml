@@ -1,0 +1,38 @@
+---
+beyla_enabled: false
+
+beyla_version: "3.15.0"
+beyla_release_dir: "{{ beyla_install_dir }}/releases/{{ beyla_version }}"
+beyla_archive_path: "/tmp/beyla-linux-amd64-v{{ beyla_version }}.tar.gz"
+
+beyla_download_url: "https://github.com/grafana/beyla/releases/download/v{{ beyla_version }}/beyla-linux-amd64-v{{ beyla_version }}.tar.gz"
+
+beyla_install_dir: /opt/beyla
+beyla_config_dir: /etc/beyla
+beyla_config_path: /etc/beyla/config.yml
+beyla_env_path: /etc/default/beyla
+beyla_binary_path: /usr/local/bin/beyla
+
+# Prefer exporting to the local collector on each app host.
+beyla_otlp_endpoint: "http://127.0.0.1:4318"
+beyla_otlp_protocol: "http/protobuf"
+
+# Set these in group_vars/host_vars.
+beyla_service_name: "{{ inventory_hostname }}"
+beyla_environment: "{{ runtime_env | default('staging') }}"
+
+# Target local listener ports. For NGINX/Apache/Passenger apps,
+# this is commonly 80 or 443.
+beyla_open_ports: []
+
+# Optional executable matching if port-based discovery is too broad.
+# Examples:
+#   - /usr/sbin/nginx
+#   - /usr/sbin/apache2
+beyla_executable_names: []
+
+beyla_log_level: info
+
+# eBPF requires elevated permissions. Run as root for first pass.
+beyla_user: root
+beyla_group: root

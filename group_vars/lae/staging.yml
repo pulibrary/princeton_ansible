@@ -1,4 +1,12 @@
 ---
+beyla_enabled: true
+beyla_service_name: lae
+beyla_environment: staging
+beyla_otlp_endpoint: "http://127.0.0.1:4318"
+beyla_otlp_protocol: "http/protobuf"
+
+beyla_open_ports:
+  - 80
 ruby_version_override: "ruby-3.4.8"
 postgres_host: "lib-postgres-staging1.princeton.edu"
 postgres_version: 15
@@ -86,6 +94,12 @@ otel_default_resource_attributes:
   environment: staging
 
 otel_receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 127.0.0.1:4317
+      http:
+        endpoint: 127.0.0.1:4318
   filelog/nginx-access:
     include: ["/var/log/nginx/access.log*"]
     start_at: end
@@ -172,6 +186,7 @@ otel_service_pipelines:
 
   metrics:
     receivers:
+      - otlp
       - hostmetrics
     processors:
       - resource
@@ -179,3 +194,12 @@ otel_service_pipelines:
     exporters:
       - loadbalancing
       - debug
+
+  traces:
+    receivers:
+      - otlp
+    processors:
+      - resource
+      - batch
+    exporters:
+      - loadbalancing
