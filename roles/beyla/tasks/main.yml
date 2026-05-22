@@ -1,0 +1,88 @@
+#SPDX-License-Identifier: MIT-0
+---
+# tasks file for roles/beyla
+- name: Beyla | Ensure install and config directories exist
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: "{{ beyla_install_dir }}", mode: "0755" }
+    - { path: "{{ beyla_config_dir }}", mode: "0755" }
+  when: beyla_enabled | bool
+- name: Beyla | Ensure release directory exists
+  ansible.builtin.file:
+    path: "{{ beyla_release_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: beyla_enabled | bool
+
+- name: Beyla | Download amd64 release archive
+  ansible.builtin.get_url:
+    url: "{{ beyla_download_url }}"
+    dest: "{{ beyla_archive_path }}"
+    mode: "0644"
+  when: beyla_enabled | bool
+
+- name: Beyla | Unarchive release
+  ansible.builtin.unarchive:
+    src: "{{ beyla_archive_path }}"
+    dest: "{{ beyla_release_dir }}"
+    remote_src: true
+    creates: "{{ beyla_release_dir }}/beyla"
+  when: beyla_enabled | bool
+
+- name: Beyla | Install binary
+  ansible.builtin.copy:
+    src: "{{ beyla_release_dir }}/beyla"
+    dest: "{{ beyla_binary_path }}"
+    owner: root
+    group: root
+    mode: "0755"
+    remote_src: true
+  notify: Restart beyla
+  when: beyla_enabled | bool
+
+- name: Beyla | Template config
+  ansible.builtin.template:
+    src: config.yml.j2
+    dest: "{{ beyla_config_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart beyla
+  when: beyla_enabled | bool
+
+- name: Beyla | Template environment file
+  ansible.builtin.template:
+    src: beyla.env.j2
+    dest: "{{ beyla_env_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart beyla
+  when: beyla_enabled | bool
+
+- name: Beyla | Install systemd unit
+  ansible.builtin.template:
+    src: beyla.service.j2
+    dest: /etc/systemd/system/beyla.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Reload systemd
+    - Restart beyla
+  when: beyla_enabled | bool
+
+- name: Beyla | Enable and start service
+  ansible.builtin.systemd:
+    name: beyla
+    enabled: true
+    state: started
+    daemon_reload: true
+  when: beyla_enabled | bool

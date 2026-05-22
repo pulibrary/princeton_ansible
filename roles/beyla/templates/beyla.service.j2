@@ -1,0 +1,19 @@
+[Unit]
+Description=Grafana Beyla eBPF auto-instrumentation
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User={{ beyla_user }}
+Group={{ beyla_group }}
+EnvironmentFile={{ beyla_env_path }}
+ExecStart={{ beyla_binary_path }} --config {{ beyla_config_path }}
+Restart=on-failure
+RestartSec=5s
+
+# Beyla needs eBPF/proc access. Keep permissive for first pass.
+NoNewPrivileges=false
+
+[Install]
+WantedBy=multi-user.target
