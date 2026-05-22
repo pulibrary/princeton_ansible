@@ -1,10 +1,8 @@
-# Ansible Role: Beyla
+# Beyla
 
 Installs and configures [Grafana Beyla](https://www.google.com/search?q=https://grafana.com/oss/beyla/), an eBPF-based auto-instrumentation tool that captures application observability metrics and traces without requiring code modifications. This role downloads the specified release, configures the service to export telemetry to an OpenTelemetry (OTLP) endpoint, and manages the Beyla systemd service.
 
 ## Requirements
-
-- **Operating System**: Linux (amd64) with systemd.
 
 - **Privileges**: Root access is required, as eBPF needs elevated permissions to attach to application processes and network sockets.
 
@@ -18,7 +16,7 @@ The following variables are defined in `defaults/main.yml` and can be overridden
 
 | **Variable**          | **Default** | **Description**                                                                   |
 | --------------------- | ----------- | --------------------------------------------------------------------------------- |
-| **`beyla_enabled`**   | `false`     | Master toggle for the role. Must be set to `true` to install and configure Beyla. |
+| **`beyla_enabled`**   | `false`     | Main toggle for the role. Must be set to `true` to install and configure Beyla. |
 | **`beyla_version`**   | `"3.15.0"`  | The version of Grafana Beyla to download and install.                             |
 | **`beyla_user`**      | `root`      | System user to run the Beyla systemd service. (Requires eBPF/proc access).        |
 | **`beyla_group`**     | `root`      | System group to run the Beyla systemd service.                                    |
@@ -39,7 +37,7 @@ Beyla needs to know which processes or ports to instrument. You can provide thes
 
 | **Variable**                 | **Default** | **Description**                                                                                            |
 | ---------------------------- | ----------- | ---------------------------------------------------------------------------------------------------------- |
-| **`beyla_open_ports`**       | `[]`        | List of target local listener ports to instrument (e.g., `[80, 8983, 8080]`).                               |
+| **`beyla_open_ports`**       | `[]`        | List of target local listener ports to instrument (e.g., `[80, 5432, 8983, 8080]`).                               |
 | **`beyla_executable_names`** | `[]`        | List of explicit executable paths to monitor if port discovery is too broad (e.g., `['/usr/sbin/nginx']`). |
 
 ### Paths and Directories

@@ -1,4 +1,12 @@
 ---
+beyla_enabled: true
+beyla_service_name: figgy
+beyla_environment: staging
+beyla_otlp_endpoint: "http://127.0.0.1:4318"
+beyla_otlp_protocol: "http/protobuf"
+
+beyla_open_ports:
+  - 80
 tigerdata_nfs_src: 'tigerdata-nfs.princeton.edu:/figgy'
 tigerdata_nfs_opts: 'nfsvers=3,mountport=2049,port=2049,nolock,proto=tcp,actimeo=0,lookupcache=none'
 figgy_db_name: 'figgy_staging'
@@ -139,6 +147,12 @@ otel_default_resource_attributes:
   environment: staging
 
 otel_receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 127.0.0.1:4317
+      http:
+        endpoint: 127.0.0.1:4318
   filelog/nginx-access:
     include: ["/var/log/nginx/access.log*"]
     start_at: end
@@ -156,6 +170,7 @@ otel_receivers:
       - type: add
         field: attributes.service_name
         value: figgy_access
+
   filelog/nginx-error:
     include: ["/var/log/nginx/error.log*"]
     start_at: end
@@ -166,25 +181,78 @@ otel_receivers:
       - type: add
         field: attributes.service_name
         value: "figgy"
+
   hostmetrics:
     collection_interval: 30s
-    scrapers: { cpu: {}, disk: {}, filesystem: {}, load: {}, memory: {}, network: {} }
+    scrapers:
+      cpu: {}
+      disk: {}
+      filesystem: {}
+      load: {}
+      memory: {}
+      network: {}
 
 otel_processors:
-  batch: { send_batch_max_size: 1024, send_batch_size: 512, timeout: 30s }
+  batch:
+    send_batch_max_size: 1024
+    send_batch_size: 512
+    timeout: 30s
 
 otel_exporters:
-  otlp:
-    endpoint: "http://sandbox-signoz1.lib.princeton.edu:4317"
-    tls: { insecure: true }
-  debug: { verbosity: basic }
+  loadbalancing:
+    routing_key: service
+    protocol:
+      otlp:
+        timeout: 10s
+        tls:
+          insecure: true
+        sending_queue:
+          enabled: true
+          num_consumers: 10
+          queue_size: 5000
+        retry_on_failure:
+          enabled: true
+          initial_interval: 5s
+          max_interval: 30s
+          max_elapsed_time: 300s
+    resolver:
+      static:
+        hostnames:
+          - k8s-staging1.lib.princeton.edu:30374
+          - k8s-staging2.lib.princeton.edu:30374
+          - k8s-staging3.lib.princeton.edu:30374
+
+  debug:
+    verbosity: basic
 
 otel_service_pipelines:
   logs:
-    receivers: ["filelog/nginx-access", "filelog/nginx-error"]
-    processors: ["resource", "batch"]
-    exporters: ["otlp", "debug"]
+    receivers:
+      - filelog/nginx-access
+      - filelog/nginx-error
+    processors:
+      - resource
+      - batch
+    exporters:
+      - loadbalancing
+      - debug
+
   metrics:
-    receivers: ["hostmetrics"]
-    processors: ["resource", "batch"]
-    exporters: ["otlp", "debug"]
+    receivers:
+      - otlp
+      - hostmetrics
+    processors:
+      - resource
+      - batch
+    exporters:
+      - loadbalancing
+      - debug
+
+  traces:
+    receivers:
+      - otlp
+    processors:
+      - resource
+      - batch
+    exporters:
+      - loadbalancing
