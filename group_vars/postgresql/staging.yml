@@ -36,6 +36,16 @@ postgresql_logrotate_rules:
       create_group: postgres
       su_user: "{{ logrotate_global_defaults.su_user }}"
       su_group: "{{ logrotate_global_defaults.su_group }}"
+# beyla
+beyla_enabled: true
+beyla_service_name: postgresql
+beyla_environment: staging
+beyla_otlp_endpoint: "http://127.0.0.1:4318"
+beyla_otlp_protocol: "http/protobuf"
+beyla_bpf_context_propagation: "all"
+
+beyla_open_ports:
+  - 5432
 
 # signoz / otel collector for PostgreSQL
 otel_default_resource_attributes:
@@ -46,6 +56,14 @@ otel_default_resource_attributes:
   deployment.environment: staging
 
 otel_receivers:
+
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 127.0.0.1:4317
+      http:
+        endpoint: 127.0.0.1:4318
+
   filelog/postgresql-json:
     include:
       - /var/lib/postgresql/15/main/pg_log/pg.json
@@ -170,3 +188,12 @@ otel_service_pipelines:
     exporters:
       - loadbalancing
       - debug
+
+  traces:
+    receivers:
+      - otlp
+    processors:
+      - resource
+      - batch
+    exporters:
+      - loadbalancing

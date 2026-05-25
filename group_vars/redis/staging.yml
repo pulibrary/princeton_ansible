@@ -10,16 +10,34 @@ redis__server_default_configuration:
   maxmemory: "{{ redis__server_maxmemory }}"
   maxmemory-policy: "{{ redis__server_maxmemory_policy }}"
   maxmemory-samples: "{{ redis__server_maxmemory_samples }}"
+# beyla
+beyla_enabled: true
+beyla_service_name: redis
+beyla_environment: staging
+beyla_otlp_endpoint: "http://127.0.0.1:4318"
+beyla_otlp_protocol: "http/protobuf"
+beyla_bpf_context_propagation: "all"
+
+beyla_open_ports:
+  - 6379
 
 # signoz / otel collector for Redis
 otel_default_resource_attributes:
   host.name: "{{ inventory_hostname }}"
   service.name: redis
-  service.version: production
-  environment: production
-  deployment.environment: production
+  service.version: staging
+  environment: staging
+  deployment.environment: staging
 
 otel_receivers:
+
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 127.0.0.1:4317
+      http:
+        endpoint: 127.0.0.1:4318
+
   filelog/redis-server:
     include:
       - /var/log/redis/redis-server.log
@@ -126,3 +144,12 @@ otel_service_pipelines:
     exporters:
       - loadbalancing
       - debug
+
+  traces:
+    receivers:
+      - otlp
+    processors:
+      - resource
+      - batch
+    exporters:
+      - loadbalancing
