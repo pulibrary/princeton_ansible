@@ -54,3 +54,16 @@
   when:
     - postgresql_is_local | bool
   notify: restart postgresql
+
+- name: RHEL | ensure access to postgres database
+  ansible.builtin.blockinfile:
+    path: "{{ postgres_conf_directory }}/pg_hba.conf"
+    insertafter: "# IPv4 local connections:"
+    block: |
+      host postgres postgres {{ ansible_default_ipv4.address }}/32 scram-sha-256
+  when:
+    - (postgres_host | default(None)) is not none
+    - running_on_server
+  become: true
+  notify:
+    - reload local postgres
