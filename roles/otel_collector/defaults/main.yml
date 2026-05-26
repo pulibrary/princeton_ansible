@@ -1,34 +1,35 @@
 ---
 # defaults file for roles/otel_collector
-# The version of the otelcol-contrib to install
-otel_version: "0.138.0"
 
-# internal (molecule) values
-# place holder if we ever want to modify
+# The version of otelcol-contrib to install.
+otel_version: "0.153.0"
+
+# Install locations.
 otel_install_dir: "/opt/otelcol"
+otel_releases_dir: "{{ otel_install_dir }}/releases"
+otel_release_dir: "{{ otel_releases_dir }}/{{ otel_version }}"
 otel_binary_path: "{{ otel_install_dir }}/otelcol-contrib"
 otel_config_path: "{{ otel_install_dir }}/config.yaml"
+otel_archive_path: "/tmp/otelcol-contrib_{{ otel_version }}_linux_amd64.tar.gz"
 
-# Construct the download URL (hardcoded for amd64)
+# Construct the download URL. PUL targets amd64.
 otel_download_url: "https://github.com/open-telemetry/opentelemetry-collector-releases/releases/download/v{{ otel_version }}/otelcol-contrib_{{ otel_version }}_linux_amd64.tar.gz"
 
-# Whether to manage a systemd unit for otelcol-contrib
+# Whether to manage a systemd unit for otelcol-contrib.
 otel_service_name: "otelcol-contrib"
 otel_service_user: "root"
 otel_service_group: "root"
 
-# Validate config after templating (safe no-op if disabled)
+# Validate config after templating.
 otel_validate_config: false
 otel_validate_cmd: "{{ otel_binary_path }} --config {{ otel_config_path }} --dry-run"
 
-# Core config inputs (override in group_vars/project)
-# We keep them empty by default; the template renders valid empty structures.
+# Core config inputs.
 otel_receivers: {}
 otel_processors: {}
 otel_exporters: {}
 otel_service_pipelines: {}
 otel_extensions: []
 
-# default resource attributes to merge into processors.resource
-# they’ll be merged under a processors.resource attributes list.
-otel_default_resource_attributes: {}  # e.g. {'host.name': 'lib-postgres-staging1', 'environment': 'staging'}
+# Default resource attributes to merge into processors.resource.
+otel_default_resource_attributes: {}

@@ -1,28 +1,49 @@
 ---
 # tasks file for roles/otel_collector
-- name: Otel_collector | Ensure target directory exists
-  ansible.builtin.file:
-    path: "{{ otel_install_dir }}"
-    state: directory
-    mode: '0755'
-    owner: root
-    group: root
 
-- name: Otel_collector | Download and unarchive otelcol-contrib binary
-  ansible.builtin.unarchive:
-    src: "{{ otel_download_url }}"
-    dest: "{{ otel_install_dir }}"
-    remote_src: true
-    mode: '0755'
+- name: Otel_collector | Ensure target directories exist
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    mode: "{{ item.mode }}"
     owner: root
     group: root
-    creates: "{{ otel_binary_path }}"
+  loop:
+    - { path: "{{ otel_install_dir }}", mode: "0755" }
+    - { path: "{{ otel_releases_dir }}", mode: "0755" }
+    - { path: "{{ otel_release_dir }}", mode: "0755" }
+
+- name: Otel_collector | Download otelcol-contrib archive
+  ansible.builtin.get_url:
+    url: "{{ otel_download_url }}"
+    dest: "{{ otel_archive_path }}"
+    mode: "0644"
+
+- name: Otel_collector | Unarchive otelcol-contrib release
+  ansible.builtin.unarchive:
+    src: "{{ otel_archive_path }}"
+    dest: "{{ otel_release_dir }}"
+    remote_src: true
+    mode: "0755"
+    owner: root
+    group: root
+    creates: "{{ otel_release_dir }}/otelcol-contrib"
+
+- name: Otel_collector | Install selected otelcol-contrib binary
+  ansible.builtin.copy:
+    src: "{{ otel_release_dir }}/otelcol-contrib"
+    dest: "{{ otel_binary_path }}"
+    owner: root
+    group: root
+    mode: "0755"
+    remote_src: true
+  notify: Restart otelcol
 
 - name: Otel_collector | Deploy config
   ansible.builtin.template:
     src: config.yaml.j2
     dest: "{{ otel_config_path }}"
-    mode: '0644'
+    mode: "0644"
     owner: root
     group: root
   notify: Restart otelcol
@@ -32,30 +53,48 @@
 - name: Otel_collector | Validate config
   ansible.builtin.command: "{{ otel_validate_cmd }}"
   changed_when: false
-  when: otel_validate_config
+  when:
+    - running_on_server
+    - otel_validate_config
 
 - name: Otel_collector | Install systemd unit
   ansible.builtin.template:
     src: otelcol.service.j2
     dest: "/etc/systemd/system/{{ otel_service_name }}.service"
-    mode: '0644'
+    mode: "0644"
     owner: root
     group: root
-  notify: Systemd daemon-reload
+  notify:
+    - Systemd daemon-reload
+    - Restart otelcol
   when:
     - running_on_server
 
-- name: Otel_collector | Daemon-reload (if not via handler)
+- name: Otel_collector | Daemon-reload
   ansible.builtin.systemd:
     daemon_reload: true
   changed_when: false
   when:
     - running_on_server
 
-- name: Otel_collector | Ensure service is enabled & running
+- name: Otel_collector | Ensure service is enabled and running
   ansible.builtin.systemd:
     name: "{{ otel_service_name }}"
     state: started
     enabled: true
+  when:
+    - running_on_server
+
+- name: Otel_collector | Check installed version
+  ansible.builtin.command:
+    cmd: "{{ otel_binary_path }} --version"
+  register: otel_installed_version
+  changed_when: false
+  when:
+    - running_on_server
+
+- name: Otel_collector | Show installed version
+  ansible.builtin.debug:
+    var: otel_installed_version.stdout
   when:
     - running_on_server
