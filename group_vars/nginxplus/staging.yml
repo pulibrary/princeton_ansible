@@ -2,6 +2,7 @@
 adc_domain: "adc-dev.lib.princeton.edu"
 nginx_http_upload_src: conf/http/dev/*.conf
 nginx_template_upload_src: conf/http/dev/templates/*.conf
+
 # modules to install
 nginx_modules:
   waf: false
@@ -12,6 +13,7 @@ nginx_modules:
   rtmp: true
   otel: true
   xslt: true
+
 # dos: true
 # app_protect logs
 app_protect_dir: "/var/log/app_protect/*.log"
@@ -44,15 +46,15 @@ otel_receivers:
     include_file_path: true
     include_file_name: true
     operators:
-      - type: regex_parser
-        id: parse_nginxplus_access
-        regex: '^(?P<remote_addr>[^\s]+) - (?P<remote_user>[^\s]+) \[(?P<time_local>[^\]]+)\] "(?P<method>\S+) (?P<path>\S+)(?: (?P<protocol>[^"]+))?" (?P<status>\d+) (?P<body_bytes_sent>\d+) "(?P<http_referer>[^"]*)" "(?P<http_user_agent>[^"]*)"(?: "(?P<http_x_forwarded_for>[^"]*)")?.*$'
+      - type: json_parser
+        id: parse_nginxplus_access_json
         parse_from: body
 
       - type: time_parser
-        parse_from: attributes.time_local
-        layout_type: strptime
-        layout: '%d/%b/%Y:%H:%M:%S %z'
+        parse_from: attributes.timestamp
+        layout_type: gotime
+        layout: "2006-01-02T15:04:05Z07:00"
+        on_error: send
 
       - type: severity_parser
         parse_from: attributes.status
@@ -64,6 +66,17 @@ otel_receivers:
             - '^4\d\d$'
           error:
             - '^5\d\d$'
+        on_error: send
+
+      - type: copy
+        from: attributes.trace_id
+        to: attributes.otel_trace_id
+        if: 'attributes.trace_id != nil and attributes.trace_id != ""'
+
+      - type: copy
+        from: attributes.span_id
+        to: attributes.otel_span_id
+        if: 'attributes.span_id != nil and attributes.span_id != ""'
 
       - type: add
         field: attributes.log_type
@@ -89,7 +102,7 @@ otel_receivers:
       - type: time_parser
         parse_from: attributes.time_local
         layout_type: strptime
-        layout: '%Y/%m/%d %H:%M:%S'
+        layout: "%Y/%m/%d %H:%M:%S"
         on_error: send
 
       - type: severity_parser
