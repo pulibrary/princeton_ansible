@@ -52,8 +52,8 @@ otel_receivers:
 
       - type: time_parser
         parse_from: attributes.timestamp
-        layout_type: strptime
-        layout: '%Y-%m-%dT%H:%M:%S%z'
+        layout_type: gotime
+        layout: "2006-01-02T15:04:05Z07:00"
         on_error: send
 
       - type: severity_parser
@@ -68,37 +68,15 @@ otel_receivers:
             - '^5\d\d$'
         on_error: send
 
-      # If ngx_otel_module populated trace_id/span_id directly,
-      # promote them to top-level log fields for trace/log correlation.
-      - type: move
+      - type: copy
         from: attributes.trace_id
-        to: trace_id
+        to: attributes.otel_trace_id
         if: 'attributes.trace_id != nil and attributes.trace_id != ""'
 
-      - type: move
+      - type: copy
         from: attributes.span_id
-        to: span_id
+        to: attributes.otel_span_id
         if: 'attributes.span_id != nil and attributes.span_id != ""'
-
-      # If trace_id/span_id were not populated directly but traceparent exists,
-      # extract the W3C traceparent header into attributes.
-      - type: regex_parser
-        id: parse_traceparent
-        parse_from: attributes.traceparent
-        regex: '^(?P<trace_version>[0-9a-f]{2})-(?P<trace_id>[0-9a-f]{32})-(?P<span_id>[0-9a-f]{16})-(?P<trace_flags>[0-9a-f]{2})$'
-        if: '(trace_id == nil or trace_id == "") and attributes.traceparent != nil and attributes.traceparent != ""'
-        on_error: send
-
-      # Promote traceparent-derived IDs if direct ngx_otel IDs were not present.
-      - type: move
-        from: attributes.trace_id
-        to: trace_id
-        if: 'trace_id == nil and attributes.trace_id != nil and attributes.trace_id != ""'
-
-      - type: move
-        from: attributes.span_id
-        to: span_id
-        if: 'span_id == nil and attributes.span_id != nil and attributes.span_id != ""'
 
       - type: add
         field: attributes.log_type
@@ -124,7 +102,7 @@ otel_receivers:
       - type: time_parser
         parse_from: attributes.time_local
         layout_type: strptime
-        layout: '%Y/%m/%d %H:%M:%S'
+        layout: "%Y/%m/%d %H:%M:%S"
         on_error: send
 
       - type: severity_parser
