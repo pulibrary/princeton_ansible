@@ -27,7 +27,7 @@ gitlab_rails['gitlab_email_enabled'] = true
 gitlab_rails['gitlab_default_theme'] = 2
 gitlab_rails['trusted_proxies'] = [{{ gitlab_trusted_proxies }}]
 gitlab_rails['lfs_enabled'] = true
- gitlab_rails['lfs_storage_path'] = "/var/opt/gitlab/gitlab-rails/shared/lfs-objects"
+gitlab_rails['lfs_storage_path'] = "/var/opt/gitlab/gitlab-rails/shared/lfs-objects"
 gitlab_rails['ldap_enabled'] = false
 gitlab_rails['ldap_servers'] = {
   'main' => {
@@ -69,6 +69,37 @@ gitlab_rails['backup_upload_connection'] = {
 }
 gitlab_rails['backup_upload_remote_directory'] = '{{ gitlab_google_bucket }}'
 gitlab_rails['backup_keep_time'] = 2419200
+################################################################################
+## Telemetry / Prometheus exporters
+################################################################################
+prometheus_monitoring['enable'] = true
+
+## GitLab application exporter
+gitlab_exporter['enable'] = true
+gitlab_exporter['listen_address'] = '127.0.0.1'
+gitlab_exporter['listen_port'] = 9168
+
+## Host metrics
+node_exporter['enable'] = true
+node_exporter['listen_address'] = '127.0.0.1:9100'
+
+## Redis metrics
+redis_exporter['enable'] = true
+redis_exporter['listen_address'] = '127.0.0.1:9121'
+
+## PostgreSQL metrics
+postgres_exporter['enable'] = true
+postgres_exporter['listen_address'] = '127.0.0.1:9187'
+
+## Puma metrics
+puma['exporter_enabled'] = true
+puma['exporter_address'] = '127.0.0.1'
+puma['exporter_port'] = 8083
+
+## Sidekiq metrics
+sidekiq['metrics_enabled'] = true
+sidekiq['listen_address'] = '127.0.0.1'
+sidekiq['listen_port'] = 8082
 
 ## OmniAuth common settings
 {% set _external_url = 'https://' ~ gitlab_loadbalancer_domain_name %}

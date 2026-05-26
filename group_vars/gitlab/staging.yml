@@ -6,3 +6,183 @@ gitlab_trusted_proxies: "'172.20.80.13', '172.20.80.14', '172.20.80.19'"
 gitlab_entra_identifier_id: "{{ vault_gitlab_entra_identifier_staging_id }}"
 gitlab_entra_issuer_id: "{{ vault_gitlab_entra_issuer_staging_id }}"
 gitlab_entra_secret_id: "{{ vault_gitlab_entra_secret_staging_id }}"
+# signoz / otel collector for gitlab
+otel_default_resource_attributes:
+  host.name: "{{ inventory_hostname }}"
+  service.name: gitlab
+  service.version: staging
+  environment: staging
+  deployment.environment: staging
+
+otel_receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 127.0.0.1:4317
+      http:
+        endpoint: 127.0.0.1:4318
+
+  prometheus/gitlab:
+    config:
+      scrape_configs:
+        - job_name: gitlab_exporter
+          scrape_interval: 30s
+          static_configs:
+            - targets:
+                - 127.0.0.1:9168
+              labels:
+                service: gitlab
+                component: gitlab_exporter
+
+        - job_name: gitlab_node_exporter
+          scrape_interval: 30s
+          static_configs:
+            - targets:
+                - 127.0.0.1:9100
+              labels:
+                service: gitlab
+                component: node_exporter
+
+        - job_name: gitlab_redis_exporter
+          scrape_interval: 30s
+          static_configs:
+            - targets:
+                - 127.0.0.1:9121
+              labels:
+                service: gitlab
+                component: redis_exporter
+
+        - job_name: gitlab_postgres_exporter
+          scrape_interval: 30s
+          static_configs:
+            - targets:
+                - 127.0.0.1:9187
+              labels:
+                service: gitlab
+                component: postgres_exporter
+
+        - job_name: gitlab_sidekiq
+          scrape_interval: 30s
+          static_configs:
+            - targets:
+                - 127.0.0.1:8082
+              labels:
+                service: gitlab
+                component: sidekiq
+
+        - job_name: gitlab_puma
+          scrape_interval: 30s
+          static_configs:
+            - targets:
+                - 127.0.0.1:8083
+              labels:
+                service: gitlab
+                component: puma
+
+  filelog/gitlab:
+    include:
+      - /var/log/gitlab/gitlab-rails/current
+      - /var/log/gitlab/gitlab-workhorse/current
+      - /var/log/gitlab/nginx/gitlab_access.log
+      - /var/log/gitlab/nginx/gitlab_error.log
+      - /var/log/gitlab/puma/current
+      - /var/log/gitlab/sidekiq/current
+      - /var/log/gitlab/gitaly/current
+      - /var/log/gitlab/postgresql/current
+      - /var/log/gitlab/redis/current
+    exclude:
+      - /var/log/gitlab/**/*.gz
+      - /var/log/gitlab/**/*.s
+      - /var/log/gitlab/**/*.u
+    start_at: end
+    include_file_path: true
+    include_file_name: true
+    operators:
+      - type: add
+        field: attributes.service
+        value: gitlab
+
+      - type: regex_parser
+        id: extract_gitlab_component
+        regex: '^/var/log/gitlab/(?P<gitlab_component>[^/]+)/'
+        parse_from: attributes["log.file.path"]
+        parse_to: attributes
+
+      - type: add
+        field: attributes.log_type
+        value: gitlab
+
+otel_processors:
+  batch: {}
+
+  resource/gitlab:
+    attributes:
+      - key: service.name
+        value: gitlab
+        action: upsert
+      - key: service
+        value: gitlab
+        action: upsert
+      - key: deployment.environment
+        value: staging
+        action: upsert
+      - key: environment
+        value: staging
+        action: upsert
+      - key: host.name
+        value: "{{ inventory_hostname }}"
+        action: upsert
+
+otel_exporters:
+  loadbalancing:
+    routing_key: service
+    protocol:
+      otlp:
+        timeout: 10s
+        tls:
+          insecure: true
+        sending_queue:
+          enabled: true
+          num_consumers: 10
+          queue_size: 5000
+        retry_on_failure:
+          enabled: true
+          initial_interval: 5s
+          max_interval: 30s
+          max_elapsed_time: 300s
+    resolver:
+      static:
+        hostnames:
+          - k8s-staging1.lib.princeton.edu:30374
+          - k8s-staging2.lib.princeton.edu:30374
+          - k8s-staging3.lib.princeton.edu:30374
+
+otel_service:
+  pipelines:
+    metrics:
+      receivers:
+        - otlp
+        - prometheus/gitlab
+      processors:
+        - resource/gitlab
+        - batch
+      exporters:
+        - loadbalancing
+
+    logs:
+      receivers:
+        - filelog/gitlab
+      processors:
+        - resource/gitlab
+        - batch
+      exporters:
+        - loadbalancing
+
+    traces:
+      receivers:
+        - otlp
+      processors:
+        - resource/gitlab
+        - batch
+      exporters:
+        - loadbalancing
