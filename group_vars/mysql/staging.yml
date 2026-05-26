@@ -3,3 +3,95 @@ mysql_server: true
 mysql_host: "mysql-db-dev1.princeton.edu"
 mysql_bind_address: "0.0.0.0"
 mysql_root_password: "{{ vault_mysql_root_password }}"
+
+# Beyla
+beyla_enabled: true
+beyla_service_name: mysql
+beyla_environment: staging
+beyla_otlp_endpoint: "http://127.0.0.1:4318"
+beyla_otlp_protocol: "http/protobuf"
+beyla_bpf_context_propagation: "all"
+
+beyla_open_ports:
+  - 3306
+
+# SigNoz / OpenTelemetry Collector
+otel_default_resource_attributes:
+  host.name: "{{ inventory_hostname }}"
+  service.name: mysql
+  service.version: staging
+  environment: staging
+  deployment.environment: staging
+
+otel_receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 127.0.0.1:4317
+      http:
+        endpoint: 127.0.0.1:4318
+
+  hostmetrics:
+    collection_interval: 30s
+    scrapers:
+      cpu: {}
+      disk: {}
+      filesystem: {}
+      load: {}
+      memory: {}
+      network: {}
+
+otel_processors:
+  batch:
+    send_batch_max_size: 1024
+    send_batch_size: 512
+    timeout: 30s
+
+otel_exporters:
+  loadbalancing:
+    routing_key: service
+    protocol:
+      otlp:
+        timeout: 10s
+        tls:
+          insecure: true
+        sending_queue:
+          enabled: true
+          num_consumers: 10
+          queue_size: 5000
+        retry_on_failure:
+          enabled: true
+          initial_interval: 5s
+          max_interval: 30s
+          max_elapsed_time: 300s
+    resolver:
+      static:
+        hostnames:
+          - k8s-staging1.lib.princeton.edu:30374
+          - k8s-staging2.lib.princeton.edu:30374
+          - k8s-staging3.lib.princeton.edu:30374
+
+  debug:
+    verbosity: basic
+
+otel_service_pipelines:
+  metrics:
+    receivers:
+      - otlp
+      - hostmetrics
+    processors:
+      - resource
+      - batch
+    exporters:
+      - loadbalancing
+      - debug
+
+  traces:
+    receivers:
+      - otlp
+    processors:
+      - resource
+      - batch
+    exporters:
+      - loadbalancing
+      - debug
