@@ -53,7 +53,7 @@ http {
     include       /etc/nginx/mime.types;
     default_type  application/octet-stream;
 
-    log_format json_logs escape=json '{'
+        log_format json_logs escape=json '{'
         '"remote_ip": "$remote_addr",'
         '"remote_user": "$remote_user",'
         '"timestamp": "$time_iso8601",'
@@ -64,7 +64,19 @@ http {
         '"body_bytes_sent": "$body_bytes_sent",'
         '"referer": "$http_referer",'
         '"host": "$host",'
-        '"user_agent": "$http_user_agent"'
+        '"user_agent": "$http_user_agent",'
+        '"request_id": "$request_id",'
+        '"traceparent": "$http_traceparent",'
+{% if nginx_modules.otel and nginx_type == "plus" %}
+        '"trace_id": "$otel_trace_id",'
+        '"span_id": "$otel_span_id",'
+        '"parent_span_id": "$otel_parent_id",'
+        '"parent_sampled": "$otel_parent_sampled",'
+{% endif %}
+        '"upstream_addr": "$upstream_addr",'
+        '"upstream_status": "$upstream_status",'
+        '"request_time": "$request_time",'
+        '"upstream_response_time": "$upstream_response_time"'
     '}';
 
     access_log  /var/log/nginx/access.log json_logs;

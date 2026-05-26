@@ -2,6 +2,7 @@
 adc_domain: "adc-dev.lib.princeton.edu"
 nginx_http_upload_src: conf/http/dev/*.conf
 nginx_template_upload_src: conf/http/dev/templates/*.conf
+
 # modules to install
 nginx_modules:
   waf: false
@@ -12,6 +13,7 @@ nginx_modules:
   rtmp: true
   otel: true
   xslt: true
+
 # dos: true
 # app_protect logs
 app_protect_dir: "/var/log/app_protect/*.log"
@@ -44,15 +46,15 @@ otel_receivers:
     include_file_path: true
     include_file_name: true
     operators:
-      - type: regex_parser
-        id: parse_nginxplus_access
-        regex: '^(?P<remote_addr>[^\s]+) - (?P<remote_user>[^\s]+) \[(?P<time_local>[^\]]+)\] "(?P<method>\S+) (?P<path>\S+)(?: (?P<protocol>[^"]+))?" (?P<status>\d+) (?P<body_bytes_sent>\d+) "(?P<http_referer>[^"]*)" "(?P<http_user_agent>[^"]*)"(?: "(?P<http_x_forwarded_for>[^"]*)")?.*$'
+      - type: json_parser
+        id: parse_nginxplus_access_json
         parse_from: body
 
       - type: time_parser
-        parse_from: attributes.time_local
+        parse_from: attributes.timestamp
         layout_type: strptime
-        layout: '%d/%b/%Y:%H:%M:%S %z'
+        layout: '%Y-%m-%dT%H:%M:%S%z'
+        on_error: send
 
       - type: severity_parser
         parse_from: attributes.status
@@ -64,6 +66,39 @@ otel_receivers:
             - '^4\d\d$'
           error:
             - '^5\d\d$'
+        on_error: send
+
+      # If ngx_otel_module populated trace_id/span_id directly,
+      # promote them to top-level log fields for trace/log correlation.
+      - type: move
+        from: attributes.trace_id
+        to: trace_id
+        if: 'attributes.trace_id != nil and attributes.trace_id != ""'
+
+      - type: move
+        from: attributes.span_id
+        to: span_id
+        if: 'attributes.span_id != nil and attributes.span_id != ""'
+
+      # If trace_id/span_id were not populated directly but traceparent exists,
+      # extract the W3C traceparent header into attributes.
+      - type: regex_parser
+        id: parse_traceparent
+        parse_from: attributes.traceparent
+        regex: '^(?P<trace_version>[0-9a-f]{2})-(?P<trace_id>[0-9a-f]{32})-(?P<span_id>[0-9a-f]{16})-(?P<trace_flags>[0-9a-f]{2})$'
+        if: '(trace_id == nil or trace_id == "") and attributes.traceparent != nil and attributes.traceparent != ""'
+        on_error: send
+
+      # Promote traceparent-derived IDs if direct ngx_otel IDs were not present.
+      - type: move
+        from: attributes.trace_id
+        to: trace_id
+        if: 'trace_id == nil and attributes.trace_id != nil and attributes.trace_id != ""'
+
+      - type: move
+        from: attributes.span_id
+        to: span_id
+        if: 'span_id == nil and attributes.span_id != nil and attributes.span_id != ""'
 
       - type: add
         field: attributes.log_type
