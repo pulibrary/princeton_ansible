@@ -31,6 +31,14 @@
       when: runtime_env | default('staging') == "production"
 
   post_tasks:
+    - name: Production webservers | Disable ufw
+      ansible.builtin.command: ufw disable
+      when:
+        - runtime_env | default('staging') == "production"
+        - "'orangelight_production_webservers' in group_names"
+      register: ufw_disable_result
+      changed_when: "'Firewall stopped and disabled on system startup' in ufw_disable_result.stdout"
+
     - name: tell everyone on slack you ran an ansible playbook
       community.general.slack:
         token: "{{ vault_pul_slack_token }}"
