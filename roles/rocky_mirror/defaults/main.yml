@@ -1,0 +1,51 @@
+#SPDX-License-Identifier: MIT-0
+---
+# defaults file for roles/rocky_mirror
+
+rocky_mirror_packages:
+  - rsync
+
+# Storage
+rocky_mirror_dataset: pubmirror/rocky
+rocky_mirror_root: /usr/local/www/nginx-dist/mirror/rocky
+rocky_mirror_owner: www
+rocky_mirror_group: www
+
+# Upstream — a US academic tier-1 mirror
+# Rocky asks private mirrors to pull from a public mirror, not msync.
+# rocky_mirror_upstream: "rsync://mirror.umd.edu/rocky/"
+rocky_mirror_upstream: "rsync://mirrors.ocf.berkeley.edu/rocky/"
+
+# Releases to mirror. Rocky uses major.minor dirs plus major-version
+# symlinks (e.g. "9" -> "9.5"). We mirror the major-version trees.
+rocky_mirror_releases:
+  - "8"
+  - "9"
+  - "10"
+
+# Architectures
+rocky_mirror_architectures:
+  - x86_64
+  - aarch64
+
+# Repositories within each release to mirror
+rocky_mirror_repos:
+  - BaseOS
+  - AppStream
+  - extras
+  - CRB
+
+# Operational
+rocky_mirror_bwlimit: 20000
+
+# Cron — Rocky asks for <=6/day, never at minute 0. Use :47 to stay
+# clear of nodejs (:17), solr (:23), ubuntu (:37).
+rocky_mirror_cron_hour: "*/6"
+rocky_mirror_cron_minute: "47"
+
+rocky_mirror_script: /usr/local/sbin/sync-rocky-mirror
+rocky_mirror_log: /var/log/rocky-mirror.log
+rocky_mirror_lock: /var/run/rocky-mirror.lock
+
+# nginx drop-in
+rocky_mirror_nginx_dropin: /usr/local/etc/nginx/server.d/rocky-locations.conf
