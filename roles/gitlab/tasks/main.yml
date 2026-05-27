@@ -1,5 +1,32 @@
 ---
 # tasks file for roles/gitlab
+- name: GitLab | Download repo ASCII key
+  ansible.builtin.get_url:
+    url: https://packages.gitlab.com/gpg.key
+    dest: /usr/share/keyrings/gitlab-ce-archive-keyring.asc
+    mode: "0644"
+  register: gitlab_ascii_key
+
+- name: GitLab | Check for existing dearmored key
+  ansible.builtin.stat:
+    path: /usr/share/keyrings/gitlab-ce-archive-keyring.gpg
+  register: gitlab_gpg_keyring
+
+- name: GitLab | Dearmor key into keyring
+  ansible.builtin.command:
+    cmd: >
+      gpg --dearmor --yes
+      -o /usr/share/keyrings/gitlab-ce-archive-keyring.gpg
+      /usr/share/keyrings/gitlab-ce-archive-keyring.asc
+  when: gitlab_ascii_key.changed or not gitlab_gpg_keyring.stat.exists
+
+- name: GitLab | Add APT repository
+  ansible.builtin.apt_repository:
+    repo: "deb [signed-by=/usr/share/keyrings/gitlab-ce-archive-keyring.gpg] https://packages.gitlab.com/gitlab/gitlab-ce/ubuntu jammy main"
+    filename: gitlab_gitlab-ce
+    state: present
+    update_cache: false
+
 - name: Gitlab | Install required packages
   ansible.builtin.apt:
     name:
@@ -42,42 +69,6 @@
   ansible.builtin.command: /usr/bin/certbot certonly --standalone --non-interactive --agree-tos --email lsupport@princeton.edu --server https://acme.sectigo.com/v2/InCommonRSAOV --eab-kid {{ vault_acme_eab_kid }} --eab-hmac-key {{ vault_acme_eab_hmac_key }} --domain {{ inventory_hostname }} --cert-name {{ inventory_hostname }}
   changed_when: false
   when: running_on_server
-
-- name: GitLab | Remove old ascii key if present
-  ansible.builtin.file:
-    path: /usr/share/keyrings/gitlab-ce.gpg
-    state: absent
-
-- name: GitLab | Download repo ASCII key
-  ansible.builtin.get_url:
-    url: https://packages.gitlab.com/gpg.key
-    dest: /usr/share/keyrings/gitlab-ce-archive-keyring.asc
-    mode: "0644"
-
-- name: GitLab | Dearmor key into keyring
-  ansible.builtin.command:
-    cmd: >
-      gpg --dearmor
-      -o /usr/share/keyrings/gitlab-ce-archive-keyring.gpg
-      /usr/share/keyrings/gitlab-ce-archive-keyring.asc
-  args:
-    creates: /usr/share/keyrings/gitlab-ce-archive-keyring.gpg
-
-- name: GitLab | Add APT repository
-  ansible.builtin.apt_repository:
-    repo: "deb [signed-by=/usr/share/keyrings/gitlab-ce-archive-keyring.gpg] https://packages.gitlab.com/gitlab/gitlab-ce/ubuntu jammy main"
-    filename: gitlab_gitlab-ce
-    state: present
-    update_cache: false
-
-- name: Gitlab | Update apt cache after adding repository
-  ansible.builtin.apt:
-    update_cache: true
-    cache_valid_time: 0
-  register: repo_cache_update
-  retries: 3
-  delay: 5
-  until: repo_cache_update is succeeded
 
 - name: GitLab | install CE package
   ansible.builtin.apt:
