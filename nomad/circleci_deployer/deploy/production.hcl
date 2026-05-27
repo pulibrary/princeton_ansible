@@ -15,7 +15,7 @@ job "circleci-runner" {
       attribute = "${node.pool}"
       weight    = 100
     }
-    count = 4
+    count = 2
 
     network {
       dns {
@@ -61,7 +61,7 @@ job "circleci-runner" {
       }
       resources {
         cpu    = 4000
-        memory = 4096
+        memory = 8192
       }
     }
   }
