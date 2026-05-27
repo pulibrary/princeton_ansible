@@ -32,14 +32,21 @@ deploy_user_local_keys:
   - { name: 'catalog-staging-circleci-key', key: "{{ lookup('file', '../keys/circleci/catalog-staging.pub') }}" }
   - { name: 'heaven', key: "{{ lookup('file', '../keys/heaven.pub') }}" }
   - { name: 'TowerDeployKey', key: "{{ lookup('file', '../keys/TowerDeployKey.pub') }}" }
-# signoz 
+# signoz
 otel_default_resource_attributes:
   host.name: "{{ inventory_hostname }}"
-  service.name: orangelight-catalog
+  service.name: orangelight
   service.version: staging
   environment: staging
 
 otel_receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 127.0.0.1:4317
+      http:
+        endpoint: 127.0.0.1:4318
+
   filelog/nginx-access:
     include: ["/var/log/nginx/access.log*"]
     start_at: end
@@ -53,39 +60,92 @@ otel_receivers:
         layout: '%d/%b/%Y:%H:%M:%S %z'
       - type: add
         field: attributes.log_type
-        value: "orangelight_catalog_access"
+        value: "orangelight_access"
       - type: add
         field: attributes.service_name
-        value: orangelight_catalog_access
+        value: oranglelight_access
+
   filelog/nginx-error:
     include: ["/var/log/nginx/error.log*"]
     start_at: end
     operators:
       - type: add
         field: attributes.log_type
-        value: "orangelight_catalog_error"
+        value: "orangelight_error"
       - type: add
         field: attributes.service_name
-        value: "orangelight_catalog"
+        value: "orangelight"
+
   hostmetrics:
     collection_interval: 30s
-    scrapers: { cpu: {}, disk: {}, filesystem: {}, load: {}, memory: {}, network: {} }
+    scrapers:
+      cpu: {}
+      disk: {}
+      filesystem: {}
+      load: {}
+      memory: {}
+      network: {}
 
 otel_processors:
-  batch: { send_batch_max_size: 1024, send_batch_size: 512, timeout: 30s }
+  batch:
+    send_batch_max_size: 1024
+    send_batch_size: 512
+    timeout: 30s
 
 otel_exporters:
-  otlp:
-    endpoint: "http://sandbox-signoz1.lib.princeton.edu:4317"
-    tls: { insecure: true }
-  debug: { verbosity: basic }
+  loadbalancing:
+    routing_key: service
+    protocol:
+      otlp:
+        timeout: 10s
+        tls:
+          insecure: true
+        sending_queue:
+          enabled: true
+          num_consumers: 10
+          queue_size: 5000
+        retry_on_failure:
+          enabled: true
+          initial_interval: 5s
+          max_interval: 30s
+          max_elapsed_time: 300s
+    resolver:
+      static:
+        hostnames:
+          - k8s-staging1.lib.princeton.edu:30374
+          - k8s-staging2.lib.princeton.edu:30374
+          - k8s-staging3.lib.princeton.edu:30374
+
+  debug:
+    verbosity: basic
 
 otel_service_pipelines:
   logs:
-    receivers: ["filelog/nginx-access", "filelog/nginx-error"]
-    processors: ["resource", "batch"]
-    exporters: ["otlp", "debug"]
+    receivers:
+      - filelog/nginx-access
+      - filelog/nginx-error
+    processors:
+      - resource
+      - batch
+    exporters:
+      - loadbalancing
+      - debug
+
   metrics:
-    receivers: ["hostmetrics"]
-    processors: ["resource", "batch"]
-    exporters: ["otlp", "debug"]
+    receivers:
+      - hostmetrics
+    processors:
+      - resource
+      - batch
+    exporters:
+      - loadbalancing
+      - debug
+
+  traces:
+    receivers:
+      - otlp
+    processors:
+      - resource
+      - batch
+    exporters:
+      - loadbalancing
