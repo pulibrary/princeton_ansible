@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 import json
 import sys
 import urllib.error
@@ -26,6 +25,24 @@ def fetch_upstreams():
         return json.loads(response.read().decode("utf-8"))
 
 
+def tally(peers):
+    """Return (total, up, bad, other) counts for a group of peers."""
+    total = len(peers)
+    up = sum(1 for peer in peers if peer.get("state") in GOOD_STATES)
+    bad = sum(1 for peer in peers if peer.get("state") in BAD_STATES)
+    other = total - up - bad
+    return total, up, bad, other
+
+
+def problem_details(peers):
+    """Comma-joined 'name=state' for peers that are bad or in an unexpected state."""
+    return ", ".join(
+        f'{peer.get("name", peer.get("server", "unknown"))}={peer.get("state", "unknown")}'
+        for peer in peers
+        if peer.get("state") in BAD_STATES or peer.get("state") not in GOOD_STATES
+    )
+
+
 def main():
     try:
         upstreams = fetch_upstreams()
@@ -43,46 +60,78 @@ def main():
     total_upstreams = 0
     critical_upstreams = 0
     warning_upstreams = 0
+    backup_serving_upstreams = 0
 
     for upstream_name, upstream in sorted(upstreams.items()):
         peers = upstream.get("peers", [])
         primary_peers = [peer for peer in peers if not peer.get("backup", False)]
+        backup_peers = [peer for peer in peers if peer.get("backup", False)]
 
-        total = len(primary_peers)
-        up = sum(1 for peer in primary_peers if peer.get("state") in GOOD_STATES)
-        bad = sum(1 for peer in primary_peers if peer.get("state") in BAD_STATES)
-        other = total - up - bad
+        p_total, p_up, p_bad, p_other = tally(primary_peers)
+        b_total, b_up, b_bad, b_other = tally(backup_peers)
 
-        bad_peer_details = [
-            f'{peer.get("name", peer.get("server", "unknown"))}={peer.get("state", "unknown")}'
-            for peer in primary_peers
-            if peer.get("state") in BAD_STATES or peer.get("state") not in GOOD_STATES
-        ]
+        bad_primary = problem_details(primary_peers)
+        bad_backup = problem_details(backup_peers)
 
-        metrics = f"upstream_primary_peers={total}|upstream_peers_up={up}|upstream_peers_bad={bad}"
+        metrics = (
+            f"upstream_primary_peers={p_total}|"
+            f"upstream_peers_up={p_up}|"
+            f"upstream_peers_bad={p_bad}|"
+            f"upstream_backup_peers={b_total}|"
+            f"upstream_backup_peers_up={b_up}|"
+            f"upstream_backup_peers_bad={b_bad}"
+        )
 
         service_name = f"NGINX Plus upstream {upstream_name}"
 
-        if total == 0:
+        if p_total == 0 and b_total == 0:
             warning_upstreams += 1
-            emit(1, service_name, metrics, "No primary upstream peers found")
-        elif up == 0:
-            critical_upstreams += 1
-            detail = ", ".join(bad_peer_details) or "no usable primary peers"
-            emit(2, service_name, metrics, f"All primary upstream peers are unavailable: {detail}")
-        elif bad > 0 or other > 0:
+            emit(1, service_name, metrics, "No upstream peers found")
+
+        elif p_up > 0:
+            # At least one primary is usable.
+            if p_bad > 0 or p_other > 0:
+                warning_upstreams += 1
+                emit(
+                    1,
+                    service_name,
+                    metrics,
+                    f"{p_up}/{p_total} primary peers usable; problem peers: {bad_primary}",
+                )
+            else:
+                emit(0, service_name, metrics, f"{p_up}/{p_total} primary peers usable")
+
+        elif b_up > 0:
+            # No usable primaries, but backups are up and serving traffic.
+            # Degraded, not down: warn instead of crit.
+            backup_serving_upstreams += 1
             warning_upstreams += 1
-            detail = ", ".join(bad_peer_details)
-            emit(1, service_name, metrics, f"{up}/{total} primary peers usable; problem peers: {detail}")
+            primary_detail = bad_primary or "no usable primary peers"
+            emit(
+                1,
+                service_name,
+                metrics,
+                f"All primaries unavailable; serving from {b_up}/{b_total} "
+                f"backup peers (primaries: {primary_detail})",
+            )
+
         else:
-            emit(0, service_name, metrics, f"{up}/{total} primary peers usable")
+            # No usable primaries and no usable backups: genuinely down.
+            critical_upstreams += 1
+            primary_detail = bad_primary or "no primary peers"
+            if b_total == 0:
+                detail = f"primaries: {primary_detail}; no backup peers defined"
+            else:
+                detail = f"primaries: {primary_detail}; backups: {bad_backup or 'none usable'}"
+            emit(2, service_name, metrics, f"No usable peers ({detail})")
 
         total_upstreams += 1
 
     summary_metrics = (
         f"upstreams={total_upstreams}|"
         f"critical_upstreams={critical_upstreams}|"
-        f"warning_upstreams={warning_upstreams}"
+        f"warning_upstreams={warning_upstreams}|"
+        f"backup_serving_upstreams={backup_serving_upstreams}"
     )
 
     if critical_upstreams:
@@ -90,14 +139,16 @@ def main():
             2,
             "NGINX Plus upstream summary",
             summary_metrics,
-            f"{critical_upstreams} upstreams have no usable primary peers; {warning_upstreams} degraded",
+            f"{critical_upstreams} upstreams have no usable peers; "
+            f"{warning_upstreams} degraded ({backup_serving_upstreams} serving from backup)",
         )
     elif warning_upstreams:
         emit(
             1,
             "NGINX Plus upstream summary",
             summary_metrics,
-            f"{warning_upstreams} upstreams degraded",
+            f"{warning_upstreams} upstreams degraded "
+            f"({backup_serving_upstreams} serving from backup)",
         )
     else:
         emit(
