@@ -55,19 +55,13 @@
   when: postgresql_is_local | bool
   become: true
 
-- name: PostgreSQL | configure access to postgres server
-  ansible.builtin.include_tasks: pg_hba.yml
-  when:
-    - not postgresql_is_local
-    - (postgres_host | default('') | length) > 0
-
-- name: PostgreSQL | configure warm standy
+- name: PostgreSQL | configure warm standby
   ansible.builtin.include_tasks: warm_standby_leader.yml
   when:
     - postgresql_cluster != false
     - inventory_hostname == postgresql_cluster.leader
 
-- name: PostgreSQL | configure warm standy follower
+- name: PostgreSQL | configure warm standby follower
   ansible.builtin.include_tasks: warm_standby_follower.yml
   when:
     - postgresql_cluster != false
