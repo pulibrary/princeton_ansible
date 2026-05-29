@@ -3,7 +3,7 @@
   ansible.builtin.include_vars:
     file: "{{ ansible_os_family | lower }}.yml"
 
-- name: PostgreSQL | Include OS-specific install tasks
+- name: Include OS-specific install tasks
   ansible.builtin.include_tasks: install_{{ ansible_os_family | lower }}.yml
 
 - name: Ensure PostgreSQL is enabled and started
@@ -12,7 +12,7 @@
    state: started
    enabled: true
 
-- name: PostgreSQL | add logrotate rules
+- name: Add logrotate rules
   ansible.builtin.template:
     src: "../../common/templates/logrotate_rules.j2"
     dest: "/etc/logrotate.d/{{ item.name }}"
@@ -24,18 +24,18 @@
     - postgresql_logrotate_rules is defined
     - postgresql_logrotate_rules | length > 0
 
-- name: PostgreSQL | add replication postgresql configuration
+- name: Add replication postgresql configuration
   ansible.builtin.template:
     src: replication.conf.j2
     dest: "/etc/postgresql/{{ postgres_version }}/main/conf.d/replication.conf"
     mode: "0644"
   when:
-    # - running_on_server
+    - running_on_server
     - ansible_os_family == "Debian"
     - postgresql_cluster_member == true
   notify: restart postgresql
 
-- name: PostgreSQL | restart leader postgres server
+- name: Restart leader postgres server
   ansible.builtin.service:
     name: "{{ postgres_service_name }}"
     state: started
@@ -45,7 +45,7 @@
     - ansible_os_family == "Debian"
     # - running_on_server
 
-- name: PostgreSQL | ensure pgpass
+- name: Ensure pgpass
   ansible.builtin.template:
     src: pg_pass.j2
     dest: "~/.pgpass"
@@ -55,32 +55,32 @@
   when: postgresql_is_local | bool
   become: true
 
-- name: PostgreSQL | configure warm standby
+- name: Configure warm standby leader
   ansible.builtin.include_tasks: warm_standby_leader.yml
   when:
     - postgresql_cluster != false
     - inventory_hostname == postgresql_cluster.leader
 
-- name: PostgreSQL | configure warm standby follower
+- name: Configure warm standby follower
   ansible.builtin.include_tasks: warm_standby_follower.yml
   when:
     - postgresql_cluster != false
     - inventory_hostname in postgresql_cluster.followers
 
-- name: PostgreSQL | configure logical replication
+- name: Configure logical replication on cluster leader
   ansible.builtin.include_tasks: logical_replication.yml
   when:
     - postgresql_cluster != false
     - inventory_hostname == postgresql_cluster.leader
     - postgresql_logical_replication != false
 
-- name: PostgreSQL | create database
+- name: Create databases
   ansible.builtin.include_tasks: create_db.yml
 
-- name: PostgreSQL | create users
+- name: Create users
   ansible.builtin.include_tasks: create_users.yml
 
-- name: PostgreSQL | create read-only user
+- name: Create read-only user
   ansible.builtin.include_tasks: create_read_only_user.yml
   when: application_dbuser_ro_name is defined
   tags: grant_ro_privs
