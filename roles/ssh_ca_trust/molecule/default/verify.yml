@@ -1,0 +1,37 @@
+---
+- name: Verify
+  hosts: all
+  become: true
+  tasks:
+    - name: Read effective sshd configuration
+      ansible.builtin.command:
+        argv:
+          - /usr/sbin/sshd
+          - -T
+      register: sshd_effective
+      changed_when: false
+
+    - name: Assert certificate settings are active
+      ansible.builtin.assert:
+        that:
+          - "'trustedusercakeys /etc/ssh/trusted_user_ca_keys.pem' in sshd_effective.stdout"
+          - "'authorizedprincipalsfile /etc/ssh/auth_principals/%u' in sshd_effective.stdout"
+          - "'pubkeyauthentication yes' in sshd_effective.stdout"
+          - "'passwordauthentication no' in sshd_effective.stdout"
+
+    - name: Read principals file
+      ansible.builtin.slurp:
+        src: /etc/ssh/auth_principals/pulsys
+      register: principals_content
+
+    - name: Assert the principal is present
+      ansible.builtin.assert:
+        that:
+          - "'pulsys' in (principals_content.content | b64decode)"
+
+    - name: Confirm the local user exists
+      ansible.builtin.command:
+        argv:
+          - id
+          - pulsys
+      changed_when: false

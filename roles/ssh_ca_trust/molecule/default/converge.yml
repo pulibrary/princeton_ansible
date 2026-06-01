@@ -1,0 +1,22 @@
+---
+- name: Converge
+  hosts: all
+  become: true
+  vars:
+    # Sample (non-production) SSH User CA public key for testing only.
+    ssh_ca_user_ca_public_key: >-
+      ssh-ed25519
+      AAAAC3NzaC1lZDI1NTE5AAAAIK7xQ8mDq3sJZr0Yb1nQwVZ2pT4fLm9aHcX0sN6eUwQk
+      ssh_user_ca_key
+    ssh_ca_operator_group: pulsys
+    ssh_ca_users:
+      - name: pulsys
+        principals:
+          - pulsys
+  pre_tasks:
+    - name: Ensure the operator group exists (normally provisioned elsewhere)
+      ansible.builtin.group:
+        name: "{{ ssh_ca_operator_group }}"
+        state: present
+  roles:
+    - role: ssh_ca_trust
