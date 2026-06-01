@@ -1,0 +1,35 @@
+---
+# defaults/main.yml
+#
+# Configures an SSH host to accept certificates signed by the step-ca SSH User
+# CA. No secrets are involved; this role is safe to apply fleet-wide (it is a
+# good candidate to fold into `common` role once the pilot graduates).
+
+# The SSH User CA public key (contents of ssh_user_ca_key.pub on the CA). This
+# is shared data: define it once in group_vars/all. The step_ca role prints it.
+ssh_ca_user_ca_public_key: ""
+
+# installed key matches before touching sshd.
+ssh_ca_user_ca_fingerprint: ""
+
+ssh_ca_trusted_keys_path: /etc/ssh/trusted_user_ca_keys.pem
+ssh_ca_sshd_dropin_path: /etc/ssh/sshd_config.d/60-ssh-ca-access.conf
+ssh_ca_auth_principals_dir: /etc/ssh/auth_principals
+
+ssh_ca_disable_password_auth: true
+ssh_ca_disable_kbdinteractive: true
+
+# Local operator group (matches the principal issued by the CA template).
+ssh_ca_operator_group: pulsys
+
+# Users who may log in via certificate. Each entry maps a local account to the
+# cert principals allowed to assume it. With the step_ca pulsys template, the
+# only principal is `pulsys`, so typically a single entry:
+#
+# ssh_ca_users:
+#   - name: pulsys
+#     principals:
+#       - pulsys
+#     create_local_user: true            # default true
+#     groups: "{{ ssh_ca_admin_groups }}"  # optional override
+ssh_ca_users: []
