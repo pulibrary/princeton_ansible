@@ -4,7 +4,7 @@ Builds and runs the Smallstep [`step-ca`](https://smallstep.com/docs/step-ca)
 certificate authority on `step-ca.lib.princeton.edu`, backed by Microsoft
 Entra ID OIDC, issuing short-lived SSH user certificates. Targets Ubuntu.
 
-Pair it with the `ssh_ca_trust` role, which configures the SSH hosts that
+This role has a tight coupling with the [ssh_ca_trust](../ssh_ca_trust) role, which configures the SSH hosts that
 accept the resulting certificates.
 
 ## What it does
@@ -74,7 +74,7 @@ step_ca_oidc_groups:
 ```
 
 After the first converge the role prints the SSH User CA public key. Copy it
-into `group_vars/all` as `ssh_ca_user_ca_public_key` for the `ssh_ca_trust`
+into `group_vars/all` as `ssh_ca_user_ca_public_key` for the [ssh_ca_trust](../ssh_ca_trust)
 role.
 
 ## Notes & caveats
@@ -82,12 +82,11 @@ role.
 - `step ca init` runs once, guarded by `ca.json`; to re-key you must remove
   `/etc/step-ca` deliberately. The role never clobbers an existing CA.
 - `--deployment-type=standalone` keeps init non-interactive on current
-  step-cli; remove it if you pin an older release that rejects the flag.
+  step-cli
 - The hardened unit sets `ProtectSystem=full` and only
   `ReadWritePaths=/etc/step-ca/db`. If you relocate `$STEPPATH` or the badger
   DB, update the unit accordingly.
-- The `step ca init` flag set is version-sensitive — verify against the
-  step-cli version actually installed on the CA before first rollout.
+- The `step ca init` flag set is version-sensitive
 - Molecule's `default` scenario builds the CA with OIDC disabled (no Entra
   round-trip) and needs network at converge to install packages.
 
