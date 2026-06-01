@@ -1,0 +1,30 @@
+---
+# tasks/step_ca
+
+- name: Assert a CA key password was supplied
+  ansible.builtin.assert:
+    that:
+      - step_ca_password | length > 0
+    fail_msg: "step_ca_password is empty. Supply the CA key password from Vault."
+
+- name: Install Smallstep packages
+  ansible.builtin.include_tasks: packages.yml
+
+- name: Create the step service account and directory tree
+  ansible.builtin.include_tasks: account.yml
+
+- name: Initialise the CA (first run only)
+  ansible.builtin.include_tasks: init.yml
+
+- name: Install the systemd unit and start the service
+  ansible.builtin.include_tasks: service.yml
+
+- name: Install the SSH user-certificate template
+  ansible.builtin.include_tasks: ssh_template.yml
+
+- name: Merge the Entra OIDC provisioner into ca.json
+  ansible.builtin.include_tasks: oidc_provisioner.yml
+  when: step_ca_oidc_enabled | bool
+
+- name: Publish the SSH User CA public key
+  ansible.builtin.include_tasks: publish_user_ca.yml
