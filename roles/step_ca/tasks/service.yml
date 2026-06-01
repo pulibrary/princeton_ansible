@@ -1,0 +1,24 @@
+---
+
+- name: Install the step-ca systemd unit
+  ansible.builtin.template:
+    src: step-ca.service.j2
+    dest: /etc/systemd/system/step-ca.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart step-ca
+
+- name: Enable and start step-ca
+  ansible.builtin.systemd_service:
+    name: step-ca
+    enabled: true
+    state: started
+    daemon_reload: true
+
+- name: Open the CA listener port via ufw
+  community.general.ufw:
+    rule: allow
+    port: "{{ step_ca_listen_port }}"
+    proto: tcp
+  when: step_ca_manage_firewall | bool
