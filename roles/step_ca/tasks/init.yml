@@ -1,0 +1,24 @@
+---
+# Guarded by ca.json: once the CA is initialised this never runs again, so the
+# root/intermediate and SSH host/user CA keys are created and then immutable.
+# --deployment-type keeps init non-interactive on current step-cli
+
+- name: Initialise the CA with SSH support
+  ansible.builtin.command:
+    argv:
+      - step
+      - ca
+      - init
+      - --ssh
+      - --deployment-type={{ step_ca_deployment_type }}
+      - --name={{ step_ca_pki_name }}
+      - --dns={{ step_ca_dns_name }}
+      - --address={{ step_ca_listen_address }}
+      - --provisioner={{ step_ca_break_glass_provisioner }}
+      - --password-file={{ step_ca_password_file }}
+      - --provisioner-password-file={{ step_ca_password_file }}
+    creates: "{{ step_ca_path }}/config/ca.json"
+  environment:
+    STEPPATH: "{{ step_ca_path }}"
+  become: true
+  become_user: "{{ step_ca_user }}"
