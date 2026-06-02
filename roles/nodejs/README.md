@@ -1,11 +1,25 @@
-Role Name
-=========
+# Nodejs
 
-Installs Nodejs (that's nodejs and yarn packages)
+By default, this role installs Yarn Classic from the Yarn upstream APT
+repository.
+
+```yaml
+use_yarn: true
+nodejs_yarn_berry_enabled: false
+```
 
 
-Role Variables
---------------
+To install Yarn Berry instead, enable the Berry flag
 
-desired_nodejs_version: "v16.14.0"
-NOTE: the value MUST begin with `v`, as in "v16.14.0" or "v12.16.1"
+```yaml
+use_yarn: true
+nodejs_yarn_berry_enabled: true
+nodejs_yarn_berry_version: "4.15.0"
+```
+
+When nodejs_yarn_berry_enabled is true, the role removes the apt-installed
+yarn package and installs the pinned Yarn Berry version with Corepack.
+
+This preserves backward compatibility for existing hosts using Yarn Classic
+while allowing newer applications to opt into Yarn Berry.
+
