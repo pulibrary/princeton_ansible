@@ -106,6 +106,19 @@
     msg: "apt-get update failed. See debug output above."
   when: cache_update.rc != 0
 
+- name: Phusion | Prefer Phusion Passenger packages
+  ansible.builtin.copy:
+    dest: /etc/apt/preferences.d/phusion-passenger
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      Package: passenger libnginx-mod-http-passenger
+      Pin: origin oss-binaries.phusionpassenger.com
+      Pin-Priority: 1001
+  notify:
+    - restart nginx
+
 - name: Phusion | Install Nginx and Passenger.
   ansible.builtin.apt:
     name: "{{ nginx_passenger_packages }}"

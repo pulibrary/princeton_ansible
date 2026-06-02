@@ -120,6 +120,21 @@
     - postgresql_logrotate_rules is defined
     - postgresql_logrotate_rules | length > 0
 
+- name: PostgreSQL | Prefer PGDG PostgreSQL packages
+  ansible.builtin.copy:
+    dest: /etc/apt/preferences.d/postgresql-pgdg
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      Package: postgresql-client-* postgresql-* libpq5 libpq-dev
+      Pin: origin apt.postgresql.org
+      Pin-Priority: 1001
+
+- name: PostgreSQL | update apt cache after PGDG pinning
+  ansible.builtin.apt:
+    update_cache: true
+
 - name: PostgreSQL | install postgresql client packages (Ubuntu)
   ansible.builtin.apt:
     name: '{{ item }}'
