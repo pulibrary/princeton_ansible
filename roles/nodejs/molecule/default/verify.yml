@@ -3,16 +3,28 @@
   hosts: all
   gather_facts: false
   tasks:
-  - name: check yarn package status
-    ansible.builtin.apt:
-      name: "{{ item }}"
-      state: present
-    check_mode: true
-    register: pkg_status
-    loop:
-      - yarn
+    - name: Verify node is installed
+      ansible.builtin.command:
+        cmd: /usr/local/bin/node --version
+      register: nodejs_verify_node
+      changed_when: false
 
-  - name: test for yarn packages
-    ansible.builtin.assert:
-      that:
-        - not pkg_status.changed
+    - name: Verify corepack is installed
+      ansible.builtin.command:
+        cmd: /usr/local/bin/corepack --version
+      register: nodejs_verify_corepack
+      changed_when: false
+
+    - name: Verify Yarn Berry version
+      ansible.builtin.command:
+        cmd: /usr/local/bin/yarn --version
+      environment:
+        COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"
+      register: nodejs_verify_yarn
+      changed_when: false
+
+    - name: Assert expected Node and Yarn versions
+      ansible.builtin.assert:
+        that:
+          - nodejs_verify_node.stdout == desired_nodejs_version
+          - nodejs_verify_yarn.stdout == nodejs_yarn_version
