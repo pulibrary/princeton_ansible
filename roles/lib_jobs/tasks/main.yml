@@ -50,7 +50,9 @@
     dest: '/opt/{{ app_directory }}/shared/git_lab_eads'
     accept_newhostkey: true
     update: false
-  when: running_on_server
+  when: 
+    - running_on_server
+    - when: runtime_env | default('staging') == "production"
 
 - name: lib_jobs | add GitLab repo configuration
   ansible.builtin.template:
@@ -59,7 +61,9 @@
     owner: '{{ deploy_user }}'
     group: '{{ deploy_user }}'
     mode: 0664
-  when: running_on_server
+  when: 
+    - running_on_server
+    - when: runtime_env | default('staging') == "production"
 
 - name: lib_jobs | add cloned staging repo
   become_user: "{{ deploy_user }}"
@@ -68,7 +72,9 @@
     dest: '/opt/{{ app_directory }}/shared/git_lab_staging_eads'
     accept_newhostkey: true
     update: false
-  when: running_on_server
+  when: 
+    - running_on_server
+    - when: runtime_env | default('staging') == "staging"
 
 - name: lib_jobs | add GitLab staging repo configuration
   ansible.builtin.template:
@@ -77,7 +83,9 @@
     owner: '{{ deploy_user }}'
     group: '{{ deploy_user }}'
     mode: 0664
-  when: running_on_server
+  when: 
+    - running_on_server
+    - when: runtime_env | default('staging') == "staging"
 
 # PeopleSoft Mount
 - name: lib_jobs | Copy peoplesoft smb credentials
