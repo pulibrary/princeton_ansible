@@ -1,0 +1,63 @@
+---
+# we only create postgres clusters on Ubuntu
+# these tasks will create a local db on RHEL
+# CI always runs on Ubuntu
+- name: RHEL | Import the PG GPG key
+  ansible.builtin.rpm_key:
+    state: present
+    key: https://apt.postgresql.org/pub/repos/yum/keys/PGDG-RPM-GPG-KEY-RHEL
+  become: true
+
+# Tower can now use PSQL 15, 16, or 17
+# RHEL 9 supports PSQL 16
+- name: RHEL | Install the postgresql rpm from a remote repo
+  ansible.builtin.dnf:
+    name: 'https://download.postgresql.org/pub/repos/yum/reporpms/EL-9-x86_64/pgdg-redhat-repo-latest.noarch.rpm'
+    state: present
+
+- name: RHEL | install postgresql server package
+  ansible.builtin.dnf:
+    name: "{{ postgres_packages }}"
+    state: present
+  when:
+    - postgresql_is_local | bool
+
+- name: RHEL | Initialize PostgreSQL database
+  ansible.builtin.command:
+    cmd: /usr/pgsql-{{ postgres_version }}/bin/postgresql-{{ postgres_version }}-setup initdb
+  args:
+    creates: "/var/lib/pgsql/{{ postgres_version }}/initdb.log"
+  when:
+    - postgresql_is_local | bool
+
+- name: RHEL | install postgresql client packages
+  ansible.builtin.dnf:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - "{{ postgres_client_packages }}"
+
+- name: RHEL | install configuration file
+  ansible.builtin.template:
+    src: 'rh_postgresql.conf.j2'
+    dest: "{{ postgres_conf_directory }}/postgresql.conf"
+    group: postgres
+    owner: postgres
+    mode: "0644"
+  register: configure_postgres
+  when:
+    - postgresql_is_local | bool
+  notify: restart postgresql
+
+- name: RHEL | ensure access to postgres database
+  ansible.builtin.blockinfile:
+    path: "{{ postgres_conf_directory }}/pg_hba.conf"
+    insertafter: "# IPv4 local connections:"
+    block: |
+      host postgres postgres {{ ansible_default_ipv4.address }}/32 scram-sha-256
+  when:
+    - (postgres_host | default(None)) is not none
+    - running_on_server
+  become: true
+  notify:
+    - reload local postgres
