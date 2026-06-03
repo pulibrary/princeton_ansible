@@ -85,6 +85,21 @@
   delay: 10
   until: signoz_service_lookup.rc == 0
 
+- name: SigNoz | Write ingress manifest
+  ansible.builtin.template:
+    src: ingress.yaml.j2
+    dest: /etc/signoz/ingress.yaml
+    owner: root
+    group: root
+    mode: "0644"
+  when: signoz_ingress_enabled | default(false) | bool
+
+- name: SigNoz | Apply ingress
+  ansible.builtin.command: microk8s kubectl apply -f /etc/signoz/ingress.yaml
+  changed_when: "'configured' in signoz_apply_ingress.stdout or 'created' in signoz_apply_ingress.stdout"
+  register: signoz_apply_ingress
+  when: signoz_ingress_enabled | default(false) | bool
+
 - name: Check SigNoz pods
   ansible.builtin.command: "microk8s kubectl -n {{ signoz_namespace }} get pods"
   changed_when: false

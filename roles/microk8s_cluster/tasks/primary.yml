@@ -7,6 +7,12 @@
     - "'is already enabled' not in microk8s_enable_addon.stdout"
   loop: "{{ microk8s_base_addons }}"
 
+- name: MicroK8s | Enable ingress addon
+  ansible.builtin.command: microk8s enable ingress
+  register: microk8s_enable_ingress
+  changed_when: "'already enabled' not in microk8s_enable_ingress.stdout"
+  when: inventory_hostname in groups[microk8s_primary_group] | default([])
+
 - name: Enable MicroK8s community addon repository
   ansible.builtin.command: microk8s enable community
   register: microk8s_enable_community
