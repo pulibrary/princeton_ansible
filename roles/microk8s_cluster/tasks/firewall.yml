@@ -24,6 +24,20 @@
     - microk8s_ufw_binary.stat.exists
     - "'Status: active' in microk8s_ufw_status.stdout"
 
+- name: Allow MicroK8s ingress traffic from load balancers
+  community.general.ufw:
+    rule: allow
+    from_ip: "{{ item.0 }}"
+    port: "{{ item.1.port }}"
+    proto: "{{ item.1.proto }}"
+    comment: "{{ item.1.comment }} from {{ item.0 }}"
+  loop: "{{ microk8s_ingress_allowed_sources | product(microk8s_ingress_ufw_rules) | list }}"
+  when:
+    - microk8s_manage_ufw | bool
+    - microk8s_ufw_binary.stat.exists
+    - "'Status: active' in microk8s_ufw_status.stdout"
+    - microk8s_ingress_allowed_sources | length > 0
+
 - name: Reload UFW
   community.general.ufw:
     state: reloaded
