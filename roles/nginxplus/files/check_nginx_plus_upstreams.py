@@ -57,11 +57,6 @@ def main():
         emit(3, "NGINX Plus upstreams", "-", "Unexpected API response format")
         return
 
-    total_upstreams = 0
-    critical_upstreams = 0
-    warning_upstreams = 0
-    backup_serving_upstreams = 0
-
     for upstream_name, upstream in sorted(upstreams.items()):
         peers = upstream.get("peers", [])
         primary_peers = [peer for peer in peers if not peer.get("backup", False)]
@@ -85,13 +80,11 @@ def main():
         service_name = f"NGINX Plus upstream {upstream_name}"
 
         if p_total == 0 and b_total == 0:
-            warning_upstreams += 1
             emit(1, service_name, metrics, "No upstream peers found")
 
         elif p_up > 0:
             # At least one primary is usable.
             if p_bad > 0 or p_other > 0:
-                warning_upstreams += 1
                 emit(
                     1,
                     service_name,
@@ -104,8 +97,6 @@ def main():
         elif b_up > 0:
             # No usable primaries, but backups are up and serving traffic.
             # Degraded, not down: warn instead of crit.
-            backup_serving_upstreams += 1
-            warning_upstreams += 1
             primary_detail = bad_primary or "no usable primary peers"
             emit(
                 1,
@@ -117,46 +108,12 @@ def main():
 
         else:
             # No usable primaries and no usable backups: genuinely down.
-            critical_upstreams += 1
             primary_detail = bad_primary or "no primary peers"
             if b_total == 0:
                 detail = f"primaries: {primary_detail}; no backup peers defined"
             else:
                 detail = f"primaries: {primary_detail}; backups: {bad_backup or 'none usable'}"
             emit(2, service_name, metrics, f"No usable peers ({detail})")
-
-        total_upstreams += 1
-
-    summary_metrics = (
-        f"upstreams={total_upstreams}|"
-        f"critical_upstreams={critical_upstreams}|"
-        f"warning_upstreams={warning_upstreams}|"
-        f"backup_serving_upstreams={backup_serving_upstreams}"
-    )
-
-    if critical_upstreams:
-        emit(
-            2,
-            "NGINX Plus upstream summary",
-            summary_metrics,
-            f"{critical_upstreams} upstreams have no usable peers; "
-            f"{warning_upstreams} degraded ({backup_serving_upstreams} serving from backup)",
-        )
-    elif warning_upstreams:
-        emit(
-            1,
-            "NGINX Plus upstream summary",
-            summary_metrics,
-            f"{warning_upstreams} upstreams degraded "
-            f"({backup_serving_upstreams} serving from backup)",
-        )
-    else:
-        emit(
-            0,
-            "NGINX Plus upstream summary",
-            summary_metrics,
-            f"All {total_upstreams} upstreams have usable primary peers",
-        )
 
 
 if __name__ == "__main__":
