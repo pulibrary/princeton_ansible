@@ -4,13 +4,13 @@
     name: "{{ postgres_service_name }}"
     state: reloaded
   become: true
-  delegate_to: '{{ postgres_host }}'
+  delegate_to: "{{ postgres_host | default(inventory_hostname, true) }}"
   # in the old pg_hba tasks file, reloading was delegated like this:
   # delegate_to: "{{ postgres_host | default(inventory_hostname) }}"
   # is this pair of conditions functionally the same?
   when:
-    - (postgres_host | default('') | length) > 0
-    - not postgresql_is_local
+    - (postgres_host | default('', true) | length) > 0
+    - not (postgresql_is_local | bool)
 
 - name: reload local postgres
   ansible.builtin.service:

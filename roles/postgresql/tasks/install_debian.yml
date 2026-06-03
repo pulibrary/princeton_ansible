@@ -104,11 +104,11 @@
 - name: Ubuntu | configure pg_hba for client connections to postgres server
   ansible.builtin.lineinfile:
     path: '/etc/postgresql/{{ postgres_version }}/main/pg_hba.conf'
-    line: 'host  {{ pg_hba_postgresql_database }}      {{ pg_hba_postgresql_user }} {{ ansible_default_ipv4.address }}/32       md5'
-  delegate_to: "{{ postgres_host | default(inventory_hostname) }}"
+    line: 'host  {{ pg_hba_postgresql_database }}      {{ pg_hba_postgresql_user }} {{ ansible_default_ipv4.address }}/32       {{ pg_hba_method }}'
+  delegate_to: "{{ postgres_host | default(inventory_hostname, true) }}"
   register: remote_postgres_configured
   when:
-    - (postgres_host | default('') | length) > 0
-    - not postgresql_is_local
-    - running_on_server
+    - running_on_server | bool
+    - not (postgresql_is_local | bool)
+    - (postgres_host | default('', true) | length) > 0
   notify: reload remote postgres
