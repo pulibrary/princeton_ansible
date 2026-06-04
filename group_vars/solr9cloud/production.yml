@@ -10,6 +10,29 @@ jolokia_agent_version: "2.5.1"
 # more granular option would be:
 # solr_java_memory: '-Xms16g -Xmx20g'
 # solr version
+# modularize modules
+solr_modules:
+  - analysis-extras
+  - scripting
+  - langid
+  - opentelemetry
+
+solr_otel_enabled: true
+solr_otel_service_name: solr
+solr_otel_endpoint: "http://127.0.0.1:4317"
+solr_otel_protocol: grpc
+solr_otel_sampler: parentbased_always_on
+solr_otel_propagators: "tracecontext,baggage"
+
+beyla_enabled: true
+beyla_service_name: solr
+beyla_environment: production
+beyla_otlp_endpoint: "http://127.0.0.1:4318"
+beyla_otlp_protocol: "http/protobuf"
+beyla_bpf_context_propagation: "all"
+beyla_open_ports:
+  - 8983
+
 solr_cloud_download_version: 9.9.0
 solr_cloud_version: "{{ solr_version }}"
 solr_version: "{{ solr_cloud_download_version }}"
@@ -41,6 +64,165 @@ solr9_gcsfuse_logrotate_rules:
       su_group: "{{ logrotate_global_defaults.su_group }}"
       postrotate: |
         systemctl reload solr-gcsfuse.service 2>/dev/null || true
+
+# signoz / otel collector for Solr
+otel_default_resource_attributes:
+  host.name: "{{ inventory_hostname }}"
+  service.name: solr
+  service.version: production
+  environment: production
+
+otel_receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 127.0.0.1:4317
+      http:
+        endpoint: 127.0.0.1:4318
+
+  filelog/solr-main:
+    include:
+      - /solr/logs/solr.log
+    start_at: end
+    include_file_path: true
+    include_file_name: true
+    operators:
+      - type: recombine
+        id: recombine_solr_stacktraces
+        combine_field: body
+        source_identifier: attributes["log.file.path"]
+        is_first_entry: 'body matches "^\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}\\.\\d{3} "'
+        force_flush_period: 5s
+
+      - type: regex_parser
+        id: parse_solr_log
+        regex: '^(?P<timestamp>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}) (?P<level>[A-Z]+)\s+\((?P<thread>[^)]*)\) \[(?P<collection>[^\]]*)\] (?P<logger>\S+) (?P<message>[\s\S]*)$'
+        parse_from: body
+        on_error: send
+
+      - type: time_parser
+        parse_from: attributes.timestamp
+        layout_type: strptime
+        layout: '%Y-%m-%d %H:%M:%S.%L'
+        on_error: send
+
+      - type: severity_parser
+        parse_from: attributes.level
+        on_error: send
+
+      - type: add
+        field: attributes.log_type
+        value: solr_main
+
+      - type: add
+        field: attributes.service_name
+        value: solr
+
+  filelog/solr-request:
+    include:
+      - /solr/logs/*.request.log
+    start_at: end
+    include_file_path: true
+    include_file_name: true
+    operators:
+      - type: add
+        field: attributes.log_type
+        value: solr_request
+
+      - type: add
+        field: attributes.service_name
+        value: solr
+
+  filelog/solr-gc:
+    include:
+      - /solr/logs/solr_gc.log
+    start_at: end
+    include_file_path: true
+    include_file_name: true
+    operators:
+      - type: add
+        field: attributes.log_type
+        value: solr_gc
+
+      - type: add
+        field: attributes.service_name
+        value: solr
+
+  hostmetrics:
+    collection_interval: 30s
+    scrapers:
+      cpu: {}
+      disk: {}
+      filesystem: {}
+      load: {}
+      memory: {}
+      network: {}
+
+otel_processors:
+  batch:
+    send_batch_max_size: 1024
+    send_batch_size: 512
+    timeout: 30s
+
+otel_exporters:
+  loadbalancing:
+    routing_key: service
+    protocol:
+      otlp:
+        timeout: 10s
+        tls:
+          insecure: true
+        sending_queue:
+          enabled: true
+          num_consumers: 10
+          queue_size: 5000
+        retry_on_failure:
+          enabled: true
+          initial_interval: 5s
+          max_interval: 30s
+          max_elapsed_time: 300s
+    resolver:
+      static:
+        hostnames:
+          - k8s-prod1.lib.princeton.edu:32317
+          - k8s-prod2.lib.princeton.edu:32317
+          - k8s-prod3.lib.princeton.edu:32317
+
+  debug:
+    verbosity: basic
+
+otel_service_pipelines:
+  logs:
+    receivers:
+      - filelog/solr-main
+      - filelog/solr-request
+      - filelog/solr-gc
+    processors:
+      - resource
+      - batch
+    exporters:
+      - loadbalancing
+      - debug
+
+  metrics:
+    receivers:
+      - hostmetrics
+    processors:
+      - resource
+      - batch
+    exporters:
+      - loadbalancing
+      - debug
+
+  traces:
+    receivers:
+      - otlp
+    processors:
+      - resource
+      - batch
+    exporters:
+      - loadbalancing
+# datadog
 datadog_api_key: "{{ vault_datadog_key }}"
 datadog_config:
   tags: "solrcloud, environment:production, role:solr, version:9"
