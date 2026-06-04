@@ -1,21 +1,4 @@
 ---
-- name: PostgreSQL | create postgresql db users
-  community.postgresql.postgresql_user:
-    name: '{{ application_dbuser_name }}'
-    port: '{{ postgres_port }}'
-    login_host: '{{ postgres_host }}'
-    login_user: '{{ postgres_admin_user }}'
-    login_password: '{{ postgres_admin_password }}'
-    password: '{{ application_dbuser_password }}'
-    encrypted: true
-    role_attr_flags: '{{ application_dbuser_role_attr_flags }}'
-    state: 'present'
-  when:
-    - running_on_server
-    - not postgresql_is_local
-  changed_when: false
-  run_once: true
-
 - name: PostgreSQL | create postgresql db server users
   community.postgresql.postgresql_user:
     name: "{{ item.name }}"
@@ -50,19 +33,3 @@
   become_user: "{{ postgres_admin_user }}"
   loop: "{{ postgresql_users }}"
   delegate_to: "{{ postgres_leader }}"
-
-- name: PostgreSQL | change postgresql database owner
-  community.postgresql.postgresql_db:
-    name: "{{ application_db_name }}"
-    port: "{{ postgres_port }}"
-    login_host: "{{ postgres_host }}"
-    login_user: "{{ postgres_admin_user }}"
-    login_password: "{{ postgres_admin_password }}"
-    encoding: "UTF-8"
-    state: "present"
-    owner: "{{ application_dbuser_name }}"
-  when:
-    - running_on_server
-    - not postgresql_is_local
-  changed_when: false
-  run_once: true
