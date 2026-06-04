@@ -171,7 +171,7 @@ job "log-shipping" {
           }
           otelcol.exporter.otlp "signoz_metrics" {
               client {
-                  endpoint = "k8s-staging1.lib.princeton.edu:30374"
+                  endpoint = "k8s-staging1.lib.princeton.edu:32317"
                   tls { 
                       insecure = true 
                   }
@@ -181,9 +181,9 @@ job "log-shipping" {
               resolver {
                   static {
                       hostnames = [
-                          "k8s-staging1.lib.princeton.edu:30374",
-                          "k8s-staging2.lib.princeton.edu:30374",
-                          "k8s-staging3.lib.princeton.edu:30374",
+                          "k8s-staging1.lib.princeton.edu:32317",
+                          "k8s-staging2.lib.princeton.edu:32317",
+                          "k8s-staging3.lib.princeton.edu:32317",
                       ]
                   }
               }
