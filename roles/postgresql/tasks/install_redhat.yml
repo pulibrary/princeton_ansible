@@ -19,16 +19,12 @@
   ansible.builtin.dnf:
     name: "{{ postgres_packages }}"
     state: present
-  when:
-    - postgresql_is_local | bool
 
 - name: RHEL | Initialize PostgreSQL database
   ansible.builtin.command:
     cmd: /usr/pgsql-{{ postgres_version }}/bin/postgresql-{{ postgres_version }}-setup initdb
   args:
     creates: "/var/lib/pgsql/{{ postgres_version }}/initdb.log"
-  when:
-    - postgresql_is_local | bool
 
 - name: RHEL | install postgresql client packages
   ansible.builtin.dnf:
@@ -45,8 +41,6 @@
     owner: postgres
     mode: "0644"
   register: configure_postgres
-  when:
-    - postgresql_is_local | bool
   notify: restart postgresql
 
 - name: RHEL | ensure access to postgres database
