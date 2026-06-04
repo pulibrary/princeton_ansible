@@ -1,12 +1,5 @@
 ---
-- name: PostgreSQL | install python drivers for psql 13
-  ansible.builtin.dnf:
-    name: python3-psycopg2
-    state: present
-  when:
-    - ansible_os_family == "RedHat"
-
-- name: PostgreSQL | create postgresql database
+- name: PostgreSQL | create remote postgresql database
   community.postgresql.postgresql_db:
     name: '{{ application_db_name }}'
     port: '{{ postgres_port }}'
@@ -20,7 +13,7 @@
     - not postgresql_is_local
   run_once: true
 
-- name: PostgreSQL | create postgresql server database
+- name: PostgreSQL | create local postgresql database
   community.postgresql.postgresql_db:
     name: "{{ item.name }}"
     encoding: 'UTF-8'
@@ -30,7 +23,7 @@
   #  delegate_to: '{{ postgres_host }}'
   when:
     - running_on_server
-    - postgresql_is_local
+    - postgresql_is_local | bool
     - postgresql_databases|length > 0
   changed_when: false
   become: true
