@@ -1,4 +1,7 @@
 ---
+# we have two types of postgres servers: standalone and clustered
+# we have a shared cluster and a dedicated cluster for figgy
+# clusters run on Ubuntu; the standalone server for Tower runs on RHEL
 - name: Include OS-specific vars
   ansible.builtin.include_vars:
     file: "{{ ansible_os_family | lower }}.yml"
@@ -31,7 +34,6 @@
     mode: "0644"
   when:
     - running_on_server
-    - ansible_os_family == "Debian"
     - postgresql_cluster_member == true
   notify: restart postgresql
 
@@ -42,8 +44,6 @@
   when:
     - postgresql_is_local | bool
     - postgresql_leader == true
-    - ansible_os_family == "Debian"
-    # - running_on_server
 
 - name: Ensure pgpass
   ansible.builtin.template:
@@ -74,8 +74,24 @@
     - inventory_hostname == postgresql_cluster.leader
     - postgresql_logical_replication != false
 
-- name: Create databases
-  ansible.builtin.include_tasks: create_db.yml
+# - name: Create databases
+#   ansible.builtin.include_tasks: create_db.yml
+
+- name: PostgreSQL | create local postgresql database
+  community.postgresql.postgresql_db:
+    name: "{{ item.name }}"
+    encoding: 'UTF-8'
+    state: "present"
+    login_user: "{{ postgres_admin_user }}"
+    owner: "{{ item.owner | default(postgres_admin_user) }}"
+  when:
+    - running_on_server
+    - postgresql_is_local | bool
+    - postgresql_databases|length > 0
+  changed_when: false
+  become: true
+  become_user: "{{ postgres_admin_user }}"
+  loop: "{{ postgresql_databases }}"
 
 - name: Create users
   ansible.builtin.include_tasks: create_users.yml
