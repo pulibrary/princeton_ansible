@@ -7,4 +7,152 @@ postfix_smtp_relay_port: "{{ proofpoint_port }}"
 proofpoint_username: "{{ vault_proofpoint_prod_username }}"
 proofpoint_password: "{{ vault_proofpoint_prod_password }}"
 proofpoint_host: "{{ vault_proofpoint_host }}"
-proofpoint_port: "587"
+
+# signoz / otel collector for ponyexpr postfix logs
+otel_default_resource_attributes:
+  host.name: "{{ inventory_hostname }}"
+  service.name: ponyexpr-postfix
+  service.namespace: mail
+  service.version: production
+  environment: production
+  deployment.environment: production
+
+otel_receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 127.0.0.1:4317
+      http:
+        endpoint: 127.0.0.1:4318
+
+  filelog/postfix:
+    include:
+      - /var/log/mail.log
+    exclude:
+      - /var/log/mail.log.*
+      - /var/log/*.gz
+    start_at: end
+    include_file_path: true
+    include_file_name: true
+    operators:
+      - type: syslog_parser
+        id: parse_syslog_rfc3164
+        protocol: rfc3164
+
+      - type: regex_parser
+        id: parse_postfix_client
+        parse_from: body
+        regex: '^connect from (?P<client_hostname>[^\[]+)\[(?P<client_ip>[^\]]+)\]$'
+        if: 'body matches "^connect from .*\\[[^\\]]+\\]$"'
+
+      - type: regex_parser
+        id: parse_postfix_disconnect
+        parse_from: body
+        regex: '^disconnect from (?P<client_hostname>[^\[]+)\[(?P<client_ip>[^\]]+)\](?: (?P<postfix_disconnect_stats>.*))?$'
+        if: 'body matches "^disconnect from .*\\[[^\\]]+\\]"'
+
+      - type: regex_parser
+        id: parse_postfix_lost_connection
+        parse_from: body
+        regex: '^lost connection after (?P<smtp_stage>[A-Z]+) from (?P<client_hostname>[^\[]+)\[(?P<client_ip>[^\]]+)\]$'
+        if: 'body matches "^lost connection after [A-Z]+ from .*\\[[^\\]]+\\]$"'
+
+      - type: add
+        field: attributes.log_type
+        value: postfix
+
+      - type: add
+        field: attributes.service.name
+        value: ponyexpr-postfix
+
+      - type: add
+        field: attributes.deployment.environment
+        value: production
+
+otel_processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 512
+    spike_limit_mib: 128
+
+  resource:
+    attributes:
+      - key: host.name
+        value: "{{ inventory_hostname }}"
+        action: upsert
+      - key: service.name
+        value: ponyexpr-postfix
+        action: upsert
+      - key: service.namespace
+        value: mail
+        action: upsert
+      - key: service.version
+        value: production
+        action: upsert
+      - key: deployment.environment
+        value: production
+        action: upsert
+      - key: environment
+        value: production
+        action: upsert
+
+  batch:
+    timeout: 10s
+    send_batch_size: 8192
+
+otel_exporters:
+  loadbalancing:
+    routing_key: service
+    protocol:
+      otlp:
+        timeout: 10s
+        tls:
+          insecure: true
+        sending_queue:
+          enabled: true
+          num_consumers: 10
+          queue_size: 5000
+        retry_on_failure:
+          enabled: true
+          initial_interval: 5s
+          max_interval: 30s
+          max_elapsed_time: 300s
+    resolver:
+      static:
+        hostnames:
+          - k8s-prod1.lib.princeton.edu:32317
+          - k8s-prod2.lib.princeton.edu:32317
+          - k8s-prod3.lib.princeton.edu:32317
+
+otel_service_pipelines:
+  logs:
+    receivers:
+      - filelog/postfix
+    processors:
+      - memory_limiter
+      - resource
+      - batch
+    exporters:
+      - loadbalancing
+
+  traces:
+    receivers:
+      - otlp
+    processors:
+      - memory_limiter
+      - resource
+      - batch
+    exporters:
+      - loadbalancing
+
+  metrics:
+    receivers:
+      - otlp
+    processors:
+      - memory_limiter
+      - resource
+      - batch
+    exporters:
+      - loadbalancing
+
+otel_extensions: []
