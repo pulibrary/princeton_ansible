@@ -1,0 +1,45 @@
+---
+- name: Verify
+  hosts: all
+  become: true
+  vars:
+    step_ca_path: /etc/step-ca
+  tasks:
+    - name: Stat key CA artefacts
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - "{{ step_ca_path }}/config/ca.json"
+        - "{{ step_ca_path }}/certs/ssh_user_ca_key.pub"
+        - "{{ step_ca_path }}/certs/ssh_host_ca_key.pub"
+        - "{{ step_ca_path }}/templates/ssh/pulsys.tpl"
+      register: ca_artefacts
+
+    - name: Assert all CA artefacts exist
+      ansible.builtin.assert:
+        that:
+          - item.stat.exists
+        fail_msg: "Missing {{ item.item }}"
+      loop: "{{ ca_artefacts.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Read ca.json
+      ansible.builtin.slurp:
+        src: "{{ step_ca_path }}/config/ca.json"
+      register: ca_json_raw
+
+    - name: Assert break-glass provisioner exists
+      ansible.builtin.assert:
+        that:
+          - "'break-glass' in ((ca_json_raw.content | b64decode | from_json).authority.provisioners | map(attribute='name') | list)"
+
+    - name: Confirm the service is active
+      ansible.builtin.systemd_service:
+        name: step-ca
+      register: stepca_unit
+
+    - name: Assert step-ca is running
+      ansible.builtin.assert:
+        that:
+          - stepca_unit.status.ActiveState == 'active'

@@ -1,0 +1,44 @@
+---
+
+- name: Install apt prerequisites
+  ansible.builtin.apt:
+    name:
+      - curl
+      - ca-certificates
+      - gnupg
+      - python3-debian
+    state: present
+    update_cache: true
+
+- name: Ensure apt keyrings directory exists
+  ansible.builtin.file:
+    path: "{{ step_ca_apt_keyring | dirname }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install the Smallstep apt signing key
+  ansible.builtin.get_url:
+    url: "{{ step_ca_apt_key_url }}"
+    dest: "{{ step_ca_apt_keyring }}"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Add the Smallstep apt repository
+  ansible.builtin.deb822_repository:
+    name: smallstep
+    types: [deb]
+    uris: "{{ step_ca_apt_repo_uri }}"
+    suites: ["{{ step_ca_apt_suite }}"]
+    components: [main]
+    signed_by: "{{ step_ca_apt_keyring }}"
+    state: present
+  register: step_ca_apt_repo
+
+- name: Install step-cli and step-ca
+  ansible.builtin.apt:
+    name: "{{ step_ca_packages }}"
+    state: present
+    update_cache: "{{ step_ca_apt_repo is changed }}"
