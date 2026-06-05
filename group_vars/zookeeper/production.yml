@@ -31,3 +31,69 @@ datadog_checks:
             name: start_with_date
             pattern: \d{4}\-(0?[1-9]|1[012])\-(0?[1-9]|[12][0-9]|3[01])
 
+# signoz
+otel_default_resource_attributes:
+  host.name: "{{ inventory_hostname }}"
+  service.name: zookeeper
+  service.version: production
+  environment: production
+
+otel_receivers:
+  journald/zookeeper:
+    units:
+      - zookeeper.service
+    priority: info
+
+  hostmetrics:
+    collection_interval: 30s
+    scrapers:
+      cpu: {}
+      disk: {}
+      filesystem: {}
+      load: {}
+      memory: {}
+      network: {}
+
+otel_processors:
+  batch:
+    send_batch_max_size: 1024
+    send_batch_size: 512
+    timeout: 30s
+
+otel_exporters:
+  loadbalancing:
+    routing_key: service
+    protocol:
+      otlp:
+        timeout: 10s
+        tls:
+          insecure: true
+        sending_queue:
+          enabled: true
+          num_consumers: 10
+          queue_size: 5000
+        retry_on_failure:
+          enabled: true
+          initial_interval: 5s
+          max_interval: 30s
+          max_elapsed_time: 300s
+    resolver:
+      static:
+        hostnames:
+          - k8s-prod1.lib.princeton.edu:32317
+          - k8s-prod2.lib.princeton.edu:32317
+          - k8s-prod3.lib.princeton.edu:32317
+
+  debug:
+    verbosity: basic
+
+otel_service_pipelines:
+  logs:
+    receivers:
+      - journald/zookeeper
+    processors:
+      - resource
+      - batch
+    exporters:
+      - loadbalancing
+      - debug
