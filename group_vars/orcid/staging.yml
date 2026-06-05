@@ -1,33 +1,50 @@
 ---
-postgres_host: 'lib-postgres-staging1.princeton.edu'
+postgres_host: "lib-postgres-staging1.princeton.edu"
 
 postgres_version: 15
 passenger_server_name: "{{ inventory_hostname }}"
 passenger_app_env: "staging"
-passenger_extra_config: "client_max_body_size 0;"
+passenger_extra_config: |
+  client_max_body_size 0;
+  passenger_app_group_name orcid-staging-otel;
 
-orcid_db_name: 'orcid_staging'
+orcid_db_name: "orcid_staging"
 
-orcid_db_user: '{{vault_orcid_staging_db_user}}'
-orcid_db_password: '{{vault_orcid_staging_db_password}}'
+orcid_db_user: "{{vault_orcid_staging_db_user}}"
+orcid_db_password: "{{vault_orcid_staging_db_password}}"
 
 ruby_app_env: "staging"
 
-orcid_host_name: 'orcid-staging.princeton.edu'
-orcid_honeybadger_key: '{{vault_orcid_honeybadger_key}}'
+orcid_host_name: "orcid-staging.princeton.edu"
+orcid_honeybadger_key: "{{vault_orcid_honeybadger_key}}"
 
-orcid_secret_key: '{{vault_orcid_staging_secret_key}}'
-orcid_rails_main_key: '{{vault_orcid_staging_rails_main_key}}'
-orcid_client_id: '{{vault_orcid_staging_client_id}}'
-orcid_client_secret: '{{vault_orcid_staging_client_secret}}'
+orcid_secret_key: "{{vault_orcid_staging_secret_key}}"
+orcid_rails_main_key: "{{vault_orcid_staging_rails_main_key}}"
+orcid_client_id: "{{vault_orcid_staging_client_id}}"
+orcid_client_secret: "{{vault_orcid_staging_client_secret}}"
 orcid_sandbox: true
-orcid_token_secret: '{{ vault_orcid_staging_token_secret }}'
+orcid_token_secret: "{{ vault_orcid_staging_token_secret }}"
 app_banner_title: "Welcome to ORCID@Princeton (Staging)!"
 app_banner_body: 'This system is connected to the <a href="https://sandbox.orcid.org/">ORCID Sandbox</a>, NOT the real ORCID API.'
 app_orcid_sandbox: true
-app_orcid_url: 'https://api.sandbox.orcid.org/v3.0'
-peoplesoft_output_location: '/mnt/peoplesoft/sr_orcid/test/ORCID_portal_report.csv'
-
+app_orcid_url: "https://api.sandbox.orcid.org/v3.0"
+peoplesoft_output_location: "/mnt/peoplesoft/sr_orcid/test/ORCID_portal_report.csv"
+ruby_app_otel_enabled: true
+ruby_app_otel_env:
+  - name: OTEL_SERVICE_NAME
+    value: orcid
+  - name: OTEL_EXPORTER_OTLP_ENDPOINT
+    value: http://127.0.0.1:4318
+  - name: OTEL_EXPORTER_OTLP_TRACES_ENDPOINT
+    value: http://127.0.0.1:4318/v1/traces
+  - name: OTEL_EXPORTER_OTLP_PROTOCOL
+    value: http/protobuf
+  - name: OTEL_EXPORTER_OTLP_TRACES_PROTOCOL
+    value: http/protobuf
+  - name: OTEL_EXPORTER_OTLP_INSECURE
+    value: "true"
+  - name: OTEL_RESOURCE_ATTRIBUTES
+    value: "deployment.environment=staging,service.namespace=orcid"
 # signoz
 otel_default_resource_attributes:
   host.name: "{{ inventory_hostname }}"
@@ -36,52 +53,118 @@ otel_default_resource_attributes:
   environment: staging
 
 otel_receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 127.0.0.1:4317
+      http:
+        endpoint: 127.0.0.1:4318
+
   filelog/nginx-access:
-    include: ["/var/log/nginx/access.log*"]
+    include:
+      - /var/log/nginx/access.log
     start_at: end
+    include_file_path: true
+    include_file_name: true
     operators:
       - type: regex_parser
-        regex: '^(?P<remote_addr>[^\s]+) \((?P<remote_user>[^)]*)\) - - \[(?P<time_local>[^\]]+)\] "(?P<method>\S+) (?P<path>\S+) (?P<protocol>[^"]+)" (?P<status>\d+) (?P<body_bytes_sent>\d+) "(?P<http_referer>[^"]*)" "(?P<http_user_agent>[^"]*)"'
         parse_from: body
+        regex: '^(?P<remote_addr>[^\s]+) \((?P<remote_user>[^)]*)\) - - \[(?P<time_local>[^\]]+)\] "(?P<method>\S+) (?P<path>\S+) (?P<protocol>[^"]+)" (?P<status>\d+) (?P<body_bytes_sent>\d+) "(?P<http_referer>[^"]*)" "(?P<http_user_agent>[^"]*)"'
       - type: time_parser
         parse_from: attributes.time_local
         layout_type: strptime
-        layout: '%d/%b/%Y:%H:%M:%S %z'
+        layout: "%d/%b/%Y:%H:%M:%S %z"
       - type: add
         field: attributes.log_type
-        value: "orcid_access"
+        value: orcid_access
       - type: add
         field: attributes.service_name
-        value: orcid_access
+        value: orcid
+
   filelog/nginx-error:
-    include: ["/var/log/nginx/error.log*"]
+    include:
+      - /var/log/nginx/error.log
     start_at: end
+    include_file_path: true
+    include_file_name: true
     operators:
       - type: add
         field: attributes.log_type
-        value: "orcid_error"
+        value: orcid_error
       - type: add
         field: attributes.service_name
-        value: "orcid"
+        value: orcid
+
   hostmetrics:
     collection_interval: 30s
-    scrapers: { cpu: {}, disk: {}, filesystem: {}, load: {}, memory: {}, network: {} }
+    scrapers:
+      cpu: {}
+      disk: {}
+      filesystem: {}
+      load: {}
+      memory: {}
+      network: {}
 
 otel_processors:
-  batch: { send_batch_max_size: 1024, send_batch_size: 512, timeout: 30s }
+  batch:
+    send_batch_max_size: 1024
+    send_batch_size: 512
+    timeout: 30s
 
 otel_exporters:
-  otlp:
-    endpoint: "http://sandbox-signoz1.lib.princeton.edu:4317"
-    tls: { insecure: true }
-  debug: { verbosity: basic }
+  loadbalancing:
+    routing_key: service
+    protocol:
+      otlp:
+        timeout: 10s
+        tls:
+          insecure: true
+        sending_queue:
+          enabled: true
+          num_consumers: 10
+          queue_size: 5000
+        retry_on_failure:
+          enabled: true
+          initial_interval: 5s
+          max_interval: 30s
+          max_elapsed_time: 300s
+    resolver:
+      static:
+        hostnames:
+          - k8s-staging1.lib.princeton.edu:32317
+          - k8s-staging2.lib.princeton.edu:32317
+          - k8s-staging3.lib.princeton.edu:32317
+
+  debug:
+    verbosity: basic
 
 otel_service_pipelines:
   logs:
-    receivers: ["filelog/nginx-access", "filelog/nginx-error"]
-    processors: ["resource", "batch"]
-    exporters: ["otlp", "debug"]
+    receivers:
+      - filelog/nginx-access
+      - filelog/nginx-error
+    processors:
+      - resource
+      - batch
+    exporters:
+      - loadbalancing
+      - debug
+
   metrics:
-    receivers: ["hostmetrics"]
-    processors: ["resource", "batch"]
-    exporters: ["otlp", "debug"]
+    receivers:
+      - hostmetrics
+    processors:
+      - resource
+      - batch
+    exporters:
+      - loadbalancing
+      - debug
+
+  traces:
+    receivers:
+      - otlp
+    processors:
+      - resource
+      - batch
+    exporters:
+      - loadbalancing

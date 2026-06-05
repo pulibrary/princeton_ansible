@@ -78,33 +78,20 @@
     repo: 'deb https://oss-binaries.phusionpassenger.com/apt/passenger {{ ansible_distribution_release }} main'
     state: present
     filename: passenger
-    update_cache: false
+    update_cache: true
 
-- name: Passenger | Clean apt cache
-  ansible.builtin.command: apt-get clean
-  changed_when: false
-
-- name: Passenger | Update apt cache after adding repository
-  ansible.builtin.command: apt-get update
-  register: cache_update
-  retries: 3
-  delay: 5
-  until: cache_update.rc == 0
-  changed_when: false
-  failed_when: false
-
-- name: Passenger | Display cache update errors
-  ansible.builtin.debug:
-    msg: |
-      Return code: {{ cache_update.rc }}
-      STDOUT: {{ cache_update.stdout }}
-      STDERR: {{ cache_update.stderr }}
-  when: cache_update.rc != 0
-
-- name: Passenger | Fail if cache update failed
-  ansible.builtin.fail:
-    msg: "apt-get update failed. See debug output above."
-  when: cache_update.rc != 0
+- name: Phusion | Prefer Phusion Passenger packages
+  ansible.builtin.copy:
+    dest: /etc/apt/preferences.d/phusion-passenger
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      Package: passenger libnginx-mod-http-passenger
+      Pin: origin oss-binaries.phusionpassenger.com
+      Pin-Priority: 1001
+  notify:
+    - restart nginx
 
 - name: Phusion | Prefer Phusion Passenger packages
   ansible.builtin.copy:

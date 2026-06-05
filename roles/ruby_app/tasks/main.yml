@@ -46,6 +46,19 @@
     - '{{ app_directory }}/shared'
     - '{{ app_directory }}/shared/tmp'
 
+- name: Ruby_app | Install OpenTelemetry environment file
+  ansible.builtin.template:
+    src: otel.env.j2
+    dest: "/opt/{{ app_directory }}/shared/.otel.env"
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+    mode: "0640"
+  when: app_otel_enabled | bool
+  tags:
+    - site_config
+    - otel
+  notify: restart rails app services
+
 # todo should we remove this since it is not being used
 - name: Ruby_app | Create symlinks
   ansible.builtin.file:
