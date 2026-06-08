@@ -15,3 +15,139 @@ cert_value: "3"
 sudo_options: "ALL=(ALL) NOPASSWD: /usr/sbin/service ezproxy *"
 microsoft_entra_idp_uuid: "{{ vault_microsoft_entra_production_idp_uuid }}"
 microsoft_entra_app_uuid: "{{ vault_microsoft_entra_production_app_uuid }}"
+# signoz / otel collector for ezproxy
+otel_default_resource_attributes:
+  host.name: "{{ inventory_hostname }}"
+  service.name: ezproxy
+  service.version: production
+  environment: production
+  deployment.environment: production
+
+otel_receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 127.0.0.1:4317
+      http:
+        endpoint: 127.0.0.1:4318
+
+  filelog/ezproxy_access:
+    include:
+      - /var/local/ezproxy/log/ezp*.log*
+    exclude:
+      - /var/local/ezproxy/log/*.gz
+    start_at: end
+    include_file_path: true
+    include_file_name: true
+    operators:
+      - type: regex_parser
+        id: parse_ezproxy_access
+        parse_from: body
+        regex: '^(?P<client_ip>\S+) (?P<ident>\S+) (?P<authenticated_user>\S+) \[(?P<time_local>[^\]]+)\] "(?P<http_method>\S+) (?P<url>\S+) (?P<http_protocol>[^"]+)" (?P<http_status>\d{3}) (?P<body_bytes_sent>\d+) "(?P<country_code>[^"]*)" "(?P<user_agent>[^"]*)"$'
+
+      - type: time_parser
+        id: parse_ezproxy_access_time
+        parse_from: attributes.time_local
+        layout_type: strptime
+        layout: '%d/%b/%Y:%H:%M:%S %z'
+
+      - type: add
+        field: attributes.log_type
+        value: ezproxy_access
+
+      - type: add
+        field: attributes.service_name
+        value: ezproxy_access
+
+  filelog/ezproxy_spu:
+    include:
+      - /var/local/ezproxy/log/spu*.log*
+    exclude:
+      - /var/local/ezproxy/log/*.gz
+    start_at: end
+    include_file_path: true
+    include_file_name: true
+    operators:
+      - type: regex_parser
+        id: parse_ezproxy_spu
+        parse_from: body
+        regex: '^(?P<client_ip>\S+) (?P<ident>\S+) (?P<session_id>\S+) \[(?P<time_local>[^\]]+)\] "(?P<http_method>\S+) (?P<url>\S+) (?P<http_protocol>[^"]+)" (?P<http_status>\d{3}) (?P<body_bytes_sent>\d+)$'
+
+      - type: time_parser
+        id: parse_ezproxy_spu_time
+        parse_from: attributes.time_local
+        layout_type: strptime
+        layout: '%d/%b/%Y:%H:%M:%S %z'
+
+      - type: add
+        field: attributes.log_type
+        value: ezproxy_spu
+
+      - type: add
+        field: attributes.service_name
+        value: ezproxy_spu
+
+  hostmetrics:
+    collection_interval: 30s
+    scrapers:
+      cpu: {}
+      disk: {}
+      filesystem: {}
+      load: {}
+      memory: {}
+      network: {}
+
+otel_processors:
+  batch:
+    send_batch_max_size: 1024
+    send_batch_size: 512
+    timeout: 30s
+
+otel_exporters:
+  loadbalancing:
+    routing_key: service
+    protocol:
+      otlp:
+        timeout: 10s
+        tls:
+          insecure: true
+        sending_queue:
+          enabled: true
+          num_consumers: 10
+          queue_size: 5000
+        retry_on_failure:
+          enabled: true
+          initial_interval: 5s
+          max_interval: 30s
+          max_elapsed_time: 300s
+    resolver:
+      static:
+        hostnames:
+          - k8s-prod1.lib.princeton.edu:32317
+          - k8s-prod2.lib.princeton.edu:32317
+          - k8s-prod3.lib.princeton.edu:32317
+
+  debug:
+    verbosity: basic
+
+otel_service_pipelines:
+  logs:
+    receivers:
+      - filelog/ezproxy_access
+      - filelog/ezproxy_spu
+    processors:
+      - resource
+      - batch
+    exporters:
+      - loadbalancing
+      - debug
+
+  metrics:
+    receivers:
+      - hostmetrics
+    processors:
+      - resource
+      - batch
+    exporters:
+      - loadbalancing
+      - debug
