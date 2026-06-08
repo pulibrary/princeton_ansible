@@ -1,17 +1,14 @@
-# Postgresql
-
+# psql-client
 =========
 
 Connects to a remote postgres server and uses provided admin credentials to create a new database and user account for a given application. It can also manage database backups.
 
 ## Requirements
-
 ------------
 
 This role requires the `community.postgresql` collection to manage the database and users.
 
 ## Variables
-
 ------------
 
 ### Database Connection & Credentials
@@ -41,7 +38,6 @@ This role requires the `community.postgresql` collection to manage the database 
 - `postgres_backup_enabled`: whether to run the database backup tasks (default: `true`)
 
 ## Example Playbook
-
 ------------
 
 ```yml
@@ -52,5 +48,5 @@ This role requires the `community.postgresql` collection to manage the database 
         application_db_name: my_app_db
         deploy_user: my_deploy_user
       roles:
-         - postgresql
+         - psql-client
 ```
