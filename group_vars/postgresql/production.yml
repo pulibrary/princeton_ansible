@@ -90,7 +90,6 @@ otel_default_resource_attributes:
   deployment.environment: production
 
 otel_receivers:
-
   otlp:
     protocols:
       grpc:
@@ -98,10 +97,23 @@ otel_receivers:
       http:
         endpoint: 127.0.0.1:4318
 
+  postgresql:
+    endpoint: 127.0.0.1:5432
+    transport: tcp
+    username: "{{ postgres_admin_user }}"
+    password: "{{ postgres_admin_password }}"
+    databases:
+      - postgres
+    collection_interval: 30s
+    metrics:
+      postgresql.database.locks:
+        enabled: true
+      postgresql.deadlocks:
+        enabled: true
+
   filelog/postgresql-json:
     include:
       - /var/lib/postgresql/15/main/pg_log/pg.json
-
       - /var/lib/postgresql/15/main/pg_log/pg.json-[0-9]*
     exclude:
       - /var/lib/postgresql/15/main/pg_log/*.gz
@@ -215,6 +227,7 @@ otel_service_pipelines:
 
   metrics:
     receivers:
+      - postgresql
       - hostmetrics
     processors:
       - resource
@@ -231,3 +244,4 @@ otel_service_pipelines:
       - batch
     exporters:
       - loadbalancing
+      - debug
