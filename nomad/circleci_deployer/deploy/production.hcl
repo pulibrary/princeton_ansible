@@ -43,6 +43,9 @@ job "circleci-runner" {
       config {
         image = "ghcr.io/pulibrary/princeton_ansible-circleci-deployer:sha-${ var.branch_or_sha }"
         privileged = true
+        # Enforce a hard CPU limit so the container cannot burst
+        # beyond the value specified in the 'resources' stanza.
+        cpu_hard_limit = true
       }
       template {
         destination = "${NOMAD_SECRETS_DIR}/env.vars"
