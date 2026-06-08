@@ -4,8 +4,6 @@
 
 Connects to a remote postgres server and uses provided admin credentials to create a new database and user account for a given application. It can also manage database backups.
 
-Based on [the `postgresql` role from `pulibrary/princeton_ansible`](https://github.com/pulibrary/princeton_ansible/tree/main/roles/postgresql).
-
 ## Requirements
 
 ------------
