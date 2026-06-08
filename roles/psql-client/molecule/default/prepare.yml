@@ -1,0 +1,34 @@
+---
+- name: Prepare Postgres Database Server
+  hosts: postgres
+  become: true
+  tasks:
+    - name: Install Postgresql and Python on DB host
+      ansible.builtin.apt:
+        name:
+          - postgresql
+          - postgresql-contrib
+          - python3-psycopg2
+          - sudo
+        state: present
+        update_cache: true
+
+    - name: Start postgresql service
+      ansible.builtin.service:
+        name: postgresql
+        state: started
+        enabled: true
+
+    - name: Set postgres user password for testing
+      become_user: postgres
+      ansible.builtin.command: psql -c "ALTER USER postgres PASSWORD 'postgres';"
+      changed_when: false
+
+- name: Prepare Application Instance
+  hosts: instance
+  become: true
+  tasks:
+    - name: Ensure deploy user exists
+      ansible.builtin.user:
+        name: conan
+        state: present

@@ -1,0 +1,23 @@
+---
+- name: Verify
+  hosts: instance
+  gather_facts: false
+  vars_files:
+    - ../../defaults/main.yml
+  tasks:
+    - name: Ensure postgresql db user can create tables
+      community.postgresql.postgresql_query:
+        login_host: "{{ postgres_host }}"
+        port: "{{ postgres_port }}"
+        login_user: "{{ application_dbuser_name }}"
+        login_password: "{{ application_dbuser_password }}"
+        db: "{{ application_db_name }}"
+        query: "CREATE TABLE IF NOT EXISTS test_table (id serial PRIMARY KEY);"
+      register: table_creation
+      failed_when: table_creation.msg is defined and 'error' in table_creation.msg.lower()
+
+    - name: Verify backup file exists
+      ansible.builtin.stat:
+        path: "{{ db_backup_path }}"
+      register: backup_file
+      failed_when: not backup_file.stat.exists
