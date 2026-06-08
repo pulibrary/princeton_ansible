@@ -74,6 +74,14 @@ rails_app_vars:
     value: 'pulibrary-figgy-storage-1'
   - name: NODE_OPTIONS
     value: '--openssl-legacy-provider'
+  - name: OTEL_SERVICE_NAME
+    value: 'pulmap'
+  - name: OTEL_EXPORTER_OTLP_ENDPOINT
+    value: 'http://127.0.0.1:4318'
+  - name: OTEL_EXPORTER_OTLP_INSECURE
+    value: 'true'
+  - name: OTEL_EXPORTER_OTLP_TRACES_PROTOCOL
+    value: 'http/protobuf'
 ruby_version_override: "ruby-3.4.8"
 sneakers_workers: GeoblacklightEventHandler
 sneakers_worker_name: pulmap-sneakers
@@ -87,6 +95,12 @@ otel_default_resource_attributes:
   environment: staging
 
 otel_receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 127.0.0.1:4317
+      http:
+        endpoint: 127.0.0.1:4318
   filelog/nginx-access:
     include: ["/var/log/nginx/access.log*"]
     start_at: end
@@ -103,7 +117,8 @@ otel_receivers:
         value: "pulmap_access"
       - type: add
         field: attributes.service_name
-        value: pulmap
+        value: pulmap_access
+
   filelog/nginx-error:
     include: ["/var/log/nginx/error.log*"]
     start_at: end
@@ -114,25 +129,77 @@ otel_receivers:
       - type: add
         field: attributes.service_name
         value: "pulmap"
+
   hostmetrics:
     collection_interval: 30s
-    scrapers: { cpu: {}, disk: {}, filesystem: {}, load: {}, memory: {}, network: {} }
+    scrapers:
+      cpu: {}
+      disk: {}
+      filesystem: {}
+      load: {}
+      memory: {}
+      network: {}
 
 otel_processors:
-  batch: { send_batch_max_size: 1024, send_batch_size: 512, timeout: 30s }
+  batch:
+    send_batch_max_size: 1024
+    send_batch_size: 512
+    timeout: 30s
 
 otel_exporters:
-  otlp:
-    endpoint: "http://sandbox-signoz1.lib.princeton.edu:4317"
-    tls: { insecure: true }
-  debug: { verbosity: basic }
+  loadbalancing:
+    routing_key: service
+    protocol:
+      otlp:
+        timeout: 10s
+        tls:
+          insecure: true
+        sending_queue:
+          enabled: true
+          num_consumers: 10
+          queue_size: 5000
+        retry_on_failure:
+          enabled: true
+          initial_interval: 5s
+          max_interval: 30s
+          max_elapsed_time: 300s
+    resolver:
+      static:
+        hostnames:
+          - k8s-staging1.lib.princeton.edu:30374
+          - k8s-staging2.lib.princeton.edu:30374
+          - k8s-staging3.lib.princeton.edu:30374
+
+  debug:
+    verbosity: basic
 
 otel_service_pipelines:
   logs:
-    receivers: ["filelog/nginx-access", "filelog/nginx-error"]
-    processors: ["resource", "batch"]
-    exporters: ["otlp", "debug"]
+    receivers:
+      - filelog/nginx-access
+      - filelog/nginx-error
+    processors:
+      - resource
+      - batch
+    exporters:
+      - loadbalancing
+      - debug
+
   metrics:
-    receivers: ["hostmetrics"]
-    processors: ["resource", "batch"]
-    exporters: ["otlp", "debug"]
+    receivers:
+      - hostmetrics
+    processors:
+      - resource
+      - batch
+    exporters:
+      - loadbalancing
+      - debug
+
+  traces:
+    receivers:
+      - otlp
+    processors:
+      - resource
+      - batch
+    exporters:
+      - loadbalancing
