@@ -26,14 +26,7 @@ job "circleci-runner" {
     service {
       name = "circleci-runner-deploy"
       tags = ["logging"]
-      port = "http"
-      check {
-        type = "http"
-        port = "http"
-        path = "/health"
-        interval = "10s"
-        timeout = "1s"
-      }
+    }
 
     restart {
       attempts = 10
