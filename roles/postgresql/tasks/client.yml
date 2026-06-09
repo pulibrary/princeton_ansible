@@ -1,57 +1,63 @@
 ---
+- name: Install PostgreSQL Python client library
+  ansible.builtin.apt:
+    name: python3-psycopg2
+    state: present
+    update_cache: true
+  when:
+    - ansible_os_family == "Debian"
+    - running_on_server | bool
+
 - name: Create remote postgresql database
   community.postgresql.postgresql_db:
-    name: '{{ application_db_name }}'
-    port: '{{ postgres_port }}'
-    login_host: '{{ postgres_host }}'
-    login_user: '{{ postgres_admin_user | default(postgres_admin_user) }}'
-    login_password: '{{ postgres_admin_password }}'
-    encoding: 'UTF-8'
-    state: 'present'
+    name: "{{ application_db_name }}"
+    login_port: "{{ postgres_port }}"
+    login_host: "{{ postgres_host }}"
+    login_user: "{{ postgres_admin_user }}"
+    login_password: "{{ postgres_admin_password }}"
+    encoding: "UTF-8"
+    state: present
   when:
-    - running_on_server
-    # - not postgresql_is_local
+    - running_on_server | bool
   run_once: true
 
 - name: Create postgresql db users
   community.postgresql.postgresql_user:
-    name: '{{ application_dbuser_name }}'
-    port: '{{ postgres_port }}'
-    login_host: '{{ postgres_host }}'
-    login_user: '{{ postgres_admin_user }}'
-    login_password: '{{ postgres_admin_password }}'
-    password: '{{ application_dbuser_password }}'
+    name: "{{ application_dbuser_name }}"
+    login_port: "{{ postgres_port }}"
+    login_host: "{{ postgres_host }}"
+    login_user: "{{ postgres_admin_user }}"
+    login_password: "{{ postgres_admin_password }}"
+    password: "{{ application_dbuser_password }}"
     encrypted: true
-    role_attr_flags: '{{ application_dbuser_role_attr_flags }}'
-    state: 'present'
+    role_attr_flags: "{{ application_dbuser_role_attr_flags }}"
+    state: present
   when:
-    - running_on_server
-    # - not postgresql_is_local
+    - running_on_server | bool
   changed_when: false
   run_once: true
 
 - name: Change postgresql database owner
   community.postgresql.postgresql_db:
     name: "{{ application_db_name }}"
-    port: "{{ postgres_port }}"
+    login_port: "{{ postgres_port }}"
     login_host: "{{ postgres_host }}"
     login_user: "{{ postgres_admin_user }}"
     login_password: "{{ postgres_admin_password }}"
     encoding: "UTF-8"
-    state: "present"
+    state: present
     owner: "{{ application_dbuser_name }}"
   when:
-    - running_on_server
-    # - not postgresql_is_local
+    - running_on_server | bool
   changed_when: false
   run_once: true
 
 - name: Configure pg_hba for client connections to postgres server
   ansible.builtin.lineinfile:
-    path: '/etc/postgresql/{{ postgres_version }}/main/pg_hba.conf'
-    line: 'host  {{ pg_hba_postgresql_database }}      {{ pg_hba_postgresql_user }} {{ ansible_default_ipv4.address }}/32       {{ pg_hba_method }}'
+    path: "/etc/postgresql/{{ postgres_version }}/main/pg_hba.conf"
+    line: "host  {{ pg_hba_postgresql_database }}      {{ pg_hba_postgresql_user }} {{ ansible_default_ipv4.address }}/32       {{ pg_hba_method }}"
   delegate_to: "{{ postgres_host | default(inventory_hostname, true) }}"
   when:
     - running_on_server | bool
-    - (postgres_host | default('', true) | length) > 0
+    - postgres_host | default("", true) | length > 0
   notify: reload remote postgres
