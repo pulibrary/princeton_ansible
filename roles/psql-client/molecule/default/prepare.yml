@@ -1,34 +1,54 @@
----
 - name: Prepare Postgres Database Server
   hosts: postgres
   become: true
+  vars_files:
+    - ../../defaults/main.yml
   tasks:
+    - name: Make sure CA certificates are available
+      ansible.builtin.apt:
+        name: ca-certificates
+        state: present
+        update_cache: true
+
+    - name: Add postgres repository apt-key
+      ansible.builtin.apt_key:
+        url: "{{ postgres_apt_key_url }}"
+        state: present
+
+    - name: Add postgres repository
+      ansible.builtin.apt_repository:
+        repo: "{{ postgres_apt_repository }}"
+        update_cache: true
+        state: present
+
     - name: Install Postgresql and Python on DB host
       ansible.builtin.apt:
         name:
-          - postgresql
-          - postgresql-contrib
+          - "postgresql-{{ postgres_version }}"
+          - "postgresql-contrib-{{ postgres_version }}"
           - python3-psycopg2
           - sudo
         state: present
         update_cache: true
 
+    - name: Listen on all container addresses
+      ansible.builtin.lineinfile:
+        path: "/etc/postgresql/{{ postgres_version }}/main/postgresql.conf"
+        regexp: '^#?listen_addresses\s*='
+        line: "listen_addresses = '*'"
+
+    - name: Allow password auth from Molecule containers
+      ansible.builtin.lineinfile:
+        path: "/etc/postgresql/{{ postgres_version }}/main/pg_hba.conf"
+        line: "host    all             all             0.0.0.0/0               md5"
+
     - name: Start postgresql service
       ansible.builtin.service:
         name: postgresql
-        state: started
+        state: restarted
         enabled: true
 
     - name: Set postgres user password for testing
       become_user: postgres
       ansible.builtin.command: psql -c "ALTER USER postgres PASSWORD 'postgres';"
       changed_when: false
-
-- name: Prepare Application Instance
-  hosts: instance
-  become: true
-  tasks:
-    - name: Ensure deploy user exists
-      ansible.builtin.user:
-        name: deploy
-        state: present
