@@ -23,6 +23,11 @@ job "circleci-runner" {
       }
     }
 
+    service {
+      name = "circleci-runner-deploy"
+      tags = ["logging"]
+    }
+
     restart {
       attempts = 10
       delay = "5s"
