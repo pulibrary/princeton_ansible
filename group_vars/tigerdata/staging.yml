@@ -43,6 +43,16 @@ app_mediaflux_alternate_host: "{{ vault_mediaflux_qa_host }}"
 app_mediaflux_domain: "{{ vault_mediaflux_domain }}"
 app_mediaflux_user: "{{ vault_mediaflux_user }}"
 app_mediaflux_password: "{{ vault_mediaflux_password }}"
+# beyla
+beyla_enabled: true
+beyla_service_name: tigerdata
+beyla_environment: staging
+beyla_otlp_endpoint: "http://127.0.0.1:4318"
+beyla_otlp_protocol: "http/protobuf"
+beyla_bpf_context_propagation: "all"
+
+beyla_open_ports:
+  - 80
 
 # signoz
 otel_default_resource_attributes:
@@ -52,6 +62,12 @@ otel_default_resource_attributes:
   environment: staging
 
 otel_receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 127.0.0.1:4317
+      http:
+        endpoint: 127.0.0.1:4318
   filelog/nginx-access:
     include: ["/var/log/nginx/access.log*"]
     start_at: end
@@ -145,3 +161,12 @@ otel_service_pipelines:
     exporters:
       - loadbalancing
       - debug
+
+  traces:
+    receivers:
+      - otlp
+    processors:
+      - resource
+      - batch
+    exporters:
+      - loadbalancing
