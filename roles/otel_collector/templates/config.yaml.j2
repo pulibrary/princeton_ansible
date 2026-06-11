@@ -15,8 +15,21 @@
 # - otel_mysql_password: "${env:OTEL_MYSQL_PASSWORD}"
 # - otel_mysql_collection_interval: "10s"
 # - otel_mysql_initial_delay: "1s"
+#
+# Optional HTTP synthetic checks:
+# - otel_httpcheck_enabled: true
+# - otel_httpcheck_component_prefix: "httpcheck"
+# - otel_httpcheck_critical_interval: "30s"
+# - otel_httpcheck_standard_interval: "300s"
+# - otel_httpcheck_tls_interval: "3600s"
+# - otel_httpcheck_critical_targets:
+#     - name: example
+#       endpoint: "https://catalog.princeton.edu/health"
+#       method: GET
+# - otel_httpcheck_standard_targets: []
+# - otel_httpcheck_tls_targets: []
 
-{# ---- Build processors.resource.attributes safely #}
+{# Build processors.resource.attributes #}
 {% set base_attrs =
   (otel_processors.resource.attributes
     if (otel_processors is defined
@@ -35,7 +48,7 @@
   recursive=True
 ) %}
 
-{# ---- Optionally add MySQL/MariaDB receiver #}
+{# add MySQL/MariaDB receiver #}
 {% set mysql_receiver = {} %}
 
 {% if otel_mysql_enabled | default(false) | bool %}
@@ -62,11 +75,78 @@
   {% endif %}
 {% endif %}
 
-{% set merged_receivers = (otel_receivers | default({})) | combine(mysql_receiver, recursive=True) %}
+{# Optionally add HTTP synthetic check receivers #}
+{% set httpcheck_receivers = {} %}
 
-{# ---- Optionally add mysql receiver to metrics pipeline #}
+{% if otel_httpcheck_enabled | default(false) | bool %}
+  {% set httpcheck_prefix = otel_httpcheck_component_prefix | default('httpcheck') %}
+
+  {% set critical = namespace(targets=[]) %}
+  {% for target in otel_httpcheck_critical_targets | default([]) %}
+    {% set _ = critical.targets.append({
+      'endpoint': target.endpoint,
+      'method': target.method | default('GET')
+    }) %}
+  {% endfor %}
+
+  {% if critical.targets | length > 0 %}
+    {% set httpcheck_receivers = httpcheck_receivers | combine({
+      (httpcheck_prefix ~ '/critical'): {
+        'collection_interval': otel_httpcheck_critical_interval | default('30s'),
+        'targets': critical.targets
+      }
+    }, recursive=True) %}
+  {% endif %}
+
+  {% set standard = namespace(targets=[]) %}
+  {% for target in otel_httpcheck_standard_targets | default([]) %}
+    {% set _ = standard.targets.append({
+      'endpoint': target.endpoint,
+      'method': target.method | default('GET')
+    }) %}
+  {% endfor %}
+
+  {% if standard.targets | length > 0 %}
+    {% set httpcheck_receivers = httpcheck_receivers | combine({
+      (httpcheck_prefix ~ '/standard'): {
+        'collection_interval': otel_httpcheck_standard_interval | default('300s'),
+        'targets': standard.targets
+      }
+    }, recursive=True) %}
+  {% endif %}
+
+  {% set tls = namespace(targets=[]) %}
+  {% for target in otel_httpcheck_tls_targets | default([]) %}
+    {% set _ = tls.targets.append({
+      'endpoint': target.endpoint,
+      'method': target.method | default('GET')
+    }) %}
+  {% endfor %}
+
+  {% if tls.targets | length > 0 %}
+    {% set httpcheck_receivers = httpcheck_receivers | combine({
+      (httpcheck_prefix ~ '/tls'): {
+        'collection_interval': otel_httpcheck_tls_interval | default('3600s'),
+        'metrics': {
+          'httpcheck.tls.cert_remaining': {
+            'enabled': true
+          }
+        },
+        'targets': tls.targets
+      }
+    }, recursive=True) %}
+  {% endif %}
+{% endif %}
+
+{% set merged_receivers = (otel_receivers | default({}))
+  | combine(mysql_receiver, recursive=True)
+  | combine(httpcheck_receivers, recursive=True)
+%}
+
+{# Start with declared service pipelines #}
 {% set merged_service_pipelines = otel_service_pipelines | default({}) %}
 
+{#  Optionally add mysql receiver to metrics pipeline #}
 {% if otel_mysql_enabled | default(false) | bool %}
   {% set metrics_pipeline = merged_service_pipelines.metrics | default({}) %}
   {% set metrics_receivers = metrics_pipeline.receivers | default([]) %}
@@ -77,6 +157,36 @@
       recursive=True
     ) %}
   {% endif %}
+
+  {% set merged_service_pipelines = merged_service_pipelines | combine(
+    {'metrics': metrics_pipeline},
+    recursive=True
+  ) %}
+{% endif %}
+
+{# Optionally add httpcheck receivers to metrics pipeline #}
+{% if otel_httpcheck_enabled | default(false) | bool %}
+  {% set httpcheck_prefix = otel_httpcheck_component_prefix | default('httpcheck') %}
+  {% set metrics_pipeline = merged_service_pipelines.metrics | default({}) %}
+  {% set metrics_receivers = metrics_pipeline.receivers | default([]) %}
+  {% set ns_httpcheck = namespace(receivers=metrics_receivers) %}
+
+  {% if (otel_httpcheck_critical_targets | default([])) | length > 0 and (httpcheck_prefix ~ '/critical') not in ns_httpcheck.receivers %}
+    {% set ns_httpcheck.receivers = ns_httpcheck.receivers + [httpcheck_prefix ~ '/critical'] %}
+  {% endif %}
+
+  {% if (otel_httpcheck_standard_targets | default([])) | length > 0 and (httpcheck_prefix ~ '/standard') not in ns_httpcheck.receivers %}
+    {% set ns_httpcheck.receivers = ns_httpcheck.receivers + [httpcheck_prefix ~ '/standard'] %}
+  {% endif %}
+
+  {% if (otel_httpcheck_tls_targets | default([])) | length > 0 and (httpcheck_prefix ~ '/tls') not in ns_httpcheck.receivers %}
+    {% set ns_httpcheck.receivers = ns_httpcheck.receivers + [httpcheck_prefix ~ '/tls'] %}
+  {% endif %}
+
+  {% set metrics_pipeline = metrics_pipeline | combine(
+    {'receivers': ns_httpcheck.receivers},
+    recursive=True
+  ) %}
 
   {% set merged_service_pipelines = merged_service_pipelines | combine(
     {'metrics': metrics_pipeline},

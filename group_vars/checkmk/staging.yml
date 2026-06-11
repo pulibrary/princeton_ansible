@@ -13,3 +13,109 @@ checkmk_agent_protocol: http
 checkmk_agent_host_specific: false
 checkmk_agent_folder_specific: false
 checkmk_agent_server_protocol: http
+# OpenTelemetry Collector / SigNoz synthetic HTTP checks
+running_on_server: true
+
+otel_version: "0.153.0"
+otel_validate_config: true
+otel_validate_cmd: "{{ otel_binary_path }} validate --config {{ otel_config_path }}"
+
+otel_service_name: otelcol-contrib
+otel_install_dir: /opt/otelcol
+otel_binary_path: "{{ otel_install_dir }}/otelcol-contrib"
+otel_config_path: "{{ otel_install_dir }}/config.yaml"
+
+otel_httpcheck_service_name: synthetic-httpcheck
+otel_httpcheck_environment: staging
+otel_httpcheck_location: pul-staging
+
+otel_httpcheck_critical_interval: 30s
+otel_httpcheck_standard_interval: 300s
+otel_httpcheck_tls_interval: 3600s
+
+otel_receivers:
+  httpcheck/critical:
+    collection_interval: "{{ otel_httpcheck_critical_interval }}"
+    targets:
+      - endpoint: https://catalog-staging.princeton.edu/health
+        method: GET
+      - endpoint: https://dpul-staging.princeton.edu/health
+        method: GET
+      - endpoint: https://figgy-staging.princeton.edu/health
+        method: GET
+
+  httpcheck/standard:
+    collection_interval: "{{ otel_httpcheck_standard_interval }}"
+    targets:
+      - endpoint: https://findingaids-staging.princeton.edu/health
+        method: GET
+
+  httpcheck/tls:
+    collection_interval: "{{ otel_httpcheck_tls_interval }}"
+    metrics:
+      httpcheck.tls.cert_remaining:
+        enabled: true
+    targets:
+      - endpoint: https://catalog-staging.princeton.edu/
+        method: GET
+      - endpoint: https://figgy-staging.princeton.edu/
+        method: GET
+      - endpoint: https://dpul-staging.princeton.edu/
+        method: GET
+      - endpoint: https://findingaids-staging.princeton.edu/
+        method: GET
+
+otel_processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 512
+    spike_limit_mib: 128
+
+  batch: {}
+
+otel_default_resource_attributes:
+  host.name: "{{ inventory_hostname }}"
+  service.name: "{{ otel_httpcheck_service_name }}"
+  deployment.environment: "{{ otel_httpcheck_environment }}"
+  environment: "{{ otel_httpcheck_environment }}"
+  synthetic.check.location: "{{ otel_httpcheck_location }}"
+
+otel_exporters:
+  loadbalancing:
+    routing_key: service
+    protocol:
+      otlp:
+        timeout: 10s
+        tls:
+          insecure: true
+        sending_queue:
+          enabled: true
+          num_consumers: 10
+          queue_size: 5000
+        retry_on_failure:
+          enabled: true
+          initial_interval: 5s
+          max_interval: 30s
+          max_elapsed_time: 300s
+    resolver:
+      static:
+        hostnames:
+          - k8s-staging1.lib.princeton.edu:32317
+          - k8s-staging2.lib.princeton.edu:32317
+          - k8s-staging3.lib.princeton.edu:32317
+
+  debug:
+    verbosity: basic
+
+otel_service_pipelines:
+  metrics:
+    receivers:
+      - httpcheck/critical
+      - httpcheck/standard
+      - httpcheck/tls
+    processors:
+      - memory_limiter
+      - resource
+      - batch
+    exporters:
+      - loadbalancing
