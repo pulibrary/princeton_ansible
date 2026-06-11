@@ -38,11 +38,15 @@
         executable: pip3
         extra_args: --break-system-packages
 
+    - name: set fqdn for use in pg_hba
+      ansible.builtin.set_fact:
+        "pg_hba_fqdn={{ ansible_facts['fqdn'] }}"
+
     - name: Ensure access to postgres server
       become: true
       ansible.builtin.lineinfile:
         path: "/etc/postgresql/{{ postgres_version }}/main/pg_hba.conf"
-        line: "host    all             all             {{ ansible_default_ipv4.address }}/32       md5"
+        line: "host    all             all             {{ pg_hba_fqdn }}/32       md5"
       delegate_to: "{{ postgres_host }}"
       notify: Reload remote postgres
 
