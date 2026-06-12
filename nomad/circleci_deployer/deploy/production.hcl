@@ -47,17 +47,16 @@ job "circleci-runner" {
 
       config {
         image = "ghcr.io/pulibrary/princeton_ansible-circleci-deployer:sha-${ var.branch_or_sha }"
-        privileged = true
+        # Required for nested Podman layers to use fuse-overlayfs securely
+        privileged = false
 
         # Enforce a hard CPU limit so the container cannot burst
         # beyond the value specified in the 'resources' stanza.
         cpu_hard_limit = true
 
-        # Mount host ID mapping parameters down into Container 1
-        volumes = [
-          "/etc/subuid:/etc/subuid:ro",
-          "/etc/subgid:/etc/subgid:ro"
-        ]
+        # Shares the host user namespace so Container 1
+        # inherits the full subuid/subgid allocations natively.
+        userns_mode = "host"
 
         # Required for inner rootless namespaces to mount storage namespaces safely
         security_opt = [
