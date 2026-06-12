@@ -56,8 +56,14 @@ job "circleci-runner" {
 
         # Shares the host user namespace so Container 1
         # inherits the full subuid/subgid allocations natively.
-        uidmap = ["0:100000:65536"]
-        gidmap = ["0:100000:65536"]
+        # Mount host ID mapping parameters down into Container 1
+
+        volumes = [
+          "/etc/subuid:/etc/subuid:rw",
+          "/etc/subgid:/etc/subgid:rw"
+        ]
+
+
 
         # Required for inner rootless namespaces to mount storage namespaces safely
         security_opt = [
