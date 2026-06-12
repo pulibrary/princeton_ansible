@@ -48,7 +48,7 @@ job "circleci-runner" {
       config {
         image = "ghcr.io/pulibrary/princeton_ansible-circleci-deployer:sha-${ var.branch_or_sha }"
         # Required for nested Podman layers to use fuse-overlayfs securely
-        privileged = false
+        privileged = true
 
         # Enforce a hard CPU limit so the container cannot burst
         # beyond the value specified in the 'resources' stanza.
