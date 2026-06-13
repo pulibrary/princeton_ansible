@@ -5,7 +5,7 @@
 # if the 'nginx -t' check fails, we probably didn't delete an obsolete config file
 # run 'playbooks/nginx.yml' (or nginx_staging.yml) following the comments for removing obsolete config
 
-- name: revoke incommon acme for {{ domain_name }}
+- name: revoke incommon certinext acme for {{ domain_name }}
   hosts: nginxplus_{{ runtime_env | default('staging') }}
   remote_user: pulsys
   become: true
@@ -29,7 +29,7 @@
         - certbot
 
     - name: revoke acme certificates for {{ domain_name }}
-      ansible.builtin.command: /usr/bin/certbot revoke --standalone --non-interactive --agree-tos --email lsupport@princeton.edu --server https://acme.sectigo.com/v2/InCommonRSAOV --eab-kid {{ vault_acme_eab_kid }} --eab-hmac-key {{ vault_acme_eab_hmac_key }} --domain {{ domain_name }}.princeton.edu --cert-path /etc/letsencrypt/live/{{ domain_name }}/cert.pem
+      ansible.builtin.command: /usr/bin/certbot revoke --standalone --non-interactive --agree-tos --email lsupport@princeton.edu --server https://acme-us.certinext.io/v1/directory --eab-kid {{ vault_certinext_acme_eab_kid }} --eab-hmac-key {{ vault_certinext_acme_eab_hmac_key }} --domain {{ domain_name }}.princeton.edu --cert-path /etc/letsencrypt/live/{{ domain_name }}/cert.pem
       become_user: root
       become: true
 

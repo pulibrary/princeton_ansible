@@ -10,7 +10,7 @@
 # If a valid certificate already exists, the existing certificate may need to be revoked
 # or deleted before this playbook will change the system.
 
-- name: add incommon acme for {{ domain_name }}
+- name: add incommon certinext acme for {{ domain_name }}
   hosts: nginxplus_{{ runtime_env | default('staging') }}
   remote_user: pulsys
   become: true
@@ -43,11 +43,11 @@
           - --email
           - lsupport@princeton.edu
           - --server
-          - https://acme.sectigo.com/v2/InCommonRSAOV
+          - https://acme-us.certinext.io/v1/directory
           - --eab-kid
-          - "{{ vault_acme_eab_kid }}"
+          - "{{ vault_certinext_acme_eab_kid }}"
           - --eab-hmac-key
-          - "{{ vault_acme_eab_hmac_key }}"
+          - "{{ vault_certinext_acme_eab_hmac_key }}"
           - --domain
           - "{{ domain_name }}.princeton.edu"
           - --cert-name
@@ -60,6 +60,6 @@
         token: "{{ vault_pul_slack_token }}"
         msg: "Ansible ran `{{ ansible_play_name }}` on {{ inventory_hostname }}"
         channel: "{{ item }}"
-      loop: "{{ slack_alerts_channel }}"
+      loop: "{{ [slack_alerts_channel] if slack_alerts_channel is string else slack_alerts_channel }}"
       tags: always
       become: false
