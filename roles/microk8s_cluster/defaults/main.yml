@@ -80,7 +80,25 @@ microk8s_ufw_rules:
     proto: tcp
     comment: "MicroK8s ingress HTTP"
 
-# Adjust this to the staging subnet if you want to restrict it.
+microk8s_pod_cidr: "10.1.0.0/16"
+
+microk8s_ufw_route_rules:
+  - interface_in: vxlan.calico
+    interface_out: cali+
+    comment: "MicroK8s Calico VXLAN to pod interface forwarding"
+
+  - interface_in: cali+
+    interface_out: vxlan.calico
+    comment: "MicroK8s pod interface to Calico VXLAN forwarding"
+
+  - interface_in: cali+
+    interface_out: cali+
+    comment: "MicroK8s pod-to-pod same-node forwarding"
+
+  - from_ip: "{{ microk8s_pod_cidr }}"
+    to_ip: "{{ microk8s_pod_cidr }}"
+    comment: "MicroK8s pod CIDR routed traffic"
+
 nfs_export_allowed_clients: "*"
 
 nfs_export_options:
