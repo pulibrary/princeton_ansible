@@ -24,6 +24,21 @@
     - microk8s_ufw_binary.stat.exists
     - "'Status: active' in microk8s_ufw_status.stdout"
 
+- name: Allow MicroK8s routed pod traffic
+  community.general.ufw:
+    rule: allow
+    route: true
+    interface_in: "{{ item.interface_in | default(omit) }}"
+    interface_out: "{{ item.interface_out | default(omit) }}"
+    from_ip: "{{ item.from_ip | default(omit) }}"
+    to_ip: "{{ item.to_ip | default(omit) }}"
+    comment: "{{ item.comment }}"
+  loop: "{{ microk8s_ufw_route_rules }}"
+  when:
+    - microk8s_manage_ufw | bool
+    - microk8s_ufw_binary.stat.exists
+    - "'Status: active' in microk8s_ufw_status.stdout"
+
 - name: Allow MicroK8s ingress traffic from load balancers
   community.general.ufw:
     rule: allow
