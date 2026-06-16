@@ -1,0 +1,34 @@
+---
+# This playbook checks for OIT mandated security tools Rapid7 and Cortex XDR
+# across the infrastructure we automate with Ansible
+# if there's a service called "cortex-agent", then Cortex XDR is installed
+# if there's a service called "ir_agent", then Rapid7 is installed
+#
+- name: audit OIT Security Tools
+  hosts: all
+  remote_user: pulsys
+  become: true
+  serial: "{{ concurrent_vms | default('5') }}"
+  vars_files:
+    - ../../group_vars/all/vars.yml
+    - ../../group_vars/all/vault.yml
+
+  pre_tasks:
+  - name: Populate service facts
+    ansible.builtin.service_facts:
+
+  - name: Populate package facts
+    ansible.builtin.package_facts:
+
+  tasks:
+  - name: Report presence of XDR agent (cortex-agent)
+    ansible.builtin.debug:
+      msg: The {{ inventory_hostname }} VM has cortex-agent available
+    when:
+      - "'cortex-agent' in ansible_facts.packages"
+
+  - name: Report presence of Rapid7 agent (ir_agent)
+    ansible.builtin.debug:
+      msg: The {{ inventory_hostname }} VM has ir_agent available
+    when:
+      - "'ir_agent' in ansible_facts.services"
