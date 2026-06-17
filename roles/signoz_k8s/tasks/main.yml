@@ -22,21 +22,18 @@
     - signoz_namespace_create.rc != 0
     - "'AlreadyExists' not in signoz_namespace_create.stderr"
 
-- name: SigNoz | Check for non-ready nodes before install
-  ansible.builtin.shell: >
-    set -o pipefail &&
-    microk8s kubectl get nodes --no-headers |
-    awk '$2 != "Ready" { print $1 ":" $2 }'
-  args:
-    executable: /bin/bash
+- name: SigNoz | Check for nodes whose Ready condition is not true
+  ansible.builtin.command: >-
+    microk8s kubectl get nodes
+    -o go-template={{ '{{' }}range .items{{ '}}' }}{{ '{{' }} $name := .metadata.name {{ '}}' }}{{ '{{' }}range .status.conditions{{ '}}' }}{{ '{{' }}if and (eq .type "Ready") (ne .status "True"){{ '}}' }}{{ '{{' }}printf "%s:%s\n" $name .status{{ '}}' }}{{ '{{' }}end{{ '}}' }}{{ '{{' }}end{{ '}}' }}{{ '{{' }}end{{ '}}' }}
   register: signoz_nonready_nodes
   changed_when: false
 
-- name: SigNoz | Assert all cluster nodes are Ready before install
+- name: SigNoz | Assert all cluster nodes have Ready condition true
   ansible.builtin.assert:
     that:
       - signoz_nonready_nodes.stdout | length == 0
-    fail_msg: "Not all Kubernetes nodes are Ready: {{ signoz_nonready_nodes.stdout }}"
+    fail_msg: "Not all Kubernetes nodes have Ready=True: {{ signoz_nonready_nodes.stdout }}"
 
 - name: SigNoz | Assert ClickHouse local storage node is defined
   ansible.builtin.assert:
@@ -48,6 +45,21 @@
 - name: SigNoz | Assert ClickHouse local storage node exists
   ansible.builtin.command: "microk8s kubectl get node {{ signoz_clickhouse_local_storage_node }}"
   changed_when: false
+  when: signoz_clickhouse_local_storage_enabled | default(false) | bool
+
+- name: SigNoz | Check ClickHouse local storage node schedulability
+  ansible.builtin.command: >-
+    microk8s kubectl get node {{ signoz_clickhouse_local_storage_node }}
+    -o jsonpath={.spec.unschedulable}
+  register: signoz_clickhouse_storage_node_unschedulable
+  changed_when: false
+  when: signoz_clickhouse_local_storage_enabled | default(false) | bool
+
+- name: SigNoz | Assert ClickHouse local storage node is schedulable
+  ansible.builtin.assert:
+    that:
+      - signoz_clickhouse_storage_node_unschedulable.stdout != "true"
+    fail_msg: "{{ signoz_clickhouse_local_storage_node }} is cordoned; ClickHouse local PV pod cannot be scheduled there."
   when: signoz_clickhouse_local_storage_enabled | default(false) | bool
 
 - name: SigNoz | Verify ClickHouse local mount exists on storage node
