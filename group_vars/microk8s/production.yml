@@ -4,3 +4,26 @@ microk8s_ingress_allowed_sources:
   - 128.112.201.34
 
 nfs_allowed_cidr: "128.112.200.0/21"
+
+microk8s_snap_channel: "1.35/stable"
+
+# Use the external Helm provisioner role instead of MicroK8s' community NFS addon.
+microk8s_enable_nfs_addon: false
+
+
+# Keep the provisioner on the stable primary node.
+# This avoids random scheduling onto ClickHouse/local-storage workers.
+k8s_nfs_node_selector:
+  kubernetes.io/hostname: "{{ microk8s_primary_node }}"
+
+microk8s_primary_node: k8s-prod1.lib.princeton.edu
+
+microk8s_control_plane_nodes:
+  - k8s-prod1.lib.princeton.edu
+  - k8s-prod2.lib.princeton.edu
+  - k8s-prod3.lib.princeton.edu
+
+microk8s_worker_nodes:
+  - k8s-prod4.lib.princeton.edu
+
+microk8s_cluster_nodes: "{{ microk8s_control_plane_nodes + microk8s_worker_nodes }}"
