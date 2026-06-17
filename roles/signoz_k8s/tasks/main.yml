@@ -23,9 +23,12 @@
     - "'AlreadyExists' not in signoz_namespace_create.stderr"
 
 - name: SigNoz | Check for nodes whose Ready condition is not true
-  ansible.builtin.command: >-
-    microk8s kubectl get nodes
-    -o go-template={{ '{{' }}range .items{{ '}}' }}{{ '{{' }} $name := .metadata.name {{ '}}' }}{{ '{{' }}range .status.conditions{{ '}}' }}{{ '{{' }}if and (eq .type "Ready") (ne .status "True"){{ '}}' }}{{ '{{' }}printf "%s:%s\n" $name .status{{ '}}' }}{{ '{{' }}end{{ '}}' }}{{ '{{' }}end{{ '}}' }}{{ '{{' }}end{{ '}}' }}
+  ansible.builtin.shell: >
+    set -o pipefail &&
+    microk8s kubectl get nodes --no-headers |
+    awk '$2 !~ /^Ready(,|$)/ { print $1 ":" $2 }'
+  args:
+    executable: /bin/bash
   register: signoz_nonready_nodes
   changed_when: false
 
