@@ -1,18 +1,18 @@
 #SPDX-License-Identifier: MIT-0
 ---
-# defaults file for roles/microk8s_cluster
 microk8s_admin_user: pulsys
 microk8s_admin_home: "/home/{{ microk8s_admin_user }}"
 
-# Leave empty to use the default snap channel.
-# Example pin:
-# microk8s_snap_channel: "1.32/stable"
 microk8s_snap_channel: ""
 
-microk8s_primary_group:  "k8s_microk8s_primary_{{ runtime_env | default('staging') }}"
+microk8s_primary_group: "k8s_microk8s_primary_{{ runtime_env | default('staging') }}"
 microk8s_secondary_group: "k8s_microk8s_secondaries_{{ runtime_env | default('staging') }}"
 microk8s_cluster_group: "k8s_microk8s_{{ runtime_env | default('staging') }}"
 microk8s_nfs_group: "k8s_nfs_{{ runtime_env | default('staging') }}"
+
+microk8s_control_plane_nodes: []
+microk8s_worker_nodes: []
+microk8s_cluster_nodes: "{{ microk8s_control_plane_nodes + microk8s_worker_nodes }}"
 
 microk8s_enable_community_addons: true
 microk8s_enable_nfs_addon: false
@@ -23,11 +23,8 @@ microk8s_base_addons:
   - ingress
 
 microk8s_enable_ha_cluster: true
-
 microk8s_install_kubectl_snap: true
-
 microk8s_manage_admin_home_owner: true
-
 microk8s_manage_ufw: true
 
 microk8s_ingress_ufw_rules:
@@ -43,39 +40,30 @@ microk8s_ufw_rules:
   - port: "16443"
     proto: tcp
     comment: "MicroK8s Kubernetes API"
-
   - port: "25000"
     proto: tcp
     comment: "MicroK8s cluster agent join endpoint"
-
   - port: "10250"
     proto: tcp
     comment: "MicroK8s kubelet"
-
   - port: "12379"
     proto: tcp
     comment: "MicroK8s dqlite"
-
   - port: "19001"
     proto: tcp
     comment: "MicroK8s dqlite"
-
   - port: "4789"
     proto: udp
     comment: "MicroK8s VXLAN pod networking"
-
   - port: "179"
     proto: tcp
     comment: "MicroK8s Calico BGP if used"
-
   - port: "32317"
     proto: tcp
     comment: "SigNoz OTLP gRPC NodePort"
-
   - port: "32318"
     proto: tcp
     comment: "SigNoz OTLP HTTP NodePort"
-
   - port: "80"
     proto: tcp
     comment: "MicroK8s ingress HTTP"
@@ -86,21 +74,17 @@ microk8s_ufw_route_rules:
   - interface_in: vxlan.calico
     interface_out: cali+
     comment: "MicroK8s Calico VXLAN to pod interface forwarding"
-
   - interface_in: cali+
     interface_out: vxlan.calico
     comment: "MicroK8s pod interface to Calico VXLAN forwarding"
-
   - interface_in: cali+
     interface_out: cali+
     comment: "MicroK8s pod-to-pod same-node forwarding"
-
   - from_ip: "{{ microk8s_pod_cidr }}"
     to_ip: "{{ microk8s_pod_cidr }}"
     comment: "MicroK8s pod CIDR routed traffic"
 
 nfs_export_allowed_clients: "*"
-
 nfs_export_options:
   - rw
   - sync
@@ -123,4 +107,3 @@ nfs_ufw_rules:
   - port: "111"
     proto: udp
     comment: "rpcbind UDP"
-
