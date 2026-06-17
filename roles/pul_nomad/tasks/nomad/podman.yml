@@ -44,6 +44,21 @@
         state: "started"
         enabled: true
 
+    # Pulled from https://github.com/podman-container-tools/podman/issues/16341#issuecomment-1295792182
+    - name: 'pul_nomad | nomad | podman | Set podman log level to warn'
+      block:
+        - name: 'pul_nomad | nomad | podman | Create podman service update override dir'
+          ansible.builtin.file:
+            path: /etc/systemd/system/podman.service.d
+            state: directory
+        - name: 'pul_nomad | nomad | podman | Set podman log level in systemd'
+          ansible.builtin.copy:
+            src: 'podman/log_level.conf'
+            dest: /etc/systemd/system/podman.service.d/local.conf
+          notify:
+            - reload systemd
+            - restart podman
+
     # Prune images with podman every night so we don't fill the disk with
     # unused container images.
     - name: 'pul_nomad | nomad | podman | Create podman update override dir'
