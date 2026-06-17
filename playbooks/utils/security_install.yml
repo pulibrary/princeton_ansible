@@ -1,6 +1,7 @@
 ---
-# This playbook will install OIT mandated security tools Rapid7 and Cortex XDR
-# By default this playbook runs on all hosts in the three environment groups. To run against a single host or group, use '--limit <group_or_host_name>'. For example '--limit qa' or '--limit figgy-web-staging1.princeton.edu'."
+# This playbook installs OIT mandated security tools Rapid7 and Cortex XDR
+# plus BigFix, for on-prem infrastructure
+# By default this playbook runs on all hosts in all environments. To run against a single host or group, use '--limit <group_or_host_name>'. For example '--limit qa' or '--limit figgy-web-staging1.princeton.edu'."
 #
 - name: install OIT Security Tools on a host
   hosts: all
@@ -93,6 +94,59 @@
     register: cytool_result
     changed_when: cytool_result.rc == 0
 
+  - name: Install, configure, and start Rapid7
+    when: "ansible_facts.services['ir_agent.service'] is not defined"
+    block:
+      - name: Download the Rapid7 deb file (Ubuntu)
+        ansible.builtin.get_url:
+          url: "https://us.storage.endpoint.ingress.rapid7.com/com.rapid7.razor.public/endpoint/agent/latest/linux/x86_64/rapid7_insight_agent_x64.deb"
+          dest: "/tmp/rapid7-insight-agent_latest_amd64.deb"
+          mode: "0644"
+        when:
+          - ansible_os_family == "Debian"
+
+      - name: Download the Rapid7 rpm file (RedHat)
+        ansible.builtin.get_url:
+          url: "https://us.storage.endpoint.ingress.rapid7.com/com.rapid7.razor.public/endpoint/agent/latest/linux/x86_64/rapid7_insight_agent_x64.rpm"
+          dest: "/tmp/rapid7-insight-agent-latest.x86_64.rpm"
+          mode: "0644"
+        when:
+          - ansible_os_family == "RedHat"
+
+      - name: install Rapid7 agent (Ubuntu)
+        ansible.builtin.apt:
+          deb: "/tmp/rapid7-insight-agent_latest_amd64.deb"
+        become: true
+        when:
+          - ansible_os_family == "Debian"
+
+      - name: Verify GPG signature (RedHat)
+        ansible.builtin.rpm_key:
+          state: present
+          key: https://us.storage.endpoint.ingress.rapid7.com/com.rapid7.razor.public/endpoint/agent/latest/linux/x86_64/Rapid7_public_key.pub
+        become: true
+        when:
+          - ansible_os_family == "RedHat"
+
+      - name: install Rapid7 agent (RedHat)
+        ansible.builtin.yum:
+          name: "/tmp/rapid7-insight-agent-latest.x86_64.rpm"
+          state: present
+        become: true
+        when:
+          - ansible_os_family == "RedHat"
+
+      # - name: Configure the agent with token
+      #   ansible.builtin.shell:
+      #     /opt/rapid7/ir_agent/components/insight_agent/{{ rapid7_version }}/configure_agent.sh --token {{ vault_Rapid7_token }} --attributes="Library Systems"
+      #   become: true
+
+      - name: Restart or start rapid7
+        ansible.builtin.service:
+          name: ir_agent
+          state: restarted
+        become: true
+
   - name: Install, configure, and start BigFix
     when: "ansible_facts.services['besclient.service'] is not defined"
     block:
@@ -153,59 +207,6 @@
       - name: Launch the BigFix client
         ansible.builtin.command: /etc/init.d/besclient start
       #For future maintenance, BigFix block ends here
-
-  - name: Install, configure, and start Rapid7
-    when: "ansible_facts.services['ir_agent.service'] is not defined"
-    block:
-      - name: Download the Rapid7 deb file (Ubuntu)
-        ansible.builtin.get_url:
-          url: "https://us.storage.endpoint.ingress.rapid7.com/com.rapid7.razor.public/endpoint/agent/latest/linux/x86_64/rapid7_insight_agent_x64.deb"
-          dest: "/tmp/rapid7-insight-agent_latest_amd64.deb"
-          mode: "0644"
-        when:
-          - ansible_os_family == "Debian"
-
-      - name: Download the Rapid7 rpm file (RedHat)
-        ansible.builtin.get_url:
-          url: "https://us.storage.endpoint.ingress.rapid7.com/com.rapid7.razor.public/endpoint/agent/latest/linux/x86_64/rapid7_insight_agent_x64.rpm"
-          dest: "/tmp/rapid7-insight-agent-latest.x86_64.rpm"
-          mode: "0644"
-        when:
-          - ansible_os_family == "RedHat"
-
-      - name: install Rapid7 agent (Ubuntu)
-        ansible.builtin.apt:
-          deb: "/tmp/rapid7-insight-agent_latest_amd64.deb"
-        become: true
-        when:
-          - ansible_os_family == "Debian"
-
-      - name: Verify GPG signature (RedHat)
-        ansible.builtin.rpm_key:
-          state: present
-          key: https://us.storage.endpoint.ingress.rapid7.com/com.rapid7.razor.public/endpoint/agent/latest/linux/x86_64/Rapid7_public_key.pub
-        become: true
-        when:
-          - ansible_os_family == "RedHat"
-
-      - name: install Rapid7 agent (RedHat)
-        ansible.builtin.yum:
-          name: "/tmp/rapid7-insight-agent-latest.x86_64.rpm"
-          state: present
-        become: true
-        when:
-          - ansible_os_family == "RedHat"
-
-      # - name: Configure the agent with token
-      #   ansible.builtin.shell:
-      #     /opt/rapid7/ir_agent/components/insight_agent/{{ rapid7_version }}/configure_agent.sh --token {{ vault_Rapid7_token }} --attributes="Library Systems"
-      #   become: true
-
-      - name: Restart or start rapid7
-        ansible.builtin.service:
-          name: ir_agent
-          state: restarted
-        become: true
 
   # post_tasks:
   #   - name: send information to slack
