@@ -1,5 +1,5 @@
 ---
-- name: Install snapd
+- name: Install snapd and NFS client packages
   ansible.builtin.apt:
     name:
       - snapd
@@ -7,20 +7,27 @@
     state: present
     update_cache: true
 
-- name: Install MicroK8s from default snap channel
-  community.general.snap:
-    name: microk8s
-    classic: true
-    state: present
-  when: microk8s_snap_channel | length == 0
+- name: Check whether MicroK8s snap is installed
+  ansible.builtin.command: snap list microk8s
+  register: microk8s_snap_installed
+  changed_when: false
+  failed_when: false
 
-- name: Install MicroK8s from pinned snap channel
-  community.general.snap:
-    name: microk8s
-    classic: true
-    channel: "{{ microk8s_snap_channel }}"
-    state: present
-  when: microk8s_snap_channel | length > 0
+- name: Install MicroK8s from default snap channel
+  ansible.builtin.command: snap install microk8s --classic
+  register: microk8s_snap_install_default
+  changed_when: "'installed' in microk8s_snap_install_default.stdout"
+  when:
+    - microk8s_snap_installed.rc != 0
+    - microk8s_snap_channel | default('') | length == 0
+
+- name: Install MicroK8s from configured snap channel
+  ansible.builtin.command: "snap install microk8s --classic --channel={{ microk8s_snap_channel }}"
+  register: microk8s_snap_install_channel
+  changed_when: "'installed' in microk8s_snap_install_channel.stdout"
+  when:
+    - microk8s_snap_installed.rc != 0
+    - microk8s_snap_channel | default('') | length > 0
 
 - name: Install kubectl snap
   community.general.snap:

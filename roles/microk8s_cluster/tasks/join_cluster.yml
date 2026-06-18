@@ -3,6 +3,17 @@
   ansible.builtin.set_fact:
     microk8s_primary_host: "{{ groups[microk8s_primary_group][0] }}"
 
+- name: Set MicroK8s node role facts
+  ansible.builtin.set_fact:
+    microk8s_join_as_worker: "{{ inventory_hostname in (microk8s_worker_nodes | default([])) }}"
+    microk8s_join_as_control_plane: "{{ inventory_hostname in (microk8s_control_plane_nodes | default([])) }}"
+
+- name: Fail if node is marked both worker and control-plane
+  ansible.builtin.assert:
+    that:
+      - not (microk8s_join_as_worker | bool and microk8s_join_as_control_plane | bool)
+    fail_msg: "{{ inventory_hostname }} is listed as both a MicroK8s worker and control-plane node."
+
 - name: Check whether this node is already in the cluster
   ansible.builtin.command: "microk8s kubectl get node {{ inventory_hostname }} --no-headers"
   delegate_to: "{{ microk8s_primary_host }}"
@@ -24,11 +35,16 @@
 
 - name: Build MicroK8s join command using primary hostname
   ansible.builtin.set_fact:
-    microk8s_join_command: >-
+    microk8s_join_command_base: >-
       {{
         microk8s_join_command_raw
         | regex_replace('microk8s join\\s+[^:]+:', 'microk8s join ' ~ microk8s_primary_host ~ ':')
       }}
+  when: microk8s_node_lookup.rc != 0
+
+- name: Build MicroK8s final join command
+  ansible.builtin.set_fact:
+    microk8s_join_command: "{{ microk8s_join_command_base }}{{ ' --worker' if microk8s_join_as_worker | bool else '' }}"
   when: microk8s_node_lookup.rc != 0
 
 - name: Fail if join command could not be parsed
@@ -63,3 +79,35 @@
   retries: 30
   delay: 10
   until: microk8s_joined_node_lookup.rc == 0
+
+- name: Check kubelite process for worker nodes
+  ansible.builtin.shell: "ps -ef | grep '[k]ubelite' || true"
+  args:
+    executable: /bin/bash
+  register: microk8s_kubelite_process
+  changed_when: false
+  when: microk8s_join_as_worker | bool
+
+- name: Assert worker nodes did not start the control plane
+  ansible.builtin.assert:
+    that:
+      - "'--start-control-plane=true' not in microk8s_kubelite_process.stdout"
+    fail_msg: "{{ inventory_hostname }} is configured as a worker but kubelite has --start-control-plane=true."
+  when: microk8s_join_as_worker | bool
+
+- name: Check MicroK8s datastore members from primary
+  ansible.builtin.shell: "microk8s status | sed -n '/datastore master nodes:/,/addons:/p'"
+  args:
+    executable: /bin/bash
+  delegate_to: "{{ microk8s_primary_host }}"
+  register: microk8s_datastore_members
+  changed_when: false
+  when: microk8s_join_as_worker | bool
+
+- name: Assert worker node is not a datastore member
+  ansible.builtin.assert:
+    that:
+      - inventory_hostname not in microk8s_datastore_members.stdout
+      - ansible_default_ipv4.address not in microk8s_datastore_members.stdout
+    fail_msg: "{{ inventory_hostname }} is configured as a worker but appears in MicroK8s datastore members."
+  when: microk8s_join_as_worker | bool
