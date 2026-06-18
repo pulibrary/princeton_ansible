@@ -1,32 +1,30 @@
 ---
 # tasks file for towerdeploy
 
-- name: towerdeploy | install capistrano
-  ansible.builtin.command: gem install capistrano --version "{{ cap_version }}"
-  register: gemoutput
-  # note: upgrading the cap version will not report 'changed'
-  changed_when: gemoutput.rc != 0
-  failed_when: gemoutput.rc !=0
-
-- name: towerdeploy | install capistrano dependencies
-  ansible.builtin.command: gem install "{{ item }}"
-  register: capgemoutput
-  changed_when: capgemoutput.rc != 0
-  failed_when: capgemoutput.rc !=0
+- name: towerdeploy | install ruby gems
+  community.general.gem:
+    name: "{{ item.name }}"
+    version: "{{ item.version | default(omit) }}"
+    state: present
+    user_install: false
+    include_doc: false
   loop:
-    - activesupport
-    - airbrussh
-    - capistrano-composer
-    - capistrano-passenger
-    - capistrano-rails
-    - capistrano-rails-console
-    - capistrano-yarn
-    - concurrent-ruby
-    - flipper
-    - honeybadger
-    - i18n
-    - net-scp
-    - net-ssh
-    - rake
-    - sshkit
-    - whenever
+    - name: i18n
+      version: "{{ i18n_version }}"
+    - name: capistrano
+      version: "{{ cap_version }}"
+    - name: activesupport
+    - name: airbrussh
+    - name: capistrano-composer
+    - name: capistrano-passenger
+    - name: capistrano-rails
+    - name: capistrano-rails-console
+    - name: capistrano-yarn
+    - name: concurrent-ruby
+    - name: flipper
+    - name: honeybadger
+    - name: net-scp
+    - name: net-ssh
+    - name: rake
+    - name: sshkit
+    - name: whenever
