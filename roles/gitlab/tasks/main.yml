@@ -1,33 +1,19 @@
 ---
 # tasks file for roles/gitlab
-- name: GitLab | Download repo ASCII key
-  ansible.builtin.get_url:
-    url: https://packages.gitlab.com/gpg.key
-    dest: /usr/share/keyrings/gitlab-ce-archive-keyring.asc
-    mode: "0644"
-  register: gitlab_ascii_key
 
-- name: GitLab | Check for existing dearmored key
+- name: GitLab | Check for existing APT repository file
   ansible.builtin.stat:
-    path: /usr/share/keyrings/gitlab-ce-archive-keyring.gpg
-  register: gitlab_gpg_keyring
+    path: /etc/apt/sources.list.d/gitlab_gitlab-ce.list
+  register: gitlab_repo_file
 
-- name: GitLab | Dearmor key into keyring
-  ansible.builtin.command:
-    cmd: >
-      gpg --dearmor --yes
-      -o /usr/share/keyrings/gitlab-ce-archive-keyring.gpg
-      /usr/share/keyrings/gitlab-ce-archive-keyring.asc
-  when: gitlab_ascii_key.changed or not gitlab_gpg_keyring.stat.exists
+- name: GitLab | Remove legacy conflicting APT repository entry
+  ansible.builtin.lineinfile:
+    path: /etc/apt/sources.list.d/gitlab_gitlab-ce.list
+    regexp: '^#?.*signed-by=/usr/share/keyrings/gitlab-ce-archive-keyring\.gpg.*packages\.gitlab\.com/gitlab/gitlab-ce/ubuntu.*$'
+    state: absent
+  when: gitlab_repo_file.stat.exists
 
-- name: GitLab | Add APT repository
-  ansible.builtin.apt_repository:
-    repo: "deb [signed-by=/usr/share/keyrings/gitlab-ce-archive-keyring.gpg] https://packages.gitlab.com/gitlab/gitlab-ce/ubuntu jammy main"
-    filename: gitlab_gitlab-ce
-    state: present
-    update_cache: false
-
-- name: Gitlab | Install required packages
+- name: GitLab | Install APT prerequisites
   ansible.builtin.apt:
     name:
       - curl
@@ -39,8 +25,48 @@
     state: present
     update_cache: true
 
-- name: Gitlab | Configure Postfix
-  # Example with debconf:
+- name: GitLab | Ensure APT keyrings directory exists
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: GitLab | Download repo ASCII key
+  ansible.builtin.get_url:
+    url: https://packages.gitlab.com/gpg.key
+    dest: /etc/apt/keyrings/gitlab_gitlab-ce-archive-keyring.asc
+    owner: root
+    group: root
+    mode: "0644"
+  register: gitlab_ascii_key
+
+- name: GitLab | Check for existing dearmored key
+  ansible.builtin.stat:
+    path: /etc/apt/keyrings/gitlab_gitlab-ce-archive-keyring.gpg
+  register: gitlab_gpg_keyring
+
+- name: GitLab | Dearmor key into keyring
+  ansible.builtin.command:
+    cmd: >
+      gpg --dearmor --yes
+      -o /etc/apt/keyrings/gitlab_gitlab-ce-archive-keyring.gpg
+      /etc/apt/keyrings/gitlab_gitlab-ce-archive-keyring.asc
+  when: gitlab_ascii_key.changed or not gitlab_gpg_keyring.stat.exists
+
+- name: GitLab | Add APT repository
+  ansible.builtin.apt_repository:
+    repo: "deb [signed-by=/etc/apt/keyrings/gitlab_gitlab-ce-archive-keyring.gpg] https://packages.gitlab.com/gitlab/gitlab-ce/ubuntu/ {{ ansible_distribution_release }} main"
+    filename: gitlab_gitlab-ce
+    state: present
+    update_cache: false
+
+- name: GitLab | Update apt cache
+  ansible.builtin.apt:
+    update_cache: true
+
+- name: GitLab | Configure Postfix
   ansible.builtin.debconf:
     name: postfix
     question: postfix/{{ item.question }}
@@ -48,16 +74,14 @@
     vtype: "{{ item.vtype }}"
   notify: Restart mail service
   loop:
-    # General mail configuration type
     - question: main_mailer_type
       value: "Satellite system"
       vtype: select
-    # SMTP relay host
     - question: relayhost
       value: "lib-ponyexpr-prod.princeton.edu"
       vtype: string
 
-- name: Gitlab | Install required postfix
+- name: GitLab | Install postfix
   ansible.builtin.apt:
     name: postfix
     autoremove: true
@@ -65,12 +89,22 @@
   environment:
     DEBIAN_FRONTEND: noninteractive
 
-- name: Gitlab | update acme certificates for {{ inventory_hostname }}
-  ansible.builtin.command: /usr/bin/certbot certonly --standalone --non-interactive --agree-tos --email lsupport@princeton.edu --server https://acme.sectigo.com/v2/InCommonRSAOV --eab-kid {{ vault_acme_eab_kid }} --eab-hmac-key {{ vault_acme_eab_hmac_key }} --domain {{ inventory_hostname }} --cert-name {{ inventory_hostname }}
+- name: GitLab | Update ACME certificates for {{ inventory_hostname }}
+  ansible.builtin.command: >
+    /usr/bin/certbot certonly
+    --standalone
+    --non-interactive
+    --agree-tos
+    --email lsupport@princeton.edu
+    --server https://acme.sectigo.com/v2/InCommonRSAOV
+    --eab-kid {{ vault_acme_eab_kid }}
+    --eab-hmac-key {{ vault_acme_eab_hmac_key }}
+    --domain {{ inventory_hostname }}
+    --cert-name {{ inventory_hostname }}
   changed_when: false
-  when: running_on_server
+  when: running_on_server | default(false)
 
-- name: GitLab | install CE package
+- name: GitLab | Install CE package
   ansible.builtin.apt:
     name: gitlab-ce
     state: present
@@ -79,7 +113,7 @@
   environment:
     DEBIAN_FRONTEND: noninteractive
 
-- name: Copy GitLab configuration file
+- name: GitLab | Copy GitLab configuration file
   ansible.builtin.template:
     src: gitlab.rb.j2
     dest: /etc/gitlab/gitlab.rb
