@@ -1,7 +1,7 @@
 ---
 # This playbook installs OIT mandated security tools Rapid7 and Cortex XDR
-# plus BigFix, for on-prem infrastructure
-# By default this playbook runs on all hosts in all environments. To run against a single host or group, use '--limit <group_or_host_name>'. For example '--limit qa' or '--limit figgy-web-staging1.princeton.edu'."
+# By default this playbook runs on all hosts in all environments
+# To run against a single host or group, use '--limit <group_or_host_name>'. For example '--limit qa' or '--limit figgy-web-staging1.princeton.edu'."
 #
 - name: install OIT Security Tools on a host
   hosts: all
@@ -146,67 +146,6 @@
           name: ir_agent
           state: restarted
         become: true
-
-  - name: Install, configure, and start BigFix
-    when: "ansible_facts.services['besclient.service'] is not defined"
-    block:
-      - name: Import BigFix GPG key
-        ansible.builtin.rpm_key:
-          state: present
-          key: https://software.bigfix.com/download/bes/95/RPM-GPG-KEY-BigFix-9-V2
-        when:
-          - ansible_os_family == "RedHat"
-
-      - name: Create bigfix directory
-        ansible.builtin.file:
-          path: /etc/opt/BESClient
-          state: directory
-          mode: '0755'
-
-      - name: Download BigFix masthead
-        ansible.builtin.get_url:
-          url: "{{ vault_bigfix_url }}"
-          dest: "/etc/opt/BESClient/actionsite.afxm"
-          owner: root
-          group: root
-          mode: "0600"
-
-      - name: Download the bigfix deb file (Ubuntu)
-        ansible.builtin.get_url:
-          url: "https://software.bigfix.com/download/bes/100/BESAgent-10.0.7.52-debian6.amd64.deb"
-          dest: "/tmp/BESAgent-10.0.7.52-debian6.amd64.deb"
-          owner: pulsys
-          group: pulsys
-          mode: "0644"
-        when:
-        - ansible_os_family == "Debian"
-
-      - name: Download the bigfix deb file (RedHat)
-        ansible.builtin.get_url:
-          url: "https://software.bigfix.com/download/bes/100/BESAgent-10.0.7.52-rhe6.x86_64.rpm"
-          dest: "/tmp/BESAgent-10.0.7.52-rhel6.x86_64.rpm"
-          owner: pulsys
-          group: pulsys
-          mode: "0644"
-        when:
-        - ansible_os_family == "RedHat"
-
-      - name: install BESClient agent (Ubuntu)
-        ansible.builtin.apt:
-          deb: "/tmp/BESAgent-10.0.7.52-debian6.amd64.deb"
-        when:
-          - ansible_os_family == "Debian"
-
-      - name: install BESClient agent (RedHat)
-        ansible.builtin.dnf:
-          name: "/tmp/BESAgent-10.0.7.52-rhel6.x86_64.rpm"
-          state: present
-        when:
-          - ansible_os_family == "RedHat"
-
-      - name: Launch the BigFix client
-        ansible.builtin.command: /etc/init.d/besclient start
-      #For future maintenance, BigFix block ends here
 
   # post_tasks:
   #   - name: send information to slack
