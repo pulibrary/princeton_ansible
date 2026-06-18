@@ -11,6 +11,8 @@
   vars_files:
     - ../../group_vars/xdr/vault.yml
     - ../../group_vars/xdr/vars.yml
+    - ../../group_vars/rapid7/vault.yml
+    - ../../group_vars/rapid7/vars.yml
     - ../../group_vars/all/vars.yml
     - ../../group_vars/all/vault.yml
 
@@ -146,6 +148,57 @@
           name: ir_agent
           state: restarted
         become: true
+
+  - name: Install and configure the Rapid7 Scan Assistant Service
+    when: "ansible_facts.services['R7ScanAssistant.service'] is not defined"
+    block:
+      - name: Download package with checksum verification deb file (Ubuntu)
+        ansible.builtin.get_url:
+          url: "{{ scan_assistant_deb_pkg_url }}"
+          dest: "/tmp/"
+          checksum: "sha512:{{ scan_assistant_deb_checksum }}"
+          mode: "0644"
+        when:
+          - ansible_os_family == "Debian"
+
+      - name: Download package with checksum verification rpm file (RedHat)
+        ansible.builtin.get_url:
+          url: "{{ scan_assistant_rpm_pkg_url }}"
+          dest: "/tmp/"
+          checksum: "sha512:{{ scan_assistant_rpm_checksum }}"
+          mode: "0644"
+        when:
+          - ansible_os_family == "RedHat"
+
+      - name: Install Rapid7 Scan Assistant Service (Ubuntu)
+        ansible.builtin.apt:
+          deb: "/tmp/R7ScanAssistant_amd64.deb"
+        become: true
+        when:
+          - ansible_os_family == "Debian"
+
+      - name: Install Rapid7 Scan Assistant Service  (RedHat)
+        ansible.builtin.yum:
+          name: "/tmp/R7ScanAssistant_amd64.rpm"
+          state: present
+        become: true
+        when:
+          - ansible_os_family == "RedHat"
+
+      - name: Download the PEM file to trust connection with Scan Engine
+        ansible.builtin.copy:
+          content: |
+            {{ scan_assistant_pem_file }}
+          dest: /etc/rapid7/ScanAssistant/scan-assistant.pem
+          mode: '0644'
+
+      - name: Delete the package file after successful installation
+        ansible.builtin.file:
+           path: "{{ item }}"
+           state: absent
+        loop:
+           - /tmp/R7ScanAssistant_amd64.deb
+           - /tmp/R7ScanAssistant_amd64.rpm
 
   # post_tasks:
   #   - name: send information to slack
