@@ -9,3 +9,133 @@ gitlab_google_bucket: "{{ vault_gitlab_google_bucket }}"
 gitlab_entra_identifier_id: "{{ vault_gitlab_entra_identifier_id }}"
 gitlab_entra_issuer_id: "{{ vault_gitlab_entra_issuer_id }}"
 gitlab_entra_secret_id: "{{ vault_gitlab_entra_secret_id }}"
+
+otel_receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 127.0.0.1:4317
+      http:
+        endpoint: 127.0.0.1:4318
+
+  prometheus/gitlab:
+    config:
+      scrape_configs:
+        - job_name: gitlab_exporter
+          scrape_interval: 30s
+          static_configs:
+            - targets:
+                - 127.0.0.1:9168
+              labels:
+                service: gitlab
+                component: gitlab_exporter
+
+        - job_name: gitlab_node_exporter
+          scrape_interval: 30s
+          static_configs:
+            - targets:
+                - 127.0.0.1:9100
+              labels:
+                service: gitlab
+                component: node_exporter
+
+        - job_name: gitlab_redis_exporter
+          scrape_interval: 30s
+          static_configs:
+            - targets:
+                - 127.0.0.1:9121
+              labels:
+                service: gitlab
+                component: redis_exporter
+
+        - job_name: gitlab_postgres_exporter
+          scrape_interval: 30s
+          static_configs:
+            - targets:
+                - 127.0.0.1:9187
+              labels:
+                service: gitlab
+                component: postgres_exporter
+
+        - job_name: gitlab_sidekiq
+          scrape_interval: 30s
+          static_configs:
+            - targets:
+                - 127.0.0.1:8082
+              labels:
+                service: gitlab
+                component: sidekiq
+
+        - job_name: gitlab_puma
+          scrape_interval: 30s
+          static_configs:
+            - targets:
+                - 127.0.0.1:8083
+              labels:
+                service: gitlab
+                component: puma
+
+otel_processors:
+  batch: {}
+
+  resource/gitlab:
+    attributes:
+      - key: service.name
+        value: gitlab
+        action: upsert
+      - key: service
+        value: gitlab
+        action: upsert
+      - key: deployment.environment
+        value: production
+        action: upsert
+      - key: environment
+        value: production
+        action: upsert
+      - key: host.name
+        value: "{{ inventory_hostname }}"
+        action: upsert
+
+otel_exporters:
+  loadbalancing:
+    routing_key: service
+    protocol:
+      otlp:
+        timeout: 10s
+        tls:
+          insecure: true
+        sending_queue:
+          enabled: true
+          num_consumers: 10
+          queue_size: 5000
+        retry_on_failure:
+          enabled: true
+          initial_interval: 5s
+          max_interval: 30s
+          max_elapsed_time: 300s
+    resolver:
+      static:
+        hostnames:
+          - k8s-prod1.lib.princeton.edu:32317
+          - k8s-prod2.lib.princeton.edu:32317
+          - k8s-prod3.lib.princeton.edu:32317
+
+otel_service_pipelines:
+  metrics:
+    receivers:
+      - otlp
+      - prometheus/gitlab
+    processors:
+      - resource/gitlab
+      - batch
+    exporters:
+      - loadbalancing
+
+  traces:
+    receivers:
+      - otlp
+    processors:
+      - resource/gitlab
+      - batch
+    exporters:
+      - loadbalancing
