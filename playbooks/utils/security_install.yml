@@ -24,6 +24,7 @@
   - name: Install XDR except on FreeBSD
     when:
       - ansible_distribution != "FreeBSD"
+      - "'traps_pmd.service' not in ansible_facts.services"
     block:
     - name: Download the XDR deb file (Ubuntu)
       ansible.builtin.unarchive:
@@ -81,7 +82,6 @@
         deb: "/opt/{{ cortex_install }}.deb"
       when:
         - ansible_os_family == "Debian"
-        - "'traps_pmd.service' not in ansible_facts.services"
 
     # yum module equiv of sudo yum -y install for rocky
     - name: install XDR agent (RedHat)
@@ -101,7 +101,8 @@
       changed_when: cytool_result.rc == 0
 
   - name: Install, configure, and start Rapid7
-    when: "ansible_facts.services['ir_agent.service'] is not defined"
+    when:
+     - "'ir_agent.service' not in ansible_facts.services"
     block:
       - name: Download the Rapid7 deb file (Ubuntu)
         ansible.builtin.get_url:
@@ -154,7 +155,8 @@
         become: true
 
   - name: Install and configure the Rapid7 Scan Assistant Service
-    when: "ansible_facts.services['R7ScanAssistant.service'] is not defined"
+    when:
+      - "'R7ScanAssistant.service' not in ansible_facts.services"
     block:
       - name: Download package with checksum verification deb file (Ubuntu)
         ansible.builtin.get_url:
