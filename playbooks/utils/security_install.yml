@@ -21,80 +21,84 @@
     ansible.builtin.service_facts:
 
   tasks:
-  - name: Download the XDR deb file (Ubuntu)
-    ansible.builtin.unarchive:
-      src: "https://pulmirror.princeton.edu/mirror/palo/Linux-{{ xdr_version }}_deb.tar.gz"
-      dest: /opt/
-      creates: /opt/{{ cortex_install }}.deb
-      remote_src: true
-    become: true
+  - name: Install XDR except on FreeBSD
     when:
-      - ansible_os_family == "Debian"
+      - ansible_distribution != "FreeBSD"
+    block:
+    - name: Download the XDR deb file (Ubuntu)
+      ansible.builtin.unarchive:
+        src: "https://pulmirror.princeton.edu/mirror/palo/Linux-{{ xdr_version }}_deb.tar.gz"
+        dest: /opt/
+        creates: /opt/{{ cortex_install }}.deb
+        remote_src: true
+      become: true
+      when:
+        - ansible_os_family == "Debian"
 
-  - name: Download the XDR rpm file (RedHat)
-    ansible.builtin.unarchive:
-      src: "https://pulmirror.princeton.edu/mirror/palo/Linux-{{ xdr_version }}_rpm.tar.gz"
-      dest: /opt/
-      creates: /opt/{{ cortex_install }}.rpm
-      remote_src: true
-    become: true
-    when:
-      - ansible_os_family == "RedHat"
+    - name: Download the XDR rpm file (RedHat)
+      ansible.builtin.unarchive:
+        src: "https://pulmirror.princeton.edu/mirror/palo/Linux-{{ xdr_version }}_rpm.tar.gz"
+        dest: /opt/
+        creates: /opt/{{ cortex_install }}.rpm
+        remote_src: true
+      become: true
+      when:
+        - ansible_os_family == "RedHat"
 
-  - name: Install Cortex XDR dependencies (RedHat)
-    ansible.builtin.dnf:
-      name: selinux-policy-devel
-      state: present
-    become: true
-    when:
-      - ansible_os_family == "RedHat"
+    - name: Install Cortex XDR dependencies (RedHat)
+      ansible.builtin.dnf:
+        name: selinux-policy-devel
+        state: present
+      become: true
+      when:
+        - ansible_os_family == "RedHat"
 
-  # Create config directory
-  - name: Create /etc/panw directory
-    ansible.builtin.file:
-      path: /etc/panw
-      state: directory
-      owner: root
-      group: root
-      mode: '0755'
-    become: true
+    # Create config directory
+    - name: Create /etc/panw directory
+      ansible.builtin.file:
+        path: /etc/panw
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+      become: true
 
-  # Build the config file
-  - name: Build the XDR config file
-    ansible.builtin.copy:
-      content: |
-        --distribution-id {{ xdr_vault_distribution_id }}
-        --distribution-server {{ xdr_distribution_server }}
-      dest: /etc/panw/cortex.conf
-      owner: root
-      group: root
-      mode: '0744'
-    become: true
+    # Build the config file
+    - name: Build the XDR config file
+      ansible.builtin.copy:
+        content: |
+          --distribution-id {{ xdr_vault_distribution_id }}
+          --distribution-server {{ xdr_distribution_server }}
+        dest: /etc/panw/cortex.conf
+        owner: root
+        group: root
+        mode: '0744'
+      become: true
 
-  # apt module equiv of sudo dpkg -i filename for ubuntu
-  - name: install XDR agent (Ubuntu)
-    ansible.builtin.apt:
-      deb: "/opt/{{ cortex_install }}.deb"
-    when:
-      - ansible_os_family == "Debian"
-      - "'traps_pmd.service' not in ansible_facts.services"
+    # apt module equiv of sudo dpkg -i filename for ubuntu
+    - name: install XDR agent (Ubuntu)
+      ansible.builtin.apt:
+        deb: "/opt/{{ cortex_install }}.deb"
+      when:
+        - ansible_os_family == "Debian"
+        - "'traps_pmd.service' not in ansible_facts.services"
 
-  # yum module equiv of sudo yum -y install for rocky
-  - name: install XDR agent (RedHat)
-    ansible.builtin.dnf:
-      name: "/opt/{{ cortex_install }}.rpm"
-      state: present
-      disable_gpg_check: true
-    when:
-      - ansible_os_family == "RedHat"
-  #
-  # Force agent checkin after installation
-  - name: Run cytool checkin
-    ansible.builtin.command:
-      cmd: /opt/traps/bin/cytool checkin
-    become: true
-    register: cytool_result
-    changed_when: cytool_result.rc == 0
+    # yum module equiv of sudo yum -y install for rocky
+    - name: install XDR agent (RedHat)
+      ansible.builtin.dnf:
+        name: "/opt/{{ cortex_install }}.rpm"
+        state: present
+        disable_gpg_check: true
+      when:
+        - ansible_os_family == "RedHat"
+    #
+    # Force agent checkin after installation
+    - name: Run cytool checkin
+      ansible.builtin.command:
+        cmd: /opt/traps/bin/cytool checkin
+      become: true
+      register: cytool_result
+      changed_when: cytool_result.rc == 0
 
   - name: Install, configure, and start Rapid7
     when: "ansible_facts.services['ir_agent.service'] is not defined"
