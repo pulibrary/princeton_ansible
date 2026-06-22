@@ -1,6 +1,7 @@
 ---
-# This playbook will install OIT mandated security tools Rapid7 and Cortex XDR
-# By default this playbook runs on all hosts in the three environment groups. To run against a single host or group, use '--limit <group_or_host_name>'. For example '--limit qa' or '--limit figgy-web-staging1.princeton.edu'."
+# This playbook installs OIT mandated security tools Rapid7 and Cortex XDR
+# By default this playbook runs on all hosts in all environments
+# To run against a single host or group, use '--limit <group_or_host_name>'. For example '--limit qa' or '--limit figgy-web-staging1.princeton.edu'."
 #
 - name: install OIT Security Tools on a host
   hosts: all
@@ -10,6 +11,8 @@
   vars_files:
     - ../../group_vars/xdr/vault.yml
     - ../../group_vars/xdr/vars.yml
+    - ../../group_vars/rapid7/vault.yml
+    - ../../group_vars/rapid7/vars.yml
     - ../../group_vars/all/vars.yml
     - ../../group_vars/all/vault.yml
 
@@ -93,67 +96,6 @@
     register: cytool_result
     changed_when: cytool_result.rc == 0
 
-  - name: Install, configure, and start BigFix
-    when: "ansible_facts.services['besclient.service'] is not defined"
-    block:
-      - name: Import BigFix GPG key
-        ansible.builtin.rpm_key:
-          state: present
-          key: https://software.bigfix.com/download/bes/95/RPM-GPG-KEY-BigFix-9-V2
-        when:
-          - ansible_os_family == "RedHat"
-
-      - name: Create bigfix directory
-        ansible.builtin.file:
-          path: /etc/opt/BESClient
-          state: directory
-          mode: '0755'
-
-      - name: Download BigFix masthead
-        ansible.builtin.get_url:
-          url: "{{ vault_bigfix_url }}"
-          dest: "/etc/opt/BESClient/actionsite.afxm"
-          owner: root
-          group: root
-          mode: "0600"
-
-      - name: Download the bigfix deb file (Ubuntu)
-        ansible.builtin.get_url:
-          url: "https://software.bigfix.com/download/bes/100/BESAgent-10.0.7.52-debian6.amd64.deb"
-          dest: "/tmp/BESAgent-10.0.7.52-debian6.amd64.deb"
-          owner: pulsys
-          group: pulsys
-          mode: "0644"
-        when:
-        - ansible_os_family == "Debian"
-
-      - name: Download the bigfix deb file (RedHat)
-        ansible.builtin.get_url:
-          url: "https://software.bigfix.com/download/bes/100/BESAgent-10.0.7.52-rhe6.x86_64.rpm"
-          dest: "/tmp/BESAgent-10.0.7.52-rhel6.x86_64.rpm"
-          owner: pulsys
-          group: pulsys
-          mode: "0644"
-        when:
-        - ansible_os_family == "RedHat"
-
-      - name: install BESClient agent (Ubuntu)
-        ansible.builtin.apt:
-          deb: "/tmp/BESAgent-10.0.7.52-debian6.amd64.deb"
-        when:
-          - ansible_os_family == "Debian"
-
-      - name: install BESClient agent (RedHat)
-        ansible.builtin.dnf:
-          name: "/tmp/BESAgent-10.0.7.52-rhel6.x86_64.rpm"
-          state: present
-        when:
-          - ansible_os_family == "RedHat"
-
-      - name: Launch the BigFix client
-        ansible.builtin.command: /etc/init.d/besclient start
-      #For future maintenance, BigFix block ends here
-
   - name: Install, configure, and start Rapid7
     when: "ansible_facts.services['ir_agent.service'] is not defined"
     block:
@@ -206,6 +148,57 @@
           name: ir_agent
           state: restarted
         become: true
+
+  - name: Install and configure the Rapid7 Scan Assistant Service
+    when: "ansible_facts.services['R7ScanAssistant.service'] is not defined"
+    block:
+      - name: Download package with checksum verification deb file (Ubuntu)
+        ansible.builtin.get_url:
+          url: "{{ scan_assistant_deb_pkg_url }}"
+          dest: "/tmp/"
+          checksum: "sha512:{{ scan_assistant_deb_checksum }}"
+          mode: "0644"
+        when:
+          - ansible_os_family == "Debian"
+
+      - name: Download package with checksum verification rpm file (RedHat)
+        ansible.builtin.get_url:
+          url: "{{ scan_assistant_rpm_pkg_url }}"
+          dest: "/tmp/"
+          checksum: "sha512:{{ scan_assistant_rpm_checksum }}"
+          mode: "0644"
+        when:
+          - ansible_os_family == "RedHat"
+
+      - name: Install Rapid7 Scan Assistant Service (Ubuntu)
+        ansible.builtin.apt:
+          deb: "/tmp/R7ScanAssistant_amd64.deb"
+        become: true
+        when:
+          - ansible_os_family == "Debian"
+
+      - name: Install Rapid7 Scan Assistant Service  (RedHat)
+        ansible.builtin.yum:
+          name: "/tmp/R7ScanAssistant_amd64.rpm"
+          state: present
+        become: true
+        when:
+          - ansible_os_family == "RedHat"
+
+      - name: Download the PEM file to trust connection with Scan Engine
+        ansible.builtin.copy:
+          content: |
+            {{ scan_assistant_pem_file }}
+          dest: /etc/rapid7/ScanAssistant/scan-assistant.pem
+          mode: '0644'
+
+      - name: Delete the package file after successful installation
+        ansible.builtin.file:
+           path: "{{ item }}"
+           state: absent
+        loop:
+           - /tmp/R7ScanAssistant_amd64.deb
+           - /tmp/R7ScanAssistant_amd64.rpm
 
   # post_tasks:
   #   - name: send information to slack
