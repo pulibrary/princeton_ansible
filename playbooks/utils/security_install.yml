@@ -99,9 +99,10 @@
       register: cytool_result
       changed_when: cytool_result.rc == 0
 
-  - name: Install, configure, and start Rapid7
+  - name: Install, configure, and start Rapid7 except on FreeBSD
     when:
-     - "'ir_agent.service' not in ansible_facts.services"
+      - ansible_distribution != "FreeBSD"
+      - "'ir_agent.service' not in ansible_facts.services"
     block:
       - name: Download the Rapid7 deb file (Ubuntu)
         ansible.builtin.get_url:
@@ -153,8 +154,9 @@
           state: restarted
         become: true
 
-  - name: Install and configure the Rapid7 Scan Assistant Service
+  - name: Install and configure the Rapid7 Scan Assistant Service except on FreeBSD
     when:
+      - ansible_distribution != "FreeBSD"
       - "'R7ScanAssistant.service' not in ansible_facts.services"
     block:
       - name: Download package with checksum verification deb file (Ubuntu)
