@@ -3,14 +3,25 @@
   hosts: all
   gather_facts: false
   vars:
+    towerdeploy_ruby_version: "3.4.9"
     cap_version: "3.19.2"
   tasks:
-  - name: check capistrano status
-    ansible.builtin.command: cap --version
-    changed_when: false
-    register: cap_status
+    - name: check ruby version
+      ansible.builtin.command: ruby --version
+      changed_when: false
+      register: ruby_status
 
-  - name: test for cap version
-    assert:
-      that:
-        - "'{{ cap_version }}' in cap_status.stdout"
+    - name: test for ruby version
+      ansible.builtin.assert:
+        that:
+          - "'ruby {{ towerdeploy_ruby_version }}' in ruby_status.stdout"
+
+    - name: check capistrano status
+      ansible.builtin.command: cap --version
+      changed_when: false
+      register: cap_status
+
+    - name: test for cap version
+      ansible.builtin.assert:
+        that:
+          - cap_version in cap_status.stdout
