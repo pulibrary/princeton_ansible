@@ -7,22 +7,94 @@
     - name: Debug connection
       ansible.builtin.debug:
         msg: "Connected successfully"
-        
+
     - name: Check permissions
       ansible.builtin.command: ls -la /tmp
       register: tmp_permissions
-      
+
     - name: Display tmp permissions
       ansible.builtin.debug:
         var: tmp_permissions.stdout_lines
-        
+
     - name: Try to create directory manually
       ansible.builtin.shell: |
         mkdir -p /tmp/ansible
         chmod 777 /tmp/ansible
         ls -la /tmp/ansible
       register: dir_creation
-      
+
     - name: Display directory creation result
       ansible.builtin.debug:
         var: dir_creation.stdout_lines
+
+- name: Prepare Postgres Database Server for ruby_app / psql-client tests
+  hosts: postgres
+  become: true
+  vars_files:
+    - ../../defaults/main.yml
+  tasks:
+    - name: Make sure CA certificates are available
+      ansible.builtin.apt:
+        name: ca-certificates
+        state: present
+        update_cache: true
+
+    - name: Add postgres repository apt-key
+      ansible.builtin.apt_key:
+        url: "{{ postgres_apt_key_url }}"
+        state: present
+
+    - name: Add postgres repository
+      ansible.builtin.apt_repository:
+        repo: "{{ postgres_apt_repository }}"
+        update_cache: true
+        state: present
+
+    - name: Install Postgresql and Python on DB host
+      ansible.builtin.apt:
+        name:
+          - libpq-dev
+          - postgresql-{{ postgres_version }}
+          - postgresql-contrib-{{ postgres_version }}
+          - postgresql-client-{{ postgres_version }}
+          - python3-psycopg2
+          - sudo
+        state: present
+        update_cache: true
+
+    - name: Install psycopg2 for Ansible Python
+      ansible.builtin.pip:
+        name: psycopg2-binary
+        executable: pip3
+        extra_args: --break-system-packages
+
+    - name: Listen on all container addresses
+      ansible.builtin.lineinfile:
+        path: "/etc/postgresql/{{ postgres_version }}/main/postgresql.conf"
+        regexp: '^#?listen_addresses\s*='
+        line: "listen_addresses = '*'"
+
+    - name: Allow password auth from Molecule containers
+      ansible.builtin.lineinfile:
+        path: "/etc/postgresql/{{ postgres_version }}/main/pg_hba.conf"
+        line: "host    all             all             0.0.0.0/0               md5"
+
+    - name: Start postgresql service
+      ansible.builtin.service:
+        name: postgresql
+        state: restarted
+        enabled: true
+
+    - name: Set postgres user password for testing
+      become_user: postgres
+      ansible.builtin.command: psql -c "ALTER USER postgres PASSWORD 'postgres';"
+      changed_when: false
+
+- name: Prepare Application Instance
+  hosts: instance
+  become: true
+  tasks:
+    - name: Ensure deploy user exists
+      ansible.builtin.user:
+        name: deploy
+        state: present
