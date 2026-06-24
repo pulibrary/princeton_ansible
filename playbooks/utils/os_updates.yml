@@ -1,10 +1,10 @@
-
 ---
 # by default this playbook runs in the staging environment
 # to run in qa, pass '-e runtime_env=qa'
 # to run in production, pass '-e runtime_env=production'
 # remember that the loadbalancing machines are not included
 # and will need to be manually updated
+
 - name: update the Operating System packages
   hosts: "{{ runtime_env | default('staging') }}"
   remote_user: pulsys
@@ -14,10 +14,14 @@
     - ../group_vars/all/vars.yml
     - ../group_vars/all/vault.yml
 
+  vars:
+    freebsd_reboot_after_pkg_upgrade: true
+
   tasks:
     - name: Ubuntu | refresh keys
       ansible.builtin.command: /usr/bin/apt-key adv --refresh-keys --keyserver keyserver.ubuntu.com
       become: true
+      changed_when: false
       when: ansible_os_family == "Debian"
 
     - name: Ubuntu | Upgrade all packages
@@ -25,6 +29,7 @@
         update_cache: true
         upgrade: dist
         force_apt_get: true
+      register: apt_update_status
       when: ansible_os_family == "Debian"
 
     - name: RedHat | Upgrade all packages with fallback
@@ -45,11 +50,35 @@
             state: latest
             skip_broken: true
             nobest: true
+          register: dnf_update_status
+          when: ansible_os_family == "RedHat"
 
     - name: RedHat | clear local repository
       ansible.builtin.command:
-        cmd: sudo yum clean all
+        cmd: yum clean all
+      changed_when: false
       when: ansible_os_family == "RedHat"
+
+    - name: FreeBSD | Upgrade all packages
+      community.general.pkgng:
+        name: "*"
+        state: latest
+      register: freebsd_pkg_update_status
+      when: ansible_os_family == "FreeBSD"
+
+    - name: FreeBSD | remove packages that are no longer required
+      ansible.builtin.command:
+        cmd: pkg autoremove -y
+      register: freebsd_pkg_autoremove_status
+      changed_when: "'Deinstallation has been requested' in freebsd_pkg_autoremove_status.stdout"
+      when: ansible_os_family == "FreeBSD"
+
+    - name: FreeBSD | clear local package cache
+      ansible.builtin.command:
+        cmd: pkg clean -ay
+      register: freebsd_pkg_clean_status
+      changed_when: "'The cleanup will free' in freebsd_pkg_clean_status.stdout"
+      when: ansible_os_family == "FreeBSD"
 
     - name: Ubuntu | remove dependencies that are no longer required
       ansible.builtin.apt:
@@ -72,37 +101,37 @@
       register: reboot_required_file
       when: ansible_os_family == "Debian"
 
-    # - name: RedHat | Note RH machines that need reboots
-    #   ansible.builtin.set_fact: needs_reboot=true
-    #   when:
-    #     - ansible_os_family == "RedHat"
-    #     - yum_update_status.changed
-
-    - name: RedHat | Reboot if required
-      ansible.builtin.reboot:
-        msg: "Reboot initiated by Ansible because of yum updates."
-        connect_timeout: 5
-        reboot_timeout: 600
-        pre_reboot_delay: 0
-        post_reboot_delay: 15
-        test_command: whoami
-      when:
-        - ansible_os_family == "RedHat"
-        - yum_update_status.changed
-        - "'ansible' not in inventory_hostname"
-        - "'recap' not in inventory_hostname"
-
-    - name: Ubuntu | Reboot if required
-      ansible.builtin.reboot:
-        msg: "Reboot initiated by Ansible because of apt-get updates."
-        connect_timeout: 5
-        reboot_timeout: 600
-        pre_reboot_delay: 0
-        post_reboot_delay: 15
-        test_command: whoami
+    - name: Ubuntu | Mark hosts that need reboot
+      ansible.builtin.set_fact:
+        os_update_reboot_required: true
+        os_update_reboot_reason: "apt-get updates"
       when:
         - ansible_os_family == "Debian"
-        - reboot_required_file.stat.exists == true
+        - reboot_required_file.stat.exists | default(false)
+
+    - name: RedHat | Mark hosts that need reboot
+      ansible.builtin.set_fact:
+        os_update_reboot_required: true
+        os_update_reboot_reason: "yum/dnf updates"
+      when:
+        - ansible_os_family == "RedHat"
+        - >
+          yum_update_status.changed | default(false)
+          or dnf_update_status.changed | default(false)
+
+    - name: FreeBSD | Mark hosts that need reboot
+      ansible.builtin.set_fact:
+        os_update_reboot_required: true
+        os_update_reboot_reason: "pkg updates"
+      when:
+        - ansible_os_family == "FreeBSD"
+        - freebsd_reboot_after_pkg_upgrade | bool
+        - freebsd_pkg_update_status.changed | default(false)
+
+    - name: Mark hosts that do not need reboot
+      ansible.builtin.set_fact:
+        os_update_reboot_required: false
+      when: os_update_reboot_required is not defined
 
     - name: tell everyone on slack you ran an ansible playbook
       community.general.slack:
@@ -110,13 +139,79 @@
         msg: "Ansible ran `{{ ansible_play_name }}` on {{ inventory_hostname }}"
         channel: "{{ slack_alerts_channel }}"
 
-  post_tasks:
-    - name: notify ops to reboot the ansible servers if needed
+
+- name: reboot hosts after Operating System package updates
+  hosts: "{{ runtime_env | default('staging') }}"
+  remote_user: pulsys
+  serial: "{{ reboot_concurrent_vms | default('1') }}"
+  become: true
+  vars_files:
+    - ../group_vars/all/vars.yml
+    - ../group_vars/all/vault.yml
+
+  vars:
+    reboot_excluded_inventory_name_patterns:
+      - ansible
+      - recap
+
+    reboot_stabilization_delays:
+      solr: 120
+      solr9: 120
+      solrcloud: 120
+
+  tasks:
+    - name: Determine whether this host is excluded from automatic reboot
+      ansible.builtin.set_fact:
+        os_update_reboot_excluded: >-
+          {{
+            reboot_excluded_inventory_name_patterns
+            | select('in', inventory_hostname)
+            | list
+            | length > 0
+          }}
+
+    - name: Notify ops to reboot excluded hosts if needed
       community.general.slack:
         token: "{{ vault_pul_slack_token }}"
-        msg: "@ops {{ inventory_hostname }} needs a reboot"
+        msg: "@ops {{ inventory_hostname }} needs a reboot after {{ os_update_reboot_reason | default('OS package updates') }}"
         channel: "{{ slack_alerts_channel }}"
       when:
-        - ansible_os_family == "RedHat"
-        - yum_update_status.changed
-        - "'ansible' in inventory_hostname or 'recap' in inventory_hostname"
+        - os_update_reboot_required | default(false)
+        - os_update_reboot_excluded
+
+    - name: Determine matching stabilization delays
+      ansible.builtin.set_fact:
+        matching_reboot_stabilization_delays: >-
+          {{
+            reboot_stabilization_delays
+            | dict2items
+            | selectattr('key', 'in', group_names)
+            | map(attribute='value')
+            | list
+          }}
+      when:
+        - os_update_reboot_required | default(false)
+        - not os_update_reboot_excluded
+
+    - name: Determine post-reboot stabilization delay
+      ansible.builtin.set_fact:
+        os_update_post_reboot_delay: >-
+          {{
+            (matching_reboot_stabilization_delays | default([]) | length > 0)
+            | ternary(matching_reboot_stabilization_delays | max, 15)
+          }}
+      when:
+        - os_update_reboot_required | default(false)
+        - not os_update_reboot_excluded
+
+    - name: Reboot if required
+      ansible.builtin.reboot:
+        msg: "Reboot initiated by Ansible because of {{ os_update_reboot_reason | default('OS package updates') }}."
+        connect_timeout: 5
+        reboot_timeout: 900
+        pre_reboot_delay: 0
+        post_reboot_delay: "{{ os_update_post_reboot_delay | default(15) }}"
+        test_command: whoami
+      when:
+        - os_update_reboot_required | default(false)
+        - not os_update_reboot_excluded
