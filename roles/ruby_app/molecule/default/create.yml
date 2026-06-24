@@ -17,6 +17,11 @@
         ansible_async_dir: "{{ lookup('env', 'HOME') }}/.ansible_async/"
       when: (lookup('env', 'HOME') | default('') | length) > 0
 
+    - name: Create docker network(s)
+      community.docker.docker_network:
+        name: CI
+        state: present
+
     - name: Create container(s)
       community.docker.docker_container:
         name: "{{ item.name }}"
@@ -27,6 +32,7 @@
         cgroupns_mode: "{{ item.cgroupns_mode | default(omit) }}"
         tmpfs: "{{ item.tmpfs | default(omit) }}"
         volumes: "{{ item.volumes | default(omit) }}"
+        networks: "{{ item.networks | default(omit) }}"
         # Only pass command if it’s non-empty; otherwise use image CMD (/sbin/init in your image)
         command: "{{ (item.command | default('') | length > 0) | ternary(item.command, omit) }}"
         log_driver: json-file
