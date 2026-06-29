@@ -1,0 +1,21 @@
+---
+# surface the SSH User CA public key so it can be
+# distributed to the fleet as ssh_ca_user_ca_public_key (for the ssh_ca_trust
+# role). Registered as a fact and printed for convenience.
+
+- name: Read the SSH User CA public key
+  ansible.builtin.slurp:
+    src: "{{ step_ca_path }}/certs/ssh_user_ca_key.pub"
+  register: step_ca_user_ca_raw
+  become: true
+  become_user: "{{ step_ca_user }}"
+
+- name: Expose the SSH User CA public key as a fact
+  ansible.builtin.set_fact:
+    step_ca_user_ca_public_key: "{{ step_ca_user_ca_raw.content | b64decode | trim }}"
+
+- name: Show the SSH User CA public key for group_vars distribution
+  ansible.builtin.debug:
+    msg: >-
+      Set this fleet-wide as ssh_ca_user_ca_public_key:
+      {{ step_ca_user_ca_public_key }}
