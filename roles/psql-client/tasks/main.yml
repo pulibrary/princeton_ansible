@@ -1,63 +1,43 @@
 ---
-- name: Setup Postgres Client and Configuration
-  when: postgres_setup_enabled | bool
-  block:
-    - name: Make sure CA certificates are available
-      become: true
-      ansible.builtin.apt:
-        pkg: ca-certificates
-        state: present
+- name: set fqdn for use in pg_hba
+  ansible.builtin.set_fact:
+    "pg_hba_fqdn={{ ansible_facts['fqdn'] }}"
 
-    - name: Add postgres repository apt-key
-      become: true
-      ansible.builtin.apt_key:
-        url: "{{ postgres_apt_key_url }}"
-        state: present
+- name: Ensure access to postgres server
+  become: true
+  ansible.builtin.lineinfile:
+    path: "/etc/postgresql/{{ postgres_version }}/main/pg_hba.conf"
+    line: "host    all             all             {{ pg_hba_fqdn }}       md5"
+  delegate_to: "{{ postgres_host }}"
+  notify: Reload remote postgres
 
-    - name: Add postgres repository
-      become: true
-      ansible.builtin.apt_repository:
-        repo: "{{ postgres_apt_repository }}"
-        update_cache: true
-        state: present
+- name: Ensure postgres user account for app exists
+  run_once: true
+  delegate_to: "{{ postgres_host }}"
+  become: true
+  become_user: postgres
+  community.postgresql.postgresql_user:
+    name: "{{ application_dbuser_name }}"
+    # login_host: "{{ postgres_host }}"
+    # login_port: "{{ postgres_port }}"
+    login_user: "{{ postgres_admin_user }}"
+    login_password: "{{ vault_postgres_admin_password }}"
+    password: "{{ application_dbuser_password }}"
+    encrypted: true
+    role_attr_flags: "{{ application_dbuser_role_attr_flags }}"
+    state: "present"
 
-    - name: Install postgres client libraries
-      become: true
-      ansible.builtin.apt:
-        name:
-          - libpq-dev
-          - python3-dev
-          - python3-psycopg2
-          - "postgresql-client-{{ postgres_version }}"
-        state: present
-        update_cache: true
-
-    - name: Install psycopg2 for Ansible Python
-      ansible.builtin.pip:
-        name: psycopg2-binary
-        executable: pip3
-        extra_args: --break-system-packages
-
-    - name: set fqdn for use in pg_hba
-      ansible.builtin.set_fact:
-        "pg_hba_fqdn={{ ansible_facts['fqdn'] }}"
-
-    - name: Ensure access to postgres server
-      become: true
-      ansible.builtin.lineinfile:
-        path: "/etc/postgresql/{{ postgres_version }}/main/pg_hba.conf"
-        line: "host    all             all             {{ pg_hba_fqdn }}       md5"
-      delegate_to: "{{ postgres_host }}"
-      notify: Reload remote postgres
-
-- name: Create postgres user
-  ansible.builtin.import_tasks: create_user.yml
-  when: postgres_setup_enabled | bool
-
-- name: Create postgres database
-  ansible.builtin.import_tasks: create_db.yml
-  when: postgres_setup_enabled | bool
-
-- name: Backup postgres database
-  ansible.builtin.import_tasks: backup_db.yml
-  when: postgres_backup_enabled | bool
+- name: Ensure postgres database for app exists
+  delegate_to: "{{ postgres_host }}"
+  become: true
+  become_user: postgres
+  community.postgresql.postgresql_db:
+    name: "{{ application_db_name }}"
+    # login_host: "{{ postgres_host }}"
+    # login_port: "{{ postgres_port }}"
+    login_user: "{{ postgres_admin_user }}"
+    login_password: "{{ vault_postgres_admin_password }}"
+    encoding: "UTF-8"
+    owner: "{{ application_dbuser_name }}"
+    state: "present"
+  # changed_when: false
