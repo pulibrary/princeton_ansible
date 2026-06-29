@@ -1,23 +1,9 @@
 ---
-- name: reload remote postgres
-  ansible.builtin.service:
-    name: "{{ postgres_service_name | default(postgresql) }}"
-    state: reloaded
-  become: true
-  delegate_to: "{{ postgres_host | default(inventory_hostname, true) }}"
-  # in the old pg_hba tasks file, reloading was delegated like this:
-  # delegate_to: "{{ postgres_host | default(inventory_hostname) }}"
-  # is this pair of conditions functionally the same?
-  when:
-    - (postgres_host | default('', true) | length) > 0
-    - not (postgresql_is_local | bool)
-
 - name: reload local postgres
   ansible.builtin.service:
     name: "{{ postgres_service_name | default(postgresql) }}"
     state: reloaded
   become: true
-  when: postgresql_is_local | bool
 
 - name: save repmgr log
   ansible.builtin.copy:

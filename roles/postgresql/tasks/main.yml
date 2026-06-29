@@ -42,7 +42,6 @@
     name: "{{ postgres_service_name | default(postgresql) }}"
     state: started
   when:
-    - postgresql_is_local | bool
     - postgresql_leader == true
 
 - name: Ensure pgpass
@@ -52,7 +51,6 @@
     mode: "0600"
     owner: postgres
   changed_when: false
-  when: postgresql_is_local | bool
   become: true
 
 - name: Configure warm standby leader
@@ -74,9 +72,6 @@
     - inventory_hostname == postgresql_cluster.leader
     - postgresql_logical_replication != false
 
-# - name: Create databases
-#   ansible.builtin.include_tasks: create_db.yml
-
 - name: PostgreSQL | create local postgresql database
   community.postgresql.postgresql_db:
     name: "{{ item.name }}"
@@ -87,8 +82,12 @@
     owner: "{{ item.owner | default(postgres_admin_user) }}"
   when:
     - running_on_server
+<<<<<<< HEAD
     - postgresql_is_local | bool
     - postgresql_databases | length > 0
+=======
+    - postgresql_databases|length > 0
+>>>>>>> 6f93a24a8 (postgresql role is now server-only, removes 'postgres_is_local' var)
   changed_when: false
   become: true
   become_user: "{{ postgres_admin_user }}"

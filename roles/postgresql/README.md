@@ -22,7 +22,6 @@ These vars provide connection information to the database server. By convention 
   postgres_admin_password: '{{ vault_postgres_admin_password }}'
   postgres_port: 5432
   postgres_admin_user: "{{ postgresadmin }}"
-  postgresql_is_local: true  # rarely true unless one is testing creating a new db server
   postgres_version: 15  # on server side this will install the postgresql server version
 ```
 
@@ -44,7 +43,6 @@ These vars provide connection information for the database you want to create or
   application_dbuser_name: "{{ ol_db_user }}"
   application_dbuser_password: "{{ ol_db_password }}"
   application_dbuser_role_attr_flags: "CREATEDB"
-  postgresql_is_local: "false" # should always be false
   postgres_version: 15  # on application side this will install the postgresql client version
 ```
 
