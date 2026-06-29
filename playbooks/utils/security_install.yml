@@ -93,41 +93,47 @@
           become: true
           register: cytool_result
           changed_when: cytool_result.rc == 0
+          failed_when: false
 
-    - name: Tag Cortex XDR endpoint except on FreeBSD
-      when:
-        - ansible_distribution != "FreeBSD"
-      block:
-        - name: Check for cytool
-          ansible.builtin.stat:
-            path: /opt/traps/bin/cytool
-          register: cytool_stat
-
-        - name: List Cortex XDR endpoint tags
-          ansible.builtin.command:
-            cmd: /opt/traps/bin/cytool endpoint_tags list
-          register: xdr_endpoint_tags
-          changed_when: false
+        - name: Tag Cortex XDR endpoint except on FreeBSD
           when:
-            - cytool_stat.stat.exists
+            - ansible_distribution != "FreeBSD"
+          block:
+            - name: Check for cytool
+              ansible.builtin.stat:
+                path: /opt/traps/bin/cytool
+              register: cytool_stat
 
-        - name: Add Cortex XDR endpoint tag
-          ansible.builtin.command:
-            cmd: /opt/traps/bin/cytool endpoint_tags add "{{ xdr_endpoint_tag }}"
-          register: xdr_tag_add
-          changed_when: xdr_tag_add.rc == 0
-          when:
-            - cytool_stat.stat.exists
-            - xdr_endpoint_tag not in xdr_endpoint_tags.stdout
+            - name: List Cortex XDR endpoint tags
+              ansible.builtin.command:
+                cmd: /opt/traps/bin/cytool endpoint_tags list
+              register: xdr_endpoint_tags
+              changed_when: false
+              failed_when: false
+              when:
+                - cytool_stat.stat.exists
 
-        - name: Run cytool checkin after endpoint tag update
-          ansible.builtin.command:
-            cmd: /opt/traps/bin/cytool checkin
-          register: cytool_tag_checkin
-          changed_when: cytool_tag_checkin.rc == 0
-          when:
-            - cytool_stat.stat.exists
-            - xdr_tag_add is changed
+            - name: Add Cortex XDR endpoint tag
+              ansible.builtin.command:
+                cmd: /opt/traps/bin/cytool endpoint_tags add "{{ xdr_endpoint_tag }}"
+              register: xdr_tag_add
+              changed_when: xdr_tag_add.rc == 0
+              failed_when: false
+              when:
+                - cytool_stat.stat.exists
+                - xdr_endpoint_tags.rc is defined
+                - xdr_endpoint_tags.rc == 0
+                - xdr_endpoint_tag not in xdr_endpoint_tags.stdout
+
+            - name: Run cytool checkin after endpoint tag update
+              ansible.builtin.command:
+                cmd: /opt/traps/bin/cytool checkin
+              register: cytool_tag_checkin
+              changed_when: cytool_tag_checkin.rc == 0
+              failed_when: false
+              when:
+                - cytool_stat.stat.exists
+                - xdr_tag_add is changed
 
     - name: Install, configure, and start Rapid7 except on FreeBSD
       when:

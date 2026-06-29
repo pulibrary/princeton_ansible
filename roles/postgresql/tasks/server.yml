@@ -76,22 +76,23 @@
 
 # - name: Create databases
 #   ansible.builtin.include_tasks: create_db.yml
-
 - name: PostgreSQL | create local postgresql database
   community.postgresql.postgresql_db:
     name: "{{ item.name }}"
-    encoding: 'UTF-8'
+    encoding: "{{ omit if item.name in postgresql_system_databases else item.encoding | default(postgres_database_encoding) }}"
+    template: "{{ omit if item.name in postgresql_system_databases else item.template | default('template0') }}"
     state: "present"
     login_user: "{{ postgres_admin_user }}"
     owner: "{{ item.owner | default(postgres_admin_user) }}"
   when:
     - running_on_server
     - postgresql_is_local | bool
-    - postgresql_databases|length > 0
+    - postgresql_databases | length > 0
   changed_when: false
   become: true
   become_user: "{{ postgres_admin_user }}"
   loop: "{{ postgresql_databases }}"
+
 
 - name: Create users
   ansible.builtin.include_tasks: create_users.yml
