@@ -17,195 +17,225 @@
     - ../../group_vars/all/vault.yml
 
   tasks:
-  - name: Populate service facts
-    ansible.builtin.service_facts:
+    - name: Populate service facts
+      ansible.builtin.service_facts:
 
-  - name: Install XDR except on FreeBSD
-    when:
-      - ansible_distribution != "FreeBSD"
-      - "'traps_pmd.service' not in ansible_facts.services"
-    block:
-    - name: Download the XDR deb file (Ubuntu)
-      ansible.builtin.unarchive:
-        src: "https://pulmirror.princeton.edu/mirror/palo/Linux-{{ xdr_version }}_deb.tar.gz"
-        dest: /opt/
-        creates: /opt/{{ cortex_install }}.deb
-        remote_src: true
-      become: true
+    - name: Install XDR except on FreeBSD
       when:
-        - ansible_os_family == "Debian"
+        - ansible_distribution != "FreeBSD"
+        - "'traps_pmd.service' not in ansible_facts.services"
+      block:
+        - name: Download the XDR deb file (Ubuntu)
+          ansible.builtin.unarchive:
+            src: "https://pulmirror.princeton.edu/mirror/palo/Linux-{{ xdr_version }}_deb.tar.gz"
+            dest: /opt/
+            creates: /opt/{{ cortex_install }}.deb
+            remote_src: true
+          become: true
+          when:
+            - ansible_os_family == "Debian"
 
-    - name: Download the XDR rpm file (RedHat)
-      ansible.builtin.unarchive:
-        src: "https://pulmirror.princeton.edu/mirror/palo/Linux-{{ xdr_version }}_rpm.tar.gz"
-        dest: /opt/
-        creates: /opt/{{ cortex_install }}.rpm
-        remote_src: true
-      become: true
+        - name: Download the XDR rpm file (RedHat)
+          ansible.builtin.unarchive:
+            src: "https://pulmirror.princeton.edu/mirror/palo/Linux-{{ xdr_version }}_rpm.tar.gz"
+            dest: /opt/
+            creates: /opt/{{ cortex_install }}.rpm
+            remote_src: true
+          become: true
+          when:
+            - ansible_os_family == "RedHat"
+
+        - name: Install Cortex XDR dependencies (RedHat)
+          ansible.builtin.dnf:
+            name: selinux-policy-devel
+            state: present
+          become: true
+          when:
+            - ansible_os_family == "RedHat"
+
+        - name: Create /etc/panw directory
+          ansible.builtin.file:
+            path: /etc/panw
+            state: directory
+            owner: root
+            group: root
+            mode: "0755"
+          become: true
+
+        - name: Build the XDR config file
+          ansible.builtin.copy:
+            content: |
+              --distribution-id {{ xdr_vault_distribution_id }}
+              --distribution-server {{ xdr_distribution_server }}
+            dest: /etc/panw/cortex.conf
+            owner: root
+            group: root
+            mode: "0744"
+          become: true
+
+        - name: install XDR agent (Ubuntu)
+          ansible.builtin.apt:
+            deb: "/opt/{{ cortex_install }}.deb"
+          when:
+            - ansible_os_family == "Debian"
+
+        - name: install XDR agent (RedHat)
+          ansible.builtin.dnf:
+            name: "/opt/{{ cortex_install }}.rpm"
+            state: present
+            disable_gpg_check: true
+          when:
+            - ansible_os_family == "RedHat"
+
+        - name: Run cytool checkin
+          ansible.builtin.command:
+            cmd: /opt/traps/bin/cytool checkin
+          become: true
+          register: cytool_result
+          changed_when: cytool_result.rc == 0
+
+    - name: Tag Cortex XDR endpoint except on FreeBSD
       when:
-        - ansible_os_family == "RedHat"
+        - ansible_distribution != "FreeBSD"
+      block:
+        - name: Check for cytool
+          ansible.builtin.stat:
+            path: /opt/traps/bin/cytool
+          register: cytool_stat
 
-    - name: Install Cortex XDR dependencies (RedHat)
-      ansible.builtin.dnf:
-        name: selinux-policy-devel
-        state: present
-      become: true
+        - name: List Cortex XDR endpoint tags
+          ansible.builtin.command:
+            cmd: /opt/traps/bin/cytool endpoint_tags list
+          register: xdr_endpoint_tags
+          changed_when: false
+          when:
+            - cytool_stat.stat.exists
+
+        - name: Add Cortex XDR endpoint tag
+          ansible.builtin.command:
+            cmd: /opt/traps/bin/cytool endpoint_tags add "{{ xdr_endpoint_tag }}"
+          register: xdr_tag_add
+          changed_when: xdr_tag_add.rc == 0
+          when:
+            - cytool_stat.stat.exists
+            - xdr_endpoint_tag not in xdr_endpoint_tags.stdout
+
+        - name: Run cytool checkin after endpoint tag update
+          ansible.builtin.command:
+            cmd: /opt/traps/bin/cytool checkin
+          register: cytool_tag_checkin
+          changed_when: cytool_tag_checkin.rc == 0
+          when:
+            - cytool_stat.stat.exists
+            - xdr_tag_add is changed
+
+    - name: Install, configure, and start Rapid7 except on FreeBSD
       when:
-        - ansible_os_family == "RedHat"
+        - ansible_distribution != "FreeBSD"
+        - "'ir_agent.service' not in ansible_facts.services"
+      block:
+        - name: Download the Rapid7 deb file (Ubuntu)
+          ansible.builtin.get_url:
+            url: "https://us.storage.endpoint.ingress.rapid7.com/com.rapid7.razor.public/endpoint/agent/latest/linux/x86_64/rapid7_insight_agent_x64.deb"
+            dest: "/tmp/rapid7-insight-agent_latest_amd64.deb"
+            mode: "0644"
+          when:
+            - ansible_os_family == "Debian"
 
-    # Create config directory
-    - name: Create /etc/panw directory
-      ansible.builtin.file:
-        path: /etc/panw
-        state: directory
-        owner: root
-        group: root
-        mode: '0755'
-      become: true
+        - name: Download the Rapid7 rpm file (RedHat)
+          ansible.builtin.get_url:
+            url: "https://us.storage.endpoint.ingress.rapid7.com/com.rapid7.razor.public/endpoint/agent/latest/linux/x86_64/rapid7_insight_agent_x64.rpm"
+            dest: "/tmp/rapid7-insight-agent-latest.x86_64.rpm"
+            mode: "0644"
+          when:
+            - ansible_os_family == "RedHat"
 
-    # Build the config file
-    - name: Build the XDR config file
-      ansible.builtin.copy:
-        content: |
-          --distribution-id {{ xdr_vault_distribution_id }}
-          --distribution-server {{ xdr_distribution_server }}
-        dest: /etc/panw/cortex.conf
-        owner: root
-        group: root
-        mode: '0744'
-      become: true
+        - name: install Rapid7 agent (Ubuntu)
+          ansible.builtin.apt:
+            deb: "/tmp/rapid7-insight-agent_latest_amd64.deb"
+          become: true
+          when:
+            - ansible_os_family == "Debian"
 
-    # apt module equiv of sudo dpkg -i filename for ubuntu
-    - name: install XDR agent (Ubuntu)
-      ansible.builtin.apt:
-        deb: "/opt/{{ cortex_install }}.deb"
+        - name: Verify GPG signature (RedHat)
+          ansible.builtin.rpm_key:
+            state: present
+            key: https://us.storage.endpoint.ingress.rapid7.com/com.rapid7.razor.public/endpoint/agent/latest/linux/x86_64/Rapid7_public_key.pub
+          become: true
+          when:
+            - ansible_os_family == "RedHat"
+
+        - name: install Rapid7 agent (RedHat)
+          ansible.builtin.yum:
+            name: "/tmp/rapid7-insight-agent-latest.x86_64.rpm"
+            state: present
+          become: true
+          when:
+            - ansible_os_family == "RedHat"
+
+        # - name: Configure the agent with token
+        #   ansible.builtin.shell:
+        #     /opt/rapid7/ir_agent/components/insight_agent/{{ rapid7_version }}/configure_agent.sh --token {{ vault_Rapid7_token }} --attributes="Library Systems"
+        #   become: true
+
+        - name: Restart or start rapid7
+          ansible.builtin.service:
+            name: ir_agent
+            state: restarted
+          become: true
+
+    - name: Install and configure the Rapid7 Scan Assistant Service except on FreeBSD
       when:
-        - ansible_os_family == "Debian"
+        - ansible_distribution != "FreeBSD"
+        - "'R7ScanAssistant.service' not in ansible_facts.services"
+      block:
+        - name: Download package with checksum verification deb file (Ubuntu)
+          ansible.builtin.get_url:
+            url: "{{ scan_assistant_deb_pkg_url }}"
+            dest: "/tmp/"
+            checksum: "sha512:{{ scan_assistant_deb_checksum }}"
+            mode: "0644"
+          when:
+            - ansible_os_family == "Debian"
 
-    # yum module equiv of sudo yum -y install for rocky
-    - name: install XDR agent (RedHat)
-      ansible.builtin.dnf:
-        name: "/opt/{{ cortex_install }}.rpm"
-        state: present
-        disable_gpg_check: true
-      when:
-        - ansible_os_family == "RedHat"
-    #
-    # Force agent checkin after installation
-    - name: Run cytool checkin
-      ansible.builtin.command:
-        cmd: /opt/traps/bin/cytool checkin
-      become: true
-      register: cytool_result
-      changed_when: cytool_result.rc == 0
+        - name: Download package with checksum verification rpm file (RedHat)
+          ansible.builtin.get_url:
+            url: "{{ scan_assistant_rpm_pkg_url }}"
+            dest: "/tmp/"
+            checksum: "sha512:{{ scan_assistant_rpm_checksum }}"
+            mode: "0644"
+          when:
+            - ansible_os_family == "RedHat"
 
-  - name: Install, configure, and start Rapid7 except on FreeBSD
-    when:
-      - ansible_distribution != "FreeBSD"
-      - "'ir_agent.service' not in ansible_facts.services"
-    block:
-      - name: Download the Rapid7 deb file (Ubuntu)
-        ansible.builtin.get_url:
-          url: "https://us.storage.endpoint.ingress.rapid7.com/com.rapid7.razor.public/endpoint/agent/latest/linux/x86_64/rapid7_insight_agent_x64.deb"
-          dest: "/tmp/rapid7-insight-agent_latest_amd64.deb"
-          mode: "0644"
-        when:
-          - ansible_os_family == "Debian"
+        - name: Install Rapid7 Scan Assistant Service (Ubuntu)
+          ansible.builtin.apt:
+            deb: "/tmp/R7ScanAssistant_amd64.deb"
+          become: true
+          when:
+            - ansible_os_family == "Debian"
 
-      - name: Download the Rapid7 rpm file (RedHat)
-        ansible.builtin.get_url:
-          url: "https://us.storage.endpoint.ingress.rapid7.com/com.rapid7.razor.public/endpoint/agent/latest/linux/x86_64/rapid7_insight_agent_x64.rpm"
-          dest: "/tmp/rapid7-insight-agent-latest.x86_64.rpm"
-          mode: "0644"
-        when:
-          - ansible_os_family == "RedHat"
+        - name: Install Rapid7 Scan Assistant Service  (RedHat)
+          ansible.builtin.yum:
+            name: "/tmp/R7ScanAssistant_amd64.rpm"
+            state: present
+          become: true
+          when:
+            - ansible_os_family == "RedHat"
 
-      - name: install Rapid7 agent (Ubuntu)
-        ansible.builtin.apt:
-          deb: "/tmp/rapid7-insight-agent_latest_amd64.deb"
-        become: true
-        when:
-          - ansible_os_family == "Debian"
+        - name: Download the PEM file to trust connection with Scan Engine
+          ansible.builtin.copy:
+            content: |
+              {{ scan_assistant_pem_file }}
+            dest: /etc/rapid7/ScanAssistant/scan-assistant.pem
+            mode: "0644"
 
-      - name: Verify GPG signature (RedHat)
-        ansible.builtin.rpm_key:
-          state: present
-          key: https://us.storage.endpoint.ingress.rapid7.com/com.rapid7.razor.public/endpoint/agent/latest/linux/x86_64/Rapid7_public_key.pub
-        become: true
-        when:
-          - ansible_os_family == "RedHat"
-
-      - name: install Rapid7 agent (RedHat)
-        ansible.builtin.yum:
-          name: "/tmp/rapid7-insight-agent-latest.x86_64.rpm"
-          state: present
-        become: true
-        when:
-          - ansible_os_family == "RedHat"
-
-      # - name: Configure the agent with token
-      #   ansible.builtin.shell:
-      #     /opt/rapid7/ir_agent/components/insight_agent/{{ rapid7_version }}/configure_agent.sh --token {{ vault_Rapid7_token }} --attributes="Library Systems"
-      #   become: true
-
-      - name: Restart or start rapid7
-        ansible.builtin.service:
-          name: ir_agent
-          state: restarted
-        become: true
-
-  - name: Install and configure the Rapid7 Scan Assistant Service except on FreeBSD
-    when:
-      - ansible_distribution != "FreeBSD"
-      - "'R7ScanAssistant.service' not in ansible_facts.services"
-    block:
-      - name: Download package with checksum verification deb file (Ubuntu)
-        ansible.builtin.get_url:
-          url: "{{ scan_assistant_deb_pkg_url }}"
-          dest: "/tmp/"
-          checksum: "sha512:{{ scan_assistant_deb_checksum }}"
-          mode: "0644"
-        when:
-          - ansible_os_family == "Debian"
-
-      - name: Download package with checksum verification rpm file (RedHat)
-        ansible.builtin.get_url:
-          url: "{{ scan_assistant_rpm_pkg_url }}"
-          dest: "/tmp/"
-          checksum: "sha512:{{ scan_assistant_rpm_checksum }}"
-          mode: "0644"
-        when:
-          - ansible_os_family == "RedHat"
-
-      - name: Install Rapid7 Scan Assistant Service (Ubuntu)
-        ansible.builtin.apt:
-          deb: "/tmp/R7ScanAssistant_amd64.deb"
-        become: true
-        when:
-          - ansible_os_family == "Debian"
-
-      - name: Install Rapid7 Scan Assistant Service  (RedHat)
-        ansible.builtin.yum:
-          name: "/tmp/R7ScanAssistant_amd64.rpm"
-          state: present
-        become: true
-        when:
-          - ansible_os_family == "RedHat"
-
-      - name: Download the PEM file to trust connection with Scan Engine
-        ansible.builtin.copy:
-          content: |
-            {{ scan_assistant_pem_file }}
-          dest: /etc/rapid7/ScanAssistant/scan-assistant.pem
-          mode: '0644'
-
-      - name: Delete the package file after successful installation
-        ansible.builtin.file:
-           path: "{{ item }}"
-           state: absent
-        loop:
-           - /tmp/R7ScanAssistant_amd64.deb
-           - /tmp/R7ScanAssistant_amd64.rpm
+        - name: Delete the package file after successful installation
+          ansible.builtin.file:
+            path: "{{ item }}"
+            state: absent
+          loop:
+            - /tmp/R7ScanAssistant_amd64.deb
+            - /tmp/R7ScanAssistant_amd64.rpm
 
   # post_tasks:
   #   - name: send information to slack
