@@ -67,8 +67,6 @@
     state: present
   loop:
     - "{{ postgres_packages }}"
-  when:
-    - postgresql_is_local | bool
 
 - name: PostgreSQL | Prefer PGDG PostgreSQL packages
   ansible.builtin.copy:
@@ -95,8 +93,6 @@
 
 - name: Ubuntu | add extensions
   ansible.builtin.import_tasks: extensions.yml
-  when:
-    - postgresql_is_local | bool
 
 - name: Ubuntu | install configuration file
   ansible.builtin.template:
@@ -106,8 +102,6 @@
     owner: postgres
     mode: "0644"
   register: configure_postgres
-  when:
-    - postgresql_is_local | bool
   notify: restart postgresql
 
 - name: Ubuntu | install pg_stats file
@@ -118,18 +112,4 @@
     owner: postgres
     mode: "0644"
   register: configure_postgres
-  when:
-    - postgresql_is_local | bool
   notify: restart postgresql
-
-- name: Ubuntu | configure pg_hba for client connections to postgres server
-  ansible.builtin.lineinfile:
-    path: '/etc/postgresql/{{ postgres_version }}/main/pg_hba.conf'
-    line: 'host  {{ pg_hba_postgresql_database }}      {{ pg_hba_postgresql_user }} {{ ansible_default_ipv4.address }}/32       {{ pg_hba_method }}'
-  delegate_to: "{{ postgres_host | default(inventory_hostname, true) }}"
-  register: remote_postgres_configured
-  when:
-    - running_on_server | bool
-    - not (postgresql_is_local | bool)
-    - (postgres_host | default('', true) | length) > 0
-  notify: reload remote postgres
