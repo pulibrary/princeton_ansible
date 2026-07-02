@@ -29,15 +29,15 @@
         proto: tcp
 
   roles:
-#    - { role: 'postgresql', tags: 'postgresql' }
-#    - role: openjdk
-#    - role: sidekiq_worker  # the staging box is both web and worker
-#      when: runtime_env | default('staging') == "staging"
-#    - role: pulfalight
+    - { role: 'psql-client', tags: 'postgresql' }
+    - role: openjdk
+    - role: sidekiq_worker  # the staging box is both web and worker
+      when: runtime_env | default('staging') == "staging"
+    - role: pulfalight
     - role: otel_collector
     - role: beyla
-#    - role: datadog
-#      when: runtime_env | default('staging') == "production"
+    - role: datadog
+      when: runtime_env | default('staging') == "production"
 
   post_tasks:
     - name: tell everyone on slack you ran an ansible playbook
@@ -66,10 +66,12 @@
     - ../group_vars/pulfalight/{{ runtime_env | default('staging') }}_solr.yml
     - ../group_vars/pulfalight/vault.yml
   roles:
-    - { role: 'roles/postgresql', tags: 'postgresql' }
+    - { role: 'roles/psql-client', tags: 'postgresql' }
     - role: roles/openjdk
     - role: roles/sidekiq_worker
     - role: roles/pulfalight
+    - role: otel_collector
+    - role: beyla
     - role: roles/datadog
       when: runtime_env | default('staging') == "production"
   post_tasks:
