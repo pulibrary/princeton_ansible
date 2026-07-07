@@ -15,6 +15,14 @@
     state: directory
     mode: "0755"
 
+- name: Remove legacy PostgreSQL apt source files with conflicting Signed-By
+  become: true
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop: "{{ postgres_apt_legacy_source_files }}"
+  when: postgres_manage_pgdg_repo | bool
+
 - name: Install PostgreSQL apt repository key
   become: true
   ansible.builtin.get_url:
