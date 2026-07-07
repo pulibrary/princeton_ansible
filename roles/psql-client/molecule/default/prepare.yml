@@ -1,33 +1,57 @@
+---
 - name: Prepare Postgres Database Server
   hosts: postgres
   become: true
   vars_files:
     - ../../defaults/main.yml
   tasks:
-    - name: Make sure CA certificates are available
-      ansible.builtin.apt:
-        name: ca-certificates
-        state: present
-        update_cache: true
+    - name: Assert postgres molecule host is amd64
+      ansible.builtin.assert:
+        that:
+          - ansible_architecture == postgres_supported_architecture
+        fail_msg: >-
+          The psql-client Molecule scenario only supports amd64 containers.
+          This container reports {{ ansible_architecture }}.
 
-    - name: Add postgres repository apt-key
-      ansible.builtin.apt_key:
-        url: "{{ postgres_apt_key_url }}"
-        state: present
-
-    - name: Add postgres repository
-      ansible.builtin.apt_repository:
-        repo: "{{ postgres_apt_repository }}"
-        update_cache: true
-        state: present
-
-    - name: Install Postgresql and Python on DB host
+    - name: Make sure CA certificates and curl are available
       ansible.builtin.apt:
         name:
+          - ca-certificates
+          - curl
+        state: present
+        update_cache: true
+
+    - name: Ensure PostgreSQL apt key directory exists
+      ansible.builtin.file:
+        path: "{{ postgres_apt_key_path | dirname }}"
+        state: directory
+        mode: "0755"
+
+    - name: Install PostgreSQL apt repository key
+      ansible.builtin.get_url:
+        url: "{{ postgres_apt_key_url }}"
+        dest: "{{ postgres_apt_key_path }}"
+        mode: "0644"
+
+    - name: Configure PostgreSQL apt repository for amd64
+      ansible.builtin.copy:
+        dest: /etc/apt/sources.list.d/pgdg.sources
+        mode: "0644"
+        content: |
+          Types: {{ postgres_apt_source_types }}
+          URIs: {{ postgres_apt_repository_uri }}
+          Suites: {{ ansible_distribution_release }}-pgdg
+          Architectures: {{ postgres_apt_architecture }}
+          Components: {{ postgres_apt_components }}
+          Signed-By: {{ postgres_apt_key_path }}
+
+    - name: Install PostgreSQL server for Molecule test fixture
+      ansible.builtin.apt:
+        name:
+          - "postgresql-{{ postgres_version }}"
+          - "postgresql-contrib-{{ postgres_version }}"
+          - "postgresql-client-{{ postgres_version }}"
           - libpq-dev
-          - postgresql-{{ postgres_version }}
-          - postgresql-contrib-{{ postgres_version }}
-          - postgresql-client-{{ postgres_version }}
           - python3-psycopg2
           - sudo
         state: present

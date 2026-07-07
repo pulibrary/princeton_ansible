@@ -1,0 +1,44 @@
+---
+- name: Make sure CA certificates and curl are available
+  become: true
+  ansible.builtin.apt:
+    name:
+      - ca-certificates
+      - curl
+    state: present
+    update_cache: true
+
+- name: Ensure PostgreSQL apt key directory exists
+  become: true
+  ansible.builtin.file:
+    path: "{{ postgres_apt_key_path | dirname }}"
+    state: directory
+    mode: "0755"
+
+- name: Install PostgreSQL apt repository key
+  become: true
+  ansible.builtin.get_url:
+    url: "{{ postgres_apt_key_url }}"
+    dest: "{{ postgres_apt_key_path }}"
+    mode: "0644"
+
+- name: Configure PostgreSQL apt repository for amd64 client packages
+  become: true
+  ansible.builtin.copy:
+    dest: /etc/apt/sources.list.d/pgdg.sources
+    mode: "0644"
+    content: |
+      Types: {{ postgres_apt_source_types }}
+      URIs: {{ postgres_apt_repository_uri }}
+      Suites: {{ ansible_distribution_release }}-pgdg
+      Architectures: {{ postgres_apt_architecture }}
+      Components: {{ postgres_apt_components }}
+      Signed-By: {{ postgres_apt_key_path }}
+  when: postgres_manage_pgdg_repo | bool
+
+- name: Install PostgreSQL client packages
+  become: true
+  ansible.builtin.apt:
+    name: "{{ postgres_debian_client_packages }}"
+    state: present
+    update_cache: true
