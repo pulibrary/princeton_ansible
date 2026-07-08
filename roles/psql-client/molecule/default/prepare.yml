@@ -45,6 +45,24 @@
           Components: {{ postgres_apt_components }}
           Signed-By: {{ postgres_apt_key_path }}
 
+    - name: Install locale package for PostgreSQL test fixture
+      ansible.builtin.apt:
+        name: locales
+        state: present
+        update_cache: true
+
+    - name: Ensure en_US.UTF-8 locale is enabled on PostgreSQL test fixture
+      ansible.builtin.lineinfile:
+        path: /etc/locale.gen
+        regexp: '^#? en_US.UTF-8 UTF-8'
+        line: 'en_US.UTF-8 UTF-8'
+        state: present
+      register: postgres_locale_enabled
+
+    - name: Generate en_US.UTF-8 locale on PostgreSQL test fixture
+      ansible.builtin.command: locale-gen en_US.UTF-8
+      changed_when: postgres_locale_enabled.changed
+
     - name: Install PostgreSQL server for Molecule test fixture
       ansible.builtin.apt:
         name:
