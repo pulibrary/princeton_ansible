@@ -1,0 +1,247 @@
+---
+postgres_version: "18"
+postgres_leader: "postgres18-prod1.lib.princeton.edu"
+postgres_max_connections: 800
+db_clusteradmin_user: "postgres"
+db_clusteradmin_password: "{{ vault_postgres_admin_password }}"
+postgresql_settings:
+  - name: port
+    value: 5432
+  - name: listen_addresses
+    value: "*"
+postgresql_ext_install_postgis: true
+postgresql_databases:
+  - name: postgres
+postgresql_users:
+  - name: postgres
+    password: "{{ vault_postgres_admin_password }}"
+    db: "postgres"
+    priv: "ALL"
+    role_attr_flags: "SUPERUSER"
+  - name: datadog
+    password: "{{ vault_datadog_db_password }}"
+    db: "postgres"
+postgresql_is_local: true
+postgresadmin: "postgres"
+postgres_admin_password: '{{ vault_postgres_admin_password }}'
+postgres_port: 5432
+postgres_admin_user: "{{ postgresadmin }}"
+# tcp connections
+postgres_tcp_keepalives_idle: 1800
+postgres_tcp_keepalives_interval: 10
+postgres_tcp_keepalives_count: 6
+
+datadog_api_key: "{{ vault_datadog_key }}"
+datadog_agent_version: "1:6.46.0-1"
+datadog_agent_allow_downgrade: true
+datadog_config:
+  log_enabled: true
+datadog_typed_checks:
+  - type: postgres
+    configuration:
+      init_config:
+      instances:
+        - host: localhost
+          dbm: true
+          port: 5432
+          username: datadog
+          password: "{{ vault_datadog_db_password }}"
+      logs:
+        - type: file
+          path: /var/lib/postgresql/{{ postgres_version }}/main/pg_log/pg.json
+          service: postgres_cluster
+          source: postgresql
+          sourcecategory: database
+          tags: "postgresql, env:prod, role:postgresql"
+          log_processing_rules:
+            - type: exclude_at_match
+              name: exclude_log_level_LOG
+              pattern: \"error_severity\":\"LOG\"
+
+postgresql_logrotate_rules:
+  - name: "postgresql"
+    paths:
+      - "{{ postgresql_log_path }}"
+    options:
+      rotate: "14"
+      maxsize: "2000"
+      create_mode: "{{ logrotate_global_defaults.create_mode }}"
+      create_owner: postgres
+      create_group: postgres
+      su_user: "{{ logrotate_global_defaults.su_user }}"
+      su_group: "{{ logrotate_global_defaults.su_group }}"
+
+# beyla
+beyla_enabled: true
+beyla_service_name: postgresql
+beyla_environment: production
+beyla_otlp_endpoint: "http://127.0.0.1:4318"
+beyla_otlp_protocol: "http/protobuf"
+beyla_bpf_context_propagation: "all"
+
+beyla_open_ports:
+  - 5432
+# signoz / otel collector for PostgreSQL
+otel_default_resource_attributes:
+  host.name: "{{ inventory_hostname }}"
+  service.name: postgresql
+  service.version: production
+  environment: production
+  deployment.environment: production
+
+otel_receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 127.0.0.1:4317
+      http:
+        endpoint: 127.0.0.1:4318
+
+  postgresql:
+    endpoint: 127.0.0.1:5432
+    transport: tcp
+    username: "{{ postgres_admin_user }}"
+    password: "{{ postgres_admin_password }}"
+    databases:
+      - postgres
+    collection_interval: 30s
+    metrics:
+      postgresql.database.locks:
+        enabled: true
+      postgresql.deadlocks:
+        enabled: true
+
+  filelog/postgresql-json:
+    include:
+      - /var/lib/postgresql/18/main/pg_log/pg.json
+      - /var/lib/postgresql/18/main/pg_log/pg.json-[0-9]*
+    exclude:
+      - /var/lib/postgresql/18/main/pg_log/*.gz
+    start_at: end
+    include_file_path: true
+    include_file_name: true
+    operators:
+      - type: json_parser
+        id: parse_postgresql_json
+        parse_from: body
+        on_error: send
+
+      - type: time_parser
+        id: parse_postgresql_timestamp
+        parse_from: attributes.timestamp
+        layout_type: strptime
+        layout: '%Y-%m-%d %H:%M:%S.%L %Z'
+        on_error: send
+
+      - type: severity_parser
+        id: parse_postgresql_severity
+        parse_from: attributes.error_severity
+        mapping:
+          debug:
+            - DEBUG
+            - DEBUG1
+            - DEBUG2
+            - DEBUG3
+            - DEBUG4
+            - DEBUG5
+          info:
+            - LOG
+            - INFO
+            - NOTICE
+          warn:
+            - WARNING
+          error:
+            - ERROR
+          fatal:
+            - FATAL
+            - PANIC
+        on_error: send
+
+      - type: move
+        id: move_postgresql_message_to_body
+        from: attributes.message
+        to: body
+        on_error: send
+
+      - type: add
+        field: attributes.log_type
+        value: postgresql_json
+
+      - type: add
+        field: attributes.service_name
+        value: postgresql
+
+  hostmetrics:
+    collection_interval: 30s
+    scrapers:
+      cpu: {}
+      disk: {}
+      filesystem: {}
+      load: {}
+      memory: {}
+      network: {}
+
+otel_processors:
+  batch:
+    send_batch_max_size: 1024
+    send_batch_size: 512
+    timeout: 30s
+
+otel_exporters:
+  loadbalancing:
+    routing_key: service
+    protocol:
+      otlp:
+        timeout: 10s
+        tls:
+          insecure: true
+        sending_queue:
+          enabled: true
+          num_consumers: 10
+          queue_size: 5000
+        retry_on_failure:
+          enabled: true
+          initial_interval: 5s
+          max_interval: 30s
+          max_elapsed_time: 300s
+    resolver:
+      static:
+        hostnames:
+          - k8s-prod1.lib.princeton.edu:32317
+          - k8s-prod2.lib.princeton.edu:32317
+          - k8s-prod3.lib.princeton.edu:32317
+
+  debug:
+    verbosity: basic
+
+otel_service_pipelines:
+  logs:
+    receivers:
+      - filelog/postgresql-json
+    processors:
+      - resource
+      - batch
+    exporters:
+      - loadbalancing
+      - debug
+
+  metrics:
+    receivers:
+      - postgresql
+      - hostmetrics
+    processors:
+      - resource
+      - batch
+    exporters:
+      - loadbalancing
+      - debug
+
+  traces:
+    receivers:
+      - otlp
+    processors:
+      - resource
+      - batch
+    exporters:
+      - loadbalancing
+      - debug
