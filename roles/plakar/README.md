@@ -69,7 +69,8 @@ You’ll now see:
    vault_plakar_aws_access_key: "AKIA...."
    vault_plakar_aws_secret_key: "super-secret-key-here"
    vault_plakar_repo_passphrase: "super-long-random-passphrase"
-```
+
+```text
 
 3. Save and re-encrypt the file if needed:
 
@@ -119,22 +120,23 @@ The role will:
 
   3. Configure an AWS store:
 
-    ```bash
-    plakar store add nfs_aws \
-    s3://s3.us-east-1.amazonaws.com/pul-nfs-backup-aws \
-    access_key=... secret_access_key=...
-    ```
-  1. Initialize the repository in that store:
+     ```bash
+     plakar store add nfs_aws \
+     s3://s3.us-east-1.amazonaws.com/pul-nfs-backup-aws \
+     access_key=... secret_access_key=...
+     ```
 
-    ```bash
-    plakar at @nfs_aws create
-    ```
+  4. Initialize the repository in that store:
 
-  1. Run the initial backup (if plakar_run_initial_backup: true):
+     ```bash
+     plakar at @nfs_aws create
+     ```
 
-    ```bash
-    plakar at @nfs_aws backup /var/nfs
-    ```
+  5. Run the initial backup (if plakar_run_initial_backup: true):
+
+     ```bash
+     plakar at @nfs_aws backup /var/nfs
+     ```
 
 ### Example: using this role for NFS backups
 
@@ -195,17 +197,18 @@ For a different project (e.g. backups of /var/lib/postgresql):
 
   3. Create a new group_vars/postgresql/<env>.yml that sets:
 
-    ```yaml
-    plakar_store_name: "postgresql_aws"
-    plakar_repo_bucket: "pul-postgresql-backup"
-    plakar_repo_access_key: "{{ vault_plakar_postgresql_aws_access_key }}"
-    plakar_repo_secret_key: "{{ vault_plakar_postgresql_aws_secret_key }}"
-    plakar_repo_passphrase: "{{ vault_plakar_postgresql_repo_passphrase }}"
-    plakar_snapshot_root: "/var/lib/postgresql"
-    plakar_configure_backup: true
-    plakar_run_initial_backup: true
-    ```
-  1. Include the `plakar` role in that project’s playbook.
+     ```yaml
+     plakar_store_name: "postgresql_aws"
+     plakar_repo_bucket: "pul-postgresql-backup"
+     plakar_repo_access_key: "{{ vault_plakar_postgresql_aws_access_key }}"
+     plakar_repo_secret_key: "{{ vault_plakar_postgresql_aws_secret_key }}"
+     plakar_repo_passphrase: "{{ vault_plakar_postgresql_repo_passphrase }}"
+     plakar_snapshot_root: "/var/lib/postgresql"
+     plakar_configure_backup: true
+     plakar_run_initial_backup: true
+     ```
+
+  4. Include the `plakar` role in that project’s playbook.
 
 ## Restore / Disaster Recovery
 
@@ -373,4 +376,3 @@ sudo -u pulsys plakar at @nfs_aws restore -to /mnt/restore SNAPSHOT_ID:/var/nfs/
 ```
 
 Remember: when prompted for the passphrase, use vault_plakar_repo_passphrase from Ansible Vault.
-
