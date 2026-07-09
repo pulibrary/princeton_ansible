@@ -88,27 +88,31 @@
   args:
     chdir: "{{ plakar_s3_build_dir }}"
   when: not plakar_s3_installed
-
-- name: Plakar | Ensure S3 plugin ptar exists
-  ansible.builtin.stat:
-    path: "{{ plakar_s3_build_dir }}/{{ plakar_s3_plugin_filename }}"
-  register: plakar_s3_ptar
+- name: Plakar | Find generated S3 plugin package
+  ansible.builtin.find:
+    paths: "{{ plakar_s3_build_dir }}"
+    patterns: "s3_*.ptar"
+    file_type: file
+  register: plakar_s3_ptar_files
   when: not plakar_s3_installed
 
-- name: Plakar | Fail if expected S3 plugin file is missing
+- name: Plakar | Fail if S3 plugin package was not generated
   ansible.builtin.fail:
     msg: >
-      Expected {{ plakar_s3_build_dir }}/{{ plakar_s3_plugin_filename }}
-      but it does not exist. Check plakar pkg build s3 output and adjust
-      plakar_s3_plugin_version/arch if needed.
+      plakar pkg build s3 completed, but no s3_*.ptar file was found in
+      {{ plakar_s3_build_dir }}.
   when:
     - not plakar_s3_installed
-    - not plakar_s3_ptar.stat.exists | default(false)
+    - (plakar_s3_ptar_files.files | default([]) | length) == 0
 
-# Install S3 plugin via local ptar
-- name: Plakar | Install S3 plugin from local ptar
+- name: Plakar | Set S3 plugin package path
+  ansible.builtin.set_fact:
+    plakar_s3_plugin_package_path: "{{ (plakar_s3_ptar_files.files | sort(attribute='mtime') | last).path }}"
+  when: not plakar_s3_installed
+
+- name: Plakar | Install S3 plugin from generated package
   ansible.builtin.command: >
-    plakar pkg add {{ plakar_s3_build_dir }}/{{ plakar_s3_plugin_filename }}
+    plakar pkg add {{ plakar_s3_plugin_package_path }}
   args:
     chdir: "{{ plakar_s3_build_dir }}"
   become: true
@@ -117,7 +121,7 @@
 
 # Verify plugin is now installed
 - name: Plakar | Verify S3 plugin is installed
-  ansible.builtin.command: plakar pkg show
+  ansible.builtin.command: plakar pkg list
   register: plakar_pkg_show_after
   become: true
   become_user: "{{ plakar_user }}"
