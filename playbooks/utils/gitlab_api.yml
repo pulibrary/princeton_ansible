@@ -43,6 +43,44 @@
         attach:
           - /opt/gitlab_issues/team_handbook_issues.csv
 
+    - name: call issue API for TigerData
+      ansible.builtin.uri:
+        url: "https://gitlab.lib.princeton.edu/api/v4/projects/15/issues?per_page=100&state=opened&access_token={{ vault_gitlab_issue_access_token }}"
+        method: GET
+        # 'scope=all' pulls issues created by all users
+      register: td_issues
+
+    - name: write CSV headers for TigerData
+      ansible.builtin.lineinfile:
+        create: true
+        dest: /opt/gitlab_issues/td_issues.csv
+        line: Source,Title,Issue ID,State,Assignee,Created At (UTC),Labels,URL
+        insertbefore: BOF
+        state: present
+
+    - name: write selected output to CSV for TigerData
+      ansible.builtin.lineinfile:
+        dest: /opt/gitlab_issues/td_issues.csv
+        line: GitLab,"{{ item.title }}",{{ item.iid }},{{ item.state }},{{ item.assignee.name | default('') }},{{ item.created_at }},{{ item.labels | default('') }},{{ item.web_url }}
+        insertafter: EOF
+        state: present
+      loop: "{{ td_issues | community.general.json_query('json[*]') }}"
+      # we assume every issue will have a title, an issue ID, a state, a created_at timestamp, and a URL
+      # we allow null values for assignee and labels
+
+    - name: Send e-mail with CSV attached
+      community.general.mail:
+      # TODO: fill in TLS and other
+        host: lib-ponyexpr-prod.princeton.edu
+        port: 25
+        subject: TigerData Issue report
+        body: Issues from the TigerData repo
+        from: ac2754@princeton.edu
+        to: "{{ vault_td_airtable_email }}"
+        # cc: ops@princeton.edu # do we have something like this?
+        attach:
+          - /opt/gitlab_issues/td_issues.csv
+
     - name: call issue API for ReCAP LAS
       ansible.builtin.uri:
         url: "https://gitlab.lib.princeton.edu/api/v4/projects/12/issues?per_page=100&state=opened&access_token={{ vault_gitlab_issue_access_token }}"
@@ -74,7 +112,7 @@
         host: lib-ponyexpr-prod.princeton.edu
         port: 25
         subject: ReCAP LAS Issue report
-        body: Issues from the ops-team-handbook repo
+        body: Issues from the recap las repo
         from: ac2754@princeton.edu
         to: "{{ vault_recap_las_airtable_email }}"
         # cc: ops@princeton.edu # do we have something like this?
