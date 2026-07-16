@@ -192,6 +192,20 @@
     mode: "0755"
   become: true
 
+# Set up log rotation for ezproxy logs
+- name: Ezproxy | Configure ezprozy log rotation
+  ansible.builtin.template:
+    src: "../../common/templates/logrotate_rules.j2"
+    dest: "/etc/logrotate.d/{{ item.name | basename }}"
+    mode: "0644"
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+  loop: "{{ ezproxy_logrotate_rules }}"
+  when:
+    - running_on_server
+    - ezproxy_logrotate_rules is defined
+    - ezproxy_logrotate_rules | length > 0
+
 - name: Ezproxy | add user config file
   ansible.builtin.template:
     src: "user.txt.j2"
