@@ -135,6 +135,20 @@
                 - cytool_stat.stat.exists
                 - xdr_tag_add is changed
 
+        - name: remove .deb file to save space (Ubuntu)
+          ansible.builtin.file:
+            name: "/opt/{{ cortex_install }}.deb"
+            state: absent
+          when:
+            - ansible_os_family == "Debian"
+
+        - name: remove .rpm file to save space (RedHat)
+          ansible.builtin.file:
+            name: "/opt/{{ cortex_install }}.rpm"
+            state: absent
+          when:
+            - ansible_os_family == "RedHat"
+
     - name: Install, configure, and start Rapid7 except on FreeBSD
       when:
         - ansible_distribution != "FreeBSD"
