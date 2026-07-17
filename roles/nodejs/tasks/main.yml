@@ -12,28 +12,29 @@
     url: "{{ nodejs__yarn_key_url }}"
     dest: /tmp/yarnpkg.gpg.key
     mode: "0644"
+    force: true
   when:
     - use_yarn
     - nodejs__yarn_upstream | bool
     - not nodejs_yarn_berry_enabled | bool
 
-- name: Nodejs | De-armor Yarn GPG key to binary keyring
-  ansible.builtin.shell: "gpg --dearmor < /tmp/yarnpkg.gpg.key > {{ nodejs__yarn_keyring_path }}"
-  args:
-    creates: "{{ nodejs__yarn_keyring_path }}"
+- name: Nodejs | De-armor Yarn GPG key
+  ansible.builtin.shell: "gpg --dearmor < /tmp/yarnpkg.gpg.key > /tmp/yarnkey.gpg"
+  changed_when: false
   when:
     - use_yarn
     - nodejs__yarn_upstream | bool
     - not nodejs_yarn_berry_enabled | bool
-  become: true
 
-- name: Nodejs | Ensure keyring permissions
-  ansible.builtin.file:
-    path: "{{ nodejs__yarn_keyring_path }}"
+- name: Nodejs | Install Yarn keyring
+  ansible.builtin.copy:
+    src: /tmp/yarnkey.gpg
+    dest: "{{ nodejs__yarn_keyring_path }}"
+    remote_src: true
     mode: "0644"
     owner: root
     group: root
-    state: file
+  become: true
   when:
     - use_yarn
     - nodejs__yarn_upstream | bool
