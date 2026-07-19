@@ -3,10 +3,17 @@
 # Merge a single OIDC provisioner into authority.provisioners in ca.json,
 # idempotently:
 #   * the provisioner with our name is replaced in place (or appended if new);
-#   * all other provisioners (e.g. the break-glass JWK) are left untouched;
+#   * all other provisioners (e.g. the break-glass JWK and sshpop) are left untouched;
 #   * ca.json is only rewritten when the merged result actually differs, so a
 #     no-op converge reports "ok"; changing any managed field re-applies.
 # The merge preserves any extra fields step-ca itself added to our entry.
+#
+# Important:
+#   * authority.disableIssuedAtCheck works around Entra/OIDC tokens whose iat
+#     can appear earlier than step-ca's bootstrap time.
+#   * claims.enableSSHCA explicitly enables SSH certificate signing for the OIDC
+#     provisioner. Without it, step-ca rejects /ssh/sign with:
+#       oidc.AuthorizeSSHSign; sshCA is disabled for oidc provisioner
 
 - name: Validate OIDC inputs
   ansible.builtin.assert:
@@ -28,7 +35,15 @@
           'configurationEndpoint': step_ca_oidc_configuration_endpoint | trim,
           'listenAddress': step_ca_oidc_listen_address,
           'domains': [step_ca_oidc_email_domain],
-          'options': {'ssh': {'templateFile': step_ca_ssh_template_relpath}}
+          'scopes': step_ca_oidc_scopes,
+          'claims': {
+            'enableSSHCA': step_ca_oidc_enable_ssh_ca
+          },
+          'options': {
+            'ssh': {
+              'templateFile': step_ca_ssh_template_relpath
+            }
+          }
         }
         | combine({'groups': step_ca_oidc_groups} if (step_ca_oidc_groups | length > 0) else {})
         | combine({'admins': step_ca_oidc_admins} if (step_ca_oidc_admins | length > 0) else {})
@@ -48,7 +63,7 @@
     step_ca_current_provisioners: "{{ (step_ca_config_raw.content | b64decode | from_json).authority.provisioners }}"
   no_log: true
 
-- name: Compute the merged provisioner entry (preserving step-ca additions)
+- name: Compute the merged provisioner entry preserving step-ca additions
   ansible.builtin.set_fact:
     step_ca_oidc_merged: >-
       {{
@@ -59,7 +74,7 @@
       }}
   no_log: true
 
-- name: Rebuild the provisioner list, replacing ours in place
+- name: Rebuild the provisioner list replacing ours in place
   ansible.builtin.set_fact:
     step_ca_built_provisioners: "{{ step_ca_built_provisioners | default([]) + [item_out] }}"
   loop: "{{ step_ca_current_provisioners }}"
@@ -75,14 +90,28 @@
   when: step_ca_oidc_provisioner_name not in (step_ca_current_provisioners | map(attribute='name') | list)
   no_log: true
 
-- name: Write ca.json when the provisioner set changed
+- name: Build desired CA configuration
+  ansible.builtin.set_fact:
+    step_ca_config_desired: >-
+      {{
+        step_ca_config
+        | combine({
+            'authority': {
+              'disableIssuedAtCheck': step_ca_disable_issued_at_check,
+              'provisioners': step_ca_built_provisioners
+            }
+          }, recursive=True)
+      }}
+  no_log: true
+
+- name: Write ca.json when authority configuration changed
   ansible.builtin.copy:
-    content: "{{ step_ca_config | combine({'authority': {'provisioners': step_ca_built_provisioners}}, recursive=True) | to_nice_json(indent=3) }}\n"
+    content: "{{ step_ca_config_desired | to_nice_json(indent=3) }}\n"
     dest: "{{ step_ca_path }}/config/ca.json"
     owner: "{{ step_ca_user }}"
     group: "{{ step_ca_group }}"
     mode: "0644"
     backup: true
-  when: step_ca_built_provisioners != step_ca_current_provisioners
+  when: step_ca_config_desired != step_ca_config
   no_log: true
-  notify: Reload step-ca
+  notify: Restart step-ca
