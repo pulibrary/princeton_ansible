@@ -1,0 +1,45 @@
+---
+- name: proxmox add host to CA
+  hosts: step_ca
+  remote_user: pulsys
+  become: true
+  vars_files:
+    - ../group_vars/proxmox/{{ runtime_env | default('staging') }}.yml
+    - ../group_vars/all/vars.yml
+    - ../group_vars/step_ca/vault.yml
+
+  roles:
+    - role: step_ca
+
+- name: proxmox add users to host
+  hosts: proxmox_servers_{{ runtime_env | default('staging') }}
+  remote_user: bootstrap
+  become: true
+  vars_files:
+    - ../group_vars/proxmox/{{ runtime_env | default('staging') }}.yml
+    - ../group_vars/all/vars.yml
+
+  pre_tasks:
+    - name: Install sudo
+      ansible.builtin.apt:
+        name: sudo
+        state: present
+        update_cache: true
+
+    - name: Create Ops Group
+      ansible.builtin.group:
+        name: opsys
+        state: present
+
+    - name: Grant sudo privileges to opsys group
+      ansible.builtin.copy:
+        content: |
+          %opsys ALL=(ALL:ALL) NOPASSWD:ALL
+        dest: /etc/sudoers.d/opsys
+        owner: root
+        group: root
+        mode: "0440"
+        validate: /usr/sbin/visudo -cf %s
+  roles:
+    - role: ssh_ca_trust
+
