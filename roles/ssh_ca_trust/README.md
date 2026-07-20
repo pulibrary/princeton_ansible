@@ -58,3 +58,16 @@ molecule test
 
 The default scenario installs the trust config on Ubuntu and checks
 idempotence plus the effective `sshd -T` output.
+
+### Notes
+
+Once role is complete user will need to run the following steps.
+
+  1. Install the step client with `brew install step`
+  2. Initialize your step with the following:
+
+      ```sh
+      step ca bootstrap --ca-url https://step-ca.lib.princeton.edu:8443 --fingerprint (content in group_vars/step_ca/vault.yml)
+      ```
+
+  3. login into the server with `ssh -o PreferredAuthentications=publickey -o PasswordAuthentication=no netid@lib-pxserv01a.princeton.edu`
