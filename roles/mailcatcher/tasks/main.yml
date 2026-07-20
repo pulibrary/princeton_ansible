@@ -31,3 +31,26 @@
     state: started
   when: running_on_server and install_mailcatcher
   tags: mailcatcher
+
+# In case it was previously installed and is no longer needed, remove it
+- name: mailcatcher | Remove mailcatcher gem if not needed
+  ansible.builtin.command: gem uninstall mailcatcher -v {{ mailcatcher_version }} -a -x
+  args:
+    removes: "{{ mailcatcher_install_location }}"
+  when: running_on_server and not install_mailcatcher
+  tags: mailcatcher
+  
+- name: mailcatcher | Remove mailcatcher service if not needed
+  ansible.builtin.service:
+    name: mailcatcher
+    enabled: false
+    state: stopped
+  when: running_on_server and not install_mailcatcher
+  tags: mailcatcher
+
+- name: mailcatcher | Remove mailcatcher startup script if not needed
+  ansible.builtin.file:
+    path: /lib/systemd/system/mailcatcher.service
+    state: absent
+  when: running_on_server and not install_mailcatcher
+  tags: mailcatcher
