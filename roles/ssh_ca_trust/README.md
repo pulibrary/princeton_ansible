@@ -63,11 +63,11 @@ idempotence plus the effective `sshd -T` output.
 
 Once role is complete user will need to run the following steps.
 
-  1. Install the step client with `brew install step`
-  2. Initialize your step with the following:
+  1. Initialize your step with the following:
 
       ```sh
-      step ca bootstrap --ca-url https://step-ca.lib.princeton.edu:8443 --fingerprint (content in group_vars/step_ca/vault.yml)
+      step ca bootstrap --ca-url https://step-ca.lib.princeton.edu:8443 --fingerprint (contents in group_vars/step_ca/vault.yml)
       ```
 
+  2. login into the server with `step ssh login netid@lib-pxserv01a.princeton.edu`
   3. login into the server with `ssh -o PreferredAuthentications=publickey -o PasswordAuthentication=no netid@lib-pxserv01a.princeton.edu`
