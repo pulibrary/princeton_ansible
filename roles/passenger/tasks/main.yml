@@ -121,35 +121,13 @@
   ansible.builtin.package_facts:
     manager: auto
 
-- name: Phusion | Initialize installed Nginx module package list
-  ansible.builtin.set_fact:
-    nginx_installed_module_packages: []
-
-- name: Phusion | Add installed Ubuntu Nginx modules to package transaction
-  ansible.builtin.set_fact:
-    nginx_installed_module_packages: >-
-      {{
-        nginx_installed_module_packages
-        + [
-          item.key
-          ~ '='
-          ~ nginx_version
-        ]
-      }}
-  loop: "{{ ansible_facts.packages | dict2items }}"
-  loop_control:
-    label: "{{ item.key }}"
-  when:
-    - item.key is match('^libnginx-mod-')
-    - item.key != 'libnginx-mod-http-passenger'
-
 - name: Phusion | Build complete Nginx and Passenger package transaction
   ansible.builtin.set_fact:
     nginx_passenger_transaction_packages: >-
       {{
         (
           nginx_passenger_packages
-          + nginx_installed_module_packages
+          + passenger_additional_nginx_packages
         )
         | unique
         | list
