@@ -1,19 +1,135 @@
 ---
-- name: Verify
+- name: Verify Passenger role
   hosts: all
-  gather_facts: false
-  tasks:
-  - name: check passenger package status
-    package:
-      name: "{{ item }}"
-      state: present
-    check_mode: true
-    register: pkg_status
-    loop:
-      - libnginx-mod-http-passenger
-      - nginx-core
+  become: true
+  gather_facts: true
 
-  - name: test for passenger packages
-    assert:
-      that:
-        - not pkg_status.changed
+  tasks:
+    - name: Phusion | Include OS-specific variables
+      ansible.builtin.include_vars:
+        file: >-
+          {{ playbook_dir }}/../../vars/{{
+            ansible_distribution_release
+          }}.yml
+
+    - name: Phusion | Validate Molecule package variables
+      ansible.builtin.assert:
+        that:
+          - passenger_version is defined
+          - nginx_package_names is defined
+          - nginx_package_names is sequence
+          - nginx_package_names is not string
+        fail_msg: >-
+          Molecule package verification variables are missing for
+          {{ ansible_distribution_release }}.
+
+    - name: Phusion | Build expected Molecule package list
+      ansible.builtin.set_fact:
+        molecule_expected_package_specs: >-
+          {{
+            (
+              nginx_package_names
+              + [
+                'passenger=' ~ passenger_version,
+                'libnginx-mod-http-passenger=' ~ passenger_version
+              ]
+            )
+            | unique
+            | list
+          }}
+
+    - name: Phusion | Populate package facts
+      ansible.builtin.package_facts:
+        manager: auto
+
+    - name: Phusion | Verify installed Nginx and Passenger packages
+      ansible.builtin.assert:
+        that:
+          - package_name in ansible_facts.packages
+          - >-
+            package_version | length == 0
+            or package_version in installed_versions
+        fail_msg: >-
+          {{ package_name }} does not meet the required package state.
+          Installed={{
+            installed_versions | join(', ')
+            if installed_versions | length > 0
+            else 'not installed'
+          }}.
+          Required={{
+            package_version
+            if package_version | length > 0
+            else 'installed from repository candidate'
+          }}.
+        success_msg: >-
+          {{ package_name }} is installed{{
+            ' at ' ~ package_version
+            if package_version | length > 0
+            else ' from the repository candidate'
+          }}.
+      vars:
+        package_name: "{{ item.split('=', 1)[0] }}"
+        package_version: >-
+          {{
+            item.split('=', 1)[1]
+            if '=' in item
+            else ''
+          }}
+        installed_versions: >-
+          {{
+            ansible_facts.packages.get(package_name, [])
+            | map(attribute='version')
+            | list
+          }}
+      loop: "{{ molecule_expected_package_specs }}"
+      loop_control:
+        label: "{{ package_name }}"
+
+    - name: Phusion | Validate Nginx configuration
+      ansible.builtin.command:
+        argv:
+          - /usr/sbin/nginx
+          - -t
+      changed_when: false
+
+    - name: Phusion | Inspect enabled Passenger virtual host
+      ansible.builtin.stat:
+        path: /etc/nginx/sites-enabled/passenger
+      register: passenger_enabled_site
+
+    - name: Phusion | Verify Passenger virtual host is enabled
+      ansible.builtin.assert:
+        that:
+          - passenger_enabled_site.stat.exists
+          - passenger_enabled_site.stat.islnk
+          - >-
+            passenger_enabled_site.stat.lnk_source
+            == '/etc/nginx/sites-available/passenger'
+        fail_msg: >-
+          The Passenger Nginx virtual host is not enabled with the
+          expected symbolic link.
+
+    - name: Phusion | Inspect default Nginx virtual host
+      ansible.builtin.stat:
+        path: /etc/nginx/sites-enabled/default
+      register: nginx_default_site
+
+    - name: Phusion | Verify default Nginx virtual host is absent
+      ansible.builtin.assert:
+        that:
+          - not nginx_default_site.stat.exists
+        fail_msg: >-
+          The default Nginx virtual host remains enabled.
+
+    - name: Phusion | Inspect Nginx systemd override
+      ansible.builtin.stat:
+        path: /etc/systemd/system/nginx.service.d/override.conf
+      register: nginx_systemd_override
+
+    - name: Phusion | Verify Nginx systemd override exists
+      ansible.builtin.assert:
+        that:
+          - nginx_systemd_override.stat.exists
+          - nginx_systemd_override.stat.isreg
+        fail_msg: >-
+          The Nginx systemd override was not installed.
