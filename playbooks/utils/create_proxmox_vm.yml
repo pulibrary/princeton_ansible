@@ -1,0 +1,275 @@
+---
+- name: Create a Proxmox VM from a cluster template
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  collections:
+    - community.proxmox
+
+  vars:
+    proxmox_api_host: >-
+      {{ lookup('env', 'PROXMOX_HOST')
+         | default('lib-pxserv01a.princeton.edu', true) }}
+    proxmox_api_user: "{{ lookup('env', 'PROXMOX_USER') }}"
+    proxmox_api_token_id: "{{ lookup('env', 'PROXMOX_TOKEN_ID') }}"
+    proxmox_api_token_secret: "{{ lookup('env', 'PROXMOX_TOKEN_SECRET') }}"
+    proxmox_validate_certs: >-
+      {{ lookup('env', 'PROXMOX_VALIDATE_CERTS')
+         | default('false', true)
+         | bool }}
+
+    # Required deployment variables. Supply these with -e or a vars file.
+    # proxmox_template_vmid: 1002
+    # proxmox_vm_vmid: 1200
+    # proxmox_vm_name: sandbox-example1
+
+    # PUL Proxmox cluster defaults.
+    proxmox_target_node: lib-pxserv01a
+    proxmox_target_storage: Lib-Storage-VMs
+    proxmox_vm_bridge: vmbr0
+
+    # Clone options.
+    proxmox_clone_full: true
+    proxmox_clone_format: qcow2
+    proxmox_clone_timeout: 1800
+
+    # VM hardware.
+    proxmox_vm_cores: 2
+    proxmox_vm_sockets: 1
+    proxmox_vm_memory_mb: 8192
+    proxmox_vm_balloon_mb: 0
+    proxmox_vm_agent: enabled=1,fstrim_cloned_disks=1
+    proxmox_vm_onboot: true
+    proxmox_vm_protection: false
+    proxmox_vm_tags:
+      - ansible-managed
+    proxmox_vm_description: >-
+      Created by Ansible from Proxmox source VMID
+      {{ proxmox_template_vmid | default('unknown') }}.
+
+    # NIC configuration. proxmox_nic preserves the cloned MAC when mac is omitted.
+    proxmox_configure_nic: true
+    proxmox_vm_nic: net0
+    proxmox_vm_nic_model: virtio
+    proxmox_vm_firewall: true
+    proxmox_vm_vlan_tag: null
+
+    # Cloud-init configuration for the Noble and Rocky templates.
+    proxmox_cloud_init_enabled: true
+    proxmox_vm_ciuser: pulsys
+    proxmox_vm_ciupgrade: false
+    proxmox_vm_ipconfig0: ip=dhcp
+    proxmox_vm_sshkeys: "{{ lookup('env', 'PROXMOX_VM_SSH_KEYS') }}"
+    proxmox_vm_nameservers: []
+    proxmox_vm_searchdomains: []
+
+    # Proxmox can grow disks but cannot shrink them through the API.
+    proxmox_vm_disk: scsi0
+    proxmox_vm_disk_size: null
+
+    proxmox_vm_start: true
+
+  module_defaults:
+    group/community.proxmox.proxmox:
+      api_host: "{{ proxmox_api_host }}"
+      api_user: "{{ proxmox_api_user }}"
+      api_token_id: "{{ proxmox_api_token_id }}"
+      api_token_secret: "{{ proxmox_api_token_secret }}"
+      validate_certs: "{{ proxmox_validate_certs }}"
+      api_timeout: 30
+
+  tasks:
+    - name: Validate required input and API credentials
+      ansible.builtin.assert:
+        that:
+          - proxmox_template_vmid is defined
+          - proxmox_vm_vmid is defined
+          - proxmox_vm_name is defined
+          - proxmox_vm_name | length > 0
+          - proxmox_template_vmid | int != proxmox_vm_vmid | int
+          - proxmox_api_host | length > 0
+          - proxmox_api_user | length > 0
+          - proxmox_api_token_id | length > 0
+          - proxmox_api_token_secret | length > 0
+        fail_msg: >-
+          Set proxmox_template_vmid, proxmox_vm_vmid, and proxmox_vm_name.
+          Export PROXMOX_USER, PROXMOX_TOKEN_ID, and
+          PROXMOX_TOKEN_SECRET before running the playbook.
+
+    - name: Look up the source template or stopped source VM
+      community.proxmox.proxmox_vm_info:
+        vmid: "{{ proxmox_template_vmid | int }}"
+        type: qemu
+        config: current
+      register: proxmox_source_lookup
+
+    - name: Verify the source VM exists and is safe to clone
+      ansible.builtin.assert:
+        that:
+          - proxmox_source_lookup.proxmox_vms | length == 1
+          - >-
+            (proxmox_source_lookup.proxmox_vms[0].template | default(false) | bool)
+            or
+            (proxmox_source_lookup.proxmox_vms[0].status == 'stopped')
+        fail_msg: >-
+          Source VMID {{ proxmox_template_vmid }} was not found, or it is a
+          non-template VM that is currently running.
+
+    - name: Save source VM information
+      ansible.builtin.set_fact:
+        proxmox_source_vm: "{{ proxmox_source_lookup.proxmox_vms[0] }}"
+
+    - name: Look up the requested target VMID
+      community.proxmox.proxmox_vm_info:
+        vmid: "{{ proxmox_vm_vmid | int }}"
+        type: qemu
+        config: current
+      register: proxmox_target_id_lookup
+
+    - name: Look up the requested target name
+      community.proxmox.proxmox_vm_info:
+        name: "{{ proxmox_vm_name }}"
+        type: qemu
+        config: current
+      register: proxmox_target_name_lookup
+
+    - name: Reject conflicting target VMID or VM name
+      ansible.builtin.assert:
+        that:
+          - proxmox_target_id_lookup.proxmox_vms | length <= 1
+          - proxmox_target_name_lookup.proxmox_vms | length <= 1
+          - >-
+            (proxmox_target_id_lookup.proxmox_vms | length == 0)
+            or
+            (proxmox_target_id_lookup.proxmox_vms[0].name == proxmox_vm_name)
+          - >-
+            (proxmox_target_name_lookup.proxmox_vms | length == 0)
+            or
+            (proxmox_target_name_lookup.proxmox_vms[0].vmid | int
+             == proxmox_vm_vmid | int)
+        fail_msg: >-
+          The requested VMID or VM name is already assigned to a different VM.
+          Choose a unique proxmox_vm_vmid and proxmox_vm_name.
+
+    - name: Clone the source into a full VM copy
+      community.proxmox.proxmox_kvm:
+        clone: "{{ proxmox_source_vm.name }}"
+        vmid: "{{ proxmox_template_vmid | int }}"
+        newid: "{{ proxmox_vm_vmid | int }}"
+        name: "{{ proxmox_vm_name }}"
+        node: "{{ proxmox_source_vm.node }}"
+        target: >-
+          {{ proxmox_target_node
+             if proxmox_target_node != proxmox_source_vm.node
+             else omit }}
+        storage: "{{ proxmox_target_storage }}"
+        full: "{{ proxmox_clone_full }}"
+        format: >-
+          {{ proxmox_clone_format if proxmox_clone_full else 'unspecified' }}
+        timeout: "{{ proxmox_clone_timeout }}"
+      when: proxmox_target_id_lookup.proxmox_vms | length == 0
+      register: proxmox_clone_result
+
+    - name: Read the cloned or existing target VM
+      community.proxmox.proxmox_vm_info:
+        vmid: "{{ proxmox_vm_vmid | int }}"
+        type: qemu
+        config: current
+      register: proxmox_target_lookup
+      retries: 12
+      delay: 5
+      until: proxmox_target_lookup.proxmox_vms | length == 1
+
+    - name: Save target VM information
+      ansible.builtin.set_fact:
+        proxmox_target_vm: "{{ proxmox_target_lookup.proxmox_vms[0] }}"
+
+    - name: Configure VM hardware and metadata
+      community.proxmox.proxmox_kvm:
+        vmid: "{{ proxmox_vm_vmid | int }}"
+        name: "{{ proxmox_vm_name }}"
+        node: "{{ proxmox_target_vm.node }}"
+        cores: "{{ proxmox_vm_cores | int }}"
+        sockets: "{{ proxmox_vm_sockets | int }}"
+        memory: "{{ proxmox_vm_memory_mb | int }}"
+        balloon: "{{ proxmox_vm_balloon_mb | int }}"
+        agent: "{{ proxmox_vm_agent }}"
+        onboot: "{{ proxmox_vm_onboot | bool }}"
+        protection: "{{ proxmox_vm_protection | bool }}"
+        tags: "{{ proxmox_vm_tags }}"
+        description: "{{ proxmox_vm_description }}"
+        update: true
+
+    - name: Configure cloud-init values
+      community.proxmox.proxmox_kvm:
+        vmid: "{{ proxmox_vm_vmid | int }}"
+        name: "{{ proxmox_vm_name }}"
+        node: "{{ proxmox_target_vm.node }}"
+        ciuser: "{{ proxmox_vm_ciuser }}"
+        ciupgrade: "{{ proxmox_vm_ciupgrade | bool }}"
+        sshkeys: >-
+          {{ proxmox_vm_sshkeys
+             if proxmox_vm_sshkeys | length > 0
+             else omit }}
+        nameservers: >-
+          {{ proxmox_vm_nameservers
+             if proxmox_vm_nameservers | length > 0
+             else omit }}
+        searchdomains: >-
+          {{ proxmox_vm_searchdomains
+             if proxmox_vm_searchdomains | length > 0
+             else omit }}
+        ipconfig:
+          ipconfig0: "{{ proxmox_vm_ipconfig0 }}"
+        update: true
+      when: proxmox_cloud_init_enabled | bool
+
+    - name: Configure the primary NIC without changing its MAC address
+      community.proxmox.proxmox_nic:
+        vmid: "{{ proxmox_vm_vmid | int }}"
+        name: "{{ proxmox_vm_name }}"
+        interface: "{{ proxmox_vm_nic }}"
+        bridge: "{{ proxmox_vm_bridge }}"
+        model: "{{ proxmox_vm_nic_model }}"
+        firewall: "{{ proxmox_vm_firewall | bool }}"
+        tag: >-
+          {{ proxmox_vm_vlan_tag
+             if proxmox_vm_vlan_tag is not none
+             else omit }}
+        state: present
+      when: proxmox_configure_nic | bool
+
+    - name: Grow the root disk when a larger size was requested
+      community.proxmox.proxmox_disk:
+        vmid: "{{ proxmox_vm_vmid | int }}"
+        disk: "{{ proxmox_vm_disk }}"
+        size: "{{ proxmox_vm_disk_size }}"
+        state: resized
+      when:
+        - proxmox_vm_disk_size is not none
+        - proxmox_vm_disk_size | string | length > 0
+
+    - name: Start the VM
+      community.proxmox.proxmox_kvm:
+        vmid: "{{ proxmox_vm_vmid | int }}"
+        state: started
+        timeout: 300
+      when: proxmox_vm_start | bool
+
+    - name: Show deployment summary
+      ansible.builtin.debug:
+        msg:
+          vmid: "{{ proxmox_vm_vmid | int }}"
+          name: "{{ proxmox_vm_name }}"
+          source_vmid: "{{ proxmox_template_vmid | int }}"
+          source_name: "{{ proxmox_source_vm.name }}"
+          node: "{{ proxmox_target_vm.node }}"
+          storage: "{{ proxmox_target_storage }}"
+          bridge: "{{ proxmox_vm_bridge }}"
+          cloud_init_ip: >-
+            {{ proxmox_vm_ipconfig0
+               if proxmox_cloud_init_enabled | bool
+               else 'inherited from source' }}
+          desired_state: >-
+            {{ 'started' if proxmox_vm_start | bool else 'stopped' }}
