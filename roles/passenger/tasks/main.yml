@@ -121,17 +121,41 @@
   ansible.builtin.package_facts:
     manager: auto
 
+- name: Phusion | Build Nginx package transaction
+  ansible.builtin.set_fact:
+    nginx_package_specs: >-
+      {{
+        (
+          nginx_package_names
+          + passenger_additional_nginx_package_names
+        )
+        | map(
+            'regex_replace',
+            '$',
+            (
+              '=' ~ nginx_version
+              if passenger_pin_nginx_version
+              else ''
+            )
+          )
+        | list
+      }}
+
 - name: Phusion | Build complete Nginx and Passenger package transaction
   ansible.builtin.set_fact:
     nginx_passenger_transaction_packages: >-
       {{
         (
-          nginx_passenger_packages
-          + passenger_additional_nginx_packages
+          nginx_package_specs
+          + passenger_package_specs
         )
         | unique
         | list
       }}
+
+- name: Phusion | Initialize package installation requirement
+  ansible.builtin.set_fact:
+    nginx_passenger_install_required: false
 
 - name: Phusion | Initialize package installation requirement
   ansible.builtin.set_fact:
@@ -142,7 +166,12 @@
     nginx_passenger_install_required: true
   vars:
     package_name: "{{ item.split('=', 1)[0] }}"
-    package_version: "{{ item.split('=', 1)[1] }}"
+    package_version: >-
+      {{
+        item.split('=', 1)[1]
+        if '=' in item
+        else ''
+      }}
     installed_versions: >-
       {{
         ansible_facts.packages.get(package_name, [])
@@ -152,7 +181,11 @@
   when:
     - >-
       package_name not in ansible_facts.packages
-      or package_version not in installed_versions
+      or
+      (
+        package_version | length > 0
+        and package_version not in installed_versions
+      )
   loop: "{{ nginx_passenger_transaction_packages }}"
   loop_control:
     label: "{{ item }}"
@@ -170,10 +203,19 @@
         )
         | default('not installed', true)
       }},
-      required={{ package_version }}
+      required={{
+        package_version
+        if package_version | length > 0
+        else 'repository candidate'
+      }}
   vars:
     package_name: "{{ item.split('=', 1)[0] }}"
-    package_version: "{{ item.split('=', 1)[1] }}"
+    package_version: >-
+      {{
+        item.split('=', 1)[1]
+        if '=' in item
+        else ''
+      }}
   loop: "{{ nginx_passenger_transaction_packages }}"
   loop_control:
     label: "{{ package_name }}"

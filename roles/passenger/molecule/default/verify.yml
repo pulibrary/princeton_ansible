@@ -1,19 +1,37 @@
 ---
-- name: Verify
-  hosts: all
-  gather_facts: false
-  tasks:
-  - name: check passenger package status
-    package:
-      name: "{{ item }}"
-      state: present
-    check_mode: true
-    register: pkg_status
-    loop:
-      - libnginx-mod-http-passenger
-      - nginx-core
-
-  - name: test for passenger packages
-    assert:
-      that:
-        - not pkg_status.changed
+- name: Phusion | Verify installed Nginx and Passenger versions
+  ansible.builtin.assert:
+    that:
+      - package_name in ansible_facts.packages
+      - >-
+        package_version | length == 0
+        or package_version in installed_versions
+    fail_msg: >-
+      {{ package_name }} does not meet the required package state.
+      Installed={{
+        installed_versions | join(', ')
+        if installed_versions | length > 0
+        else 'not installed'
+      }}.
+      Required={{
+        package_version
+        if package_version | length > 0
+        else 'installed from repository candidate'
+      }}.
+  vars:
+    package_name: "{{ item.split('=', 1)[0] }}"
+    package_version: >-
+      {{
+        item.split('=', 1)[1]
+        if '=' in item
+        else ''
+      }}
+    installed_versions: >-
+      {{
+        ansible_facts.packages.get(package_name, [])
+        | map(attribute='version')
+        | list
+      }}
+  loop: "{{ nginx_passenger_transaction_packages }}"
+  loop_control:
+    label: "{{ package_name }}"
