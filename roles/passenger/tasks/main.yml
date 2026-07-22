@@ -168,126 +168,40 @@
       }}
   when: passenger_pin_nginx_version | default(false) | bool
 
-- name: Phusion | Build complete Nginx and Passenger package transaction
-  ansible.builtin.set_fact:
-    nginx_passenger_transaction_packages: >-
-      {{
-        (
-          nginx_package_specs
-          + [
-            'passenger=' ~ passenger_version,
-            'libnginx-mod-http-passenger=' ~ passenger_version
-          ]
-        )
-        | unique
-        | list
-      }}
-
-- name: Phusion | Initialize package installation requirement
-  ansible.builtin.set_fact:
-    nginx_passenger_install_required: false
-
-- name: Phusion | Determine whether package changes are required
-  ansible.builtin.set_fact:
-    nginx_passenger_install_required: true
-  vars:
-    package_name: "{{ item.split('=', 1)[0] }}"
-    package_version: >-
-      {{
-        item.split('=', 1)[1]
-        if '=' in item
-        else ''
-      }}
-    installed_versions: >-
-      {{
-        ansible_facts.packages.get(package_name, [])
-        | map(attribute='version')
-        | list
-      }}
-  when:
-    - >-
-      package_name not in ansible_facts.packages
-      or
-      (
-        package_version | length > 0
-        and package_version not in installed_versions
-      )
-  loop: "{{ nginx_passenger_transaction_packages }}"
-  loop_control:
-    label: "{{ item }}"
-
-    #
-    #- name: Phusion | Display installed and required package versions
-    #  ansible.builtin.debug:
-    #    msg: >-
-    #      {{ package_name }}:
-    #      installed={{
-    #        (
-    #          ansible_facts.packages.get(package_name, [])
-    #          | map(attribute='version')
-    #          | list
-    #          | join(', ')
-    #        )
-    #        | default('not installed', true)
-    #      }},
-    #      required={{
-    #        package_version
-    #        if package_version | length > 0
-    #        else 'repository candidate'
-    #      }}
-    #  vars:
-    #    package_name: "{{ item.split('=', 1)[0] }}"
-    #    package_version: >-
-    #      {{
-    #        item.split('=', 1)[1]
-    #        if '=' in item
-    #        else ''
-    #      }}
-    #  loop: "{{ nginx_passenger_transaction_packages }}"
-    #  loop_control:
-    #    label: "{{ package_name }}"
-    #
-    #- name: Phusion | Display package transaction
-    #  ansible.builtin.debug:
-    #    var: nginx_passenger_transaction_packages
-    #  when: nginx_passenger_install_required
-    #
-- name: Phusion | Update apt cache before package installation
-  become: true
-  ansible.builtin.apt:
-    update_cache: true
-    cache_valid_time: 3600
-  when: nginx_passenger_install_required
-
 - name: Phusion | Install Nginx and pinned Passenger packages
+  become: true
+  ansible.builtin.command:
+    argv: >-
+      {{
+        [
+          '/usr/bin/timeout',
+          '--signal=TERM',
+          '180',
+          '/usr/bin/apt-get',
+          '-o',
+          'Dpkg::Use-Pty=0',
+          '-o',
+          'APT::Color=0',
+          '-o',
+          'Acquire::http::Timeout=20',
+          '-o',
+          'Acquire::https::Timeout=20',
+          '-o',
+          'Acquire::Retries=1',
+          '--yes',
+          '--allow-downgrades',
+          '--allow-change-held-packages',
+          'install'
+        ]
+        + nginx_passenger_transaction_packages
+      }}
+  environment:
+    DEBIAN_FRONTEND: noninteractive
+  register: nginx_passenger_install
   when: nginx_passenger_install_required
-  block:
-    - name: Phusion | Run Nginx and Passenger package transaction
-      become: true
-      ansible.builtin.command:
-        argv: >-
-          {{
-            [
-              '/usr/bin/apt-get',
-              '-o',
-              'Dpkg::Use-Pty=0',
-              '-o',
-              'APT::Color=0',
-              '-o',
-              'Acquire::Retries=3',
-              '--yes',
-              '--allow-downgrades',
-              '--allow-change-held-packages',
-              'install'
-            ]
-            + nginx_passenger_transaction_packages
-          }}
-      environment:
-        DEBIAN_FRONTEND: noninteractive
-      register: nginx_passenger_install
-      changed_when: true
-      notify:
-        - restart nginx
+  changed_when: true
+  notify:
+    - restart nginx
 
   rescue:
     - name: Phusion | Read apt terminal log
@@ -343,6 +257,103 @@
         msg: >-
           The Nginx and Passenger package transaction failed.
           Review the APT and dpkg diagnostics above.
+
+- name: Phusion | Initialize package installation requirement
+  ansible.builtin.set_fact:
+    nginx_passenger_install_required: false
+
+- name: Phusion | Determine whether package changes are required
+  ansible.builtin.set_fact:
+    nginx_passenger_install_required: true
+  vars:
+    package_name: "{{ item.split('=', 1)[0] }}"
+    package_version: >-
+      {{
+        item.split('=', 1)[1]
+        if '=' in item
+        else ''
+      }}
+    installed_versions: >-
+      {{
+        ansible_facts.packages.get(package_name, [])
+        | map(attribute='version')
+        | list
+      }}
+  when:
+    - >-
+      package_name not in ansible_facts.packages
+      or
+      (
+        package_version | length > 0
+        and package_version not in installed_versions
+      )
+  loop: "{{ nginx_passenger_transaction_packages }}"
+  loop_control:
+    label: "{{ item }}"
+
+- name: Phusion | Display installed and required package versions
+  ansible.builtin.debug:
+    msg: >-
+      {{ package_name }}:
+      installed={{
+        (
+          ansible_facts.packages.get(package_name, [])
+          | map(attribute='version')
+          | list
+          | join(', ')
+        )
+        | default('not installed', true)
+      }},
+      required={{
+        package_version
+        if package_version | length > 0
+        else 'repository candidate'
+      }}
+  vars:
+    package_name: "{{ item.split('=', 1)[0] }}"
+    package_version: >-
+      {{
+        item.split('=', 1)[1]
+        if '=' in item
+        else ''
+      }}
+  loop: "{{ nginx_passenger_transaction_packages }}"
+  loop_control:
+    label: "{{ package_name }}"
+
+- name: Phusion | Display package transaction
+  ansible.builtin.debug:
+    var: nginx_passenger_transaction_packages
+  when: nginx_passenger_install_required
+
+- name: Phusion | Update apt cache before package installation
+  become: true
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+  when: nginx_passenger_install_required
+
+- name: Phusion | Install Nginx and pinned Passenger packages
+  become: true
+  ansible.builtin.command:
+    argv: >-
+      {{
+        [
+          '/usr/bin/apt-get',
+          '--yes',
+          '--allow-downgrades',
+          '--allow-change-held-packages',
+          'install'
+        ]
+        + nginx_passenger_transaction_packages
+      }}
+  environment:
+    DEBIAN_FRONTEND: noninteractive
+  register: nginx_passenger_install
+  when: nginx_passenger_install_required
+  changed_when: nginx_passenger_install_required
+  notify:
+    - restart nginx
 
 - name: Phusion | Refresh package facts after installation
   ansible.builtin.package_facts:
