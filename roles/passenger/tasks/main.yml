@@ -121,25 +121,50 @@
   ansible.builtin.package_facts:
     manager: auto
 
-- name: Phusion | Build Nginx package transaction
+- name: Phusion | Validate release-specific package variables
+  ansible.builtin.assert:
+    that:
+      - nginx_version is defined
+      - passenger_version is defined
+      - nginx_package_names is defined
+      - nginx_package_names is sequence
+    fail_msg: >-
+      Passenger package variables are missing for
+      {{ ansible_distribution_release }}.
+
+- name: Phusion | Build effective Nginx package name list
   ansible.builtin.set_fact:
-    nginx_package_specs: >-
+    nginx_effective_package_names: >-
       {{
         (
           nginx_package_names
-          + passenger_additional_nginx_package_names
+          | default([], true)
         )
+        +
+        (
+          passenger_additional_nginx_package_names
+          | default([], true)
+        )
+      }}
+
+- name: Phusion | Build unpinned Nginx package transaction
+  ansible.builtin.set_fact:
+    nginx_package_specs: "{{ nginx_effective_package_names }}"
+  when: not (passenger_pin_nginx_version | default(false) | bool)
+
+- name: Phusion | Build pinned Nginx package transaction
+  ansible.builtin.set_fact:
+    nginx_package_specs: >-
+      {{
+        nginx_effective_package_names
         | map(
             'regex_replace',
             '$',
-            (
-              '=' ~ nginx_version
-              if passenger_pin_nginx_version
-              else ''
-            )
+            '=' ~ nginx_version
           )
         | list
       }}
+  when: passenger_pin_nginx_version | default(false) | bool
 
 - name: Phusion | Build complete Nginx and Passenger package transaction
   ansible.builtin.set_fact:
@@ -147,7 +172,10 @@
       {{
         (
           nginx_package_specs
-          + passenger_package_specs
+          + [
+            'passenger=' ~ passenger_version,
+            'libnginx-mod-http-passenger=' ~ passenger_version
+          ]
         )
         | unique
         | list
