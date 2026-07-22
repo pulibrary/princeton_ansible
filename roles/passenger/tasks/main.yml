@@ -215,6 +215,7 @@
   loop: "{{ nginx_passenger_transaction_packages }}"
   loop_control:
     label: "{{ item }}"
+
     #
     #- name: Phusion | Display installed and required package versions
     #  ansible.builtin.debug:
@@ -259,26 +260,89 @@
   when: nginx_passenger_install_required
 
 - name: Phusion | Install Nginx and pinned Passenger packages
-  become: true
-  ansible.builtin.command:
-    argv: >-
-      {{
-        [
-          '/usr/bin/apt-get',
-          '--yes',
-          '--allow-downgrades',
-          '--allow-change-held-packages',
-          'install'
-        ]
-        + nginx_passenger_transaction_packages
-      }}
-  environment:
-    DEBIAN_FRONTEND: noninteractive
-  register: nginx_passenger_install
   when: nginx_passenger_install_required
-  changed_when: nginx_passenger_install_required
-  notify:
-    - restart nginx
+  block:
+    - name: Phusion | Run Nginx and Passenger package transaction
+      become: true
+      ansible.builtin.command:
+        argv: >-
+          {{
+            [
+              '/usr/bin/apt-get',
+              '-o',
+              'Dpkg::Use-Pty=0',
+              '-o',
+              'APT::Color=0',
+              '-o',
+              'Acquire::Retries=3',
+              '--yes',
+              '--allow-downgrades',
+              '--allow-change-held-packages',
+              'install'
+            ]
+            + nginx_passenger_transaction_packages
+          }}
+      environment:
+        DEBIAN_FRONTEND: noninteractive
+      register: nginx_passenger_install
+      changed_when: true
+      notify:
+        - restart nginx
+
+  rescue:
+    - name: Phusion | Read apt terminal log
+      become: true
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/tail
+          - -n
+          - "200"
+          - /var/log/apt/term.log
+      register: passenger_apt_term_log
+      changed_when: false
+      failed_when: false
+
+    - name: Phusion | Read recent dpkg log
+      become: true
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/tail
+          - -n
+          - "100"
+          - /var/log/dpkg.log
+      register: passenger_dpkg_log
+      changed_when: false
+      failed_when: false
+
+    - name: Phusion | Audit incomplete packages
+      become: true
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/dpkg
+          - --audit
+      register: passenger_dpkg_audit
+      changed_when: false
+      failed_when: false
+
+    - name: Phusion | Display failed apt transaction
+      ansible.builtin.debug:
+        msg:
+          - "Command stdout:"
+          - "{{ ansible_failed_result.stdout | default('No stdout') }}"
+          - "Command stderr:"
+          - "{{ ansible_failed_result.stderr | default('No stderr') }}"
+          - "APT terminal log:"
+          - "{{ passenger_apt_term_log.stdout | default('Unavailable') }}"
+          - "DPKG log:"
+          - "{{ passenger_dpkg_log.stdout | default('Unavailable') }}"
+          - "DPKG audit:"
+          - "{{ passenger_dpkg_audit.stdout | default('No incomplete packages reported') }}"
+
+    - name: Phusion | Fail after displaying package diagnostics
+      ansible.builtin.fail:
+        msg: >-
+          The Nginx and Passenger package transaction failed.
+          Review the APT and dpkg diagnostics above.
 
 - name: Phusion | Refresh package facts after installation
   ansible.builtin.package_facts:
