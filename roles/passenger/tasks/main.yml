@@ -215,42 +215,42 @@
   loop: "{{ nginx_passenger_transaction_packages }}"
   loop_control:
     label: "{{ item }}"
-
-- name: Phusion | Display installed and required package versions
-  ansible.builtin.debug:
-    msg: >-
-      {{ package_name }}:
-      installed={{
-        (
-          ansible_facts.packages.get(package_name, [])
-          | map(attribute='version')
-          | list
-          | join(', ')
-        )
-        | default('not installed', true)
-      }},
-      required={{
-        package_version
-        if package_version | length > 0
-        else 'repository candidate'
-      }}
-  vars:
-    package_name: "{{ item.split('=', 1)[0] }}"
-    package_version: >-
-      {{
-        item.split('=', 1)[1]
-        if '=' in item
-        else ''
-      }}
-  loop: "{{ nginx_passenger_transaction_packages }}"
-  loop_control:
-    label: "{{ package_name }}"
-
-- name: Phusion | Display package transaction
-  ansible.builtin.debug:
-    var: nginx_passenger_transaction_packages
-  when: nginx_passenger_install_required
-
+    #
+    #- name: Phusion | Display installed and required package versions
+    #  ansible.builtin.debug:
+    #    msg: >-
+    #      {{ package_name }}:
+    #      installed={{
+    #        (
+    #          ansible_facts.packages.get(package_name, [])
+    #          | map(attribute='version')
+    #          | list
+    #          | join(', ')
+    #        )
+    #        | default('not installed', true)
+    #      }},
+    #      required={{
+    #        package_version
+    #        if package_version | length > 0
+    #        else 'repository candidate'
+    #      }}
+    #  vars:
+    #    package_name: "{{ item.split('=', 1)[0] }}"
+    #    package_version: >-
+    #      {{
+    #        item.split('=', 1)[1]
+    #        if '=' in item
+    #        else ''
+    #      }}
+    #  loop: "{{ nginx_passenger_transaction_packages }}"
+    #  loop_control:
+    #    label: "{{ package_name }}"
+    #
+    #- name: Phusion | Display package transaction
+    #  ansible.builtin.debug:
+    #    var: nginx_passenger_transaction_packages
+    #  when: nginx_passenger_install_required
+    #
 - name: Phusion | Update apt cache before package installation
   become: true
   ansible.builtin.apt:
