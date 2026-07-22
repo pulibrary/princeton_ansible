@@ -1,7 +1,7 @@
 ---
 # Variable setup.
 - name: Phusion | Include OS-specific variables.
-  ansible.builtin.include_vars: "main.yml"
+  ansible.builtin.include_vars: "{{ ansible_distribution_release }}.yml"
 
 - name: Phusion | Define nginx_user.
   ansible.builtin.set_fact:
@@ -102,38 +102,117 @@
     content: |
       Package: passenger libnginx-mod-http-passenger
       Pin: origin oss-binaries.phusionpassenger.com
-      Pin-Priority: 1001
+      Pin-Priority: 999
   notify:
     - restart nginx
 
-- name: Phusion | populate package facts
+- name: Phusion | Populate package facts
   ansible.builtin.package_facts:
+    manager: auto
 
-- name: Phusion | get libnginx-mod-http-passenger version
-  ansible.builtin.command: "dpkg-query --show --showformat='${Version}' libnginx-mod-http-passenger"
-  when: "'libnginx-mod-http-passenger' in ansible_facts.packages"
-  register: libnginx_version
+- name: Phusion | Initialize package installation requirement
+  ansible.builtin.set_fact:
+    nginx_passenger_install_required: false
 
-- name: Phusion | debug
+- name: Phusion | Determine whether package changes are required
+  ansible.builtin.set_fact:
+    nginx_passenger_install_required: true
+  vars:
+    package_name: "{{ item.split('=', 1)[0] }}"
+    package_version: "{{ item.split('=', 1)[1] }}"
+    installed_versions: >-
+      {{
+        ansible_facts.packages.get(package_name, [])
+        | map(attribute='version')
+        | list
+      }}
+  when:
+    - package_name not in ansible_facts.packages
+      or package_version not in installed_versions
+  loop: "{{ nginx_passenger_packages }}"
+  loop_control:
+    label: "{{ item }}"
+
+- name: Phusion | Display installed and required package versions
   ansible.builtin.debug:
-    msg: version is {{ libnginx_version.stdout }}
-  when: "'libnginx-mod-http-passenger' in ansible_facts.packages"
+    msg: >-
+      {{ package_name }}:
+      installed={{
+        (
+          ansible_facts.packages.get(package_name, [])
+          | map(attribute='version')
+          | list
+          | join(', ')
+        ) | default('not installed', true)
+      }},
+      required={{ package_version }}
+  vars:
+    package_name: "{{ item.split('=', 1)[0] }}"
+    package_version: "{{ item.split('=', 1)[1] }}"
+  loop: "{{ nginx_passenger_packages }}"
+  loop_control:
+    label: "{{ package_name }}"
 
-- name: Phusion | downgrade and install install packages for nginx
-  ansible.builtin.command: "apt -y --allow-downgrades install nginx-core=1.24.0-2ubuntu7.15 nginx-common=1.24.0-2ubuntu7.15 passenger=1:6.1.6-1~noble1 libnginx-mod-http-passenger=1:6.1.6-1~noble1"
+- name: Phusion | Update apt cache before package installation
   become: true
-  when:
-    - "'libnginx-mod-http-passenger' in ansible_facts.packages"
-    - libnginx_version.stdout != "1:6.1.6-1~noble1"
-
-- name: Phusion | Install Nginx and Passenger.
   ansible.builtin.apt:
-    name: "{{ nginx_passenger_packages }}"
-    state: present
     update_cache: true
-  when:
-    "'libnginx-mod-http-passenger' not in ansible_facts.packages"
-    #
+    cache_valid_time: 3600
+  when: nginx_passenger_install_required
+
+- name: Phusion | Install pinned Nginx and Passenger packages
+  become: true
+  ansible.builtin.command:
+    argv: >-
+      {{
+        [
+          '/usr/bin/apt-get',
+          '--yes',
+          '--allow-downgrades',
+          '--allow-change-held-packages',
+          'install'
+        ]
+        + nginx_passenger_packages
+      }}
+  environment:
+    DEBIAN_FRONTEND: noninteractive
+  when: nginx_passenger_install_required
+  changed_when: true
+  notify:
+    - restart nginx
+
+- name: Phusion | Refresh package facts after installation
+  ansible.builtin.package_facts:
+    manager: auto
+
+- name: Phusion | Verify installed Nginx and Passenger versions
+  ansible.builtin.assert:
+    that:
+      - package_name in ansible_facts.packages
+      - package_version in installed_versions
+    fail_msg: >-
+      {{ package_name }} is not at the required version.
+      Installed={{
+        installed_versions | join(', ')
+        if installed_versions | length > 0
+        else 'not installed'
+      }}.
+      Required={{ package_version }}.
+    success_msg: >-
+      {{ package_name }} is installed at {{ package_version }}.
+  vars:
+    package_name: "{{ item.split('=', 1)[0] }}"
+    package_version: "{{ item.split('=', 1)[1] }}"
+    installed_versions: >-
+      {{
+        ansible_facts.packages.get(package_name, [])
+        | map(attribute='version')
+        | list
+      }}
+  loop: "{{ nginx_passenger_packages }}"
+  loop_control:
+    label: "{{ package_name }}"
+
 # Nginx and passenger configuration.
 - name: Phusion | Copy Nginx configuration into place.
   ansible.builtin.template:
