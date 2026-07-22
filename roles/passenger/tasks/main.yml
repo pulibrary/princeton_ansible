@@ -128,23 +128,25 @@
       - passenger_version is defined
       - nginx_package_names is defined
       - nginx_package_names is sequence
+      - nginx_package_names is not string
     fail_msg: >-
-      Passenger package variables are missing for
-      {{ ansible_distribution_release }}.
+      Passenger package variables are missing or invalid for
+      {{ ansible_distribution }} {{ ansible_distribution_release }}.
 
 - name: Phusion | Build effective Nginx package name list
   ansible.builtin.set_fact:
     nginx_effective_package_names: >-
       {{
         (
-          nginx_package_names
-          | default([], true)
+          (nginx_package_names | default([], true))
+          +
+          (
+            passenger_additional_nginx_package_names
+            | default([], true)
+          )
         )
-        +
-        (
-          passenger_additional_nginx_package_names
-          | default([], true)
-        )
+        | unique
+        | list
       }}
 
 - name: Phusion | Build unpinned Nginx package transaction
@@ -180,10 +182,6 @@
         | unique
         | list
       }}
-
-- name: Phusion | Initialize package installation requirement
-  ansible.builtin.set_fact:
-    nginx_passenger_install_required: false
 
 - name: Phusion | Initialize package installation requirement
   ansible.builtin.set_fact:
@@ -260,7 +258,7 @@
     cache_valid_time: 3600
   when: nginx_passenger_install_required
 
-- name: Phusion | Install pinned Nginx and Passenger packages
+- name: Phusion | Install Nginx and pinned Passenger packages
   become: true
   ansible.builtin.command:
     argv: >-
@@ -276,8 +274,9 @@
       }}
   environment:
     DEBIAN_FRONTEND: noninteractive
+  register: nginx_passenger_install
   when: nginx_passenger_install_required
-  changed_when: true
+  changed_when: nginx_passenger_install_required
   notify:
     - restart nginx
 
@@ -289,20 +288,35 @@
   ansible.builtin.assert:
     that:
       - package_name in ansible_facts.packages
-      - package_version in installed_versions
+      - >-
+        package_version | length == 0
+        or package_version in installed_versions
     fail_msg: >-
-      {{ package_name }} is not at the required version.
+      {{ package_name }} does not meet the required package state.
       Installed={{
         installed_versions | join(', ')
         if installed_versions | length > 0
         else 'not installed'
       }}.
-      Required={{ package_version }}.
+      Required={{
+        package_version
+        if package_version | length > 0
+        else 'installed from repository candidate'
+      }}.
     success_msg: >-
-      {{ package_name }} is installed at {{ package_version }}.
+      {{ package_name }} is installed{{
+        ' at ' ~ package_version
+        if package_version | length > 0
+        else ' from the repository candidate'
+      }}.
   vars:
     package_name: "{{ item.split('=', 1)[0] }}"
-    package_version: "{{ item.split('=', 1)[1] }}"
+    package_version: >-
+      {{
+        item.split('=', 1)[1]
+        if '=' in item
+        else ''
+      }}
     installed_versions: >-
       {{
         ansible_facts.packages.get(package_name, [])
@@ -325,7 +339,7 @@
   tags:
     - passenger_config
   notify:
-    - "passenger : restart nginx"
+    - restart nginx
 
 - name: Phusion | Configure Passenger virtual host
   become: true
