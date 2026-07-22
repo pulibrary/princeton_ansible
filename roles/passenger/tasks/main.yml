@@ -20,7 +20,8 @@
     group: root
     mode: "0755"
 
-# Legacy signing key, still used for the Jammy repository.
+# Legacy signing key, still used to sign the Jammy repository.
+# https://oss-binaries.phusionpassenger.com/auto-software-signing-gpg-key.txt
 - name: Phusion | Download legacy apt signing key
   become: true
   ansible.builtin.get_url:
@@ -29,6 +30,7 @@
     owner: root
     group: root
     mode: "0644"
+  register: phusion_passenger_legacy_key
 
 - name: Phusion | Convert legacy key to GPG keyring
   become: true
@@ -41,7 +43,28 @@
       - --output
       - /usr/local/share/keyrings/phusion_passenger_legacy.gpg
       - /usr/local/share/keyrings/phusion_passenger_legacy.asc
-    creates: /usr/local/share/keyrings/phusion_passenger_legacy.gpg
+  when: phusion_passenger_legacy_key.changed
+  changed_when: true
+
+- name: Phusion | Check legacy GPG keyring
+  become: true
+  ansible.builtin.stat:
+    path: /usr/local/share/keyrings/phusion_passenger_legacy.gpg
+  register: phusion_passenger_legacy_gpg
+
+- name: Phusion | Create missing legacy GPG keyring
+  become: true
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/gpg
+      - --batch
+      - --yes
+      - --dearmor
+      - --output
+      - /usr/local/share/keyrings/phusion_passenger_legacy.gpg
+      - /usr/local/share/keyrings/phusion_passenger_legacy.asc
+  when: not phusion_passenger_legacy_gpg.stat.exists
+  changed_when: true
 
 - name: Phusion | Install legacy apt signing key
   become: true
@@ -54,6 +77,8 @@
     remote_src: true
 
 # SHA-256 signing key.
+# https://blog.phusion.nl/important-new-signing-key-for-passenger/
+# https://oss-binaries.phusionpassenger.com/auto-software-signing-gpg-key-2025.txt
 - name: Phusion | Download SHA-256 apt signing key
   become: true
   ansible.builtin.get_url:
@@ -62,6 +87,7 @@
     owner: root
     group: root
     mode: "0644"
+  register: phusion_passenger_sha256_key
 
 - name: Phusion | Convert SHA-256 key to GPG keyring
   become: true
@@ -74,7 +100,28 @@
       - --output
       - /usr/local/share/keyrings/phusion_passenger_2025.gpg
       - /usr/local/share/keyrings/phusion_passenger_2025.asc
-    creates: /usr/local/share/keyrings/phusion_passenger_2025.gpg
+  when: phusion_passenger_sha256_key.changed
+  changed_when: true
+
+- name: Phusion | Check SHA-256 GPG keyring
+  become: true
+  ansible.builtin.stat:
+    path: /usr/local/share/keyrings/phusion_passenger_2025.gpg
+  register: phusion_passenger_sha256_gpg
+
+- name: Phusion | Create missing SHA-256 GPG keyring
+  become: true
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/gpg
+      - --batch
+      - --yes
+      - --dearmor
+      - --output
+      - /usr/local/share/keyrings/phusion_passenger_2025.gpg
+      - /usr/local/share/keyrings/phusion_passenger_2025.asc
+  when: not phusion_passenger_sha256_gpg.stat.exists
+  changed_when: true
 
 - name: Phusion | Install SHA-256 apt signing key
   become: true
@@ -339,7 +386,11 @@
           - "DPKG log:"
           - "{{ passenger_dpkg_log.stdout | default('Unavailable') }}"
           - "DPKG audit:"
-          - "{{ passenger_dpkg_audit.stdout | default('No incomplete packages reported') }}"
+          - >-
+            {{
+              passenger_dpkg_audit.stdout
+              | default('No incomplete packages reported')
+            }}
 
     - name: Phusion | Fail after displaying package diagnostics
       ansible.builtin.fail:
