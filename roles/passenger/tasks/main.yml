@@ -20,9 +20,9 @@
     group: root
     mode: "0755"
 
-# Legacy auto-software-signing key, still used to sign the Jammy repository.
+# Legacy signing key, still used to sign the Jammy repository.
 # https://oss-binaries.phusionpassenger.com/auto-software-signing-gpg-key.txt
-- name: Phusion | Download legacy auto signing key
+- name: Phusion | Download legacy apt signing key
   become: true
   ansible.builtin.get_url:
     url: https://oss-binaries.phusionpassenger.com/auto-software-signing-gpg-key.txt
@@ -36,7 +36,7 @@
   become: true
   ansible.builtin.command:
     argv:
-      - gpg
+      - /usr/bin/gpg
       - --batch
       - --yes
       - --dearmor
@@ -44,8 +44,29 @@
       - /usr/local/share/keyrings/phusion_passenger_legacy.gpg
       - /usr/local/share/keyrings/phusion_passenger_legacy.asc
   when: phusion_passenger_legacy_key.changed
+  changed_when: true
 
-- name: Phusion | Install legacy key into apt trusted.gpg.d
+- name: Phusion | Check legacy GPG keyring
+  become: true
+  ansible.builtin.stat:
+    path: /usr/local/share/keyrings/phusion_passenger_legacy.gpg
+  register: phusion_passenger_legacy_gpg
+
+- name: Phusion | Create missing legacy GPG keyring
+  become: true
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/gpg
+      - --batch
+      - --yes
+      - --dearmor
+      - --output
+      - /usr/local/share/keyrings/phusion_passenger_legacy.gpg
+      - /usr/local/share/keyrings/phusion_passenger_legacy.asc
+  when: not phusion_passenger_legacy_gpg.stat.exists
+  changed_when: true
+
+- name: Phusion | Install legacy apt signing key
   become: true
   ansible.builtin.copy:
     src: /usr/local/share/keyrings/phusion_passenger_legacy.gpg
@@ -54,9 +75,8 @@
     group: root
     mode: "0644"
     remote_src: true
-  when: phusion_passenger_legacy_key.changed
 
-# Phusion SHA-256 signing key.
+# SHA-256 signing key.
 # https://blog.phusion.nl/important-new-signing-key-for-passenger/
 # https://oss-binaries.phusionpassenger.com/auto-software-signing-gpg-key-2025.txt
 - name: Phusion | Download SHA-256 apt signing key
@@ -67,22 +87,43 @@
     owner: root
     group: root
     mode: "0644"
-  register: phusion_passenger_key
+  register: phusion_passenger_sha256_key
 
 - name: Phusion | Convert SHA-256 key to GPG keyring
   become: true
   ansible.builtin.command:
     argv:
-      - gpg
+      - /usr/bin/gpg
       - --batch
       - --yes
       - --dearmor
       - --output
       - /usr/local/share/keyrings/phusion_passenger_2025.gpg
       - /usr/local/share/keyrings/phusion_passenger_2025.asc
-  when: phusion_passenger_key.changed
+  when: phusion_passenger_sha256_key.changed
+  changed_when: true
 
-- name: Phusion | Install SHA-256 key into apt trusted.gpg.d
+- name: Phusion | Check SHA-256 GPG keyring
+  become: true
+  ansible.builtin.stat:
+    path: /usr/local/share/keyrings/phusion_passenger_2025.gpg
+  register: phusion_passenger_sha256_gpg
+
+- name: Phusion | Create missing SHA-256 GPG keyring
+  become: true
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/gpg
+      - --batch
+      - --yes
+      - --dearmor
+      - --output
+      - /usr/local/share/keyrings/phusion_passenger_2025.gpg
+      - /usr/local/share/keyrings/phusion_passenger_2025.asc
+  when: not phusion_passenger_sha256_gpg.stat.exists
+  changed_when: true
+
+- name: Phusion | Install SHA-256 apt signing key
   become: true
   ansible.builtin.copy:
     src: /usr/local/share/keyrings/phusion_passenger_2025.gpg
@@ -91,7 +132,6 @@
     group: root
     mode: "0644"
     remote_src: true
-  when: phusion_passenger_key.changed
 
 # Phusion repository.
 - name: Phusion | Add Phusion apt repository
@@ -216,42 +256,41 @@
   loop_control:
     label: "{{ item }}"
 
-    #
-    #- name: Phusion | Display installed and required package versions
-    #  ansible.builtin.debug:
-    #    msg: >-
-    #      {{ package_name }}:
-    #      installed={{
-    #        (
-    #          ansible_facts.packages.get(package_name, [])
-    #          | map(attribute='version')
-    #          | list
-    #          | join(', ')
-    #        )
-    #        | default('not installed', true)
-    #      }},
-    #      required={{
-    #        package_version
-    #        if package_version | length > 0
-    #        else 'repository candidate'
-    #      }}
-    #  vars:
-    #    package_name: "{{ item.split('=', 1)[0] }}"
-    #    package_version: >-
-    #      {{
-    #        item.split('=', 1)[1]
-    #        if '=' in item
-    #        else ''
-    #      }}
-    #  loop: "{{ nginx_passenger_transaction_packages }}"
-    #  loop_control:
-    #    label: "{{ package_name }}"
-    #
-    #- name: Phusion | Display package transaction
-    #  ansible.builtin.debug:
-    #    var: nginx_passenger_transaction_packages
-    #  when: nginx_passenger_install_required
-    #
+- name: Phusion | Display installed and required package versions
+  ansible.builtin.debug:
+    msg: >-
+      {{ package_name }}:
+      installed={{
+        (
+          ansible_facts.packages.get(package_name, [])
+          | map(attribute='version')
+          | list
+          | join(', ')
+        )
+        | default('not installed', true)
+      }},
+      required={{
+        package_version
+        if package_version | length > 0
+        else 'repository candidate'
+      }}
+  vars:
+    package_name: "{{ item.split('=', 1)[0] }}"
+    package_version: >-
+      {{
+        item.split('=', 1)[1]
+        if '=' in item
+        else ''
+      }}
+  loop: "{{ nginx_passenger_transaction_packages }}"
+  loop_control:
+    label: "{{ package_name }}"
+
+- name: Phusion | Display package transaction
+  ansible.builtin.debug:
+    var: nginx_passenger_transaction_packages
+  when: nginx_passenger_install_required
+
 - name: Phusion | Update apt cache before package installation
   become: true
   ansible.builtin.apt:
@@ -268,13 +307,24 @@
         argv: >-
           {{
             [
+              '/usr/bin/timeout',
+              '--signal=TERM',
+              '180',
               '/usr/bin/apt-get',
               '-o',
               'Dpkg::Use-Pty=0',
               '-o',
               'APT::Color=0',
               '-o',
-              'Acquire::Retries=3',
+              'Acquire::http::Timeout=20',
+              '-o',
+              'Acquire::https::Timeout=20',
+              '-o',
+              'Acquire::Retries=1',
+              '-o',
+              'Dpkg::Options::=--force-confdef',
+              '-o',
+              'Dpkg::Options::=--force-confold',
               '--yes',
               '--allow-downgrades',
               '--allow-change-held-packages',
@@ -336,7 +386,11 @@
           - "DPKG log:"
           - "{{ passenger_dpkg_log.stdout | default('Unavailable') }}"
           - "DPKG audit:"
-          - "{{ passenger_dpkg_audit.stdout | default('No incomplete packages reported') }}"
+          - >-
+            {{
+              passenger_dpkg_audit.stdout
+              | default('No incomplete packages reported')
+            }}
 
     - name: Phusion | Fail after displaying package diagnostics
       ansible.builtin.fail:
