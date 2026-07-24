@@ -9,10 +9,20 @@
 # checkmk folder names must be all lower case and should not begin with a slash
 # checkmk site names are: 'production', 'staging', 'aws', and 'gce'
 #
-# by default this playbook runs against inventory from the staging environment
-# to run against a production group or host, pass '-e runtime_env=production'
+# by default this playbook runs against the staging inventory group
+# to run against a production group or host, pass '-e inventory_group=production'
+#
+# Note:
+# 'inventory_group' can be 'ci', 'qa', 'staging', or 'production'
+# 'runtime_env' is often used for both inventory referecnes and
+# references to the VMware environment
+# in that context it can only be 'production' or 'staging'
+#
+# By using two variables, we can pass both when we rebuild a VM with the Tower workflow
+# even if two values are different (VMware environment and inventory group)
+#
 - name: Install CheckMk agent on host
-  hosts: "{{ runtime_env | default ('staging') }}"
+  hosts: "{{ inventory_group | default ('staging') }}"
   remote_user: pulsys
   become: true
 
