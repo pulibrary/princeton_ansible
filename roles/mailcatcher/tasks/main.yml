@@ -1,21 +1,20 @@
 ---
-# tasks file for roles/mailcatcher
+# First, install the pre-requisites. Find these in the defaults/main.yml file. 
 - name: mailcatcher | installing pre-reqs
   apt:
     name: "{{ item }}"
     state: present
   with_items: '{{ mailcatcher_ubuntu_packages }}'
+  when: running_on_server 
 
-- import_tasks: create_user.yml
-- import_tasks: install.yml
-- import_tasks: config.yml
+# Then, create the mailcatcher user and group. 
+# - import_tasks: create_user.yml
 
-- name: mailcatcher | daemon-reload systemd
-  ansible.builtin.systemd:
-    daemon_reload: yes
+# # Next, install mailcatcher at /usr/local/bin/mailcatcher
+# - import_tasks: install.yml
 
-- name: mailcatcher | restart mailcatcher
-  ansible.builtin.systemd:
-    name: mailcatcher
-    state: restarted
-    enabled: yes
+# # Finally, configure mailcatcher to run as a service.
+# - import_tasks: config.yml
+
+# You can test that it is running with the command: curl http://localhost:1080 or
+# sudo service mailcatcher status
