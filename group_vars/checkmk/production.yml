@@ -19,4 +19,245 @@ checkmk_agent_server_protocol: http
 #   - path: /linux/sandboxes
 #     title: Sandboxes
 
-# Server Role
+
+
+checkmk_observability_hosts:
+  pulmonitor-prod1.lib.princeton.edu:
+    site_name: production
+    environment: production
+    otlp_backends:
+      - "k8s-prod1.lib.princeton.edu:32317"
+      - "k8s-prod2.lib.princeton.edu:32317"
+      - "k8s-prod3.lib.princeton.edu:32317"
+
+  pulmonitor-prod2.lib.princeton.edu:
+    site_name: staging
+    environment: staging
+    otlp_backends:
+      - "k8s-staging1.lib.princeton.edu:32317"
+      - "k8s-staging2.lib.princeton.edu:32317"
+      - "k8s-staging3.lib.princeton.edu:32317"
+
+checkmk_site_name: >-
+  {{
+    checkmk_observability_hosts[inventory_hostname]['site_name']
+  }}
+
+checkmk_environment: >-
+  {{
+    checkmk_observability_hosts[inventory_hostname]['environment']
+  }}
+
+otel_signoz_backends: >-
+  {{
+    checkmk_observability_hosts[inventory_hostname]['otlp_backends']
+  }}
+
+
+otel_service_name: otelcol-contrib
+otel_service_user: root
+otel_service_group: root
+
+otel_default_resource_attributes:
+  host.name: "{{ inventory_hostname }}"
+  service.name: checkmk
+  service.namespace: pul-library
+  service.version: "{{ checkmk_version | default('2.5.0p9') }}"
+  deployment.environment: "{{ checkmk_environment }}"
+  environment: "{{ checkmk_environment }}"
+  checkmk.site.name: "{{ checkmk_site_name }}"
+  checkmk.site.role: >-
+    {{
+      'central'
+      if checkmk_site_name == 'production'
+      else 'remote'
+    }}
+
+
+otel_receivers:
+  otlp/beyla:
+    protocols:
+      grpc:
+        endpoint: 127.0.0.1:4317
+
+      http:
+        endpoint: 127.0.0.1:4318
+
+  # Checkmk/OMD logs for the site assigned to this host.
+  filelog/checkmk:
+    include:
+      - "/omd/sites/{{ checkmk_site_name }}/var/log/*.log"
+      - "/omd/sites/{{ checkmk_site_name }}/var/log/apache/access_log"
+      - "/omd/sites/{{ checkmk_site_name }}/var/log/apache/error_log"
+
+    exclude:
+      - "/omd/sites/{{ checkmk_site_name }}/var/log/*.gz"
+      - "/omd/sites/{{ checkmk_site_name }}/var/log/*.[0-9]"
+      - "/omd/sites/{{ checkmk_site_name }}/var/log/apache/*.gz"
+      - "/omd/sites/{{ checkmk_site_name }}/var/log/apache/*.[0-9]"
+
+    start_at: end
+    include_file_name: true
+    include_file_path: true
+
+    operators:
+      - type: add
+        field: attributes["log.source"]
+        value: checkmk
+
+      - type: add
+        field: attributes["checkmk.site.name"]
+        value: "{{ checkmk_site_name }}"
+
+  filelog/system:
+    include:
+      - /var/log/syslog
+      - /var/log/auth.log
+
+    exclude:
+      - /var/log/*.gz
+      - /var/log/*.[0-9]
+
+    start_at: end
+    include_file_name: true
+    include_file_path: true
+
+    operators:
+      - type: add
+        field: attributes["log.source"]
+        value: system
+
+  hostmetrics:
+    collection_interval: 30s
+
+    scrapers:
+      cpu: {}
+
+      load: {}
+
+      memory: {}
+
+      disk: {}
+
+      filesystem:
+        exclude_fs_types:
+          match_type: strict
+          fs_types:
+            - autofs
+            - binfmt_misc
+            - bpf
+            - cgroup
+            - cgroup2
+            - configfs
+            - debugfs
+            - devpts
+            - devtmpfs
+            - fusectl
+            - hugetlbfs
+            - mqueue
+            - nsfs
+            - overlay
+            - proc
+            - procfs
+            - pstore
+            - rpc_pipefs
+            - securityfs
+            - sysfs
+            - tmpfs
+            - tracefs
+
+      network: {}
+
+      paging: {}
+
+      processes: {}
+
+otel_processors:
+  memory_limiter:
+    check_interval: 5s
+    limit_mib: 512
+    spike_limit_mib: 128
+
+  batch:
+    timeout: 10s
+    send_batch_size: 8192
+    send_batch_max_size: 16384
+
+otel_exporters:
+  loadbalancing:
+    routing_key: service
+
+    protocol:
+      otlp:
+        timeout: 10s
+
+        tls:
+          insecure: true
+
+        sending_queue:
+          enabled: true
+          num_consumers: 10
+          queue_size: 5000
+
+        retry_on_failure:
+          enabled: true
+          initial_interval: 5s
+          max_interval: 30s
+          max_elapsed_time: 300s
+
+    resolver:
+      static:
+        hostnames: "{{ otel_signoz_backends }}"
+
+otel_extensions: []
+
+
+otel_service_pipelines:
+  logs:
+    receivers:
+      - filelog/checkmk
+      - filelog/system
+
+    processors:
+      - memory_limiter
+      - resource
+      - batch
+
+    exporters:
+      - loadbalancing
+
+  metrics:
+    receivers:
+      - hostmetrics
+      - otlp/beyla
+
+    processors:
+      - memory_limiter
+      - resource
+      - batch
+
+    exporters:
+      - loadbalancing
+
+  traces:
+    receivers:
+      - otlp/beyla
+
+    processors:
+      - memory_limiter
+      - resource
+      - batch
+
+    exporters:
+      - loadbalancing
+
+beyla_enabled: true
+beyla_service_name: checkmk
+beyla_environment: "{{ checkmk_environment }}"
+beyla_otlp_endpoint: http://127.0.0.1:4318
+beyla_otlp_protocol: http/protobuf
+beyla_bpf_context_propagation: all
+beyla_log_level: info
+beyla_privileged: true
+beyla_open_ports:
+  - 5000
