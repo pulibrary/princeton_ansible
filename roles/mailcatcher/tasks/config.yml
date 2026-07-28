@@ -1,0 +1,22 @@
+---
+- name: config | create mailcatcher log directory
+  ansible.builtin.file:
+    path: /var/log/mailcatcher
+    state: directory
+    owner: "{{ mailcatcher_user }}"
+    group: "{{ mailcatcher_group }}"
+
+- name: config | configuring mailcatcher init service
+  template:
+    src: "templates/mailcatcher.service.j2"
+    dest: "/etc/systemd/system/mailcatcher.service"
+    owner: root
+    group: root
+    mode: 0644
+  notify:
+    - restart mailcatcher
+
+- name: config | ensuring mailcatcher starts on boot
+  ansible.builtin.systemd:
+    name: "mailcatcher"
+    enabled: yes

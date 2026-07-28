@@ -5,13 +5,10 @@ After=syslog.target network.target
 [Service]
 Type=simple
 WorkingDirectory=/home/{{ mailcatcher_user }}
-ExecStart=/bin/bash --login -c "{{ mailcatcher_install_location }} --foreground"
+ExecStart=/bin/bash --login -c "{{ mailcatcher_install_location }} -f -v --ip={{ mailcatcher_listen_address }} --smtp-ip={{ mailcatcher_smtp_listen_address }} --smtp-port={{ mailcatcher_smtp_port }} --http-ip={{ mailcatcher_http_listen_address }} --http-port={{ mailcatcher_http_port }} &>>/var/log/mailcatcher/mailcatcher.log"
 User={{ mailcatcher_user }}
 Group={{ mailcatcher_group }}
 UMask=0002
-
-StandardOutput=journal
-StandardError=journal
 
 # if we crash, restart
 RestartSec=1
