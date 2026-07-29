@@ -154,11 +154,17 @@
             dest: "/tmp/rapid7-insight-agent_latest_amd64.deb"
             mode: "0644"
 
-        # - name: Extract version number from Rapid7 deb file (Ubuntu)
-        #   ansible.builtin.command: "dpkg-deb -f /tmp/rapid7-insight-agent_latest_amd64.deb Version"
-        #   register: rapid7_version
-        # when:
-        #   - ansible_os_family == "Debian"
+        - name: Extract version number from Rapid7 deb file (Ubuntu)
+          ansible.builtin.command: "dpkg-deb -f /tmp/rapid7-insight-agent_latest_amd64.deb Version"
+          register: rapid7_version
+          when:
+            - ansible_os_family == "Debian"
+
+        - name: View version var (Ubuntu)
+          ansible.builtin.debug:
+            var: rapid7_version
+          when:
+            - ansible_os_family == "Debian"
 
         - name: Download the Rapid7 rpm file (RedHat)
           ansible.builtin.get_url:
