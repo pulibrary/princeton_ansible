@@ -6,15 +6,26 @@
     state: present
   with_items: '{{ mailcatcher_ubuntu_packages }}'
   when: running_on_server 
+- name: Mailcatcher | Install and configure Mailcatcher
+  when:
+    - install_mailcatcher | bool
+    - running_on_server | default(true) | bool
+  block:
+    - name: Mailcatcher | Install prerequisites
+      ansible.builtin.apt:
+        name: "{{ mailcatcher_ubuntu_packages }}"
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
 
 # Then, create the mailcatcher user and group. 
-# - import_tasks: create_user.yml
+- import_tasks: create_user.yml
 
 # # Next, install mailcatcher at /usr/local/bin/mailcatcher
-# - import_tasks: install.yml
+- import_tasks: install.yml
 
 # # Finally, configure mailcatcher to run as a service.
-# - import_tasks: config.yml
+- import_tasks: config.yml
 
 # You can test that it is running with the command: curl http://localhost:1080 or
 # sudo service mailcatcher status
