@@ -159,8 +159,12 @@
             url: "https://us.storage.endpoint.ingress.rapid7.com/com.rapid7.razor.public/endpoint/agent/latest/linux/x86_64/rapid7_insight_agent_x64.deb"
             dest: "/tmp/rapid7-insight-agent_latest_amd64.deb"
             mode: "0644"
-          when:
-            - ansible_os_family == "Debian"
+
+        # - name: Extract version number from Rapid7 deb file (Ubuntu)
+        #   ansible.builtin.command: "dpkg-deb -f /tmp/rapid7-insight-agent_latest_amd64.deb Version"
+        #   register: rapid7_version
+        # when:
+        #   - ansible_os_family == "Debian"
 
         - name: Download the Rapid7 rpm file (RedHat)
           ansible.builtin.get_url:
@@ -193,10 +197,18 @@
           when:
             - ansible_os_family == "RedHat"
 
-        # - name: Configure the agent with token
-        #   ansible.builtin.shell:
-        #     /opt/rapid7/ir_agent/components/insight_agent/{{ rapid7_version }}/configure_agent.sh --token {{ vault_Rapid7_token }} --attributes="Library Systems"
-        #   become: true
+        # - name: Extract version number from Rapid7 rpm file (Red Hat)
+        #   ansible.builtin.command: "rpm -qp --queryformat '%{VERSION}\n' /tmp/rapid7-insight-agent-latest.x86_64.rpm"
+        #   register: rapid7_version
+        # when:
+        #   - ansible_os_family == "RedHat"
+        # RH/RPM equivalent is (according to random internet post)
+        #
+
+        - name: Configure the agent with token
+          ansible.builtin.shell:
+            /opt/rapid7/ir_agent/components/insight_agent/{{ rapid7_version }}/configure_agent.sh --token {{ vault_Rapid7_token }} --attributes="Library Operations"
+          become: true
 
         - name: Restart or start rapid7
           ansible.builtin.service:
@@ -227,6 +239,13 @@
           when:
             - ansible_os_family == "RedHat"
 
+        - name: Download the PEM file to trust connection with Scan Engine
+          ansible.builtin.copy:
+            content: |
+              {{ vault_scan_assistant_pem_file }}
+            dest: /etc/rapid7/ScanAssistant/scan-assistant.pem
+            mode: "0644"
+
         - name: Install Rapid7 Scan Assistant Service (Ubuntu)
           ansible.builtin.apt:
             deb: "/tmp/R7ScanAssistant_amd64.deb"
@@ -241,13 +260,6 @@
           become: true
           when:
             - ansible_os_family == "RedHat"
-
-        - name: Download the PEM file to trust connection with Scan Engine
-          ansible.builtin.copy:
-            content: |
-              {{ scan_assistant_pem_file }}
-            dest: /etc/rapid7/ScanAssistant/scan-assistant.pem
-            mode: "0644"
 
         - name: Delete the package file after successful installation
           ansible.builtin.file:
