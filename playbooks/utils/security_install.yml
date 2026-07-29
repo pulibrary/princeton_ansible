@@ -156,13 +156,7 @@
 
         - name: Extract version number from Rapid7 deb file (Ubuntu)
           ansible.builtin.command: "dpkg-deb -f /tmp/rapid7-insight-agent_latest_amd64.deb Version"
-          register: rapid7_version
-          when:
-            - ansible_os_family == "Debian"
-
-        - name: View version var (Ubuntu)
-          ansible.builtin.debug:
-            var: rapid7_version
+          register: rapid7_package_version
           when:
             - ansible_os_family == "Debian"
 
@@ -197,17 +191,19 @@
           when:
             - ansible_os_family == "RedHat"
 
-        # - name: Extract version number from Rapid7 rpm file (Red Hat)
-        #   ansible.builtin.command: "rpm -qp --queryformat '%{VERSION}\n' /tmp/rapid7-insight-agent-latest.x86_64.rpm"
-        #   register: rapid7_version
-        # when:
-        #   - ansible_os_family == "RedHat"
-        # RH/RPM equivalent is (according to random internet post)
-        #
+        - name: Extract version number from Rapid7 rpm file (Red Hat)
+          ansible.builtin.command: "rpm -qp --queryformat '%{VERSION}\n' /tmp/rapid7-insight-agent-latest.x86_64.rpm"
+          register: rapid7_package_version
+          when:
+            - ansible_os_family == "RedHat"
+
+        - name: set a var for R7 package version without the dash
+          ansible.builtin.set_fact:
+            slim_rapid7_version: "{{ rapid7_package_version.stdout.split('-') }}"
 
         - name: Configure the agent with token
           ansible.builtin.shell:
-            /opt/rapid7/ir_agent/components/insight_agent/{{ rapid7_version }}/configure_agent.sh --token {{ vault_Rapid7_token }} --attributes="Library Operations"
+            /opt/rapid7/ir_agent/components/insight_agent/{{ slim_rapid7_version.0 }}/configure_agent.sh --token {{ vault_Rapid7_token }} --attributes="Library Operations"
           become: true
 
         - name: Restart or start rapid7
