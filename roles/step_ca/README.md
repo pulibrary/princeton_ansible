@@ -4,8 +4,14 @@ Builds and runs the Smallstep [`step-ca`](https://smallstep.com/docs/step-ca)
 certificate authority on `step-ca.lib.princeton.edu`, backed by Microsoft
 Entra ID OIDC, issuing short-lived SSH user certificates. Targets Ubuntu.
 
-This role has a tight coupling with the [ssh_ca_trust](../ssh_ca_trust) role, which configures the SSH hosts that
-accept the resulting certificates.
+The goal is to use Entra ID authentication and short-lived SSH certificates
+instead of permanent personal SSH keys. This lets us tie SSH access to current
+institutional authorization and reduce the risk of stale keys continuing to
+grant access after a person's access should change.
+
+This role has a tight coupling with the [ssh_ca_trust](../ssh_ca_trust) role.
+The `step_ca` role runs the certificate authority; `ssh_ca_trust` configures
+the servers people log into so sshd trusts certificates issued by that CA.
 
 ## What it does
 
