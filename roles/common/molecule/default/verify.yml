@@ -56,3 +56,25 @@
         name: "{{ common_ubuntu_packages }}"
         state: present
 
+    - name: Refresh apt metadata to collect any repository warnings
+      ansible.builtin.command: apt-get update
+      register: apt_update_output
+      changed_when: false
+
+    - name: Assert no repository is configured more than once
+      ansible.builtin.assert:
+        that:
+          - "'configured multiple times' not in apt_update_output.stdout"
+          - "'configured multiple times' not in apt_update_output.stderr"
+        fail_msg: >-
+          Duplicate apt repositories are configured; apt-get update reported
+          the same target in more than one sources file.
+
+    - name: Count active Ubuntu archive sources
+      ansible.builtin.shell: >-
+        set -o pipefail && apt-cache policy | grep -c 'archive.ubuntu.com'
+      args:
+        executable: /bin/bash
+      register: archive_source_count
+      changed_when: false
+      failed_when: archive_source_count.stdout | int == 0

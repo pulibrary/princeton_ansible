@@ -135,30 +135,28 @@
                 - cytool_stat.stat.exists
                 - xdr_tag_add is changed
 
-        - name: remove .deb file to save space (Ubuntu)
+        - name: remove XDR package file to save space
           ansible.builtin.file:
-            name: "/opt/{{ cortex_install }}.deb"
+            path: "{{ item }}"
             state: absent
-          when:
-            - ansible_os_family == "Debian"
-
-        - name: remove .rpm file to save space (RedHat)
-          ansible.builtin.file:
-            name: "/opt/{{ cortex_install }}.rpm"
-            state: absent
-          when:
-            - ansible_os_family == "RedHat"
+          loop:
+            - "/opt/{{ cortex_install }}.deb"
+            - "/opt/{{ cortex_install }}.rpm"
 
     - name: Install, configure, and start Rapid7 except on FreeBSD
       when:
         - ansible_distribution != "FreeBSD"
-        - "'ir_agent.service' not in ansible_facts.services"
+        # add condition here so we don't re-install Rapid7 on every machine every week
       block:
         - name: Download the Rapid7 deb file (Ubuntu)
           ansible.builtin.get_url:
             url: "https://us.storage.endpoint.ingress.rapid7.com/com.rapid7.razor.public/endpoint/agent/latest/linux/x86_64/rapid7_insight_agent_x64.deb"
             dest: "/tmp/rapid7-insight-agent_latest_amd64.deb"
             mode: "0644"
+
+        - name: Extract version number from Rapid7 deb file (Ubuntu)
+          ansible.builtin.command: "dpkg-deb -f /tmp/rapid7-insight-agent_latest_amd64.deb Version"
+          register: r7_deb_version
           when:
             - ansible_os_family == "Debian"
 
@@ -193,10 +191,20 @@
           when:
             - ansible_os_family == "RedHat"
 
-        # - name: Configure the agent with token
-        #   ansible.builtin.shell:
-        #     /opt/rapid7/ir_agent/components/insight_agent/{{ rapid7_version }}/configure_agent.sh --token {{ vault_Rapid7_token }} --attributes="Library Systems"
-        #   become: true
+        - name: Extract version number from Rapid7 rpm file (Red Hat)
+          ansible.builtin.command: "rpm -qp --queryformat '%{VERSION}\n' /tmp/rapid7-insight-agent-latest.x86_64.rpm"
+          register: r7_rpm_version
+          when:
+            - ansible_os_family == "RedHat"
+
+        - name: set a var for R7 package version without the dash
+          ansible.builtin.set_fact:
+            slim_rapid7_version: "{{ r7_deb_version.stdout.split('-') if (r7_deb_version.skipped is not defined) else r7_rpm_version.stdout.split('-') }}"
+
+        - name: Configure the agent with token
+          ansible.builtin.shell:
+            /opt/rapid7/ir_agent/components/insight_agent/{{ slim_rapid7_version.0 }}/configure_agent.sh --token {{ vault_Rapid7_token }} --attributes="Library Operations"
+          become: true
 
         - name: Restart or start rapid7
           ansible.builtin.service:
@@ -207,7 +215,7 @@
     - name: Install and configure the Rapid7 Scan Assistant Service except on FreeBSD
       when:
         - ansible_distribution != "FreeBSD"
-        - "'R7ScanAssistant.service' not in ansible_facts.services"
+        # add condition here so we don't re-install Scan Assistant on every machine every week
       block:
         - name: Download package with checksum verification deb file (Ubuntu)
           ansible.builtin.get_url:
@@ -227,6 +235,13 @@
           when:
             - ansible_os_family == "RedHat"
 
+        - name: Download the PEM file to trust connection with Scan Engine
+          ansible.builtin.copy:
+            content: |
+              {{ vault_scan_assistant_pem_file }}
+            dest: /etc/rapid7/ScanAssistant/scan-assistant.pem
+            mode: "0644"
+
         - name: Install Rapid7 Scan Assistant Service (Ubuntu)
           ansible.builtin.apt:
             deb: "/tmp/R7ScanAssistant_amd64.deb"
@@ -241,13 +256,6 @@
           become: true
           when:
             - ansible_os_family == "RedHat"
-
-        - name: Download the PEM file to trust connection with Scan Engine
-          ansible.builtin.copy:
-            content: |
-              {{ scan_assistant_pem_file }}
-            dest: /etc/rapid7/ScanAssistant/scan-assistant.pem
-            mode: "0644"
 
         - name: Delete the package file after successful installation
           ansible.builtin.file:

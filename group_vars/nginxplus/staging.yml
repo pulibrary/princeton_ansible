@@ -3,7 +3,7 @@ adc_domain: "adc-dev.lib.princeton.edu"
 nginx_http_upload_src: conf/http/dev/*.conf
 nginx_template_upload_src: conf/http/dev/templates/*.conf
 
-# modules to install
+# Modules to install
 nginx_modules:
   waf: false
   geoip: true
@@ -15,11 +15,33 @@ nginx_modules:
   xslt: true
 
 # dos: true
-# app_protect logs
+
+# App Protect logs
 app_protect_dir: "/var/log/app_protect/*.log"
+
 sites: []
 
-# signoz / otel collector for nginxplus load balancers
+# Grafana Beyla
+#
+beyla_enabled: true
+beyla_service_name: nginxplus-lb
+beyla_environment: staging
+
+beyla_otlp_endpoint: http://127.0.0.1:4318
+beyla_otlp_protocol: http/protobuf
+
+beyla_open_ports:
+  - 80
+  - 443
+
+# Propagate W3C trace context through normal HTTP headers without enabling
+# Beyla's IP-option/TC propagation mechanism.
+beyla_bpf_context_propagation: headers
+
+# Beyla requires elevated eBPF and process-inspection privileges.
+beyla_privileged: true
+
+# SigNoz / OpenTelemetry Collector for NGINX Plus load balancers
 otel_default_resource_attributes:
   host.name: "{{ inventory_hostname }}"
   service.name: nginxplus-lb
@@ -28,6 +50,7 @@ otel_default_resource_attributes:
   deployment.environment: staging
 
 otel_receivers:
+  # Receives:
   otlp:
     protocols:
       grpc:
@@ -170,10 +193,11 @@ otel_service_pipelines:
       - batch
     exporters:
       - loadbalancing
-      - debug
 
   metrics:
     receivers:
+      # Required for Beyla RED metrics.
+      - otlp
       - nginx
       - hostmetrics
     processors:
@@ -181,7 +205,6 @@ otel_service_pipelines:
       - batch
     exporters:
       - loadbalancing
-      - debug
 
   traces:
     receivers:
@@ -191,4 +214,3 @@ otel_service_pipelines:
       - batch
     exporters:
       - loadbalancing
-      - debug
