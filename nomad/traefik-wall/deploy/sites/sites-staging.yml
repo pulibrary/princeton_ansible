@@ -8,68 +8,91 @@ http:
       middlewares: 
         - metricAuth
 
-    # Don't protect the path if it's an ajax request.
-    protected-sites-skip-mw:
-      rule: "Header(`Sec-Fetch-Dest`, `empty`)"
+    protected-sites:
+      rule: "Header(`X-Forwarded-Host`, `catalog-staging.princeton.edu`) || Header(`X-Forwarded-Host`, `dpul-staging.princeton.edu`) || Header(`X-Forwarded-Host`, `dss-staging.princeton.edu`) || Header(`X-Forwarded-Host`, `figgy-staging.princeton.edu`) || Header(`X-Forwarded-Host`, `findingaids-staging.princeton.edu`) || Header(`X-Forwarded-Host`, `lae-staging.princeton.edu`) || Header(`X-Forwarded-Host`, `pulfalight-staging.princeton.edu`) || Header(`X-Forwarded-Host`, `maps-staging.princeton.edu`)"
       entrypoints:
         - http
 
-    protected-sites:
-      rule: "!Header(`Sec-Fetch-Dest`, `empty`) && (Header(`X-Forwarded-Host`, `catalog-staging.princeton.edu`) || Header(`X-Forwarded-Host`, `dpul-staging.princeton.edu`) || Header(`X-Forwarded-Host`, `dss-staging.princeton.edu`) || Header(`X-Forwarded-Host`, `figgy-staging.princeton.edu`) || Header(`X-Forwarded-Host`, `findingaids-staging.princeton.edu`) || Header(`X-Forwarded-Host`, `lae-staging.princeton.edu`) || Header(`X-Forwarded-Host`, `pulfalight-staging.princeton.edu`) || Header(`X-Forwarded-Host`, `maps-staging.princeton.edu`))"
-      entrypoints:
-        - http
+    # Skip the bot wall on ajax requests.
+    skip-bot-wall:
+      rule: "Header(`Sec-Fetch-Dest`, `empty`)"
+      parentRefs:
+        - protected-sites
+
+    apply-bot-wall:
+      rule: "!Header(`Sec-Fetch-Dest`, `empty`)"
       middlewares:
         - captcha-protect
-        - append-catalog-regex
+      parentRefs:
+        - protected-sites
 
     catalog-staging:
       service: catalog-staging
       rule: "Header(`X-Forwarded-Host`, `catalog-staging.princeton.edu`)"
+      middlewares:
+        - append-catalog-regex
       parentRefs:
-        - protected-sites-skip-mw
-        - protected-sites
+        - apply-bot-wall
+        - skip-bot-wall
+
+    dpul-staging:
+      service: dpul-staging
+      rule: "Header(`X-Forwarded-Host`, `dpul-staging.princeton.edu`)"
+      parentRefs:
+        - apply-bot-wall
+        - skip-bot-wall
 
     dss-staging:
       service: dss-staging
       rule: "Header(`X-Forwarded-Host`, `dss-staging.princeton.edu`)"
+      middlewares:
+        - append-catalog-regex
       parentRefs:
-        - protected-sites-skip-mw
-        - protected-sites
+        - apply-bot-wall
+        - skip-bot-wall
 
     figgy-staging:
       service: figgy-staging
       rule: "Header(`X-Forwarded-Host`, `figgy-staging.princeton.edu`)"
+      middlewares:
+        - append-catalog-regex
       parentRefs:
-        - protected-sites-skip-mw
-        - protected-sites
+        - apply-bot-wall
+        - skip-bot-wall
 
     findingaids-staging:
       service: findingaids-staging
       rule: "Header(`X-Forwarded-Host`, `findingaids-staging.princeton.edu`)"
+      middlewares:
+        - append-catalog-regex
       parentRefs:
-        - protected-sites-skip-mw
-        - protected-sites
+        - apply-bot-wall
+        - skip-bot-wall
 
     lae-staging:
       service: lae-staging
       rule: "Header(`X-Forwarded-Host`, `lae-staging.princeton.edu`)"
       parentRefs:
-        - protected-sites-skip-mw
-        - protected-sites
+        - apply-bot-wall
+        - skip-bot-wall
 
     pulfalight-staging:
       service: findingaids-staging
       rule: "Header(`X-Forwarded-Host`, `pulfalight-staging.princeton.edu`)"
+      middlewares:
+        - append-catalog-regex
       parentRefs:
-        - protected-sites-skip-mw
-        - protected-sites
+        - apply-bot-wall
+        - skip-bot-wall
 
     pulmap-staging:
       service: pulmap-staging
       rule: "Header(`X-Forwarded-Host`, `maps-staging.princeton.edu`)"
       middlewares:
-        - captcha-protect
         - append-catalog-regex
+      parentRefs:
+        - apply-bot-wall
+        - skip-bot-wall
   services:
     catalog-staging:
       loadBalancer:
