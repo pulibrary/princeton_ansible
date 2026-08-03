@@ -56,12 +56,20 @@
     - ansible_os_family == "Debian"
     - princeton_files.files | length > 0
 
+- name: Common | Check whether main sources.list is present
+  ansible.builtin.stat:
+    path: /etc/apt/sources.list
+  register: sources_list
+  when:
+    - ansible_os_family == "Debian"
+
 - name: Common | Check whether sources.list backup exists
   ansible.builtin.stat:
     path: /etc/apt/sources.list.pre-ansible
   register: sources_list_backup
   when:
     - ansible_os_family == "Debian"
+    - sources_list.stat.exists
 
 - name: Common | Backup original sources.list (one-time)
   ansible.builtin.copy:
@@ -73,29 +81,44 @@
     group: root
   when:
     - ansible_os_family == "Debian"
-    - not sources_list_backup.stat.exists
+    - sources_list.stat.exists
+    - not (sources_list_backup.stat.exists | default(false))
 
-- name: Common | Remove duplicate Ubuntu archive entries from main sources.list
+- name: Common | Comment out Ubuntu archive entries in main sources.list
   ansible.builtin.replace:
     path: /etc/apt/sources.list
-    regexp: '^(deb(?:-src)?\s+https?://(?:[a-z]+\.)?archive\.ubuntu\.com/ubuntu)\s+'
-    replace: '# \1'
+    regexp: '^(deb(?:-src)?\s+(?:\[[^]]*\]\s+)?https?://(?:[a-z0-9.-]+\.)?(?:archive|security)\.ubuntu\.com/ubuntu/?)\s+'
+    replace: '# \1 '
+  when:
+    - ansible_os_family == "Debian"
+    - sources_list.stat.exists
+
+- name: Common | Check whether deb822 Ubuntu sources are present
+  ansible.builtin.stat:
+    path: /etc/apt/sources.list.d/ubuntu.sources
+  register: ubuntu_deb822_sources
   when:
     - ansible_os_family == "Debian"
 
-- name: Common | Remove duplicate security.ubuntu.com entries from main sources.list
-  ansible.builtin.replace:
-    path: /etc/apt/sources.list
-    regexp: '^(deb(?:-src)?\s+https?://security\.ubuntu\.com/ubuntu)\s+'
-    replace: '# \1'
+- name: Common | Check whether deb822 sources already provide the Ubuntu archives
+  ansible.builtin.command:
+    cmd: >-
+      grep -qE '^URIs:.*(archive|security)\.ubuntu\.com'
+      /etc/apt/sources.list.d/ubuntu.sources
+  register: deb822_archive_check
+  changed_when: false
+  failed_when: false
   when:
     - ansible_os_family == "Debian"
+    - ubuntu_deb822_sources.stat.exists
 
-- name: Common | Remove duplicate us.archive.ubuntu.com entries from main sources.list
-  ansible.builtin.replace:
-    path: /etc/apt/sources.list
-    regexp: '^(deb(?:-src)?\s+https?://us\.archive\.ubuntu\.com/ubuntu)\s+'
-    replace: '# \1'
+# Ubuntu 24.04 and later ship the archives in deb822 format. Adding our own
+# one-line list there duplicates every suite and floods apt with hundreds of
+# "configured multiple times" warnings, so only manage the list when the
+# deb822 sources are missing or do not carry the archives.
+- name: Common | Record whether deb822 sources provide the Ubuntu archives
+  ansible.builtin.set_fact:
+    common_deb822_provides_archives: "{{ (ubuntu_deb822_sources.stat.exists | default(false)) and (deb822_archive_check.rc | default(1)) == 0 }}"
   when:
     - ansible_os_family == "Debian"
 
@@ -114,6 +137,15 @@
       deb http://security.ubuntu.com/ubuntu {{ ubuntu_codename }}-security main restricted universe multiverse
   when:
     - ansible_os_family == "Debian"
+    - not common_deb822_provides_archives
+
+- name: Common | Remove redundant archive list when deb822 sources provide them
+  ansible.builtin.file:
+    path: /etc/apt/sources.list.d/99-ubuntu-archive.list
+    state: absent
+  when:
+    - ansible_os_family == "Debian"
+    - common_deb822_provides_archives
 
 # fix redis
 - name: Common | Force IPv4 for APT (fixes Launchpad PPA timeouts)
