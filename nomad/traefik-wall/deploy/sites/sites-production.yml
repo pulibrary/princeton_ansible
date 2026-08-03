@@ -8,147 +8,100 @@ http:
       middlewares:
         - metricAuth
 
-    catalog-production-skip-all-mw:
-      service: catalog-production
-      rule: "Header(`X-Forwarded-Host`, `catalog.princeton.edu`) && Header(`Sec-Fetch-Dest`, `empty`)"
+    protected-sites:
+      rule: "Header(`X-Forwarded-Host`, `catalog.princeton.edu`) || Header(`X-Forwarded-Host`, `datacommons.princeton.edu`) || Header(`X-Forwarded-Host`, `dpul.princeton.edu`) || Header(`X-Forwarded-Host`, `dss.princeton.edu`) || Header(`X-Forwarded-Host`, `figgy.princeton.edu`) || Header(`X-Forwarded-Host`, `findingaids.princeton.edu`) || Header(`X-Forwarded-Host`, `findingaids-qa.princeton.edu`) || Header(`X-Forwarded-Host`, `lae.princeton.edu`) || Header(`X-Forwarded-Host`, `maps.princeton.edu`)"
       entrypoints:
         - http
-      priority: 11
-    catalog-production-apply-mw:
+
+    # Skip the bot wall on ajax requests.
+    skip-bot-wall:
+      rule: "Header(`Sec-Fetch-Dest`, `empty`)"
+      parentRefs:
+        - protected-sites
+
+    apply-bot-wall:
+      rule: "!Header(`Sec-Fetch-Dest`, `empty`)"
+      middlewares:
+        - captcha-protect
+      parentRefs:
+        - protected-sites
+
+    catalog-production:
       service: catalog-production
       rule: "Header(`X-Forwarded-Host`, `catalog.princeton.edu`)"
-      entrypoints:
-        - http
       middlewares:
-        - captcha-protect
         - append-catalog-regex
-      priority: 10
+      parentRefs:
+        - apply-bot-wall
+        - skip-bot-wall
 
-    datacommons-production-skip-all-mw:
+    datacommons-production:
       service: datacommons-production
-      rule: "Header(`X-Forwarded-Host`, `datacommons.princeton.edu`) && Header(`Sec-Fetch-Dest`, `empty`)"
-      entrypoints:
-        - http
-      priority: 11
-    datacommons-production-apply-mw:
-      service: datacommons-production
-      rule: Header(`X-Forwarded-Host`, `datacommons.princeton.edu`)
-      entrypoints:
-        - http
+      rule: "Header(`X-Forwarded-Host`, `datacommons.princeton.edu`)"
       middlewares:
-        - captcha-protect
         - append-discovery-regex
-      priority: 10
+      parentRefs:
+        - apply-bot-wall
+        - skip-bot-wall
 
-    dpul-production-skip-all-mw:
-      service: dpul-production
-      rule: "Header(`X-Forwarded-Host`, `dpul.princeton.edu`) && Header(`Sec-Fetch-Dest`, `empty`)"
-      entrypoints:
-        - http
-      priority: 11
-    dpul-production-apply-mw:
+    dpul-production:
       service: dpul-production
       rule: "Header(`X-Forwarded-Host`, `dpul.princeton.edu`)"
-      entrypoints:
-        - http
-      middlewares:
-        - captcha-protect
-      priority: 10
+      parentRefs:
+        - apply-bot-wall
+        - skip-bot-wall
 
-    dss-production-skip-all-mw:
+    dss-production:
       service: dss-production
-      rule: "Header(`X-Forwarded-Host`, `dss.princeton.edu`) && Header(`Sec-Fetch-Dest`, `empty`)"
-      entrypoints:
-        - http
-      priority: 11
-    dss-production-apply-mw:
-      service: dss-production
-      rule: Header(`X-Forwarded-Host`, `dss.princeton.edu`)
-      entrypoints:
-        - http
+      rule: "Header(`X-Forwarded-Host`, `dss.princeton.edu`)"
       middlewares:
-        - captcha-protect
         - append-catalog-regex
-      priority: 10
+      parentRefs:
+        - apply-bot-wall
+        - skip-bot-wall
 
-    figgy-production-skip-all-mw:
-      service: figgy-production
-      rule: "Header(`X-Forwarded-Host`, `figgy.princeton.edu`) && Header(`Sec-Fetch-Dest`, `empty`)"
-      entrypoints:
-        - http
-      priority: 11
-    figgy-production-apply-mw:
+    figgy-production:
       service: figgy-production
       rule: "Header(`X-Forwarded-Host`, `figgy.princeton.edu`)"
-      entrypoints:
-        - http
       middlewares:
-        - captcha-protect
         - append-catalog-regex
-      priority: 10
+      parentRefs:
+        - apply-bot-wall
+        - skip-bot-wall
 
-    findingaids-production-skip-all-mw:
-      service: findingaids-production
-      rule: "Header(`X-Forwarded-Host`, `findingaids.princeton.edu`) && Header(`Sec-Fetch-Dest`, `empty`)"
-      entrypoints:
-        - http
-      priority: 11
-    findingaids-production-apply-mw:
+    findingaids-production:
       service: findingaids-production
       rule: "Header(`X-Forwarded-Host`, `findingaids.princeton.edu`)"
-      entrypoints:
-        - http
       middlewares:
-        - captcha-protect
         - append-catalog-regex
-      priority: 10
+      parentRefs:
+        - apply-bot-wall
+        - skip-bot-wall
 
-    findingaids-qa-skip-all-mw:
-      service: findingaids-qa
-      rule: "Header(`X-Forwarded-Host`, `findingaids-qa.princeton.edu`) && Header(`Sec-Fetch-Dest`, `empty`)"
-      entrypoints:
-        - http
-      priority: 11
-    findingaids-qa-apply-mw:
+    findingaids-qa:
       service: findingaids-qa
       rule: "Header(`X-Forwarded-Host`, `findingaids-qa.princeton.edu`)"
-      entrypoints:
-        - http
       middlewares:
-        - captcha-protect
         - append-catalog-regex
-      priority: 10
+      parentRefs:
+        - apply-bot-wall
+        - skip-bot-wall
 
-    lae-production-skip-all-mw:
-      service: lae-production
-      rule: "Header(`X-Forwarded-Host`, `lae.princeton.edu`) && Header(`Sec-Fetch-Dest`, `empty`)"
-      entrypoints:
-        - http
-      priority: 11
-    lae-production-apply-mw:
+    lae-production:
       service: lae-production
       rule: "Header(`X-Forwarded-Host`, `lae.princeton.edu`)"
-      entrypoints:
-        - http
-      middlewares:
-        - captcha-protect
-      priority: 10
+      parentRefs:
+        - apply-bot-wall
+        - skip-bot-wall
 
-    maps-production-skip-all-mw:
-      service: maps-production
-      rule: "Header(`X-Forwarded-Host`, `maps.princeton.edu`) && Header(`Sec-Fetch-Dest`, `empty`)"
-      entrypoints:
-        - http
-      priority: 11
-    maps-production-apply-mw:
+    maps-production:
       service: maps-production
       rule: "Header(`X-Forwarded-Host`, `maps.princeton.edu`)"
-      entrypoints:
-        - http
       middlewares:
-        - captcha-protect
         - append-catalog-regex
-      priority: 10
+      parentRefs:
+        - apply-bot-wall
+        - skip-bot-wall
 
   services:
     catalog-production:
