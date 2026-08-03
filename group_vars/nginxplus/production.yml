@@ -1,6 +1,7 @@
 ---
 adc_domain: "lib-adc"
-# modules to install
+
+# Modules to install
 nginx_modules:
   waf: false
   geoip: true
@@ -11,13 +12,16 @@ nginx_modules:
   otel: true
   xslt: true
   dos: false
-# app_protect logs
+
+# App Protect logs
 app_protect_dir: "/var/log/app_protect/*.log"
-# external sites
+
+# External sites
 sites:
   - domain: cicognara.org
     cert_dst: /etc/nginx/conf.d/ssl/certs/cicognara_org_chained.pem
     key_dst: /etc/nginx/conf.d/ssl/private/cicognara_org_priv.key
+
   - domain: pcdm.org
     cert_dst: /etc/nginx/conf.d/ssl/certs/pcdm_org_chained.pem
     key_dst: /etc/nginx/conf.d/ssl/private/pcdm_org_priv.key
@@ -25,7 +29,26 @@ sites:
 nginxplus_otel_enabled: true
 nginxplus_otel_stub_status_port: 18080
 
-# signoz / otel collector for nginxplus load balancers
+# Grafana Beyla
+#
+beyla_enabled: true
+beyla_service_name: nginxplus-lb
+beyla_environment: production
+
+beyla_otlp_endpoint: http://127.0.0.1:4318
+beyla_otlp_protocol: http/protobuf
+
+beyla_open_ports:
+  - 80
+  - 443
+
+# Propagate W3C trace context using HTTP headers.
+beyla_bpf_context_propagation: headers
+
+# Beyla requires elevated eBPF and process-inspection privileges.
+beyla_privileged: true
+
+# SigNoz / OpenTelemetry Collector for NGINX Plus load balancers
 otel_default_resource_attributes:
   host.name: "{{ inventory_hostname }}"
   service.name: nginxplus-lb
@@ -34,6 +57,7 @@ otel_default_resource_attributes:
   deployment.environment: production
 
 otel_receivers:
+  # Receives native NGINX OpenTelemetry traces and Beyla telemetry.
   otlp:
     protocols:
       grpc:
@@ -176,10 +200,11 @@ otel_service_pipelines:
       - batch
     exporters:
       - loadbalancing
-      - debug
 
   metrics:
     receivers:
+      # Required to receive Beyla RED metrics over OTLP/HTTP.
+      - otlp
       - nginx
       - hostmetrics
     processors:
@@ -187,7 +212,6 @@ otel_service_pipelines:
       - batch
     exporters:
       - loadbalancing
-      - debug
 
   traces:
     receivers:
@@ -197,4 +221,3 @@ otel_service_pipelines:
       - batch
     exporters:
       - loadbalancing
-      - debug
