@@ -119,8 +119,8 @@ job "traefik-wall-production" {
       }
 
       resources {
-        cpu    = 1000
-        memory = 1024
+        cpu    = 4000
+        memory = 3072
       }
     }
   }
