@@ -4,10 +4,16 @@ install_ruby_from_source: true
 install_zookeeper_from_source: true
 desired_ruby_version: "3.4.1"
 ruby_version_override: "ruby-3.4.1"
-solr_heap_setting: '20g'
+solr_heap_setting: "20g"
 jardirectory: "/opt/solr/lib"
 jolokia_agent_version: "2.5.1"
-# modularize modules
+
+# Validate the rendered Collector configuration before restarting it.
+otel_validate_config: true
+otel_validate_cmd: >-
+  {{ otel_binary_path }} validate
+  --config {{ otel_config_path }}
+
 solr_modules:
   - analysis-extras
   - scripting
@@ -20,30 +26,36 @@ solr_otel_endpoint: "http://127.0.0.1:4317"
 solr_otel_protocol: grpc
 solr_otel_sampler: parentbased_always_on
 solr_otel_propagators: "tracecontext,baggage"
-# more granular option would be:
-# solr_java_memory: '-Xms16g -Xmx20g'
-# solr shards
+
+# More granular option:
+# solr_java_memory: "-Xms16g -Xmx20g"
+
+# Solr shard and update timeouts
 solr_shard_socket_timeout: 120000
-solr_shard_conn_timeout:   60000
+solr_shard_conn_timeout: 60000
 solr_update_socket_timeout: 120000
-solr_update_conn_timeout:   60000
+solr_update_conn_timeout: 60000
 solr_update_max_connections: 512
-solr_update_max_per_host:    64
-# solr version
+solr_update_max_per_host: 64
+
 solr_cloud_download_version: 9.9.0
 solr_cloud_version: "{{ solr_version }}"
 solr_version: "{{ solr_cloud_download_version }}"
-solr_log4j_path: '/solr/log4j2.xml'
+solr_log4j_path: "/solr/log4j2.xml"
 solr_znode: solr9
+
 solr_nodes:
   - "lib-solr-staging1.princeton.edu"
   - "lib-solr-staging2.princeton.edu"
   - "lib-solr-staging3.princeton.edu"
+
 solr_zookeeper_hosts:
   - "lib-zk-staging4.princeton.edu:2181"
   - "lib-zk-staging5.princeton.edu:2181"
   - "lib-zk-staging6.princeton.edu:2181"
-cjkfoldingfilter: https://github.com/pulibrary/pul_solr/raw/master/solr8_jars/CJKFoldingFilter.jar
+
+cjkfoldingfilter: >-
+  https://github.com/pulibrary/pul_solr/raw/master/solr8_jars/CJKFoldingFilter.jar
 
 # gcsfuse logrotate
 gcsfuse_directory: "/var/log/gcsfuse"
@@ -62,6 +74,7 @@ solr9_gcsfuse_logrotate_rules:
       su_group: "{{ logrotate_global_defaults.su_group }}"
       postrotate: |
         systemctl reload solr-gcsfuse.service 2>/dev/null || true
+
 beyla_enabled: true
 beyla_service_name: solr
 beyla_environment: staging
@@ -71,7 +84,7 @@ beyla_bpf_context_propagation: "all"
 beyla_open_ports:
   - 8983
 
-# signoz / otel collector for Solr
+# SigNoz / OpenTelemetry Collector for Solr
 otel_default_resource_attributes:
   host.name: "{{ inventory_hostname }}"
   service.name: solr
@@ -82,14 +95,13 @@ otel_receivers:
   otlp:
     protocols:
       grpc:
-        endpoint: 127.0.0.1:4317
+        endpoint: "127.0.0.1:4317"
       http:
-        endpoint: 127.0.0.1:4318
-        value: solr
+        endpoint: "127.0.0.1:4318"
 
-    filelog/solr-main:
+  filelog/solr-main:
     include:
-      - /solr/logs/solr.log
+      - "/solr/logs/solr.log"
     start_at: end
     include_file_path: true
     include_file_name: true
@@ -98,29 +110,45 @@ otel_receivers:
         id: recombine_solr_stacktraces
         combine_field: body
         source_identifier: attributes["log.file.path"]
-        is_first_entry: 'body matches "^\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}\\.\\d{3} "'
+        is_first_entry: >-
+          body matches
+          "^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} "
         force_flush_period: 5s
 
       - type: regex_parser
         id: parse_solr_log
-        regex: '^(?P<timestamp>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3})\s+(?P<level>[A-Z]+)\s+\((?P<thread>[^)]*)\)\s+\[(?P<solr_context>[^\]]*)\]\s+(?P<logger>\S+)\s+(?P<message>[\s\S]*)$'
+        regex: >-
+          ^(?P<timestamp>\d{4}-\d{2}-\d{2}
+          \d{2}:\d{2}:\d{2}\.\d{3})\s+
+          (?P<level>[A-Z]+)\s+
+          \((?P<thread>[^)]*)\)\s+
+          \[(?P<solr_context>[^\]]*)\]\s+
+          (?P<logger>\S+)\s+
+          (?P<message>[\s\S]*)$
         parse_from: body
         on_error: send
 
       - type: time_parser
+        id: parse_solr_timestamp
         parse_from: attributes.timestamp
         layout_type: strptime
-        layout: '%Y-%m-%d %H:%M:%S.%L'
+        layout: "%Y-%m-%d %H:%M:%S.%L"
         on_error: send
 
       - type: severity_parser
+        id: parse_solr_severity
         parse_from: attributes.level
         on_error: send
 
+      # Extract t:<trace_id> from the Log4j MDC context and assign it
+      # to the OpenTelemetry log record's trace context.
       - type: regex_parser
         id: extract_solr_trace_id
         parse_from: attributes.solr_context
-        if: 'attributes.solr_context matches ".*t:[0-9a-fA-F]{32}.*"'
+        if: >-
+          attributes.solr_context != nil and
+          attributes.solr_context matches
+          ".*t:[0-9a-fA-F]{32}.*"
         regex: '^.*t:(?P<trace_id>[0-9a-fA-F]{32}).*$'
         trace:
           trace_id:
@@ -128,40 +156,46 @@ otel_receivers:
         on_error: send
 
       - type: add
+        id: add_solr_main_log_type
         field: attributes.log_type
         value: solr_main
 
       - type: add
+        id: add_solr_main_service_name
         field: attributes.service_name
         value: solr
 
   filelog/solr-request:
     include:
-      - /solr/logs/*.request.log
+      - "/solr/logs/*.request.log"
     start_at: end
     include_file_path: true
     include_file_name: true
     operators:
       - type: add
+        id: add_solr_request_log_type
         field: attributes.log_type
         value: solr_request
 
       - type: add
+        id: add_solr_request_service_name
         field: attributes.service_name
         value: solr
 
   filelog/solr-gc:
     include:
-      - /solr/logs/solr_gc.log
+      - "/solr/logs/solr_gc.log"
     start_at: end
     include_file_path: true
     include_file_name: true
     operators:
       - type: add
+        id: add_solr_gc_log_type
         field: attributes.log_type
         value: solr_gc
 
       - type: add
+        id: add_solr_gc_service_name
         field: attributes.service_name
         value: solr
 
@@ -201,9 +235,9 @@ otel_exporters:
     resolver:
       static:
         hostnames:
-          - k8s-staging1.lib.princeton.edu:32317
-          - k8s-staging2.lib.princeton.edu:32317
-          - k8s-staging3.lib.princeton.edu:32317
+          - "k8s-staging1.lib.princeton.edu:32317"
+          - "k8s-staging2.lib.princeton.edu:32317"
+          - "k8s-staging3.lib.princeton.edu:32317"
 
   debug:
     verbosity: basic
