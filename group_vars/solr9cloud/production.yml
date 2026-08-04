@@ -4,13 +4,19 @@ install_ruby_from_source: true
 install_zookeeper_from_source: true
 desired_ruby_version: "3.4.1"
 ruby_version_override: "ruby-3.4.1"
-solr_heap_setting: '20g'
+solr_heap_setting: "20g"
 jardirectory: "/opt/solr/lib"
 jolokia_agent_version: "2.5.1"
-# more granular option would be:
-# solr_java_memory: '-Xms16g -Xmx20g'
-# solr version
-# modularize modules
+
+# Validate the rendered Collector configuration before restarting it.
+otel_validate_config: true
+otel_validate_cmd: >-
+  {{ otel_binary_path }} validate
+  --config {{ otel_config_path }}
+
+# More granular option:
+# solr_java_memory: "-Xms16g -Xmx20g"
+
 solr_modules:
   - analysis-extras
   - scripting
@@ -36,17 +42,22 @@ beyla_open_ports:
 solr_cloud_download_version: 9.9.0
 solr_cloud_version: "{{ solr_version }}"
 solr_version: "{{ solr_cloud_download_version }}"
-solr_log4j_path: '/solr/log4j2.xml'
+solr_log4j_path: "/solr/log4j2.xml"
 solr_znode: solr9
+
 solr_nodes:
   - "lib-solr-prod1.princeton.edu"
   - "lib-solr-prod2.princeton.edu"
   - "lib-solr-prod3.princeton.edu"
+
 solr_zookeeper_hosts:
   - "lib-zk4.princeton.edu:2181"
   - "lib-zk5.princeton.edu:2181"
   - "lib-zk6.princeton.edu:2181"
-cjkfoldingfilter: https://github.com/pulibrary/pul_solr/raw/master/solr8_jars/CJKFoldingFilter.jar
+
+cjkfoldingfilter: >-
+  https://github.com/pulibrary/pul_solr/raw/master/solr8_jars/CJKFoldingFilter.jar
+
 # gcsfuse logrotate
 gcsfuse_directory: "/var/log/gcsfuse"
 
@@ -65,7 +76,7 @@ solr9_gcsfuse_logrotate_rules:
       postrotate: |
         systemctl reload solr-gcsfuse.service 2>/dev/null || true
 
-# signoz / otel collector for Solr
+# SigNoz / OpenTelemetry Collector for Solr
 otel_default_resource_attributes:
   host.name: "{{ inventory_hostname }}"
   service.name: solr
@@ -76,13 +87,13 @@ otel_receivers:
   otlp:
     protocols:
       grpc:
-        endpoint: 127.0.0.1:4317
+        endpoint: "127.0.0.1:4317"
       http:
-        endpoint: 127.0.0.1:4318
+        endpoint: "127.0.0.1:4318"
 
   filelog/solr-main:
     include:
-      - /solr/logs/solr.log
+      - "/solr/logs/solr.log"
     start_at: end
     include_file_path: true
     include_file_name: true
@@ -91,60 +102,92 @@ otel_receivers:
         id: recombine_solr_stacktraces
         combine_field: body
         source_identifier: attributes["log.file.path"]
-        is_first_entry: 'body matches "^\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}\\.\\d{3} "'
+        is_first_entry: >-
+          body matches
+          "^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} "
         force_flush_period: 5s
 
       - type: regex_parser
         id: parse_solr_log
-        regex: '^(?P<timestamp>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}) (?P<level>[A-Z]+)\s+\((?P<thread>[^)]*)\) \[(?P<collection>[^\]]*)\] (?P<logger>\S+) (?P<message>[\s\S]*)$'
+        regex: >-
+          ^(?P<timestamp>\d{4}-\d{2}-\d{2}
+          \d{2}:\d{2}:\d{2}\.\d{3})\s+
+          (?P<level>[A-Z]+)\s+
+          \((?P<thread>[^)]*)\)\s+
+          \[(?P<solr_context>[^\]]*)\]\s+
+          (?P<logger>\S+)\s+
+          (?P<message>[\s\S]*)$
         parse_from: body
         on_error: send
 
       - type: time_parser
+        id: parse_solr_timestamp
         parse_from: attributes.timestamp
         layout_type: strptime
-        layout: '%Y-%m-%d %H:%M:%S.%L'
+        layout: "%Y-%m-%d %H:%M:%S.%L"
         on_error: send
 
       - type: severity_parser
+        id: parse_solr_severity
         parse_from: attributes.level
         on_error: send
 
+      # Extract t:<trace_id> from the Log4j MDC context and assign it
+      # to the OpenTelemetry log record's trace context.
+      - type: regex_parser
+        id: extract_solr_trace_id
+        parse_from: attributes.solr_context
+        if: >-
+          attributes.solr_context != nil and
+          attributes.solr_context matches
+          ".*t:[0-9a-fA-F]{32}.*"
+        regex: '^.*t:(?P<trace_id>[0-9a-fA-F]{32}).*$'
+        trace:
+          trace_id:
+            parse_from: attributes.trace_id
+        on_error: send
+
       - type: add
+        id: add_solr_main_log_type
         field: attributes.log_type
         value: solr_main
 
       - type: add
+        id: add_solr_main_service_name
         field: attributes.service_name
         value: solr
 
   filelog/solr-request:
     include:
-      - /solr/logs/*.request.log
+      - "/solr/logs/*.request.log"
     start_at: end
     include_file_path: true
     include_file_name: true
     operators:
       - type: add
+        id: add_solr_request_log_type
         field: attributes.log_type
         value: solr_request
 
       - type: add
+        id: add_solr_request_service_name
         field: attributes.service_name
         value: solr
 
   filelog/solr-gc:
     include:
-      - /solr/logs/solr_gc.log
+      - "/solr/logs/solr_gc.log"
     start_at: end
     include_file_path: true
     include_file_name: true
     operators:
       - type: add
+        id: add_solr_gc_log_type
         field: attributes.log_type
         value: solr_gc
 
       - type: add
+        id: add_solr_gc_service_name
         field: attributes.service_name
         value: solr
 
@@ -184,9 +227,9 @@ otel_exporters:
     resolver:
       static:
         hostnames:
-          - k8s-prod1.lib.princeton.edu:32317
-          - k8s-prod2.lib.princeton.edu:32317
-          - k8s-prod3.lib.princeton.edu:32317
+          - "k8s-prod1.lib.princeton.edu:32317"
+          - "k8s-prod2.lib.princeton.edu:32317"
+          - "k8s-prod3.lib.princeton.edu:32317"
 
   debug:
     verbosity: basic
@@ -222,8 +265,10 @@ otel_service_pipelines:
       - batch
     exporters:
       - loadbalancing
-# datadog
+
+# Datadog
 datadog_api_key: "{{ vault_datadog_key }}"
+
 datadog_config:
   tags: "solrcloud, environment:production, role:solr, version:9"
   apm_enabled: false
@@ -231,6 +276,7 @@ datadog_config:
   dogstatsd_port: 8135
   process_config:
     enabled: "true"
+
 datadog_checks:
   solrcloud:
     init_config:
@@ -243,9 +289,11 @@ datadog_checks:
           - type: multi_line
             name: new_log_start_with_date
             pattern: \d{4}\-(0?[1-9]|1[012])\-(0?[1-9]|[12][0-9]|3[01])
+
           - type: exclude_at_match
             name: exclude_solrcloud_distrib_queries
             pattern: distrib=false
+
       - type: file
         path: /solr/logs/solr_gc.log.0.current
         service: solr
@@ -254,19 +302,21 @@ datadog_checks:
           - type: multi_line
             name: new_log_start_with_date
             pattern: \d{4}\-(0?[1-9]|1[012])\-(0?[1-9]|[12][0-9]|3[01])
+
   http_check:
     init_config:
     instances:
       - name: Geniza Production
-        url: 'http://localhost:8983/solr/geniza/admin/ping?wt=json&distrib=true&indent=true'
+        url: >-
+          http://localhost:8983/solr/geniza/admin/ping?wt=json&distrib=true&indent=true
         skip_event: true
         tags:
-          - 'http_service:solr'
-          - 'application:geniza'
-          - 'environment:production'
+          - "http_service:solr"
+          - "application:geniza"
+          - "environment:production"
+
   solr:
     instances:
-      # location of tomcat
       - host: localhost
         port: 1099
         conf:
@@ -285,6 +335,7 @@ datadog_checks:
                 size:
                   alias: solr.filter_cache.size
                   metric_type: gauge
+
           - include:
               category: CACHE
               name: queryResultCache
@@ -300,6 +351,7 @@ datadog_checks:
                 size:
                   alias: solr.query_result_cache.size
                   metric_type: gauge
+
           - include:
               category: CACHE
               name: documentCache
@@ -315,4 +367,5 @@ datadog_checks:
                 size:
                   alias: solr.document_cache.size
                   metric_type: gauge
+
     init_config:
