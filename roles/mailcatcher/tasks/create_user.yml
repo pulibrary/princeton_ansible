@@ -1,0 +1,33 @@
+---
+- name: Mailcatcher | Create service group
+  ansible.builtin.group:
+    name: "{{ mailcatcher_group }}"
+    system: "{{ mailcatcher_manage_user | bool }}"
+    state: present
+
+- name: Mailcatcher | Create service user
+  ansible.builtin.user:
+    name: "{{ mailcatcher_user }}"
+    comment: Mailcatcher Service Account
+    group: "{{ mailcatcher_group }}"
+    home: "{{ mailcatcher_home }}"
+    create_home: true
+    shell: /usr/sbin/nologin
+    system: true
+    state: present
+  when: mailcatcher_manage_user | bool
+
+- name: Mailcatcher | Look up existing service user
+  ansible.builtin.getent:
+    database: passwd
+    key: "{{ mailcatcher_user }}"
+    fail_key: true
+  when: not mailcatcher_manage_user | bool
+
+- name: Mailcatcher | Create application home
+  ansible.builtin.file:
+    path: "{{ mailcatcher_home }}"
+    state: directory
+    owner: "{{ mailcatcher_user }}"
+    group: "{{ mailcatcher_group }}"
+    mode: "0755"

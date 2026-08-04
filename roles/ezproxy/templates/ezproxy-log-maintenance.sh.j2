@@ -1,0 +1,53 @@
+#!/bin/sh
+
+set -eu
+
+log_directory={{ ezproxy_directory | quote }}
+today="$(date +%Y%m%d)"
+retention_minutes={{ (ezproxy_log_retention_days | int) * 1440 }}
+
+# Compress completed logs. Do not touch today's active log files.
+find "$log_directory" \
+  -maxdepth 1 \
+  -type f \
+  \( \
+    -name 'ezp????????.log' \
+    -o -name 'spu????????.log' \
+  \) \
+  ! -name "*${today}.log" \
+  ! -empty \
+  -exec gzip --force -- {} +
+
+# Delete compressed application logs older than the retention period.
+find "$log_directory" \
+  -maxdepth 1 \
+  -type f \
+  \( \
+    -name 'ezp????????.log.gz' \
+    -o -name 'spu????????.log.gz' \
+  \) \
+  -mmin "+${retention_minutes}" \
+  -delete
+
+# Delete empty files left by the previous logrotate configuration.
+find "$log_directory" \
+  -maxdepth 1 \
+  -type f \
+  \( \
+    -name 'ezp????????.log' \
+    -o -name 'spu????????.log' \
+  \) \
+  -empty \
+  -mmin "+${retention_minutes}" \
+  -delete
+
+# Delete archives created by the previous logrotate configuration.
+find "$log_directory" \
+  -maxdepth 1 \
+  -type f \
+  \( \
+    -name 'ezp????????.log-*' \
+    -o -name 'spu????????.log-*' \
+  \) \
+  -mmin "+${retention_minutes}" \
+  -delete

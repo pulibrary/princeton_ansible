@@ -3,6 +3,7 @@
 # across the infrastructure we automate with Ansible
 # if there's a service called "traps_pmd", then Cortex XDR is installed
 # if there's a service called "ir_agent", then Rapid7 is installed
+# neither of these services will run on FreeBSD
 #
 - name: audit OIT Security Tools
   hosts: all
@@ -30,9 +31,17 @@
       msg: The traps_pmd service is missing on {{ inventory_hostname }}
     when:
       - "'traps_pmd.service' not in ansible_facts.services"
+      - ansible_distribution != "FreeBSD"
 
   - name: Report absence of Rapid7 service (ir_agent)
     ansible.builtin.debug:
       msg: The ir_agent service is missing on {{ inventory_hostname }}
     when:
       - "'ir_agent.service' not in ansible_facts.services"
+      - ansible_distribution != "FreeBSD"
+
+  - name: Report absence of security services on FreeBSD
+    ansible.builtin.debug:
+      msg: "{{ inventory_hostname }} runs FreeBSD and cannot run these tools"
+    when:
+      - ansible_distribution != "FreeBSD"

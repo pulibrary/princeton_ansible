@@ -1,33 +1,31 @@
 ---
-# tasks file for roles/mailcatcher
-- name: mailcatcher | Install dependencies
-  ansible.builtin.apt:
-    pkg:
-    - libsqlite3-dev
-    - pkg-config
+# First, install the pre-requisites. Find these in the defaults/main.yml file. 
+- name: mailcatcher | installing pre-reqs
+  apt:
+    name: "{{ item }}"
     state: present
-  tags: mailcatcher
+  with_items: '{{ mailcatcher_ubuntu_packages }}'
+  when: running_on_server 
+- name: Mailcatcher | Install and configure Mailcatcher
+  when:
+    - install_mailcatcher | bool
+    - running_on_server | default(true) | bool
+  block:
+    - name: Mailcatcher | Install prerequisites
+      ansible.builtin.apt:
+        name: "{{ mailcatcher_ubuntu_packages }}"
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
 
-- name: mailcatcher | install global mail catcher
-  ansible.builtin.command: gem install mailcatcher -v {{ mailcatcher_version }}
-  register: gem_install
-  args:
-    creates: "{{ mailcatcher_install_location }}"
-  tags: mailcatcher
+# Then, create the mailcatcher user and group. 
+- import_tasks: create_user.yml
 
-- name: mailcatcher | Install startup script for mailcatcher
-  ansible.builtin.template:
-    src: mailcatcher.service.j2
-    dest: /lib/systemd/system/mailcatcher.service
-    mode: 0644
-  when: running_on_server and install_mailcatcher
-  notify: restart mailcatcher
-  tags: mailcatcher
+# # Next, install mailcatcher at /usr/local/bin/mailcatcher
+- import_tasks: install.yml
 
-- name: mailcatcher | Keep mailcatcher running
-  ansible.builtin.service:
-    name: mailcatcher
-    enabled: true
-    state: started
-  when: running_on_server and install_mailcatcher
-  tags: mailcatcher
+# # Finally, configure mailcatcher to run as a service.
+- import_tasks: config.yml
+
+# You can test that it is running with the command: curl http://localhost:1080 or
+# sudo service mailcatcher status

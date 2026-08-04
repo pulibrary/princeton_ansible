@@ -1,6 +1,10 @@
 ---
 # you MUST run this playbook on a single host with '--limit' for example `ansible-playbook -e domain_name=orcid-staging --limit adc-dev2.princeton.edu playbooks/utils/incommon_certbot_revoke.yml`
 # to run in production, you must add '-e runtime_env=production'
+# based on this URL https://letsencrypt.org/docs/revoking/ 
+# example: ansible-playbook playbooks/utils/certinext_incommon_certbot_revoke.yml -e runtime_env=production -e domain_name=historicperiodicals --limit adc-prod1.princeton.edu -e cert_reason=cessationOfOperation
+# most use cases will be 'superseded' 
+#note: unspecified does not work
 # Run the playbook on the inactive load balancer first
 # if the 'nginx -t' check fails, we probably didn't delete an obsolete config file
 # run 'playbooks/nginx.yml' (or nginx_staging.yml) following the comments for removing obsolete config
@@ -29,7 +33,7 @@
         - certbot
 
     - name: revoke acme certificates for {{ domain_name }}
-      ansible.builtin.command: /usr/bin/certbot revoke --standalone --non-interactive --agree-tos --email lsupport@princeton.edu --server https://acme-us.certinext.io/v1/directory --eab-kid {{ vault_certinext_acme_eab_kid }} --eab-hmac-key {{ vault_certinext_acme_eab_hmac_key }} --domain {{ domain_name }}.princeton.edu --cert-path /etc/letsencrypt/live/{{ domain_name }}/cert.pem
+      ansible.builtin.command: /usr/bin/certbot revoke --standalone --non-interactive --agree-tos --email lsupport@princeton.edu --server https://acme-us.certinext.io/v1/directory --eab-kid {{ vault_certinext_acme_eab_kid }} --eab-hmac-key {{ vault_certinext_acme_eab_hmac_key }} --domain {{ domain_name }}.princeton.edu --cert-path /etc/letsencrypt/live/{{ domain_name }}/cert.pem --reason {{ cert_reason }}
       become_user: root
       become: true
 

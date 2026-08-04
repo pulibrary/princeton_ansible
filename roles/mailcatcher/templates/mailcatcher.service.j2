@@ -1,24 +1,20 @@
 [Unit]
 Description=Mailcatcher
-After=syslog.target network.target
+Wants=network-online.target
+After=network-online.target
 
 [Service]
 Type=simple
-WorkingDirectory=/home/{{ mailcatcher_user }}
-ExecStart=/bin/bash --login -c "{{ mailcatcher_install_location }} --foreground"
 User={{ mailcatcher_user }}
 Group={{ mailcatcher_group }}
 UMask=0002
-
-# if we crash, restart
+WorkingDirectory={{ mailcatcher_home }}
+Environment=HOME={{ mailcatcher_home }}
+ExecStart=/bin/bash -c 'exec {{ mailcatcher_install_location }} -f -v --ip={{ mailcatcher_listen_address }} --smtp-ip={{ mailcatcher_smtp_listen_address }} --smtp-port={{ mailcatcher_smtp_port }} --http-ip={{ mailcatcher_http_listen_address }} --http-port={{ mailcatcher_http_port }} >>/var/log/mailcatcher/mailcatcher.log 2>&1'
 RestartSec=1
+
 Restart=on-failure
 
-# output goes to /var/log/syslog
-StandardOutput=syslog
-StandardError=syslog
-
-# This will default to "bundler" if we don't specify it
 SyslogIdentifier=mailcatcher
 
 [Install]
