@@ -79,8 +79,9 @@ otel_receivers:
         endpoint: 127.0.0.1:4317
       http:
         endpoint: 127.0.0.1:4318
+        value: solr
 
-  filelog/solr-main:
+    filelog/solr-main:
     include:
       - /solr/logs/solr.log
     start_at: end
@@ -96,7 +97,7 @@ otel_receivers:
 
       - type: regex_parser
         id: parse_solr_log
-        regex: '^(?P<timestamp>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}) (?P<level>[A-Z]+)\s+\((?P<thread>[^)]*)\) \[(?P<collection>[^\]]*)\] (?P<logger>\S+) (?P<message>[\s\S]*)$'
+        regex: '^(?P<timestamp>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3})\s+(?P<level>[A-Z]+)\s+\((?P<thread>[^)]*)\)\s+\[(?P<solr_context>[^\]]*)\]\s+(?P<logger>\S+)\s+(?P<message>[\s\S]*)$'
         parse_from: body
         on_error: send
 
@@ -108,6 +109,16 @@ otel_receivers:
 
       - type: severity_parser
         parse_from: attributes.level
+        on_error: send
+
+      - type: regex_parser
+        id: extract_solr_trace_id
+        parse_from: attributes.solr_context
+        if: 'attributes.solr_context matches ".*t:[0-9a-fA-F]{32}.*"'
+        regex: '^.*t:(?P<trace_id>[0-9a-fA-F]{32}).*$'
+        trace:
+          trace_id:
+            parse_from: attributes.trace_id
         on_error: send
 
       - type: add
