@@ -1,5 +1,6 @@
 ---
 # Configure GCS backup mount for SolrCloud using gcsfuse
+
 - name: Solrcloud | Install gcsfuse dependencies
   ansible.builtin.apt:
     name:
@@ -32,18 +33,17 @@
     update_cache: true
   when: running_on_server
 
-# Copy GCS service account key
 - name: Solrcloud | Copy GCS service account key
   ansible.builtin.copy:
     src: "files/solr-backup-{{ runtime_env | default('staging') }}-account-key.json"
-    dest: "/etc/solr-backup-account-key.json"
+    dest: /etc/solr-backup-account-key.json
     mode: "0600"
     owner: root
     group: root
+  register: solr_gcs_key
   when: running_on_server
 
-# Allow deploy to read the key without changing ownership/mode
-- name: Solrcloud | Grant deploy read access to SA key
+- name: Solrcloud | Grant Solr user read access to service account key
   ansible.posix.acl:
     path: /etc/solr-backup-account-key.json
     entity: "{{ solr_user | default('deploy') }}"
@@ -52,29 +52,162 @@
     state: present
   when: running_on_server
 
-# Ensure FUSE allows -o allow_other
-- name: Solrcloud | Ensure fuse allows allow_other
+- name: Solrcloud | Ensure FUSE allows allow_other
   ansible.builtin.lineinfile:
     path: /etc/fuse.conf
     regexp: '^\s*#?\s*user_allow_other\s*$'
-    line: "user_allow_other"
+    line: user_allow_other
     state: present
     create: true
     mode: "0644"
+  register: solr_gcs_fuse_conf
   when: running_on_server
-  notify: reload systemd
 
-- name: Solrcloud | Ensure gcsfuse log dir exists
+- name: Solrcloud | Ensure gcsfuse log directory exists
   ansible.builtin.file:
-    path: "/var/log/gcsfuse"
+    path: "{{ gcsfuse_directory | default('/var/log/gcsfuse') }}"
     state: directory
-    recurse: true
-    owner: "deploy"
-    group: "deploy"
+    owner: "{{ solr_user | default('deploy') }}"
+    group: "{{ solr_group | default('deploy') }}"
     mode: "0755"
   when: running_on_server
 
-# Create systemd service for gcsfuse mount
+- name: Solrcloud | Resolve Solr service user UID
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/id
+      - -u
+      - "{{ solr_user | default('deploy') }}"
+  register: solr_gcs_uid
+  changed_when: false
+  when: running_on_server
+
+- name: Solrcloud | Resolve Solr service user GID
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/id
+      - -g
+      - "{{ solr_user | default('deploy') }}"
+  register: solr_gcs_gid
+  changed_when: false
+  when: running_on_server
+
+# findmnt checks the kernel mount table without accessing the mounted
+# filesystem. This still works when the FUSE endpoint is disconnected.
+- name: Solrcloud | Check GCS backup mount table
+  ansible.builtin.command:
+    argv:
+      - findmnt
+      - --noheadings
+      - --mountpoint
+      - /solr/backups/cloud_backup
+  register: solr_gcs_mount_table
+  changed_when: false
+  failed_when: false
+  when: running_on_server
+
+# A mount can exist in the kernel mount table while its FUSE process is dead.
+- name: Solrcloud | Check GCS backup mount accessibility
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/stat
+      - --dereference
+      - --format=%F
+      - /solr/backups/cloud_backup
+  register: solr_gcs_mount_stat
+  changed_when: false
+  failed_when: false
+  when:
+    - running_on_server
+    - solr_gcs_mount_table.rc == 0
+
+- name: Solrcloud | Determine whether GCS mount is stale
+  ansible.builtin.set_fact:
+    solr_gcs_mount_is_stale: >-
+      {{
+        solr_gcs_mount_table.rc == 0
+        and (solr_gcs_mount_stat.rc | default(1)) != 0
+      }}
+  when: running_on_server
+
+- name: Solrcloud | Recover disconnected GCS backup mount
+  when:
+    - running_on_server
+    - solr_gcs_mount_is_stale | bool
+  block:
+    - name: Solrcloud | Stop GCS backup mount service
+      ansible.builtin.systemd:
+        name: solr-gcs-backup.service
+        state: stopped
+      failed_when: false
+
+    - name: Solrcloud | Lazily detach disconnected FUSE mount
+      ansible.builtin.command:
+        argv:
+          - /bin/fusermount
+          - -uz
+          - /solr/backups/cloud_backup
+      register: solr_gcs_fusermount
+      changed_when: solr_gcs_fusermount.rc == 0
+      failed_when: false
+
+    - name: Solrcloud | Check mount table after FUSE detach
+      ansible.builtin.command:
+        argv:
+          - findmnt
+          - --noheadings
+          - --mountpoint
+          - /solr/backups/cloud_backup
+      register: solr_gcs_mount_after_fusermount
+      changed_when: false
+      failed_when: false
+
+    - name: Solrcloud | Lazily unmount remaining stale mount
+      ansible.builtin.command:
+        argv:
+          - /bin/umount
+          - --lazy
+          - /solr/backups/cloud_backup
+      register: solr_gcs_lazy_unmount
+      changed_when: solr_gcs_lazy_unmount.rc == 0
+      failed_when: false
+      when: solr_gcs_mount_after_fusermount.rc == 0
+
+    - name: Solrcloud | Verify stale mount was removed
+      ansible.builtin.command:
+        argv:
+          - findmnt
+          - --noheadings
+          - --mountpoint
+          - /solr/backups/cloud_backup
+      register: solr_gcs_mount_after_recovery
+      changed_when: false
+      failed_when: false
+      retries: 3
+      delay: 1
+      until: solr_gcs_mount_after_recovery.rc != 0
+
+    - name: Solrcloud | Fail if stale mount remains
+      ansible.builtin.assert:
+        that:
+          - solr_gcs_mount_after_recovery.rc != 0
+        fail_msg: >-
+          Unable to remove the disconnected GCS FUSE mount at
+          /solr/backups/cloud_backup.
+
+- name: Solrcloud | Ensure GCS backup mountpoint exists
+  ansible.builtin.file:
+    path: /solr/backups/cloud_backup
+    state: directory
+    owner: "{{ solr_user | default('deploy') }}"
+    group: "{{ solr_group | default('deploy') }}"
+    mode: "0755"
+  when:
+    - running_on_server
+    - >-
+      solr_gcs_mount_table.rc != 0
+      or solr_gcs_mount_is_stale | bool
+
 - name: Solrcloud | Create solr-gcs-backup systemd service
   ansible.builtin.copy:
     content: |
@@ -88,12 +221,10 @@
       User={{ solr_user | default('deploy') }}
       Group={{ solr_group | default('deploy') }}
       Environment="GOOGLE_APPLICATION_CREDENTIALS=/etc/solr-backup-account-key.json"
-      ExecStartPre=/usr/bin/mkdir -p /solr/backups/cloud_backup
-      ExecStartPre=/bin/chown {{ solr_user | default('deploy') }}:{{ solr_group | default('deploy') }} /solr/backups/cloud_backup
       ExecStart=/usr/bin/gcsfuse \
         --foreground \
-        --uid=1001 \
-        --gid=1001 \
+        --uid={{ solr_gcs_uid.stdout }} \
+        --gid={{ solr_gcs_gid.stdout }} \
         --file-mode=0644 \
         --dir-mode=0755 \
         --implicit-dirs \
@@ -105,9 +236,10 @@
         -o allow_other \
         {{ gcs_bucket_name | default('solr-backups') }} \
         /solr/backups/cloud_backup
-      ExecStop=/bin/fusermount -u /solr/backups/cloud_backup
+      ExecStop=-/bin/fusermount -uz /solr/backups/cloud_backup
       Restart=on-failure
       RestartSec=10
+      TimeoutStopSec=30
 
       [Install]
       WantedBy=multi-user.target
@@ -115,40 +247,65 @@
     mode: "0644"
     owner: root
     group: root
+  register: solr_gcs_service_unit
   when: running_on_server
-  notify:
-    - reload systemd
-    - restart solr-gcs-backup
 
-- name: Solrcloud | Enable and start solr-gcs-backup service
+- name: Solrcloud | Enable and start GCS backup mount service
   ansible.builtin.systemd:
-    name: solr-gcs-backup
+    name: solr-gcs-backup.service
     enabled: true
-    state: restarted
+    masked: false
+    state: >-
+      {{
+        'restarted'
+        if (
+          solr_gcs_service_unit.changed
+          or solr_gcs_key.changed
+          or solr_gcs_fuse_conf.changed
+        )
+        else 'started'
+      }}
     daemon_reload: true
   when: running_on_server
 
-# Verify mount is working
-- name: Solrcloud | Wait for GCS mount to be available
-  ansible.builtin.wait_for:
-    path: /solr/backups/cloud_backup
-    state: present
-    timeout: 30
-  when: running_on_server
-
-- name: Solrcloud | Verify GCS mount is active
-  ansible.builtin.command: mountpoint -q /solr/backups/cloud_backup
+- name: Solrcloud | Wait for GCS mount table entry
+  ansible.builtin.command:
+    argv:
+      - findmnt
+      - --noheadings
+      - --output
+      - SOURCE,FSTYPE,TARGET
+      - --mountpoint
+      - /solr/backups/cloud_backup
   register: mount_check
   changed_when: false
-  failed_when: false
+  retries: 6
+  delay: 5
+  until: mount_check.rc == 0
   when: running_on_server
 
-- name: Solrcloud | Display mount status
+- name: Solrcloud | Verify GCS mount is accessible
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/stat
+      - --dereference
+      - --format=%F
+      - /solr/backups/cloud_backup
+  register: mount_access_check
+  changed_when: false
+  retries: 6
+  delay: 5
+  until: mount_access_check.rc == 0
+  when: running_on_server
+
+- name: Solrcloud | Display GCS mount status
   ansible.builtin.debug:
-    msg: "GCS mount is {{ 'active' if mount_check.rc == 0 else 'not active' }}"
+    msg:
+      - "GCS mount is active and accessible"
+      - "{{ mount_check.stdout }}"
   when: running_on_server
 
-- name: Solrcloud | Ensure Checkmk local dir exists
+- name: Solrcloud | Ensure Checkmk local directory exists
   ansible.builtin.file:
     path: /usr/lib/check_mk_agent/local
     state: directory
@@ -166,9 +323,10 @@
     mode: "0755"
   when: running_on_server
 
-#  run once to display current output during deploy
 - name: Solrcloud | Verify Solr 9 backup local check
-  ansible.builtin.command: /usr/lib/check_mk_agent/local/check_solr_backup.sh
+  ansible.builtin.command:
+    argv:
+      - /usr/lib/check_mk_agent/local/check_solr_backup.sh
   register: solr_backup_check_output
   changed_when: false
   failed_when: false
@@ -183,14 +341,6 @@
     - running_on_server
     - checkmk_verify_local | default(false) | bool
 
-- name: Solrcloud | restart gcsfuse service
-  ansible.builtin.systemd_service:
-    name: solr-gcs-backup.service
-    state: started
-  when:
-    - running_on_server
-
-# Set up log rotation for gcsfuse logs
 - name: Solrcloud | Configure gcsfuse log rotation
   ansible.builtin.template:
     src: "../../common/templates/logrotate_rules.j2"
