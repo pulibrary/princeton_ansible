@@ -1,28 +1,26 @@
 ---
 # This playbook installs OIT-mandated security tools:
-# Cortex XDR, the Rapid7 Insight Agent, and the Rapid7 Scan Assistant.
+# Cortex XDR, Rapid7 Insight Agent, and Rapid7 Scan Assistant.
 #
-# By default, this playbook runs against all hosts in all environments.
-# To run against a single host or group:
+# Rapid7 uses a happy-path workflow:
+#
+# 1. Confirm that the repository Scan Assistant certificate exists.
+# 2. Check the deployed certificate, configuration, services, listener,
+#    and firewall.
+# 3. Skip all Rapid7 installation work when everything is healthy.
+# 4. Install or repair both Rapid7 components when any check fails.
+#
+# Run only Rapid7:
 #
 #   ansible-playbook playbooks/utils/security_install.yml \
-#     --limit <group_or_host_name>
+#     --limit <host> \
+#     --tags rapid7
 #
-# To install or repair only the Rapid7 Scan Assistant:
+# Run only Rapid7 Scan Assistant and its related happy-path checks:
 #
 #   ansible-playbook playbooks/utils/security_install.yml \
-#     --limit <group_or_host_name> \
+#     --limit <host> \
 #     --tags rapid7_scan_assistant
-#
-# The Rapid7 Scan Assistant firewall rule defaults to allowing:
-#
-#   10.6.48.214 -> TCP/21047
-#
-# These defaults can be overridden with:
-#
-#   scan_assistant_engine_ips
-#   scan_assistant_port
-#   scan_assistant_firewalld_zone
 
 - name: Install OIT security tools on a host
   hosts: all
@@ -39,26 +37,25 @@
     - ../../group_vars/all/vault.yml
 
   vars:
-    rapid7_scan_assistant_engine_ips: >-
-      {{
-        scan_assistant_engine_ips
-        | default(['10.6.48.214'])
-      }}
+    rapid7_scan_assistant_pem_source: >-
+      {{ playbook_dir }}/../../group_vars/rapid7/scan-assistant.pem
+
     rapid7_scan_assistant_port: >-
-      {{
-        scan_assistant_port
-        | default('21047')
-      }}
+      {{ scan_assistant_port | default(21047) | int }}
+
+    rapid7_scan_assistant_engine_ips: >-
+      {{ scan_assistant_engine_ips | default(['10.6.48.214']) }}
+
     rapid7_scan_assistant_firewalld_zone: >-
-      {{
-        scan_assistant_firewalld_zone
-        | default('public')
-      }}
+      {{ scan_assistant_firewalld_zone | default('public') }}
 
   tasks:
     - name: Populate service facts
       ansible.builtin.service_facts:
+      tags:
+        - always
 
+    # Cortex XDR
     - name: Install XDR except on FreeBSD
       when:
         - ansible_distribution != "FreeBSD"
@@ -130,9 +127,7 @@
           changed_when: cytool_result.rc == 0
           failed_when: false
 
-        - name: Tag Cortex XDR endpoint except on FreeBSD
-          when:
-            - ansible_distribution != "FreeBSD"
+        - name: Tag Cortex XDR endpoint
           block:
             - name: Check for cytool
               ansible.builtin.stat:
@@ -150,9 +145,11 @@
 
             - name: Add Cortex XDR endpoint tag
               ansible.builtin.command:
-                cmd: >-
-                  /opt/traps/bin/cytool endpoint_tags add
-                  "{{ xdr_endpoint_tag }}"
+                argv:
+                  - /opt/traps/bin/cytool
+                  - endpoint_tags
+                  - add
+                  - "{{ xdr_endpoint_tag }}"
               register: xdr_tag_add
               changed_when: xdr_tag_add.rc == 0
               failed_when: false
@@ -172,7 +169,7 @@
                 - cytool_stat.stat.exists
                 - xdr_tag_add is changed
 
-        - name: Remove XDR package files to save space
+        - name: Remove XDR package files
           ansible.builtin.file:
             path: "{{ item }}"
             state: absent
@@ -180,11 +177,345 @@
             - "/opt/{{ cortex_install }}.deb"
             - "/opt/{{ cortex_install }}.rpm"
 
-    - name: Install, configure, and start Rapid7 Insight Agent
+    # Happy path: repository certificate must exist
+    - name: Happy path | Check repository Scan Assistant certificate
+      ansible.builtin.stat:
+        path: "{{ rapid7_scan_assistant_pem_source }}"
+        checksum_algorithm: sha256
+      register: rapid7_source_pem
+      delegate_to: localhost
+      become: false
+      run_once: true
+      tags:
+        - rapid7
+        - rapid7_scan_assistant
+
+    - name: Happy path | Fail when repository certificate is missing
+      ansible.builtin.assert:
+        that:
+          - rapid7_source_pem.stat.exists
+          - rapid7_source_pem.stat.isreg
+          - rapid7_source_pem.stat.size | int > 0
+        fail_msg: >-
+          The Rapid7 Scan Assistant certificate is missing or empty:
+          {{ rapid7_scan_assistant_pem_source }}
+      delegate_to: localhost
+      become: false
+      run_once: true
+      tags:
+        - rapid7
+        - rapid7_scan_assistant
+
+    # Happy path: inspect the existing Rapid7 installation
+    - name: Happy path | Check deployed Scan Assistant certificate
+      ansible.builtin.stat:
+        path: /etc/rapid7/ScanAssistant/scan-assistant.pem
+        checksum_algorithm: sha256
+      register: rapid7_remote_pem
       when:
         - ansible_distribution != "FreeBSD"
+      tags:
+        - rapid7
+        - rapid7_scan_assistant
+
+    - name: Happy path | Read deployed Scan Assistant certificate
+      ansible.builtin.slurp:
+        path: /etc/rapid7/ScanAssistant/scan-assistant.pem
+      register: rapid7_remote_pem_content
+      failed_when: false
+      when:
+        - ansible_distribution != "FreeBSD"
+      tags:
+        - rapid7
+        - rapid7_scan_assistant
+
+    - name: Happy path | Validate deployed certificate with OpenSSL
+      ansible.builtin.command:
+        argv:
+          - openssl
+          - x509
+          - -in
+          - /etc/rapid7/ScanAssistant/scan-assistant.pem
+          - -noout
+          - -subject
+      register: rapid7_remote_pem_validation
+      changed_when: false
+      failed_when: false
+      when:
+        - ansible_distribution != "FreeBSD"
+        - rapid7_remote_pem.stat.exists | default(false)
+      tags:
+        - rapid7
+        - rapid7_scan_assistant
+
+    - name: Happy path | Check Scan Assistant configuration certificate
+      ansible.builtin.shell:
+        executable: /bin/bash
+        cmd: |
+          /usr/bin/python3 <<'PY'
+          import json
+          from pathlib import Path
+
+          config_path = Path(
+              "/etc/rapid7/ScanAssistant/config.json"
+          )
+          pem_path = Path(
+              "/etc/rapid7/ScanAssistant/scan-assistant.pem"
+          )
+
+          config = json.loads(config_path.read_text())
+          deployed_pem = pem_path.read_text().strip()
+          configured_pem = config.get(
+              "ClientCertificate",
+              "",
+          ).strip()
+
+          if not configured_pem:
+              raise SystemExit(1)
+
+          if configured_pem != deployed_pem:
+              raise SystemExit(1)
+          PY
+      register: rapid7_config_certificate_check
+      changed_when: false
+      failed_when: false
+      when:
+        - ansible_distribution != "FreeBSD"
+      tags:
+        - rapid7
+        - rapid7_scan_assistant
+
+    - name: Happy path | Check Scan Assistant listener
+      ansible.builtin.command:
+        argv:
+          - ss
+          - -H
+          - -ltn
+          - "sport = :{{ rapid7_scan_assistant_port }}"
+      register: rapid7_listener_check
+      changed_when: false
+      failed_when: false
+      when:
+        - ansible_distribution != "FreeBSD"
+      tags:
+        - rapid7
+        - rapid7_scan_assistant
+
+    # Happy path: inspect the active endpoint firewall
+    - name: Happy path | Check UFW status
+      ansible.builtin.command:
+        argv:
+          - ufw
+          - status
+      register: rapid7_ufw_status
+      changed_when: false
+      failed_when: false
+      when:
+        - ansible_os_family == "Debian"
+      tags:
+        - rapid7
+        - rapid7_scan_assistant
+
+    - name: Happy path | Check UFW Scan Assistant rules
+      ansible.builtin.shell:
+        executable: /bin/bash
+        cmd: |
+          set -o pipefail
+
+          ufw status |
+            grep -F '{{ rapid7_scan_assistant_port }}/tcp' |
+            grep -F '{{ item }}'
+      loop: "{{ rapid7_scan_assistant_engine_ips }}"
+      register: rapid7_ufw_rule_checks
+      changed_when: false
+      failed_when: false
+      when:
+        - ansible_os_family == "Debian"
+        - "'Status: active' in rapid7_ufw_status.stdout"
+      tags:
+        - rapid7
+        - rapid7_scan_assistant
+
+    - name: Happy path | Check firewalld status
+      ansible.builtin.command:
+        argv:
+          - systemctl
+          - is-active
+          - firewalld
+      register: rapid7_firewalld_status
+      changed_when: false
+      failed_when: false
+      when:
+        - ansible_os_family == "RedHat"
+      tags:
+        - rapid7
+        - rapid7_scan_assistant
+
+    - name: Happy path | Check firewalld Scan Assistant rules
+      ansible.builtin.command:
+        argv:
+          - firewall-cmd
+          - "--zone={{ rapid7_scan_assistant_firewalld_zone }}"
+          - >-
+            --query-rich-rule=rule family="ipv4"
+            source address="{{ item }}"
+            port port="{{ rapid7_scan_assistant_port }}"
+            protocol="tcp" accept
+      loop: "{{ rapid7_scan_assistant_engine_ips }}"
+      register: rapid7_firewalld_rule_checks
+      changed_when: false
+      failed_when: false
+      when:
+        - ansible_os_family == "RedHat"
+        - rapid7_firewalld_status.rc == 0
+      tags:
+        - rapid7
+        - rapid7_scan_assistant
+
+    - name: Happy path | Determine firewall health
+      ansible.builtin.set_fact:
+        rapid7_firewall_happy_path: >-
+          {{
+            (
+              ansible_os_family == "Debian"
+              and
+              (
+                "Status: inactive"
+                in (rapid7_ufw_status.stdout | default(""))
+                or
+                (
+                  rapid7_ufw_rule_checks.results
+                  | default([])
+                  | rejectattr("rc", "equalto", 0)
+                  | list
+                  | length
+                ) == 0
+              )
+            )
+            or
+            (
+              ansible_os_family == "RedHat"
+              and
+              (
+                rapid7_firewalld_status.rc | default(1) != 0
+                or
+                (
+                  rapid7_firewalld_rule_checks.results
+                  | default([])
+                  | rejectattr("rc", "equalto", 0)
+                  | list
+                  | length
+                ) == 0
+              )
+            )
+            or
+            (
+              ansible_os_family
+              not in ["Debian", "RedHat"]
+            )
+          }}
+      when:
+        - ansible_distribution != "FreeBSD"
+      tags:
+        - rapid7
+        - rapid7_scan_assistant
+
+    # Happy path: all conditions must pass
+    - name: Happy path | Determine Rapid7 health
+      ansible.builtin.set_fact:
+        rapid7_happy_path: >-
+          {{
+            (
+              ansible_facts.services.get(
+                "ir_agent.service",
+                {}
+              ).get("state", "")
+              == "running"
+            )
+            and
+            (
+              ansible_facts.services.get(
+                "R7ScanAssistant.service",
+                {}
+              ).get("state", "")
+              == "running"
+            )
+            and
+            (
+              rapid7_remote_pem.stat.exists
+              | default(false)
+            )
+            and
+            (
+              rapid7_remote_pem_validation.rc
+              | default(1)
+              == 0
+            )
+            and
+            (
+              (
+                rapid7_remote_pem_content.content
+                | default("")
+                | b64decode
+                | trim
+              )
+              ==
+              (
+                lookup(
+                  "ansible.builtin.file",
+                  rapid7_scan_assistant_pem_source
+                )
+                | trim
+              )
+            )
+            and
+            (
+              rapid7_config_certificate_check.rc
+              | default(1)
+              == 0
+            )
+            and
+            (
+              rapid7_listener_check.stdout
+              | default("")
+              | trim
+              | length
+              > 0
+            )
+            and
+            (
+              rapid7_firewall_happy_path
+              | default(false)
+            )
+          }}
+      when:
+        - ansible_distribution != "FreeBSD"
+      tags:
+        - rapid7
+        - rapid7_scan_assistant
+
+    - name: Happy path | Report healthy Rapid7 installation
+      ansible.builtin.debug:
+        msg: >-
+          Rapid7 Insight Agent and Scan Assistant are healthy.
+          Installation and repair blocks will be skipped.
+      when:
+        - ansible_distribution != "FreeBSD"
+        - rapid7_happy_path
+      tags:
+        - rapid7
+        - rapid7_scan_assistant
+
+    # Happy path failed: install or repair both Rapid7 components
+    - name: Happy path failed | Install or repair Rapid7
+      when:
+        - ansible_distribution != "FreeBSD"
+        - not rapid7_happy_path
+      tags:
+        - rapid7
+        - rapid7_scan_assistant
       block:
-        - name: Download Rapid7 Insight Agent deb package (Ubuntu)
+        - name: Happy path failed | Download Insight Agent deb package
           ansible.builtin.get_url:
             url: >-
               https://us.storage.endpoint.ingress.rapid7.com/com.rapid7.razor.public/endpoint/agent/latest/linux/x86_64/rapid7_insight_agent_x64.deb
@@ -195,19 +526,7 @@
           when:
             - ansible_os_family == "Debian"
 
-        - name: Extract version from Rapid7 Insight Agent deb package
-          ansible.builtin.command:
-            argv:
-              - dpkg-deb
-              - -f
-              - /tmp/rapid7-insight-agent_latest_amd64.deb
-              - Version
-          register: r7_deb_version
-          changed_when: false
-          when:
-            - ansible_os_family == "Debian"
-
-        - name: Download Rapid7 Insight Agent rpm package (RedHat)
+        - name: Happy path failed | Download Insight Agent rpm package
           ansible.builtin.get_url:
             url: >-
               https://us.storage.endpoint.ingress.rapid7.com/com.rapid7.razor.public/endpoint/agent/latest/linux/x86_64/rapid7_insight_agent_x64.rpm
@@ -218,7 +537,7 @@
           when:
             - ansible_os_family == "RedHat"
 
-        - name: Install Rapid7 public signing key (RedHat)
+        - name: Happy path failed | Install Rapid7 signing key
           ansible.builtin.rpm_key:
             state: present
             key: >-
@@ -226,74 +545,72 @@
           when:
             - ansible_os_family == "RedHat"
 
-        - name: Install Rapid7 Insight Agent (Ubuntu)
+        - name: Happy path failed | Install Insight Agent deb package
           ansible.builtin.apt:
             deb: /tmp/rapid7-insight-agent_latest_amd64.deb
           when:
             - ansible_os_family == "Debian"
 
-        - name: Install Rapid7 Insight Agent (RedHat)
+        - name: Happy path failed | Install Insight Agent rpm package
           ansible.builtin.dnf:
             name: /tmp/rapid7-insight-agent-latest.x86_64.rpm
             state: present
           when:
             - ansible_os_family == "RedHat"
 
-        - name: Extract version from Rapid7 Insight Agent rpm package
+        - name: Happy path failed | Read Insight Agent deb version
+          ansible.builtin.command:
+            argv:
+              - dpkg-deb
+              - -f
+              - /tmp/rapid7-insight-agent_latest_amd64.deb
+              - Version
+          register: rapid7_deb_version
+          changed_when: false
+          when:
+            - ansible_os_family == "Debian"
+
+        - name: Happy path failed | Read Insight Agent rpm version
           ansible.builtin.command:
             argv:
               - rpm
               - -qp
               - "--queryformat=%{VERSION}"
               - /tmp/rapid7-insight-agent-latest.x86_64.rpm
-          register: r7_rpm_version
+          register: rapid7_rpm_version
           changed_when: false
           when:
             - ansible_os_family == "RedHat"
 
-        - name: Set Rapid7 Insight Agent component version (Ubuntu)
+        - name: Happy path failed | Set Insight Agent version
           ansible.builtin.set_fact:
-            slim_rapid7_version: "{{ r7_deb_version.stdout.split('-')[0] }}"
-          when:
-            - ansible_os_family == "Debian"
+            rapid7_insight_agent_version: >-
+              {{
+                (
+                  rapid7_deb_version.stdout
+                  if ansible_os_family == "Debian"
+                  else rapid7_rpm_version.stdout
+                ).split("-")[0]
+              }}
 
-        - name: Set Rapid7 Insight Agent component version (RedHat)
-          ansible.builtin.set_fact:
-            slim_rapid7_version: "{{ r7_rpm_version.stdout.split('-')[0] }}"
-          when:
-            - ansible_os_family == "RedHat"
-
-        - name: Configure Rapid7 Insight Agent with token
+        - name: Happy path failed | Configure Insight Agent
           ansible.builtin.command:
             argv:
               - >-
-                /opt/rapid7/ir_agent/components/insight_agent/{{ slim_rapid7_version }}/configure_agent.sh
+                /opt/rapid7/ir_agent/components/insight_agent/{{ rapid7_insight_agent_version }}/configure_agent.sh
               - --token
               - "{{ vault_Rapid7_token }}"
               - "--attributes=Library Operations"
           no_log: true
 
-        - name: Enable and restart Rapid7 Insight Agent
-          ansible.builtin.service:
-            name: ir_agent
+        - name: Happy path failed | Enable and restart Insight Agent
+          ansible.builtin.systemd_service:
+            name: ir_agent.service
             enabled: true
             state: restarted
 
-        - name: Remove Rapid7 Insight Agent package files
-          ansible.builtin.file:
-            path: "{{ item }}"
-            state: absent
-          loop:
-            - /tmp/rapid7-insight-agent_latest_amd64.deb
-            - /tmp/rapid7-insight-agent-latest.x86_64.rpm
-
-    - name: Install, configure, start, and verify Rapid7 Scan Assistant
-      when:
-        - ansible_distribution != "FreeBSD"
-      tags:
-        - rapid7_scan_assistant
-      block:
-        - name: Create Rapid7 Scan Assistant configuration directory
+        # Happy path failed: Rapid7 Scan Assistant
+        - name: Happy path failed | Create Scan Assistant directory
           ansible.builtin.file:
             path: /etc/rapid7/ScanAssistant
             state: directory
@@ -301,7 +618,7 @@
             group: root
             mode: "0755"
 
-        - name: Download Rapid7 Scan Assistant deb package (Ubuntu)
+        - name: Happy path failed | Download Scan Assistant deb package
           ansible.builtin.get_url:
             url: "{{ scan_assistant_deb_pkg_url }}"
             dest: /tmp/R7ScanAssistant_amd64.deb
@@ -312,7 +629,7 @@
           when:
             - ansible_os_family == "Debian"
 
-        - name: Download Rapid7 Scan Assistant rpm package (RedHat)
+        - name: Happy path failed | Download Scan Assistant rpm package
           ansible.builtin.get_url:
             url: "{{ scan_assistant_rpm_pkg_url }}"
             dest: /tmp/R7ScanAssistant_amd64.rpm
@@ -323,89 +640,130 @@
           when:
             - ansible_os_family == "RedHat"
 
-        - name: Install Rapid7 Scan Assistant package (Ubuntu)
+        - name: Happy path failed | Install Scan Assistant deb package
           ansible.builtin.apt:
             deb: /tmp/R7ScanAssistant_amd64.deb
-          register: scan_assistant_deb_install
           when:
             - ansible_os_family == "Debian"
 
-        - name: Install Rapid7 Scan Assistant package (RedHat)
+        - name: Happy path failed | Install Scan Assistant rpm package
           ansible.builtin.dnf:
             name: /tmp/R7ScanAssistant_amd64.rpm
             state: present
             disable_gpg_check: true
-          register: scan_assistant_rpm_install
           when:
             - ansible_os_family == "RedHat"
 
-        - name: Verify Rapid7 Scan Assistant configuration was created
+        - name: Happy path failed | Verify Scan Assistant config exists
           ansible.builtin.stat:
             path: /etc/rapid7/ScanAssistant/config.json
-          register: scan_assistant_config
+          register: rapid7_installed_config
 
-        - name: Fail when Rapid7 Scan Assistant configuration is missing
+        - name: Happy path failed | Fail when Scan Assistant config is missing
           ansible.builtin.assert:
             that:
-              - scan_assistant_config.stat.exists
-              - scan_assistant_config.stat.isreg
+              - rapid7_installed_config.stat.exists
+              - rapid7_installed_config.stat.isreg
             fail_msg: >-
               Rapid7 Scan Assistant installation did not create
               /etc/rapid7/ScanAssistant/config.json.
 
-        - name: Install Rapid7 Scan Assistant certificate
+        - name: Happy path failed | Deploy Scan Assistant certificate
           ansible.builtin.copy:
-            content: "{{ vault_scan_assistant_pem_file | trim }}\n"
+            src: "{{ rapid7_scan_assistant_pem_source }}"
             dest: /etc/rapid7/ScanAssistant/scan-assistant.pem
             owner: root
             group: root
             mode: "0644"
-          register: scan_assistant_pem
-          no_log: true
+          register: rapid7_scan_assistant_pem_deployment
 
-        - name: Reload systemd after Rapid7 Scan Assistant installation
-          ansible.builtin.systemd_service:
-            daemon_reload: true
+        - name: Happy path failed | Install OpenSSL for certificate validation
+          ansible.builtin.package:
+            name: openssl
+            state: present
 
-        - name: Enable and start Rapid7 Scan Assistant
-          ansible.builtin.systemd_service:
-            name: R7ScanAssistant.service
-            enabled: true
-            state: started
+        - name: Happy path failed | Validate deployed certificate
+          ansible.builtin.command:
+            argv:
+              - openssl
+              - x509
+              - -in
+              - /etc/rapid7/ScanAssistant/scan-assistant.pem
+              - -noout
+              - -subject
+              - -issuer
+              - -serial
+              - -dates
+          changed_when: false
 
-        - name: Allow Rapid7 Scan Engine through UFW (Ubuntu)
+        - name: Happy path failed | Read Scan Assistant configuration
+          ansible.builtin.slurp:
+            path: /etc/rapid7/ScanAssistant/config.json
+          register: rapid7_scan_assistant_config_file
+
+        - name: Happy path failed | Build Scan Assistant configuration
+          ansible.builtin.set_fact:
+            rapid7_scan_assistant_config: >-
+              {{
+                (
+                  rapid7_scan_assistant_config_file.content
+                  | b64decode
+                  | from_json
+                )
+                | combine(
+                    {
+                      "ClientCertificate":
+                        lookup(
+                          "ansible.builtin.file",
+                          rapid7_scan_assistant_pem_source
+                        )
+                        | trim
+                    }
+                  )
+              }}
+
+        - name: Happy path failed | Write Scan Assistant configuration
+          ansible.builtin.copy:
+            content: >-
+              {{
+                rapid7_scan_assistant_config
+                | to_nice_json
+              }}
+            dest: /etc/rapid7/ScanAssistant/config.json
+            owner: root
+            group: root
+            mode: "0644"
+          register: rapid7_scan_assistant_config_deployment
+
+        # Happy path failed: endpoint firewall
+        - name: Happy path failed | Install UFW package
+          ansible.builtin.apt:
+            name: ufw
+            state: present
+          when:
+            - ansible_os_family == "Debian"
+
+        - name: Happy path failed | Allow Scan Engine through UFW
           community.general.ufw:
             rule: allow
             direction: in
             proto: tcp
             from_ip: "{{ item }}"
-            to_port: "{{ rapid7_scan_assistant_port }}"
+            to_port: "{{ rapid7_scan_assistant_port | string }}"
             comment: Rapid7 Scan Assistant
           loop: "{{ rapid7_scan_assistant_engine_ips }}"
-          loop_control:
-            label: >-
-              {{ item }} -> TCP/{{ rapid7_scan_assistant_port }}
           when:
             - ansible_os_family == "Debian"
 
-        - name: Install firewalld dependencies (Rocky and RedHat)
+        - name: Happy path failed | Install firewalld Python support
           ansible.builtin.dnf:
-            name:
-              - firewalld
-              - python3-firewall
+            name: python3-firewall
             state: present
           when:
             - ansible_os_family == "RedHat"
+            - rapid7_firewalld_status.rc == 0
 
-        - name: Enable and start firewalld (Rocky and RedHat)
-          ansible.builtin.systemd_service:
-            name: firewalld
-            enabled: true
-            state: started
-          when:
-            - ansible_os_family == "RedHat"
-
-        - name: Allow Rapid7 Scan Engine through firewalld
+        - name: Happy path failed | Allow Scan Engine through firewalld
           ansible.posix.firewalld:
             zone: "{{ rapid7_scan_assistant_firewalld_zone }}"
             rich_rule: >-
@@ -418,62 +776,83 @@
             immediate: true
             state: enabled
           loop: "{{ rapid7_scan_assistant_engine_ips }}"
-          loop_control:
-            label: >-
-              {{ item }} -> TCP/{{ rapid7_scan_assistant_port }}
           when:
             - ansible_os_family == "RedHat"
+            - rapid7_firewalld_status.rc == 0
 
-        - name: Restart Rapid7 Scan Assistant after package or certificate changes
+        # Happy path failed: start and verify both services
+        - name: Happy path failed | Reload systemd
+          ansible.builtin.systemd_service:
+            daemon_reload: true
+
+        - name: Happy path failed | Enable and restart Scan Assistant
           ansible.builtin.systemd_service:
             name: R7ScanAssistant.service
+            enabled: true
             state: restarted
-          when:
-            - >-
-              (scan_assistant_pem.changed | default(false))
-              or (scan_assistant_deb_install.changed | default(false))
-              or (scan_assistant_rpm_install.changed | default(false))
 
-        - name: Verify Rapid7 Scan Assistant listener
-          block:
-            - name: Wait for Rapid7 Scan Assistant to listen locally
-              ansible.builtin.wait_for:
-                host: 127.0.0.1
-                port: "{{ rapid7_scan_assistant_port }}"
-                state: started
-                connect_timeout: 2
-                timeout: 20
+        - name: Happy path failed | Verify Insight Agent is active
+          ansible.builtin.command:
+            argv:
+              - systemctl
+              - is-active
+              - ir_agent.service
+          register: rapid7_final_agent_status
+          changed_when: false
 
-          rescue:
-            - name: Restart Rapid7 Scan Assistant after failed listener check
-              ansible.builtin.systemd_service:
-                name: R7ScanAssistant.service
-                state: restarted
-
-            - name: Wait again for Rapid7 Scan Assistant to listen locally
-              ansible.builtin.wait_for:
-                host: 127.0.0.1
-                port: "{{ rapid7_scan_assistant_port }}"
-                state: started
-                connect_timeout: 2
-                timeout: 30
-
-        - name: Verify Rapid7 Scan Assistant service is active
+        - name: Happy path failed | Verify Scan Assistant is active
           ansible.builtin.command:
             argv:
               - systemctl
               - is-active
               - R7ScanAssistant.service
-          register: scan_assistant_service_status
+          register: rapid7_final_scan_assistant_status
           changed_when: false
-          failed_when: >-
-            scan_assistant_service_status.rc != 0
-            or scan_assistant_service_status.stdout != "active"
 
-        - name: Remove Rapid7 Scan Assistant package files
+        - name: Happy path failed | Wait for Scan Assistant listener
+          ansible.builtin.wait_for:
+            host: 127.0.0.1
+            port: "{{ rapid7_scan_assistant_port }}"
+            state: started
+            connect_timeout: 2
+            timeout: 30
+
+        - name: Happy path failed | Verify configured certificate
+          ansible.builtin.shell:
+            executable: /bin/bash
+            cmd: |
+              /usr/bin/python3 <<'PY'
+              import json
+              from pathlib import Path
+
+              config_path = Path(
+                  "/etc/rapid7/ScanAssistant/config.json"
+              )
+              pem_path = Path(
+                  "/etc/rapid7/ScanAssistant/scan-assistant.pem"
+              )
+
+              config = json.loads(config_path.read_text())
+              configured_pem = config.get(
+                  "ClientCertificate",
+                  "",
+              ).strip()
+              deployed_pem = pem_path.read_text().strip()
+
+              if configured_pem != deployed_pem:
+                  raise SystemExit(
+                      "Scan Assistant configuration certificate "
+                      "does not match the deployed PEM"
+                  )
+              PY
+          changed_when: false
+
+        - name: Happy path failed | Remove downloaded packages
           ansible.builtin.file:
             path: "{{ item }}"
             state: absent
           loop:
+            - /tmp/rapid7-insight-agent_latest_amd64.deb
+            - /tmp/rapid7-insight-agent-latest.x86_64.rpm
             - /tmp/R7ScanAssistant_amd64.deb
             - /tmp/R7ScanAssistant_amd64.rpm
