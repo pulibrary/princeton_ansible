@@ -110,21 +110,12 @@ otel_receivers:
         id: recombine_solr_stacktraces
         combine_field: body
         source_identifier: attributes["log.file.path"]
-        is_first_entry: >-
-          body matches
-          "^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} "
+        is_first_entry: 'body matches "^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}[.][0-9]{3} "'
         force_flush_period: 5s
 
       - type: regex_parser
         id: parse_solr_log
-        regex: >-
-          ^(?P<timestamp>\d{4}-\d{2}-\d{2}
-          \d{2}:\d{2}:\d{2}\.\d{3})\s+
-          (?P<level>[A-Z]+)\s+
-          \((?P<thread>[^)]*)\)\s+
-          \[(?P<solr_context>[^\]]*)\]\s+
-          (?P<logger>\S+)\s+
-          (?P<message>[\s\S]*)$
+        regex: '^(?P<timestamp>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3})\s+(?P<level>[A-Z]+)\s+\((?P<thread>[^)]*)\)\s+\[(?P<solr_context>[^\]]*)\]\s+(?P<logger>\S+)\s+(?P<message>[\s\S]*)$'
         parse_from: body
         on_error: send
 
@@ -145,10 +136,7 @@ otel_receivers:
       - type: regex_parser
         id: extract_solr_trace_id
         parse_from: attributes.solr_context
-        if: >-
-          attributes.solr_context != nil and
-          attributes.solr_context matches
-          ".*t:[0-9a-fA-F]{32}.*"
+        if: 'attributes.solr_context != nil and attributes.solr_context matches ".*t:[0-9a-fA-F]{32}.*"'
         regex: '^.*t:(?P<trace_id>[0-9a-fA-F]{32}).*$'
         trace:
           trace_id:
