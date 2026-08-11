@@ -188,6 +188,23 @@ otel_receivers:
         field: attributes.service_name
         value: solr
 
+  filelog/solr-slow-requests:
+    include:
+      - "/solr/logs/solr_slow_requests.log"
+    start_at: end
+    include_file_path: true
+    include_file_name: true
+    operators:
+      - type: add
+        id: add_solr_slow_requests_log_type
+        field: attributes.log_type
+        value: solr_slow_requests
+
+      - type: add
+        id: add_solr_slow_requests_service_name
+        field: attributes.service_name
+        value: solr
+
   hostmetrics:
     collection_interval: 30s
     scrapers:
@@ -237,6 +254,7 @@ otel_service_pipelines:
       - filelog/solr-main
       - filelog/solr-request
       - filelog/solr-gc
+      - filelog/solr-slow-requests
     processors:
       - resource
       - batch
