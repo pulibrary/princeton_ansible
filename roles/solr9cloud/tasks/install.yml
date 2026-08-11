@@ -60,3 +60,19 @@
     mode: "0755"
     state: file
   tags: [install]
+
+
+- name: Solr9cloud | Enable Jetty forwarded request handling
+  ansible.builtin.blockinfile:
+    path: "{{ solr_installation }}/server/etc/jetty.xml"
+    marker: "<!-- {mark} ANSIBLE MANAGED FORWARDED REQUEST CUSTOMIZER -->"
+    insertbefore: '^\s*<!-- Uncomment to enable handling of X-Forwarded- style headers'
+    block: |
+      <Call name="addCustomizer">
+        <Arg>
+          <New class="org.eclipse.jetty.server.ForwardedRequestCustomizer"/>
+        </Arg>
+      </Call>
+  notify: Restart solr
+  when: solr_trust_forwarded_headers | bool
+  tags: [install]
