@@ -1,0 +1,137 @@
+---
+# Pulled from https://dev.to/lovestaco/install-docker-with-ansible-on-ubuntu-official-repo-docker-compose-578b and adjusted according to https://docs.docker.com/engine/install/ubuntu/
+- name: 'pul_nomad | nomad | docker | remove conflicting packages'
+  ansible.builtin.apt:
+    name:
+      - docker.io
+      - docker-doc
+      - docker-compose
+      - docker-compose-v2
+      - podman-docker
+      - containerd
+      - runc
+    state: absent
+
+- name: 'pul_nomad | nomad | docker | ensure dependencies are installed'
+  ansible.builtin.apt:
+    name:
+      - bc
+      - curl
+      - expect
+      - git
+      - ca-certificates
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: 'pul_nomad | nomad | docker | get dpkg architecture'
+  ansible.builtin.command: dpkg --print-architecture
+  register: dpkg_architecture
+  changed_when: false
+  check_mode: false
+
+- name: 'pul_nomad | nomad | docker | create apt keyring directory'
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: "pul_nomad | nomad | docker | download Docker's official GPG key"
+  ansible.builtin.get_url:
+    url: https://download.docker.com/linux/ubuntu/gpg
+    dest: /etc/apt/keyrings/docker.asc
+    owner: root
+    group: root
+    mode: "0644"
+    force: false
+
+- name: 'pul_nomad | nomad | docker | add Docker repository to apt sources'
+  ansible.builtin.apt_repository:
+    repo: >-
+      deb [arch={{ dpkg_architecture.stdout }} signed-by=/etc/apt/keyrings/docker.asc]
+      https://download.docker.com/linux/ubuntu
+      {{ ansible_distribution_release }} stable
+    state: present
+    filename: docker
+    update_cache: true
+
+- name: 'pul_nomad | nomad | docker | install Docker Engine and Compose plugin'
+  ansible.builtin.apt:
+    name:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+    state: present
+
+# Setup userns-remap so that jobs don't run with real root ever unless we
+# explicitly allow it.
+- name: 'pul_nomad | nomad | docker | create dockremap user'
+  ansible.builtin.user:
+    name: dockremap
+    system: true
+    shell: /usr/sbin/nologin
+    create_home: false
+    state: present
+
+- name: 'pul_nomad | nomad | docker | add dockremap subuid range'
+  ansible.builtin.lineinfile:
+    path: /etc/subuid
+    regexp: '^dockremap:'
+    line: 'dockremap:1000000:65536'
+    create: true
+    owner: root
+    group: root
+    mode: "0644"
+    state: present
+  notify: restart docker
+
+- name: 'pul_nomad | nomad | docker | add dockremap subgid range'
+  ansible.builtin.lineinfile:
+    path: /etc/subgid
+    regexp: '^dockremap:'
+    line: 'dockremap:1000000:65536'
+    create: true
+    owner: root
+    group: root
+    mode: "0644"
+    state: present
+  notify: restart docker
+
+- name: 'pul_nomad | nomad | docker | create docker config directory'
+  ansible.builtin.file:
+    path: /etc/docker
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: 'pul_nomad | nomad | docker | write daemon.json'
+  ansible.builtin.copy:
+    content: "{{ docker_daemon_config | to_nice_json }}\n"
+    dest: /etc/docker/daemon.json
+    owner: root
+    group: root
+    mode: "0644"
+    validate: 'dockerd --validate --config-file=%s'
+  vars:
+    docker_daemon_config:
+      userns-remap: dockremap
+      log-driver: json-file
+      log-opts:
+        max-size: 10m
+        max-file: "3"
+  notify: restart docker
+
+- name: 'pul_nomad | nomad | docker | ensure Docker service is enabled and started'
+  ansible.builtin.service:
+    name: docker
+    state: started
+    enabled: true
+
+- name: 'pul_nomad | nomad | docker | add pulsys to docker group'
+  ansible.builtin.user:
+    name: pulsys
+    groups: docker
+    append: true
