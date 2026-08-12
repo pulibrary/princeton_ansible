@@ -1,0 +1,73 @@
+#!/bin/bash
+
+set -u
+
+MICROK8S="/snap/bin/microk8s"
+NAMESPACE="{{ signoz_namespace }}"
+CLICKHOUSE_POD="chi-signoz-clickhouse-cluster-0-0-0"
+WARN_SECONDS={{ signoz_checkmk_ingestion_warn_seconds }}
+CRIT_SECONDS={{ signoz_checkmk_ingestion_crit_seconds }}
+COLLECTOR_LOG_WINDOW="{{ signoz_checkmk_collector_log_window }}"
+
+SERVICE_NAME="SigNoz log ingestion"
+
+clickhouse_lag="$(
+  "${MICROK8S}" kubectl -n "${NAMESPACE}" exec \
+    "${CLICKHOUSE_POD}" \
+    -c clickhouse -- \
+    clickhouse-client \
+      --format TSVRaw \
+      -q "
+        SELECT dateDiff(
+          'second',
+          toDateTime(intDiv(max(timestamp), 1000000000)),
+          now()
+        )
+        FROM signoz_logs.logs_v2
+      " 2>/dev/null
+)"
+
+if [[ $? -ne 0 || ! "${clickhouse_lag}" =~ ^[0-9]+$ ]]; then
+  echo "2 \"${SERVICE_NAME}\" - Unable to query newest log timestamp from ClickHouse"
+  exit 0
+fi
+
+collector_pod="$(
+  "${MICROK8S}" kubectl -n "${NAMESPACE}" get pods \
+    -l app.kubernetes.io/component=otel-collector \
+    -o jsonpath='{.items[0].metadata.name}' \
+    2>/dev/null
+)"
+
+if [[ -z "${collector_pod}" ]]; then
+  echo "2 \"${SERVICE_NAME}\" lag_seconds=${clickhouse_lag};${WARN_SECONDS};${CRIT_SECONDS} No SigNoz OTel collector pod found"
+  exit 0
+fi
+
+collector_errors="$(
+  "${MICROK8S}" kubectl -n "${NAMESPACE}" logs \
+    "${collector_pod}" \
+    -c collector \
+    --since="${COLLECTOR_LOG_WINDOW}" \
+    2>/dev/null |
+  grep -Eic \
+    'sending queue is full|PrepareBatch.*context deadline exceeded|Rejecting data' \
+  || true
+)"
+
+if (( collector_errors > 0 )); then
+  echo "2 \"${SERVICE_NAME}\" lag_seconds=${clickhouse_lag};${WARN_SECONDS};${CRIT_SECONDS}|collector_errors=${collector_errors} Collector exporter failure detected: ${collector_errors} matching errors in last ${COLLECTOR_LOG_WINDOW}"
+  exit 0
+fi
+
+if (( clickhouse_lag >= CRIT_SECONDS )); then
+  echo "2 \"${SERVICE_NAME}\" lag_seconds=${clickhouse_lag};${WARN_SECONDS};${CRIT_SECONDS}|collector_errors=${collector_errors} Log ingestion is ${clickhouse_lag}s behind"
+  exit 0
+fi
+
+if (( clickhouse_lag >= WARN_SECONDS )); then
+  echo "1 \"${SERVICE_NAME}\" lag_seconds=${clickhouse_lag};${WARN_SECONDS};${CRIT_SECONDS}|collector_errors=${collector_errors} Log ingestion is ${clickhouse_lag}s behind"
+  exit 0
+fi
+
+echo "0 \"${SERVICE_NAME}\" lag_seconds=${clickhouse_lag};${WARN_SECONDS};${CRIT_SECONDS}|collector_errors=${collector_errors} Log ingestion healthy: ${clickhouse_lag}s behind"

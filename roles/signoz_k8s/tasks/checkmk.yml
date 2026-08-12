@@ -1,0 +1,41 @@
+---
+- name: SigNoz | Ensure Checkmk local check directory exists
+  ansible.builtin.file:
+    path: /usr/lib/check_mk_agent/local
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when:
+    - signoz_checkmk_ingestion_enabled | default(false) | bool
+    - inventory_hostname == signoz_checkmk_monitor_host
+
+- name: SigNoz | Install Checkmk ingestion local check
+  ansible.builtin.template:
+    src: check_signoz_ingestion.sh.j2
+    dest: /usr/lib/check_mk_agent/local/check_signoz_ingestion.sh
+    owner: root
+    group: root
+    mode: "0755"
+  when:
+    - signoz_checkmk_ingestion_enabled | default(false) | bool
+    - inventory_hostname == signoz_checkmk_monitor_host
+
+- name: SigNoz | Verify Checkmk ingestion local check
+  ansible.builtin.command:
+    cmd: /usr/lib/check_mk_agent/local/check_signoz_ingestion.sh
+  register: signoz_checkmk_ingestion_result
+  changed_when: false
+  failed_when: false
+  when:
+    - signoz_checkmk_ingestion_enabled | default(false) | bool
+    - inventory_hostname == signoz_checkmk_monitor_host
+    - checkmk_verify_local | default(false) | bool
+
+- name: SigNoz | Show Checkmk ingestion local check result
+  ansible.builtin.debug:
+    var: signoz_checkmk_ingestion_result.stdout
+  when:
+    - signoz_checkmk_ingestion_enabled | default(false) | bool
+    - inventory_hostname == signoz_checkmk_monitor_host
+    - checkmk_verify_local | default(false) | bool
