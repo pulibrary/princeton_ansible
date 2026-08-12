@@ -102,7 +102,6 @@ job "zookeeper-staging" {
         ZOO_4LW_COMMANDS_WHITELIST=srvr,ruok,mntr
         ZOO_AUTOPURGE_PURGEINTERVAL=1
         ZOO_SERVERS="server.{{ env "NOMAD_ALLOC_INDEX" | parseInt | add 1 }}=0.0.0.0:2888:3888;2181 {{ range $s := service "zookeeper-staging|any" }}{{ if and $s.ServiceMeta.alloc_index (ne $s.ServiceMeta.alloc_index (env "NOMAD_ALLOC_INDEX")) }}server.{{ $s.ServiceMeta.alloc_index | parseInt | add 1 }}={{ $s.Address }}:2888:3888;2181 {{ end }}{{ end }}"
-        ZOO_CFG_EXTRA=enforce.auth.enabled=true enforce.auth.schemes=digest admin.enableServer=false
         EOT
       }
 
