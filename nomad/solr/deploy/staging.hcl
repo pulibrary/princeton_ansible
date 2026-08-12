@@ -119,7 +119,7 @@ job "solr-staging" {
 
       volume_mount {
         volume      = "data"
-        destination = "/var/solr"
+        destination = "/var/solr/data"
       }
     }
   }
