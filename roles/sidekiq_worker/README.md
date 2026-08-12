@@ -11,7 +11,14 @@ This role expects the `rails_app`
 Role Variables
 --------------
 
-Variables in `defaults/main.yml`
+Variables in `defaults/main.yml`, including:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `sidekiq_worker_name` | `sidekiq-workers` | systemd unit name |
+| `sidekiq_worker_threads` | `5` | Sidekiq concurrency (`-c`) |
+| `sidekiq_worker_queues` | high, mailers, default, low, super_low | Queues |
+| `sidekiq_worker_limit_nofile` | `65536` | systemd `LimitNOFILE` for the worker unit |
 
 Dependencies
 ------------

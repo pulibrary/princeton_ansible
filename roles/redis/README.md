@@ -56,6 +56,9 @@ Requirements
 Role Variables
 --------------
 
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `redis_limit_nofile` | `65536` | `nofile` in `limits.d` for the redis user and systemd `LimitNOFILE` for `redis-server` |
 
 Dependencies
 ------------
