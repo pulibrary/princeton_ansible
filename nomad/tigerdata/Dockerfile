@@ -1,7 +1,7 @@
 FROM quay.io/podman/stable:latest AS podman
 FROM circleci/runner-agent:machine-3
 ARG RUBY_VERSION=3.4.3
-# Install dependencies - pulled from build-pack-deps:
+# 1. Install dependencies - pulled from build-pack-deps:
 # https://github.com/docker-library/buildpack-deps/blob/d0ecd4b7313e9bc6b00d9a4fe62ad5787bc197ae/debian/bookworm/Dockerfile
 RUN set -ex; \
       sudo apt-get update; \
@@ -59,6 +59,23 @@ RUN set -ex; \
       libz-dev \
       ; \
       sudo rm -rf /var/lib/apt/lists/*
+
+# # 2. Download and install the latest stable Google Chrome .deb package
+# RUN wget -q https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb \
+#     && apt-get update \
+#     && apt-get install -y ./google-chrome-stable_current_amd64.deb --no-install-recommends \
+#     && rm google-chrome-stable_current_amd64.deb \
+#     && rm -rf /var/lib/apt/lists/*
+
+# # 3. Dynamic matching: Fetch major version and download corresponding ChromeDriver
+# RUN CHROME_VERSION=$(google-chrome --version | awk '{print $3}') \
+#     && CHROMEDRIVER_URL=$(curl -s "https://github.io" \
+#     | jq -r --arg version "$CHROME_VERSION" '.channels.Stable.downloads.chromedriver[] | select(.platform=="linux64") | .url') \
+#     && wget -q -O /tmp/chromedriver.zip "$CHROMEDRIVER_URL" \
+#     && unzip /tmp/chromedriver.zip -d /tmp/ \
+#     && mv /tmp/chromedriver-linux64/chromedriver /usr/local/bin/chromedriver \
+#     && chmod +x /usr/local/bin/chromedriver \
+#     && rm -rf /tmp/chromedriver.zip /tmp/chromedriver-linux64
 
 # Check out ruby-build and install
 RUN sudo git clone https://github.com/sstephenson/ruby-build.git /usr/local/ruby-build
