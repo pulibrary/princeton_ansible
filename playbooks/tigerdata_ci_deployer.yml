@@ -1,0 +1,19 @@
+---
+# The tigerdata runner only exists in production, so this playbook takes no
+# runtime_env. It seeds the CircleCI runner token into Nomad; the job itself is
+# deployed with 'cd nomad && BRANCH=main ./bin/deploy tigerdata production'.
+- name: Tigerdata CircleCI Deployer | Provision Variables & Infrastructure
+  # The [0] picks the first host, since we just run the nomad commands there.
+  hosts: "nomad_production[0]"
+  remote_user: pulsys
+  become: true
+
+  # Vault files (env-agnostic secrets or per-env keys within)
+  vars_files:
+    # This will auto include group_vars/nomad_production.yml
+    # This will auto include group_vars/nomad_servers.yml
+    - ../group_vars/nomad/vault.yml
+    - "../group_vars/tigerdata/production.yml"
+    - ../group_vars/tigerdata/vault.yml
+  roles:
+    - role: roles/nomad_app

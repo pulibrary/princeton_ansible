@@ -1,4 +1,4 @@
-name: Create and publish CircleCI Runner Image
+name: Create and publish CircleCI Runner Images
 permissions:
   contents: read
   packages: write
@@ -11,20 +11,31 @@ on:
     branches:
       - main
 
-# Defines two custom environment variables for the workflow. These are used for the Container registry domain, and a name for the Docker image that this workflow builds.
+# Defines a custom environment variable for the Container registry domain. Each
+# runner image derives its own name from the matrix below.
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}-circleci-deployer
 
-# There is a single job in this workflow. It's configured to run on the latest available version of Ubuntu.
+# Each entry in the matrix builds one self-hosted runner image. They share a
+# base but differ in the tooling they ship, so they cannot be a single image.
 jobs:
   build-and-push-image:
+    name: ${{ matrix.image_suffix }}
     runs-on: ubuntu-latest
     # Sets the permissions granted to the `GITHUB_TOKEN` for the actions in this job.
     permissions:
       contents: read
       packages: write
-      # 
+    strategy:
+      # Don't let one failing image cancel the other, so a broken change is
+      # easier to attribute.
+      fail-fast: false
+      matrix:
+        include:
+          - context: ./nomad/circleci_deployer
+            image_suffix: circleci-deployer
+          - context: ./nomad/tigerdata
+            image_suffix: tigerdata-deployer
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -42,7 +53,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@9ec57ed1fcdbf14dcef7dfbe97b2010124a938b7
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          images: ${{ env.REGISTRY }}/${{ github.repository }}-${{ matrix.image_suffix }}
           tags: |
             type=ref,event=branch
             type=ref,event=pr
@@ -52,12 +63,14 @@ jobs:
       # This step uses the `docker/build-push-action` action to build the image, based on your repository's `Dockerfile`. If the build succeeds, it pushes the image to GitHub Packages.
       # It uses the `context` parameter to define the build's context as the set of files located in the specified path. For more information, see "[Usage](https://github.com/docker/build-push-action#usage)" in the README of the `docker/build-push-action` repository.
       # It uses the `tags` and `labels` parameters to tag and label the image with the output from the "meta" step.
+      # The cache is scoped per image, otherwise the two builds would evict each
+      # other's layers on every run.
       - name: Build and push Docker image
         uses: docker/build-push-action@f2a1d5e99d037542a71f64918e516c093c6f3fc4
         with:
-          context: ./nomad/circleci_deployer
+          context: ${{ matrix.context }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=${{ matrix.image_suffix }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image_suffix }}
