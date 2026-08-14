@@ -3,7 +3,7 @@
   ansible.builtin.get_url:
     url: "{{ redis_apt_key_url }}"
     dest: /tmp/redis.gpg.key
-    mode: '0644'
+    mode: "0644"
 
 - name: Redis | De-armor Redis GPG key to binary keyring
   ansible.builtin.shell: "gpg --dearmor < /tmp/redis.gpg.key > {{ redis_keyring_path }}"
@@ -14,7 +14,7 @@
 - name: Redis | Ensure keyring permissions
   ansible.builtin.file:
     path: "{{ redis_keyring_path }}"
-    mode: '0644'
+    mode: "0644"
     owner: root
     group: root
     state: file
@@ -44,7 +44,7 @@
     dest: /etc/redis/redis.conf
     owner: redis
     group: redis
-    mode: '0644'
+    mode: "0644"
   notify:
     - restart redis
 
@@ -52,7 +52,27 @@
   ansible.builtin.template:
     src: redis_ulimit.conf.j2
     dest: /etc/security/limits.d/redis.conf
-    mode: '0644'
+    mode: "0644"
+
+# because systemd services do not inherit limits.d the LimitNOFILE must be set on the unit.
+- name: Redis | Create redis-server systemd drop-in directory
+  ansible.builtin.file:
+    path: /etc/systemd/system/redis-server.service.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Redis | Set LimitNOFILE for redis-server
+  ansible.builtin.template:
+    src: redis-server-limits.conf.j2
+    dest: /etc/systemd/system/redis-server.service.d/limits.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - reload systemd
+    - restart redis
 
 - name: Redis | Set vm.overcommit
   ansible.posix.sysctl:

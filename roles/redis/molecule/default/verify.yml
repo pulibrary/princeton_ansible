@@ -25,3 +25,11 @@
     changed_when: false
     failed_when:
       - process | length == 0
+
+  - name: redis limits.d sets nofile
+    ansible.builtin.command: grep -E 'nofile {{ redis_limit_nofile | default(65536) }}' /etc/security/limits.d/redis.conf
+    changed_when: false
+
+  - name: redis-server systemd drop-in sets LimitNOFILE
+    ansible.builtin.command: grep -E '^LimitNOFILE={{ redis_limit_nofile | default(65536) }}$' /etc/systemd/system/redis-server.service.d/limits.conf
+    changed_when: false
