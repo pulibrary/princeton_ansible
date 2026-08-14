@@ -1,8 +1,14 @@
 ---
 # handlers file for roles/redis
+- name: reload systemd
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+  become: true
+
 - name: restart redis
   ansible.builtin.service:
     name: "redis-server"
     state: restarted
   when:
     - not ansible_check_mode
+    - running_on_server | default(true)

@@ -6,6 +6,8 @@ redis_apt_repository: "deb [signed-by={{ redis_keyring_path }}] https://packages
 
 redis__user: "redis"
 redis__group: "redis"
+# File descriptor limit for Redis (limits.d for the redis user and systemd unit descriptor)
+redis_limit_nofile: 65536
 redis__domain: "{{ ansible_domain if ansible_domain else ansible_hostname }}"
 redis__server_bind: "0.0.0.0"
 redis__auth_password: "{{ vault_redis__auth_password | default('change_me') }}"
@@ -17,9 +19,9 @@ redis__server_save_enabled: true
 # List of ``SAVE`` snapshots to configure. See http://redis.io/commands/save
 # for more details.
 redis__server_save:
-  - '900 1'
-  - '300 10'
-  - '60 10000'
+  - "900 1"
+  - "300 10"
+  - "60 10000"
 # Specify Redis Server log level. Available levels: ``debug``, ``verbose``,
 # ``notice``, ``warning``.
 redis__server_loglevel: "notice"
@@ -34,7 +36,7 @@ redis__server_maxmemory_limit: "0.8"
 #
 # Maximum amount of system memory available for Redis Server in bytes.
 redis__server_maxmemory: "{{ ((ansible_memtotal_mb|int * 1024 * 1024) *
-                              redis__server_maxmemory_limit|float) | round | int }}"
+  redis__server_maxmemory_limit|float) | round | int }}"
 # Specify the policy used by Redis Server for key expiration.
 redis__server_maxmemory_policy: "volatile-lru"
 # Enable or disable vm.overcommit_memory. If disabled and background save is
@@ -64,16 +66,16 @@ redis__server_configuration: {}
 redis__server_group_configuration: {}
 
 redis__server_combined_configuration: "{{ redis__server_default_configuration
-                                          | combine(redis__server_configuration)
-                                          | combine(redis__server_group_configuration)
-                                          | combine(redis__server_host_configuration) }}"
+  | combine(redis__server_configuration)
+  | combine(redis__server_group_configuration)
+  | combine(redis__server_host_configuration) }}"
 
 # versions and above. This YAML dictionary defines what parameters can be used
 # when certain Redis version is installed.
 redis__server_version_config_map:
-  tcp-backlog: '2.8.5'
-  hll-sparse-max-bytes: '2.8.9'
-  latency-monitor-threshold: '2.8.13'
+  tcp-backlog: "2.8.5"
+  hll-sparse-max-bytes: "2.8.9"
+  latency-monitor-threshold: "2.8.13"
 # service needs to be restarted (role will do that automatically).
 redis__server_static_options:
   - "activerehashing"
