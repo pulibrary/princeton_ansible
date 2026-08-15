@@ -46,31 +46,6 @@
   changed_when: false
   when: running_on_server
 
-- name: Ezproxy | Clean apt cache
-  ansible.builtin.command: apt-get clean
-  changed_when: false
-
-- name: Ezproxy | Update apt cache after adding repository
-  ansible.builtin.command: apt-get update
-  register: ezproxy_cache_update
-  retries: 3
-  delay: 5
-  until: ezproxy_cache_update.rc == 0
-  changed_when: false
-  failed_when: false
-
-- name: Ezproxy | Display errors if update failed
-  ansible.builtin.debug:
-    msg: |
-      Return code: {{ ezproxy_cache_update.rc }}
-      STDERR: {{ ezproxy_cache_update.stderr }}
-  when: ezproxy_cache_update.rc != 0
-
-- name: Ezproxy | Fail if update failed
-  ansible.builtin.fail:
-    msg: "Cache update failed after adding repository"
-  when: ezproxy_cache_update.rc != 0
-
 - name: Ezproxy | Allow HTTP and HTTPS traffic
   community.general.ufw:
     rule: allow
@@ -122,41 +97,13 @@
     line: "{{ deploy_user }} ALL=(ALL) NOPASSWD: /usr/sbin/service ezproxy restart"
     validate: "visudo -cf %s"
 
-- name: Ezproxy | add geoip ppa
-  ansible.builtin.apt_repository:
-    repo: "ppa:maxmind/ppa"
-    state: present
-    update_cache: false
-
-- name: Ezproxy | Clean apt cache
-  ansible.builtin.command: apt-get clean
-  changed_when: false
-
-- name: Ezproxy | Update apt cache after adding repository
-  ansible.builtin.command: apt-get update
-  register: ezproxy_cache_update
-  retries: 3
-  delay: 5
-  until: ezproxy_cache_update.rc == 0
-  changed_when: false
-  failed_when: false
-
-- name: Ezproxy | Display errors if update failed
-  ansible.builtin.debug:
-    msg: |
-      Return code: {{ ezproxy_cache_update.rc }}
-      STDERR: {{ ezproxy_cache_update.stderr }}
-  when: ezproxy_cache_update.rc != 0
-
-- name: Ezproxy | Fail if update failed
-  ansible.builtin.fail:
-    msg: "Cache update failed after adding repository"
-  when: ezproxy_cache_update.rc != 0
-
-- name: Ezproxy | install geoupdate
+- name: Ezproxy | Install geoipupdate
   ansible.builtin.apt:
     name: geoipupdate
     state: present
+    update_cache: true
+    cache_valid_time: 3600
+    lock_timeout: 120
 
 - name: Ezproxy | add geoip configuration file
   ansible.builtin.template:
