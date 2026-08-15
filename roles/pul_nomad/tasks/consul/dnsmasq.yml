@@ -61,21 +61,6 @@
         - any_ethernet_connection.stdout | trim != ""
 
 # We need to get DNSMasq's 127.0.0.1 above the Princeton nameservers, but
-# NetworkManager manages DNS on RedHat machines. This updates the connection to
-# prepend the DNS server.
-- name: Pul_nomad | dnsmasq | Configure DNS for consul
-  become: true
-  ansible.builtin.shell: '/bin/nmcli connection modify "{{ detected_interface }}" ipv4.dns "127.0.0.1" && /bin/nmcli connection up "{{ detected_interface }}"'
-  when:
-    - ansible_os_family == 'RedHat'
-    - detected_interface is defined
-  changed_when: false
-  tags:
-    - notest
-  register: dns_config_result
-  failed_when: 
-    - dns_config_result.rc != 0
-    - "'already active' not in dns_config_result.stderr"
 
 - name: Pul_nomad | dnsmasq | Warn if DNS configuration was skipped
   debug:

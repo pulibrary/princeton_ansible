@@ -1,24 +1,25 @@
 ---
-- name: 'pul_nomad | consul | Get consul installed version'
+- name: "pul_nomad | consul | Get consul installed version"
   block:
-    - name: 'pul_nomad | consul | Check for existing Consul binary'
+    - name: "pul_nomad | consul | Check for existing Consul binary"
       ansible.builtin.stat:
         path: "/usr/local/bin/consul"
       register: consul_binary_installed
-    - name: 'pul_nomad | consul | Get current Consul version'
+    - name: "pul_nomad | consul | Get current Consul version"
       ansible.builtin.command: "/usr/local/bin/consul version -format json"
       check_mode: false
       changed_when: false
       register: consul_installed_version_json
       when:
         - consul_binary_installed.stat.exists
-    - name: 'pul_nomad | consul | Save consul version'
+
+    - name: "pul_nomad | consul | Save consul version"
       ansible.builtin.set_fact:
         consul_installed_version: "{{ consul_installed_version_json.stdout | from_json | community.general.json_query('Version') }}"
       when:
         - consul_binary_installed.stat.exists
 
-    - name: 'pul_nomad | consul | Gather network facts for nomad_servers'
+    - name: "pul_nomad | consul | Gather network facts for nomad_servers"
       ansible.builtin.setup:
         gather_subset:
           - all
@@ -27,12 +28,12 @@
       loop: "{{ groups[nomad_server_group] }}"
       run_once: true
 
-    - name: 'pul_nomad | consul | Debug - show raw server_facts results'
+    - name: "pul_nomad | consul | Debug - show raw server_facts results"
       ansible.builtin.debug:
         msg: "{{ server_facts.results | map(attribute='ansible_facts') | list }}"
       run_once: true
 
-    - name: 'pul_nomad | consul | Build server IPs from gathered facts'
+    - name: "pul_nomad | consul | Build server IPs from gathered facts"
       ansible.builtin.set_fact:
         nomad_server_ips: >-
           {{
@@ -43,7 +44,7 @@
           }}
       run_once: true
 
-    - name: 'pul_nomad | consul | Fallback - get IPs from ansible_all_ipv4_addresses if no default_ipv4'
+    - name: "pul_nomad | consul | Fallback - get IPs from ansible_all_ipv4_addresses if no default_ipv4"
       ansible.builtin.set_fact:
         nomad_server_ips: >-
           {{
@@ -56,7 +57,7 @@
       when: nomad_server_ips | length == 0
       run_once: true
 
-    - name: 'pul_nomad | consul | Last resort - get IPs via hostname command'
+    - name: "pul_nomad | consul | Last resort - get IPs via hostname command"
       ansible.builtin.command: hostname -I
       register: hostname_ips
       delegate_to: "{{ item }}"
@@ -65,7 +66,7 @@
       when: nomad_server_ips | length == 0
       run_once: true
 
-    - name: 'pul_nomad | consul | Build server IPs from hostname command'
+    - name: "pul_nomad | consul | Build server IPs from hostname command"
       ansible.builtin.set_fact:
         nomad_server_ips: >-
           {{
@@ -83,7 +84,7 @@
         - hostname_ips.results is defined
       run_once: true
 
-    - name: 'pul_nomad | consul | Set ansible_default_ipv4 for hosts missing network facts'
+    - name: "pul_nomad | consul | Set ansible_default_ipv4 for hosts missing network facts"
       ansible.builtin.set_fact:
         ansible_default_ipv4:
           address: "{{ (hostname_ips.results | selectattr('item', 'equalto', item) | first).stdout.split() | first }}"
@@ -96,23 +97,23 @@
         - hostvars[item].ansible_default_ipv4 is not defined
       run_once: true
 
-    - name: 'pul_nomad | consul | Debug - show gathered IPs'
+    - name: "pul_nomad | consul | Debug - show gathered IPs"
       ansible.builtin.debug:
         var: nomad_server_ips
       run_once: true
 
-    - name: 'pul_nomad | consul | Distribute server IPs to all hosts'
+    - name: "pul_nomad | consul | Distribute server IPs to all hosts"
       ansible.builtin.set_fact:
         nomad_server_ips: "{{ hostvars[groups[nomad_server_group][0]].nomad_server_ips }}"
       when: nomad_server_ips is not defined # this is strangely only happening on GA
 
-    - name: 'pul_nomad | consul | Verify we have server IPs'
+    - name: "pul_nomad | consul | Verify we have server IPs"
       ansible.builtin.assert:
         that:
           - nomad_server_ips | length > 0
         fail_msg: "No server IPs found. Ensure facts are gathered for all hosts in {{ nomad_server_group }}"
 
-- name: 'pul_nomad | consul | Check mandatory variables are defined'
+- name: "pul_nomad | consul | Check mandatory variables are defined"
   assert:
     that:
       - consul_gossip_encryption_key is defined
