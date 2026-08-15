@@ -289,13 +289,24 @@
   until: signoz_clickhouse_pvc_bound.stdout == "Bound," ~ signoz_clickhouse_local_pv_name
   when: signoz_clickhouse_local_storage_enabled | default(false) | bool
 
-- name: SigNoz | Wait for ClickHouse pod readiness
-  ansible.builtin.command: >
-    microk8s kubectl -n {{ signoz_namespace }}
-    wait --for=condition=Ready pod/chi-signoz-clickhouse-cluster-0-0-0
-    --timeout=600s
+- name: SigNoz | Check ClickHouse pod readiness
+  ansible.builtin.command:
+    argv:
+      - microk8s
+      - kubectl
+      - --request-timeout=10s
+      - -n
+      - "{{ signoz_namespace }}"
+      - get
+      - pod
+      - chi-signoz-clickhouse-cluster-0-0-0
+      - -o
+      - 'jsonpath={.status.conditions[?(@.type=="Ready")].status}'
+  register: signoz_clickhouse_pod_ready
   changed_when: false
-  when: signoz_clickhouse_local_storage_enabled | default(false) | bool
+  retries: 60
+  delay: 10
+  until: signoz_clickhouse_pod_ready.stdout == "True"
 
 - name: Wait for SigNoz service
   ansible.builtin.command: "microk8s kubectl -n {{ signoz_namespace }} get svc {{ signoz_release_name }}"
