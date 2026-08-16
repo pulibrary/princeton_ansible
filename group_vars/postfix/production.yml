@@ -96,6 +96,11 @@ otel_processors:
         value: production
         action: upsert
 
+  filter/warn_and_above:
+    error_mode: ignore
+    log_conditions:
+      - log.severity_number < SEVERITY_NUMBER_WARN
+
   batch:
     timeout: 10s
     send_batch_size: 8192
@@ -131,6 +136,7 @@ otel_service_pipelines:
     processors:
       - memory_limiter
       - resource
+      - filter/warn_and_above
       - batch
     exporters:
       - loadbalancing
