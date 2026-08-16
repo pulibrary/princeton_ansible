@@ -7,8 +7,20 @@
 
 - name: delete old vips package
   ansible.builtin.file:
-    path: "/opt/vips"
+    path: "{{ item }}"
     state: "absent"
+  loop:
+    - "/opt/vips"
+    - "/usr/local/lib/libvips.a"
+    - "/usr/local/lib/libvips-cpp.a"
+    - "/usr/local/lib/libvips-cpp.la"
+    - "/usr/local/lib/libvips-cpp.so"
+    - "/usr/local/lib/libvips-cpp.so.42"
+    - "/usr/local/lib/libvips-cpp.so.42.14.2"
+    - "/usr/local/lib/libvips.la"
+    - "/usr/local/lib/libvips.so"
+    - "/usr/local/lib/libvips.so.42"
+    - "/usr/local/lib/libvips.so.42.14.2"
   when:
     - running_on_server
     - vips_list.failed or not vips_version in vips_list.stdout
@@ -26,6 +38,8 @@
     name:
       - build-essential
       - pkg-config
+      - meson
+      - ninja-build
       - libglib2.0-dev
       - libexpat1-dev
       - libtiff5-dev
@@ -37,6 +51,7 @@
       - liblcms2-2
       - libpng-dev
       - libpoppler-glib-dev
+      - libfftw3-dev
     state: present
   when:
     - running_on_server
@@ -56,10 +71,14 @@
   when:
     - running_on_server
 
-- name: Compile VIPS
-  ansible.builtin.shell: cd /opt/vips/vips-{{ vips_version }} && ./configure && make && make install
+- name: Compile and install libvips
+  ansible.builtin.shell: |
+    meson setup build --buildtype=release
+    ninja -C build
+    ninja -C build install
   args:
-    creates: /usr/local/bin/vips
+    chdir: "/opt/vips/vips-{{ vips_version }}"
+    creates: "/usr/local/bin/vips"
   when:
     - running_on_server
 
