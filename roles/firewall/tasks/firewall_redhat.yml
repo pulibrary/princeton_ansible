@@ -1,0 +1,84 @@
+---
+- name: Firewall | Install firewalld and iptables
+  ansible.builtin.dnf:
+    name:
+      - firewalld
+      - iptables
+    state: present
+
+- name: Firewall | Enable and start firewalld
+  ansible.builtin.service:
+    name: firewalld
+    enabled: true
+    state: started
+
+- name: Firewall | Install DNF plugins for repository management
+  ansible.builtin.dnf:
+    name: dnf-plugins-core
+    state: present
+
+- name: Firewall | Allow SSH from approved networks with firewalld
+  ansible.posix.firewalld:
+    rich_rule: >-
+      rule family="ipv4" source address="{{ item }}"
+      port protocol="tcp" port="22" accept
+    zone: "{{ firewall_zone }}"
+    permanent: true
+    immediate: true
+    state: enabled
+  loop: "{{ firewall_allowed_admin_cidrs }}"
+
+- name: Firewall | Disable unrestricted SSH service with firewalld
+  ansible.posix.firewalld:
+    service: ssh
+    zone: "{{ firewall_zone }}"
+    permanent: true
+    immediate: true
+    state: disabled
+
+- name: Firewall | Allow HTTP from LibNet with firewalld
+  ansible.posix.firewalld:
+    rich_rule: >-
+      rule family="ipv4" source address="{{ item }}"
+      port protocol="tcp" port="80" accept
+    zone: "{{ firewall_zone }}"
+    permanent: true
+    immediate: true
+    state: enabled
+  loop: "{{ firewall_allowed_libnet_cidrs }}"
+  when: firewall_allow_http | bool
+
+- name: Firewall | Allow BigFix with firewalld
+  ansible.posix.firewalld:
+    port: "{{ firewall_bigfix_port }}/tcp"
+    zone: "{{ firewall_zone }}"
+    permanent: true
+    immediate: true
+    state: enabled
+  when: firewall_allow_bigfix | bool
+
+- name: Firewall | Allow CheckMK from approved networks with firewalld
+  ansible.posix.firewalld:
+    rich_rule: >-
+      rule family="ipv4" source address="{{ item }}"
+      port protocol="tcp" port="{{ firewall_checkmk_port }}" accept
+    zone: "{{ firewall_zone }}"
+    permanent: true
+    immediate: true
+    state: enabled
+  loop: "{{ firewall_checkmk_cidrs }}"
+  when: firewall_allow_checkmk | bool
+
+- name: Firewall | Apply additional firewalld rules
+  ansible.posix.firewalld:
+    rich_rule: >-
+      rule family="ipv4" source address="{{ item.source }}"
+      port protocol="{{ item.protocol | default('tcp') }}"
+      port="{{ item.port }}" accept
+    zone: "{{ firewall_zone }}"
+    permanent: true
+    immediate: true
+    state: enabled
+  loop: "{{ firewall_additional_rules }}"
+  loop_control:
+    label: "{{ item.port }}/{{ item.protocol | default('tcp') }}"

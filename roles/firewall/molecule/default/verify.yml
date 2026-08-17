@@ -1,0 +1,31 @@
+---
+- name: Verify
+  hosts: all
+  become: true
+  tasks:
+    - name: Read UFW status
+      ansible.builtin.command: ufw status
+      register: firewall_verify_ufw
+      changed_when: false
+
+    - name: Assert UFW is active
+      ansible.builtin.assert:
+        that:
+          - "'Status: active' in firewall_verify_ufw.stdout"
+
+    - name: Read ICMP redirect values
+      ansible.builtin.command:
+        argv:
+          - sysctl
+          - -n
+          - net.ipv4.conf.all.accept_redirects
+          - net.ipv4.conf.default.accept_redirects
+          - net.ipv6.conf.all.accept_redirects
+          - net.ipv6.conf.default.accept_redirects
+      register: firewall_verify_sysctl
+      changed_when: false
+
+    - name: Assert ICMP redirects are disabled
+      ansible.builtin.assert:
+        that:
+          - firewall_verify_sysctl.stdout_lines | unique == ['0']
