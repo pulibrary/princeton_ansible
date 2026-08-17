@@ -49,9 +49,11 @@
   ansible.builtin.command: "microk8s kubectl get storageclass {{ k8s_nfs_storage_class }}"
   changed_when: false
 
-- name: Verify NFS provisioner pod is running
-  ansible.builtin.command: >-
-    microk8s kubectl -n {{ k8s_nfs_namespace }}
-    rollout status deployment/{{ k8s_nfs_release_name }}
-    --timeout=5m
+- name: Verify NFS provisioner deployment is available
+  ansible.builtin.command: >
+    microk8s kubectl -n platform
+    get deployment nfs-subdir-external-provisioner
+    -o jsonpath={.status.availableReplicas}
+  register: nfs_provisioner_available
   changed_when: false
+  failed_when: nfs_provisioner_available.stdout | int < 1

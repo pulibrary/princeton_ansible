@@ -19,8 +19,6 @@ checkmk_agent_server_protocol: http
 #   - path: /linux/sandboxes
 #     title: Sandboxes
 
-
-
 checkmk_observability_hosts:
   pulmonitor-prod1.lib.princeton.edu:
     site_name: production
@@ -53,7 +51,6 @@ otel_signoz_backends: >-
     checkmk_observability_hosts[inventory_hostname]['otlp_backends']
   }}
 
-
 otel_service_name: otelcol-contrib
 otel_service_user: root
 otel_service_group: root
@@ -73,7 +70,6 @@ otel_default_resource_attributes:
       else 'remote'
     }}
 
-
 otel_receivers:
   otlp/beyla:
     protocols:
@@ -83,24 +79,48 @@ otel_receivers:
       http:
         endpoint: 127.0.0.1:4318
 
-  # Checkmk/OMD logs for the site assigned to this host.
+  # Checkmk logs which use Python-style numeric severity levels.
+  #
+  # Observed examples:
+  #   [15] debug-ish / verbose
+  #   [20] info
+  #   [40] error
+  #
+  # Only WARN (30) and above will reach SigNoz because this receiver
+  # passes through filter/warn_and_above in the logs pipeline.
   filelog/checkmk:
     include:
       - "/omd/sites/{{ checkmk_site_name }}/var/log/*.log"
-      - "/omd/sites/{{ checkmk_site_name }}/var/log/apache/access_log"
-      - "/omd/sites/{{ checkmk_site_name }}/var/log/apache/error_log"
 
     exclude:
+      # CMC uses a different numeric logging/verbosity scale and is
+      # handled by its own receiver and pipeline below.
+      - "/omd/sites/{{ checkmk_site_name }}/var/log/cmc.log"
+
+      # Ignore rotated logs.
       - "/omd/sites/{{ checkmk_site_name }}/var/log/*.gz"
       - "/omd/sites/{{ checkmk_site_name }}/var/log/*.[0-9]"
-      - "/omd/sites/{{ checkmk_site_name }}/var/log/apache/*.gz"
-      - "/omd/sites/{{ checkmk_site_name }}/var/log/apache/*.[0-9]"
 
     start_at: end
     include_file_name: true
     include_file_path: true
 
     operators:
+      - type: regex_parser
+        regex: '^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:,\d{3})? \[(?P<severity>[0-9]+)\]'
+        severity:
+          parse_from: attributes.severity
+          preset: none
+          mapping:
+            debug:
+              - 10
+              - 15
+            info: 20
+            warn: 30
+            error: 40
+            fatal: 50
+          overwrite_text: true
+
       - type: add
         field: attributes["log.source"]
         value: checkmk
@@ -109,18 +129,95 @@ otel_receivers:
         field: attributes["checkmk.site.name"]
         value: "{{ checkmk_site_name }}"
 
-  filelog/system:
+  # CMC does not use the same numeric severity scale as the other
+  # Checkmk logs. For example, observed "[4]" records can contain
+  # actual errors. Keep CMC logs unfiltered rather than risk dropping
+  # operationally useful errors.
+  # https://docs.checkmk.com/latest/en/notifications.html
+  filelog/checkmk-cmc:
     include:
-      - /var/log/syslog
-      - /var/log/auth.log
+      - "/omd/sites/{{ checkmk_site_name }}/var/log/cmc.log"
 
     exclude:
-      - /var/log/*.gz
-      - /var/log/*.[0-9]
+      - "/omd/sites/{{ checkmk_site_name }}/var/log/cmc.log.*"
 
     start_at: end
     include_file_name: true
     include_file_path: true
+
+    operators:
+      - type: add
+        field: attributes["log.source"]
+        value: checkmk-cmc
+
+      - type: add
+        field: attributes["checkmk.site.name"]
+        value: "{{ checkmk_site_name }}"
+
+  # Apache error log only.
+  #
+  # access_log is intentionally not collected because HTTP access
+  # records do not have WARN/ERROR severity semantics.
+  filelog/checkmk-apache-error:
+    include:
+      - "/omd/sites/{{ checkmk_site_name }}/var/log/apache/error_log"
+
+    exclude:
+      - "/omd/sites/{{ checkmk_site_name }}/var/log/apache/*.gz"
+      - "/omd/sites/{{ checkmk_site_name }}/var/log/apache/*.[0-9]"
+
+    start_at: end
+    include_file_name: true
+    include_file_path: true
+
+    operators:
+      - type: regex_parser
+        regex: '^\[[^\]]+\] \[[^:\]]+:(?P<severity>[^\]]+)\]'
+        severity:
+          parse_from: attributes.severity
+          preset: none
+          mapping:
+            debug:
+              - debug
+              - trace1
+              - trace2
+              - trace3
+              - trace4
+              - trace5
+              - trace6
+              - trace7
+              - trace8
+            info:
+              - info
+              - notice
+            warn: warn
+            error: error
+            fatal:
+              - crit
+              - alert
+              - emerg
+          overwrite_text: true
+
+      - type: add
+        field: attributes["log.source"]
+        value: checkmk-apache
+
+      - type: add
+        field: attributes["checkmk.site.name"]
+        value: "{{ checkmk_site_name }}"
+
+  # System logs at warning severity and above.
+  #
+  # This replaces direct file tailing of:
+  #   /var/log/syslog
+  #   /var/log/auth.log
+  #
+  # journald performs the priority filtering before sending records
+  # into the Collector pipeline.
+  # https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/main/receiver/journaldreceiver/README.md
+  journald/system:
+    start_at: end
+    priority: warning
 
     operators:
       - type: add
@@ -178,6 +275,16 @@ otel_processors:
     limit_mib: 512
     spike_limit_mib: 128
 
+  # Drop any parsed log record below WARN.
+  #
+  # This applies to the normal Checkmk logs, Apache error logs,
+  # and journald/system. CMC logs intentionally use a separate
+  # pipeline without this processor.
+  filter/warn_and_above:
+    error_mode: ignore
+    log_conditions:
+      - log.severity_number < SEVERITY_NUMBER_WARN
+
   batch:
     timeout: 10s
     send_batch_size: 8192
@@ -209,14 +316,30 @@ otel_exporters:
       static:
         hostnames: "{{ otel_signoz_backends }}"
 
-otel_extensions: []
-
+otel_extensions: {}
 
 otel_service_pipelines:
+  # WARN and above only.
   logs:
     receivers:
       - filelog/checkmk
-      - filelog/system
+      - filelog/checkmk-apache-error
+      - journald/system
+
+    processors:
+      - memory_limiter
+      - resource
+      - filter/warn_and_above
+      - batch
+
+    exporters:
+      - loadbalancing
+
+  # CMC uses a different logging level scheme, so do not apply
+  # the generic WARN severity filter.
+  logs/cmc:
+    receivers:
+      - filelog/checkmk-cmc
 
     processors:
       - memory_limiter

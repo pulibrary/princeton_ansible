@@ -31,6 +31,51 @@ otel_receivers:
       http:
         endpoint: 127.0.0.1:4318
 
+  filelog/mysql-error:
+    include:
+      - /var/log/mysql/mysql_error.log
+    start_at: end
+    include_file_path: true
+    include_file_name: true
+    operators:
+      - type: regex_parser
+        id: parse_mysql_error
+        regex: '^\S+(?:\s+\S+)?\s+\d+\s+\[(?P<level>[^\]]+)\]\s+(?P<message>[\s\S]*)$'
+        parse_from: body
+        on_error: send
+
+      - type: severity_parser
+        id: parse_mysql_severity
+        parse_from: attributes.level
+        mapping:
+          debug:
+            - Debug
+          info:
+            - Note
+            - Info
+          warn:
+            - Warning
+          error:
+            - Error
+          fatal:
+            - Critical
+            - Fatal
+        on_error: send
+
+      - type: move
+        id: move_mysql_message_to_body
+        from: attributes.message
+        to: body
+        on_error: send
+
+      - type: add
+        field: attributes.log_type
+        value: mysql_error
+
+      - type: add
+        field: attributes.service_name
+        value: mysql
+
   hostmetrics:
     collection_interval: 30s
     scrapers:
@@ -42,6 +87,11 @@ otel_receivers:
       network: {}
 
 otel_processors:
+  filter/warn_and_above:
+    error_mode: ignore
+    log_conditions:
+      - log.severity_number < SEVERITY_NUMBER_WARN
+
   batch:
     send_batch_max_size: 1024
     send_batch_size: 512
@@ -75,6 +125,17 @@ otel_exporters:
     verbosity: basic
 
 otel_service_pipelines:
+  logs:
+    receivers:
+      - filelog/mysql-error
+    processors:
+      - resource
+      - filter/warn_and_above
+      - batch
+    exporters:
+      - loadbalancing
+      - debug
+
   metrics:
     receivers:
       - otlp
@@ -95,4 +156,3 @@ otel_service_pipelines:
     exporters:
       - loadbalancing
       - debug
-
