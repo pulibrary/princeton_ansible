@@ -117,7 +117,7 @@
 
 - name: Verify Nomad Clients
   hosts: nomad_clients
-  gather_facts: false
+  gather_facts: true
   tasks:
     - name: Check Nomad service is running on client
       ansible.builtin.command: systemctl is-active nomad
@@ -142,6 +142,8 @@
       ansible.builtin.command: podman info
       register: podman_info
       changed_when: false
+      when:
+        - "ansible_os_family == 'RedHat'"
 
     - name: Verify Nomad client is registered and ready
       ansible.builtin.assert:
@@ -157,6 +159,8 @@
           - "'podman' in nomad_node_status.stdout"
         fail_msg: "Podman driver not available on Nomad client"
         success_msg: "Podman driver is available"
+      when:
+        - "ansible_os_family == 'RedHat'"
 
     - name: Verify podman is set up with sqlite
       ansible.builtin.assert:
@@ -164,6 +168,17 @@
           - "'sqlite' in podman_info.stdout"
         fail_msg: "Podman not configured to use sqlite"
         success_msg: "Podman configured to use sqlite"
+      when:
+        - "ansible_os_family == 'RedHat'"
+
+    - name: Verify Docker driver is available (Ubuntu clients only)
+      ansible.builtin.assert:
+        that:
+          - "'docker' in nomad_node_status.stdout"
+        fail_msg: "Docker driver not available on Nomad client"
+        success_msg: "Docker driver is available"
+      when:
+        - "ansible_os_family == 'Debian'"
 
 - name: Verify Consul-Nomad Integration
   hosts: nomad_servers[0]
