@@ -33,9 +33,7 @@ Service-specific rules can be supplied through group variables:
 
 ```yaml
 firewall_additional_rules:
-  - port: 2181
-    protocol: tcp
-    source: 172.20.80.0/22
+  - source: 172.20.80.0/22
     comment: PU Subnet - LibNetPvt
 ```
 

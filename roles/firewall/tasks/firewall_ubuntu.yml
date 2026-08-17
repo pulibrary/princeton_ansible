@@ -63,13 +63,13 @@
   community.general.ufw:
     rule: "{{ item.rule | default('allow') }}"
     direction: "{{ item.direction | default('in') }}"
-    proto: "{{ item.protocol | default('tcp') }}"
-    port: "{{ item.port | string }}"
+    proto: "{{ item.protocol | default(omit) }}"
+    port: "{{ (item.port | string) if item.port is defined else omit }}"
     from_ip: "{{ item.source }}"
     comment: "{{ item.comment | default(omit) }}"
   loop: "{{ firewall_additional_rules }}"
   loop_control:
-    label: "{{ item.port }}/{{ item.protocol | default('tcp') }}"
+    label: "{{ item.source }}"
 
 - name: Firewall | Enable UFW
   community.general.ufw:

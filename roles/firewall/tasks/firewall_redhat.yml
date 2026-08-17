@@ -73,12 +73,15 @@
   ansible.posix.firewalld:
     rich_rule: >-
       rule family="ipv4" source address="{{ item.source }}"
+      {% if item.port is defined %}
       port protocol="{{ item.protocol | default('tcp') }}"
-      port="{{ item.port }}" accept
+      port="{{ item.port }}"
+      {% endif %}
+      accept
     zone: "{{ firewall_zone }}"
     permanent: true
     immediate: true
     state: enabled
   loop: "{{ firewall_additional_rules }}"
   loop_control:
-    label: "{{ item.port }}/{{ item.protocol | default('tcp') }}"
+    label: "{{ item.source }}"
