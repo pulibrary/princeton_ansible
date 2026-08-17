@@ -68,8 +68,8 @@ job "circleci-runner" {
         EOF
       }
       resources {
-        cpu    = 4000
-        memory = 8192
+        cpu    = 2000
+        memory = 2048
       }
     }
   }
