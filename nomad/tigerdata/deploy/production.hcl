@@ -22,12 +22,6 @@ job "tigerdata" {
       size = 25000
     }
 
-    network {
-      dns {
-        servers = ["128.112.129.209", "8.8.8.8", "8.8.4.4"]
-      }
-    }
-
     service {
       name = "tigerdata-deploy"
       tags = ["logging"]
@@ -60,15 +54,21 @@ job "tigerdata" {
         image    = "docker:27-dind"
         cgroupns = "private"
 
-        cap_add      = ["sys_admin", "net_admin", "mknod", "setfcap", "audit_write"]
-        security_opt = ["seccomp=unconfined", "apparmor=unconfined"]
         dns_servers = ["128.112.129.209", "8.8.8.8", "8.8.4.4"]
 
-        args = [
-          "--data-root=/alloc/docker",
-          "--host=unix:///alloc/docker.sock",
-          "--storage-driver=overlay2",
-          "--group=1500",
+        cap_add = ["sys_admin", "net_admin", "mknod", "setfcap", "audit_write"]
+
+        sysctl = {
+          "net.ipv6.conf.all.disable_ipv6"     = "1"
+          "net.ipv6.conf.default.disable_ipv6" = "1"
+        }
+
+        entrypoint = ["/bin/sh", "-c",
+          "mount -o remount,bind,rw /proc/sys /proc/sys || echo 'REMOUNT FAILED' >&2; exec dockerd-entrypoint.sh --data-root=/alloc/docker --host=unix:///alloc/docker.sock --storage-driver=overlay2 --group=1500"]
+
+        security_opt = [
+          "seccomp=unconfined",
+          "apparmor=unconfined",
         ]
       }
 
