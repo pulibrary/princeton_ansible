@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+IPTABLES_BIN="$(command -v iptables)"
+if [[ -z "${IPTABLES_BIN}" ]]; then
+  echo "iptables not found" >&2
+  exit 1
+fi
+
+add_rule() {
+  local table="$1"
+  shift
+
+  if [[ "${table}" == "filter" ]]; then
+    if ! "${IPTABLES_BIN}" -C "$@" >/dev/null 2>&1; then
+      "${IPTABLES_BIN}" -A "$@"
+    fi
+  else
+    if ! "${IPTABLES_BIN}" -t "${table}" -C "$@" >/dev/null 2>&1; then
+      "${IPTABLES_BIN}" -t "${table}" -A "$@"
+    fi
+  fi
+}
+
+{% if gateway_nat_enable_ipv4_forwarding | bool %}
+# Forward new and established traffic from internal to external.
+add_rule filter FORWARD   -i {{ gateway_nat_internal_interface | quote }}   -o {{ gateway_nat_external_interface | quote }}   -s {{ gateway_nat_internal_cidr | quote }} {% if gateway_nat_external_cidr | length > 0 %}  -d {{ gateway_nat_external_cidr | quote }} {% endif %}  -m conntrack --ctstate NEW,ESTABLISHED,RELATED   -j ACCEPT
+
+# Allow reply traffic back from external to internal.
+add_rule filter FORWARD   -i {{ gateway_nat_external_interface | quote }}   -o {{ gateway_nat_internal_interface | quote }} {% if gateway_nat_external_cidr | length > 0 %}  -s {{ gateway_nat_external_cidr | quote }} {% endif %}  -d {{ gateway_nat_internal_cidr | quote }}   -m conntrack --ctstate ESTABLISHED,RELATED   -j ACCEPT
+{% endif %}
+
+{% if gateway_nat_bidirectional_forward | bool %}
+# Optional: allow flows initiated from external to internal.
+add_rule filter FORWARD   -i {{ gateway_nat_external_interface | quote }}   -o {{ gateway_nat_internal_interface | quote }} {% if gateway_nat_external_cidr | length > 0 %}  -s {{ gateway_nat_external_cidr | quote }} {% endif %}  -d {{ gateway_nat_internal_cidr | quote }}   -m conntrack --ctstate NEW,ESTABLISHED,RELATED   -j ACCEPT
+{% endif %}
+
+# Always masquerade traffic sourced from the internal subnet when exiting the external interface.
+add_rule nat POSTROUTING   -s {{ gateway_nat_internal_cidr | quote }}   -o {{ gateway_nat_external_interface | quote }}   -j MASQUERADE
+
+{% for rule in gateway_nat_extra_forward_rules %}
+add_rule filter FORWARD {% if rule.in_interface is defined %}  -i {{ rule.in_interface | quote }} {% endif %}{% if rule.out_interface is defined %}  -o {{ rule.out_interface | quote }} {% endif %}{% if rule.source is defined %}  -s {{ rule.source | quote }} {% endif %}{% if rule.destination is defined %}  -d {{ rule.destination | quote }} {% endif %}  -j ACCEPT
+{% endfor %}
