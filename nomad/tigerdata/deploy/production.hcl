@@ -1,5 +1,5 @@
 variable "branch_or_sha" {
-  type    = string
+  type = string
   default = "main"
 }
 
@@ -7,7 +7,7 @@ job "tigerdata" {
   region      = "global"
   datacenters = ["dc1"]
   type        = "service"
-  node_pool   = "all"
+  node_pool = "all"
 
   group "deploy" {
     # Let's do two staging/two prod
@@ -16,7 +16,7 @@ job "tigerdata" {
       weight    = 100
     }
 
-    count = 1
+    count = 6
 
     ephemeral_disk {
       size = 25000
@@ -35,9 +35,9 @@ job "tigerdata" {
 
     restart {
       attempts = 10
-      delay    = "5s"
+      delay = "5s"
       interval = "5m"
-      mode     = "delay"
+      mode = "delay"
     }
 
     reschedule {
@@ -104,9 +104,9 @@ job "tigerdata" {
 
       template {
         destination = "${NOMAD_SECRETS_DIR}/env.vars"
-        env         = true
+        env = true
         change_mode = "restart"
-        data        = <<EOF
+        data = <<EOF
         {{- with nomadVar "nomad/jobs/tigerdata" -}}
         CIRCLECI_RESOURCE_CLASS = pulibrary/tigerdata-deploy
         CIRCLECI_API_TOKEN = {{.CIRCLECI_API_TOKEN}}
