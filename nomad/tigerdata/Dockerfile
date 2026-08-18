@@ -56,6 +56,19 @@ RUN set -ex; \
       ; \
       sudo rm -rf /var/lib/apt/lists/*
 
+RUN set -ex; \
+      sudo install -m 0755 -d /etc/apt/keyrings; \
+      curl -fsSL https://download.docker.com/linux/debian/gpg \
+      | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg; \
+      sudo chmod a+r /etc/apt/keyrings/docker.gpg; \
+      echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.gpg] \
+      https://download.docker.com/linux/debian bookworm stable" \
+      | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null; \
+      sudo apt-get update; \
+      sudo apt-get install -y --no-install-recommends docker-ce-cli; \
+      sudo rm -rf /var/lib/apt/lists/*; \
+      docker --version
+
 # 2. Install the latest stable Google Chrome, required by Capybara feature specs
 RUN set -ex; \
       curl -fsSL -o /tmp/google-chrome-stable_current_amd64.deb \
@@ -100,20 +113,5 @@ RUN sudo /usr/local/ruby-build/install.sh
 # Install the version of Ruby we want and add to the path
 RUN sudo ruby-build ${RUBY_VERSION} /usr/local/ruby
 ENV PATH="/usr/local/ruby/bin:${PATH}"
-
-# Install Docker
-RUN set -ex; \
-      sudo install -m 0755 -d /etc/apt/keyrings; \
-      curl -fsSL https://download.docker.com/linux/debian/gpg \
-        | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg; \
-      sudo chmod a+r /etc/apt/keyrings/docker.gpg; \
-      echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.gpg] \
-        https://download.docker.com/linux/debian bookworm stable" \
-        | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null; \
-      sudo apt-get update; \
-      sudo apt-get install -y --no-install-recommends \
-        docker-ce docker-ce-cli containerd.io docker-buildx-plugin; \
-      sudo rm -rf /var/lib/apt/lists/*; \
-      sudo usermod -aG docker circleci
 
 RUN echo "$(ruby --version)"
