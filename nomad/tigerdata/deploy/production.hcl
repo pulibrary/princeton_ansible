@@ -57,15 +57,18 @@ job "tigerdata" {
       }
 
       config {
-        image       = "docker:27-dind"
-        privileged  = true
-        userns_mode = "host"
-        cgroupns    = "private"
+        image    = "docker:27-dind"
+        cgroupns = "private"
+
+        cap_add      = ["sys_admin", "net_admin", "mknod", "setfcap", "audit_write"]
+        security_opt = ["seccomp=unconfined", "apparmor=unconfined"]
+        dns_servers = ["128.112.129.209", "8.8.8.8", "8.8.4.4"]
 
         args = [
           "--data-root=/alloc/docker",
           "--host=unix:///alloc/docker.sock",
           "--storage-driver=overlay2",
+          "--group=1500",
         ]
       }
 
