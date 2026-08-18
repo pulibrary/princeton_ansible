@@ -1,0 +1,15 @@
+---
+- name: Zookeeper | Ensure UFW is present
+  ansible.builtin.apt:
+    name: ufw
+    state: present
+
+- name: Zookeeper | Allow ZooKeeper ports from approved networks
+  community.general.ufw:
+    rule: allow
+    direction: in
+    proto: tcp
+    from_ip: "{{ item.0 }}"
+    to_port: "{{ item.1 }}"
+    comment: PU Subnet - LibNetPvt
+  loop: "{{ zk_firewall_allowed_cidrs | product(zk_firewall_ports) | list }}"
