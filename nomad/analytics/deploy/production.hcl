@@ -41,14 +41,20 @@ job "analytics-production" {
     }
 
     task "app" {
-      driver = "podman"
+      driver = "docker"
+
+      user = "1001:1001"
 
       config {
         image        = "ghcr.io/umami-software/umami:3.2.0"
         ports = ["http"]
-        # Maps root to a random permissionless user on the host, prevents someone breaking out of container from having any permissions on the host.
-        # REQUIRES size=65536, otherwise it doesn't do the mapping and silently fails.
-        userns = "auto:size=65536"
+        # Don't allow writing anything to the file system.
+        readonly_rootfs = true
+        # We don't need any CAP privileges - don't allow any privilege escalation.
+        cap_drop = ["ALL"]
+        security_opt = [
+          "no-new-privileges"
+        ]
       }
 
       template {
