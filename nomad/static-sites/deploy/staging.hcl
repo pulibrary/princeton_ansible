@@ -115,7 +115,10 @@ map $http_x_forwarded_host $site_root {
     # cicognara
     cicognara-staging.lib.princeton.edu    /srv/sites/cicognara;
 }
-
+set_real_ip_from 172.20.80.13;
+set_real_ip_from 172.20.80.14;
+real_ip_header   X-Real-IP;
+real_ip_recursive on;
 server {
     listen 8080 default_server;
     root   $site_root;
