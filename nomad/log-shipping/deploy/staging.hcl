@@ -41,19 +41,19 @@ job "log-shipping-staging" {
       driver = "docker"
 
       env {
-        VERBOSE  = 2
-        LOG_TAG  = "logging"
+        VERBOSE = 2
+        LOG_TAG = "logging"
         LOG_FILE = "${NOMAD_ALLOC_DIR}/nomad-logs.log"
         NOMAD_ADDR = "http://host.docker.internal:4646"
       }
 
       identity {
-        env  = true
+        env = true
         file = true
       }
 
       config {
-        image       = "docker.io/sofixa/nomad_follower:latest"
+        image = "docker.io/sofixa/nomad_follower:latest"
         extra_hosts = ["host.docker.internal:host-gateway"]
       }
 
@@ -66,9 +66,19 @@ job "log-shipping-staging" {
     task "alloy" {
       driver = "docker"
 
+      env {
+        NODE_NAME = "${node.unique.name}"
+      }
+
+      identity {
+        env = true
+        file = true
+      }
+
       config {
         image = "docker.io/grafana/alloy:latest"
         ports = ["otlp_grpc", "otlp_http"]
+        extra_hosts = ["host.docker.internal:host-gateway"]
         args = [
           "run",
           "local/config.alloy",
@@ -112,6 +122,7 @@ job "log-shipping-staging" {
                       task_name    = "task_name",
                   }
               }
+
               stage.drop {
                   expression = "\"(Consul Health Check|check_http[^\"]*)\""
                   drop_counter_reason = "health_check"
@@ -160,6 +171,60 @@ job "log-shipping-staging" {
 
               output {
                   logs = [otelcol.exporter.otlp.signoz.input]
+              }
+          }
+
+          prometheus.scrape "nomad_client" {
+              targets = [{
+                  __address__ = "host.docker.internal:4646",
+                  __metrics_path__ = "/v1/metrics",
+                  __param_format = "prometheus",
+              }]
+
+              bearer_token_file = "/secrets/nomad_token"
+              forward_to = [otelcol.receiver.prometheus.bridge.receiver]
+              scrape_interval = "60s"
+              job_name = "nomad-client"
+          }
+
+          prometheus.exporter.self "alloy" { }
+
+          prometheus.scrape "alloy_self" {
+              targets  = prometheus.exporter.self.alloy.targets
+              forward_to = [otelcol.receiver.prometheus.bridge.receiver]
+              scrape_interval = "60s"
+              job_name = "alloy"
+          }
+
+          prometheus.relabel "trim" {
+              forward_to = [otelcol.receiver.prometheus.bridge.receiver]
+              rule {
+                  source_labels = ["__name__"]
+                  regex = "nomad_client_(host|allocs)_(cpu|memory).*|nomad_client_allocations_(running|pending|failed)"
+                  action = "keep"
+              }
+          }
+
+          otelcol.receiver.prometheus "bridge" {
+              output {
+                  metrics = [otelcol.processor.transform.metric_attrs.input]
+              }
+          }
+
+          otelcol.processor.transform "metric_attrs" {
+              error_mode = "propagate"
+
+              metric_statements {
+                  context = "resource"
+                  statements = [
+                      "set(attributes[\"service.name\"], \"nomad-client\")",
+                      "set(attributes[\"host.name\"], \"{{ env "NODE_NAME" }}\")",
+                      "set(attributes[\"deployment.environment\"], \"staging\")",
+                  ]
+              }
+
+              output {
+                  metrics = [otelcol.exporter.otlp.signoz.input]
               }
           }
 
