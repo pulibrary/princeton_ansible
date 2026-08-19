@@ -16,11 +16,9 @@ job "static-sites-staging" {
       port "http" { to = 8080 }
     }
 
-    # milberg
     service {
-      name = "milberg-staging-web"
       port = "http"
-
+      tags = ["logging"]
       check {
         type     = "http"
         port     = "http"
@@ -32,37 +30,21 @@ job "static-sites-staging" {
         }
       }
     }
+
+    # milberg
+    service {
+      name = "milberg-staging-web"
+      port = "http"
+    }
     # daviesproject
     service {
       name = "daviesproject-staging-web"
       port = "http"
-
-      check {
-        type     = "http"
-        port     = "http"
-        path     = "/"
-        interval = "10s"
-        timeout  = "2s"
-        header {
-          X-Forwarded-Host = ["daviesproject-staging.lib.princeton.edu"]
-        }
-      }
     }
     # cicognara
     service {
       name = "cicognara-staging-web"
       port = "http"
-
-      check {
-        type     = "http"
-        port     = "http"
-        path     = "/"
-        interval = "10s"
-        timeout  = "2s"
-        header {
-          X-Forwarded-Host = ["cicognara-staging.lib.princeton.edu"]
-        }
-      }
     }
 
     task "nginx" {
@@ -118,6 +100,11 @@ job "static-sites-staging" {
         destination = "local/nginx/sites.conf"
         change_mode = "restart"
         data        = <<EOF
+log_format json_combined escape=json
+  '{"time":"$time_iso8601","remote_addr":"$remote_addr",'
+  '"request":"$request","status":$status,'
+  '"bytes":$body_bytes_sent,"user_agent":"$http_user_agent",'
+  '"host":"$http_x_forwarded_host"}';
 map $http_x_forwarded_host $site_root {
     hostnames;
     default                              /srv/sites/none;
@@ -133,6 +120,7 @@ server {
     listen 8080 default_server;
     root   $site_root;
     index  index.html index.htm;
+    access_log /dev/stdout json_combined;
 
     location / {
         try_files $uri $uri/ =404;
