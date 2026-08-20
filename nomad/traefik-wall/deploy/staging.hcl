@@ -51,7 +51,7 @@ job "traefik-wall-staging" {
     }
 
     task "traefik" {
-      driver = "podman"
+      driver = "docker"
 
       env {
         # Challenge after only 1 request.
@@ -70,6 +70,7 @@ job "traefik-wall-staging" {
           "local/traefik-config:/etc/traefik/config.d",
           "local/challenge.tmpl.html:/challenge.tmpl.html"
         ]
+        extra_hosts = ["host.containers.internal:host-gateway"]
       }
 
       # Static Configuration
@@ -82,16 +83,7 @@ job "traefik-wall-staging" {
         destination = "local/traefik.yml"
       }
 
-      template {
-        destination = "${NOMAD_SECRETS_DIR}/env.vars"
-        env = true
-        change_mode = "restart"
-        data = <<EOF
-        {{- with nomadVar "nomad/jobs/traefik-wall-staging" -}}
-        CONSUL_HTTP_TOKEN = {{ .CONSUL_ACL_TOKEN }}
-        {{- end -}}
-        EOF
-      }
+      consul {}
 
       # Plugin Configuration
       artifact {
@@ -164,7 +156,7 @@ job "traefik-wall-staging" {
     }
 
     task "traefik" {
-      driver = "podman"
+      driver = "docker"
 
       env {
         rate_limit = 20
@@ -180,18 +172,10 @@ job "traefik-wall-staging" {
           "local/traefik-config:/etc/traefik/config.d",
           "local/challenge.tmpl.html:/challenge.tmpl.html"
         ]
+        extra_hosts = ["host.containers.internal:host-gateway"]
       }
 
-      template {
-        destination = "${NOMAD_SECRETS_DIR}/env.vars"
-        env = true
-        change_mode = "restart"
-        data = <<EOF
-        {{- with nomadVar "nomad/jobs/traefik-wall-staging" -}}
-        CONSUL_HTTP_TOKEN = {{ .CONSUL_ACL_TOKEN }}
-        {{- end -}}
-        EOF
-      }
+      consul {}
 
       # Static Configuration
       artifact {

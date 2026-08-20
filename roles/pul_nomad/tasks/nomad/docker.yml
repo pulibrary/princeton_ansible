@@ -175,3 +175,17 @@
     - 4318
   when: running_on_server
   become: true
+
+- name: 'pul_nomad | nomad | docker | Allow containers to talk to Consul'
+  community.general.ufw:
+    rule: allow
+    direction: in
+    interface: docker0
+    to_port: '8500'
+    proto: "{{ item }}"
+    comment: dns for containers
+  loop:
+    - udp
+    - tcp
+  when: running_on_server
+  become: true
