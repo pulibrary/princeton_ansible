@@ -16,11 +16,10 @@ job "static-sites-production" {
       port "http" { to = 8080 }
     }
 
-    # milberg
+    # This is the health endpoint, that determines if nginx is running
     service {
-      name = "milberg-production-web"
       port = "http"
-
+      tags = ["logging"]
       check {
         type     = "http"
         port     = "http"
@@ -32,37 +31,21 @@ job "static-sites-production" {
         }
       }
     }
+
+    # milberg
+    service {
+      name = "milberg-production-web"
+      port = "http"
+    }
     # daviesproject
     service {
       name = "daviesproject-production-web"
       port = "http"
-
-      check {
-        type     = "http"
-        port     = "http"
-        path     = "/"
-        interval = "10s"
-        timeout  = "2s"
-        header {
-          X-Forwarded-Host = ["daviesproject.princeton.edu"]
-        }
-      }
     }
     # cicognara
     service {
       name = "cicognara-production-web"
       port = "http"
-
-      check {
-        type     = "http"
-        port     = "http"
-        path     = "/"
-        interval = "10s"
-        timeout  = "2s"
-        header {
-          X-Forwarded-Host = ["cicognara.org"]
-        }
-      }
     }
 
     task "nginx" {
