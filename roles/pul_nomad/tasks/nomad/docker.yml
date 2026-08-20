@@ -135,3 +135,43 @@
     name: pulsys
     groups: docker
     append: true
+
+# Containers should be able to query nomad if they want and our ACLs allow it.
+- name: 'pul_nomad | nomad | docker | allow container access to Nomad API'
+  community.general.ufw:
+    rule: allow
+    direction: in
+    interface: docker0
+    to_port: '4646'
+    proto: tcp
+    comment: nomad api for containers
+  when: running_on_server
+  become: true
+
+- name: 'pul_nomad | nomad | docker | Allow container DNS resolution'
+  community.general.ufw:
+    rule: allow
+    direction: in
+    interface: docker0
+    to_port: '53'
+    proto: "{{ item }}"
+    comment: dns for containers
+  loop:
+    - udp
+    - tcp
+  when: running_on_server
+  become: true
+
+- name: 'pul_nomad | nomad | docker | Allow OTEL'
+  community.general.ufw:
+    rule: allow
+    direction: in
+    interface: docker0
+    to_port: '{{ item }}'
+    proto: "tcp"
+    comment: otel for containers
+  loop:
+    - 4317
+    - 4318
+  when: running_on_server
+  become: true

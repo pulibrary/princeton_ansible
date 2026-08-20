@@ -20,3 +20,40 @@
     - ../group_vars/postgresql/{{ runtime_env | default('staging') }}.yml
   roles:
     - role: roles/nomad_app
+  tasks:
+    - name: Create Nomad policy directory
+      ansible.builtin.file:
+        path: /etc/nomad.d/policies
+        state: directory
+        owner: root
+        group: root
+        mode: '0750'
+
+    - name: Write log shipping workload identity policy
+      ansible.builtin.copy:
+        dest: /etc/nomad.d/policies/log-shipping-policy.hcl
+        owner: root
+        group: root
+        mode: '0640'
+        content: |
+          agent {
+            policy = "read"
+          }
+          node {
+            policy = "read"
+          }
+          namespace "default" {
+            policy = "read"
+            capabilities = ["read-logs"]
+          }
+
+    - name: Create workload identity policy for log shipping
+      ansible.builtin.command:
+        cmd: >
+          /usr/local/bin/nomad acl policy apply
+          -namespace default -job log-shipping-staging
+          log-shipping-policy /etc/nomad.d/policies/log-shipping-policy.hcl
+      environment:
+        NOMAD_TOKEN: '{{ pul_nomad_management_token }}'
+      run_once: true
+      changed_when: false
