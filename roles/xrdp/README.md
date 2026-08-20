@@ -37,8 +37,14 @@ Defined in `defaults/main.yml`:
 ```yaml
 xrdp_port: 3389
 
-xrdp_manage_ufw: false
-xrdp_ufw_allow_from: "128.112.0.0/16"
+xrdp_manage_ufw: true
+xrdp_ufw_allow_from:
+  - 10.249.64.0/18
+  - 10.249.0.0/18
+  - 128.112.0.0/16
+  - 172.20.80.0/22
+  - 172.20.95.0/24
+  - 172.20.192.0/19
 
 xrdp_desktop: xfce
 
@@ -72,25 +78,42 @@ xrdp_port: 3389
 
 `xrdp_manage_ufw`
 
-Whether the role should attempt to create a UFW allow rule for the XRDP port.
+Whether the role creates a UFW allow rule for the XRDP port.
+
+This is enabled by default. The `firewall` role sets a default-deny incoming
+policy, so a remote desktop host that does not open this port cannot be reached
+at all, and RDP clients report only a generic "cannot connect" error with no
+indication that a firewall is responsible.
 
 Default:
 
 ```yaml
-xrdp_manage_ufw: false
+xrdp_manage_ufw: true
 ```
 
 `xrdp_ufw_allow_from`
 
-Optional source restriction when `xrdp_manage_ufw` is enabled.
+List of networks permitted to reach the RDP port: campus wired plus both VPN
+ranges, matching the networks trusted for SSH.
 
 Default:
 
 ```yaml
-xrdp_ufw_allow_from: "128.112.0.0/16"
+xrdp_ufw_allow_from:
+  - 10.249.64.0/18   # Princeton Wired Private
+  - 10.249.0.0/18    # Princeton Wired Private-2
+  - 128.112.0.0/16   # Princeton Wired
+  - 172.20.80.0/22   # PU Subnet - LibNetPvt
+  - 172.20.95.0/24   # Princeton VPN Subnet 1
+  - 172.20.192.0/19  # Princeton VPN Subnet 2
 ```
 
-If set to an empty string, the role allows the XRDP port without a source restriction.
+If set to an empty list the role opens the port to any source, which is rarely
+appropriate for a graphical login.
+
+After starting the services the role waits for the RDP port to accept a local
+connection, so a session manager that failed to start fails the play instead of
+leaving a host that merely looks configured.
 
 ## Templates and Managed Files
 
@@ -145,6 +168,7 @@ Example with custom firewall handling:
   - role: xrdp  
     vars:  
       xrdp_manage_ufw: true  
-      xrdp_ufw_allow_from: "128.112.0.0/16"  
+      xrdp_ufw_allow_from:  
+        - 128.112.0.0/16  
       xrdp_port: 3389
 ```

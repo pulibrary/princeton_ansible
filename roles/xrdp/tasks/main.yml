@@ -206,32 +206,41 @@
     mode: "0755"
   notify: restart xrdp
 
-- name: Xrdp - open firewall via ufw
+- name: Xrdp - open the RDP port in ufw
   when: xrdp_manage_ufw | bool
   block:
-    - name: Check ufw exists
-      ansible.builtin.command: "command -v ufw"
-      register: _ufw
+    - name: Xrdp - check whether ufw is installed
+      ansible.builtin.command: command -v ufw
+      register: xrdp_ufw_present
       changed_when: false
       failed_when: false
 
-    - name: Allow XRDP port (no source restriction)
-      ansible.builtin.command: "ufw allow {{ xrdp_port | int }}/tcp"
+    # The firewall role sets a default-deny incoming policy, so without an
+    # explicit rule here the RDP port is unreachable and clients fail with a
+    # generic "cannot connect" error.
+    - name: Xrdp - allow RDP from approved networks
+      community.general.ufw:
+        rule: allow
+        direction: in
+        proto: tcp
+        port: "{{ xrdp_port | string }}"
+        from_ip: "{{ item }}"
+        comment: XRDP remote desktop
+      loop: "{{ xrdp_ufw_allow_from }}"
       when:
-        - _ufw.rc == 0
-        - xrdp_ufw_allow_from | length == 0
-      register: _ufw_allow
-      changed_when: "'Skipping' not in (_ufw_allow.stdout | default(''))"
-      failed_when: false
-
-    - name: Allow XRDP port (source restricted)
-      ansible.builtin.command: "ufw allow from {{ xrdp_ufw_allow_from }} to any port {{ xrdp_port | int }} proto tcp"
-      when:
-        - _ufw.rc == 0
+        - xrdp_ufw_present.rc == 0
         - xrdp_ufw_allow_from | length > 0
-      register: _ufw_allow_src
-      changed_when: "'Skipping' not in (_ufw_allow_src.stdout | default(''))"
-      failed_when: false
+
+    - name: Xrdp - allow RDP from any source
+      community.general.ufw:
+        rule: allow
+        direction: in
+        proto: tcp
+        port: "{{ xrdp_port | string }}"
+        comment: XRDP remote desktop
+      when:
+        - xrdp_ufw_present.rc == 0
+        - xrdp_ufw_allow_from | length == 0
 
 - name: Xrdp - enable and start XRDP services
   ansible.builtin.service:
@@ -241,3 +250,12 @@
   loop:
     - xrdp-sesman
     - xrdp
+
+# Turns a silently broken remote desktop into a failed task: if the session
+# manager or the listener did not come up, there is nothing for a client to
+# connect to no matter how the firewall is configured.
+- name: Xrdp - confirm the RDP port is listening
+  ansible.builtin.wait_for:
+    port: "{{ xrdp_port | int }}"
+    host: 127.0.0.1
+    timeout: 30
