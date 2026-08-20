@@ -1,0 +1,86 @@
+---
+allowed_admin_cidrs:
+  - 10.249.64.0/18
+  - 10.249.0.0/18
+  - 128.112.0.0/16
+  - 172.20.80.0/22
+  - 172.20.95.0/24
+  - 172.20.192.0/19
+  - 172.24.0.0/19
+  # Required for local QEMU user networking.
+  - 10.0.2.0/24
+
+allowed_libnet_cidrs:
+  # Staging load balancers
+  - 172.20.80.19/32
+  - 172.20.80.13/32
+  - 172.20.80.14/32
+  # Production load balancers
+  - 128.112.203.146/32
+  - 128.112.200.245/32
+  - 128.112.201.34/32
+
+# Networks permitted to reach every port on the host, not just the specific
+# services opened below. Previously this was applied per service group (only
+# ZooKeeper had the LibNetPvt rule), which meant otherwise identical hosts
+# behaved differently. Keep this list short: each entry is unrestricted access.
+firewall_trusted_cidrs:
+  # PU Subnet - LibNetPvt
+  - 172.20.80.0/22
+  # Production load balancers
+  - 128.112.203.146/32
+  - 128.112.200.245/32
+  - 128.112.201.34/32
+firewall_trusted_comment: Trusted network - all ports
+
+ssh_allowed_cidrs:
+  - 10.249.64.0/18
+  - 10.249.0.0/18
+  - 128.112.0.0/16
+  - 172.20.80.0/22
+  - 172.20.95.0/24
+  - 172.20.192.0/19
+  - 172.24.0.0/19
+  # Required for local QEMU user networking.
+  - 10.0.2.0/24
+
+fail2ban_backend: systemd
+fail2ban_bantime: 1h
+fail2ban_findtime: 10m
+fail2ban_maxretry: 5
+fail2ban_ignoreips:
+  - 127.0.0.1/8
+  - ::1
+  - 10.249.64.0/18
+  - 10.249.0.0/18
+  - 128.112.0.0/16
+  - 172.20.95.0/24
+  - 172.20.192.0/19
+  - 172.24.0.0/19
+  - 10.0.2.0/24
+
+ufw_default_incoming: deny
+ufw_default_outgoing: allow
+ufw_enable_now: true
+firewalld_zone: public
+
+firewall_allowed_admin_cidrs: "{{ allowed_admin_cidrs }}"
+firewall_allowed_libnet_cidrs: "{{ allowed_libnet_cidrs }}"
+firewall_ssh_allowed_cidrs: "{{ ssh_allowed_cidrs }}"
+firewall_zone: "{{ firewalld_zone }}"
+
+firewall_allow_http: true
+firewall_allow_bigfix: true
+firewall_allow_checkmk: true
+firewall_bigfix_port: "52311"
+firewall_checkmk_port: "6556"
+firewall_checkmk_cidrs:
+  - 128.112.0.0/16
+firewall_additional_rules: []
+
+firewall_fail2ban_enabled: true
+firewall_fail2ban_backend: "{{ fail2ban_backend }}"
+firewall_fail2ban_bantime: "{{ fail2ban_bantime }}"
+firewall_fail2ban_findtime: "{{ fail2ban_findtime }}"
+firewall_fail2ban_maxretry: "{{ fail2ban_maxretry }}"
+firewall_fail2ban_ignoreips: "{{ fail2ban_ignoreips }}"

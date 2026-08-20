@@ -1,0 +1,58 @@
+---
+- name: Verify
+  hosts: all
+  become: true
+  tasks:
+    # This playbook does not include the role, so role defaults are not in
+    # scope. Load them rather than restating the list, so the test keeps
+    # checking whatever the role actually ships.
+    - name: Load firewall role defaults
+      ansible.builtin.include_vars:
+        file: "../../defaults/main.yml"
+        name: firewall_defaults
+
+    - name: Determine the trusted networks under test
+      ansible.builtin.set_fact:
+        firewall_expected_trusted_cidrs: >-
+          {{ firewall_trusted_cidrs
+             | default(firewall_defaults.firewall_trusted_cidrs) }}
+
+    - name: Read UFW status
+      ansible.builtin.command: ufw status
+      register: firewall_verify_ufw
+      changed_when: false
+
+    - name: Assert UFW is active
+      ansible.builtin.assert:
+        that:
+          - "'Status: active' in firewall_verify_ufw.stdout"
+
+    # An unrestricted rule shows the destination as "Anywhere" with no port,
+    # which is what distinguishes it from the service-specific rules. ufw prints
+    # single hosts without the /32 suffix, so strip it before matching.
+    - name: Assert trusted networks are allowed on every port
+      ansible.builtin.assert:
+        that:
+          - firewall_verify_ufw.stdout is search('Anywhere\s+ALLOW\s+' ~ (item | regex_replace('/32$', '') | regex_escape))
+        fail_msg: >-
+          No unrestricted allow rule for {{ item }} was found in UFW status:
+          {{ firewall_verify_ufw.stdout }}
+      loop: "{{ firewall_expected_trusted_cidrs }}"
+
+
+    - name: Read ICMP redirect values
+      ansible.builtin.command:
+        argv:
+          - sysctl
+          - -n
+          - net.ipv4.conf.all.accept_redirects
+          - net.ipv4.conf.default.accept_redirects
+          - net.ipv6.conf.all.accept_redirects
+          - net.ipv6.conf.default.accept_redirects
+      register: firewall_verify_sysctl
+      changed_when: false
+
+    - name: Assert ICMP redirects are disabled
+      ansible.builtin.assert:
+        that:
+          - firewall_verify_sysctl.stdout_lines | unique == ['0']

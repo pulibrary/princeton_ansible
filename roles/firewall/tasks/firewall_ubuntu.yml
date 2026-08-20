@@ -1,0 +1,85 @@
+---
+- name: Firewall | Install UFW
+  ansible.builtin.apt:
+    name:
+      - ufw
+      - iptables
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Firewall | Set UFW default incoming policy
+  community.general.ufw:
+    policy: "{{ ufw_default_incoming }}"
+    direction: incoming
+
+- name: Firewall | Set UFW default outgoing policy
+  community.general.ufw:
+    policy: "{{ ufw_default_outgoing }}"
+    direction: outgoing
+
+- name: Firewall | Allow all traffic from trusted networks with UFW
+  community.general.ufw:
+    rule: allow
+    direction: in
+    from_ip: "{{ item }}"
+    comment: "{{ firewall_trusted_comment }}"
+  loop: "{{ firewall_trusted_cidrs }}"
+
+- name: Firewall | Allow SSH from approved networks with UFW
+  community.general.ufw:
+    rule: allow
+    direction: in
+    proto: tcp
+    port: "22"
+    from_ip: "{{ item }}"
+    comment: Approved administrative network
+  loop: "{{ firewall_ssh_allowed_cidrs }}"
+
+- name: Firewall | Allow HTTP from LibNet with UFW
+  community.general.ufw:
+    rule: allow
+    direction: in
+    proto: tcp
+    port: "80"
+    from_ip: "{{ item }}"
+    comment: Approved LibNet network
+  loop: "{{ firewall_allowed_libnet_cidrs }}"
+  when: firewall_allow_http | bool
+
+- name: Firewall | Allow BigFix with UFW
+  community.general.ufw:
+    rule: allow
+    direction: in
+    proto: tcp
+    port: "{{ firewall_bigfix_port }}"
+    comment: BigFix
+  when: firewall_allow_bigfix | bool
+
+- name: Firewall | Allow CheckMK from approved networks with UFW
+  community.general.ufw:
+    rule: allow
+    direction: in
+    proto: tcp
+    port: "{{ firewall_checkmk_port }}"
+    from_ip: "{{ item }}"
+    comment: CheckMK
+  loop: "{{ firewall_checkmk_cidrs }}"
+  when: firewall_allow_checkmk | bool
+
+- name: Firewall | Apply additional UFW rules
+  community.general.ufw:
+    rule: "{{ item.rule | default('allow') }}"
+    direction: "{{ item.direction | default('in') }}"
+    proto: "{{ item.protocol | default(omit) }}"
+    port: "{{ (item.port | string) if item.port is defined else omit }}"
+    from_ip: "{{ item.source }}"
+    comment: "{{ item.comment | default(omit) }}"
+  loop: "{{ firewall_additional_rules }}"
+  loop_control:
+    label: "{{ item.source }}"
+
+- name: Firewall | Enable UFW
+  community.general.ufw:
+    state: enabled
+  when: ufw_enable_now | bool

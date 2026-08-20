@@ -1,0 +1,39 @@
+---
+- name: Firewall | Validate supported operating system
+  ansible.builtin.assert:
+    that:
+      - ansible_os_family in ['Debian', 'RedHat']
+    fail_msg: >-
+      The firewall role supports Debian and RedHat operating-system families;
+      found {{ ansible_os_family }}.
+
+- name: Firewall | Configure UFW
+  ansible.builtin.import_tasks: firewall_ubuntu.yml
+  when: ansible_os_family == 'Debian'
+  tags:
+    - firewall
+    - security
+    - ssh
+
+- name: Firewall | Configure firewalld
+  ansible.builtin.import_tasks: firewall_redhat.yml
+  when: ansible_os_family == 'RedHat'
+  tags:
+    - firewall
+    - security
+    - ssh
+
+- name: Firewall | Harden ICMP redirects
+  ansible.builtin.import_tasks: firewall_icmp.yml
+  tags:
+    - firewall
+    - icmp_redirects
+    - security
+    - sysctl
+
+- name: Firewall | Configure fail2ban
+  ansible.builtin.import_tasks: fail2ban.yml
+  when: firewall_fail2ban_enabled | bool
+  tags:
+    - fail2ban
+    - security

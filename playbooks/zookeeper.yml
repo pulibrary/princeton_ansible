@@ -9,6 +9,7 @@
     - ../site_vars.yml
     - ../group_vars/solr9cloud/{{ runtime_env | default('staging') }}.yml
     - ../group_vars/solr9cloud/vault.yml
+    - ../group_vars/zookeeper/common.yml
     - ../group_vars/zookeeper/{{ runtime_env | default('staging') }}.yml
   vars:
     allow_multiple_hosts: false
@@ -22,6 +23,7 @@
         - ansible_play_hosts | length > 1
         - not allow_multiple_hosts | bool
   roles:
+    - role: roles/firewall
     - role: roles/otel_collector
     - role: roles/openjdk
     - role: roles/zookeeper
@@ -31,4 +33,3 @@
         token: "{{ vault_pul_slack_token }}"
         msg: "Ansible ran `{{ ansible_play_name }}` on {{ inventory_hostname }}"
         channel: "{{ slack_alerts_channel }}"
-

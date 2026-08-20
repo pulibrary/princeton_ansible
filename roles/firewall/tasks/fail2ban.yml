@@ -1,0 +1,84 @@
+---
+- name: Firewall | Install fail2ban on Debian
+  ansible.builtin.apt:
+    name: fail2ban
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  when: ansible_os_family == 'Debian'
+
+- name: Firewall | Enable CRB repository on Rocky Linux
+  ansible.builtin.command:
+    argv:
+      - dnf
+      - config-manager
+      - --set-enabled
+      - crb
+  changed_when: false
+  when:
+    - ansible_os_family == 'RedHat'
+    - ansible_distribution | lower == 'rocky'
+    - ansible_distribution_major_version | int >= 9
+
+- name: Firewall | Enable PowerTools repository on Rocky Linux 8
+  ansible.builtin.command:
+    argv:
+      - dnf
+      - config-manager
+      - --set-enabled
+      - powertools
+  changed_when: false
+  when:
+    - ansible_os_family == 'RedHat'
+    - ansible_distribution | lower == 'rocky'
+    - ansible_distribution_major_version | int == 8
+
+- name: Firewall | Install EPEL on RedHat
+  ansible.builtin.dnf:
+    name: epel-release
+    state: present
+  when: ansible_os_family == 'RedHat'
+
+- name: Firewall | Install fail2ban on RedHat
+  ansible.builtin.dnf:
+    name: fail2ban
+    state: present
+  when: ansible_os_family == 'RedHat'
+
+- name: Firewall | Ensure fail2ban jail directory exists
+  ansible.builtin.file:
+    path: /etc/fail2ban/jail.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Firewall | Configure fail2ban defaults
+  ansible.builtin.copy:
+    dest: /etc/fail2ban/jail.local
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      [DEFAULT]
+      backend = {{ firewall_fail2ban_backend }}
+      bantime = {{ firewall_fail2ban_bantime }}
+      findtime = {{ firewall_fail2ban_findtime }}
+      maxretry = {{ firewall_fail2ban_maxretry }}
+      ignoreip = {{ firewall_fail2ban_ignoreips | join(' ') }}
+  notify: Restart fail2ban
+
+- name: Firewall | Configure fail2ban SSH jail
+  ansible.builtin.template:
+    src: sshd.local.j2
+    dest: /etc/fail2ban/jail.d/sshd.local
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart fail2ban
+
+- name: Firewall | Enable and start fail2ban
+  ansible.builtin.service:
+    name: fail2ban
+    enabled: true
+    state: started
