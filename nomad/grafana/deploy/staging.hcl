@@ -15,7 +15,7 @@ job "grafana-staging" {
         to = 3000
       }
       dns {
-        servers = ["10.88.0.1", "128.112.129.209", "8.8.8.8", "8.8.4.4"]
+        servers = ["172.17.0.1", "128.112.129.209", "8.8.8.8", "8.8.4.4"]
       }
     }
 
@@ -32,7 +32,7 @@ job "grafana-staging" {
     }
 
     task "grafana" {
-      driver = "podman"
+      driver = "docker"
 
       env {
         GF_LOG_LEVEL          = "ERROR"
@@ -105,7 +105,7 @@ EOF
         static = 9090
       }
       dns {
-        servers = ["10.88.0.1", "128.112.129.209", "8.8.8.8", "8.8.4.4"]
+        servers = ["172.17.0.1", "128.112.129.209", "8.8.8.8", "8.8.4.4"]
       }
     }
 
@@ -133,6 +133,8 @@ EOF
           timeout  = "2s"
       }
     }
+
+    consul {}
 
     task "prometheus" {
       user = "9090:9090"
@@ -207,7 +209,7 @@ scrape_configs:
 EOH
       }
 
-      driver = "podman"
+      driver = "docker"
 
       config {
         image = "docker.io/prom/prometheus:v3.2.0"
