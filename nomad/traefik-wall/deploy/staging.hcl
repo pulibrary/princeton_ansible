@@ -83,16 +83,7 @@ job "traefik-wall-staging" {
         destination = "local/traefik.yml"
       }
 
-      template {
-        destination = "${NOMAD_SECRETS_DIR}/env.vars"
-        env = true
-        change_mode = "restart"
-        data = <<EOF
-        {{- with nomadVar "nomad/jobs/traefik-wall-staging" -}}
-        CONSUL_HTTP_TOKEN = {{ .CONSUL_ACL_TOKEN }}
-        {{- end -}}
-        EOF
-      }
+      consul {}
 
       # Plugin Configuration
       artifact {
@@ -184,16 +175,7 @@ job "traefik-wall-staging" {
         extra_hosts = ["host.containers.internal:host-gateway"]
       }
 
-      template {
-        destination = "${NOMAD_SECRETS_DIR}/env.vars"
-        env = true
-        change_mode = "restart"
-        data = <<EOF
-        {{- with nomadVar "nomad/jobs/traefik-wall-staging" -}}
-        CONSUL_HTTP_TOKEN = {{ .CONSUL_ACL_TOKEN }}
-        {{- end -}}
-        EOF
-      }
+      consul {}
 
       # Static Configuration
       artifact {
