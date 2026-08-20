@@ -68,6 +68,7 @@
 
 # Established before any PAM or NSS change, so an emergency route into the host
 # already exists if a later task breaks authentication.
+# this will go out before we merge
 - name: Himmelblau - Establish break-glass SSH access
   ansible.builtin.include_tasks: breakglass.yml
   when: himmelblau_breakglass_enable | bool
@@ -271,24 +272,32 @@
 - name: Himmelblau | first sign-in instructions
   ansible.builtin.debug:
     msg: |
-      Each user enrols a Hello PIN once, over SSH, before remote desktop will
-      work. No administrator rights are needed for this:
+      Each user needs a Hello PIN before remote desktop will work. Enrol it from
+      a terminal, where MFA prompts (including "enter the number NN") display
+      correctly. The remote desktop login window cannot show them, so enrolling
+      from there is not possible.
+
+      An administrator can enrol on a user's behalf:
+
+        sudo aad-tool auth-test -D <netid>@{{ himmelblau_domain }}
+
+      This prompts for the user's Entra ID password, runs MFA, then asks them to
+      set and confirm a PIN. It needs root because the himmelblaud socket is
+      root-owned, so the user must be present at an administrator's session.
+
+      Users who already have a shell on this host can enrol themselves, with no
+      administrator rights, because pam_himmelblau implements the PAM
+      password-change step:
 
         ssh <netid>@{{ inventory_hostname }}
         passwd
 
-      The SSH login performs MFA, which renders correctly in a terminal, and
-      joins the device to Entra ID on first success. 'passwd' then sets the
-      Hello PIN: pam_himmelblau handles the password-change phase, so it changes
-      the local Hello PIN and NOT the Entra ID password. It says so itself.
+      That changes the local Hello PIN, NOT the Entra ID password, and says so.
 
-      Afterwards, sign in to remote desktop with that PIN in the password field.
-      Do not try to enrol from remote desktop: its login window cannot display
-      the MFA device-code message.
+      Afterwards, sign in to remote desktop with the PIN in the password field.
 
-      Administrators can check the daemon side with:
+      Check the daemon side with:
 
         sudo aad-tool status
-        sudo aad-tool auth-test -D <netid>@{{ himmelblau_domain }}
         sudo journalctl -u himmelblaud -n 50 --no-pager
   when: himmelblau_show_enrollment_instructions | default(true)

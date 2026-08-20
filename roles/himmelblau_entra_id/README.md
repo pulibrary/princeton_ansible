@@ -402,47 +402,70 @@ already, since the service name `xrdp-sesman` matches the `xrdp` entry in
 `mfa_poll_prompt_services` by substring, and the message still cannot be
 rendered.
 
-So MFA cannot be completed at the remote desktop login window. The role instead
-configures Hello PIN, which removes the MFA exchange from that window entirely:
+The message is not lost, though: xrdp writes PAM conversation text to
+`/var/log/xrdp-sesman.log`, prefixed `PAM:`. The number is therefore recoverable
+while a login is in progress, which is useful when diagnosing a stuck sign-in:
+
+```bash
+sudo tail -f /var/log/xrdp-sesman.log
+```
+
+That is a debugging aid, not a workflow. Nobody should have to read a server log
+to sign in.
+
+So MFA cannot practically be completed at the remote desktop login window. The
+role instead configures Hello PIN, which removes the MFA exchange from that
+window entirely:
 
 ```yaml
 himmelblau_enable_hello: true
 himmelblau_allow_remote_hello: true
 ```
 
-Each user enrols a PIN once, over SSH, and needs no administrator rights to do
-it:
+Enrol the PIN from a terminal, where MFA prompts render correctly. An
+administrator can do this with the user present:
+
+```bash
+sudo aad-tool auth-test -D <netid>@princeton.edu
+```
+
+That prompts for the user's Entra ID password, runs MFA (including the "enter
+the number NN" step, which displays correctly in a terminal), then asks them to
+set and confirm a PIN. This is the verified path.
+
+Users who already have a shell on the host can enrol themselves with no
+administrator rights, because `pam_himmelblau` implements the PAM
+password-change phase (`sm_chauthtok`) and the managed `common-password` stack
+puts it ahead of `pam_unix`:
 
 ```bash
 ssh <netid>@sandbox-bitcur1.princeton.edu
 passwd
 ```
 
-The SSH login performs MFA, which renders correctly in a terminal, and joins the
-device to Entra ID on first success. `passwd` then sets the PIN, because
-`pam_himmelblau` implements the PAM password-change phase (`sm_chauthtok`) and
-claims it ahead of `pam_unix` in the managed `common-password` stack. It prints
-"This command changes your local Hello PIN, NOT your Entra Id password" so users
-are not left guessing.
+It prints "This command changes your local Hello PIN, NOT your Entra Id
+password" so users are not left guessing.
 
 From then on they type that PIN into the remote desktop password field. It is an
 ordinary password prompt, so nothing needs to be displayed back to them.
 
-### Users do not need sudo for any of this
+### Do users need sudo to enrol?
 
-`passwd` is run by the user as themselves. Granting `NOPASSWD` sudo to Entra ID
-users to make enrolment work would be a bad trade: it would hand every desktop
-user unauthenticated root, which is a far larger exposure than anything else
-discussed here, in order to solve a problem that does not exist.
+No, though the question is reasonable: the administrator-driven path above does
+require root, because the himmelblaud socket is root-owned (mode 0750, from this
+role's systemd drop-in). So `aad-tool` is not something an unprivileged user can
+run.
 
-`aad-tool` is a different matter. It talks to the himmelblaud socket, which this
-role creates mode 0750 and root-owned, so `aad-tool status` and
-`aad-tool auth-test` do need root. Those are administrator diagnostics, not part
-of user enrolment, and `pulsys` already has the sudo rights to run them.
+Self-service enrolment avoids it entirely. `passwd` is run by the user as
+themselves and needs no special rights.
+
+Do not grant `NOPASSWD` sudo to Entra ID users to make enrolment work. It would
+hand every desktop user unauthenticated root, which is a far larger exposure
+than anything else discussed here, to solve a problem that has a
+no-privilege answer.
 
 If Entra ID users genuinely need sudo on a host, grant it by group membership
-rather than by relaxing authentication. Himmelblau maps an Entra group to a
-local sudo group:
+rather than by relaxing authentication:
 
 ```yaml
 # Object IDs, not group names: Entra names are not unique
