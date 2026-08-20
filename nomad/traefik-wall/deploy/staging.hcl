@@ -70,6 +70,7 @@ job "traefik-wall-staging" {
           "local/traefik-config:/etc/traefik/config.d",
           "local/challenge.tmpl.html:/challenge.tmpl.html"
         ]
+        extra_hosts = ["host.containers.internal:host-gateway"]
       }
 
       # Static Configuration
@@ -180,6 +181,7 @@ job "traefik-wall-staging" {
           "local/traefik-config:/etc/traefik/config.d",
           "local/challenge.tmpl.html:/challenge.tmpl.html"
         ]
+        extra_hosts = ["host.containers.internal:host-gateway"]
       }
 
       template {
