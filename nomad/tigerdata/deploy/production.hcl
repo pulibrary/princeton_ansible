@@ -15,12 +15,11 @@ job "tigerdata" {
       attribute = "${node.pool}"
       weight    = 100
     }
+
     count = 6
 
-    network {
-      dns {
-        servers = ["10.88.0.1", "128.112.129.209", "8.8.8.8", "8.8.4.4"]
-      }
+    ephemeral_disk {
+      size = 25000
     }
 
     service {
@@ -42,16 +41,67 @@ job "tigerdata" {
       unlimited      = true
     }
 
-    task "deploy-runner" {
-      driver = "podman"
+    task "dind" {
+      driver = "docker"
+      user   = "root"
+
+      lifecycle {
+        hook    = "prestart"
+        sidecar = true
+      }
 
       config {
-        image = "ghcr.io/pulibrary/princeton_ansible-tigerdata-deployer:sha-${ var.branch_or_sha }"
-        privileged = true
-        # Enforce a hard CPU limit so the container cannot burst
-        # beyond the value specified in the 'resources' stanza.
+        image    = "docker:27-dind"
+        cgroupns = "private"
+
+        dns_servers = ["128.112.129.209", "8.8.8.8", "8.8.4.4"]
+
+        cap_add = ["sys_admin", "net_admin", "mknod", "setfcap", "audit_write"]
+
+        sysctl = {
+          "net.ipv6.conf.all.disable_ipv6"     = "1"
+          "net.ipv6.conf.default.disable_ipv6" = "1"
+        }
+
+        entrypoint = ["/bin/sh", "-c",
+          "mount -o remount,bind,rw /proc/sys /proc/sys || echo 'REMOUNT FAILED' >&2; exec dockerd-entrypoint.sh --data-root=/alloc/docker --host=unix:///alloc/docker.sock --storage-driver=overlay2 --group=1500"]
+
+        security_opt = [
+          "seccomp=unconfined",
+          "apparmor=unconfined",
+        ]
+      }
+
+      env {
+        DOCKER_TLS_CERTDIR = ""
+      }
+
+      resources {
+        cpu    = 500
+        memory = 1024
+      }
+    }
+
+    task "deploy-runner" {
+      driver = "docker"
+
+      config {
+        image = "ghcr.io/pulibrary/princeton_ansible-tigerdata-deployer:sha-${var.branch_or_sha}"
+
+        network_mode = "container:dind-${NOMAD_ALLOC_ID}"
+
+        shm_size = 1073741824
+
+        entrypoint = ["/bin/sh", "-c",
+          "until docker info >/dev/null 2>&1; do sleep 1; done; exec /opt/circleci/scripts/run.sh"]
+
         cpu_hard_limit = true
       }
+
+      env {
+        DOCKER_HOST = "unix:///alloc/docker.sock"
+      }
+
       template {
         destination = "${NOMAD_SECRETS_DIR}/env.vars"
         env = true
@@ -67,6 +117,7 @@ job "tigerdata" {
         {{- end -}}
         EOF
       }
+
       resources {
         cpu    = 4000
         memory = 8192

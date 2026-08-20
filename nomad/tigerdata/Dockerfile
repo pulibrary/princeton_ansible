@@ -1,4 +1,3 @@
-FROM quay.io/podman/stable:latest AS podman
 FROM circleci/runner-agent:machine-3
 ARG RUBY_VERSION=3.4.3
 # 1. Install dependencies - pulled from build-pack-deps:
@@ -49,10 +48,6 @@ RUN set -ex; \
       unzip \
       xz-utils \
       zlib1g-dev \
-      podman \
-      fuse-overlayfs \
-      uidmap \
-      slirp4netns \
       build-essential \
       ca-certificates \
       curl \
@@ -60,6 +55,19 @@ RUN set -ex; \
       libz-dev \
       ; \
       sudo rm -rf /var/lib/apt/lists/*
+
+RUN set -ex; \
+      sudo install -m 0755 -d /etc/apt/keyrings; \
+      curl -fsSL https://download.docker.com/linux/debian/gpg \
+      | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg; \
+      sudo chmod a+r /etc/apt/keyrings/docker.gpg; \
+      echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.gpg] \
+      https://download.docker.com/linux/debian bookworm stable" \
+      | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null; \
+      sudo apt-get update; \
+      sudo apt-get install -y --no-install-recommends docker-ce-cli; \
+      sudo rm -rf /var/lib/apt/lists/*; \
+      docker --version
 
 # 2. Install the latest stable Google Chrome, required by Capybara feature specs
 RUN set -ex; \
@@ -107,7 +115,3 @@ RUN sudo ruby-build ${RUBY_VERSION} /usr/local/ruby
 ENV PATH="/usr/local/ruby/bin:${PATH}"
 
 RUN echo "$(ruby --version)"
-
-# Copy podman's podman-in-podman compatible configuration files
-# Pulled from https://quay.io/repository/podman/stable/manifest/sha256:b83bf5b82d8d02a49dfa7f8b5c35e6ffc826e6dfb1592b7ec2e17100dd47c810
-COPY --from=podman --chown=circleci /etc/containers/storage.conf /etc/containers/storage.conf
