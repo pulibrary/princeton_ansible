@@ -73,12 +73,46 @@ himmelblau_pam_auth_args: >-
 himmelblau_home_attr: CN
 himmelblau_home_alias: CN
 himmelblau_idmap_range: "5000000-5999999"
-himmelblau_enable_hello: false
+
+# Windows Hello PIN.
+#
+# This is the only sign-in flow that works in a remote desktop login window.
+# For any PAM service other than gdm-password, Himmelblau renders the MFA
+# device-code message as unicode QR art and sends the whole thing as a single
+# informational message. The remote desktop login window cannot draw that, so
+# the user is left staring at a blank screen while their phone waits for an
+# approval they cannot see the code for.
+#
+# With a Hello PIN there is no MFA exchange at the login window at all: the user
+# types a PIN into the ordinary password field. Enrol the PIN over SSH, where
+# the MFA prompts render correctly, then use it for remote desktop.
+himmelblau_enable_hello: true
+# Himmelblau classes remote desktop as a remote service, because the client
+# address appears in PAM_RHOST, and remote services skip Hello unless one of
+# the two settings below is enabled. Without either of them, enabling Hello
+# alone does not fix remote desktop sign-in.
+#
+# allow_remote_hello accepts the PIN by itself. That is a single factor: someone
+# holding the machine with no route to Entra ID needs only the PIN.
+himmelblau_allow_remote_hello: true
+# enable_hello_totp keeps two factors by requiring a local TOTP code alongside
+# the PIN. Stronger, but every user has to enrol a TOTP secret on the host
+# first. Prefer this over allow_remote_hello for anything not a sandbox.
+himmelblau_enable_hello_totp: false
 # Let people sign in with "netid" instead of "netid@princeton.edu"
 himmelblau_cn_name_mapping: true
 # Local groups every Entra ID user is added to
 himmelblau_local_groups:
   - users
+
+# Entra ID groups whose members get local sudo rights. This is how to grant
+# administrative access to Entra ID users: by group membership, rather than by
+# relaxing authentication with NOPASSWD sudo rules. Members authenticate to sudo
+# with their Hello PIN as normal.
+#
+# Entra group names are not unique, so these must be group Object ID GUIDs.
+himmelblau_sudo_groups: []
+himmelblau_local_sudo_group: sudo
 
 # Graphical and console logins (XRDP, LightDM, TTY) may authenticate with a
 # password only. Entra ID Conditional Access still forces MFA when it applies.
@@ -103,6 +137,21 @@ himmelblau_mfa_poll_prompt_services:
   - ssh
   - cockpit
   - xrdp
+
+# Preferred MFA method. Empty means use whatever the user has set in Entra ID.
+#
+# Push notification can require typing a displayed number into Microsoft
+# Authenticator, and that number is only visible where the login prompt can
+# render informational text. Graphical and remote desktop logins frequently
+# cannot, which leaves the user holding a push they have no way to complete.
+# PhoneAppOTP avoids the problem entirely: the code is read from the app and
+# typed in, so nothing has to be displayed back to the user.
+#
+#   PhoneAppNotification  push notification (may use number matching)
+#   PhoneAppOTP           verification code from the Authenticator app
+#   OneWaySMS             text message code
+#   TwoWayVoiceMobile     phone call to mobile
+himmelblau_mfa_method: ""
 
 # Remote desktop (XRDP) sign-in for Entra ID users. Tasks are skipped
 # automatically on hosts where XRDP is not installed.
