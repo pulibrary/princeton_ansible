@@ -52,7 +52,7 @@ job "traefik-wall-production" {
     }
 
     task "traefik" {
-      driver = "podman"
+      driver = "docker"
 
       env {
         # Challenge after only 1 request.
@@ -168,7 +168,7 @@ job "traefik-wall-production" {
     }
 
     task "traefik" {
-      driver = "podman"
+      driver = "docker"
 
       env {
         # Challenge after only 1 request.
@@ -282,7 +282,7 @@ job "traefik-wall-production" {
     }
 
     task "traefik" {
-      driver = "podman"
+      driver = "docker"
 
       env {
         rate_limit = 20
