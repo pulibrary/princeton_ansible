@@ -3,6 +3,20 @@
   hosts: all
   become: true
   tasks:
+    # This playbook does not include the role, so role defaults are not in
+    # scope. Load them rather than restating the list, so the test keeps
+    # checking whatever the role actually ships.
+    - name: Load firewall role defaults
+      ansible.builtin.include_vars:
+        file: "../../defaults/main.yml"
+        name: firewall_defaults
+
+    - name: Determine the trusted networks under test
+      ansible.builtin.set_fact:
+        firewall_expected_trusted_cidrs: >-
+          {{ firewall_trusted_cidrs
+             | default(firewall_defaults.firewall_trusted_cidrs) }}
+
     - name: Read UFW status
       ansible.builtin.command: ufw status
       register: firewall_verify_ufw
@@ -23,7 +37,8 @@
         fail_msg: >-
           No unrestricted allow rule for {{ item }} was found in UFW status:
           {{ firewall_verify_ufw.stdout }}
-      loop: "{{ firewall_trusted_cidrs }}"
+      loop: "{{ firewall_expected_trusted_cidrs }}"
+
 
     - name: Read ICMP redirect values
       ansible.builtin.command:
