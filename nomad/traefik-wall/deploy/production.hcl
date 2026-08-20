@@ -71,18 +71,11 @@ job "traefik-wall-production" {
           "local/traefik-config:/etc/traefik/config.d",
           "local/challenge.tmpl.html:/challenge.tmpl.html"
         ]
+
+        extra_hosts = ["host.containers.internal:host-gateway"]
       }
 
-      template {
-        destination = "${NOMAD_SECRETS_DIR}/env.vars"
-        env = true
-        change_mode = "restart"
-        data = <<EOF
-        {{- with nomadVar "nomad/jobs/traefik-wall-production" -}}
-        CONSUL_HTTP_TOKEN = {{ .CONSUL_ACL_TOKEN }}
-        {{- end -}}
-        EOF
-      }
+      consul {}
 
       # Static Configuration
       artifact {
@@ -187,18 +180,10 @@ job "traefik-wall-production" {
           "local/traefik-config:/etc/traefik/config.d",
           "local/challenge.tmpl.html:/challenge.tmpl.html"
         ]
+        extra_hosts = ["host.containers.internal:host-gateway"]
       }
 
-      template {
-        destination = "${NOMAD_SECRETS_DIR}/env.vars"
-        env = true
-        change_mode = "restart"
-        data = <<EOF
-        {{- with nomadVar "nomad/jobs/traefik-wall-production" -}}
-        CONSUL_HTTP_TOKEN = {{ .CONSUL_ACL_TOKEN }}
-        {{- end -}}
-        EOF
-      }
+      consul {}
 
       # Static Configuration
       artifact {
@@ -298,18 +283,11 @@ job "traefik-wall-production" {
           "local/traefik-config:/etc/traefik/config.d",
           "local/challenge.tmpl.html:/challenge.tmpl.html"
         ]
+
+        extra_hosts = ["host.containers.internal:host-gateway"]
       }
 
-      template {
-        destination = "${NOMAD_SECRETS_DIR}/env.vars"
-        env = true
-        change_mode = "restart"
-        data = <<EOF
-        {{- with nomadVar "nomad/jobs/traefik-wall-production" -}}
-        CONSUL_HTTP_TOKEN = {{ .CONSUL_ACL_TOKEN }}
-        {{- end -}}
-        EOF
-      }
+      consul {}
 
       # Static Configuration
       artifact {
