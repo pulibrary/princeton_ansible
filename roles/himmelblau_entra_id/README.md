@@ -9,23 +9,29 @@ This role:
 
 * Writes `/etc/himmelblau/himmelblau.conf` from a template
 
-* Hardens and fixes the systemd unit with a drop-in (ensures `Type=notify`, correct Directory settings, coherent `UMask`, and a fixed socket path)
+* Hardens and fixes the systemd unit with a drop-in (ensures `Type=notify`,
+  correct Directory settings, coherent `UMask`, and a fixed socket path)
 
 * Updates `nsswitch.conf` to include the `himmelblau` source
 
-*Replaces Ubuntu’s common-* PAM stacks with a strict, deterministic configuration using `dpkg-divert`
+* Replaces Ubuntu's common-* PAM stacks with a strict, deterministic
+  configuration using `dpkg-divert`
 
 * Manages an SSH `AllowUsers/AllowGroups` include in `sshd_config.d/`
 
+* Enables Entra ID logins through remote desktop (XRDP) on desktop hosts
+
 * Restarts services safely and waits for the daemon socket to be ready
 
-> Be aware that this role changes system authentication, so you could end up with a brick
+> Be aware that this role changes system authentication, so you could end up
+> with a brick
 
 ## Supported platforms
 
 * Ubuntu 22.04/24.04 (tested)
 
-* Rocky Linux 8/9 tasks scaffolded; ensure `tasks/rocky.yml`
+The role asserts that `ansible_os_family` is `Debian` and fails fast on
+anything else.
 
 ## Requirements
 
@@ -35,15 +41,16 @@ This role:
 
 * Network egress to `packages.himmelblau-idm.org` and Microsoft login endpoints
 
-* An Entra ID app registration (client/app ID) that’s allowed for your tenant
+* An Entra ID app registration (client/app ID) that's allowed for your tenant
 
-* SSHD must allow keyboard-interactive (the role comments out any `KbdInteractiveAuthentication no`)
+* SSHD must allow keyboard-interactive (the role comments out any
+  `KbdInteractiveAuthentication no`)
 
 ### What the role changes
 
-* `/etc/apt/sources.list.d/himmelblau.list` (Ubuntu) or a YUM repo (Rocky)
+* `/etc/apt/sources.list.d/himmelblau.list`
 
-* `/usr/share/keyrings/himmelblau.gpg` (Ubuntu)
+* `/usr/share/keyrings/himmelblau.gpg`
 
 * `/etc/himmelblau/himmelblau.conf`
 
@@ -61,9 +68,10 @@ This role:
 
   * `Environment=HIMMELBLAU_SOCKET=/var/run/himmelblaud/socket`
 
-* `/etc/nsswitch.conf` (ensures `passwd`: and `group`: lines include `himmelblau`)
+* `/etc/nsswitch.conf` (ensures `passwd`: and `group`: lines include
+  `himmelblau`)
 
-* Ubuntu only (strict PAM) via `dpkg-divert`:
+* Strict PAM via `dpkg-divert`:
 
   * `/etc/pam.d/common-auth`
 
@@ -76,12 +84,221 @@ This role:
   * The common-auth line includes:
 
     ```perl
-    pam_himmelblau.so ignore_unknown_user mfa_poll_prompt socket=/var/run/himmelblaud/socket connect_timeout_ms=3000 retries=2
+    pam_himmelblau.so ignore_unknown_user mfa_poll_prompt \
+      socket=/var/run/himmelblaud/socket connect_timeout_ms=3000 retries=2
     ```
+
+* `/etc/pam.d/xrdp-sesman` (only when XRDP is installed)
 
 * `/etc/ssh/sshd_config.d/99-allow-users-global.conf`
 
-* Starts and enables `himmelblaud`, then waits for `/var/run/himmelblaud/socket`
+* Starts and enables `himmelblaud`, then waits for
+  `/var/run/himmelblaud/socket`
+
+## How local accounts keep working
+
+`common-auth` routes accounts that exist in `/etc/passwd` through `pam_unix`
+and everybody else through `pam_himmelblau`:
+
+```pam
+auth required                             pam_env.so
+auth [default=1 ignore=ignore success=ok] pam_localuser.so
+auth [success=2 default=ignore]           pam_unix.so nullok try_first_pass
+auth [success=1 default=ignore]           pam_himmelblau.so ignore_unknown_user
+auth requisite                            pam_deny.so
+auth required                             pam_permit.so
+auth optional                             pam_cap.so
+```
+
+This matters well beyond SSH: `pulsys`, `sudo`, the local console, and the
+remote desktop greeter all authenticate through the same stack.
+
+`common-account` marks a Himmelblau denial as terminal with `auth_err=die`, so
+a `pam_allow_groups` rejection cannot be laundered into a success by a later
+module.
+
+`common-session` runs `pam_mkhomedir` before `pam_systemd` so a home directory
+exists before a graphical session tries to start in it.
+
+## Remote desktop (XRDP) logins
+
+An Xubuntu desktop VM built with `roles/xrdp` needs three things before an
+Entra ID user can sign in over RDP, and this role handles all three:
+
+1. **XRDP's PAM service must see Himmelblau.** XRDP authenticates through
+   `/etc/pam.d/xrdp-sesman`, which the role rewrites so it includes the
+   managed `common-*` stacks.
+
+2. **XRDP must not be forced down the MFA device-code path.** Himmelblau ships
+   `xrdp` and `vnc` in `password_only_remote_services_deny_list`, which means
+   those services always require MFA. The XRDP login window can only carry a
+   single password field, so the device-code conversation can never be
+   completed and the login simply fails. The role's default deny list omits
+   `xrdp` and `vnc`, and sets `allow_console_password_only = true`. Entra ID
+   Conditional Access still triggers MFA where policy demands it.
+
+3. **The session must be able to start.** A home directory is created by
+   `pam_mkhomedir`, `systemd-logind` is running so the user gets an
+   `XDG_RUNTIME_DIR`, and Entra ID users are added to the local `audio`,
+   `video`, `plugdev`, and `netdev` groups that a desktop session expects.
+
+Remote desktop support is enabled by default but is a no-op on hosts where
+XRDP is not installed, so servers are unaffected. Apply `roles/xrdp` before
+(or alongside) this role on desktop VMs.
+
+### Why himmelblau-qr-greeter is not installed
+
+`himmelblau-qr-greeter` renders the MFA device code as a QR code on the login
+screen, but it is a GNOME Shell extension and declares
+`Depends: gnome-shell`. On an XFCE host running LightDM, apt satisfies that by
+installing GNOME Shell and gdm3, which takes over as the default display
+manager and leaves the Xubuntu desktop unreachable. It is therefore left out of
+`himmelblau_packages_deb`, and Recommends are disabled so nothing else can pull
+a desktop environment in sideways.
+
+As a backstop, the role runs `apt-get install --simulate` before installing
+anything and fails if the resulting plan contains any of
+`himmelblau_forbidden_packages` (gdm3, gnome-shell, gnome-session,
+ubuntu-desktop). Set `himmelblau_guard_desktop_packages: false` to override.
+
+## Break-glass access
+
+This role rewrites the PAM stacks and inserts `himmelblaud` into the NSS chain.
+Both sit on the critical path for logging in, so a mistake in either, or a
+daemon that stops answering, makes the host unreachable and forces console
+access or a rebuild.
+
+Two independent problems can lock you out, and the role now guards both.
+
+### The SSH allowlist must include the account Ansible uses
+
+`allow_users` lists Entra ID netids. The playbook connects as `pulsys`, which is
+**not** in that list, so writing `99-allow-users-global.conf` denies the
+automation account on the next sshd restart. `allow_users_always` (default
+`[pulsys]`) is merged into every generated `AllowUsers` line, and the role
+asserts that the connecting account is covered before writing the file. `root`
+is deliberately not in that list, so root SSH stays disabled.
+
+### A second sshd that does not use PAM
+
+`himmelblau_breakglass_enable` (default `true`) stands up `ssh-breakglass.service`
+on port `2202` before any PAM or NSS change is made:
+
+* `UsePAM no` — sshd has no option to select a PAM service name, so a
+  break-glass instance that used PAM would read the very `common-auth` stack
+  this role rewrites and fail in exactly the situation it exists to rescue.
+* Public key authentication only. The role refuses to enable the instance
+  unless a break-glass account has a populated `~/.ssh/authorized_keys`, since
+  a port nobody can log in through is worse than none.
+* No systemd dependency on `ssh.service` or `himmelblaud.service`, plus
+  `Restart=always`, so it survives their failure.
+* Account lookup still uses NSS, but `nsswitch.conf` lists `files` before
+  `himmelblau`, so local accounts resolve from `/etc/passwd` without waiting on
+  the daemon.
+
+Verify it from your workstation **before** trusting it:
+
+```bash
+ssh -p 2202 pulsys@sandbox-bitcur1.princeton.edu
+```
+
+A campus firewall may block the port, in which case console access remains the
+fallback. Set `himmelblau_breakglass_enable: false` once the rollout is stable.
+
+### Himmelblau's own offline breakglass
+
+Separate feature, and not a lockout escape for local accounts: it lets **Entra
+ID MFA users** sign in with a cached password verifier while Entra ID is
+unreachable. Off by default; verifiers are only cached after a successful online
+sign-in, so it must be enabled before an outage to be useful, and it weakens MFA
+if the device is stolen.
+
+```yaml
+himmelblau_offline_breakglass_enabled: true
+himmelblau_offline_breakglass_ttl: "2h"
+```
+
+## Ordering: configuration before packages
+
+`nss-himmelblau`'s postinst adds `himmelblau` to the `passwd`, `group`,
+`shadow`, and `initgroups` lines of `/etc/nsswitch.conf`. From that point every
+name lookup on the host is routed through `nss_himmelblau`, which talks to
+`himmelblaud`. If the daemon has no `domains` configured it cannot answer, so
+later postinsts that resolve a user, and dpkg itself, block on a daemon that is
+waiting for configuration dpkg has not yet allowed to be written. The result is
+an install that hangs indefinitely.
+
+The role therefore writes `/etc/himmelblau/himmelblau.conf` and the systemd
+drop-in **before** installing any package, and verifies afterwards that
+`getent passwd root` still returns within 15 seconds rather than letting every
+subsequent task inherit the same hang.
+
+## Recovering from an interrupted run
+
+`himmelblau-sshd-config` installs `/etc/ssh/sshd_config.d/30-himmelblau.conf`
+and its postinst then runs `systemctl restart ssh` **directly**, so
+`policy-rc.d` cannot suppress it. That stop tears down the SSH session Ansible
+is running through, which kills apt/dpkg mid-postinst so the matching start
+never happens. Because Ubuntu's `ssh.service` declares
+`RuntimeDirectory=sshd`, systemd deletes `/run/sshd` on stop, and sshd cannot
+start without it. The host then answers with `Connection refused` (nothing
+listening) rather than timing out.
+
+The role now handles this in two layers:
+
+* **Prevention.** Before any package is installed, a drop-in sets
+  `RuntimeDirectoryPreserve=yes` and `Restart=always` on `ssh.service`, and
+  `/run/sshd` is created plus registered in `/etc/tmpfiles.d`. A postinst
+  restart can no longer destroy the privilege separation directory, and sshd
+  comes back on its own if it dies.
+
+* **Containment.** The package install runs detached (`async` with `poll: 0`)
+  so a dropped connection cannot abort dpkg. The role then waits for the
+  connection to return, collects the result, runs `dpkg --configure --pending`,
+  and makes sure `ssh` is started again.
+
+If you are recovering a host that was hit by this before the fix, from the VM
+console:
+
+```bash
+sudo mkdir -p /run/sshd && sudo chmod 0755 /run/sshd
+sudo dpkg --configure -a          # finish the interrupted install
+sudo sshd -t                      # must print nothing
+sudo systemctl start ssh
+```
+
+The role also refuses to rewrite the PAM stacks unless `pam_himmelblau.so`,
+`pam_localuser.so`, and `pam_mkhomedir.so` are all present, so a
+half-installed host cannot get a PAM configuration it is unable to satisfy.
+
+## Role Variables
+
+Selected variables from `defaults/main.yml`:
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `himmelblau_domain` | `princeton.edu` | Entra ID domain |
+| `himmelblau_tenant_id` | Princeton tenant GUID | Entra ID tenant |
+| `himmelblau_local_groups` | `[users]` | Local groups every Entra user joins |
+| `himmelblau_cn_name_mapping` | `true` | Allow `netid` instead of full UPN |
+| `himmelblau_enable_hello` | `false` | Windows Hello PIN enrollment |
+| `himmelblau_allow_console_password_only` | `true` | Password-only console auth |
+| `himmelblau_password_only_remote_services_deny_list` | ssh, telnet, ftp, rsh, rlogin, rexec, cockpit, mosh | Services that must always do MFA |
+| `himmelblau_mfa_poll_prompt_services` | `[ssh, cockpit, xrdp]` | Services needing an MFA poll prompt flush |
+| `himmelblau_remote_desktop_enable` | `true` | Configure XRDP logins when XRDP is present |
+| `himmelblau_remote_desktop_pam_services` | `[xrdp-sesman]` | PAM services rewritten for XRDP |
+| `himmelblau_remote_desktop_local_groups` | `[audio, video, plugdev, netdev]` | Extra groups for desktop sessions |
+| `himmelblau_install_recommends` | `false` | Let apt install Recommends |
+| `himmelblau_guard_desktop_packages` | `true` | Abort if apt would install a desktop/display manager |
+| `himmelblau_forbidden_packages` | gdm3, gnome-shell, gnome-session, ubuntu-desktop | Packages that must never be pulled in |
+| `himmelblau_apt_async_timeout` | `1800` | Seconds allowed for the detached package install |
+| `allow_users` | Princeton netids | SSH `AllowUsers` allowlist |
+| `allow_users_always` | `[pulsys]` | Accounts always kept in `AllowUsers` |
+| `himmelblau_breakglass_enable` | `true` | Stand up the no-PAM break-glass sshd |
+| `himmelblau_breakglass_port` | `2202` | Port for the break-glass instance |
+| `himmelblau_breakglass_users` | `[pulsys]` | Accounts allowed on the break-glass port |
+| `himmelblau_offline_breakglass_enabled` | `false` | Cached-password sign-in for MFA users during an outage |
+| `himmelblau_ssh_service` | `ssh` | SSH unit name to bounce |
 
 ## Inventory & vars example
 
@@ -122,23 +339,59 @@ allow_users:
         channel: "{{ slack_alerts_channel }}"
 ```
 
+Xubuntu desktop VM that should accept remote desktop logins:
+
+```yaml
+- name: build an Entra ID enabled Xubuntu desktop
+  hosts: desktops
+  become: true
+  vars_files:
+    - ../group_vars/himmelblau/common.yml
+    - ../group_vars/himmelblau/vault.yml
+  roles:
+    - role: xrdp
+    - role: himmelblau_entra_id
+```
+
 ## Verifying
 
-On the endpoint (local)
+`pamtester` is not installed by default on these hosts. The role installs it
+itself when `himmelblau_verify_pam` is true (the default) and, **before
+restarting SSH**, checks that local accounts still pass PAM account management.
+Only the account phase is tested: it needs no password, so it cannot block
+waiting for input, and it is where this role's changes are most likely to bite.
+If the check fails the play stops with SSH still running, so existing sessions
+keep working and the `.distrib` copies can be restored.
+
+The role then confirms a brand new connection can be established after the
+restart, rather than assuming it.
+
+To check by hand on the endpoint:
 
 ```bash
 sudo apt -y install pamtester
-# Auth should MFA and succeed (no PAM_IGNORE)
+
+# Account phase: no password needed, safe to run over SSH
+sudo pamtester -v sshd pulsys acct_mgmt
+sudo pamtester -v sudo  pulsys acct_mgmt
+
+# Full authentication: prompts for a password, so run it from a console
 sudo pamtester -v sshd <netid>@princeton.edu authenticate
-sudo pamtester -v sshd <netid>@princeton.edu open_session
+sudo pamtester -v xrdp-sesman <netid>@princeton.edu authenticate
+
+# Name lookups must return immediately, not hang on himmelblaud
+getent passwd root
+getent passwd <netid>@princeton.edu
 
 # Daemon health
 sudo systemctl status himmelblaud
 sudo journalctl -u himmelblaud -n 120 --no-pager
-
-# Socket present
 sudo ls -l /run/himmelblaud
 ```
+
+The single most reliable check costs nothing: with your current session still
+open, start a **new** SSH session from your workstation. If that succeeds,
+authentication is intact.
 
 From remote (your workstation)
 
@@ -148,3 +401,8 @@ ssh -o PreferredAuthentications=keyboard-interactive \
     -o PubkeyAuthentication=no \
     -l <netid> sandbox-rl36671.lib.princeton.edu
 ```
+
+For remote desktop, connect any RDP client to port 3389 and sign in with your
+netid and Entra ID password. Session startup is logged to
+`/tmp/xrdp-startwm-<user>-<display>.log` and sesman activity lands in
+`/var/log/xrdp-sesman.log`.

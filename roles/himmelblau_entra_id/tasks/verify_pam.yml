@@ -1,0 +1,67 @@
+---
+# Prove local authentication still works before the SSH daemon is restarted.
+#
+# The role rewrites every common-* PAM stack. If that leaves local accounts
+# unable to authenticate, the damage only becomes visible when sshd restarts and
+# the next login attempt fails, by which point the host may be unreachable.
+# Checking first turns a lockout into a failed task.
+#
+# Only the account phase is exercised: it needs no password, so it stays
+# non-interactive, and it is where this role's changes are most likely to bite
+# (the auth_err=die control and pam_allow_groups both act during account
+# management). An interactive "authenticate" test would block forever waiting
+# for input on a controlled connection.
+
+- name: Himmelblau (verify) | install pamtester
+  ansible.builtin.apt:
+    name: pamtester
+    state: present
+  register: himmelblau_pamtester
+  failed_when: false
+
+- name: Himmelblau (verify) | check local accounts pass PAM account management
+  ansible.builtin.command:
+    argv:
+      - timeout
+      - "20"
+      - pamtester
+      - "{{ item.service }}"
+      - "{{ item.user }}"
+      - acct_mgmt
+  loop:
+    - { service: sshd, user: "{{ himmelblau_ssh_login_user }}" }
+    - { service: sudo, user: "{{ himmelblau_ssh_login_user }}" }
+  loop_control:
+    label: "{{ item.service }}:{{ item.user }}"
+  register: himmelblau_pam_verify
+  changed_when: false
+  failed_when: false
+  when: himmelblau_pamtester is not failed
+
+- name: Himmelblau (verify) | fail if a local account was locked out
+  ansible.builtin.assert:
+    that:
+      - item.rc == 0
+    fail_msg: >-
+      PAM account management failed for '{{ item.item.user }}' via the
+      '{{ item.item.service }}' service (rc={{ item.rc }}):
+      {{ (item.stderr | default('')) | truncate(300) }}
+      The rewritten PAM stacks would lock this account out of
+      {{ inventory_hostname }}. SSH has NOT been restarted, so existing sessions
+      still work. Restore /etc/pam.d/common-* from the .distrib copies before
+      disconnecting:
+      for f in common-auth common-account common-session common-password; do
+      cp "/etc/pam.d/$f.distrib" "/etc/pam.d/$f"; done
+    quiet: true
+  loop: "{{ himmelblau_pam_verify.results | default([]) }}"
+  loop_control:
+    label: "{{ item.item.service }}:{{ item.item.user }}"
+  when: himmelblau_pam_verify is not skipped
+
+- name: Himmelblau (verify) | warn when the check could not run
+  ansible.builtin.debug:
+    msg: >-
+      pamtester could not be installed, so the PAM stacks were not verified.
+      Confirm you can open a NEW SSH session to {{ inventory_hostname }} before
+      closing your current one.
+  when: himmelblau_pamtester is failed

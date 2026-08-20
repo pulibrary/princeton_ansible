@@ -1,15 +1,30 @@
 {{ ansible_managed | comment }}
+{% set desktop_groups = himmelblau_remote_desktop_local_groups if himmelblau_remote_desktop_enable | bool else [] %}
+{% set effective_local_groups = (himmelblau_local_groups + desktop_groups) | unique | list %}
 [global]
 
 domains = {{ himmelblau_domain }}
-local_groups = users
-home_attr = CN
-home_alias = CN
+local_groups = {{ effective_local_groups | join(',') }}
+home_attr = {{ himmelblau_home_attr }}
+home_alias = {{ himmelblau_home_alias }}
 use_etc_skel = true
-enable_hello = false
+enable_hello = {{ himmelblau_enable_hello | bool | lower }}
+cn_name_mapping = {{ himmelblau_cn_name_mapping | bool | lower }}
+allow_console_password_only = {{ himmelblau_allow_console_password_only | bool | lower }}
+password_only_remote_services_deny_list = {{ himmelblau_password_only_remote_services_deny_list | join(',') }}
+mfa_poll_prompt_services = {{ himmelblau_mfa_poll_prompt_services | join(',') }}
 
 [{{ himmelblau_domain }}]
 tenant_id = {{ himmelblau_tenant_id }}
 app_id = {{ himmelblau_domain_app_id }}
 redirect_uri = himmelblau://Himmelblau.EntraId.BrokerPlugin
-idmap_range = 5000000-5999999
+idmap_range = {{ himmelblau_idmap_range }}
+{% if himmelblau_offline_breakglass_enabled | bool %}
+
+# Lets MFA users sign in with a cached password verifier while Entra ID is
+# unreachable. Verifiers are only cached after a successful online sign-in, so
+# this has to be enabled before an outage to be of any use.
+[offline_breakglass]
+enabled = true
+ttl = {{ himmelblau_offline_breakglass_ttl }}
+{% endif %}
