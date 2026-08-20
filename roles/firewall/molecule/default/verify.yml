@@ -13,6 +13,18 @@
         that:
           - "'Status: active' in firewall_verify_ufw.stdout"
 
+    # An unrestricted rule shows the destination as "Anywhere" with no port,
+    # which is what distinguishes it from the service-specific rules. ufw prints
+    # single hosts without the /32 suffix, so strip it before matching.
+    - name: Assert trusted networks are allowed on every port
+      ansible.builtin.assert:
+        that:
+          - firewall_verify_ufw.stdout is search('Anywhere\s+ALLOW\s+' ~ (item | regex_replace('/32$', '') | regex_escape))
+        fail_msg: >-
+          No unrestricted allow rule for {{ item }} was found in UFW status:
+          {{ firewall_verify_ufw.stdout }}
+      loop: "{{ firewall_trusted_cidrs }}"
+
     - name: Read ICMP redirect values
       ansible.builtin.command:
         argv:

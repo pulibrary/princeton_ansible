@@ -6,6 +6,7 @@ and Red Hat/Rocky systems. It replaces the former `ufw_firewall` role.
 The role:
 
 - configures UFW on Debian-family hosts and firewalld on Red Hat-family hosts;
+- allows all traffic from trusted networks;
 - restricts SSH and HTTP to approved networks;
 - optionally permits BigFix and CheckMK;
 - disables IPv4 and IPv6 ICMP redirects and adds runtime DROP rules; and
@@ -18,6 +19,12 @@ allowed_admin_cidrs: []
 allowed_libnet_cidrs: []
 ssh_allowed_cidrs: []
 
+firewall_trusted_cidrs:
+  - 172.20.80.0/22
+  - 128.112.203.146/32
+  - 128.112.200.245/32
+  - 128.112.201.34/32
+
 ufw_default_incoming: deny
 ufw_default_outgoing: allow
 ufw_enable_now: true
@@ -27,6 +34,25 @@ firewall_allow_http: true
 firewall_allow_bigfix: true
 firewall_allow_checkmk: true
 firewall_fail2ban_enabled: true
+```
+
+## Trusted networks
+
+`firewall_trusted_cidrs` opens **every port** to the listed sources, rather than
+the specific services permitted by the other variables. It covers the LibNetPvt
+subnet and the production load balancers, and applies to all hosts.
+
+This rule previously existed only in the ZooKeeper group variables, so
+otherwise identical hosts enforced different policy depending on which group
+they happened to be in. Because each entry grants unrestricted access, keep the
+list short and prefer a service-specific rule where one will do.
+
+To narrow or extend it for a group, override the list in that group's variables:
+
+```yaml
+# group_vars/<group>/common.yml
+firewall_trusted_cidrs:
+  - 172.20.80.0/22
 ```
 
 Service-specific rules can be supplied through group variables:

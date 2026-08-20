@@ -17,6 +17,16 @@
     name: dnf-plugins-core
     state: present
 
+- name: Firewall | Allow all traffic from trusted networks with firewalld
+  ansible.posix.firewalld:
+    rich_rule: >-
+      rule family="ipv4" source address="{{ item }}" accept
+    zone: "{{ firewall_zone }}"
+    permanent: true
+    immediate: true
+    state: enabled
+  loop: "{{ firewall_trusted_cidrs }}"
+
 - name: Firewall | Allow SSH from approved networks with firewalld
   ansible.posix.firewalld:
     rich_rule: >-
