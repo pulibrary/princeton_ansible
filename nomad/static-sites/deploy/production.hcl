@@ -131,7 +131,13 @@ server {
     index  index.html index.htm;
 
     location / {
-        try_files $uri $uri/ =404;
+        # Modified try_files to prevent redirection cycles
+        try_files $uri $uri/ $uri.html $uri.xml =404;
+    }
+
+    # Prevent applying the XML extension multiple times
+    location ~ \.xml$ {
+        try_files $uri =404;
     }
 }
 EOF
