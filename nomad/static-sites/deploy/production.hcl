@@ -111,6 +111,11 @@ job "static-sites-production" {
         destination = "local/nginx/sites.conf"
         change_mode = "restart"
         data        = <<EOF
+log_format json_combined escape=json
+  '{"time":"$time_iso8601","remote_addr":"$remote_addr",'
+  '"request":"$request","status":$status,'
+  '"bytes":$body_bytes_sent,"user_agent":"$http_user_agent",'
+  '"host":"$http_x_forwarded_host"}';
 map $http_x_forwarded_host $site_root {
     hostnames;
     default                              /srv/sites/none;
@@ -124,11 +129,15 @@ map $http_x_forwarded_host $site_root {
     # pcdm
     pcdm.org    /srv/sites/pcdm/_site;
 }
-
+set_real_ip_from 128.112.200.245;
+set_real_ip_from 128.112.201.34;
+real_ip_header   X-Real-IP;
+real_ip_recursive on;
 server {
     listen 8080 default_server;
     root   $site_root;
     index  index.html index.htm;
+    access_log /dev/stdout json_combined;
 
     location / {
         # Modified try_files to prevent redirection cycles
