@@ -353,6 +353,16 @@ Xubuntu desktop VM that should accept remote desktop logins:
     - role: himmelblau_entra_id
 ```
 
+`playbooks/desktop_entra_id.yml` does exactly this. Use it rather than
+`playbooks/bitcurator_setup.yml` when the point is per-user Entra ID sign-in:
+the bitcurator role also creates a local `bcadmin` account with a shared
+password, which is what Entra ID authentication is meant to replace.
+
+Role order matters. This role skips its remote desktop work when XRDP is not
+installed, so `xrdp` has to be applied first. Running the himmelblau playbook on
+its own against a host with no XRDP logs "XRDP is not installed" and moves on,
+which is easy to miss.
+
 ## Verifying
 
 `pamtester` is not installed by default on these hosts. The role installs it
