@@ -16,11 +16,10 @@ job "static-sites-production" {
       port "http" { to = 8080 }
     }
 
-    # milberg
+    # This is the health endpoint, that determines if nginx is running
     service {
-      name = "milberg-production-web"
       port = "http"
-
+      tags = ["logging"]
       check {
         type     = "http"
         port     = "http"
@@ -32,37 +31,26 @@ job "static-sites-production" {
         }
       }
     }
+
+    # milberg
+    service {
+      name = "milberg-production-web"
+      port = "http"
+    }
     # daviesproject
     service {
       name = "daviesproject-production-web"
       port = "http"
-
-      check {
-        type     = "http"
-        port     = "http"
-        path     = "/"
-        interval = "10s"
-        timeout  = "2s"
-        header {
-          X-Forwarded-Host = ["daviesproject.princeton.edu"]
-        }
-      }
     }
     # cicognara
     service {
       name = "cicognara-production-web"
       port = "http"
-
-      check {
-        type     = "http"
-        port     = "http"
-        path     = "/"
-        interval = "10s"
-        timeout  = "2s"
-        header {
-          X-Forwarded-Host = ["cicognara.org"]
-        }
-      }
+    }
+    # pcdm
+    service {
+      name = "pcdm-production-web"
+      port = "http"
     }
 
     task "nginx" {
@@ -82,6 +70,11 @@ job "static-sites-production" {
       artifact {
         source      = "git::https://github.com/pulibrary/digital-cicognara-library//apps/cicognara-static/_site"
         destination = "local/sites/cicognara"
+      }
+      # We have to do the root here instead of _site because there's symlinks under _site, and Nomad complains. It's happy to clone the whole repo.
+      artifact {
+        source      = "git::https://github.com/pulibrary/pcdm.org"
+        destination = "local/sites/pcdm"
       }
 
       config {
@@ -118,6 +111,11 @@ job "static-sites-production" {
         destination = "local/nginx/sites.conf"
         change_mode = "restart"
         data        = <<EOF
+log_format json_combined escape=json
+  '{"time":"$time_iso8601","remote_addr":"$remote_addr",'
+  '"request":"$request","status":$status,'
+  '"bytes":$body_bytes_sent,"user_agent":"$http_user_agent",'
+  '"host":"$http_x_forwarded_host"}';
 map $http_x_forwarded_host $site_root {
     hostnames;
     default                              /srv/sites/none;
@@ -128,15 +126,27 @@ map $http_x_forwarded_host $site_root {
     daviesproject.lib.princeton.edu    /srv/sites/daviesproject;
     # cicognara
     cicognara.org    /srv/sites/cicognara;
+    # pcdm
+    pcdm.org    /srv/sites/pcdm/_site;
 }
-
+set_real_ip_from 128.112.200.245;
+set_real_ip_from 128.112.201.34;
+real_ip_header   X-Real-IP;
+real_ip_recursive on;
 server {
     listen 8080 default_server;
     root   $site_root;
     index  index.html index.htm;
+    access_log /dev/stdout json_combined;
 
     location / {
-        try_files $uri $uri/ =404;
+        # Modified try_files to prevent redirection cycles
+        try_files $uri $uri/ $uri.html $uri.xml =404;
+    }
+
+    # Prevent applying the XML extension multiple times
+    location ~ \.xml$ {
+        try_files $uri =404;
     }
 }
 EOF
