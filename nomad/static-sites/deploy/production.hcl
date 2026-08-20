@@ -47,6 +47,11 @@ job "static-sites-production" {
       name = "cicognara-production-web"
       port = "http"
     }
+    # pcdm
+    service {
+      name = "pcdm-production-web"
+      port = "http"
+    }
 
     task "nginx" {
       driver = "docker"
@@ -65,6 +70,11 @@ job "static-sites-production" {
       artifact {
         source      = "git::https://github.com/pulibrary/digital-cicognara-library//apps/cicognara-static/_site"
         destination = "local/sites/cicognara"
+      }
+      # We have to do the root here instead of _site because there's symlinks under _site, and Nomad complains. It's happy to clone the whole repo.
+      artifact {
+        source      = "git::https://github.com/pulibrary/pcdm.org"
+        destination = "local/sites/pcdm"
       }
 
       config {
@@ -111,6 +121,8 @@ map $http_x_forwarded_host $site_root {
     daviesproject.lib.princeton.edu    /srv/sites/daviesproject;
     # cicognara
     cicognara.org    /srv/sites/cicognara;
+    # pcdm
+    pcdm.org    /srv/sites/pcdm/_site;
 }
 
 server {

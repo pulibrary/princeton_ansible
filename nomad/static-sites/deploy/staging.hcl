@@ -70,6 +70,7 @@ job "static-sites-staging" {
         source      = "git::https://github.com/pulibrary/digital-cicognara-library//apps/cicognara-static/_site"
         destination = "local/sites/cicognara"
       }
+      # We have to do the root here instead of _site because there's symlinks under _site, and Nomad complains. It's happy to clone the whole repo.
       artifact {
         source      = "git::https://github.com/pulibrary/pcdm.org"
         destination = "local/sites/pcdm"
