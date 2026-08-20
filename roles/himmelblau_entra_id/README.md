@@ -280,11 +280,16 @@ Selected variables from `defaults/main.yml`:
 | `himmelblau_domain` | `princeton.edu` | Entra ID domain |
 | `himmelblau_tenant_id` | Princeton tenant GUID | Entra ID tenant |
 | `himmelblau_local_groups` | `[users]` | Local groups every Entra user joins |
+| `himmelblau_sudo_groups` | `[]` | Entra group Object IDs granted local sudo |
+| `himmelblau_local_sudo_group` | `sudo` | Local group used for `himmelblau_sudo_groups` |
 | `himmelblau_cn_name_mapping` | `true` | Allow `netid` instead of full UPN |
-| `himmelblau_enable_hello` | `false` | Windows Hello PIN enrollment |
 | `himmelblau_allow_console_password_only` | `true` | Password-only console auth |
 | `himmelblau_password_only_remote_services_deny_list` | ssh, telnet, ftp, rsh, rlogin, rexec, cockpit, mosh | Services that must always do MFA |
 | `himmelblau_mfa_poll_prompt_services` | `[ssh, cockpit, xrdp]` | Services needing an MFA poll prompt flush |
+| `himmelblau_mfa_method` | `""` (user's own setting) | Force one MFA method, e.g. `PhoneAppOTP` |
+| `himmelblau_enable_hello` | `true` | Windows Hello PIN enrolment and sign-in |
+| `himmelblau_allow_remote_hello` | `true` | Accept PIN alone for remote services such as RDP |
+| `himmelblau_enable_hello_totp` | `false` | Require a local TOTP alongside the PIN |
 | `himmelblau_remote_desktop_enable` | `true` | Configure XRDP logins when XRDP is present |
 | `himmelblau_remote_desktop_pam_services` | `[xrdp-sesman]` | PAM services rewritten for XRDP |
 | `himmelblau_remote_desktop_local_groups` | `[audio, video, plugdev, netdev]` | Extra groups for desktop sessions |
@@ -362,6 +367,121 @@ Role order matters. This role skips its remote desktop work when XRDP is not
 installed, so `xrdp` has to be applied first. Running the himmelblau playbook on
 its own against a host with no XRDP logs "XRDP is not installed" and moves on,
 which is easy to miss.
+
+## Joining the device to Entra ID
+
+There is no enrollment command. `himmelblaud` is only the daemon and takes no
+tenant argument; the device joins Entra ID automatically on the first successful
+sign-in. To trigger and watch that:
+
+```bash
+sudo aad-tool auth-test -D <netid>@princeton.edu
+sudo aad-tool status
+```
+
+`auth-test` exercises the himmelblaud resolver directly, so it isolates cloud
+authentication from PAM configuration. Add `--force-reauth` to bypass a cached
+Hello key.
+
+### Why remote desktop shows a blank screen during MFA
+
+The symptom is a blank remote desktop screen with no prompt, while the user's
+phone receives an Authenticator request they cannot complete.
+
+Himmelblau sends the MFA device-code message as a PAM informational message
+(`PAM_TEXT_INFO`). For every PAM service except `gdm-password` and
+`broker-interactive` it also renders the verification URL as unicode QR art and
+appends it to that message. The remote desktop login window cannot draw a
+multi-line unicode block, so the entire message is lost. The upstream code
+already skips the QR for GDM, and for pinentry because it "panics on long Assuan
+payloads"; the remote desktop login window has the same limitation but is not
+excluded.
+
+The `mfa_poll_prompt` flush does not help here. It is active for remote desktop
+already, since the service name `xrdp-sesman` matches the `xrdp` entry in
+`mfa_poll_prompt_services` by substring, and the message still cannot be
+rendered.
+
+So MFA cannot be completed at the remote desktop login window. The role instead
+configures Hello PIN, which removes the MFA exchange from that window entirely:
+
+```yaml
+himmelblau_enable_hello: true
+himmelblau_allow_remote_hello: true
+```
+
+Each user enrols a PIN once, over SSH, and needs no administrator rights to do
+it:
+
+```bash
+ssh <netid>@sandbox-bitcur1.princeton.edu
+passwd
+```
+
+The SSH login performs MFA, which renders correctly in a terminal, and joins the
+device to Entra ID on first success. `passwd` then sets the PIN, because
+`pam_himmelblau` implements the PAM password-change phase (`sm_chauthtok`) and
+claims it ahead of `pam_unix` in the managed `common-password` stack. It prints
+"This command changes your local Hello PIN, NOT your Entra Id password" so users
+are not left guessing.
+
+From then on they type that PIN into the remote desktop password field. It is an
+ordinary password prompt, so nothing needs to be displayed back to them.
+
+### Users do not need sudo for any of this
+
+`passwd` is run by the user as themselves. Granting `NOPASSWD` sudo to Entra ID
+users to make enrolment work would be a bad trade: it would hand every desktop
+user unauthenticated root, which is a far larger exposure than anything else
+discussed here, in order to solve a problem that does not exist.
+
+`aad-tool` is a different matter. It talks to the himmelblaud socket, which this
+role creates mode 0750 and root-owned, so `aad-tool status` and
+`aad-tool auth-test` do need root. Those are administrator diagnostics, not part
+of user enrolment, and `pulsys` already has the sudo rights to run them.
+
+If Entra ID users genuinely need sudo on a host, grant it by group membership
+rather than by relaxing authentication. Himmelblau maps an Entra group to a
+local sudo group:
+
+```yaml
+# Object IDs, not group names: Entra names are not unique
+himmelblau_sudo_groups:
+  - <entra-group-object-id>
+himmelblau_local_sudo_group: sudo
+```
+
+Those users then authenticate to sudo with their Hello PIN, which works fine in
+a terminal. The `no_hello_pin` module option can force a full MFA round trip for
+sudo specifically if you want stronger confirmation for privilege escalation.
+
+`allow_remote_hello` is on by default because without it, or without
+`enable_hello_totp`, remote services skip Hello and remote desktop stays broken.
+It does reduce remote sign-in to a single factor: someone holding the machine
+with no route to Entra ID needs only the PIN. For anything beyond a sandbox,
+prefer keeping two factors:
+
+```yaml
+himmelblau_allow_remote_hello: false
+himmelblau_enable_hello_totp: true
+```
+
+Every user then enrols a TOTP secret on the host and supplies a code alongside
+the PIN.
+
+### Forcing a particular MFA method
+
+`himmelblau_mfa_method` requests one specific method rather than whatever the
+user has configured in Entra ID. `PhoneAppOTP` turns MFA into a code the user
+reads from their phone and types in, which needs nothing displayed back to them:
+
+```yaml
+himmelblau_mfa_method: PhoneAppOTP
+```
+
+This is useful for SSH and console logins. It does not rescue the remote desktop
+login window on its own, because the polling message is still sent the same way.
+Leave it empty to use each user's own Entra ID setting.
 
 ## Verifying
 

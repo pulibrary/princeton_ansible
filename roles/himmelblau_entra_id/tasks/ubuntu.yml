@@ -265,11 +265,30 @@
     state: present
     timeout: 30
 
-- name: Himmelblau | enrollment instructions
+# There is no separate enrollment command. himmelblaud is only the daemon and
+# takes no tenant argument; the device joins Entra ID automatically the first
+# time a user authenticates successfully.
+- name: Himmelblau | first sign-in instructions
   ansible.builtin.debug:
     msg: |
-      Device enrollment must be completed manually:
-      1. Run: sudo himmelblaud -e {{ himmelblau_tenant_id }}
-      2. Follow the device code flow
-      3. Approve device in Entra ID portal
+      Each user enrols a Hello PIN once, over SSH, before remote desktop will
+      work. No administrator rights are needed for this:
+
+        ssh <netid>@{{ inventory_hostname }}
+        passwd
+
+      The SSH login performs MFA, which renders correctly in a terminal, and
+      joins the device to Entra ID on first success. 'passwd' then sets the
+      Hello PIN: pam_himmelblau handles the password-change phase, so it changes
+      the local Hello PIN and NOT the Entra ID password. It says so itself.
+
+      Afterwards, sign in to remote desktop with that PIN in the password field.
+      Do not try to enrol from remote desktop: its login window cannot display
+      the MFA device-code message.
+
+      Administrators can check the daemon side with:
+
+        sudo aad-tool status
+        sudo aad-tool auth-test -D <netid>@{{ himmelblau_domain }}
+        sudo journalctl -u himmelblaud -n 50 --no-pager
   when: himmelblau_show_enrollment_instructions | default(true)
