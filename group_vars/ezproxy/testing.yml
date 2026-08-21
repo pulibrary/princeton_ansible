@@ -1,21 +1,27 @@
 ---
 install_ruby_from_source: true
+
 # these can go to common when we merge testing
 desired_ruby_version: "3.4.4"
 ruby_version_override: "ruby-3.4.4"
+
 domain_name: "ezproxy-test"
 domain_place_name: "ezproxy-test"
 generic_app_user: ezproxy
 oclc_wskey: "{{ vault_oclc_wskey }}"
 ezproxy_public_host: ezproxy-test.princeton.edu
-# The below value corresponds to the application's numbering convention of the SSL certificate that is 
+
+# The below value corresponds to the application's numbering convention of the SSL certificate that is
 # being passed to the campus IDP for Shibbleth/SAML integration.
 # See pul-it-handbook: https://github.com/pulibrary/pul-it-handbook/blob/main/services/ezproxy.md
 cert_value: "3"
+
 sudo_options: "ALL=(ALL) NOPASSWD: /usr/sbin/service ezproxy *"
+
 microsoft_entra_idp_uuid: "{{ vault_microsoft_entra_testing_idp_uuid }}"
 microsoft_entra_app_uuid: "{{ vault_microsoft_entra_testing_app_uuid }}"
-# signoz / otel collector for ezproxy
+
+# SigNoz / OpenTelemetry collector for EZproxy
 otel_default_resource_attributes:
   host.name: "{{ inventory_hostname }}"
   service.name: ezproxy
@@ -31,6 +37,7 @@ otel_receivers:
       http:
         endpoint: 127.0.0.1:4318
 
+  # EZproxy HTTP access logs
   filelog/ezproxy_access:
     include:
       - /var/local/ezproxy/log/ezp*.log*
@@ -59,6 +66,7 @@ otel_receivers:
         field: attributes.service_name
         value: ezproxy_access
 
+  # EZproxy SPU logs
   filelog/ezproxy_spu:
     include:
       - /var/local/ezproxy/log/spu*.log*
@@ -86,6 +94,42 @@ otel_receivers:
       - type: add
         field: attributes.service_name
         value: ezproxy_spu
+
+  # EZproxy audit logs
+  #
+  # Examples:
+  #
+  # 2026-08-18 23:45:10 Login.Success 74.104.115.202 user@princeton.edu SESSION |Shibboleth|
+  # 2026-08-18 23:47:51 Logout user@princeton.edu SESSION Expired
+  # 2026-08-18 23:51:02 Info.usr 119.249.100.47 Access Denied Unauthorized Country
+  #
+  filelog/ezproxy_audit:
+    include:
+      - /var/local/ezproxy/audit/*.txt
+    start_at: end
+    include_file_path: true
+    include_file_name: true
+    operators:
+      - type: regex_parser
+        id: parse_ezproxy_audit
+        parse_from: body
+        regex: '^(?P<time_local>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\s+(?P<audit_event>\S+)\s+(?:(?P<client_ip>(?:\d{1,3}\.){3}\d{1,3}|[0-9A-Fa-f:]+)\s+)?(?:(?P<authenticated_user>\S+@\S+)\s+)?(?:(?P<session_id>[A-Za-z0-9]{20,})\s+)?(?P<audit_detail>.*)$'
+        on_error: send
+
+      - type: time_parser
+        id: parse_ezproxy_audit_time
+        parse_from: attributes.time_local
+        layout_type: strptime
+        layout: '%Y-%m-%d %H:%M:%S'
+        on_error: send
+
+      - type: add
+        field: attributes.log_type
+        value: ezproxy_audit
+
+      - type: add
+        field: attributes.service_name
+        value: ezproxy_audit
 
   hostmetrics:
     collection_interval: 30s
@@ -135,6 +179,7 @@ otel_service_pipelines:
     receivers:
       - filelog/ezproxy_access
       - filelog/ezproxy_spu
+      - filelog/ezproxy_audit
     processors:
       - resource
       - batch
