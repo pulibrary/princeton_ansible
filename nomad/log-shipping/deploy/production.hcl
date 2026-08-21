@@ -3,10 +3,10 @@ variable "branch_or_sha" {
   default = "main"
 }
 
-job "log-shipping-staging" {
+job "log-shipping-production" {
   datacenters = ["dc1"]
   type        = "system"
-  node_pool   = "staging"
+  node_pool   = "production"
   priority    = 60
 
   group "log-shipping" {
@@ -248,7 +248,7 @@ job "log-shipping-staging" {
                   statements = [
                       "set(attributes[\"service.name\"], \"nomad-client\")",
                       "set(attributes[\"host.name\"], \"{{ env "NODE_NAME" }}\")",
-                      "set(attributes[\"deployment.environment\"], \"staging\")",
+                      "set(attributes[\"deployment.environment\"], \"production\")",
                   ]
               }
 
@@ -284,7 +284,7 @@ job "log-shipping-staging" {
 
           otelcol.exporter.otlp "signoz" {
               client {
-                  endpoint = "k8s-staging1.lib.princeton.edu:32317"
+                  endpoint = "k8s-prod1.lib.princeton.edu:32317"
                   tls {
                       insecure = true
                   }

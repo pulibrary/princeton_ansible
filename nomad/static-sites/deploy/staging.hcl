@@ -110,11 +110,19 @@ job "static-sites-staging" {
         destination = "local/nginx/sites.conf"
         change_mode = "restart"
         data        = <<EOF
+map $status $log_level {
+    default "info";
+    ~^4     "warn";
+    ~^5     "error";
+}
+
 log_format json_combined escape=json
   '{"time":"$time_iso8601","remote_addr":"$remote_addr",'
   '"request":"$request","status":$status,'
   '"bytes":$body_bytes_sent,"user_agent":"$http_user_agent",'
-  '"host":"$http_x_forwarded_host"}';
+  '"host":"$http_x_forwarded_host",'
+  '"level":"$log_level",'
+  '"message":"$remote_addr $request $status $body_bytes_sent"}';
 map $http_x_forwarded_host $site_root {
     hostnames;
     default                              /srv/sites/none;
@@ -127,6 +135,12 @@ map $http_x_forwarded_host $site_root {
     # pcdm
     pcdm-staging.lib.princeton.edu    /srv/sites/pcdm/_site;
 }
+# Drop logs if it's from consul checks.
+map $http_user_agent $loggable {
+    ~*consul  0;
+    ~*checkmk 0;
+    default   1;
+}
 set_real_ip_from 172.20.80.13;
 set_real_ip_from 172.20.80.14;
 real_ip_header   X-Real-IP;
@@ -135,7 +149,7 @@ server {
     listen 8080 default_server;
     root   $site_root;
     index  index.html index.htm;
-    access_log /dev/stdout json_combined;
+    access_log /dev/stdout json_combined if=$loggable;
 
     location / {
         # Modified try_files to prevent redirection cycles
