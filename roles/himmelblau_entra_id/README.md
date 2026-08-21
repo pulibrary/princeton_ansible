@@ -465,6 +465,82 @@ Enrolment must not be attempted over remote desktop, because the MFA step needs
 to display a code that the remote desktop login window discards. Once a PIN
 exists, remote desktop needs nothing displayed and only the PIN typed.
 
+### Onboarding a user who has no PIN yet
+
+A user with no enrolled PIN cannot sign in over remote desktop, and there is no
+one-time-code fallback. What they will see is the blank screen described above,
+their phone buzzing, and eventually a failure, because the verification number is
+discarded before it reaches them.
+
+So a PIN has to exist before their first remote desktop login, and it has to be
+enrolled from a terminal. Either way, **the user must type their own Entra ID
+password**. Nobody can enrol a PIN on someone else's behalf unattended, which is
+the correct behaviour: the PIN is derived from an authentication only that person
+can complete.
+
+**Self-service is the route that scales.** Add the netid to `allow_users` and let
+them do it themselves. For BitCurator workstations that list lives in
+`group_vars/bitcurator/desktop.yml`:
+
+```yaml
+allow_users:
+  - ac2754
+  - ar1789
+  - fkayiwa
+  - gpmenos
+  - jkazmier
+  - vk4273
+  - alice
+```
+
+Beware the naming: despite living under `group_vars/`, `bitcurator` is not an
+inventory group. The real groups are `bitcurator_production` and `sandboxes`, so
+Ansible never loads that directory automatically. It is pulled in explicitly
+through `vars_files`, which is the same convention `group_vars/himmelblau` and
+`group_vars/zookeeper` follow. Editing it has no effect on a playbook that does
+not name it.
+
+Re-run the playbook, then they run:
+
+```bash
+ssh alice@sandbox-bitcur1.princeton.edu
+passwd
+```
+
+The SSH login itself performs MFA, which displays correctly in a terminal, and
+`passwd` sets the PIN. No administrator has to be involved and no credential is
+shared.
+
+Use the **short netid form** when connecting. `cn_name_mapping` is enabled so
+`alice` resolves to the full UPN, but `ssh alice@princeton.edu@host` would present
+the username `alice@princeton.edu`, which the allowlist does not match. Note also
+that a UPN cannot simply be added to `AllowUsers`: sshd interprets an entry
+containing `@` as `USER@HOST`, restricting a user to connections from a host, so
+`alice@princeton.edu` would silently mean "alice, connecting from princeton.edu"
+rather than the account name.
+
+**Administrator-assisted** is the fallback when the user is not on the SSH
+allowlist and you do not want to add them:
+
+```bash
+sudo aad-tool auth-test -D alice@princeton.edu
+```
+
+The `sudo` is needed because the himmelblaud socket is root-owned, but the
+password prompt that follows is *alice's* Entra ID password, not yours. She has to
+be at the keyboard. This is useful for a one-off, and awkward for a team.
+
+Remote desktop access does not depend on `allow_users` at all, since that is an
+sshd setting. A user can therefore have remote desktop access without SSH access,
+but then they cannot self-enrol, and somebody has to sit with them for the
+administrator-assisted route.
+
+Do not let a user attempt PIN enrolment over remote desktop. Enrolment prompts
+for a PIN and then a confirmation, and xrdp answers every prompt with whatever was
+typed in the login box, so the two would trivially "match" and set their PIN to
+their Entra ID password. In practice MFA blocks the attempt first, but the failure
+mode is worth knowing about.
+
 ### Rebuilding a host destroys every PIN on it
 
 PIN and one-time-code material is stored on the machine, not in Entra ID:
