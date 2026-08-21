@@ -47,11 +47,22 @@
             capabilities = ["read-logs"]
           }
 
-    - name: Create workload identity policy for log shipping
+    - name: Create workload identity policy for log shipping staging
       ansible.builtin.command:
         cmd: >
           /usr/local/bin/nomad acl policy apply
           -namespace default -job log-shipping-staging
+          log-shipping-policy /etc/nomad.d/policies/log-shipping-policy.hcl
+      environment:
+        NOMAD_TOKEN: '{{ pul_nomad_management_token }}'
+      run_once: true
+      changed_when: false
+
+    - name: Create workload identity policy for log shipping prod
+      ansible.builtin.command:
+        cmd: >
+          /usr/local/bin/nomad acl policy apply
+          -namespace default -job log-shipping-production
           log-shipping-policy /etc/nomad.d/policies/log-shipping-policy.hcl
       environment:
         NOMAD_TOKEN: '{{ pul_nomad_management_token }}'
