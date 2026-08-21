@@ -140,6 +140,7 @@ map $http_x_forwarded_host $site_root {
 # Drop logs if it's from consul checks.
 map $http_user_agent $loggable {
     ~*consul  0;
+    ~*checkmk 0;
     default   1;
 }
 set_real_ip_from 128.112.200.245;
