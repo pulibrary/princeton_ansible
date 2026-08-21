@@ -13,6 +13,7 @@ job "loki" {
     healthy_deadline  = "3m"
     progress_deadline = "5m"
   }
+  priority = 60
   group "loki" {
     count = 1
     restart {
@@ -49,8 +50,8 @@ job "loki" {
         }
     }
     task "loki" {
-      driver = "podman"
-      user = "root"
+      driver = "docker"
+      user = "2056"
       config {
         image = "grafana/loki:3.2.1"
         args = [
