@@ -189,3 +189,42 @@
     - tcp
   when: running_on_server
   become: true
+
+# UFW doesn't apply to docker ports without this block.
+# See
+# https://cheatsheetseries.owasp.org/cheatsheets/Docker_Security_Cheat_Sheet.html#rule-5a-be-careful-when-mapping-container-ports-to-the-host-with-firewalls-like-ufw
+# and https://github.com/chaifeng/ufw-docker#solving-ufw-and-docker-issues
+- name: 'pul_nomad | nomad | docker | Ensure containers are blocked by UFW'
+  ansible.builtin.blockinfile:
+    path: /etc/ufw/after.rules
+    marker: "# {mark} UFW AND DOCKER"
+    insertafter: EOF
+    block: |
+      *filter
+      :ufw-user-forward - [0:0]
+      :ufw-docker-logging-deny - [0:0]
+      :DOCKER-USER - [0:0]
+      -A DOCKER-USER -j ufw-user-forward
+
+      -A DOCKER-USER -m conntrack --ctstate RELATED,ESTABLISHED -j RETURN
+      -A DOCKER-USER -m conntrack --ctstate INVALID -j DROP
+      -A DOCKER-USER -i docker0 -o docker0 -j ACCEPT
+
+      # Traffic leaving containers (egress, -i docker0) may go anywhere.
+      -A DOCKER-USER -i docker0 -j RETURN
+
+      # Only allow private IP range and load balancers
+      -A DOCKER-USER -o docker0 -s 172.20.80.0/22 -j RETURN
+      -A DOCKER-USER -o docker0 -s 128.112.203.146/32 -j RETURN
+      -A DOCKER-USER -o docker0 -s 128.112.200.245/32 -j RETURN
+      -A DOCKER-USER -o docker0 -s 128.112.201.34/32 -j RETURN
+      -A DOCKER-USER -o docker0 -j ufw-docker-logging-deny
+      -A DOCKER-USER -o docker0 -j DROP
+
+      -A DOCKER-USER -j RETURN
+
+      -A ufw-docker-logging-deny -m limit --limit 3/min --limit-burst 10 -j LOG --log-prefix "[UFW DOCKER BLOCK] "
+      -A ufw-docker-logging-deny -j DROP
+
+      COMMIT
+  notify: reload ufw
