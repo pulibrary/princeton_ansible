@@ -206,42 +206,6 @@
     mode: "0755"
   notify: restart xrdp
 
-- name: Xrdp - open the RDP port in ufw
-  when: xrdp_manage_ufw | bool
-  block:
-    - name: Xrdp - check whether ufw is installed
-      ansible.builtin.command: command -v ufw
-      register: xrdp_ufw_present
-      changed_when: false
-      failed_when: false
-
-    # The firewall role sets a default-deny incoming policy, so without an
-    # explicit rule here the RDP port is unreachable and clients fail with a
-    # generic "cannot connect" error.
-    - name: Xrdp - allow RDP from approved networks
-      community.general.ufw:
-        rule: allow
-        direction: in
-        proto: tcp
-        port: "{{ xrdp_port | string }}"
-        from_ip: "{{ item }}"
-        comment: XRDP remote desktop
-      loop: "{{ xrdp_ufw_allow_from }}"
-      when:
-        - xrdp_ufw_present.rc == 0
-        - xrdp_ufw_allow_from | length > 0
-
-    - name: Xrdp - allow RDP from any source
-      community.general.ufw:
-        rule: allow
-        direction: in
-        proto: tcp
-        port: "{{ xrdp_port | string }}"
-        comment: XRDP remote desktop
-      when:
-        - xrdp_ufw_present.rc == 0
-        - xrdp_ufw_allow_from | length == 0
-
 - name: Xrdp - enable and start XRDP services
   ansible.builtin.service:
     name: "{{ item }}"

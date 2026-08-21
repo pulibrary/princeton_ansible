@@ -92,13 +92,19 @@ himmelblau_enable_hello: true
 # the two settings below is enabled. Without either of them, enabling Hello
 # alone does not fix remote desktop sign-in.
 #
-# allow_remote_hello accepts the PIN by itself. That is a single factor: someone
-# holding the machine with no route to Entra ID needs only the PIN.
-himmelblau_allow_remote_hello: true
-# enable_hello_totp keeps two factors by requiring a local TOTP code alongside
-# the PIN. Stronger, but every user has to enrol a TOTP secret on the host
-# first. Prefer this over allow_remote_hello for anything not a sandbox.
-himmelblau_enable_hello_totp: false
+# Two factors are kept by requiring a local TOTP code alongside the PIN. The
+# TOTP secret is enrolled and checked on the host itself, independently of Entra
+# ID, so it keeps working during an Entra outage.
+#
+# Enrol over SSH: the enrolment step displays the secret as unicode QR art, the
+# same thing the remote desktop login window cannot draw. Once enrolled, remote
+# desktop sees only ordinary prompts.
+himmelblau_enable_hello_totp: true
+# The alternative is accepting the PIN by itself for remote services. That is a
+# single factor: someone holding the machine with no route to Entra ID needs
+# only the PIN. Sandboxes are configured the same as production here, so this
+# stays off rather than being relaxed for convenience.
+himmelblau_allow_remote_hello: false
 # Let people sign in with "netid" instead of "netid@princeton.edu"
 himmelblau_cn_name_mapping: true
 # Local groups every Entra ID user is added to
