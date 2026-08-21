@@ -288,8 +288,8 @@ Selected variables from `defaults/main.yml`:
 | `himmelblau_mfa_poll_prompt_services` | `[ssh, cockpit, xrdp]` | Services needing an MFA poll prompt flush |
 | `himmelblau_mfa_method` | `""` (user's own setting) | Force one MFA method, e.g. `PhoneAppOTP` |
 | `himmelblau_enable_hello` | `true` | Windows Hello PIN enrolment and sign-in |
-| `himmelblau_allow_remote_hello` | `false` | Accept PIN alone for remote services (single factor) |
-| `himmelblau_enable_hello_totp` | `true` | Require a local TOTP alongside the PIN |
+| `himmelblau_allow_remote_hello` | `true` | Accept PIN alone for remote services (required for RDP) |
+| `himmelblau_enable_hello_totp` | `false` | Require a local TOTP as well; breaks RDP |
 | `himmelblau_remote_desktop_enable` | `true` | Configure XRDP logins when XRDP is present |
 | `himmelblau_remote_desktop_pam_services` | `[xrdp-sesman]` | PAM services rewritten for XRDP |
 | `himmelblau_remote_desktop_local_groups` | `[audio, video, plugdev, netdev]` | Extra groups for desktop sessions |
@@ -383,54 +383,57 @@ sudo aad-tool status
 authentication from PAM configuration. Add `--force-reauth` to bypass a cached
 Hello key.
 
-### Why remote desktop shows a blank screen during MFA
+### What remote desktop can and cannot do at the login window
 
-The symptom is a blank remote desktop screen with no prompt, while the user's
-phone receives an Authenticator request they cannot complete.
+The symptom that starts this trail is a blank remote desktop screen with no
+prompt, while the user's phone receives an Authenticator request they cannot
+complete. The cause is in xrdp itself, in the PAM conversation function in
+`sesman/verify_user_pam.c`:
 
-Himmelblau sends the MFA device-code message as a PAM informational message
-(`PAM_TEXT_INFO`). For every PAM service except `gdm-password` and
-`broker-interactive` it also renders the verification URL as unicode QR art and
-appends it to that message. The remote desktop login window cannot draw a
-multi-line unicode block, so the entire message is lost. The upstream code
-already skips the QR for GDM, and for pinentry because it "panics on long Assuan
-payloads"; the remote desktop login window has the same limitation but is not
-excluded.
-
-The `mfa_poll_prompt` flush does not help here. It is active for remote desktop
-already, since the service name `xrdp-sesman` matches the `xrdp` entry in
-`mfa_poll_prompt_services` by substring, and the message still cannot be
-rendered.
-
-The message is not lost, though: xrdp writes PAM conversation text to
-`/var/log/xrdp-sesman.log`, prefixed `PAM:`. The number is therefore recoverable
-while a login is in progress, which is useful when diagnosing a stuck sign-in:
-
-```bash
-sudo tail -f /var/log/xrdp-sesman.log
+```c
+case PAM_PROMPT_ECHO_OFF: /* password */
+    reply[i].resp = g_strdup(user_pass->pass);
+    ...
+case PAM_TEXT_INFO:
+    g_memset(&reply[i], 0, sizeof(struct pam_response));
 ```
 
-That is a debugging aid, not a workflow. Nobody should have to read a server log
-to sign in.
+Two consequences follow, and they bound everything else on this page:
 
-So MFA cannot practically be completed at the remote desktop login window. The
-role instead configures a Hello PIN plus a local one-time code, which replaces
-that exchange with two ordinary prompts:
+1. **Informational text is discarded.** `PAM_TEXT_INFO` replies are zeroed, so
+   the MFA message never reaches the client whatever it contains. xrdp does log
+   it, which is why the verification number appears in
+   `/var/log/xrdp-sesman.log` and nowhere else.
+2. **There is only ever one answer.** Every `PAM_PROMPT_ECHO_OFF` is answered
+   with the same string, the password from the login box. xrdp cannot ask the
+   user for anything further.
+
+So remote desktop sign-in has exactly one secret to offer and can display
+nothing back. Cloud MFA needs both: it must show a code and then confirm. It
+cannot be completed at a remote desktop login window, and no configuration here
+changes that.
+
+A Hello PIN fits the constraint exactly, because it is a single secret typed into
+the password field:
 
 ```yaml
 himmelblau_enable_hello: true
-himmelblau_enable_hello_totp: true
-himmelblau_allow_remote_hello: false
+himmelblau_allow_remote_hello: true
 ```
 
-Sandboxes are configured the same as production here. The weaker alternative,
-`allow_remote_hello: true`, accepts the PIN by itself for remote services and so
-reduces remote sign-in to a single factor: someone holding the machine with no
-route to Entra ID needs only the PIN. It is left off rather than relaxed for
-convenience on test hosts.
+### Why not require a one-time code as well
 
-The one-time code is enrolled and checked on the host itself, independently of
-Entra ID, so it also keeps working during an Entra outage.
+Upstream recommends `enable_hello_totp` over `allow_remote_hello`, and for SSH
+that is the better choice. It cannot be used where remote desktop matters:
+requiring a code adds a second `PAM_PROMPT_ECHO_OFF`, which xrdp answers with the
+PIN again, so the code is always wrong and sign-in always fails. The setting is
+global rather than per-service, so it cannot be enabled for SSH alone.
+
+The tradeoff accepted here is that remote desktop is a single factor at the login
+window. Two things temper it: the firewall role restricts the port to campus and
+VPN ranges, and the PIN is device-bound, sealed to that host and not recoverable
+from Entra ID. It is still weaker than SSH on the same host, which does get full
+MFA, and worth revisiting if xrdp ever gains an interactive conversation.
 
 ### Enrolling
 
@@ -443,7 +446,7 @@ sudo aad-tool auth-test -D <netid>@princeton.edu
 
 That prompts for the user's Entra ID password, runs multi-factor authentication
 (including the "enter the number NN" step, which displays correctly in a
-terminal), then has them set a PIN and enrol a one-time code.
+terminal), then has them set a PIN.
 
 Users who already have a shell on the host can enrol themselves with no
 administrator rights, because `pam_himmelblau` implements the PAM
@@ -458,9 +461,9 @@ passwd
 It prints "This command changes your local Hello PIN, NOT your Entra Id
 password" so users are not left guessing.
 
-Enrolment must not be attempted over remote desktop. One-time code enrolment
-displays the secret as unicode QR art, exactly what the remote desktop login
-window cannot draw. Once enrolled, remote desktop sees only plain prompts.
+Enrolment must not be attempted over remote desktop, because the MFA step needs
+to display a code that the remote desktop login window discards. Once a PIN
+exists, remote desktop needs nothing displayed and only the PIN typed.
 
 ### Rebuilding a host destroys every PIN on it
 

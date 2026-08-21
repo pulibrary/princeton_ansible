@@ -76,35 +76,38 @@ himmelblau_idmap_range: "5000000-5999999"
 
 # Windows Hello PIN.
 #
-# This is the only sign-in flow that works in a remote desktop login window.
-# For any PAM service other than gdm-password, Himmelblau renders the MFA
-# device-code message as unicode QR art and sends the whole thing as a single
-# informational message. The remote desktop login window cannot draw that, so
-# the user is left staring at a blank screen while their phone waits for an
-# approval they cannot see the code for.
+# xrdp's PAM conversation function (sesman/verify_user_pam.c) constrains what is
+# possible here, and it is worth being precise about how:
 #
-# With a Hello PIN there is no MFA exchange at the login window at all: the user
-# types a PIN into the ordinary password field. Enrol the PIN over SSH, where
-# the MFA prompts render correctly, then use it for remote desktop.
+#   * PAM_TEXT_INFO messages are discarded outright (the reply struct is zeroed),
+#     so MFA text such as "enter the number 41" never reaches the client. It is
+#     only written to /var/log/xrdp-sesman.log.
+#   * Every PAM_PROMPT_ECHO_OFF is answered with the same string, the password
+#     from the login box. xrdp cannot ask the user anything further.
+#
+# So a remote desktop sign-in has exactly one secret to offer and can display
+# nothing back. Only single-prompt authentication can work: a Hello PIN typed
+# into the password field.
 himmelblau_enable_hello: true
 # Himmelblau classes remote desktop as a remote service, because the client
-# address appears in PAM_RHOST, and remote services skip Hello unless one of
-# the two settings below is enabled. Without either of them, enabling Hello
-# alone does not fix remote desktop sign-in.
+# address appears in PAM_RHOST, and remote services skip Hello unless one of the
+# two settings below is enabled. Without either, enabling Hello alone does not
+# fix remote desktop sign-in.
 #
-# Two factors are kept by requiring a local TOTP code alongside the PIN. The
-# TOTP secret is enrolled and checked on the host itself, independently of Entra
-# ID, so it keeps working during an Entra outage.
+# This accepts the PIN by itself for remote services. Upstream recommends Hello
+# TOTP instead, and for SSH that is the better choice, but the setting is global
+# rather than per-service and TOTP cannot work over remote desktop: it needs a
+# second prompt that xrdp answers with the PIN again. Enabling it breaks remote
+# desktop sign-in entirely.
 #
-# Enrol over SSH: the enrolment step displays the secret as unicode QR art, the
-# same thing the remote desktop login window cannot draw. Once enrolled, remote
-# desktop sees only ordinary prompts.
-himmelblau_enable_hello_totp: true
-# The alternative is accepting the PIN by itself for remote services. That is a
-# single factor: someone holding the machine with no route to Entra ID needs
-# only the PIN. Sandboxes are configured the same as production here, so this
-# stays off rather than being relaxed for convenience.
-himmelblau_allow_remote_hello: false
+# The tradeoff accepted here is that remote desktop is a single factor at the
+# login window. Access to the port is already restricted to campus and VPN
+# ranges by the firewall role, and the PIN is device-bound: it is sealed to this
+# host and is not recoverable from Entra ID.
+himmelblau_allow_remote_hello: true
+# Requires a local TOTP code alongside the PIN. Leave false while remote desktop
+# matters. Enabling it is only appropriate on hosts reached solely over SSH.
+himmelblau_enable_hello_totp: false
 # Let people sign in with "netid" instead of "netid@princeton.edu"
 himmelblau_cn_name_mapping: true
 # Local groups every Entra ID user is added to
