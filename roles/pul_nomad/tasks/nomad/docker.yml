@@ -190,6 +190,18 @@
   when: running_on_server
   become: true
 
+- name: 'pul_nomad | nomad | docker | Allow containers to talk to containers'
+  community.general.ufw:
+    rule: allow
+    direction: in
+    interface: docker0
+    # These are the internal docker IPs.
+    from_ip: 172.17.0.0/16
+    proto: "tcp"
+    comment: Allow containers to talk to other containers by host IP
+  when: running_on_server
+  become: true
+
 # UFW doesn't apply to docker ports without this block.
 # See
 # https://cheatsheetseries.owasp.org/cheatsheets/Docker_Security_Cheat_Sheet.html#rule-5a-be-careful-when-mapping-container-ports-to-the-host-with-firewalls-like-ufw
