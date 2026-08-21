@@ -288,8 +288,8 @@ Selected variables from `defaults/main.yml`:
 | `himmelblau_mfa_poll_prompt_services` | `[ssh, cockpit, xrdp]` | Services needing an MFA poll prompt flush |
 | `himmelblau_mfa_method` | `""` (user's own setting) | Force one MFA method, e.g. `PhoneAppOTP` |
 | `himmelblau_enable_hello` | `true` | Windows Hello PIN enrolment and sign-in |
-| `himmelblau_allow_remote_hello` | `true` | Accept PIN alone for remote services such as RDP |
-| `himmelblau_enable_hello_totp` | `false` | Require a local TOTP alongside the PIN |
+| `himmelblau_allow_remote_hello` | `false` | Accept PIN alone for remote services (single factor) |
+| `himmelblau_enable_hello_totp` | `true` | Require a local TOTP alongside the PIN |
 | `himmelblau_remote_desktop_enable` | `true` | Configure XRDP logins when XRDP is present |
 | `himmelblau_remote_desktop_pam_services` | `[xrdp-sesman]` | PAM services rewritten for XRDP |
 | `himmelblau_remote_desktop_local_groups` | `[audio, video, plugdev, netdev]` | Extra groups for desktop sessions |
@@ -414,24 +414,36 @@ That is a debugging aid, not a workflow. Nobody should have to read a server log
 to sign in.
 
 So MFA cannot practically be completed at the remote desktop login window. The
-role instead configures Hello PIN, which removes the MFA exchange from that
-window entirely:
+role instead configures a Hello PIN plus a local one-time code, which replaces
+that exchange with two ordinary prompts:
 
 ```yaml
 himmelblau_enable_hello: true
-himmelblau_allow_remote_hello: true
+himmelblau_enable_hello_totp: true
+himmelblau_allow_remote_hello: false
 ```
 
-Enrol the PIN from a terminal, where MFA prompts render correctly. An
-administrator can do this with the user present:
+Sandboxes are configured the same as production here. The weaker alternative,
+`allow_remote_hello: true`, accepts the PIN by itself for remote services and so
+reduces remote sign-in to a single factor: someone holding the machine with no
+route to Entra ID needs only the PIN. It is left off rather than relaxed for
+convenience on test hosts.
+
+The one-time code is enrolled and checked on the host itself, independently of
+Entra ID, so it also keeps working during an Entra outage.
+
+### Enrolling
+
+Enrol from a terminal, where prompts render correctly. An administrator can do
+this with the user present:
 
 ```bash
 sudo aad-tool auth-test -D <netid>@princeton.edu
 ```
 
-That prompts for the user's Entra ID password, runs MFA (including the "enter
-the number NN" step, which displays correctly in a terminal), then asks them to
-set and confirm a PIN. This is the verified path.
+That prompts for the user's Entra ID password, runs multi-factor authentication
+(including the "enter the number NN" step, which displays correctly in a
+terminal), then has them set a PIN and enrol a one-time code.
 
 Users who already have a shell on the host can enrol themselves with no
 administrator rights, because `pam_himmelblau` implements the PAM
@@ -446,8 +458,34 @@ passwd
 It prints "This command changes your local Hello PIN, NOT your Entra Id
 password" so users are not left guessing.
 
-From then on they type that PIN into the remote desktop password field. It is an
-ordinary password prompt, so nothing needs to be displayed back to them.
+Enrolment must not be attempted over remote desktop. One-time code enrolment
+displays the secret as unicode QR art, exactly what the remote desktop login
+window cannot draw. Once enrolled, remote desktop sees only plain prompts.
+
+### Rebuilding a host destroys every PIN on it
+
+PIN and one-time-code material is stored on the machine, not in Entra ID:
+
+* `/var/lib/himmelblaud` (or `/var/lib/private/himmelblaud`) holds the sealed
+  key material and the HSM pin
+* `/var/cache/himmelblaud/himmelblau.cache.db` holds device state and cached
+  authentication data
+* `hsm_type` defaults to `tpm_bound_soft_if_possible`, so the parent key is
+  bound to the machine's TPM where one exists
+
+So wiping a VM invalidates every enrolled PIN on it, and every user has to enrol
+again over SSH. Nothing is recoverable from Entra ID, by design: the PIN is a
+device credential, which is what makes it a second factor rather than a password.
+
+The Entra ID **device object** is not removed by wiping the machine, and each
+rebuild registers a new one. Repeatedly rebuilding a host therefore leaves a
+growing pile of stale device records named after it. `aad-tool` has no command to
+leave or unregister a device, so stale objects have to be deleted in the Entra
+admin centre. Worth checking during a rollout that involves frequent rebuilds,
+since Entra enforces a per-user device limit.
+
+For a host that is rebuilt often, it is less painful to snapshot after enrolment
+than to re-enrol each time.
 
 ### Do users need sudo to enrol?
 
@@ -477,20 +515,6 @@ himmelblau_local_sudo_group: sudo
 Those users then authenticate to sudo with their Hello PIN, which works fine in
 a terminal. The `no_hello_pin` module option can force a full MFA round trip for
 sudo specifically if you want stronger confirmation for privilege escalation.
-
-`allow_remote_hello` is on by default because without it, or without
-`enable_hello_totp`, remote services skip Hello and remote desktop stays broken.
-It does reduce remote sign-in to a single factor: someone holding the machine
-with no route to Entra ID needs only the PIN. For anything beyond a sandbox,
-prefer keeping two factors:
-
-```yaml
-himmelblau_allow_remote_hello: false
-himmelblau_enable_hello_totp: true
-```
-
-Every user then enrols a TOTP secret on the host and supplies a code alongside
-the PIN.
 
 ### Forcing a particular MFA method
 

@@ -272,18 +272,19 @@
 - name: Himmelblau | first sign-in instructions
   ansible.builtin.debug:
     msg: |
-      Each user needs a Hello PIN before remote desktop will work. Enrol it from
-      a terminal, where MFA prompts (including "enter the number NN") display
-      correctly. The remote desktop login window cannot show them, so enrolling
-      from there is not possible.
+      Each user needs a Hello PIN and a TOTP code before remote desktop will
+      work. Enrol both from a terminal, where MFA prompts (including "enter the
+      number NN") and the TOTP setup QR display correctly. The remote desktop
+      login window cannot show them, so enrolling from there is not possible.
 
       An administrator can enrol on a user's behalf:
 
         sudo aad-tool auth-test -D <netid>@{{ himmelblau_domain }}
 
       This prompts for the user's Entra ID password, runs MFA, then asks them to
-      set and confirm a PIN. It needs root because the himmelblaud socket is
-      root-owned, so the user must be present at an administrator's session.
+      set a PIN and enrol a TOTP secret. It needs root because the himmelblaud
+      socket is root-owned, so the user must be present at an administrator's
+      session.
 
       Users who already have a shell on this host can enrol themselves, with no
       administrator rights, because pam_himmelblau implements the PAM
@@ -294,7 +295,8 @@
 
       That changes the local Hello PIN, NOT the Entra ID password, and says so.
 
-      Afterwards, sign in to remote desktop with the PIN in the password field.
+      Afterwards, sign in to remote desktop with the PIN in the password field,
+      then the TOTP code when prompted.
 
       Check the daemon side with:
 

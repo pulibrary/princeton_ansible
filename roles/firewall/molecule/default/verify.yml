@@ -39,6 +39,17 @@
           {{ firewall_verify_ufw.stdout }}
       loop: "{{ firewall_expected_trusted_cidrs }}"
 
+    # firewall_allow_rdp is off by default, so the converge run must not have
+    # opened the port. A desktop host gets it via the xrdp role instead.
+    - name: Assert the remote desktop port is closed by default
+      ansible.builtin.assert:
+        that:
+          - not (firewall_verify_ufw.stdout is search(firewall_defaults.firewall_rdp_port ~ '/tcp'))
+        fail_msg: >-
+          Port {{ firewall_defaults.firewall_rdp_port }} is open even though
+          firewall_allow_rdp defaults to false:
+          {{ firewall_verify_ufw.stdout }}
+      when: not (firewall_allow_rdp | default(false) | bool)
 
     - name: Read ICMP redirect values
       ansible.builtin.command:

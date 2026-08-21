@@ -1,8 +1,8 @@
 ---
 galaxy_info:
-  role_name: example
+  role_name: xrdp
   company: Princeton University Library
-  description: Example Role
+  description: XRDP remote desktop with an XFCE session
   author: pulibrary
 
   license: MIT
@@ -13,6 +13,10 @@ galaxy_info:
     - name: Ubuntu
       versions:
         - jammy
-dependencies: []
-  # uncomment the line below and remove the `[]` above in your role
-  # - role: "<role I depend on>"
+# The firewall role denies incoming traffic by default, so a remote desktop host
+# is unreachable unless the RDP port is opened. Depending on the firewall role
+# and asking it for the rule keeps host firewall policy in one place, instead of
+# having this role reach for ufw directly.
+dependencies:
+  - role: firewall
+    firewall_allow_rdp: true
