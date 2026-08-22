@@ -1,0 +1,70 @@
+---
+# Make sshd survive being restarted by a package postinst.
+#
+# Ubuntu's ssh.service declares RuntimeDirectory=sshd, so systemd deletes
+# /run/sshd whenever the unit stops. sshd needs that directory for privilege
+# separation, so if a stop happens but the matching start is cut short (for
+# example because the postinst that triggered it was killed along with the SSH
+# session it was running in) sshd cannot start again and the host becomes
+# unreachable. RuntimeDirectoryPreserve keeps the directory across restarts and
+# Restart=always brings sshd back if it dies for any reason.
+
+- name: Himmelblau (SSH) | ensure ssh.service drop-in directory exists
+  ansible.builtin.file:
+    path: "/etc/systemd/system/{{ himmelblau_ssh_service }}.service.d"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Himmelblau (SSH) | keep the privilege separation directory across restarts
+  ansible.builtin.copy:
+    dest: "/etc/systemd/system/{{ himmelblau_ssh_service }}.service.d/10-himmelblau-resilience.conf"
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Managed by Ansible (roles/himmelblau_entra_id)
+      [Unit]
+      StartLimitIntervalSec=0
+
+      [Service]
+      RuntimeDirectoryPreserve=yes
+      Restart=always
+      RestartSec=2
+  register: himmelblau_ssh_dropin
+
+- name: Himmelblau (SSH) | reload systemd for the drop-in
+  ansible.builtin.systemd:
+    daemon_reload: true
+  when: himmelblau_ssh_dropin is changed
+
+# A missing /run/sshd is the state that leaves sshd unable to start. Create it
+# now so the directory is already there if a postinst stops the unit.
+- name: Himmelblau (SSH) | ensure the privilege separation directory exists
+  ansible.builtin.file:
+    path: /run/sshd
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Himmelblau (SSH) | recreate the privilege separation directory on boot
+  ansible.builtin.copy:
+    dest: /etc/tmpfiles.d/himmelblau-sshd.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Managed by Ansible (roles/himmelblau_entra_id)
+      d /run/sshd 0755 root root -
+
+- name: Himmelblau (SSH) | confirm sshd config is valid before we touch packages
+  ansible.builtin.command: sshd -t
+  changed_when: false
+
+- name: Himmelblau (SSH) | apply the drop-in so it is active during the install
+  ansible.builtin.systemd:
+    name: "{{ himmelblau_ssh_service }}"
+    state: restarted
+  when: himmelblau_ssh_dropin is changed

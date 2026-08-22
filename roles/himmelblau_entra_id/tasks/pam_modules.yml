@@ -1,0 +1,66 @@
+---
+# Discover which PAM modules actually exist on this host before writing stacks
+# that reference them. Referencing a module that is not installed makes every
+# login attempt log a module-load failure, and for a required module it locks
+# the host out entirely.
+- name: Himmelblau | locate the PAM module directory
+  ansible.builtin.shell:
+    cmd: >-
+      set -o pipefail;
+      dirname "$(find /usr/lib /lib -maxdepth 4 -name pam_unix.so -print -quit)"
+    executable: /bin/bash
+  register: _pam_module_dir
+  changed_when: false
+
+- name: Himmelblau | record the PAM module directory
+  ansible.builtin.set_fact:
+    himmelblau_pam_module_dir: "{{ _pam_module_dir.stdout | trim }}"
+
+- name: Himmelblau | verify the PAM module directory was found
+  ansible.builtin.assert:
+    that:
+      - himmelblau_pam_module_dir | length > 0
+      - himmelblau_pam_module_dir != '.'
+    fail_msg: >-
+      Could not locate pam_unix.so on {{ inventory_hostname }}, so the PAM
+      module directory is unknown. Refusing to rewrite the PAM stacks.
+    quiet: true
+
+- name: Himmelblau | check which PAM modules are present
+  ansible.builtin.stat:
+    path: "{{ himmelblau_pam_module_dir }}/{{ item }}"
+  loop:
+    - pam_himmelblau.so
+    - pam_localuser.so
+    - pam_mkhomedir.so
+    - pam_pwquality.so
+    - pam_cap.so
+    - pam_sss.so
+    - pam_gnome_keyring.so
+  register: _pam_modules
+
+- name: Himmelblau | build the set of available PAM modules
+  ansible.builtin.set_fact:
+    himmelblau_pam_available: >-
+      {{ _pam_modules.results
+         | selectattr('stat.exists')
+         | map(attribute='item')
+         | map('regex_replace', '^pam_(.*)\.so$', '\1')
+         | list }}
+
+# Without pam_himmelblau.so no Entra ID user can authenticate, and without
+# pam_localuser.so local accounts lose their pam_unix branch and the host
+# becomes unreachable. Both are hard requirements.
+- name: Himmelblau | verify the modules the PAM stacks depend on are installed
+  ansible.builtin.assert:
+    that:
+      - "'himmelblau' in himmelblau_pam_available"
+      - "'localuser' in himmelblau_pam_available"
+      - "'mkhomedir' in himmelblau_pam_available"
+    fail_msg: >-
+      Required PAM modules are missing from {{ himmelblau_pam_module_dir }} on
+      {{ inventory_hostname }} (found: {{ himmelblau_pam_available | join(', ') }}).
+      pam-himmelblau and libpam-modules must be fully installed before the PAM
+      stacks are rewritten. If a previous run was interrupted, finish it with
+      'sudo dpkg --configure -a' and try again.
+    quiet: true

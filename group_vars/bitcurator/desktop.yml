@@ -1,0 +1,44 @@
+---
+# Remote desktop with Entra ID sign-in, for BitCurator workstations.
+#
+# Use short netids. sshd reads an entry containing "@" as USER@HOST, so
+# "alice@princeton.edu" would mean "alice, connecting from princeton.edu" rather
+# than naming the account. cn_name_mapping maps the short form to the full UPN.
+allow_users:
+  - ac2754
+  - ar1789
+  - fkayiwa
+  - gpmenos
+  - jkazmier
+  - vk4273
+
+# Local groups every Entra ID user joins. The remote desktop groups (audio,
+himmelblau_local_groups:
+  - users
+
+# Entra ID groups whose members get sudo, by group Object ID rather than name,
+# because Entra group names are not unique. This is how to grant administrative
+# access, instead of relaxing authentication with a NOPASSWD sudo rule.
+#
+# himmelblau_sudo_groups:
+#   - 00000000-0000-0000-0000-000000000000
+
+# Networks allowed to reach the remote desktop port. Inherited from the firewall
+# role, which permits campus wired plus both VPN ranges. Narrow it here if a set
+# of workstations should only be reachable from a smaller range.
+#
+# firewall_rdp_cidrs:
+#   - 128.112.0.0/16
+
+# Sign-in method. A Hello PIN is the only credential that works at the remote
+# desktop login window: xrdp answers every password prompt with the one string
+# typed into its login box and discards informational text, so cloud MFA and
+# one-time codes cannot be completed there.
+#
+# These match the role defaults and are repeated to make the security posture of
+# these workstations explicit rather than inherited silently.
+himmelblau_enable_hello: true
+himmelblau_allow_remote_hello: true
+# Enabling this breaks remote desktop sign-in: it adds a second prompt that xrdp
+# answers with the PIN again. Only appropriate on hosts reached solely by SSH.
+himmelblau_enable_hello_totp: false
