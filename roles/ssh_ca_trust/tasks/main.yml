@@ -1,0 +1,117 @@
+---
+# tasks/main.yml
+- name: Load OS-specific variables
+  ansible.builtin.include_vars: "{{ lookup('ansible.builtin.first_found', params) }}"
+  vars:
+    params:
+      files:
+        - "{{ ansible_os_family }}.yml"
+        - default.yml
+      paths:
+        - "vars"
+
+- name: Assert the SSH User CA public key was provided
+  ansible.builtin.assert:
+    that:
+      - ssh_ca_user_ca_public_key | length > 0
+    fail_msg: >-
+      ssh_ca_user_ca_public_key is empty. Distribute the CA's
+      ssh_user_ca_key.pub contents (typically from group_vars/all).
+
+- name: Ensure OpenSSH server is installed
+  ansible.builtin.package:
+    name: "{{ ssh_ca_openssh_packages }}"
+    state: present
+
+- name: Install the trusted SSH User CA key
+  ansible.builtin.copy:
+    content: "{{ ssh_ca_user_ca_public_key | trim }}\n"
+    dest: "{{ ssh_ca_trusted_keys_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Validate sshd configuration
+    - Restart sshd
+
+- name: Verify the installed CA key fingerprint
+  when: ssh_ca_user_ca_fingerprint | length > 0
+  block:
+    - name: Read the installed CA key fingerprint
+      ansible.builtin.command:
+        argv:
+          - ssh-keygen
+          - -lf
+          - "{{ ssh_ca_trusted_keys_path }}"
+      register: ssh_ca_installed_fpr
+      changed_when: false
+
+    - name: Assert the fingerprint matches the expected value
+      ansible.builtin.assert:
+        that:
+          - ssh_ca_user_ca_fingerprint in ssh_ca_installed_fpr.stdout
+        fail_msg: >-
+          Installed CA key fingerprint ({{ ssh_ca_installed_fpr.stdout }})
+          does not contain the expected {{ ssh_ca_user_ca_fingerprint }}.
+
+- name: Create the authorized principals directory
+  ansible.builtin.file:
+    path: "{{ ssh_ca_auth_principals_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Create local users for certificate access
+  ansible.builtin.user:
+    name: "{{ item.name }}"
+    shell: /bin/bash
+    create_home: true
+    groups: "{{ item.groups | default(ssh_ca_admin_groups) }}"
+    append: true
+  loop: "{{ ssh_ca_users }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when: item.create_local_user | default(true) | bool
+
+- name: Write authorized principals files
+  ansible.builtin.template:
+    src: auth_principals.j2
+    dest: "{{ ssh_ca_auth_principals_dir }}/{{ item.name }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ ssh_ca_users }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Configure sshd for SSH certificate access
+  ansible.builtin.template:
+    src: sshd_ca_access.conf.j2
+    dest: "{{ ssh_ca_sshd_dropin_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Validate sshd configuration
+    - Restart sshd
+
+- name: Detect Allow/Deny directives that could block certificate users
+  ansible.builtin.command:
+    argv:
+      - grep
+      - -RniE
+      - '^[[:space:]]*(AllowUsers|AllowGroups|DenyUsers|DenyGroups)'
+      - /etc/ssh/sshd_config
+      - "{{ ssh_ca_sshd_dropin_path | dirname }}"
+  register: ssh_ca_allow_directives
+  changed_when: false
+  failed_when: false
+
+- name: Warn about Allow/Deny directives that may block certificate users
+  ansible.builtin.debug:
+    msg: >-
+      sshd has Allow/Deny directives that can block certificate logins unless
+      your principals are listed. Review:
+      {{ ssh_ca_allow_directives.stdout_lines }}
+  when: ssh_ca_allow_directives.stdout | length > 0

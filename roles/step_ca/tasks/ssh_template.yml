@@ -1,0 +1,18 @@
+---
+
+- name: Create the SSH template directory
+  ansible.builtin.file:
+    path: "{{ step_ca_path }}/templates/ssh"
+    state: directory
+    owner: "{{ step_ca_user }}"
+    group: "{{ step_ca_group }}"
+    mode: "0700"
+
+- name: Install the SSH user-certificate template
+  ansible.builtin.template:
+    src: ssh_user_cert.tpl.j2
+    dest: "{{ step_ca_path }}/{{ step_ca_ssh_template_relpath }}"
+    owner: "{{ step_ca_user }}"
+    group: "{{ step_ca_group }}"
+    mode: "0644"
+  notify: Reload step-ca
