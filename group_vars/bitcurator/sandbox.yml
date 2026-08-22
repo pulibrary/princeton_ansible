@@ -1,0 +1,70 @@
+---
+# SSH certificate access for the BitCurator sandbox.
+#
+# This mirrors group_vars/proxmox/common.yml: the same file supplies the CA with
+# the identities that may be issued certificates, and supplies the target host
+# with the local accounts those identities map onto.
+#
+# Certificate principals come from the Entra token, so each person receives a
+# certificate whose principal is their own email address rather than a shared
+# account name. sshd then maps that principal to their own local account.
+
+# --- Consumed by the step_ca role, on the CA host ---
+
+step_ca_oidc_enabled: true
+step_ca_oidc_listen_address: "localhost:10000"
+
+step_ca_password: "{{ vault_step_ca_password }}"
+step_ca_oidc_tenant_id: "2ff60116-7431-425d-b5af-077d7791bda4"
+step_ca_oidc_client_id: "{{ vault_step_ca_oidc_client_id }}"
+step_ca_oidc_client_secret: "{{ vault_step_ca_oidc_client_secret }}"
+
+# Identities permitted to request certificates for this host.
+step_ca_oidc_admins:
+  - acozine@princeton.edu
+  - ar1789@princeton.edu
+  - gpmenos@princeton.edu
+  - jkazmier@princeton.edu
+  - kayiwa@princeton.edu
+  - fkayiwa@princeton.edu
+  - vkarasic@princeton.edu
+
+# --- Consumed by the ssh_ca_trust role, on the sandbox itself ---
+
+# Local group holding the operator accounts, and the sudo group members inherit
+# when an entry below does not override `groups`.
+ssh_ca_operator_group: opsys
+
+# The base image ships "AllowUsers pulsys", which would refuse every account
+# below. Listing them here keeps pulsys working for Ansible while admitting the
+# certificate-backed accounts.
+ssh_ca_allowed_users:
+  - pulsys
+  - acozine
+  - ar1789
+  - gpmenos
+  - jkazmier
+  - kayiwa
+  - vkarasic
+
+# Each Entra identity maps to its own local account, so file and process
+# ownership names the actual person.
+ssh_ca_users:
+  - name: acozine
+    principals:
+      - acozine@princeton.edu
+  - name: ar1789
+    principals:
+      - ar1789@princeton.edu
+  - name: gpmenos
+    principals:
+      - gpmenos@princeton.edu
+  - name: jkazmier
+    principals:
+      - jkazmier@princeton.edu
+  - name: kayiwa
+    principals:
+      - kayiwa@princeton.edu
+  - name: vkarasic
+    principals:
+      - vkarasic@princeton.edu
