@@ -1,7 +1,8 @@
 ---
 # tasks/main.yml
 - name: Load OS-specific variables
-  ansible.builtin.include_vars: "{{ lookup('ansible.builtin.first_found', params) }}"
+  ansible.builtin.include_vars: >-
+    {{ lookup('ansible.builtin.first_found', params) }}
   vars:
     params:
       files:
@@ -101,6 +102,7 @@
     argv:
       - grep
       - -RniE
+      - "--exclude={{ ssh_ca_sshd_dropin_path | basename }}"
       - '^[[:space:]]*(AllowUsers|AllowGroups|DenyUsers|DenyGroups)'
       - /etc/ssh/sshd_config
       - "{{ ssh_ca_sshd_dropin_path | dirname }}"
