@@ -1,0 +1,51 @@
+---
+# SSH certificate access for the BitCurator sandbox.
+#
+# Same two-step shape as playbooks/proxmox.yml: first tell the certificate
+# authority which identities may be issued certificates for this host, then
+# configure the host to trust those certificates and map each identity to its
+# own local account.
+#
+# Run both plays together. Registering identities with the CA has no effect
+# until the host trusts the CA, and a host that trusts the CA is useless until
+# the identities are registered.
+
+- name: bitcurator sandbox add host to CA
+  hosts: step_ca
+  remote_user: pulsys
+  become: true
+  vars_files:
+    - ../group_vars/bitcurator/sandbox.yml
+    - ../group_vars/all/vars.yml
+    - ../group_vars/step_ca/vault.yml
+
+  roles:
+    - role: step_ca
+
+- name: bitcurator sandbox add users to host
+  hosts: bitcurator_sandbox
+  remote_user: pulsys
+  become: true
+  vars_files:
+    - ../group_vars/bitcurator/sandbox.yml
+    - ../group_vars/all/vars.yml
+
+  pre_tasks:
+    # The operator group must exist before ssh_ca_trust adds accounts to it.
+    - name: Create the operator group
+      ansible.builtin.group:
+        name: "{{ ssh_ca_operator_group }}"
+        state: present
+
+    - name: Grant sudo to the operator group
+      ansible.builtin.copy:
+        content: |
+          %{{ ssh_ca_operator_group }} ALL=(ALL:ALL) NOPASSWD:ALL
+        dest: "/etc/sudoers.d/{{ ssh_ca_operator_group }}"
+        owner: root
+        group: root
+        mode: "0440"
+        validate: /usr/sbin/visudo -cf %s
+
+  roles:
+    - role: ssh_ca_trust
