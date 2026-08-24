@@ -67,6 +67,36 @@ Default:
 xrdp_port: 3389
 ```
 
+### `xrdp_listen_address`
+
+Address the listener binds to. Empty is the packaged behaviour, every interface,
+and is what a desktop reached directly by an RDP client needs.
+
+Default:
+
+```yaml
+xrdp_listen_address: ""
+```
+
+**xrdp has no `address` setting.** The bind address is part of the port value,
+in the form `tcp://<address>:<port>`. Adding an `address` key to `[Globals]`
+looks right, is accepted without complaint, and does nothing, so a host
+configured that way keeps listening on every interface. This role composes the
+port value for you:
+
+| `xrdp_listen_address` | rendered `xrdp.ini` | binds to |
+| --- | --- | --- |
+| `""` (default) | `port=3389` | every interface |
+| `127.0.0.1` | `port=tcp://127.0.0.1:3389` | loopback only |
+
+Set it to `127.0.0.1` on a host whose desktop is reached by forwarding the port
+over SSH, which keeps the login window off the network entirely. See
+[`xrdp_ca_login`](../xrdp_ca_login), which verifies the resulting socket rather
+than trusting the setting.
+
+IPv4 only: an IPv6 bind address needs the `tcp6://` form, which this does not
+compose. Set `xrdp_listen_spec` directly for that.
+
 ### The firewall
 
 This role depends on the `firewall` role and asks it to open the RDP port:

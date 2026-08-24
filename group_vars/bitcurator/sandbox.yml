@@ -1,9 +1,10 @@
 ---
-# SSH certificate access for the BitCurator sandbox.
+# Remote desktop for the BitCurator sandbox, signed in to by certificate.
 #
-# This mirrors group_vars/proxmox/common.yml: the same file supplies the CA with
-# the identities that may be issued certificates, and supplies the target host
-# with the local accounts those identities map onto.
+# One file serves both ends of the arrangement: it tells the certificate
+# authority which identities may be issued certificates for this host, and tells
+# the host which local account each of those identities maps onto. Keeping them
+# together is what stops the two lists drifting apart.
 #
 # Certificate principals come from the Entra token, so each person receives a
 # certificate whose principal is their own email address rather than a shared
@@ -65,6 +66,44 @@ ssh_ca_users:
   - name: kayiwa
     principals:
       - kayiwa@princeton.edu
+      # Same person, second Entra identity. Both are trusted by the CA above, so
+      # without this line a certificate issued to fkayiwa@princeton.edu maps to
+      # no account, cert authentication fails, and sshd quietly falls back to
+      # asking for a password.
+      - fkayiwa@princeton.edu
   - name: vkarasic
     principals:
       - vkarasic@princeton.edu
+
+# --- Consumed by the firewall role, on the sandbox itself ---
+
+# No remote desktop port is opened. The login window listens on loopback and is
+# reached by forwarding the port over a certificate-authenticated SSH session,
+# so a rule here would open a port with nothing behind it and misdescribe how
+# this host is reached. The xrdp role asks for firewall_allow_rdp, and an empty
+# source list is what turns that request into no rules.
+firewall_rdp_cidrs: []
+
+# --- Consumed by the xrdp role, on the sandbox itself ---
+
+# Bind the desktop login window to loopback. xrdp takes the bind address as part
+# of its port value, so this renders port=tcp://127.0.0.1:3389; there is no
+# "address" setting, and one added by hand is ignored in silence.
+#
+# This is what makes a certificate the gate on desktop access: the window is
+# reachable only through a port forwarded inside an authenticated SSH session.
+# It also matters more than it first appears, because firewall_trusted_cidrs
+# opens *every* port to the library private subnet, so loopback binding rather
+# than any firewall rule is what keeps RDP off the network.
+xrdp_listen_address: 127.0.0.1
+
+# --- Consumed by the xrdp_ca_login role, on the sandbox itself ---
+
+# Everyone with certificate access to this host also gets a desktop session.
+# This is the role default, repeated here to make it visible that desktop access
+# and certificate access are the same list rather than two that can drift.
+xrdp_ca_login_users: "{{ ssh_ca_users | map(attribute='name') | list }}"
+
+# Fail the run if anything is listening on the RDP port outside loopback, rather
+# than trusting the setting above to have had its intended effect.
+xrdp_ca_login_assert_not_exposed: true
