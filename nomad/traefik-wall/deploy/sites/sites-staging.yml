@@ -51,6 +51,23 @@ http:
         - apply-bot-wall
         - skip-bot-wall
 
+    # Figgy - apply the bot wall for PDFs, but NOT manifests!
+    figgy-staging-manifests:
+      service: figgy-staging
+      rule: "Header(`X-Forwarded-Host`, `figgy-staging.princeton.edu`) && PathRegexp(`/manifest$`)"
+      parentRefs:
+        - protected-sites
+
+    # PDFs all go to the "download" boxes.
+    figgy-staging-downloads:
+      service: figgy-staging-downloads
+      rule: "Header(`X-Forwarded-Host`, `figgy-staging.princeton.edu`) && PathRegexp(`/pdf$`)"
+      middlewares:
+        - append-catalog-regex
+      parentRefs:
+        - apply-bot-wall
+        - skip-bot-wall
+
     figgy-staging:
       service: figgy-staging
       rule: "Header(`X-Forwarded-Host`, `figgy-staging.princeton.edu`)"
@@ -125,6 +142,12 @@ http:
           timeout: 10
         servers:
           - url: http://figgy-web-staging1.princeton.edu:80
+    figgy-staging-downloads:
+      loadBalancer:
+        healthCheck:
+          path: /health.json
+          timeout: 10
+        servers:
           - url: http://figgy-web-staging2.princeton.edu:80
     findingaids-staging:
       loadBalancer:
