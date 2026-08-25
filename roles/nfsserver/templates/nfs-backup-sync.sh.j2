@@ -1,0 +1,103 @@
+#!/usr/bin/bash
+{{ ansible_managed | comment }}
+#
+# Copies the exported NFS trees to the GCS backup mount.
+#
+# The Solr role needs nothing like this: Solr writes its own backups into the
+# mount through its backup API. An NFS export has nobody doing that for it, so a
+# mounted bucket on its own backs up nothing at all. This is what makes the
+# mount a backup rather than just an empty destination.
+set -uo pipefail
+
+SOURCE={{ nfsserver_backup_source | quote }}
+MOUNTPOINT={{ nfsserver_backup_mountpoint | quote }}
+DEST="${MOUNTPOINT}/{{ nfsserver_backup_prefix }}"
+MARKER="${DEST}/.last_backup"
+MANIFEST="${DEST}/.ownership_manifest"
+LOG={{ nfsserver_backup_log | quote }}
+
+log() {
+    printf '%s %s\n' "$(date --iso-8601=seconds)" "$*" >>"$LOG"
+}
+
+log "starting backup of ${SOURCE}"
+
+if [ ! -d "$SOURCE" ]; then
+    log "FATAL source ${SOURCE} does not exist"
+    exit 1
+fi
+
+# Confirm the destination is really the FUSE mount and not the empty directory
+# underneath it. Without this check, a backup taken while the mount was down
+# would write to the root filesystem, silently report success, and fill the disk.
+if ! findmnt --noheadings --mountpoint "$MOUNTPOINT" >/dev/null 2>&1; then
+    log "FATAL ${MOUNTPOINT} is not mounted; refusing to write to local disk"
+    exit 1
+fi
+
+# The mount table can list a mount whose FUSE process has died.
+if ! stat --dereference --format=%F "$MOUNTPOINT" >/dev/null 2>&1; then
+    log "FATAL ${MOUNTPOINT} is mounted but not accessible (stale FUSE mount)"
+    exit 1
+fi
+
+mkdir -p "$DEST" || {
+    log "FATAL could not create ${DEST}"
+    exit 1
+}
+
+# rsync flags are chosen for a FUSE-backed object store rather than a disk:
+#
+#   --inplace    a rename on GCS is a copy followed by a delete, so the default
+#                write-to-temp-then-rename doubles the transfer for every file
+#   --no-perms, --no-owner, --no-group
+#                object storage has no POSIX ownership; gcsfuse reports whatever
+#                the mount options say. Asking rsync to set them produces errors
+#                on every file and no benefit. Ownership is captured separately
+#                in the manifest below.
+#   --size-only  mtime comparison means a metadata round trip per file, which
+#                dominates runtime on a large tree
+rsync_args=(
+    --archive
+    --no-perms
+    --no-owner
+    --no-group
+    --inplace
+    --size-only
+    --human-readable
+    --stats
+    # The marker and the manifest live in the destination and have no
+    # counterpart in the source, so --delete would remove them on every run and
+    # the monitoring check would then report that no backup had ever completed.
+    # Excluding them also protects them from deletion.
+    --exclude=/.last_backup
+    --exclude=/.ownership_manifest
+{% if nfsserver_backup_delete | bool %}
+    --delete
+{% endif %}
+{% for pattern in nfsserver_backup_excludes %}
+    --exclude={{ pattern | quote }}
+{% endfor %}
+)
+
+rsync "${rsync_args[@]}" "${SOURCE}/" "${DEST}/" >>"$LOG" 2>&1
+rsync_rc=$?
+
+# 24 means "some files vanished while we copied", which is expected on a live
+# NFS export and is not a backup failure.
+if [ "$rsync_rc" -ne 0 ] && [ "$rsync_rc" -ne 24 ]; then
+    log "FATAL rsync exited ${rsync_rc}"
+    exit "$rsync_rc"
+fi
+
+# Ownership and permissions are the one thing object storage cannot hold, and
+# these trees are owned by several accounts. Without this, a restore would put
+# every file back as root and the applications reading the shares would break.
+# One text file is far cheaper than per-file metadata.
+if ! find "$SOURCE" -printf '%m %u %g %p\n' >"$MANIFEST" 2>>"$LOG"; then
+    log "WARNING could not write ownership manifest"
+fi
+
+date --iso-8601=seconds >"$MARKER"
+log "completed backup of ${SOURCE} (rsync rc=${rsync_rc})"
+exit 0

@@ -58,3 +58,144 @@
         state: present
       changed_when: false
       when: nfsserver_is_local
+
+    # --- GCS backup of the exported trees ---
+    #
+    # gcsfuse and a real bucket are out of reach here, so a bind mount stands in
+    # for the mounted bucket. That is enough to test the part that matters: the
+    # script must refuse to run unless its destination is genuinely a mount,
+    # because a backup that quietly writes to the root filesystem reports
+    # success while backing up nothing and filling the disk.
+    - name: Nfsserver | Verify the backup sync script is installed
+      ansible.builtin.stat:
+        path: /usr/local/sbin/nfs-backup-sync
+      register: backup_script
+
+    - name: Nfsserver | Assert the backup script is executable
+      ansible.builtin.assert:
+        that:
+          - backup_script.stat.exists
+          - backup_script.stat.mode == '0755'
+
+    - name: Nfsserver | Assert the backup script is valid shell
+      ansible.builtin.command:
+        argv:
+          - bash
+          - -n
+          - /usr/local/sbin/nfs-backup-sync
+      changed_when: false
+
+    - name: Nfsserver | Verify the Checkmk local check is installed
+      ansible.builtin.stat:
+        path: /usr/lib/check_mk_agent/local/check_nfs_backup.sh
+      register: backup_check
+
+    - name: Nfsserver | Assert the local check is executable
+      ansible.builtin.assert:
+        that:
+          - backup_check.stat.exists
+          - backup_check.stat.mode == '0755'
+
+    - name: Nfsserver | Create backup fixture content
+      ansible.builtin.copy:
+        content: "catalog records\n"
+        dest: "{{ bibdata_fileshare_mount }}/records.mrc"
+        mode: "0644"
+
+    - name: Nfsserver | Run the backup with no mount present
+      ansible.builtin.command:
+        argv:
+          - /usr/local/sbin/nfs-backup-sync
+      register: backup_unmounted
+      changed_when: false
+      failed_when: false
+
+    - name: Nfsserver | Count files written without a mount
+      ansible.builtin.find:
+        paths: /var/backups/nfs_cloud_backup
+        recurse: true
+        file_type: file
+      register: backup_local_leak
+
+    # The important assertion in this file. If this ever passes zero files with
+    # a zero exit code, the backup is writing to the root disk and reporting
+    # success.
+    - name: Nfsserver | Assert the backup refused to write to local disk
+      ansible.builtin.assert:
+        that:
+          - backup_unmounted.rc != 0
+          - backup_local_leak.matched == 0
+        fail_msg: >-
+          The backup script ran with no mount present. It must refuse, or it
+          will fill the root filesystem while appearing to succeed.
+
+    - name: Nfsserver | Assert the local check reports the missing mount
+      ansible.builtin.command:
+        argv:
+          - /usr/lib/check_mk_agent/local/check_nfs_backup.sh
+      register: check_unmounted
+      changed_when: false
+      failed_when: "not check_unmounted.stdout.startswith('2 ')"
+
+    - name: Nfsserver | Stand in for the mounted bucket
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: "0755"
+      loop:
+        - /srv/fake_backup_bucket
+        # Normally created by backup_gcs_mount.yml, which this scenario does not
+        # run. An existing empty directory here is exactly the dangerous case
+        # the script has to refuse, and it was tested above.
+        - /var/backups/nfs_cloud_backup
+
+    - name: Nfsserver | Mount the stand-in bucket
+      ansible.builtin.command:
+        argv:
+          - mount
+          - --bind
+          - /srv/fake_backup_bucket
+          - /var/backups/nfs_cloud_backup
+      changed_when: true
+
+    - name: Nfsserver | Run the backup against the stand-in mount
+      ansible.builtin.command:
+        argv:
+          - /usr/local/sbin/nfs-backup-sync
+      register: backup_mounted
+      changed_when: true
+
+    - name: Nfsserver | Look for the copied fixture
+      ansible.builtin.stat:
+        path: >-
+          /var/backups/nfs_cloud_backup/nfs/staging/bibdata/records.mrc
+      register: backup_copy
+
+    - name: Nfsserver | Look for the ownership manifest
+      ansible.builtin.stat:
+        path: /var/backups/nfs_cloud_backup/nfs/staging/.ownership_manifest
+      register: backup_manifest
+
+    - name: Nfsserver | Assert the backup copied the tree and the manifest
+      ansible.builtin.assert:
+        that:
+          - backup_mounted.rc == 0
+          - backup_copy.stat.exists
+          # Object storage cannot hold POSIX ownership, so without this a
+          # restore would put every file back owned by root.
+          - backup_manifest.stat.exists
+
+    - name: Nfsserver | Assert the local check now reports OK
+      ansible.builtin.command:
+        argv:
+          - /usr/lib/check_mk_agent/local/check_nfs_backup.sh
+      register: check_mounted
+      changed_when: false
+      failed_when: "not check_mounted.stdout.startswith('0 ')"
+
+    - name: Nfsserver | Remove the stand-in mount
+      ansible.builtin.command:
+        argv:
+          - umount
+          - /var/backups/nfs_cloud_backup
+      changed_when: true

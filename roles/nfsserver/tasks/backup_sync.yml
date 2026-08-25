@@ -1,0 +1,125 @@
+---
+# Scheduled copy of the exported NFS trees into the GCS backup mount, plus the
+# Checkmk check that tells us whether it is still happening.
+
+- name: Nfsserver | Install backup dependencies
+  ansible.builtin.apt:
+    name:
+      - rsync
+    state: present
+  when: running_on_server
+
+- name: Nfsserver | Install the NFS backup sync script
+  ansible.builtin.template:
+    src: nfs-backup-sync.sh.j2
+    dest: "{{ nfsserver_backup_script }}"
+    owner: root
+    group: root
+    mode: "0755"
+  when: running_on_server
+
+- name: Nfsserver | Create NFS backup sync service
+  ansible.builtin.copy:
+    content: |
+      [Unit]
+      Description=Copy exported NFS trees to the GCS backup mount
+      # The mount has to be up first. Requires= rather than Wants= so the sync
+      # does not run at all when the mount failed: the script refuses to write
+      # to local disk, and a failed unit is easier to see than an empty backup.
+      Requires={{ nfsserver_backup_mount_service }}
+      After={{ nfsserver_backup_mount_service }}
+
+      [Service]
+      Type=oneshot
+      ExecStart={{ nfsserver_backup_script }}
+      # A tree this size can take a long while; the default would kill it.
+      TimeoutStartSec=0
+      Nice=10
+      IOSchedulingClass=idle
+    dest: "/etc/systemd/system/{{ nfsserver_backup_sync_service }}"
+    owner: root
+    group: root
+    mode: "0644"
+  register: nfsserver_backup_sync_unit
+  when: running_on_server
+
+- name: Nfsserver | Create NFS backup sync timer
+  ansible.builtin.copy:
+    content: |
+      [Unit]
+      Description=Scheduled backup of exported NFS trees to GCS
+
+      [Timer]
+      OnCalendar={{ nfsserver_backup_sync_calendar }}
+      # Spreads load when several NFS servers share a bucket.
+      RandomizedDelaySec={{ nfsserver_backup_sync_randomized_delay }}
+      # Runs after a reboot if the host was down when the timer was due, so a
+      # missed window does not silently become a missing backup.
+      Persistent=true
+
+      [Install]
+      WantedBy=timers.target
+    dest: "/etc/systemd/system/{{ nfsserver_backup_sync_timer }}"
+    owner: root
+    group: root
+    mode: "0644"
+  register: nfsserver_backup_timer_unit
+  when: running_on_server
+
+- name: Nfsserver | Enable and start the NFS backup sync timer
+  ansible.builtin.systemd:
+    name: "{{ nfsserver_backup_sync_timer }}"
+    enabled: true
+    state: >-
+      {{
+        'restarted'
+        if (
+          nfsserver_backup_sync_unit.changed
+          or nfsserver_backup_timer_unit.changed
+        )
+        else 'started'
+      }}
+    daemon_reload: true
+  when: running_on_server
+
+- name: Nfsserver | Ensure Checkmk local directory exists
+  ansible.builtin.file:
+    path: /usr/lib/check_mk_agent/local
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when:
+    - running_on_server
+    - nfsserver_backup_checkmk | bool
+
+- name: Nfsserver | Install NFS backup local check
+  ansible.builtin.template:
+    src: check_nfs_backup.sh.j2
+    dest: /usr/lib/check_mk_agent/local/check_nfs_backup.sh
+    owner: root
+    group: root
+    mode: "0755"
+  when:
+    - running_on_server
+    - nfsserver_backup_checkmk | bool
+
+- name: Nfsserver | Verify NFS backup local check
+  ansible.builtin.command:
+    argv:
+      - /usr/lib/check_mk_agent/local/check_nfs_backup.sh
+  register: nfsserver_backup_check_output
+  changed_when: false
+  failed_when: false
+  when:
+    - running_on_server
+    - nfsserver_backup_checkmk | bool
+    - checkmk_verify_local | default(false) | bool
+
+- name: Nfsserver | Show local check output
+  ansible.builtin.debug:
+    var: nfsserver_backup_check_output.stdout_lines
+  when:
+    - running_on_server
+    - nfsserver_backup_checkmk | bool
+    - checkmk_verify_local | default(false) | bool
