@@ -12,6 +12,7 @@ STATE_CRIT=2
 
 MOUNTPOINT={{ nfsserver_backup_mountpoint | quote }}
 MARKER="${MOUNTPOINT}/{{ nfsserver_backup_prefix }}/.last_backup"
+LOG={{ nfsserver_backup_log | quote }}
 MAX_AGE_HOURS={{ nfsserver_backup_max_age_hours }}
 service_name="nfs_backup_{{ runtime_env | default('staging') }}"
 
@@ -24,6 +25,17 @@ fi
 # fails, so a check that stopped at findmnt would report OK on a dead mount.
 if ! stat --dereference --format=%F "$MOUNTPOINT" >/dev/null 2>&1; then
   echo "${STATE_CRIT} ${service_name} - CRITICAL: GCS backup mount (${MOUNTPOINT}) is mounted but not accessible"
+  exit 0
+fi
+
+# A backup that has started failing is invisible to the age check below until the
+# last good marker goes stale, which is up to a day. Ask systemd how the most
+# recent run ended so a broken backup is reported on the next check instead.
+sync_result=$(systemctl show {{ nfsserver_backup_sync_service }} \
+  --property=Result --value 2>/dev/null)
+
+if [ -n "$sync_result" ] && [ "$sync_result" != "success" ]; then
+  echo "${STATE_CRIT} ${service_name} - CRITICAL: Last backup run failed (systemd Result=${sync_result}); see ${LOG}"
   exit 0
 fi
 
