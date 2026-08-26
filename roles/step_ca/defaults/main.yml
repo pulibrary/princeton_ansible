@@ -1,0 +1,77 @@
+---
+# defaults/main.yml
+#
+# Builds the Smallstep step-ca SSH/X.509 certificate authority on
+# step-ca.lib.princeton.edu. 
+
+step_ca_user: step
+step_ca_group: step
+
+step_ca_path: /etc/step-ca
+step_ca_password_file: "{{ step_ca_path }}/password.txt"
+step_ca_binary: /usr/bin/step-ca
+
+step_ca_pki_name: "Princeton Library SSH CA"
+step_ca_dns_name: step-ca.lib.princeton.edu
+step_ca_listen_address: ":8443"
+step_ca_listen_port: 8443
+step_ca_deployment_type: standalone
+
+# Break-glass JWK provisioner created during init. Lets an operator issue
+# certs directly (with the CA password) when Entra/OIDC is unavailable.
+step_ca_break_glass_provisioner: break-glass
+
+# CA key password -- MUST come from Vault. The role refuses to init without it.
+step_ca_password: ""
+
+step_ca_apt_keyring: /etc/apt/keyrings/smallstep.asc
+step_ca_apt_key_url: "https://packages.smallstep.com/keys/apt/repo-signing-key.gpg"
+step_ca_apt_repo_uri: "https://packages.smallstep.com/stable/debian"
+step_ca_apt_suite: debs
+
+step_ca_packages:
+  - step-cli
+  - step-ca
+
+# Login shell for the system account.
+step_ca_nologin_shell: /usr/sbin/nologin
+
+step_ca_manage_firewall: true
+
+# SSH user-certificate template
+# Every Entra-authenticated user is issued a cert whose principal list is
+# fixed to step_ca_ssh_principals (the shared operator account), while the
+# cert KeyID carries the user's Entra email for audit (step-ca sets .KeyID to
+# the OIDC email for OIDC provisioners).
+step_ca_ssh_principals:
+  - pulsys
+step_ca_ssh_template_name: pulsys.tpl
+step_ca_ssh_template_relpath: "templates/ssh/{{ step_ca_ssh_template_name }}"
+
+# Entra ID (Azure AD) OIDC provisioner
+# Merged into ca.json on every run (idempotent; other provisioners untouched).
+step_ca_oidc_enabled: false
+step_ca_oidc_provisioner_name: "Princeton Entra OIDC"
+step_ca_oidc_tenant_id: ""
+step_ca_oidc_client_id: ""
+step_ca_oidc_client_secret: ""          # Vault
+# The Entra app registration's redirect URI must match this exactly. The app
+# was registered with http://127.0.0.1:10000 under a public-client platform.
+step_ca_oidc_listen_address: "127.0.0.1:10000"
+step_ca_oidc_email_domain: princeton.edu
+step_ca_oidc_configuration_endpoint: >-
+  https://login.microsoftonline.com/{{ step_ca_oidc_tenant_id }}/v2.0/.well-known/openid-configuration
+# Initially Optional: need restrict to Entra security group object IDs (emitted as the
+# groups claim from grouper(?)). Empty list = no group restriction.
+step_ca_oidc_groups: []
+# Optional: emails permitted to use the admin/sshpop flows.
+step_ca_oidc_admins: []
+
+step_ca_disable_issued_at_check: true
+
+step_ca_oidc_enable_ssh_ca: true
+
+step_ca_oidc_scopes:
+  - openid
+  - email
+  - profile
