@@ -23,10 +23,18 @@
     content: |
       [Unit]
       Description=Copy exported NFS trees to the GCS backup mount
-      # The mount has to be up first. Requires= rather than Wants= so the sync
-      # does not run at all when the mount failed: the script refuses to write
-      # to local disk, and a failed unit is easier to see than an empty backup.
-      Requires={{ nfsserver_backup_mount_service }}
+      # Wants= rather than Requires=, and this matters more than it looks.
+      #
+      # With Requires=, stopping the mount service puts a running backup
+      # straight into "failed": the stop propagates and rsync is killed
+      # mid-copy. This role's own stale-mount recovery stops that service, so a
+      # recovery during a long backup would kill the backup it was protecting.
+      #
+      # Wants= keeps the useful half (the mount is pulled in and ordered first)
+      # without the stop propagation. Nothing is lost by dropping Requires=,
+      # because the script verifies the mount itself and refuses to run without
+      # it, with a message that names the problem.
+      Wants={{ nfsserver_backup_mount_service }}
       After={{ nfsserver_backup_mount_service }}
 
       [Service]
@@ -81,6 +89,113 @@
       }}
     daemon_reload: true
   when: running_on_server
+
+# The systemd module reports the unit state it saw before acting, so its output
+# can show a timer as "disabled / dead" on the same run that enabled it. Ask
+# systemd directly instead: a timer that is not both enabled and active means no
+# backup will ever run, and the only symptom would be the monitoring check going
+# critical a day later.
+- name: Nfsserver | Read the backup timer state
+  ansible.builtin.command:
+    argv:
+      - systemctl
+      - show
+      - "{{ nfsserver_backup_sync_timer }}"
+      - --property=ActiveState
+      - --property=UnitFileState
+      - --property=NextElapseUSecRealtime
+  register: nfsserver_timer_state
+  changed_when: false
+  when: running_on_server
+
+- name: Nfsserver | Assert the backup timer is scheduled to run
+  ansible.builtin.assert:
+    that:
+      - "'ActiveState=active' in nfsserver_timer_state.stdout"
+      - "'UnitFileState=enabled' in nfsserver_timer_state.stdout"
+    fail_msg: >-
+      {{ nfsserver_backup_sync_timer }} is not both enabled and active on
+      {{ inventory_hostname }}, so the backup will never run:
+      {{ nfsserver_timer_state.stdout_lines | join(' ') }}
+    success_msg: >-
+      Backup timer is enabled and active.
+      {{ nfsserver_timer_state.stdout_lines
+         | select('search', 'NextElapse') | join(' ') }}
+    quiet: true
+  when: running_on_server
+
+# Without this, the first backup waits for the timer, so a freshly configured
+# host has an empty bucket and a monitoring check that reports no backup has
+# ever completed.
+#
+# Only when no backup has ever completed. Starting a oneshot service that has
+# already run would report a change on every play, and re-copying on each run is
+# the timer's job rather than the playbook's.
+- name: Nfsserver | Look for a completed backup
+  ansible.builtin.stat:
+    path: "{{ marker_path }}"
+  register: nfsserver_backup_marker
+  vars:
+    marker_path: >-
+      {{ nfsserver_backup_mountpoint }}/{{ nfsserver_backup_prefix
+      }}/.last_backup
+  when:
+    - running_on_server
+    - nfsserver_backup_run_now | bool
+
+# A first copy of a large tree runs for hours, and re-running the playbook
+# during it must not queue a second one. The script's lock would refuse the
+# duplicate anyway, but checking here keeps the play output honest.
+- name: Nfsserver | Check whether a backup is already running
+  ansible.builtin.command:
+    argv:
+      - systemctl
+      - is-active
+      - "{{ nfsserver_backup_sync_service }}"
+  register: nfsserver_backup_active
+  changed_when: false
+  failed_when: false
+  when:
+    - running_on_server
+    - nfsserver_backup_run_now | bool
+
+# Runs in the background: a first copy of a large tree takes a while and should
+# not hold the play open.
+- name: Nfsserver | Start the first backup now
+  ansible.builtin.systemd:
+    name: "{{ nfsserver_backup_sync_service }}"
+    state: started
+    no_block: true
+  when:
+    - running_on_server
+    - nfsserver_backup_run_now | bool
+    - not nfsserver_backup_marker.stat.exists
+    - nfsserver_backup_active.stdout | default('') | trim != 'activating'
+    - nfsserver_backup_active.stdout | default('') | trim != 'active'
+
+- name: Nfsserver | Report a backup already in progress
+  ansible.builtin.debug:
+    msg: >-
+      {{ nfsserver_backup_sync_service }} is already running, so no new backup
+      was started. Watch the existing one with:
+      journalctl -u {{ nfsserver_backup_sync_service }} -f
+  when:
+    - running_on_server
+    - nfsserver_backup_run_now | bool
+    - nfsserver_backup_active.stdout | default('') | trim
+      in ['active', 'activating']
+
+- name: Nfsserver | Explain how to watch the first backup
+  ansible.builtin.debug:
+    msg: >-
+      Started {{ nfsserver_backup_sync_service }} in the background, because no
+      backup had completed yet. Watch it with:
+      journalctl -u {{ nfsserver_backup_sync_service }} -f
+      or tail -f {{ nfsserver_backup_log }}
+  when:
+    - running_on_server
+    - nfsserver_backup_run_now | bool
+    - not nfsserver_backup_marker.stat.exists
 
 - name: Nfsserver | Ensure Checkmk local directory exists
   ansible.builtin.file:
