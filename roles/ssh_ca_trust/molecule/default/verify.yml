@@ -1,0 +1,75 @@
+---
+- name: Verify
+  hosts: all
+  become: true
+  tasks:
+    - name: Read effective sshd configuration
+      ansible.builtin.command:
+        argv:
+          - /usr/sbin/sshd
+          - -T
+      register: sshd_effective
+      changed_when: false
+
+    - name: Assert certificate settings are active
+      ansible.builtin.assert:
+        that:
+          - >-
+            'trustedusercakeys /etc/ssh/trusted_user_ca_keys.pem'
+            in sshd_effective.stdout
+          - >-
+            'authorizedprincipalsfile /etc/ssh/auth_principals/%u'
+            in sshd_effective.stdout
+          - "'pubkeyauthentication yes' in sshd_effective.stdout"
+          - "'passwordauthentication no' in sshd_effective.stdout"
+
+    - name: Read the managed sshd drop-in
+      ansible.builtin.slurp:
+        src: /etc/ssh/sshd_config.d/60-ssh-ca-access.conf
+      register: ssh_ca_dropin
+
+    - name: Assert all required local accounts are allowed by sshd
+      ansible.builtin.assert:
+        that:
+          - "'AllowUsers pulsys alice' in (ssh_ca_dropin.content | b64decode)"
+
+    - name: Read principals file
+      ansible.builtin.slurp:
+        src: /etc/ssh/auth_principals/pulsys
+      register: principals_content
+
+    - name: Assert the principal is present
+      ansible.builtin.assert:
+        that:
+          - "'pulsys' in (principals_content.content | b64decode)"
+
+    - name: Confirm the local user exists
+      ansible.builtin.command:
+        argv:
+          - id
+          - pulsys
+      changed_when: false
+
+    - name: Read the unprivileged user's groups
+      ansible.builtin.command:
+        argv:
+          - id
+          - -nG
+          - alice
+      register: alice_groups
+      changed_when: false
+
+    - name: Assert the unprivileged user has no supplementary groups
+      ansible.builtin.assert:
+        that:
+          - alice_groups.stdout.split() == ['alice']
+
+    - name: Read the unprivileged user's principals file
+      ansible.builtin.slurp:
+        src: /etc/ssh/auth_principals/alice
+      register: alice_principals
+
+    - name: Assert the Entra principal maps to the unprivileged user
+      ansible.builtin.assert:
+        that:
+          - "'alice@princeton.edu' in (alice_principals.content | b64decode)"

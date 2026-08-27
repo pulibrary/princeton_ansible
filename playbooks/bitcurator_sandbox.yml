@@ -1,0 +1,101 @@
+---
+# Remote desktop for the BitCurator sandbox, with per-person sign-in.
+#
+# Run both plays together. Registering identities with the CA has no effect
+# until the host trusts the CA, and a host that trusts the CA is useless until
+# the identities are registered.
+- name: bitcurator sandbox add host to CA
+  hosts: step_ca
+  remote_user: pulsys
+  become: true
+  vars_files:
+    - ../group_vars/bitcurator/sandbox.yml
+    - ../group_vars/all/vars.yml
+    - ../group_vars/step_ca/vault.yml
+
+  roles:
+    - role: step_ca
+
+- name: bitcurator sandbox build the remote desktop
+  hosts: sandbox-bitcur1.princeton.edu
+  remote_user: pulsys
+  become: true
+  vars_files:
+    - ../group_vars/bitcurator/sandbox.yml
+    - ../group_vars/all/vars.yml
+
+  pre_tasks:
+    # The two lists in group_vars have to agree, and nothing else checks that.
+    #
+    # The CA issues a certificate whose principal is the authenticating Entra
+    # identity. If that principal is not claimed by any local account, sshd
+    # finds no match, silently falls back to asking for a password, and the
+    # person sees a password prompt with no indication that their certificate
+    # was ignored. That cost real debugging time, so it fails the run instead.
+    - name: Check every identity the CA trusts can reach an account here
+      ansible.builtin.assert:
+        that:
+          - unmapped | length == 0
+        fail_msg: >-
+          These identities are trusted by the certificate authority but map
+          to no local account on {{ inventory_hostname }}:
+          {{ unmapped | join(', ') }}.
+          A certificate issued to one of them would be ignored by sshd, which
+          then asks for a password instead. Add each to the principals of the
+          matching entry in ssh_ca_users, or remove it from step_ca_oidc_admins.
+        success_msg: >-
+          Every identity the CA trusts maps to a local account here.
+        quiet: true
+      vars:
+        mapped_principals: >-
+          {{ ssh_ca_users | map(attribute='principals') | flatten | list }}
+        unmapped: >-
+          {{ step_ca_oidc_admins | default([])
+             | difference(mapped_principals) }}
+
+
+    # The xrdp_ca_login_group group must exist before ssh_ca_trust adds accounts to it.
+    - name: Desktop CA login (session) | ensure the desktop groups exist
+      ansible.builtin.group:
+        name: "{{ item }}"
+        state: present
+      loop: "{{ xrdp_ca_login_session_groups + [xrdp_ca_login_group] }}"
+
+    - name: Desktop CA login (password) | permit the desktop group to run it
+      ansible.builtin.copy:
+        content: |
+          # Managed by Ansible bitcurator setup)
+          %{{ xrdp_ca_login_group }} ALL=(root) NOPASSWD: \
+            {{ xrdp_ca_login_helper_path }}
+        dest: "{{ xrdp_ca_login_helper_sudoers_path }}"
+        owner: root
+        group: root
+        mode: "0440"
+        validate: /usr/sbin/visudo -cf %s
+
+  # Order matters, and none of it is enforced by role metadata so that it stays
+  # visible here:
+  #   ssh_ca_trust   trusts the CA and creates one local account per person
+  #   xrdp           builds the no-sleep XFCE desktop
+  #   xrdp_ca_login  binds the login window to loopback and gives those accounts
+  #                  a session; it fails if either of the other two is missing
+  roles:
+    - role: ssh_ca_trust
+    - role: xrdp
+    - role: xrdp_ca_login
+
+  post_tasks:
+    # A host whose only route in is SSH should not be left on the assumption
+    # that SSH still works. This opens a genuinely new connection rather than
+    # reusing the existing one.
+    - name: Confirm a new SSH session can still be established
+      ansible.builtin.wait_for_connection:
+        delay: 5
+        sleep: 5
+        timeout: 60
+
+    - name: tell everyone on slack you ran an ansible playbook
+      community.general.slack:
+        token: "{{ vault_pul_slack_token }}"
+        msg: "Ansible ran `{{ ansible_play_name }}` on {{ inventory_hostname }}"
+        channel: "{{ slack_alerts_channel }}"
