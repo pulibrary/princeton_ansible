@@ -81,3 +81,12 @@ Once role is complete user will need to run the following steps.
 
   2. login into the server with `step ssh login netid@lib-pxserv01a.princeton.edu`
   3. login into the server with `ssh -o PreferredAuthentications=publickey -o PasswordAuthentication=no netid@lib-pxserv01a.princeton.edu`
+
+## Remote desktop hosts
+
+On a host that also serves a desktop, apply this role **before**
+[`xrdp_ca_login`](../xrdp_ca_login): that role gives the accounts created here a
+desktop session, and stops the run if they do not exist yet. The desktop login
+window is bound to loopback and reached by forwarding the RDP port over one of
+these certificate-authenticated SSH sessions, so certificate access is what gates
+desktop access.
