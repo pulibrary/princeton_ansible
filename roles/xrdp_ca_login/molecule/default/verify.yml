@@ -1,0 +1,201 @@
+---
+- name: Verify
+  hosts: all
+  become: true
+  tasks:
+    - name: Read the xrdp configuration
+      ansible.builtin.slurp:
+        src: /etc/xrdp/xrdp.ini
+      register: xrdp_ini
+
+    - name: Assert the bind address is expressed the way xrdp understands it
+      ansible.builtin.assert:
+        that:
+          - "'port=tcp://127.0.0.1:3389' in config"
+          # An "address" key is accepted and ignored, so its presence means the
+          # file misdescribes what the daemon is doing.
+          - "'address=' not in config"
+        fail_msg: >-
+          /etc/xrdp/xrdp.ini does not express the loopback binding in the port
+          value, or still carries an ineffective address setting.
+      vars:
+        config: "{{ xrdp_ini.content | b64decode }}"
+
+    # The check that matters: the live socket, not the config file. This is what
+    # the first version of this scenario failed to test.
+    - name: Read the listening sockets
+      ansible.builtin.command:
+        argv:
+          - ss
+          - -H
+          - -ltn
+      register: listening
+      changed_when: false
+
+    - name: Assert nothing outside loopback answers on the RDP port
+      ansible.builtin.assert:
+        that:
+          - exposed | length == 0
+        fail_msg: >-
+          RDP is reachable from the network: {{ exposed | join(', ') }}
+      vars:
+        exposed: >-
+          {{ listening.stdout_lines
+             | map('split')
+             | map(attribute=3)
+             | select('search', ':3389$')
+             | reject('search', '^(127\.|\[::1\])')
+             | list }}
+
+    - name: Assert the login window is still reachable on loopback
+      ansible.builtin.wait_for:
+        host: 127.0.0.1
+        port: 3389
+        timeout: 10
+
+    # Proves the exposure check is not vacuous. Without this, a check that could
+    # never fail would look identical to one that works, which is exactly how
+    # the earlier version of this scenario passed while the host was exposed.
+    - name: Confirm the exposure check would catch a login window on the network
+      block:
+        - name: Put the listener back on every interface
+          community.general.ini_file:
+            path: /etc/xrdp/xrdp.ini
+            section: Globals
+            option: port
+            value: "3389"
+            no_extra_spaces: true
+
+        - name: Restart xrdp so the change takes effect
+          ansible.builtin.systemd:
+            name: xrdp
+            state: restarted
+
+        # A failure inside an included role propagates to the enclosing block,
+        # so rescue is what catches it. ignore_errors on include_role would not.
+        - name: Re-run the role's exposure check against the exposed host
+          block:
+            - name: Run the loopback checks
+              ansible.builtin.include_role:
+                name: xrdp_ca_login
+                tasks_from: loopback.yml
+
+            - name: Record that the check raised no objection
+              ansible.builtin.set_fact:
+                exposure_check_caught_it: false
+          rescue:
+            - name: Record that the check refused the exposed configuration
+              ansible.builtin.set_fact:
+                exposure_check_caught_it: true
+
+        - name: Assert the check refused the exposed configuration
+          ansible.builtin.assert:
+            that:
+              - exposure_check_caught_it | bool
+            fail_msg: >-
+              The exposure check passed while the RDP port was listening on
+              every interface, so it cannot detect the condition it exists to
+              detect.
+            success_msg: >-
+              The exposure check correctly failed when the login window was put
+              back on the network.
+      always:
+        - name: Restore the loopback binding
+          community.general.ini_file:
+            path: /etc/xrdp/xrdp.ini
+            section: Globals
+            option: port
+            value: "tcp://127.0.0.1:3389"
+            no_extra_spaces: true
+
+        - name: Restart xrdp back onto loopback
+          ansible.builtin.systemd:
+            name: xrdp
+            state: restarted
+
+    - name: Read the desktop group membership
+      ansible.builtin.command:
+        argv:
+          - id
+          - -nG
+          - alice
+      register: alice_groups
+      changed_when: false
+
+    - name: Assert the account has what a desktop session needs
+      ansible.builtin.assert:
+        that:
+          - "'rdpusers' in alice_groups.stdout.split()"
+          - "'audio' in alice_groups.stdout.split()"
+          - "'video' in alice_groups.stdout.split()"
+          - "'plugdev' in alice_groups.stdout.split()"
+          - "'netdev' in alice_groups.stdout.split()"
+
+    - name: Confirm the self-service password command is installed
+      ansible.builtin.stat:
+        path: /usr/local/sbin/set-desktop-password
+      register: password_helper
+
+    - name: Assert the command is executable
+      ansible.builtin.assert:
+        that:
+          - password_helper.stat.exists
+          - password_helper.stat.mode == '0755'
+
+    - name: Confirm the command is valid shell
+      ansible.builtin.command:
+        argv:
+          - sh
+          - -n
+          - /usr/local/sbin/set-desktop-password
+      changed_when: false
+
+    - name: Read the sudoers rule
+      ansible.builtin.slurp:
+        src: /etc/sudoers.d/xrdp-desktop-password
+      register: helper_sudoers
+
+    # The rule must name one command for one group. Anything broader would hand
+    # desktop users rights the certificate authority is meant to remove.
+    - name: Assert the sudo grant is scoped to that one command
+      ansible.builtin.assert:
+        that:
+          - "'%rdpusers' in rule"
+          - "'/usr/local/sbin/set-desktop-password' in rule"
+          - "'ALL=(ALL' not in rule"
+      vars:
+        rule: "{{ helper_sudoers.content | b64decode }}"
+
+    - name: Confirm sudo accepts the rule
+      ansible.builtin.command:
+        argv:
+          - /usr/sbin/visudo
+          - -c
+      changed_when: false
+
+    - name: Read the effective sshd configuration
+      ansible.builtin.command:
+        argv:
+          - /usr/sbin/sshd
+          - -T
+      register: sshd_effective
+      changed_when: false
+
+    - name: Assert port forwarding is allowed, so the tunnel can be built
+      ansible.builtin.assert:
+        that:
+          - "'allowtcpforwarding yes' in sshd_effective.stdout"
+
+    - name: Confirm an unlisted account gets no desktop session
+      ansible.builtin.command:
+        argv:
+          - id
+          - -nG
+          - pulsys
+      register: pulsys_groups
+      changed_when: false
+
+    - name: Assert only the listed accounts are desktop users
+      ansible.builtin.assert:
+        that:
+          - "'rdpusers' not in pulsys_groups.stdout.split()"

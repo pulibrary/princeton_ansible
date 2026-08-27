@@ -1,0 +1,28 @@
+---
+# tasks/main.yml -- xrdp_ca_login
+
+- name: Desktop CA login | verify the host is supported
+  ansible.builtin.assert:
+    that:
+      - ansible_os_family == 'Debian'
+    fail_msg: >-
+      xrdp_ca_login has only been tested Ubuntu hosts, but
+      {{ inventory_hostname }} reports
+      ansible_os_family={{ ansible_os_family }}.
+    quiet: true
+
+- name: Desktop CA login | confirm the desktop and the CA trust are in place
+  ansible.builtin.include_tasks: preflight.yml
+
+- name: Desktop CA login | keep the login window off the network
+  ansible.builtin.include_tasks: loopback.yml
+- name: Desktop CA login | grant the certificate accounts a desktop session
+  ansible.builtin.include_tasks: session.yml
+
+- name: Desktop CA login | install the self-service password command
+  ansible.builtin.include_tasks: password_helper.yml
+  when: xrdp_ca_login_password_helper | bool
+
+- name: Desktop CA login | how people sign in
+  ansible.builtin.include_tasks: instructions.yml
+  when: xrdp_ca_login_show_instructions | bool
