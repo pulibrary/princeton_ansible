@@ -1,0 +1,108 @@
+---
+# Remote desktop for the BitCurator sandbox, signed in to by certificate.
+#
+# One file serves both ends of the arrangement: it tells the certificate
+# authority which identities may be issued certificates for this host, and tells
+# the host which local account each of those identities maps onto. Keeping them
+# together is what stops the two lists drifting apart.
+#
+# Certificate principals come from the Entra token, so each person receives a
+# certificate whose principal is their own email address rather than a shared
+# account name. sshd then maps that principal to their own local account.
+
+# --- Consumed by the step_ca role, on the CA host ---
+
+step_ca_oidc_enabled: true
+step_ca_oidc_listen_address: "localhost:10000"
+
+step_ca_password: "{{ vault_step_ca_password }}"
+step_ca_oidc_tenant_id: "2ff60116-7431-425d-b5af-077d7791bda4"
+step_ca_oidc_client_id: "{{ vault_step_ca_oidc_client_id }}"
+step_ca_oidc_client_secret: "{{ vault_step_ca_oidc_client_secret }}"
+
+# Identities permitted to request certificates for this host.
+step_ca_oidc_admins:
+  - acozine@princeton.edu
+  - ar1789@princeton.edu
+  - gpmenos@princeton.edu
+  - jkazmier@princeton.edu
+  - kayiwa@princeton.edu
+  - fkayiwa@princeton.edu
+  - vkarasic@princeton.edu
+
+# --- Consumed by the ssh_ca_trust role, on the sandbox itself ---
+
+# Local group holding the rdp accounts, and the sudo group members inherit
+ssh_ca_operator_group: rdpusers
+
+# The base image ships "AllowUsers pulsys", which would refuse every account
+# below. Listing them here keeps pulsys working for Ansible while admitting the
+# certificate-backed accounts.
+ssh_ca_allowed_users:
+  - pulsys
+  - acozine
+  - ar1789
+  - gpmenos
+  - jkazmier
+  - kayiwa
+  - vkarasic
+
+# Each Entra identity maps to its own local account, so file and process
+# ownership names the actual person.
+ssh_ca_users:
+  - name: acozine
+    principals:
+      - acozine@princeton.edu
+  - name: ar1789
+    principals:
+      - ar1789@princeton.edu
+  - name: gpmenos
+    principals:
+      - gpmenos@princeton.edu
+  - name: jkazmier
+    principals:
+      - jkazmier@princeton.edu
+  - name: kayiwa
+    principals:
+      - kayiwa@princeton.edu
+      # Same person, second Entra identity. Both are trusted by the CA above, so
+      # without this line a certificate issued to fkayiwa@princeton.edu maps to
+      # no account, cert authentication fails, and sshd quietly falls back to
+      # asking for a password.
+      - fkayiwa@princeton.edu
+  - name: vkarasic
+    principals:
+      - vkarasic@princeton.edu
+
+# --- Consumed by the firewall role, on the sandbox itself ---
+
+# No remote desktop port is opened. The login window listens on loopback and is
+# reached by forwarding the port over a certificate-authenticated SSH session,
+# so a rule here would open a port with nothing behind it and misdescribe how
+# this host is reached. The xrdp role asks for firewall_allow_rdp, and an empty
+# source list is what turns that request into no rules.
+firewall_rdp_cidrs: []
+
+# --- Consumed by the xrdp role, on the sandbox itself ---
+
+# Bind the desktop login window to loopback. xrdp takes the bind address as part
+# of its port value, so this renders port=tcp://127.0.0.1:3389; there is no
+# "address" setting, and one added by hand is ignored in silence.
+#
+# This is what makes a certificate the gate on desktop access: the window is
+# reachable only through a port forwarded inside an authenticated SSH session.
+# It also matters more than it first appears, because firewall_trusted_cidrs
+# opens *every* port to the library private subnet, so loopback binding rather
+# than any firewall rule is what keeps RDP off the network.
+xrdp_listen_address: 127.0.0.1
+
+# --- Consumed by the xrdp_ca_login role, on the sandbox itself ---
+
+# Everyone with certificate access to this host also gets a desktop session.
+# This is the role default, repeated here to make it visible that desktop access
+# and certificate access are the same list rather than two that can drift.
+xrdp_ca_login_users: "{{ ssh_ca_users | map(attribute='name') | list }}"
+
+# Fail the run if anything is listening on the RDP port outside loopback, rather
+# than trusting the setting above to have had its intended effect.
+xrdp_ca_login_assert_not_exposed: true
