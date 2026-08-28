@@ -120,6 +120,7 @@ Inside the Devbox shell, you can run:
 |---------|-------------|
 | `devbox run init` | Initialize Python environment and dependencies |
 | `devbox run update-deps` | Update Python dependencies from requirements.txt |
+| `devbox run renovate-validate` | Check the Renovate config before pushing it |
 | `devbox run clean` | Remove virtual environment and Devbox cache |
 | `devbox run test` | Verify Ansible tools installation |
 | `devbox run env-info` | Display current environment configuration |
@@ -355,6 +356,71 @@ Upgrading Ansible version
 4. Run the test suite to ensure compatibility
 5. Commit the updated `requirements.txt`
 
+Automated dependency updates (Renovate)
+---------------------------------------
+
+Dependency bumps are proposed automatically by
+[Renovate](https://docs.renovatebot.com/), run as the Mend-hosted GitHub App.
+Nobody has to watch upstream releases: Renovate opens pull requests, and the
+Molecule test suite gates them like any other change.
+
+### What is kept current
+
+| Where | What Renovate updates |
+|-------|-----------------------|
+| `requirements.txt` | Python packages; Ansible and Molecule get their own PR |
+| `requirements.yml` | Ansible Galaxy collections the playbooks depend on |
+| `.github/workflows/*.yml` | GitHub Actions used by CI |
+| `devbox.json` | Developer toolchain packages |
+| `nomad/*/Dockerfile` | Runner image base images and the pinned Ruby version |
+| `nomad/**/*.hcl` | Container image tags pinned in Nomad job specs |
+
+Updates arrive in one batch early Monday morning (America/New_York), except for
+security advisories, which are opened as soon as a fix is published. Everything
+Renovate is aware of, including anything it is waiting on, is listed in the
+repository's "Dependency Dashboard" issue.
+
+### Turning it on for the repository
+
+Renovate only runs once the app has access to this repo:
+
+1. Install the [Renovate GitHub App](https://github.com/apps/renovate) for the
+   `pulibrary` organization and grant it access to `princeton_ansible`.
+2. Merge the onboarding pull request Renovate opens. It uses the configuration
+   already committed at `.github/renovate.json5`, so no further setup is needed.
+
+### Changing the configuration
+
+A malformed config silently stops all updates, so validate before pushing:
+
+```bash
+devbox run renovate-validate
+```
+
+The same check runs in CI whenever `.github/renovate.json5` changes.
+
+### Tracking a version that lives in a variable
+
+Versions pinned in Ansible variables or Nomad HCL variables are invisible to
+Renovate unless you say what they point at. Add a comment directly above the
+value:
+
+```yaml
+# renovate: datasource=github-releases depName=apache/solr
+solr_version: "9.7.0"
+```
+
+```hcl
+# renovate: datasource=docker depName=docker.io/grafana/grafana
+variable "grafana_version" {
+  default = "11.3.0"
+}
+```
+
+Renovate will then propose upgrades for that value and leave everything else
+alone. Pick a `datasource` from the
+[Renovate datasource list](https://docs.renovatebot.com/modules/datasource/).
+
 Migration from Pipenv to Devbox
 -------------------------------
 
@@ -377,3 +443,4 @@ This project has been migrated from Pipenv to Devbox for better reproducibility 
 ### For CI/CD
 
 The `requirements.txt` file is maintained for CI/CD compatibility and contains all Python dependencies.
+Galaxy collections live in `requirements.yml`. Both files are kept current by Renovate.

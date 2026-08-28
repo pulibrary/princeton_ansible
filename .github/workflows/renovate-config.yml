@@ -1,0 +1,31 @@
+---
+name: Renovate Config
+permissions:
+  contents: read
+
+# A malformed Renovate config silently stops dependency updates, so check it
+# whenever the config or the manifests it reads change.
+on:
+  push:
+    paths:
+      - .github/renovate.json5
+      - .github/workflows/renovate-config.yml
+  pull_request:
+    paths:
+      - .github/renovate.json5
+      - .github/workflows/renovate-config.yml
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Validate Renovate configuration
+        run: npx --yes --package renovate -- renovate-config-validator --strict

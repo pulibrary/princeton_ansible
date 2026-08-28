@@ -1,0 +1,163 @@
+{
+  $schema: "https://docs.renovatebot.com/renovate-schema.json",
+
+  // Dependency updates are opened by the Mend-hosted Renovate GitHub App
+  // (https://github.com/apps/renovate) after it is installed on this repo.
+  extends: [
+    "config:recommended",
+    ":dependencyDashboard",
+    ":semanticCommitsDisabled",
+    "security:openssf-scorecard",
+  ],
+
+  timezone: "America/New_York",
+  // One batch of update PRs per week keeps review load predictable.
+  schedule: ["before 7am on monday"],
+  prConcurrentLimit: 6,
+  prHourlyLimit: 2,
+  labels: ["dependencies"],
+  // Match the existing "[scope] message" commit convention in this repo.
+  commitMessagePrefix: "[deps]",
+  rebaseWhen: "conflicted",
+  configMigration: true,
+  dependencyDashboardTitle: "Dependency Dashboard",
+
+  // Generated, vendored, or templated trees that contain manifests Renovate
+  // would otherwise try to update. The Molecule Dockerfiles are Jinja
+  // templates whose image names are filled in at test time,
+  // roles/ansible-consul only carries a leftover pin list from an upstream
+  // role we no longer build from, and the SigNoz Nomad deployment is being
+  // retired, so upgrading its images would be wasted review effort.
+  ignorePaths: [
+    ".venv/**",
+    ".devbox/**",
+    "**/node_modules/**",
+    "**/molecule/**",
+    "roles/ansible-consul/**",
+    "nomad/signoz/**",
+  ],
+
+  // Security fixes should never wait for the weekly window.
+  vulnerabilityAlerts: {
+    enabled: true,
+    schedule: ["at any time"],
+    labels: ["dependencies", "security"],
+    minimumReleaseAge: null,
+  },
+  osvVulnerabilityAlerts: true,
+
+  // Let a release settle before proposing it, so we skip versions that are
+  // yanked or immediately superseded.
+  minimumReleaseAge: "3 days",
+
+  packageRules: [
+    {
+      description: "Ansible and Molecule tooling changes can break every role, so keep them in their own reviewable PR.",
+      matchManagers: ["pip_requirements"],
+      matchPackageNames: [
+        "ansible",
+        "ansible-builder",
+        "ansible-compat",
+        "ansible-core",
+        "ansible-creator",
+        "ansible-lint",
+        "molecule",
+        "molecule-plugins",
+      ],
+      groupName: "ansible tooling",
+      addLabels: ["ansible"],
+    },
+    {
+      description: "Everything else in requirements.txt is transitive pinning; one combined PR avoids dozens of trivial ones.",
+      matchManagers: ["pip_requirements"],
+      groupName: "python dependencies",
+    },
+    {
+      description: "Ansible Galaxy collections used by the playbooks.",
+      matchManagers: ["ansible-galaxy"],
+      groupName: "ansible collections",
+      addLabels: ["ansible"],
+    },
+    {
+      description: "Workflow actions rarely need individual review.",
+      matchManagers: ["github-actions"],
+      groupName: "github actions",
+    },
+    {
+      description: "Developer toolchain pinned in devbox.json.",
+      matchManagers: ["devbox"],
+      groupName: "devbox packages",
+    },
+    {
+      description: "Ruby is pinned in both the devbox environment and the runner images; bump them together to avoid drift.",
+      matchPackageNames: ["ruby"],
+      groupName: "ruby version",
+    },
+    {
+      description: "Container images deployed to Nomad are reviewed per service, since each one is a production rollout.",
+      matchManagers: ["custom.regex"],
+      matchFileNames: ["nomad/**/*.hcl"],
+      addLabels: ["nomad"],
+      minimumReleaseAge: "7 days",
+    },
+    {
+      description: "Floating tags cannot be updated meaningfully.",
+      matchCurrentValue: "latest",
+      enabled: false,
+    },
+  ],
+
+  customManagers: [
+    {
+      customType: "regex",
+      description: "Container images pinned inline in Nomad job specs.",
+      managerFilePatterns: ["nomad/**/*.hcl"],
+      // Skips images whose tag is an HCL variable, e.g. "${var.signoz_version}".
+      matchStrings: [
+        "image\\s*=\\s*\"(?<depName>[^\"$:]+?):(?<currentValue>[^\"$\\s]+)\"",
+      ],
+      datasourceTemplate: "docker",
+      versioningTemplate: "docker",
+    },
+    {
+      customType: "regex",
+      description: "Image tags held in Nomad HCL variable defaults, annotated with a renovate comment.",
+      managerFilePatterns: ["nomad/**/*.hcl"],
+      matchStrings: [
+        "#\\s*renovate:\\s*datasource=(?<datasource>\\S+)\\s+depName=(?<depName>\\S+)(?:\\s+versioning=(?<versioning>\\S+))?[\\s\\S]*?default\\s*=\\s*\"(?<currentValue>[^\"]+)\"",
+      ],
+      versioningTemplate: "{{#if versioning}}{{{versioning}}}{{else}}docker{{/if}}",
+    },
+    {
+      customType: "regex",
+      description: "Versions pinned in Ansible variables, opted in with a renovate comment.",
+      managerFilePatterns: [
+        "group_vars/**/*.yml",
+        "group_vars/**/*.yaml",
+        "host_vars/**/*.yml",
+        "host_vars/**/*.yaml",
+        "playbooks/**/*.yml",
+        "playbooks/**/*.yaml",
+        "roles/**/*.yml",
+        "roles/**/*.yaml",
+        "site_vars.yml",
+      ],
+      matchStrings: [
+        "#\\s*renovate:\\s*datasource=(?<datasource>\\S+)\\s+depName=(?<depName>\\S+)(?:\\s+versioning=(?<versioning>\\S+))?\\s*\\n\\s*[\\w.]+:\\s*[\"']?(?<currentValue>[^\"'\\s]+)[\"']?",
+      ],
+      versioningTemplate: "{{#if versioning}}{{{versioning}}}{{else}}semver{{/if}}",
+    },
+    {
+      customType: "regex",
+      description: "Ruby pinned in the CircleCI runner images and the devbox environment.",
+      managerFilePatterns: ["nomad/**/Dockerfile", "devbox.json"],
+      matchStrings: [
+        "ARG RUBY_VERSION=(?<currentValue>\\d+\\.\\d+\\.\\d+)",
+        "\"RUBY_VERSION\":\\s*\"(?<currentValue>\\d+\\.\\d+\\.\\d+)\"",
+      ],
+      depNameTemplate: "ruby",
+      datasourceTemplate: "ruby-version",
+      versioningTemplate: "ruby",
+    },
+  ],
+}
