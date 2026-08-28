@@ -52,7 +52,7 @@ otel_receivers:
         value: "pdc-discovery_access"
       - type: add
         field: attributes.service_name
-        value: pdc-discovery_access
+        value: "pdc-discovery"
 
   filelog/nginx-error:
     include: ["/var/log/nginx/error.log*"]
@@ -64,6 +64,17 @@ otel_receivers:
       - type: add
         field: attributes.service_name
         value: "pdc-discovery"
+
+  filelog/rails-logs:
+    include: ["/opt/pdc_discovery/current/log/*"]
+    start_at: end
+    operators:
+      - type: add
+        field: attributes.log_type
+        value: "pdc_discovery_app_log"
+      - type: add
+        field: attributes.service_name
+        value: "pdc_discovery"
 
   hostmetrics:
     collection_interval: 30s
@@ -113,6 +124,7 @@ otel_service_pipelines:
     receivers:
       - filelog/nginx-access
       - filelog/nginx-error
+      - filelog/rails-logs
     processors:
       - resource
       - batch
