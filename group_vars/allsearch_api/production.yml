@@ -103,6 +103,17 @@ otel_receivers:
         field: attributes.service_name
         value: "allsearch_api"
 
+  filelog/allsearch-app-log:
+    include: ["/opt/allsearch_api/current/log/*"]
+    start_at: end
+    operators:
+      - type: add
+        field: attributes.log_type
+        value: "allsearch_api_app_log"
+      - type: add
+        field: attributes.service_name
+        value: "allsearch_api"
+
   hostmetrics:
     collection_interval: 30s
     scrapers:
@@ -151,6 +162,7 @@ otel_service_pipelines:
     receivers:
       - filelog/nginx-access
       - filelog/nginx-error
+      - filelog/allsearch-app-log
     processors:
       - resource
       - batch
