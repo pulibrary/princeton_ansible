@@ -98,15 +98,13 @@ otel_receivers:
             - '^5\d\d$'
         on_error: send
 
-      - type: copy
-        from: attributes.trace_id
-        to: attributes.otel_trace_id
-        if: 'attributes.trace_id != nil and attributes.trace_id != ""'
-
-      - type: copy
-        from: attributes.span_id
-        to: attributes.otel_span_id
-        if: 'attributes.span_id != nil and attributes.span_id != ""'
+      - type: trace_parser
+        id: parse_nginxplus_trace_context
+        trace_id:
+          parse_from: attributes.trace_id
+        span_id:
+          parse_from: attributes.span_id
+        on_error: send
 
       - type: add
         field: attributes.log_type
