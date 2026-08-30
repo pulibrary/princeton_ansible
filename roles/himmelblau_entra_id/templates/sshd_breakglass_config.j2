@@ -1,0 +1,49 @@
+# {{ ansible_managed }}
+#
+# Break-glass SSH instance.
+#
+# This instance deliberately sets UsePAM no. sshd has no option to select a PAM
+# service name, so a break-glass instance that used PAM would read the very
+# /etc/pam.d/sshd -> common-auth stack this role rewrites, and would fail in
+# exactly the situation it exists to rescue. With UsePAM no and public key
+# authentication only, sign-in touches no PAM module at all.
+#
+# Account lookup still goes through NSS, but /etc/nsswitch.conf lists "files"
+# before "himmelblau", so local accounts resolve from /etc/passwd without
+# waiting on himmelblaud.
+
+Port {{ himmelblau_breakglass_port }}
+{% if himmelblau_breakglass_listen_address | length > 0 %}
+ListenAddress {{ himmelblau_breakglass_listen_address }}
+{% endif %}
+
+PidFile /run/sshd-breakglass.pid
+
+HostKey /etc/ssh/ssh_host_ed25519_key
+HostKey /etc/ssh/ssh_host_rsa_key
+
+# No PAM, so no dependency on common-auth / pam_himmelblau / himmelblaud
+UsePAM no
+
+# Key-based only. Password auth without PAM would consult /etc/shadow directly,
+# which is a weaker posture for a permanently listening emergency port.
+PubkeyAuthentication yes
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+PermitEmptyPasswords no
+GSSAPIAuthentication no
+
+PermitRootLogin no
+AllowUsers {{ himmelblau_breakglass_users | join(' ') }}
+
+StrictModes yes
+X11Forwarding no
+AllowAgentForwarding no
+AllowTcpForwarding no
+PrintMotd no
+AcceptEnv LANG LC_*
+Subsystem sftp /usr/lib/openssh/sftp-server
+
+# Keep the emergency path quiet but auditable
+LogLevel VERBOSE
+SyslogFacility AUTH

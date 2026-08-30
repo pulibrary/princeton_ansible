@@ -1,9 +1,29 @@
 ---
 # defaults file for roles/xrdp
+#
+# The RDP port is opened by the firewall role, which this role depends on. See
+# firewall_allow_rdp and firewall_rdp_cidrs in roles/firewall/defaults/main.yml.
 xrdp_port: 3389
 
-xrdp_manage_ufw: false
-xrdp_ufw_allow_from: "128.112.0.0/16"
+# Address the listener binds to. Empty is the packaged behaviour, every
+# interface, and is what a desktop reached directly by an RDP client needs.
+#
+# Note that xrdp has no separate "address" setting: the bind address is part of
+# the port value, in the form tcp://<address>:<port>. Adding an "address" key to
+# [Globals] looks right, is accepted without complaint, and does nothing, so a
+# host configured that way keeps listening on every interface.
+#
+# A host whose desktop is reached by forwarding the port over SSH sets this to
+# 127.0.0.1, which keeps the login window off the network entirely. See
+# roles/xrdp_ca_login.
+#
+# IPv4 only. An IPv6 bind address needs the tcp6:// form, which this does not
+# compose; set xrdp_listen_spec directly for that.
+xrdp_listen_address: ""
+xrdp_listen_spec: >-
+  {{ ('tcp://' ~ xrdp_listen_address ~ ':' ~ xrdp_port)
+     if (xrdp_listen_address | length > 0)
+     else (xrdp_port | string) }}
 
 xrdp_desktop: xfce
 
