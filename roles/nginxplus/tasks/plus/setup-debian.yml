@@ -8,9 +8,10 @@
   become: true
   ansible.builtin.lineinfile:
     path: /etc/apt/sources.list.d/nginx-plus.list
-    # until we close https://github.com/pulibrary/princeton_ansible/issues/7130 we are holding it at R36 below
-    # line: "deb [signed-by=/usr/share/keyrings/nginx-archive-keyring.gpg] https://pkgs.nginx.com/plus/ubuntu {{ ansible_distribution_release }} nginx-plus"
-    line: "deb [signed-by=/usr/share/keyrings/nginx-archive-keyring.gpg] https://pkgs.nginx.com/plus/R36/ubuntu {{ ansible_distribution_release }} nginx-plus"
+    # pinned per environment via nginx_plus_release; see group_vars/nginxplus
+    # the regexp replaces any previously pinned release instead of appending a second repo
+    regexp: '^deb .*pkgs\.nginx\.com/plus/'
+    line: "deb [signed-by=/usr/share/keyrings/nginx-archive-keyring.gpg] https://pkgs.nginx.com/plus/{{ nginx_plus_release }}/ubuntu {{ ansible_distribution_release }} nginx-plus"
     mode: "0644"
     create: true
 
