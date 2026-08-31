@@ -79,6 +79,8 @@ otel_receivers:
         field: attributes.rails_env
         value: "{{ rails_app_env }}"
 
+        # Suppress 
+
 
   hostmetrics:
     collection_interval: 30s
@@ -132,6 +134,12 @@ otel_service_pipelines:
     processors:
       - resource
       - batch
+          send_batch_size: 500
+          timeout: 2s
+      - filter:
+          logs:
+            log_record:
+              - 'IsMatch(body, "HealthMonitor::HealthController")'
     exporters:
       - loadbalancing
       - debug
