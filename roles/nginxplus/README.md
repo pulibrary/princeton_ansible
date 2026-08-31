@@ -118,6 +118,15 @@ nginx_repository:
 # Default is mainline.
 nginx_branch: mainline
 
+# Which NGINX Plus release channel to pull packages from.
+# "R36" keeps hosts on the previous feature release; "R37.0" is the
+# first long-term support (LTS) release and only receives security patches.
+nginx_plus_release: R36
+
+# Emit error logs as JSON instead of the traditional text format.
+# Only available from the R37 long-term support release onwards.
+nginx_error_log_json: false
+
 # Location of your NGINX Plus license in your local machine.
 # Default is the files folder within the NGINX Ansible role.
 nginx_license:
