@@ -79,7 +79,6 @@ otel_receivers:
         field: attributes.rails_env
         value: "{{ rails_app_env }}"
 
-
   hostmetrics:
     collection_interval: 30s
     scrapers:
@@ -132,6 +131,10 @@ otel_service_pipelines:
     processors:
       - resource
       - batch
+      - filter:
+          log_conditions:
+            - 'IsMatch(log.body, "*.HealthMonitor::HealthController.*")'
+            - log.severity_number < SEVERITY_NUMBER_INFO
     exporters:
       - loadbalancing
       - debug
