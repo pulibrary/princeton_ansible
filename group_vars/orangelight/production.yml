@@ -119,6 +119,17 @@ otel_receivers:
         field: attributes.service_name
         value: "orangelight"
 
+  filelog/orangelight-app-log:
+    include: ["/opt/orangelight/current/log/*"]
+    start_at: end
+    operators:
+      - type: add
+        field: attributes.log_type
+        value: "app-log"
+      - type: add
+        field: attributes.service_name
+        value: "orangelight"
+
   hostmetrics:
     collection_interval: 30s
     scrapers:
@@ -167,6 +178,7 @@ otel_service_pipelines:
     receivers:
       - filelog/nginx-access
       - filelog/nginx-error
+      - filelog/orangelight-app-log
     processors:
       - resource
       - batch

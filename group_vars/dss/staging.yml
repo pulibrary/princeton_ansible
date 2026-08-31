@@ -82,6 +82,17 @@ otel_receivers:
         field: attributes.service_name
         value: "dss"
 
+  filelog/dss-app-log:
+    include: ["/opt/dss-blacklight/current/log/*"]
+    start_at: end
+    operators:
+      - type: add
+        field: attributes.log_type
+        value: "app-log"
+      - type: add
+        field: attributes.service_name
+        value: "dss"
+
   hostmetrics:
     collection_interval: 30s
     scrapers:
@@ -130,6 +141,7 @@ otel_service_pipelines:
     receivers:
       - filelog/nginx-access
       - filelog/nginx-error
+      - filelog/dss-app-log
     processors:
       - resource
       - batch
