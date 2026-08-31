@@ -34,6 +34,7 @@
   become: true
   loop:
     - 'tigerdata'
+    - 'tigerdata_ingest_locations'
 
 - name: Figgy | Create tigerdata mount
   ansible.posix.mount:
@@ -41,6 +42,17 @@
     src: '{{ tigerdata_nfs_src }}'
     fstype: nfs
     opts: '{{ tigerdata_nfs_opts }}'
+    state: mounted
+  when:
+    - running_on_server
+  tags: 'mounts'
+
+- name: Figgy | Create tigerdata_ingest_locations mount
+  ansible.posix.mount:
+    name: '/mnt/tigerdata_ingest_locations'
+    src: 'tigerdata-nfs.princeton.edu:/pul'
+    fstype: nfs
+    opts: 'nfsvers=3,mountport=2049,port=2049,nolock,proto=tcp,actimeo=0,lookupcache=none'
     state: mounted
   when:
     - running_on_server
@@ -70,10 +82,9 @@
     dest: "/etc/{{ item }}"
     mode: "0644"
   when: running_on_server
+  tags: 'mounts'
   loop:
     - pudl.smb.credentials
-    - archives.smb.credentials
-    - archives_bd.smb.credentials
     - studio.new.smb.credentials
     - hydradev.smb.credentials
     - numis.smb.credentials
@@ -93,9 +104,11 @@
     fstype: cifs
     opts: 'credentials=/etc/plum_mount.smb.credentials,uid={{ deploy_user_uid }},gid=33'
     state: mounted
+  tags: 'mounts'
   when: running_on_server
 
 - name: Figgy | Create mount to pudl binaries (for migration)
+  tags: 'mounts'
   ansible.posix.mount:
     name: '/mnt/diglibdata/pudl'
     src: '//diglibdata1.princeton.edu/pudl'
@@ -105,6 +118,7 @@
   when: running_on_server
 
 - name: Figgy | Create mount to scratch space (for bulk ingests)
+  tags: 'mounts'
   ansible.posix.mount:
     name: '/mnt/hydra_sources/ingest_scratch'
     src: '//diglibdata1.princeton.edu/hydra/binaries/ingest_scratch'
@@ -116,11 +130,13 @@
   # We don't think we need this anymore but we haven't tested that yet; it was
   # from when we used cantaloupe for iiif derivatives
 - name: Figgy | Ensure figgy derivatives mount directory exists
+  tags: 'mounts'
   ansible.builtin.file:
     path: '{{ figgy_derivatives_mount }}'
     state: directory
 
 - name: Figgy | Create diglibdata mounts (hydra sources)
+  tags: 'mounts'
   ansible.posix.mount:
     name: /mnt/hydra_sources/{{ item }}
     src: //diglibdata1.princeton.edu/{{ item }}
@@ -130,12 +146,37 @@
   when: running_on_server
   loop:
     - pudl
-    - archives
-    - archives_bd
     - maplab
     - bitcur-archives
 
+- name: Figgy | Remove old diglibdata mounts (hydra sources)
+  tags: 'mounts'
+  ansible.posix.mount:
+    name: /mnt/hydra_sources/{{ item }}
+    src: //diglibdata1.princeton.edu/{{ item }}
+    fstype: cifs
+    opts: 'credentials=/etc/{{ item }}.smb.credentials,uid={{ deploy_user_uid }}'
+    state: absent
+  when: running_on_server
+  loop:
+    - archives
+    - archives_bd
+
+- name: Figgy | Ensure old diglibdata mounts are unmounted (hydra sources)
+  tags: 'mounts'
+  ansible.posix.mount:
+    name: /mnt/hydra_sources/{{ item }}
+    src: //diglibdata1.princeton.edu/{{ item }}
+    fstype: cifs
+    opts: 'credentials=/etc/{{ item }}.smb.credentials,uid={{ deploy_user_uid }}'
+    state: unmounted
+  when: running_on_server
+  loop:
+    - archives
+    - archives_bd
+
 - name: Figgy | Create mount to studio (hydra sources)
+  tags: 'mounts'
   ansible.posix.mount:
     name: /mnt/hydra_sources/studio_new
     src: //lib-dps-server.princeton.edu/studio
@@ -145,6 +186,7 @@
   when: running_on_server
 
 - name: Figgy | Create lib-dps mounts
+  tags: 'mounts'
   ansible.posix.mount:
     name: /mnt/hydra_sources/{{ item }}
     src: //lib-dps-server.princeton.edu/{{ item }}
@@ -159,6 +201,7 @@
     - microforms
 
 - name: Figgy | Create mount to music reserves (hydra sources)
+  tags: 'mounts'
   ansible.posix.mount:
     name: /mnt/hydra_sources/music
     src: '//diglibdata1.princeton.edu/music'
@@ -168,6 +211,7 @@
   when: running_on_server
 
 - name: Figgy | Create mount to numismatics (hydra sources)
+  tags: 'mounts'
   ansible.posix.mount:
     name: /mnt/hydra_sources/numismatics
     src: '//diglibdata1.princeton.edu/numismatics'
@@ -208,6 +252,21 @@
       link: '/opt/repository/stream_derivatives'
   tags:
     - mounts
+
+## Tigerdata Symlinks
+- name: Figgy | Create tigerdata ingest symlinks
+  tags:
+    - mounts
+  ansible.builtin.file:
+    src: '{{ item.src }}'
+    dest: '{{ item.link }}'
+    state: 'link'
+    force: true
+  loop:
+    - src: '/mnt/tigerdata_ingest_locations/archives'
+      link: '/mnt/hydra_sources/archives'
+    - src: '/mnt/tigerdata_ingest_locations/archives_bd'
+      link: '/mnt/hydra_sources/archives_bd'
 
 ## Symlink to fallback Mounts
 - name: Figgy | Create symlinks
