@@ -93,6 +93,20 @@ otel_receivers:
         field: attributes.service_name
         value: "pdc-describe"
 
+  filelog/rails-logs:
+    include: ["/opt/pdc_describe/shared/log/*.json"]
+    start_at: end
+    operators:
+      - type: add
+        field: attributes.log_type
+        value: "app-log"
+      - type: add
+        field: attributes.service_name
+        value: "pdc-describe"
+      - type: add
+        field: attributes.rails_env
+        value: "{{ rails_app_env }}"
+
   hostmetrics:
     collection_interval: 30s
     scrapers:
@@ -141,6 +155,7 @@ otel_service_pipelines:
     receivers:
       - filelog/nginx-access
       - filelog/nginx-error
+      - filelog/rails-logs
     processors:
       - resource
       - batch
