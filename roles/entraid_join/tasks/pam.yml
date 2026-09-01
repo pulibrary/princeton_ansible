@@ -1,26 +1,4 @@
----
-- name: Entraid_join | Configure Ubuntu common-auth for Himmelblau MFA
-  ansible.builtin.lineinfile:
-    path: /etc/pam.d/common-auth
-    regexp: '^auth\s+.*pam_himmelblau\.so.*'
-    line: 'auth     [success=2 default=ignore]    pam_himmelblau.so ignore_unknown_user mfa_poll_prompt no_hello_pin'
-    backup: true
-    firstmatch: true
-  when: ansible_os_family == "Debian"
-  notify:
-    - restart himmelblaud
-
-- name: Entraid_join | Remove duplicate Ubuntu sufficient pam_himmelblau auth line
-  ansible.builtin.lineinfile:
-    path: /etc/pam.d/common-auth
-    regexp: '^auth\s+sufficient\s+pam_himmelblau\.so\s+ignore_unknown_user\s+mfa_poll_prompt\s+no_hello_pin'
-    state: absent
-    backup: true
-  when: ansible_os_family == "Debian"
-  notify:
-    - restart himmelblaud
-
-- name: Entraid_join | Configure Rocky system-auth for Himmelblau MFA
+- name: Configure Rocky system-auth for Himmelblau MFA
   ansible.builtin.lineinfile:
     path: /etc/pam.d/system-auth
     regexp: '^auth\s+sufficient\s+pam_himmelblau\.so.*'
@@ -30,7 +8,7 @@
   notify:
     - restart himmelblaud
 
-- name: Entraid_join | Configure Rocky password-auth for Himmelblau MFA
+- name: Configure Rocky password-auth for Himmelblau MFA
   ansible.builtin.lineinfile:
     path: /etc/pam.d/password-auth
     regexp: '^auth\s+sufficient\s+pam_himmelblau\.so.*'
@@ -39,3 +17,42 @@
   when: ansible_os_family == "RedHat"
   notify:
     - restart himmelblaud
+
+- name: Configure Rocky system-auth account handling for Himmelblau
+  ansible.builtin.lineinfile:
+    path: /etc/pam.d/system-auth
+    regexp: '^account\s+.*pam_himmelblau\.so.*'
+    line: 'account  [success=done default=ignore] pam_himmelblau.so ignore_unknown_user'
+    backup: true
+  when: ansible_os_family == "RedHat"
+  notify:
+    - restart himmelblaud
+
+- name: Configure Rocky password-auth account handling for Himmelblau
+  ansible.builtin.lineinfile:
+    path: /etc/pam.d/password-auth
+    regexp: '^account\s+.*pam_himmelblau\.so.*'
+    line: 'account  [success=done default=ignore] pam_himmelblau.so ignore_unknown_user'
+    backup: true
+  when: ansible_os_family == "RedHat"
+  notify:
+    - restart himmelblaud
+
+- name: Configure Rocky sshd account stack for Himmelblau
+  ansible.builtin.blockinfile:
+    path: /etc/pam.d/sshd
+    marker: "# {mark} ANSIBLE MANAGED BLOCK entraid_join account"
+    insertafter: '^account\s+required\s+pam_nologin\.so'
+    block: |
+      account    sufficient   pam_himmelblau.so ignore_unknown_user
+      account    sufficient   pam_permit.so
+    backup: true
+  when: ansible_os_family == "RedHat"
+
+- name: Disable Rocky sshd account include password-auth
+  ansible.builtin.replace:
+    path: /etc/pam.d/sshd
+    regexp: '^account\s+include\s+password-auth$'
+    replace: '# account    include      password-auth'
+    backup: true
+  when: ansible_os_family == "RedHat"
