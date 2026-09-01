@@ -1,0 +1,26 @@
+namespace = "{{ item.namespace | default('default') }}"
+name      = "{{ item.name }}"
+type      = "host"
+
+plugin_id = "{{ item.plugin_id | default('mkdir') }}"
+{% if item.node_pool is defined %}
+node_pool = "{{ item.node_pool }}"
+{% endif %}
+{% if item.size is defined %}
+
+# mkdir doesn't work with capacity_min/max, but maybe it'll help with
+# scheduling.
+capacity_min = "{{ item.size }}"
+capacity_max = "{{ item.size }}"
+{% endif %}
+
+capability {
+  access_mode     = "{{ item.access_mode | default('single-node-single-writer') }}"
+  attachment_mode = "{{ item.attachment_mode | default('file-system') }}"
+}
+
+parameters = {
+  mode = "{{ item.mode | default('0700') }}"
+  uid  = "{{ item.uid | default('1000') }}"
+  gid  = "{{ item.gid | default('1000') }}"
+}

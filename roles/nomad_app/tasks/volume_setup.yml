@@ -1,0 +1,30 @@
+---
+- name: "Nomad App | stash host volume spec for {{ item.name }}"
+  ansible.builtin.template:
+    src: volume.hcl.j2
+    dest: "/tmp/nomad-volume-{{ item.name }}.hcl"
+    mode: "0600"
+
+- name: "Nomad App | list host volumes for {{ item.name }}"
+  ansible.builtin.command:
+    cmd: >
+      /usr/local/bin/nomad volume status -type host
+      -namespace {{ item.namespace | default('default') }} -json
+  register: nomad_volume_status
+  changed_when: false
+  environment:
+    NOMAD_TOKEN: "{{ pul_nomad_management_token }}"
+
+# Run as many times as we need new copies.
+- name: "Nomad App | create host volumes for {{ item.name }}"
+  ansible.builtin.command:
+    cmd: "/usr/local/bin/nomad volume create /tmp/nomad-volume-{{ item.name }}.hcl"
+  loop: "{{ range(nomad_existing_volume_count | int, item.count | int) | list }}"
+  loop_control:
+    loop_var: volume_replica
+  vars:
+    nomad_existing_volume_count: >-
+      {{ (nomad_volume_status.stdout | default('[]', true) | from_json)
+         | selectattr('Name', 'equalto', item.name) | list | length }}
+  environment:
+    NOMAD_TOKEN: "{{ pul_nomad_management_token }}"
