@@ -6,6 +6,8 @@ job "figgy-infrastructure-staging" {
   datacenters = ["dc1"]
   type        = "service"
   node_pool   = "staging"
+  # Set a higher priority because this job only works on this box.
+  priority = 60
 
   group "rabbitmq" {
     count = 1
@@ -44,7 +46,7 @@ job "figgy-infrastructure-staging" {
       }
 
       volume_mount {
-        volume      = "data"
+        volume      = "rabbitmq_data"
         destination = "/var/lib//rabbitmq"
       }
 
