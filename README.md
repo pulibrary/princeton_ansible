@@ -119,7 +119,8 @@ Inside the Devbox shell, you can run:
 | Command | Description |
 |---------|-------------|
 | `devbox run init` | Initialize Python environment and dependencies |
-| `devbox run update-deps` | Update Python dependencies from requirements.txt |
+| `devbox run update-deps` | Upgrade Python dependencies and refresh `uv.lock` |
+| `devbox run lock` | Refresh `uv.lock` after editing `pyproject.toml` |
 | `devbox run clean` | Remove virtual environment and Devbox cache |
 | `devbox run test` | Verify Ansible tools installation |
 | `devbox run env-info` | Display current environment configuration |
@@ -336,14 +337,49 @@ devbox run env-info  # Should show ANSIBLE_VAULT_PASSWORD_FILE set
 1. Add the new vault password to the vault_password in lastpass.
 1. Log into [Ansible Tower](https://ansible-tower.princeton.edu/#/credentials/10/details). To replace it click `Edit` then click on the circular arrow to the left of the Vault Password, paste in the new value, and save. The value is automatically encrypted.
 
+Python dependencies
+-------------------
+
+Python dependencies are managed with [uv](https://docs.astral.sh/uv/).
+Two files matter:
+
+- `pyproject.toml` declares the direct dependencies: ansible, molecule,
+  the linters, and the libraries Ansible modules need at run time.
+- `uv.lock` pins every direct and transitive dependency and is what both
+  developers and CI install from. Always commit it together with
+  `pyproject.toml`.
+
+Common operations, from inside the Devbox shell:
+
+```bash
+# Install exactly what the lock file says (this is what CI does)
+uv sync --frozen
+
+# Add or remove a dependency (updates pyproject.toml and uv.lock)
+uv add "netaddr==1.3.0"
+uv remove netaddr
+
+# Upgrade everything allowed by the declared constraints
+uv lock --upgrade && uv sync
+
+# Run a tool without activating the virtual environment
+uv run ansible-lint
+```
+
+Renovate keeps this current on its own: it opens pull requests that bump
+versions in `pyproject.toml` and regenerate `uv.lock` in the same pull
+request, plus periodic lock file maintenance pull requests that refresh
+transitive dependencies only.
+
 Upgrading Ansible version
 -------------------------
 
-1. Edit `requirements.txt` to update the ansible version
-2. In Devbox shell, update the dependencies:
+1. Edit the `ansible` and `ansible-core` pins in `pyproject.toml`
+2. In Devbox shell, refresh the lock file and the virtual environment:
 
    ```bash
-   devbox run update-deps
+   devbox run lock
+   devbox run init
    ```
 
 3. Verify the new version:
@@ -353,7 +389,7 @@ Upgrading Ansible version
    ```
 
 4. Run the test suite to ensure compatibility
-5. Commit the updated `requirements.txt`
+5. Commit the updated `pyproject.toml` and `uv.lock`
 
 Migration from Pipenv to Devbox
 -------------------------------
@@ -363,7 +399,7 @@ This project has been migrated from Pipenv to Devbox for better reproducibility 
 | Feature | Old (Pipenv/ASDF) | New (Devbox) |
 |---------|-------------------|--------------|
 | **Config File** | `Pipfile`, `.tool-versions` | `devbox.json` |
-| **Python Deps** | `Pipfile.lock` | `requirements.txt` + venv |
+| **Python Deps** | `Pipfile.lock` | `pyproject.toml` + `uv.lock` |
 | **Environment Setup** | `pipenv shell` + source script | `devbox shell` + `devbox run init` |
 | **Version Management** | ASDF plugins | Nix packages |
 | **LastPass CLI** | Homebrew (macOS only) | Nix package (cross-platform) |
@@ -376,4 +412,7 @@ This project has been migrated from Pipenv to Devbox for better reproducibility 
 
 ### For CI/CD
 
-The `requirements.txt` file is maintained for CI/CD compatibility and contains all Python dependencies.
+CI installs dependencies with `uv sync --frozen`, so it uses the exact
+versions recorded in `uv.lock`. A pull request that changes dependencies
+must include the updated lock file, otherwise CI fails instead of quietly
+resolving different versions.
