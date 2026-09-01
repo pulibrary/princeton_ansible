@@ -2,7 +2,8 @@
 - name: Nginxplus | Check the pinned release can write JSON error logs
   ansible.builtin.assert:
     that:
-      - nginx_plus_release is not match('R(1|2|3[0-6])')
+      - nginx_plus_release is not match('^R[0-9]+')
+        or nginx_plus_release | regex_replace('^R([0-9]+).*$', '\1') | int >= 37
     fail_msg: >-
       JSON error logs need NGINX Plus R37 or newer, but this host is pinned to
       {{ nginx_plus_release }}. Raise nginx_plus_release or set
@@ -18,7 +19,11 @@
 - name: "Install: Install NGINX Plus"
   ansible.builtin.apt:
     name: nginx-plus
-    state: present
+    # "present" leaves an already-installed release untouched, which would
+    # move the repository without ever upgrading the package and then write
+    # directives the running binary does not understand. The repository is
+    # pinned to a single release, so this only moves within that release.
+    state: latest
     update_cache: true
   notify: Start NGINX
 
