@@ -53,6 +53,21 @@ http {
     include       /etc/nginx/mime.types;
     default_type  application/octet-stream;
 
+    map $upstream_response_time $upstream_response_seconds {
+        default        "null";
+        "~([0-9.]+)$"  $1;
+    }
+
+    map $upstream_connect_time $upstream_connect_seconds {
+        default        "null";
+        "~([0-9.]+)$"  $1;
+    }
+
+    map $upstream_header_time $upstream_header_seconds {
+        default        "null";
+        "~([0-9.]+)$"  $1;
+    }
+
         log_format json_logs escape=json '{'
         '"remote_ip": "$remote_addr",'
         '"remote_user": "$remote_user",'
@@ -75,8 +90,13 @@ http {
 {% endif %}
         '"upstream_addr": "$upstream_addr",'
         '"upstream_status": "$upstream_status",'
+        '"upstream_cache_status": "$upstream_cache_status",'
         '"request_time": "$request_time",'
-        '"upstream_response_time": "$upstream_response_time"'
+        '"upstream_response_time": "$upstream_response_time",'
+        '"request_seconds": $request_time,'
+        '"upstream_response_seconds": $upstream_response_seconds,'
+        '"upstream_connect_seconds": $upstream_connect_seconds,'
+        '"upstream_header_seconds": $upstream_header_seconds'
     '}';
 
     access_log  /var/log/nginx/access.log json_logs;
