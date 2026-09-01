@@ -1,9 +1,14 @@
 ---
 adc_domain: "lib-adc"
 
-# Production stays on R36 for now; the support upgrade has been validated
-# on staging.
-nginx_plus_release: R36
+# Long-term support release. Only security patches land here, and it is the
+# first release where connection reuse to backends is on unless we opt out
+# with "keepalive 0;" in each upstream.
+nginx_plus_release: R37.0
+
+# The long-term support release can emit error logs as JSON, so the log
+# shipper below parses them as structured data rather than scraping text.
+nginx_error_log_json: true
 
 # Modules to install
 nginx_modules:
@@ -129,21 +134,42 @@ otel_receivers:
     include_file_path: true
     include_file_name: true
     operators:
-      - type: regex_parser
-        id: parse_nginxplus_error
-        regex: '^(?P<time_local>\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}) \[(?P<level>\w+)\] (?P<pid>\d+)#(?P<tid>\d+): (?:\*(?P<connection>\d+) )?(?P<message>[\s\S]*)$'
+      # Early startup failures are still written as plain text, and during the
+      # upgrade the file holds a mix of both, so unparseable lines are kept
+      # rather than dropped.
+      - type: json_parser
+        id: parse_nginxplus_error_json
         parse_from: body
-        on_error: send
+        on_error: send_quiet
 
       - type: time_parser
-        parse_from: attributes.time_local
-        layout_type: strptime
-        layout: "%Y/%m/%d %H:%M:%S"
-        on_error: send
+        parse_from: attributes.timestamp
+        layout_type: gotime
+        layout: "2006-01-02T15:04:05.000-07:00"
+        on_error: send_quiet
 
+      # notice, crit, alert and emerg have no default meaning, and anything
+      # left unmapped is discarded later by the info-and-above filter.
       - type: severity_parser
         parse_from: attributes.level
-        on_error: send
+        mapping:
+          debug: debug
+          info:
+            - info
+            - notice
+          warn: warn
+          error: error
+          fatal:
+            - crit
+            - alert
+            - emerg
+        on_error: send_quiet
+
+      # Surface the human-readable text instead of the raw JSON document.
+      - type: move
+        from: attributes.msg
+        to: body
+        on_error: send_quiet
 
       - type: add
         field: attributes.log_type
