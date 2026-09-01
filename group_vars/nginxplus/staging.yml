@@ -31,7 +31,6 @@ app_protect_dir: "/var/log/app_protect/*.log"
 sites: []
 
 # Grafana Beyla
-#
 beyla_enabled: true
 beyla_service_name: nginxplus-lb
 beyla_environment: staging
@@ -61,7 +60,7 @@ otel_default_resource_attributes:
   deployment.environment: staging
 
 otel_receivers:
-  # Receives:
+  # Receives native NGINX OpenTelemetry traces and Beyla telemetry.
   otlp:
     protocols:
       grpc:
@@ -90,16 +89,21 @@ otel_receivers:
         layout: "2006-01-02T15:04:05Z07:00"
         on_error: send
 
-      - type: severity_parser
+      # Extract the first digit of the HTTP status code and map the resulting
+      # status class to a real OpenTelemetry severity.
+      - type: regex_parser
+        id: parse_nginxplus_access_status
         parse_from: attributes.status
-        mapping:
-          info:
-            - '^2\d\d$'
-            - '^3\d\d$'
-          warn:
-            - '^4\d\d$'
-          error:
-            - '^5\d\d$'
+        regex: '^(?P<status_class>[1-5])\d\d$'
+        severity:
+          parse_from: attributes.status_class
+          mapping:
+            info:
+              - "1"
+              - "2"
+              - "3"
+            warn: "4"
+            error: "5"
         on_error: send
 
       - type: trace_parser
@@ -132,7 +136,7 @@ otel_receivers:
         id: parse_nginxplus_error_json
         parse_from: body
         on_error: send_quiet
-        # this probably doesn't need to stay
+
       - type: time_parser
         parse_from: attributes.timestamp
         layout_type: gotime
@@ -232,7 +236,7 @@ otel_service_pipelines:
 
   metrics:
     receivers:
-      # Required for Beyla RED metrics.
+      # Required to receive Beyla RED metrics over OTLP/HTTP.
       - otlp
       - nginx
       - hostmetrics

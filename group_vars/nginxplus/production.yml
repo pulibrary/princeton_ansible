@@ -1,8 +1,8 @@
 ---
 adc_domain: "lib-adc"
 
-# Production stays on R36 for now
-# support upgrade has been validated on staging.
+# Production stays on R36 for now; the support upgrade has been validated
+# on staging.
 nginx_plus_release: R36
 
 # Modules to install
@@ -34,7 +34,6 @@ nginxplus_otel_enabled: true
 nginxplus_otel_stub_status_port: 18080
 
 # Grafana Beyla
-#
 beyla_enabled: true
 beyla_service_name: nginxplus-lb
 beyla_environment: production
@@ -90,16 +89,21 @@ otel_receivers:
         layout: "2006-01-02T15:04:05Z07:00"
         on_error: send
 
-      - type: severity_parser
+      # Extract the first digit of the HTTP status code and map the resulting
+      # status class to a real OpenTelemetry severity.
+      - type: regex_parser
+        id: parse_nginxplus_access_status
         parse_from: attributes.status
-        mapping:
-          info:
-            - '^2\d\d$'
-            - '^3\d\d$'
-          warn:
-            - '^4\d\d$'
-          error:
-            - '^5\d\d$'
+        regex: '^(?P<status_class>[1-5])\d\d$'
+        severity:
+          parse_from: attributes.status_class
+          mapping:
+            info:
+              - "1"
+              - "2"
+              - "3"
+            warn: "4"
+            error: "5"
         on_error: send
 
       - type: trace_parser
