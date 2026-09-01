@@ -17,3 +17,83 @@ cdh_fileshare_mount: "/var/nfs/cdh"
 open_marc_records_mount: "/var/nfs/open_marc_records"
 pas_fileshare_mount: "/var/nfs/pas"
 tigerdata_fileshare_mount: "/var/nfs/tigerdata"
+
+# --- GCS backup of the exported NFS trees ---
+#
+# Off by default. Turning it on needs a bucket and a service account key that
+# only exist for hosts meant to be backed up, so an environment that has not
+# been set up should not half-configure itself.
+nfsserver_backup_enabled: false
+
+# The tree being backed up. Everything exported lives under here, so one source
+# covers every share rather than a list that drifts from nfsserver_exports.
+nfsserver_backup_source: /var/nfs
+
+nfsserver_backup_bucket: pul-nfs-backup
+nfsserver_backup_mountpoint: /var/backups/nfs_cloud_backup
+# Path within the bucket. Keyed by environment so staging and production can
+# share a bucket without writing over each other.
+nfsserver_backup_prefix: "nfs/{{ runtime_env | default('staging') }}"
+
+# Service account key, supplied per environment the same way the Solr backup key
+# is. Not in this repo: add it to the playbook's files/ directory.
+nfsserver_backup_key_src: >-
+  files/nfs-backup-{{ runtime_env | default('staging') }}-account-key.json
+nfsserver_backup_key_dest: /etc/nfs-backup-account-key.json
+
+nfsserver_backup_mount_service: nfs-gcs-backup.service
+nfsserver_backup_sync_service: nfs-backup-sync.service
+nfsserver_backup_sync_timer: nfs-backup-sync.timer
+nfsserver_backup_script: /usr/local/sbin/nfs-backup-sync
+nfsserver_backup_log: /var/log/nfs-backup-sync.log
+# Guarantees one backup at a time. A first copy can outrun the daily timer, and
+# a playbook run can start one by hand, so two rsyncs writing the same
+# destination with --inplace is reachable and would corrupt files.
+nfsserver_backup_lock: /var/lock/nfs-backup-sync.lock
+# How often the backup logs how many bytes it has written, in seconds.
+#
+# rsync only reports at the end, so without this the log is silent for hours and
+# a working backup is indistinguishable from a hung one. The figure comes from
+# the kernel's per-process counters, so it costs nothing on the mount.
+nfsserver_backup_progress_interval: 300
+
+nfsserver_gcsfuse_directory: /var/log/gcsfuse
+
+# How long gcsfuse may cache file and directory metadata.
+#
+# Must be 0 for this workload. The Solr role uses 60, which is fine there
+# because Solr writes into paths that already exist. rsync creates a directory
+# and immediately writes files into it, and with any non-zero TTL the new
+# directory is still invisible when those writes happen: every file fails with
+# "No such file or directory" while rsync walks the whole tree, so the run takes
+# as long as a real backup and copies nothing.
+nfsserver_gcsfuse_metadata_ttl: 0
+
+# When the backup runs.
+nfsserver_backup_sync_calendar: daily
+nfsserver_backup_sync_randomized_delay: 1h
+
+# Kick off a backup at the end of the run rather than waiting for the timer.
+# Without it a newly configured host sits with an empty bucket until midnight,
+# and the monitoring check reports that no backup has ever completed. Starts in
+# the background, so a large first copy does not hold the play open.
+nfsserver_backup_run_now: true
+
+# Whether a deletion on the share removes the copy in the bucket.
+#
+# Left off deliberately. With it on, anything deleted or encrypted on a share is
+# deleted from the backup on the next run, which is precisely when the backup is
+# needed. Enable it only once the bucket has object versioning and a lifecycle
+# policy, so previous versions survive the delete.
+nfsserver_backup_delete: false
+
+# Paths not worth sending to object storage. Relative to the source.
+nfsserver_backup_excludes:
+  - "lost+found"
+  - "*.tmp"
+
+# Hours before the Checkmk check warns that no backup has completed. Slightly
+# over a day for a daily timer, so the randomized delay cannot trip it. The
+# check goes critical at twice this.
+nfsserver_backup_max_age_hours: 26
+nfsserver_backup_checkmk: true

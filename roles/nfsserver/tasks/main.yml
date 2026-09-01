@@ -20,3 +20,16 @@
   when: nfsserver_is_local
   changed_when: false
   tags: update_config
+
+# Last, for two reasons: the shares have to exist before there is anything to
+# copy, and the backup is a destination rather than part of serving NFS, so a
+# problem with the bucket should never delay the exports coming up.
+- name: NFsserver | mount the GCS backup bucket
+  ansible.builtin.import_tasks: backup_gcs_mount.yml
+  when: nfsserver_backup_enabled | bool
+  tags: backup
+
+- name: NFsserver | schedule the backup of the exported trees
+  ansible.builtin.import_tasks: backup_sync.yml
+  when: nfsserver_backup_enabled | bool
+  tags: backup
