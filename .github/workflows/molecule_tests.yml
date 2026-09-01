@@ -90,24 +90,20 @@ jobs:
           for i in 1 2 3 4 5; do git clone https://github.com/pulibrary/princeton_ansible.git . && break || sleep 15; done
           git checkout ${{ github.sha }}
 
-      - name: Set up Python
-        uses: actions/setup-python@v7
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
         with:
+          version: "0.12.8"
           python-version: "3.13"
-
-      - name: cache python environment
-        uses: actions/cache@v6
-        with:
-          path: ${{ env.pythonLocation }}
-          key: ${{ env.pythonLocation }}-${{ hashFiles('requirements.txt') }}
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
 
       - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          #- name: Setup upterm session
-          #uses: lhotari/action-upterm@v1
-          #
+        run: uv sync --frozen
+
+      # - name: Setup upterm session
+      #   uses: lhotari/action-upterm@v1
+
       - name: Enable Docker retry for GHCR pulls
         run: |
           # bump Docker's default timeouts & retries
@@ -123,7 +119,7 @@ jobs:
         env:
           MOLECULE_DOCKER_PLATFORM: linux/amd64
         run: |
-          ROLE=${{ matrix.role }} python run_molecule.py
+          ROLE=${{ matrix.role }} uv run --frozen python run_molecule.py
 
       - name: Debug on failure
         if: failure()
