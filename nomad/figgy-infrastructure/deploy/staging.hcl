@@ -12,6 +12,9 @@ job "figgy-infrastructure-staging" {
   group "rabbitmq" {
     count = 3
 
+    # Remove from consul, wait 10s, then shut down.
+    shutdown_delay = "10s"
+
     # nomad-client-staging4 runs the load balancer on 5672.
     constraint {
       attribute = "${node.unique.name}"
@@ -207,6 +210,9 @@ EOF
   # A little reverse proxy load balancer. Force it onto one node because that's where everything's pointing right now, but we could give it a DNS name later if we want.
   group "rabbitmq-lb" {
     count = 1
+
+    # Remove from consul, wait 10s, then shut down.
+    shutdown_delay = "10s"
 
     constraint {
       attribute = "${node.unique.name}"
