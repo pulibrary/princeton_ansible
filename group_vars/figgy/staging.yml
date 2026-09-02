@@ -27,7 +27,7 @@ figgy_derivatives_mount: '/mnt/tigerdata/staging/derivatives'
 figgy_rabbit_user: '{{vault_rabbit_staging_user}}'
 figgy_rabbit_password: '{{vault_rabbit_staging_password}}'
 figgy_rabbit_server: 'amqp://{{figgy_rabbit_user}}:{{figgy_rabbit_password}}@{{figgy_staging_rabbit_host}}:5672'
-figgy_staging_rabbit_host: 'figgy-web-staging1.princeton.edu'
+figgy_staging_rabbit_host: 'nomad-client-staging4.lib.princeton.edu'
 figgy_solr_name: figgy-staging
 passenger_server_name: "figgy-staging.princeton.edu"
 passenger_app_env: "staging"
@@ -183,6 +183,20 @@ otel_receivers:
         field: attributes.service_name
         value: "figgy"
 
+  filelog/rails-logs:
+    include: ["/opt/figgy/shared/log/{{ rails_app_env }}.log"]
+    start_at: end
+    operators:
+      - type: add
+        field: attributes.log_type
+        value: "app-log"
+      - type: add
+        field: attributes.service_name
+        value: "figgy"
+      - type: add
+        field: attributes.rails_env
+        value: "{{ rails_app_env }}"
+
   hostmetrics:
     collection_interval: 30s
     scrapers:
@@ -231,6 +245,7 @@ otel_service_pipelines:
     receivers:
       - filelog/nginx-access
       - filelog/nginx-error
+      - filelog/rails-logs
     processors:
       - resource
       - batch
