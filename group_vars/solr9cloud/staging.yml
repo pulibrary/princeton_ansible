@@ -140,11 +140,34 @@ otel_receivers:
 
   filelog/solr-request:
     include:
-      - "/solr/logs/*.request.log"
+      - "/solr/logs/solr_request.log"
     start_at: end
     include_file_path: true
     include_file_name: true
     operators:
+      - type: json_parser
+        id: parse_solr_request_log
+        parse_from: body
+        timestamp:
+          parse_from: attributes.timestamp
+          layout_type: strptime
+          layout: "%Y-%m-%dT%H:%M:%S.%LZ"
+        severity:
+          parse_from: attributes.level
+        on_error: send
+
+      # The message field holds the Jetty access log entry:
+      # <client ip> - <user> "<request line>" <status> <bytes> <millis>
+      - type: regex_parser
+        id: parse_solr_request_fields
+        parse_from: attributes.message
+        regex: >-
+          ^(?P<client_ip>\S+) -
+          (?P<user>\S+)
+          "(?P<method>\S+) (?P<url>\S*) (?P<protocol>[^"]*)"
+          (?P<status>\d{3}) (?P<bytes_sent>\S+) (?P<duration_ms>\d+)$
+        on_error: send
+
       - type: add
         id: add_solr_request_log_type
         field: attributes.log_type
@@ -162,6 +185,18 @@ otel_receivers:
     include_file_path: true
     include_file_name: true
     operators:
+      # The JVM writes this log itself and its -Xlog framework has no JSON
+      # output, so the [time][uptime][level][tags] prefix is parsed here.
+      - type: regex_parser
+        id: parse_solr_gc_log
+        parse_from: body
+        regex: '^\[(?P<timestamp>[^\]]+)\]\[(?P<uptime>[^\]]+)\]\[(?P<level>[^\]]+)\]\[(?P<gc_tags>[^\]]+)\]\s*(?P<message>[\s\S]*)$'
+        timestamp:
+          parse_from: attributes.timestamp
+          layout_type: strptime
+          layout: "%Y-%m-%dT%H:%M:%S.%L%z"
+        on_error: send
+
       - type: add
         id: add_solr_gc_log_type
         field: attributes.log_type

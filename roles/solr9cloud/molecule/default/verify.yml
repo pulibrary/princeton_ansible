@@ -35,6 +35,11 @@
         src: /solr/log4j2-json-layout.json
       register: solr_json_layout
 
+    - name: Read Jetty access log configuration
+      ansible.builtin.slurp:
+        src: /opt/solr/server/etc/jetty-requestlog.xml
+      register: solr_request_log_config
+
     - name: Verify logs are written as JSON
       ansible.builtin.assert:
         that:
@@ -47,3 +52,28 @@
       vars:
         log4j2_config: "{{ solr_log4j2_config.content | b64decode }}"
         json_layout: "{{ solr_json_layout.content | b64decode | from_json }}"
+
+    - name: Verify the Jetty access log goes through Log4j
+      ansible.builtin.assert:
+        that:
+          - "'Slf4jRequestLogWriter' in request_log_config"
+          - "'AsyncRequestLogWriter' not in request_log_config"
+          - "'org.eclipse.jetty.server.RequestLog' in log4j2_config"
+        fail_msg: The Jetty access log is still written outside of Log4j
+      vars:
+        log4j2_config: "{{ solr_log4j2_config.content | b64decode }}"
+        request_log_config: "{{ solr_request_log_config.content | b64decode }}"
+
+    - name: Read Solr environment file
+      ansible.builtin.slurp:
+        src: /etc/default/solr.in.sh
+      register: solr_in_sh
+
+    - name: Verify garbage collection logging is configured
+      ansible.builtin.assert:
+        that:
+          - "'GC_LOG_OPTS=' in solr_env"
+          - "'/solr/logs/solr_gc.log' in solr_env"
+        fail_msg: The JVM is not configured to write a garbage collection log
+      vars:
+        solr_env: "{{ solr_in_sh.content | b64decode }}"

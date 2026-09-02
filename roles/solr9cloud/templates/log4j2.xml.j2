@@ -44,6 +44,23 @@
       </Policies>
       <DefaultRolloverStrategy max="{{ solr_log_max_backup_index | default('9') }}"/>
     </RollingFile>
+
+    <RollingFile
+        name="RequestFile"
+        fileName="{{ solr_request_log_file }}"
+        filePattern="{{ solr_request_log_file }}.%i">
+{% if json_layout %}
+      <JsonTemplateLayout eventTemplateUri="file://{{ solr_log_json_layout_path }}"/>
+{% else %}
+      <PatternLayout>
+        <Pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %m%n</Pattern>
+      </PatternLayout>
+{% endif %}
+      <Policies>
+        <SizeBasedTriggeringPolicy size="{{ solr_log_file_size | default('500MB') }}"/>
+      </Policies>
+      <DefaultRolloverStrategy max="{{ solr_log_max_backup_index | default('9') }}"/>
+    </RollingFile>
   </Appenders>
 
   <Loggers>
@@ -56,6 +73,13 @@
         level="INFO"
         additivity="false">
       <AppenderRef ref="SlowFile"/>
+    </Logger>
+
+    <Logger
+        name="{{ solr_request_log_logger }}"
+        level="INFO"
+        additivity="false">
+      <AppenderRef ref="RequestFile"/>
     </Logger>
 
     <Root level="{{ solr_log_root_level | default('WARN') }}">
