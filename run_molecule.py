@@ -55,7 +55,16 @@ def roles_dependant_on_changed_roles():
     return out_roles
 
 
+def roles_path():
+    repo_roles = os.path.abspath('./roles')
+    existing = os.environ.get('ANSIBLE_ROLES_PATH')
+    if existing and repo_roles not in existing.split(':'):
+        return repo_roles + ':' + existing
+    return existing or repo_roles
+
+
 def run_test(role):
+    os.environ['ANSIBLE_ROLES_PATH'] = roles_path()
     exit_code = os.system('cd  roles/' + role + ' && molecule test')
     if not exit_code == 0:
         raise Exception('Molecule tests failed')
