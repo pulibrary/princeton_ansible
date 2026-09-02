@@ -56,11 +56,11 @@ def roles_dependant_on_changed_roles():
 
 
 def roles_path():
-    repo_roles = os.path.abspath('./roles')
+    search_path = [os.path.abspath('./external_roles'), os.path.abspath('./roles')]
     existing = os.environ.get('ANSIBLE_ROLES_PATH')
-    if existing and repo_roles not in existing.split(':'):
-        return repo_roles + ':' + existing
-    return existing or repo_roles
+    if existing:
+        search_path.extend(p for p in existing.split(':') if p not in search_path)
+    return ':'.join(search_path)
 
 
 def run_test(role):
