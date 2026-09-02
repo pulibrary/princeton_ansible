@@ -1,8 +1,13 @@
 ---
 nomad_volumes:
-  - name: 'figgy-rabbitmq-staging'
-    count: 1
+  - name: 'figgy-rabbitmq-staging-cluster'
+    count: 3
     node_pool: 'staging'
+    # nomad-client-staging4 has a load balancer
+    constraints:
+      - attribute: '${node.unique.name}'
+        operator: '!='
+        value: 'nomad-client-staging4'
     capacity_min: '3G'
     uid: 1000000
     gid: 1000000
@@ -10,3 +15,4 @@ nomad_vars:
   figgy-infrastructure-staging:
     RABBITMQ_USER: '{{ vault_rabbit_staging_user }}'
     RABBITMQ_PASSWORD: '{{ vault_rabbit_staging_password }}'
+    RABBITMQ_ERLANG_COOKIE: '{{ vault_rabbit_staging_erlang_cookie }}'

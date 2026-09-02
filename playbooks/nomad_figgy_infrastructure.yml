@@ -13,6 +13,44 @@
     # This will auto include group_vars/nomad_production.yml
     # This will auto include group_vars/nomad_servers.yml
     - ../group_vars/nomad/vault.yml
+    - ../group_vars/nomad_figgy_infrastructure/vault.yml
     - "../group_vars/nomad_figgy_infrastructure/{{ runtime_env | default('staging') }}.yml"
   roles:
     - role: roles/nomad_app
+  tasks:
+    - name: Create consul policy for RabbitMQ peer discovery
+      community.general.consul_policy:
+        token: '{{ consul_acl_management_token }}'
+        name: 'rabbitmq-staging-peer-discovery'
+        description: 'Lets the staging brokers find each other via Consul'
+        rules: |
+          service_prefix "rabbitmq-staging-peers" {
+            policy = "write"
+          }
+          key_prefix "rabbitmq-staging" {
+            policy = "write"
+          }
+          session_prefix "" {
+            policy = "write"
+          }
+      run_once: true
+
+    - name: Create consul role for RabbitMQ peer discovery
+      community.general.consul_role:
+        token: '{{ consul_acl_management_token }}'
+        name: 'nomad-tasks-figgy-infrastructure-staging'
+        policies:
+          - name: 'rabbitmq-staging-peer-discovery'
+      run_once: true
+
+    - name: Bind figgy-infrastructure-staging task identities to that role
+      community.general.consul_binding_rule:
+        token: '{{ consul_acl_management_token }}'
+        name: 'nomad-tasks-figgy-infrastructure-staging'
+        auth_method: 'nomad-workloads'
+        bind_type: 'role'
+        bind_name: 'nomad-tasks-figgy-infrastructure-staging'
+        selector: >-
+          "nomad_service" not in value and
+          value.nomad_job_id == "figgy-infrastructure-staging"
+      run_once: true
