@@ -54,6 +54,30 @@ yaml
 solr_heap: "20g"  # JVM heap size
 ```
 
+### Logging
+
+Solr logs are written as structured JSON, one object per line, so log
+collectors (OpenTelemetry Collector, Datadog) can index fields such as
+`level`, `logger`, `collection`, `core` and `trace_id` without regular
+expressions, and multi-line stack traces stay in a single record.
+
+```
+yaml
+solr_log_json_enabled: true       # false falls back to plain text
+solr_log_json_service_name: solr  # value of the "service" field
+solr_log_root_level: WARN
+solr_log_file_size: 500MB
+solr_log_max_backup_index: 9
+```
+
+The JSON field list lives in `templates/log4j2-json-layout.json.j2` and is
+installed at `/solr/log4j2-json-layout.json`, where Log4j reads it as the
+event template for `solr.log`, `solr_slow_requests.log` and the console
+log. Log filenames are unchanged.
+
+Garbage collection logs come from the JVM and the request log comes from
+Jetty, so both stay in their native plain text formats.
+
 ### ZooKeeper Configuration
 
 ```
