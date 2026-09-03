@@ -1,0 +1,22 @@
+<?xml version="1.0"?>
+<!DOCTYPE Configure PUBLIC "-//Jetty//Configure//EN" "http://www.eclipse.org/jetty/configure_10_0.dtd">
+{{ ansible_managed | comment('xml') }}
+<!-- Send the Jetty access log through Log4j so it is written with the same
+     layout, rotation and escaping as the rest of the Solr logs. -->
+<Configure id="Server" class="org.eclipse.jetty.server.Server">
+  <Set name="RequestLog">
+    <New id="RequestLog" class="org.eclipse.jetty.server.CustomRequestLog">
+      <Arg>
+        <New class="org.eclipse.jetty.server.Slf4jRequestLogWriter">
+          <Set name="loggerName">{{ solr_request_log_logger }}</Set>
+        </New>
+      </Arg>
+      <Arg>{{ solr_request_log_format }}</Arg>
+    </New>
+  </Set>
+  <!-- Solr checks this property to report whether request logging is on. -->
+  <Call class="java.lang.System" name="setProperty">
+    <Arg>solr.log.requestlog.enabled</Arg>
+    <Arg>true</Arg>
+  </Call>
+</Configure>

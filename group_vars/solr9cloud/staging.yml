@@ -107,41 +107,25 @@ otel_receivers:
     include_file_path: true
     include_file_name: true
     operators:
-      - type: recombine
-        id: recombine_solr_stacktraces
-        combine_field: body
-        source_identifier: attributes["log.file.path"]
-        is_first_entry: 'body matches "^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}[.][0-9]{3} "'
-        force_flush_period: 5s
-
-      - type: regex_parser
+      # Solr writes one JSON object per line, so multi-line stack traces
+      # already arrive as a single log record.
+      - type: json_parser
         id: parse_solr_log
-        regex: '^(?P<timestamp>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3})\s+(?P<level>[A-Z]+)\s+\((?P<thread>[^)]*)\)\s+\[(?P<solr_context>[^\]]*)\]\s+(?P<logger>\S+)\s+(?P<message>[\s\S]*)$'
         parse_from: body
+        timestamp:
+          parse_from: attributes.timestamp
+          layout_type: strptime
+          layout: "%Y-%m-%dT%H:%M:%S.%LZ"
+        severity:
+          parse_from: attributes.level
         on_error: send
 
-      - type: time_parser
-        id: parse_solr_timestamp
-        parse_from: attributes.timestamp
-        layout_type: strptime
-        layout: "%Y-%m-%d %H:%M:%S.%L"
-        on_error: send
-
-      - type: severity_parser
-        id: parse_solr_severity
-        parse_from: attributes.level
-        on_error: send
-
-      # Extract t:<trace_id> from the Log4j MDC context and assign it
-      # to the OpenTelemetry log record's trace context.
-      - type: regex_parser
-        id: extract_solr_trace_id
-        parse_from: attributes.solr_context
-        if: 'attributes.solr_context != nil and attributes.solr_context matches ".*t:[0-9a-fA-F]{32}.*"'
-        regex: '^.*t:(?P<trace_id>[0-9a-fA-F]{32}).*$'
-        trace:
-          trace_id:
-            parse_from: attributes.trace_id
+      # trace_id is only present on requests that carry trace context.
+      - type: trace_parser
+        id: parse_solr_trace_id
+        if: 'attributes.trace_id != nil'
+        trace_id:
+          parse_from: attributes.trace_id
         on_error: send
 
       - type: add
@@ -156,11 +140,34 @@ otel_receivers:
 
   filelog/solr-request:
     include:
-      - "/solr/logs/*.request.log"
+      - "/solr/logs/solr_request.log"
     start_at: end
     include_file_path: true
     include_file_name: true
     operators:
+      - type: json_parser
+        id: parse_solr_request_log
+        parse_from: body
+        timestamp:
+          parse_from: attributes.timestamp
+          layout_type: strptime
+          layout: "%Y-%m-%dT%H:%M:%S.%LZ"
+        severity:
+          parse_from: attributes.level
+        on_error: send
+
+      # The message field holds the Jetty access log entry:
+      # <client ip> - <user> "<request line>" <status> <bytes> <millis>
+      - type: regex_parser
+        id: parse_solr_request_fields
+        parse_from: attributes.message
+        regex: >-
+          ^(?P<client_ip>\S+) -
+          (?P<user>\S+)
+          "(?P<method>\S+) (?P<url>\S*) (?P<protocol>[^"]*)"
+          (?P<status>\d{3}) (?P<bytes_sent>\S+) (?P<duration_ms>\d+)$
+        on_error: send
+
       - type: add
         id: add_solr_request_log_type
         field: attributes.log_type
@@ -178,6 +185,18 @@ otel_receivers:
     include_file_path: true
     include_file_name: true
     operators:
+      # The JVM writes this log itself and its -Xlog framework has no JSON
+      # output, so the [time][uptime][level][tags] prefix is parsed here.
+      - type: regex_parser
+        id: parse_solr_gc_log
+        parse_from: body
+        regex: '^\[(?P<timestamp>[^\]]+)\]\[(?P<uptime>[^\]]+)\]\[(?P<level>[^\]]+)\]\[(?P<gc_tags>[^\]]+)\]\s*(?P<message>[\s\S]*)$'
+        timestamp:
+          parse_from: attributes.timestamp
+          layout_type: strptime
+          layout: "%Y-%m-%dT%H:%M:%S.%L%z"
+        on_error: send
+
       - type: add
         id: add_solr_gc_log_type
         field: attributes.log_type
@@ -195,6 +214,24 @@ otel_receivers:
     include_file_path: true
     include_file_name: true
     operators:
+      - type: json_parser
+        id: parse_solr_slow_request_log
+        parse_from: body
+        timestamp:
+          parse_from: attributes.timestamp
+          layout_type: strptime
+          layout: "%Y-%m-%dT%H:%M:%S.%LZ"
+        severity:
+          parse_from: attributes.level
+        on_error: send
+
+      - type: trace_parser
+        id: parse_solr_slow_request_trace_id
+        if: 'attributes.trace_id != nil'
+        trace_id:
+          parse_from: attributes.trace_id
+        on_error: send
+
       - type: add
         id: add_solr_slow_requests_log_type
         field: attributes.log_type

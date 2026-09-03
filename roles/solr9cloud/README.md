@@ -54,6 +54,59 @@ yaml
 solr_heap: "20g"  # JVM heap size
 ```
 
+### Logging
+
+Every log Solr itself writes is structured JSON, one object per line, so log
+collectors (OpenTelemetry Collector, Datadog) can index fields such as
+`level`, `logger`, `collection`, `core` and `trace_id` without regular
+expressions, and multi-line stack traces stay in a single record.
+
+```
+yaml
+solr_log_json_enabled: true       # false falls back to plain text
+solr_log_json_service_name: solr  # value of the "service" field
+solr_log_root_level: WARN
+solr_log_file_size: 500MB
+solr_log_max_backup_index: 9
+```
+
+The JSON field list lives in `templates/log4j2-json-layout.json.j2` and is
+installed at `/solr/log4j2-json-layout.json`, where Log4j reads it as the
+event template for every appender.
+
+| Log | Written by | Format |
+| --- | --- | --- |
+| `solr.log` | Log4j | JSON |
+| `solr_slow_requests.log` | Log4j | JSON |
+| `solr_request.log` | Jetty, via Log4j | JSON |
+| `solr_gc.log` | JVM | plain text |
+| `solr-8983-console.log` | start script | plain text |
+
+The Jetty access log used to be written straight to a new
+`yyyy_mm_dd.request.log` file each day. It now goes through Log4j, which
+gives it the same JSON envelope, escaping and size-based rotation as the
+other logs, with the access log entry itself in the `message` field:
+
+```
+yaml
+solr_request_log_file: "/solr/logs/solr_request.log"
+solr_request_log_format: '%{client}a - %u "%r" %s %O %{ms}T'
+```
+
+Leftover daily files from the old writer are removed by the role.
+
+Two logs cannot be JSON. The garbage collection log is written by the JVM's
+own `-Xlog` framework, which has no JSON output, and the console log is the
+raw standard output of the start script. Both are parsed into fields by the
+collector instead.
+
+```
+yaml
+solr_gc_log_file: "/solr/logs/solr_gc.log"
+solr_gc_log_file_count: 9
+solr_gc_log_file_size: 20M
+```
+
 ### ZooKeeper Configuration
 
 ```

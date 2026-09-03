@@ -1,18 +1,27 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- roles/solr9cloud/templates/log4j2.xml.j2 -->
+{% set json_layout = solr_log_json_enabled | default(true) | bool %}
 <Configuration>
   <Appenders>
     <Console name="STDOUT" target="SYSTEM_OUT">
-      <PatternLayout pattern="%d{yyyy-MM-dd HH:mm:ss.SSS} %-5p (%t) [%notEmpty{c:%X{collection}}%notEmpty{ s:%X{shard}}%notEmpty{ r:%X{replica}}%notEmpty{ x:%X{core}}%notEmpty{ t:%X{trace_id}}] %c{1.} %m%n"/>
+{% if json_layout %}
+      <JsonTemplateLayout eventTemplateUri="file://{{ solr_log_json_layout_path }}"/>
+{% else %}
+      <PatternLayout pattern="{{ solr_log_pattern }}"/>
+{% endif %}
     </Console>
 
     <RollingFile
         name="RollingFile"
         fileName="{{ solr_log_dir }}/solr.log"
         filePattern="{{ solr_log_dir }}/solr.log.%i">
+{% if json_layout %}
+      <JsonTemplateLayout eventTemplateUri="file://{{ solr_log_json_layout_path }}"/>
+{% else %}
       <PatternLayout>
-        <Pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %-5p (%t) [%notEmpty{c:%X{collection}}%notEmpty{ s:%X{shard}}%notEmpty{ r:%X{replica}}%notEmpty{ x:%X{core}}%notEmpty{ t:%X{trace_id}}] %c{1.} %m%n</Pattern>
+        <Pattern>{{ solr_log_pattern }}</Pattern>
       </PatternLayout>
+{% endif %}
       <Policies>
         <SizeBasedTriggeringPolicy size="{{ solr_log_file_size | default('500MB') }}"/>
       </Policies>
@@ -23,9 +32,30 @@
         name="SlowFile"
         fileName="{{ solr_log_dir }}/solr_slow_requests.log"
         filePattern="{{ solr_log_dir }}/solr_slow_requests.log.%i">
+{% if json_layout %}
+      <JsonTemplateLayout eventTemplateUri="file://{{ solr_log_json_layout_path }}"/>
+{% else %}
       <PatternLayout>
-        <Pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %-5p (%t) [%notEmpty{c:%X{collection}}%notEmpty{ s:%X{shard}}%notEmpty{ r:%X{replica}}%notEmpty{ x:%X{core}}%notEmpty{ t:%X{trace_id}}] %c{1.} %m%n</Pattern>
+        <Pattern>{{ solr_log_pattern }}</Pattern>
       </PatternLayout>
+{% endif %}
+      <Policies>
+        <SizeBasedTriggeringPolicy size="{{ solr_log_file_size | default('500MB') }}"/>
+      </Policies>
+      <DefaultRolloverStrategy max="{{ solr_log_max_backup_index | default('9') }}"/>
+    </RollingFile>
+
+    <RollingFile
+        name="RequestFile"
+        fileName="{{ solr_request_log_file }}"
+        filePattern="{{ solr_request_log_file }}.%i">
+{% if json_layout %}
+      <JsonTemplateLayout eventTemplateUri="file://{{ solr_log_json_layout_path }}"/>
+{% else %}
+      <PatternLayout>
+        <Pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %m%n</Pattern>
+      </PatternLayout>
+{% endif %}
       <Policies>
         <SizeBasedTriggeringPolicy size="{{ solr_log_file_size | default('500MB') }}"/>
       </Policies>
@@ -43,6 +73,13 @@
         level="INFO"
         additivity="false">
       <AppenderRef ref="SlowFile"/>
+    </Logger>
+
+    <Logger
+        name="{{ solr_request_log_logger }}"
+        level="INFO"
+        additivity="false">
+      <AppenderRef ref="RequestFile"/>
     </Logger>
 
     <Root level="{{ solr_log_root_level | default('WARN') }}">

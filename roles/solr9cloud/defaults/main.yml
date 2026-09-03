@@ -55,13 +55,14 @@ solr_gc_tune: "-XX:NewRatio=3 \
   -XX:PretenureSizeThreshold=64m \
   -XX:+ParallelRefProcEnabled"
 
-# GC logging settings
-gc_log_settings: "-verbose:gc \
-  -Xlog:gc=debug:file=/solr/logs/gc.txt:time,uptime,pid,tid,level,tags \
-  -Xlog:gc+heap=debug \
-  -Xlog:gc+age=trace \
-  -Xlog:safepoint"
-solr_gc_log_opts: "{{ gc_log_settings }}"
+# GC logging settings. The JVM writes these directly and its -Xlog framework
+# has no JSON output, so this file stays plain text.
+solr_gc_log_file: "{{ solr_log_dir }}/solr_gc.log"
+solr_gc_log_file_count: 9
+solr_gc_log_file_size: 20M
+solr_gc_log_opts: "-Xlog:gc*:file={{ solr_gc_log_file }}\
+  :time,uptime,level,tags\
+  :filecount={{ solr_gc_log_file_count }},filesize={{ solr_gc_log_file_size }}"
 
 # ZooKeeper configuration
 solr_zookeeper_hosts:
@@ -79,6 +80,25 @@ log_max_backup_index: 9
 solr_log_root_level: "{{ log_root_level }}"
 solr_log_file_size: "{{ log_file_size }}"
 solr_log_max_backup_index: "{{ log_max_backup_index }}"
+
+# Write solr.log, solr_slow_requests.log, the Jetty access log and the
+# console log as one JSON object per line. Set to false to fall back to the
+# plain text layout below.
+solr_log_json_enabled: true
+solr_log_json_layout_path: "{{ solr_data_home }}/log4j2-json-layout.json"
+solr_log_json_service_name: solr
+solr_log_pattern: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5p (%t) \
+  [%notEmpty{c:%X{collection}}%notEmpty{ s:%X{shard}}\
+  %notEmpty{ r:%X{replica}}%notEmpty{ x:%X{core}}\
+  %notEmpty{ t:%X{trace_id}}] %c{1.} %m%n"
+
+# Jetty writes its access log through Log4j, so it lands in a single rotated
+# file instead of one plain text file per day.
+solr_request_log_file: "{{ solr_log_dir }}/solr_request.log"
+solr_request_log_logger: org.eclipse.jetty.server.RequestLog
+solr_request_log_format: '%{client}a - %u "%r" %s %O %{ms}T'
+# Daily files left behind by the previous Jetty access log writer.
+solr_legacy_request_log_pattern: "[0-9][0-9][0-9][0-9]_[0-9][0-9]_[0-9][0-9].request.log"
 
 # Security settings
 solr_use_security: false

@@ -151,6 +151,17 @@
   tags: [configure]
 
 # Configure logging
+- name: Solrcloud | Configure JSON log layout
+  ansible.builtin.template:
+    src: log4j2-json-layout.json.j2
+    dest: "{{ solr_log_json_layout_path }}"
+    owner: "{{ solr_user }}"
+    group: "{{ solr_group }}"
+    mode: "0644"
+  when: solr_log_json_enabled | bool
+  notify: Restart solr
+  tags: [logging]
+
 - name: Solrcloud | Configure logging
   ansible.builtin.template:
     src: log4j2.xml.j2
@@ -159,6 +170,33 @@
     group: "{{ solr_group }}"
     mode: "0644"
   notify: Restart solr
+  tags: [logging]
+
+- name: Solrcloud | Route Jetty access log through Log4j
+  ansible.builtin.template:
+    src: jetty-requestlog.xml.j2
+    dest: "{{ solr_installation }}/server/etc/jetty-requestlog.xml"
+    owner: "{{ solr_user }}"
+    group: "{{ solr_group }}"
+    mode: "0644"
+  notify: Restart solr
+  tags: [logging]
+
+- name: Solrcloud | Find daily access logs from the previous writer
+  ansible.builtin.find:
+    paths: "{{ solr_log_dir }}"
+    patterns: "{{ solr_legacy_request_log_pattern }}"
+    use_regex: false
+  register: solr_legacy_request_logs
+  tags: [logging]
+
+- name: Solrcloud | Remove daily access logs from the previous writer
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: absent
+  loop: "{{ solr_legacy_request_logs.files }}"
+  loop_control:
+    label: "{{ item.path }}"
   tags: [logging]
 
 - name: Solrcloud | Check if temp files exist
