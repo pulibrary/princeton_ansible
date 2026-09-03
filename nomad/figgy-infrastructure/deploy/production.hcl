@@ -133,12 +133,12 @@ job "figgy-infrastructure-production" {
         env = true
         change_mode = "restart"
         data = <<EOF
-{{- with nomadVar "nomad/jobs/figgy-infrastructure-production" -}}
-RABBITMQ_DEFAULT_USER={{ .RABBITMQ_USER }}
-RABBITMQ_DEFAULT_PASS={{ .RABBITMQ_PASSWORD }}
-RABBITMQ_ERLANG_COOKIE={{ .RABBITMQ_ERLANG_COOKIE }}
-{{- end -}}
-EOF
+        {{- with nomadVar "nomad/jobs/figgy-infrastructure-production" -}}
+        RABBITMQ_DEFAULT_USER={{ .RABBITMQ_USER }}
+        RABBITMQ_DEFAULT_PASS={{ .RABBITMQ_PASSWORD }}
+        RABBITMQ_ERLANG_COOKIE={{ .RABBITMQ_ERLANG_COOKIE }}
+        {{- end -}}
+        EOF
       }
 
       # Consul clustering docs: https://www.rabbitmq.com/docs/cluster-formation#configuration-3
@@ -146,32 +146,32 @@ EOF
         destination = "local/rabbitmq.conf"
         change_mode = "restart"
         data = <<EOF
-cluster_name = figgy-production
+        cluster_name = figgy-production
 
-# Let's use Consul, we got it anyways.
-cluster_formation.peer_discovery_backend = consul
-cluster_formation.consul.host = host.containers.internal
-cluster_formation.consul.port = 8500
-cluster_formation.consul.scheme = http
-cluster_formation.consul.acl_token = {{ env "CONSUL_TOKEN" }}
+        # Let's use Consul, we got it anyways.
+        cluster_formation.peer_discovery_backend = consul
+        cluster_formation.consul.host = host.containers.internal
+        cluster_formation.consul.port = 8500
+        cluster_formation.consul.scheme = http
+        cluster_formation.consul.acl_token = {{ env "CONSUL_TOKEN" }}
 
-cluster_formation.consul.svc = rabbitmq-production-peers
-cluster_formation.consul.svc_port = {{ env "NOMAD_PORT_amqp" }}
-cluster_formation.consul.svc_ttl = 30
-cluster_formation.consul.deregister_after = 90
+        cluster_formation.consul.svc = rabbitmq-production-peers
+        cluster_formation.consul.svc_port = {{ env "NOMAD_PORT_amqp" }}
+        cluster_formation.consul.svc_ttl = 30
+        cluster_formation.consul.deregister_after = 90
 
-cluster_formation.consul.svc_addr_auto = true
-cluster_formation.consul.svc_addr_use_nodename = true
-cluster_formation.consul.use_longname = true
+        cluster_formation.consul.svc_addr_auto = true
+        cluster_formation.consul.svc_addr_use_nodename = true
+        cluster_formation.consul.use_longname = true
 
-cluster_formation.consul.lock_prefix = rabbitmq-production
-cluster_formation.consul.lock_wait_time = 300
+        cluster_formation.consul.lock_prefix = rabbitmq-production
+        cluster_formation.consul.lock_wait_time = 300
 
-# Make the default queue a quorum, so it can survive one node dying.
-default_queue_type = quorum
+        # Make the default queue a quorum, so it can survive one node dying.
+        default_queue_type = quorum
 
-management.tcp.port = {{ env "NOMAD_PORT_management" }}
-EOF
+        management.tcp.port = {{ env "NOMAD_PORT_management" }}
+        EOF
       }
 
       template {
