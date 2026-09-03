@@ -61,14 +61,7 @@ job "figgy-infrastructure-staging" {
     service {
       name = "rabbitmq-staging"
       port = "amqp"
-
-      # Use rabbitmq.enable to tell traefik (but not the traefik wall) to load balance this node.
-      tags = [
-        "rabbitmq.enable=true",
-        "rabbitmq.tcp.routers.rabbitmq-staging.entrypoints=amqp",
-        # This does TCP load reverse proxy.
-        "rabbitmq.tcp.routers.rabbitmq-staging.rule=HostSNI(`*`)",
-      ]
+      tags = ["logging"]
 
       check {
         name = "amqp-listener"
@@ -92,12 +85,6 @@ job "figgy-infrastructure-staging" {
     service {
       name = "rabbitmq-staging-management"
       port = "management"
-
-      tags = [
-        "rabbitmq.enable=true",
-        "rabbitmq.http.routers.rabbitmq-staging-management.entrypoints=management",
-        "rabbitmq.http.routers.rabbitmq-staging-management.rule=PathPrefix(`/`)",
-      ]
 
       check {
         name = "management-ui"
@@ -201,124 +188,8 @@ EOF
       }
 
       resources {
-        cpu = 2000
-        memory = 2000
-      }
-    }
-  }
-
-  # A little reverse proxy load balancer. Force it onto one node because that's where everything's pointing right now, but we could give it a DNS name later if we want.
-  group "rabbitmq-lb" {
-    count = 1
-
-    # Remove from consul, wait 10s, then shut down.
-    shutdown_delay = "10s"
-
-    constraint {
-      attribute = "${node.unique.name}"
-      value = "nomad-client-staging4"
-    }
-
-    update {
-      max_parallel = 1
-      health_check = "checks"
-      min_healthy_time = "10s"
-      auto_revert = true
-    }
-
-    network {
-      port "amqp" {
-        static = 5672
-        to = 5672
-      }
-      port "management" {
-        static = 15672
-        to = 15672
-      }
-      port "traefik" {}
-      port "metrics" {}
-
-      dns {
-        servers = ["172.17.0.1", "128.112.129.209", "8.8.8.8", "8.8.4.4"]
-      }
-    }
-
-    service {
-      name = "rabbitmq-staging-lb"
-      port = "traefik"
-
-      check {
-        type = "http"
-        port = "traefik"
-        path = "/ping"
-        interval = "10s"
-        timeout = "2s"
-      }
-    }
-
-    service {
-      name = "rabbitmq-staging-lb-metrics"
-      port = "metrics"
-      tags = ["staging", "metrics"]
-    }
-
-    task "traefik" {
-      driver = "docker"
-
-      consul {}
-
-      config {
-        image = "docker.io/library/traefik:v3.7"
-        ports = ["amqp", "management", "traefik", "metrics"]
-
-        volumes = [
-          "local/traefik.yml:/etc/traefik/traefik.yml",
-        ]
-
-        extra_hosts = ["host.containers.internal:host-gateway"]
-      }
-
-      template {
-        destination = "local/traefik.yml"
-        change_mode = "restart"
-        data = <<EOF
----
-ping:
-  entryPoint: traefik
-log:
-  level: ERROR
-entryPoints:
-  amqp:
-    address: ":{{ env "NOMAD_PORT_amqp" }}"
-  management:
-    address: ":{{ env "NOMAD_PORT_management" }}"
-  traefik:
-    address: ":{{ env "NOMAD_PORT_traefik" }}"
-  metrics:
-    address: ":{{ env "NOMAD_PORT_metrics" }}"
-metrics:
-  prometheus:
-    entryPoint: metrics
-    addEntryPointsLabels: true
-    addRoutersLabels: true
-    addServicesLabels: true
-api:
-  dashboard: false
-  insecure: false
-providers:
-  consulCatalog:
-    exposedByDefault: false
-    prefix: rabbitmq
-    endpoint:
-      address: "host.containers.internal:8500"
-      scheme: "http"
-      token: "{{ env "CONSUL_TOKEN" }}"
-EOF
-      }
-
-      resources {
-        cpu = 500
-        memory = 256
+        cpu = 1000
+        memory = 512
       }
     }
   }
