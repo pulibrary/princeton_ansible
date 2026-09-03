@@ -14,12 +14,93 @@ otel_default_resource_attributes:
   service.name: zookeeper
   service.version: staging
   environment: staging
+  deployment.environment: staging
 
 otel_receivers:
-  journald/zookeeper:
-    units:
-      - zookeeper.service
-    priority: info
+  filelog/zookeeper-json:
+    include:
+      - "/var/log/zookeeper/zookeeper.json"
+    start_at: end
+    include_file_path: true
+    include_file_name: true
+    operators:
+      # ZooKeeper 3.8+ logs through logback, whose JsonEncoder writes a complete
+      # JSON object per event, stack traces included, so each line stands alone.
+      - type: json_parser
+        id: parse_zookeeper_json
+        parse_from: body
+        timestamp:
+          parse_from: attributes.timestamp
+          layout_type: epoch
+          layout: ms
+        severity:
+          parse_from: attributes.level
+          mapping:
+            trace: TRACE
+            debug: DEBUG
+            info: INFO
+            warn: WARN
+            error: ERROR
+        on_error: send
+
+      # myid rides along in the logback MDC and is the quickest way to tell the
+      # three ensemble members apart.
+      - type: move
+        id: move_zookeeper_myid
+        if: 'attributes.mdc != nil and attributes.mdc.myid != nil'
+        from: attributes.mdc.myid
+        to: attributes.zookeeper_myid
+        on_error: send
+
+      - type: remove
+        id: remove_zookeeper_mdc
+        if: 'attributes.mdc != nil'
+        field: attributes.mdc
+        on_error: send
+
+      - type: move
+        id: move_zookeeper_message_to_body
+        from: attributes.message
+        to: body
+        on_error: send
+
+      # Encoder bookkeeping that adds no value once the record is in SigNoz.
+      - type: remove
+        id: remove_zookeeper_context
+        field: attributes.context
+        on_error: send
+
+      - type: remove
+        id: remove_zookeeper_sequence_number
+        field: attributes.sequenceNumber
+        on_error: send
+
+      - type: remove
+        id: remove_zookeeper_nanoseconds
+        field: attributes.nanoseconds
+        on_error: send
+
+      # Now that these drive the record timestamp and severity, the raw copies
+      # would just be duplicate columns in SigNoz.
+      - type: remove
+        id: remove_zookeeper_raw_timestamp
+        field: attributes.timestamp
+        on_error: send
+
+      - type: remove
+        id: remove_zookeeper_raw_level
+        field: attributes.level
+        on_error: send
+
+      - type: add
+        id: add_zookeeper_log_type
+        field: attributes.log_type
+        value: zookeeper_json
+
+      - type: add
+        id: add_zookeeper_service_name
+        field: attributes.service_name
+        value: zookeeper
 
   hostmetrics:
     collection_interval: 30s
@@ -72,10 +153,20 @@ otel_exporters:
 otel_service_pipelines:
   logs:
     receivers:
-      - journald/zookeeper
+      - filelog/zookeeper-json
     processors:
       - resource
       - filter/info_and_above
+      - batch
+    exporters:
+      - loadbalancing
+      - debug
+
+  metrics:
+    receivers:
+      - hostmetrics
+    processors:
+      - resource
       - batch
     exporters:
       - loadbalancing

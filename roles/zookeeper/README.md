@@ -23,8 +23,16 @@ zk_user: "zookeeper"
 zk_group: "zookeeper"
 
 # ZooKeeper directories
-zk_data_dir: "/var/lib/zookeeper/data"
-zk_log_dir: "/var/lib/zookeeper/log"
+zk_data_dir: "/var/lib/zookeeper"
+zk_log_dir: "/var/log/zookeeper"
+
+# Logging
+zk_log_file: "zookeeper.json"
+zk_log_path: "/var/log/zookeeper/zookeeper.json"
+zk_log_threshold: "INFO"
+zk_console_log_threshold: "WARN"
+zk_log_max_file_size: "256MB"
+zk_log_max_backup_index: 20
 
 # ZooKeeper ports
 zk_client_port: 2181     # Client connection port
@@ -41,6 +49,24 @@ zk_nodes:
 # Set to true on actual servers, false for local testing
 running_on_server: true
 ```
+
+## Logging
+
+ZooKeeper 3.8 and later log through logback, so this role ships a `logback.xml`
+that uses logback's `JsonEncoder`. Each log event, stack traces included, is
+written as a single JSON object on one line to `zk_log_path`.
+
+That file is what gets shipped to SigNoz: the OpenTelemetry Collector (see
+`group_vars/zookeeper/`) tails it and forwards structured records, so level,
+logger, thread and the ensemble member id (`myid`) are queryable fields rather
+than text buried in a log line.
+
+The console appender is still wired up so the systemd journal keeps a local
+copy, but only from `zk_console_log_threshold` (WARN) upward. This avoids
+sending every INFO line to SigNoz twice.
+
+Logback rotates the file itself once it reaches `zk_log_max_file_size`, keeping
+`zk_log_max_backup_index` older copies, so no logrotate rule is needed.
 
 ## Dependencies
 
@@ -79,6 +105,7 @@ all:
 ## Files and Templates
 
 * `templates/zoo.cfg.j2` - Main ZooKeeper configuration
+* `templates/logback.xml.j2` - JSON logging configuration
 * `templates/zookeeper.service.j2` - Systemd service file
 
 ## License

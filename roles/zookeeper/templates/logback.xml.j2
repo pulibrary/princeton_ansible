@@ -1,0 +1,37 @@
+<!--
+{{ ansible_managed }}
+
+ZooKeeper 3.8 and later log through logback. JsonEncoder writes one JSON object
+per log event, including any stack trace, so every record is a single line that
+the OpenTelemetry Collector can parse without multi-line stitching.
+-->
+<configuration>
+  <appender name="JSONFILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+    <File>{{ zk_log_path }}</File>
+    <encoder class="ch.qos.logback.classic.encoder.JsonEncoder" />
+    <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+      <level>{{ zk_log_threshold }}</level>
+    </filter>
+    <rollingPolicy class="ch.qos.logback.core.rolling.FixedWindowRollingPolicy">
+      <maxIndex>{{ zk_log_max_backup_index }}</maxIndex>
+      <FileNamePattern>{{ zk_log_path }}.%i</FileNamePattern>
+    </rollingPolicy>
+    <triggeringPolicy class="ch.qos.logback.core.rolling.SizeBasedTriggeringPolicy">
+      <MaxFileSize>{{ zk_log_max_file_size }}</MaxFileSize>
+    </triggeringPolicy>
+  </appender>
+
+  <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+    <encoder>
+      <pattern>%d{ISO8601} [myid:%X{myid}] - %-5p [%t:%C{1}@%L] - %m%n</pattern>
+    </encoder>
+    <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+      <level>{{ zk_console_log_threshold }}</level>
+    </filter>
+  </appender>
+
+  <root level="{{ zk_log_threshold }}">
+    <appender-ref ref="JSONFILE" />
+    <appender-ref ref="CONSOLE" />
+  </root>
+</configuration>
