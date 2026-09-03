@@ -15,13 +15,6 @@ job "figgy-infrastructure-staging" {
     # Remove from consul, wait 10s, then shut down.
     shutdown_delay = "10s"
 
-    # nomad-client-staging4 runs the load balancer on 5672.
-    constraint {
-      attribute = "${node.unique.name}"
-      operator = "!="
-      value = "nomad-client-staging4"
-    }
-
     update {
       max_parallel = 1
       health_check = "checks"
