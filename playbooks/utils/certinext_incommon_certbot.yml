@@ -1,7 +1,7 @@
 ---
 # you MUST run this playbook on a single host with '--limit'
 # example:
-# ansible-playbook -v -e domain_name=datacommons --limit adc-prod2.princeton.edu playbooks/utils/incommon_certbot.yml
+# ansible-playbook -v -e domain_name=datacommons --limit adc-prod2.princeton.edu playbooks/utils/certinext_incommon_certbot.yml -e runtime_env=production
 #
 # This playbook will need to be run on both load balancers sequentially.
 # The domain_name will also be the certbot cert-name and live directory:
@@ -29,15 +29,18 @@
   tasks:
     - name: install certbot software
       ansible.builtin.apt:
-        name: certbot
+        name:
+          - certbot
+          - python3-certbot-nginx
         state: present
+        update_cache: true
 
     - name: update acme certificates for {{ domain_name }}
       ansible.builtin.command:
         argv:
           - /usr/bin/certbot
           - certonly
-          - --standalone
+          - --nginx
           - --non-interactive
           - --agree-tos
           - --email
