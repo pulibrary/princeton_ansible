@@ -30,6 +30,19 @@
           - binary_file.stat.mode == '0755'
         fail_msg: "Binary {{ otel_binary_path }} does not exist, is not a file, or has wrong permissions (expected 0755)."
 
+    - name: Check if the downloaded archive was kept
+      ansible.builtin.stat:
+        path: "{{ otel_archive_path }}"
+        get_checksum: false
+      register: archive_file
+
+    - name: Assert the archive is available for reuse
+      ansible.builtin.assert:
+        that:
+          - archive_file.stat.exists
+          - archive_file.stat.isreg
+        fail_msg: "Archive {{ otel_archive_path }} is missing, so every run would download it again."
+
     - name: Check installed binary version
       ansible.builtin.command:
         cmd: "{{ otel_binary_path }} --version"
@@ -42,4 +55,3 @@
         that:
           - "otel_version in otel_version_check.stdout"
         fail_msg: "Version check failed. Expected '{{ otel_version }}' in stdout, but got: {{ otel_version_check.stdout }}"
-        fail_msg: "Config file {{ otel_config_path }} does not exist, is not a file, or has wrong permissions (expected 0644)."

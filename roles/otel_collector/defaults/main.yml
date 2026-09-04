@@ -1,19 +1,25 @@
 ---
 # defaults file for roles/otel_collector
 
-# The version of otelcol-contrib to install.
+# The version of otelcol-contrib to install. PUL targets amd64.
 otel_version: "0.157.0"
+otel_platform: "linux_amd64"
 
 # Install locations.
 otel_install_dir: "/opt/otelcol"
 otel_releases_dir: "{{ otel_install_dir }}/releases"
 otel_release_dir: "{{ otel_releases_dir }}/{{ otel_version }}"
+otel_release_binary: "{{ otel_release_dir }}/otelcol-contrib"
 otel_binary_path: "{{ otel_install_dir }}/otelcol-contrib"
 otel_config_path: "{{ otel_install_dir }}/config.yaml"
-otel_archive_path: "/tmp/otelcol-contrib_{{ otel_version }}_linux_amd64.tar.gz"
 
-# Construct the download URL. PUL targets amd64.
-otel_download_url: "https://github.com/open-telemetry/opentelemetry-collector-releases/releases/download/v{{ otel_version }}/otelcol-contrib_{{ otel_version }}_linux_amd64.tar.gz"
+# Where the release tarball is kept. Downloading it outside of /tmp means it
+# survives reboots and tmp cleaners, so it only has to be fetched once.
+otel_archive_name: "otelcol-contrib_{{ otel_version }}_{{ otel_platform }}.tar.gz"
+otel_download_dir: "{{ otel_releases_dir }}"
+otel_archive_path: "{{ otel_download_dir }}/{{ otel_archive_name }}"
+otel_download_base_url: "https://github.com/open-telemetry/opentelemetry-collector-releases/releases/download"
+otel_download_url: "{{ otel_download_base_url }}/v{{ otel_version }}/{{ otel_archive_name }}"
 
 # Whether to manage a systemd unit for otelcol-contrib.
 otel_service_name: "otelcol-contrib"
