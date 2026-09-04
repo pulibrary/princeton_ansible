@@ -37,26 +37,65 @@ otel_receivers:
       http:
         endpoint: 127.0.0.1:4318
 
-  # EZproxy HTTP access logs
+  # EZproxy HTTP access logs.
+  #
+  # EZproxy is configured to write these as JSON, one object per request, so
+  # the fields are read by name instead of being pulled out with a regex. See
+  # the LogFormat directive in roles/ezproxy/templates/config.txt.j2.
   filelog/ezproxy_access:
     include:
-      - /var/local/ezproxy/log/ezp*.log*
+      - /var/local/ezproxy/log/ezp*.json
     exclude:
       - /var/local/ezproxy/log/*.gz
     start_at: end
     include_file_path: true
     include_file_name: true
     operators:
-      - type: regex_parser
+      # EZproxy does not escape quotes in the values it logs, so a request with
+      # a quote in its user agent or URL still produces a line that is not
+      # valid JSON. on_error: send keeps those lines, with their raw text as
+      # the body, rather than dropping them.
+      - type: json_parser
         id: parse_ezproxy_access
         parse_from: body
-        regex: '^(?P<client_ip>\S+) (?P<ident>\S+) (?P<authenticated_user>\S+) \[(?P<time_local>[^\]]+)\] "(?P<http_method>\S+) (?P<url>\S+) (?P<http_protocol>[^"]+)" (?P<http_status>\d{3}) (?P<body_bytes_sent>\d+) "(?P<country_code>[^"]*)" "(?P<user_agent>[^"]*)"$'
+        timestamp:
+          parse_from: attributes.timestamp
+          layout_type: strptime
+          layout: '%Y-%m-%dT%H:%M:%S%z'
+        on_error: send
 
-      - type: time_parser
-        id: parse_ezproxy_access_time
-        parse_from: attributes.time_local
-        layout_type: strptime
-        layout: '%d/%b/%Y:%H:%M:%S %z'
+      # Give the record a severity so failed requests can be found in SigNoz
+      # without knowing EZproxy's status codes. Anything at or above 400
+      # includes EZproxy's own 5xx/9xx codes for rejected and intruder traffic.
+      - type: severity_parser
+        id: parse_ezproxy_access_severity
+        if: 'attributes.http_status != nil'
+        parse_from: attributes.http_status
+        overwrite_text: true
+        mapping:
+          error:
+            - min: 500
+              max: 999
+          warn:
+            - min: 400
+              max: 499
+          info:
+            - min: 100
+              max: 399
+        on_error: send
+
+      # The parsed fields are the useful part, so the body becomes a short
+      # summary instead of a second copy of the whole JSON object.
+      - type: add
+        id: set_ezproxy_access_body
+        if: 'attributes.url != nil'
+        field: body
+        value: 'EXPR(attributes.http_method + " " + attributes.url)'
+
+      - type: remove
+        id: remove_ezproxy_access_timestamp
+        if: 'attributes.timestamp != nil'
+        field: attributes.timestamp
 
       - type: add
         field: attributes.log_type
@@ -66,26 +105,56 @@ otel_receivers:
         field: attributes.service_name
         value: ezproxy_access
 
-  # EZproxy SPU logs
+  # EZproxy starting point URL logs, also written as JSON. These record which
+  # resource a session set out to reach, so they answer "what did people use"
+  # rather than "what did their browser fetch".
   filelog/ezproxy_spu:
     include:
-      - /var/local/ezproxy/log/spu*.log*
+      - /var/local/ezproxy/log/spu*.json
     exclude:
       - /var/local/ezproxy/log/*.gz
     start_at: end
     include_file_path: true
     include_file_name: true
     operators:
-      - type: regex_parser
+      - type: json_parser
         id: parse_ezproxy_spu
         parse_from: body
-        regex: '^(?P<client_ip>\S+) (?P<ident>\S+) (?P<session_id>\S+) \[(?P<time_local>[^\]]+)\] "(?P<http_method>\S+) (?P<url>\S+) (?P<http_protocol>[^"]+)" (?P<http_status>\d{3}) (?P<body_bytes_sent>\d+)$'
+        timestamp:
+          parse_from: attributes.timestamp
+          layout_type: strptime
+          layout: '%Y-%m-%dT%H:%M:%S%z'
+        on_error: send
 
-      - type: time_parser
-        id: parse_ezproxy_spu_time
-        parse_from: attributes.time_local
-        layout_type: strptime
-        layout: '%d/%b/%Y:%H:%M:%S %z'
+      - type: severity_parser
+        id: parse_ezproxy_spu_severity
+        if: 'attributes.http_status != nil'
+        parse_from: attributes.http_status
+        overwrite_text: true
+        mapping:
+          error:
+            - min: 500
+              max: 999
+          warn:
+            - min: 400
+              max: 499
+          info:
+            - min: 100
+              max: 399
+        on_error: send
+
+      # The parsed fields are the useful part, so the body becomes a short
+      # summary instead of a second copy of the whole JSON object.
+      - type: add
+        id: set_ezproxy_spu_body
+        if: 'attributes.url != nil'
+        field: body
+        value: 'EXPR(attributes.http_method + " " + attributes.url)'
+
+      - type: remove
+        id: remove_ezproxy_spu_timestamp
+        if: 'attributes.timestamp != nil'
+        field: attributes.timestamp
 
       - type: add
         field: attributes.log_type
@@ -95,7 +164,11 @@ otel_receivers:
         field: attributes.service_name
         value: ezproxy_spu
 
-  # EZproxy audit logs
+  # EZproxy audit logs.
+  #
+  # These stay plain text: EZproxy has no directive to change the audit log
+  # format, so unlike the access and SPU logs they still have to be matched
+  # with a regex.
   #
   # Examples:
   #

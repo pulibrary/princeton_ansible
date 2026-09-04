@@ -51,12 +51,27 @@ Option BlockCountryChange
 Option RecordPeaks
 
 ## Log formatting
-LogFormat %h %l %u %t "%r" %s %b "%{Country()}e" "%{user-agent}i"
-LogFile -strftime log/ezp%Y%m%d.log
+##
+## EZproxy's LogFormat/LogSPU directives take a free-form format string, so it
+## is told to write one JSON object per request instead of common log format.
+## The OpenTelemetry Collector then reads named fields straight out of each
+## line instead of matching a regex against it, and a field can be added here
+## without also having to rewrite that regex.
+##
+## %u is a session identifier and not a username, because Option LogSession is
+## set above rather than Option LogUser. Every value is quoted: EZproxy writes
+## "-" for anything it has no value for, which would not be valid JSON sitting
+## in a numeric position.
+##
+## The Jinja raw blocks below are needed because EZproxy's %{...}t time token
+## looks like the start of a Jinja statement.
+LogFormat {% raw %}{"timestamp":"%{%Y-%m-%dT%H:%M:%S%z}t","client_ip":"%h","session_id":"%u","http_method":"%m","url":"%U","virtual_host":"%v","http_protocol":"%{ezproxy-protocol}i","http_status":"%s","body_bytes_sent":"%b","duration_seconds":"%T","country_code":"%{Country()}e","user_agent":"%{user-agent}i","referer":"%{referer}i"}{% endraw %}
+
+LogFile -strftime {{ ezproxy_access_log_pattern }}
 ## send logfiles to the log subdir
 ## log starting point URLs
-LogSPU -strftime log/spu%Y%m%d.log %h %l %u %t "%r" %s %b
-# for analysis in tab delimited file
+LogSPU -strftime {{ ezproxy_spu_log_pattern }} {% raw %}{"timestamp":"%{%Y-%m-%dT%H:%M:%S%z}t","client_ip":"%h","session_id":"%u","http_method":"%m","url":"%U","virtual_host":"%v","spu_access":"%{ezproxy-spuaccess}i","http_status":"%s","body_bytes_sent":"%b"}{% endraw %}
+
 #Community EZproxy block repo
 #
 ###### This will be configured by the cap deploy ######
