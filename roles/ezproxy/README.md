@@ -128,6 +128,17 @@ than in EZproxy.
 
 Points worth knowing:
 
+* **`security_trips.json` does not exist until the first rule trips.** That is
+  normal, not a sign the reporter is broken: the script appends only when it has
+  something new, so an absent file simply means nothing has tripped since the
+  servers were built. Use the `sqlite3` query above to confirm the database
+  agrees.
+* Because the file appears late, its receiver reads from the **beginning**,
+  unlike the request logs which read from the end. Reading from the end would
+  skip the first line of a newly created file, which here is the first trip ever
+  recorded and the one most worth alerting on. A storage extension remembers the
+  read position so a Collector restart does not re-send old trips. The same
+  applies each time logrotate starts a fresh file.
 * A rule whose action is `block` arrives as an **error**; `log` arrives as a
   **warning**. So a single SigNoz alert on error-severity records from
   `service.name = ezproxy` catches every blocked account.

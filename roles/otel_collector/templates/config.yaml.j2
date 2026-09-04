@@ -103,6 +103,13 @@ service:
   telemetry:
 {{ otel_service_telemetry | to_nice_yaml(indent=2) | indent(4, true) }}
 {% endif %}
+{% if (otel_service_extensions | default([])) | length > 0 %}
+  # Extensions have to be listed here as well as defined below. A defined but
+  # unlisted extension is never started, and a receiver that asks for one that
+  # is not started makes the Collector fail on boot.
+  extensions:
+{{ otel_service_extensions | to_nice_yaml(indent=2) | indent(4, true) }}
+{% endif %}
   pipelines:
 {{ (merged_service_pipelines | default({})) | to_nice_yaml(indent=2) | indent(4, true) }}
 

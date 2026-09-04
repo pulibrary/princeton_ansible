@@ -24,6 +24,7 @@ See `defaults/main.yml` for the full list. Key ones:
 - `otel_download_url`: Download URL (amd64)
 - `otel_validate_config`: If `true`, run a validation command after templating (default: `false`)
 - `otel_receivers`, `otel_processors`, `otel_exporters`, `otel_service_pipelines`, `otel_extensions`: Core config dicts/lists (default: empty)
+- `otel_service_extensions`: List naming which of `otel_extensions` to start (default: empty). An extension that is defined but not named here never starts, and a receiver referencing an unstarted extension makes the Collector fail on boot.
 - `otel_default_resource_attributes`: Map of resource attributes to **merge** into a `processors.resource` section (as *upsert* actions)
 
 ## How to use
