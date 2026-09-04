@@ -166,16 +166,21 @@ otel_receivers:
 
   # EZproxy audit logs.
   #
-  # These stay plain text: EZproxy has no directive to change the audit log
-  # format, so unlike the access and SPU logs they still have to be matched
-  # with a regex.
+  # EZproxy has no directive to change the audit log format, so unlike the
+  # access and SPU logs these cannot be written as JSON at the source. They are
+  # a tab separated table with a header row instead, which is still structured,
+  # so they are split on tabs rather than picked apart with a regex.
   #
-  # Examples:
+  # The header row names the columns, and every line has all six even when a
+  # value is empty:
   #
-  # 2026-08-18 23:45:10 Login.Success 74.104.115.202 user@princeton.edu SESSION |Shibboleth|
-  # 2026-08-18 23:47:51 Logout user@princeton.edu SESSION Expired
-  # 2026-08-18 23:51:02 Info.usr 119.249.100.47 Access Denied Unauthorized Country
+  #   Date/Time  Event  IP  Username  Session  Other
   #
+  # Examples, with tabs shown as ->:
+  #
+  #   2026-09-04 00:01:10->Login.Success->124.33.99.130->u@princeton.edu->SESSION->|Shibboleth|
+  #   2026-09-04 00:01:08->Logout->->u@princeton.edu->SESSION->Expired
+  #   2026-09-04 00:01:33->Info.usr->111.225.214.206->->->Access Denied Unauthorized Country
   filelog/ezproxy_audit:
     include:
       - /var/local/ezproxy/audit/*.txt
@@ -183,18 +188,87 @@ otel_receivers:
     include_file_path: true
     include_file_name: true
     operators:
-      - type: regex_parser
+      # Each daily file repeats the column header, which is not a log entry.
+      - type: filter
+        id: drop_ezproxy_audit_header
+        expr: 'body matches "^Date/Time	"'
+
+      # ignore_quotes keeps a stray double quote in a value from swallowing the
+      # rest of the line, since these columns are not quoted at all.
+      - type: csv_parser
         id: parse_ezproxy_audit
         parse_from: body
-        regex: '^(?P<time_local>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\s+(?P<audit_event>\S+)\s+(?:(?P<client_ip>(?:\d{1,3}\.){3}\d{1,3}|[0-9A-Fa-f:]+)\s+)?(?:(?P<authenticated_user>\S+@\S+)\s+)?(?:(?P<session_id>[A-Za-z0-9]{20,})\s+)?(?P<audit_detail>.*)$'
+        header: 'timestamp,audit_event,client_ip,authenticated_user,session_id,audit_detail'
+        header_delimiter: ","
+        delimiter: "	"
+        ignore_quotes: true
+        # Audit timestamps carry no UTC offset, so they are read in the host's
+        # local time. The Collector reads these files from disk on the same host
+        # that wrote them, so that is the same clock either way.
+        timestamp:
+          parse_from: attributes.timestamp
+          layout_type: strptime
+          layout: '%Y-%m-%d %H:%M:%S'
         on_error: send
 
-      - type: time_parser
-        id: parse_ezproxy_audit_time
-        parse_from: attributes.time_local
-        layout_type: strptime
-        layout: '%Y-%m-%d %H:%M:%S'
+      # Give each event a severity so denied logins, lockouts and limit hits can
+      # be found in SigNoz without knowing EZproxy's event names. Failed logins
+      # and intruder lockouts are errors; blocked countries, usage limits and
+      # session address or country changes are warnings worth a look.
+      - type: severity_parser
+        id: parse_ezproxy_audit_severity
+        parse_from: attributes.audit_event
+        overwrite_text: true
+        mapping:
+          error:
+            - Login.Denied
+            - Login.Failure
+            - Login.Failure.Password
+            - Login.Intruder.IP
+            - Login.Intruder.User
+          warn:
+            - Info.usr
+            - UsageLimit
+            - BlockCountryChange
+            - Session.IPChange
+            - Session.ReconnectBlocked
+          info:
+            - Login.Success
+            - Login.Success.Password
+            - Login.Success.Groups
+            - Login.Success.Relogin
+            - Logout
+            - System
         on_error: send
+
+      # Not every event fills every column: a logout has no address, and a
+      # blocked request has no user or session. Drop the blanks so they do not
+      # show up as empty fields.
+      - type: remove
+        id: remove_ezproxy_audit_empty_client_ip
+        if: 'attributes.client_ip == ""'
+        field: attributes.client_ip
+
+      - type: remove
+        id: remove_ezproxy_audit_empty_user
+        if: 'attributes.authenticated_user == ""'
+        field: attributes.authenticated_user
+
+      - type: remove
+        id: remove_ezproxy_audit_empty_session
+        if: 'attributes.session_id == ""'
+        field: attributes.session_id
+
+      # The columns are the useful part, so the body becomes a short summary
+      # instead of a second copy of the whole line.
+      - type: add
+        id: set_ezproxy_audit_body
+        field: body
+        value: 'EXPR(attributes.audit_event + " " + attributes.audit_detail)'
+
+      - type: remove
+        id: remove_ezproxy_audit_timestamp
+        field: attributes.timestamp
 
       - type: add
         field: attributes.log_type

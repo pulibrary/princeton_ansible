@@ -87,8 +87,14 @@ Two things worth knowing:
   valid JSON. The Collector is set to forward those lines with their raw text
   intact instead of dropping them.
 
-Audit logs (`audit/*.txt`) stay plain text and are still matched with a regex,
-because EZproxy has no directive to change the audit log format.
+Audit logs (`audit/*.txt`) cannot be written as JSON, because EZproxy has no
+directive to change their format. They are already structured though: a tab
+separated table with a header row naming the columns (`Date/Time`, `Event`,
+`IP`, `Username`, `Session`, `Other`), so they are split on tabs rather than
+matched with a regex. Each event also gets a severity, so failed logins and
+intruder lockouts show up as errors and blocked countries, usage limits and
+session address changes as warnings, without anyone having to memorise
+EZproxy's event names.
 
 **The running servers get `config.txt` from the encrypted
 `files/{production,testing}_vault_config.txt`, not from `config.txt.j2`.** The
