@@ -37,9 +37,6 @@ Defined in `defaults/main.yml`:
 ```yaml
 xrdp_port: 3389
 
-xrdp_manage_ufw: false
-xrdp_ufw_allow_from: "128.112.0.0/16"
-
 xrdp_desktop: xfce
 
 xrdp_packages_common:
@@ -70,27 +67,31 @@ Default:
 xrdp_port: 3389
 ```
 
-`xrdp_manage_ufw`
+### The firewall
 
-Whether the role should attempt to create a UFW allow rule for the XRDP port.
-
-Default:
+This role depends on the `firewall` role and asks it to open the RDP port:
 
 ```yaml
-xrdp_manage_ufw: false
+# roles/xrdp/meta/main.yml
+dependencies:
+  - role: firewall
+    firewall_allow_rdp: true
 ```
 
-`xrdp_ufw_allow_from`
+The firewall role denies incoming traffic by default, so without that rule a
+remote desktop host cannot be reached at all and clients report only a generic
+"cannot connect". Keeping the rule in the firewall role means host firewall
+policy lives in one place, and applying this role now also applies the standard
+firewall baseline.
 
-Optional source restriction when `xrdp_manage_ufw` is enabled.
+The permitted sources are `firewall_rdp_cidrs` in the firewall role: campus
+wired plus both VPN ranges, matching the networks trusted for SSH. Note that
+`firewall_trusted_cidrs` does not cover this, since it permits the library
+private subnet and the load balancers but not the VPN ranges staff connect from.
 
-Default:
-
-```yaml
-xrdp_ufw_allow_from: "128.112.0.0/16"
-```
-
-If set to an empty string, the role allows the XRDP port without a source restriction.
+After starting the services this role waits for the RDP port to accept a local
+connection, so a session manager that failed to start fails the play instead of
+leaving a host that merely looks configured.
 
 ## Templates and Managed Files
 
@@ -131,20 +132,21 @@ This role defines handlers for:
   - role: xrdp
 ```
 
-Example with custom firewall handling:
+Example restricting which networks may reach the RDP port. The permitted sources
+belong to the firewall role, so override them there:
 
 ```yaml
----  
+---
 
-- name: Configure XRDP host  
-  hosts: xrdp_hosts  
-  become: true  
+- name: Configure XRDP host
+  hosts: xrdp_hosts
+  become: true
 
-  roles:  
+  roles:
 
-  - role: xrdp  
-    vars:  
-      xrdp_manage_ufw: true  
-      xrdp_ufw_allow_from: "128.112.0.0/16"  
+  - role: xrdp
+    vars:
       xrdp_port: 3389
+      firewall_rdp_cidrs:
+        - 128.112.0.0/16
 ```

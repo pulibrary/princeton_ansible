@@ -1,0 +1,14 @@
+# {{ ansible_managed }}
+#
+# auth_err=die keeps a himmelblau denial (for example a pam_allow_groups
+# rejection) terminal instead of letting pam_unix admit the user.
+account [success=done auth_err=die default=ignore]              pam_himmelblau.so ignore_unknown_user
+account [success=1 new_authtok_reqd=done default=ignore]         pam_unix.so
+# fallback if no module above succeeded
+account requisite                       pam_deny.so
+# prime the stack with a positive return value
+account required                        pam_permit.so
+account sufficient                      pam_localuser.so
+{% if 'sss' in himmelblau_pam_available %}
+account [default=bad success=ok user_unknown=ignore]    pam_sss.so
+{% endif %}
