@@ -1,0 +1,72 @@
+#!/bin/sh
+#
+# {{ ansible_managed }}
+#
+# EZproxy records every security rule it trips in a SQLite database, and shows
+# them on the admin page under Security. Nothing pushes them anywhere, so a
+# blocked account is only noticed if somebody thinks to look, or the next day
+# when EZproxy emails its digest.
+#
+# This turns each new trip into a line of JSON in the EZproxy log directory.
+# The OpenTelemetry Collector already tails that directory, so trips reach
+# SigNoz within a minute or two and can raise an alert there.
+
+set -eu
+
+security_db={{ ezproxy_security_db | quote }}
+state_file={{ ezproxy_security_state_file | quote }}
+output_log={{ ezproxy_security_trips_log | quote }}
+
+# The database only appears once EZproxy has loaded at least one security rule.
+[ -r "$security_db" ] || exit 0
+
+# -readonly guarantees we cannot disturb the database EZproxy is writing to,
+# and the timeout waits rather than failing if EZproxy holds the write lock.
+run_query() {
+  sqlite3 -readonly -noheader -batch -cmd ".timeout {{ ezproxy_security_query_timeout_ms }}" \
+    "$security_db" "$1"
+}
+
+if [ ! -s "$state_file" ]; then
+  # First run: note where the table currently stands and report nothing, so
+  # existing history is not replayed as a burst of new alerts.
+  run_query "SELECT IFNULL(MAX(id), 0) FROM tripped;" > "$state_file"
+  exit 0
+fi
+
+last_id="$(cat "$state_file")"
+
+# tripped.id is an autoincrementing key, so it only ever moves forward and is
+# never reused. That makes it a safe high water mark for "what has been seen".
+new_trips="$(run_query "
+  SELECT json_object(
+    'trip_id',        t.id,
+    'triggered_at',   strftime('%Y-%m-%dT%H:%M:%SZ', t.at, 'unixepoch'),
+    'rule_name',      r.rulename,
+    'username',       t.user,
+    'criterion',      r.criterion,
+    'limit_value',    r.boundary,
+    'observed_value', t.value,
+    'over_limit_by',  t.value - r.boundary,
+    'action',         r.action,
+    'period_seconds', r.period,
+    'evidence_table', r.facttable,
+    'expires_at',     CASE WHEN t.expires IN (0, 1) THEN NULL
+                           ELSE strftime('%Y-%m-%dT%H:%M:%SZ', t.expires, 'unixepoch') END,
+    'never_expires',  CASE WHEN t.expires >= 2147483647 THEN 1 ELSE 0 END,
+    'rule_source',    r.file || ':' || r.lineno
+  )
+  FROM tripped AS t
+  JOIN rule AS r ON r.id = t.ruleid
+  WHERE t.id > $last_id
+  ORDER BY t.id;
+")"
+
+[ -n "$new_trips" ] || exit 0
+
+printf '%s\n' "$new_trips" >> "$output_log"
+
+# Advance the mark only after the trips are safely written, so a failure here
+# means they are reported again next run rather than lost.
+printf '%s\n' "$new_trips" \
+  | sed -n '$s/.*"trip_id":\([0-9]*\).*/\1/p' > "$state_file"

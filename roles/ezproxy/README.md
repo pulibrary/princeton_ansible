@@ -96,6 +96,62 @@ intruder lockouts show up as errors and blocked countries, usage limits and
 session address changes as warnings, without anyone having to memorise
 EZproxy's event names.
 
+## Security rules and alerting
+
+EZproxy enforces its own security rules (byte limits, login rates and so on)
+and records every rule it trips in a SQLite database at
+`/var/local/ezproxy/security/security_v1.db`. The `sqlite3` client is installed
+so this can be queried by hand:
+
+```sh
+sqlite3 -readonly -line /var/local/ezproxy/security/security_v1.db <<'SQL'
+SELECT t.id, datetime(t.at, 'unixepoch') AS triggered_utc, r.rulename,
+       t.user, r.criterion, r.boundary AS limit_value, t.value AS observed,
+       r.action, datetime(t.expires, 'unixepoch') AS expires_utc
+FROM tripped AS t JOIN rule AS r ON r.id = t.ruleid
+ORDER BY t.at DESC LIMIT 10;
+SQL
+```
+
+Always pass `-readonly`, since EZproxy is writing to this database while it
+runs.
+
+Waiting for someone to run that query is not alerting, though. EZproxy itself
+can only email a **daily** digest (admin page, Tripped Security Rules
+Notifications), which is too slow to catch an account being blocked mid-day.
+
+So `/usr/local/bin/ezproxy-security-trips` runs from cron every five minutes,
+finds trips it has not reported yet, and appends them to
+`log/security_trips.json`. The Collector tails that file like the other logs,
+so trips reach SigNoz within minutes and alerts are configured there rather
+than in EZproxy.
+
+Points worth knowing:
+
+* **`security_trips.json` does not exist until the first rule trips.** That is
+  normal, not a sign the reporter is broken: the script appends only when it has
+  something new, so an absent file simply means nothing has tripped since the
+  servers were built. Use the `sqlite3` query above to confirm the database
+  agrees.
+* Because the file appears late, its receiver reads from the **beginning**,
+  unlike the request logs which read from the end. Reading from the end would
+  skip the first line of a newly created file, which here is the first trip ever
+  recorded and the one most worth alerting on. A storage extension remembers the
+  read position so a Collector restart does not re-send old trips. The same
+  applies each time logrotate starts a fresh file.
+* A rule whose action is `block` arrives as an **error**; `log` arrives as a
+  **warning**. So a single SigNoz alert on error-severity records from
+  `service.name = ezproxy` catches every blocked account.
+* Useful alert fields: `rule_name`, `username`, `criterion`, `limit_value`,
+  `observed_value`, `over_limit_by`, and `never_expires` (set when a block has
+  no expiry and so needs a human to clear it).
+* Progress is tracked in `/var/lib/ezproxy/security_trips.last_id`. On a first
+  run the script records where the table stands and reports nothing, so
+  existing history is not replayed as a flood of alerts. Delete that file to
+  deliberately re-report everything.
+* The high water mark only advances after trips are written, so a failure means
+  they are reported next run rather than silently lost.
+
 **The running servers get `config.txt` from the encrypted
 `files/{production,testing}_vault_config.txt`, not from `config.txt.j2`.** The
 template is only used for a greenfield build, so a log format change has to be

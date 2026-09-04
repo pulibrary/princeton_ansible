@@ -21,6 +21,9 @@
     - libc6
     - libstdc++6
     - lsof
+    # EZproxy keeps its security rule history in a SQLite database. The client
+    # lets us query it by hand and lets the alerting script below read it.
+    - sqlite3
 
 - name: Ezproxy | install missing file replacements
   ansible.builtin.command: /var/local/ezproxy/ezproxy -m
@@ -160,6 +163,36 @@
     owner: root
     group: root
     mode: "0755"
+  when:
+    - running_on_server
+
+# Report tripped security rules so they can be alerted on, rather than waiting
+# for someone to open the admin page.
+- name: Ezproxy | create security alerting state directory
+  ansible.builtin.file:
+    path: "{{ ezproxy_security_state_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when:
+    - running_on_server
+
+- name: Ezproxy | install security rule trip reporter
+  ansible.builtin.template:
+    src: ezproxy-security-trips.sh.j2
+    dest: /usr/local/bin/ezproxy-security-trips
+    owner: root
+    group: root
+    mode: "0755"
+  when:
+    - running_on_server
+
+- name: Ezproxy | check for tripped security rules on a schedule
+  ansible.builtin.cron:
+    name: "report tripped ezproxy security rules"
+    minute: "{{ ezproxy_security_check_minute }}"
+    job: "/usr/local/bin/ezproxy-security-trips"
   when:
     - running_on_server
 
