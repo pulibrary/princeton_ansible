@@ -22,3 +22,36 @@ domain_name: "ezproxy.example.edu"
 # that use them are given -strftime.
 ezproxy_access_log_pattern: "log/ezp%Y%m%d.json"
 ezproxy_spu_log_pattern: "log/spu%Y%m%d.json"
+
+# Security rule alerting.
+#
+# EZproxy records each security rule it trips in a SQLite database and shows
+# them on its admin page, but nothing pushes them anywhere. A companion script
+# copies new trips into the log directory as JSON so the OpenTelemetry Collector
+# picks them up and SigNoz can alert on them.
+ezproxy_security_db: "/var/local/ezproxy/security/security_v1.db"
+ezproxy_security_trips_log: "/var/local/ezproxy/log/security_trips.json"
+ezproxy_security_state_dir: "/var/lib/ezproxy"
+ezproxy_security_state_file: "/var/lib/ezproxy/security_trips.last_id"
+# How long to wait for EZproxy to release the write lock before giving up.
+ezproxy_security_query_timeout_ms: 10000
+# How often to look for new trips. Alerts are only ever this fresh.
+ezproxy_security_check_minute: "*/5"
+
+# The request logs are date stamped and aged out by a daily script, but the
+# security trip log is a single append-only file, so it needs rotating. Trips
+# are rare, so a long retention costs almost nothing and keeps the history
+# around for looking back at an incident. This lives here, next to the path it
+# rotates, so the two cannot drift apart.
+ezproxy_logrotate_rules:
+  - name: "ezproxy-security-trips"
+    paths:
+      - "{{ ezproxy_security_trips_log }}"
+    options:
+      rotate: "52"
+      maxsize: "10M"
+      create_mode: "0644"
+      create_owner: "root"
+      create_group: "root"
+      su_user: "root"
+      su_group: "root"

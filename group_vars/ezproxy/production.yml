@@ -276,6 +276,63 @@ otel_receivers:
         field: attributes.service_name
         value: ezproxy_audit
 
+  # Tripped EZproxy security rules.
+  #
+  # EZproxy stores these in a SQLite database and only shows them on its admin
+  # page. A cron script (see roles/ezproxy) copies each new trip here as JSON so
+  # they arrive in SigNoz, where an alert can fire on them. The rule that was
+  # tripped, who tripped it, the limit and the observed value all come through
+  # as fields.
+  filelog/ezproxy_security:
+    include:
+      - /var/local/ezproxy/log/security_trips.json
+    exclude:
+      - /var/local/ezproxy/log/*.gz
+    start_at: end
+    include_file_path: true
+    include_file_name: true
+    operators:
+      - type: json_parser
+        id: parse_ezproxy_security_trip
+        parse_from: body
+        timestamp:
+          parse_from: attributes.triggered_at
+          layout_type: strptime
+          layout: '%Y-%m-%dT%H:%M:%SZ'
+        on_error: send
+
+      # EZproxy security rules either block the account or just record the
+      # breach, so a block is an error and a log entry is a warning. Anything
+      # else is passed through unclassified rather than dropped.
+      - type: severity_parser
+        id: parse_ezproxy_security_severity
+        parse_from: attributes.action
+        overwrite_text: true
+        mapping:
+          error:
+            - block
+          warn:
+            - log
+        on_error: send
+
+      - type: add
+        id: set_ezproxy_security_body
+        field: body
+        value: 'EXPR(attributes.rule_name + " " + attributes.action + " " + attributes.username)'
+
+      - type: remove
+        id: remove_ezproxy_security_triggered_at
+        if: 'attributes.triggered_at != nil'
+        field: attributes.triggered_at
+
+      - type: add
+        field: attributes.log_type
+        value: ezproxy_security_trip
+
+      - type: add
+        field: attributes.service_name
+        value: ezproxy_security
+
   hostmetrics:
     collection_interval: 30s
     scrapers:
@@ -325,6 +382,7 @@ otel_service_pipelines:
       - filelog/ezproxy_access
       - filelog/ezproxy_spu
       - filelog/ezproxy_audit
+      - filelog/ezproxy_security
     processors:
       - resource
       - batch
