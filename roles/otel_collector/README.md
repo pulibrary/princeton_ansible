@@ -6,6 +6,9 @@ You define receivers/processors/exporters/pipelines in `group_vars` or `host_var
 ## What it does
 
 - Downloads and unpacks a specific `otelcol-contrib` version to `/opt/otelcol`.
+- Keeps the release tarball under `/opt/otelcol/releases` and skips the download
+  entirely when that file is already there, so re-running the role does not
+  depend on reaching the internet.
 - Renders `config.yaml` from your vars (no hardcoding).
 - Optionally:
   - Validates the config with `--dry-run`.
@@ -19,9 +22,11 @@ You define receivers/processors/exporters/pipelines in `group_vars` or `host_var
 
 See `defaults/main.yml` for the full list. Key ones:
 
-- `otel_version`: Collector version (default: `0.138.0`)
+- `otel_version`: Collector version
+- `otel_platform`: Release platform suffix (default: `linux_amd64`)
 - `otel_install_dir`, `otel_binary_path`, `otel_config_path`: Install locations
-- `otel_download_url`: Download URL (amd64)
+- `otel_download_dir`, `otel_archive_path`: Where the release tarball is cached
+- `otel_download_base_url`, `otel_download_url`: Where releases are fetched from
 - `otel_validate_config`: If `true`, run a validation command after templating (default: `false`)
 - `otel_receivers`, `otel_processors`, `otel_exporters`, `otel_service_pipelines`, `otel_extensions`: Core config dicts/lists (default: empty)
 - `otel_default_resource_attributes`: Map of resource attributes to **merge** into a `processors.resource` section (as *upsert* actions)

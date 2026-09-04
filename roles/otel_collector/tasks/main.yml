@@ -3,21 +3,30 @@
 
 - name: Otel_collector | Ensure target directories exist
   ansible.builtin.file:
-    path: "{{ item.path }}"
+    path: "{{ item }}"
     state: directory
-    mode: "{{ item.mode }}"
+    mode: "0755"
     owner: root
     group: root
   loop:
-    - { path: "{{ otel_install_dir }}", mode: "0755" }
-    - { path: "{{ otel_releases_dir }}", mode: "0755" }
-    - { path: "{{ otel_release_dir }}", mode: "0755" }
+    - "{{ otel_install_dir }}"
+    - "{{ otel_releases_dir }}"
+    - "{{ otel_release_dir }}"
+    - "{{ otel_download_dir }}"
+
+- name: Otel_collector | Look for an already downloaded otelcol-contrib archive
+  ansible.builtin.stat:
+    path: "{{ otel_archive_path }}"
+    get_checksum: false
+  register: otel_archive
 
 - name: Otel_collector | Download otelcol-contrib archive
   ansible.builtin.get_url:
     url: "{{ otel_download_url }}"
     dest: "{{ otel_archive_path }}"
     mode: "0644"
+    force: false
+  when: not otel_archive.stat.exists
 
 - name: Otel_collector | Unarchive otelcol-contrib release
   ansible.builtin.unarchive:
@@ -27,11 +36,11 @@
     mode: "0755"
     owner: root
     group: root
-    creates: "{{ otel_release_dir }}/otelcol-contrib"
+    creates: "{{ otel_release_binary }}"
 
 - name: Otel_collector | Install selected otelcol-contrib binary
   ansible.builtin.copy:
-    src: "{{ otel_release_dir }}/otelcol-contrib"
+    src: "{{ otel_release_binary }}"
     dest: "{{ otel_binary_path }}"
     owner: root
     group: root
