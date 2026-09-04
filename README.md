@@ -94,7 +94,7 @@ devbox run init
 If your DevBox environment is acting wonky, or you're unsure if it might be causing some weird behavior, delete the local virtual environment and start over:
 
 ```bash
-# Delete the old python venv if you still have one
+# Delete your python venv
 rm -rf .venv
 # Delete and recreate devbox shell
 rm -rf .devbox
