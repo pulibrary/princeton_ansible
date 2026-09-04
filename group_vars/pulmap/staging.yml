@@ -117,7 +117,7 @@ otel_receivers:
         value: "nginx-access"
       - type: add
         field: attributes.service_name
-        value: pulmap_access
+        value: "{{ rails_app_name }}"
 
   filelog/nginx-error:
     include: ["/var/log/nginx/error.log"]
@@ -128,7 +128,21 @@ otel_receivers:
         value: "nginx-error"
       - type: add
         field: attributes.service_name
-        value: "pulmap"
+        value: "{{ rails_app_name }}"
+
+  filelog/rails-logs:
+    include: ["/opt/{{ rails_app_directory }}/shared/log/{{ rails_app_env }}.log"]
+    start_at: end
+    operators:
+      - type: add
+        field: attributes.log_type
+        value: "app-log"
+      - type: add
+        field: attributes.service_name
+        value: "{{ rails_app_name }}"
+      - type: add
+        field: attributes.rails_env
+        value: "{{ rails_app_env }}"
 
   hostmetrics:
     collection_interval: 30s
@@ -178,6 +192,7 @@ otel_service_pipelines:
     receivers:
       - filelog/nginx-access
       - filelog/nginx-error
+      - filelog/rails-logs
     processors:
       - resource
       - batch
