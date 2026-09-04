@@ -250,4 +250,221 @@ job "figgy-infrastructure-staging" {
       }
     }
   }
+
+  # Three redises, watched by three sentinels.
+  # Helpful docs: https://oneuptime.com/blog/post/2026-03-31-redis-sentinel-docker-compose/view, 
+  # https://redis.io/docs/latest/operate/oss_and_stack/management/sentinel/
+  group "redis" {
+    count = 3
+
+    shutdown_delay = "10s"
+
+    update {
+      max_parallel = 1
+      health_check = "checks"
+      min_healthy_time = "30s"
+      healthy_deadline = "5m"
+      progress_deadline = "15m"
+      auto_revert = true
+    }
+
+    migrate {
+      max_parallel = 1
+      health_check = "checks"
+      min_healthy_time = "30s"
+    }
+
+    network {
+      port "redis" {
+        static = 6379
+      }
+      port "sentinel" {
+        static = 26379
+      }
+
+      dns {
+        servers = ["172.17.0.1"]
+      }
+    }
+
+    service {
+      name = "figgy-redis-staging"
+      port = "redis"
+      tags = ["logging", "index-${NOMAD_ALLOC_INDEX}"]
+
+      check {
+        name = "redis-listener"
+        type = "tcp"
+        port = "redis"
+        interval = "10s"
+        timeout = "2s"
+      }
+
+      check {
+        name = "redis-responding"
+        type = "script"
+        task = "redis"
+        command = "redis-cli"
+        args = ["-p", "6379", "ping"]
+        interval = "30s"
+        timeout = "10s"
+      }
+    }
+
+    service {
+      name = "figgy-redis-staging-sentinel"
+      port = "sentinel"
+      tags = ["logging"]
+
+      check {
+        name = "sentinel-listener"
+        type = "tcp"
+        port = "sentinel"
+        interval = "10s"
+        timeout = "2s"
+      }
+
+      check {
+        name = "sentinel-responding"
+        type = "script"
+        task = "sentinel"
+        command = "redis-cli"
+        args = ["-p", "26379", "ping"]
+        interval = "30s"
+        timeout = "10s"
+      }
+    }
+
+    volume "redis_data" {
+      type = "host"
+      source = "figgy-redis-staging-cluster"
+      access_mode = "single-node-single-writer"
+      attachment_mode = "file-system"
+      sticky = false
+    }
+
+    task "redis" {
+      driver = "docker"
+
+      config {
+        image = "redis:8.10-alpine"
+        ports = ["redis"]
+        command = "redis-server"
+        args = ["/local/redis.conf"]
+        extra_hosts = ["host.containers.internal:host-gateway"]
+      }
+
+      consul {}
+
+      volume_mount {
+        volume = "redis_data"
+        destination = "/data"
+      }
+
+      template {
+        destination = "${NOMAD_SECRETS_DIR}/env.vars"
+        env = true
+        change_mode = "restart"
+        data = <<EOF
+        {{- with nomadVar "nomad/jobs/figgy-infrastructure-staging" -}}
+        REDISCLI_AUTH={{ .REDIS_PASSWORD }}
+        {{- end -}}
+        EOF
+      }
+
+      template {
+        destination = "local/redis.conf"
+        change_mode = "restart"
+        perms = "0666"
+        data = <<EOF
+        port {{ env "NOMAD_PORT_redis" }}
+        bind 0.0.0.0
+        protected-mode no
+        dir /data
+
+        {{- with nomadVar "nomad/jobs/figgy-infrastructure-staging" }}
+        requirepass {{ .REDIS_PASSWORD }}
+        masterauth {{ .REDIS_PASSWORD }}
+        {{- end }}
+
+        appendonly yes
+        appendfsync everysec
+        save ""
+        maxmemory-policy noeviction
+
+        min-replicas-to-write 1
+        min-replicas-max-lag 10
+
+        replica-announce-ip {{ env "NOMAD_IP_redis" }}
+        replica-announce-port {{ env "NOMAD_HOST_PORT_redis" }}
+        {{- if ne (env "NOMAD_ALLOC_INDEX") "0" }}
+
+        replicaof index-0.figgy-redis-staging.service.consul {{ env "NOMAD_HOST_PORT_redis" }}
+        {{- end }}
+        EOF
+      }
+
+      resources {
+        cpu = 500
+        memory = 512
+      }
+    }
+
+    task "sentinel" {
+      driver = "docker"
+
+      config {
+        image = "redis:8.10-alpine"
+        ports = ["sentinel"]
+        command = "redis-sentinel"
+        args = ["/local/sentinel.conf"]
+        extra_hosts = ["host.containers.internal:host-gateway"]
+      }
+
+      consul {}
+
+      template {
+        destination = "${NOMAD_SECRETS_DIR}/env.vars"
+        env = true
+        change_mode = "restart"
+        data = <<EOF
+        {{- with nomadVar "nomad/jobs/figgy-infrastructure-staging" -}}
+        REDISCLI_AUTH={{ .REDIS_PASSWORD }}
+        {{- end -}}
+        EOF
+      }
+
+      template {
+        destination = "local/sentinel.conf"
+        change_mode = "restart"
+        perms = "0666"
+        data = <<EOF
+        port {{ env "NOMAD_PORT_sentinel" }}
+        bind 0.0.0.0
+        protected-mode no
+        dir /local
+
+        sentinel announce-ip {{ env "NOMAD_IP_sentinel" }}
+        sentinel announce-port {{ env "NOMAD_HOST_PORT_sentinel" }}
+
+        sentinel resolve-hostnames yes
+        sentinel monitor figgy-staging figgy-redis-staging.service.consul {{ env "NOMAD_HOST_PORT_redis" }} 2
+        sentinel down-after-milliseconds figgy-staging 5000
+        sentinel failover-timeout figgy-staging 30000
+        sentinel parallel-syncs figgy-staging 1
+
+        {{- with nomadVar "nomad/jobs/figgy-infrastructure-staging" }}
+        requirepass {{ .REDIS_PASSWORD }}
+        sentinel sentinel-pass {{ .REDIS_PASSWORD }}
+        sentinel auth-pass figgy-staging {{ .REDIS_PASSWORD }}
+        {{- end }}
+        EOF
+      }
+
+      resources {
+        cpu = 100
+        memory = 64
+      }
+    }
+  }
 }

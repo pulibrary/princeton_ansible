@@ -21,13 +21,13 @@
     - name: Create consul policy for RabbitMQ peer discovery
       community.general.consul_policy:
         token: '{{ consul_acl_management_token }}'
-        name: 'rabbitmq-{{ runtime_env }}-peer-discovery'
-        description: 'Lets the {{ runtime_env }} brokers find each other via Consul'
+        name: 'rabbitmq-{{ runtime_env | default("staging") }}-peer-discovery'
+        description: 'Lets the {{ runtime_env | default("staging") }} brokers find each other via Consul'
         rules: |
-          service_prefix "rabbitmq-{{ runtime_env }}-peers" {
+          service_prefix "rabbitmq-{{ runtime_env | default("staging") }}-peers" {
             policy = "write"
           }
-          key_prefix "rabbitmq-{{ runtime_env }}" {
+          key_prefix "rabbitmq-{{ runtime_env | default("staging") }}" {
             policy = "write"
           }
           session_prefix "" {
@@ -38,19 +38,19 @@
     - name: Create consul role for RabbitMQ peer discovery
       community.general.consul_role:
         token: '{{ consul_acl_management_token }}'
-        name: 'nomad-tasks-figgy-infrastructure-{{ runtime_env }}'
+        name: 'nomad-tasks-figgy-infrastructure-{{ runtime_env | default("staging") }}'
         policies:
-          - name: 'rabbitmq-{{ runtime_env }}-peer-discovery'
+          - name: 'rabbitmq-{{ runtime_env | default("staging") }}-peer-discovery'
       run_once: true
 
-    - name: Bind figgy-infrastructure-{{ runtime_env }} task identities to that role
+    - name: Bind figgy-infrastructure-{{ runtime_env | default("staging") }} task identities to that role
       community.general.consul_binding_rule:
         token: '{{ consul_acl_management_token }}'
-        name: 'nomad-tasks-figgy-infrastructure-{{ runtime_env }}'
+        name: 'nomad-tasks-figgy-infrastructure-{{ runtime_env | default("staging") }}'
         auth_method: 'nomad-workloads'
         bind_type: 'role'
-        bind_name: 'nomad-tasks-figgy-infrastructure-{{ runtime_env }}'
+        bind_name: 'nomad-tasks-figgy-infrastructure-{{ runtime_env | default("staging") }}'
         selector: >-
           "nomad_service" not in value and
-          value.nomad_job_id == "figgy-infrastructure-{{ runtime_env }}"
+          value.nomad_job_id == "figgy-infrastructure-{{ runtime_env | default("staging") }}"
       run_once: true
