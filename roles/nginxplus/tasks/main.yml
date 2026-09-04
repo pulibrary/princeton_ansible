@@ -72,6 +72,18 @@
 # we can't use group vars at this time because they aren't really
 # group vars
 
+- name: Nginxplus | UFW on staging allows HTTPS from trusted networks
+  community.general.ufw:
+    rule: allow
+    direction: in
+    proto: tcp
+    port: "443"
+    from_ip: "{{ item }}"
+    comment: Approved LibNet network
+  loop: "{{ https_allowed_cidrs }}"
+  # we only run UFW on the private network
+  when: ansible_default_ipv4.address is match("172.20.80")
+
 - name: Nginxplus | validate nginx configuration work
   ansible.builtin.import_tasks: validate.yml
   when: nginx_type == "plus"
