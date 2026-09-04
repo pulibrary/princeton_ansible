@@ -57,10 +57,49 @@ The role deploys the following key configuration files:
     * Load balancer handling (`LoginPort 80`, `Option ProxyByHostname`).
     * Shibboleth Metadata (currently commented out in template, typically configured here).
     * Security options (Audit levels, Intruder blocking).
-    * Log formatting (`LogFormat`, `LogFile`).
+    * JSON log formatting (`LogFormat`, `LogFile`, `LogSPU`) - see Logging below.
     * Include files for IP blocking and allow lists (`princeton_allow.txt`).
 2. **`/etc/GeoIP.conf`**: Configures the `geoipupdate` tool with MaxMind credentials.
 3. **`/lib/systemd/system/ezproxy.service`**: Defines the systemd service for managing the EZproxy process.
+
+## Logging
+
+EZproxy's `LogFormat` and `LogSPU` directives take a free-form format string,
+so EZproxy is told to write one JSON object per request instead of common log
+format. The OpenTelemetry Collector (configured in `group_vars/ezproxy/`) then
+reads named fields straight out of each line and forwards them to SigNoz, so
+client IP, session, URL, status and country are queryable fields rather than
+positions in a regex. Adding a field means editing the directive only, not also
+rewriting a regex.
+
+The files are `log/ezpYYYYMMDD.json` (all proxied requests) and
+`log/spuYYYYMMDD.json` (starting point URLs). A daily cron script compresses
+yesterday's files and deletes anything past `ezproxy_log_retention_days`; it
+still handles the older `.log` files so any left on disk age out normally.
+
+Two things worth knowing:
+
+* `session_id` holds a session identifier rather than a username, because
+  `config.txt` sets `Option LogSession` instead of `Option LogUser`. That is a
+  deliberate privacy choice, so the field is named for what it actually holds.
+* EZproxy does not escape quotes in the values it logs, so a request carrying a
+  double quote in its user agent or URL can still produce a line that is not
+  valid JSON. The Collector is set to forward those lines with their raw text
+  intact instead of dropping them.
+
+Audit logs (`audit/*.txt`) cannot be written as JSON, because EZproxy has no
+directive to change their format. They are already structured though: a tab
+separated table with a header row naming the columns (`Date/Time`, `Event`,
+`IP`, `Username`, `Session`, `Other`), so they are split on tabs rather than
+matched with a regex. Each event also gets a severity, so failed logins and
+intruder lockouts show up as errors and blocked countries, usage limits and
+session address changes as warnings, without anyone having to memorise
+EZproxy's event names.
+
+**The running servers get `config.txt` from the encrypted
+`files/{production,testing}_vault_config.txt`, not from `config.txt.j2`.** The
+template is only used for a greenfield build, so a log format change has to be
+made in both places to take effect. See the brownfield checklist below.
 
 ## Example Playbook
 
@@ -111,3 +150,15 @@ To make changes to an existing VM (brownfield scenario):
 * [ ] from your branch, run the ezproxy playbook with NO tags:  
 `ansible-playbook playbooks/ezproxy.yml`
 * [ ] if needed, restart the ezproxy service: `sudo systemctl restart ezproxy`
+
+### JSON log directives for the vault config
+
+The encrypted `config.txt` files need these three lines to match
+`templates/config.txt.j2`, otherwise EZproxy keeps writing common log format
+and the Collector will forward every line unparsed:
+
+```text
+LogFormat {"timestamp":"%{%Y-%m-%dT%H:%M:%S%z}t","client_ip":"%h","session_id":"%u","http_method":"%m","url":"%U","virtual_host":"%v","http_protocol":"%{ezproxy-protocol}i","http_status":"%s","body_bytes_sent":"%b","duration_seconds":"%T","country_code":"%{Country()}e","user_agent":"%{user-agent}i","referer":"%{referer}i"}
+LogFile -strftime log/ezp%Y%m%d.json
+LogSPU -strftime log/spu%Y%m%d.json {"timestamp":"%{%Y-%m-%dT%H:%M:%S%z}t","client_ip":"%h","session_id":"%u","http_method":"%m","url":"%U","virtual_host":"%v","spu_access":"%{ezproxy-spuaccess}i","http_status":"%s","body_bytes_sent":"%b"}
+```
