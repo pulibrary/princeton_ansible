@@ -16,3 +16,30 @@
     ansible.builtin.assert:
       that:
         - not pkg_status.changed
+
+  - name: Read the server configuration
+    ansible.builtin.slurp:
+      src: /etc/mysql/mariadb.conf.d/mariadb-server.cnf
+    register: server_config
+
+  - name: Test that the logs the shipper reads are turned on
+    ansible.builtin.assert:
+      that:
+        - "'log_error = /var/log/mysql/mysql_error.log' in config"
+        - "'slow_query_log = 1' in config"
+        - "'slow_query_log_file = /var/log/mysql/mysql_slow.log' in config"
+        - "'long_query_time = 2' in config"
+      fail_msg: "MariaDB is not configured to write the logs SigNoz collects"
+    vars:
+      config: "{{ server_config.content | b64decode }}"
+
+  - name: Check the log directory
+    ansible.builtin.stat:
+      path: /var/log/mysql
+    register: log_dir
+
+  - name: Test that the log directory belongs to mariadb
+    ansible.builtin.assert:
+      that:
+        - log_dir.stat.isdir
+        - log_dir.stat.pw_name == 'mysql'

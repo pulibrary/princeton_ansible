@@ -74,18 +74,65 @@
     - mysql_server
     - install_app_key.changed
 
-- name: MySQL | mysql_root_password
+# A brand new MariaDB has a passwordless root account, while a server that has
+# been through here before already has the password we want. Rather than
+# assuming one or the other, find out which login works, so a rerun against a
+# live database sets the password again instead of failing.
+- name: MySQL | Check whether root accepts the password we have
+  community.mysql.mysql_info:
+    login_unix_socket: "{{ mysql_socket }}"
+    login_user: root
+    login_password: "{{ mysql_root_password }}"
+    filter: version
+  register: mysql_password_login
+  changed_when: false
+  failed_when: false
+  no_log: true
+  when:
+    - running_on_server
+    - mysql_server
+
+- name: MySQL | Check whether root can log in without a password
+  community.mysql.mysql_info:
+    login_unix_socket: "{{ mysql_socket }}"
+    login_user: root
+    login_password: ""
+    filter: version
+  register: mysql_passwordless_login
+  changed_when: false
+  failed_when: false
+  no_log: true
+  when:
+    - running_on_server
+    - mysql_server
+    - mysql_password_login.version is not defined
+
+- name: MySQL | Fail when root cannot be reached at all
+  ansible.builtin.fail:
+    msg: >-
+      Cannot log in to MariaDB on {{ inventory_hostname }} as root. The
+      password in mysql_root_password is rejected and the account is not
+      passwordless, so the vaulted password no longer matches the database.
+      Reconcile the two before rerunning.
+  when:
+    - running_on_server
+    - mysql_server
+    - mysql_password_login.version is not defined
+    - mysql_passwordless_login.version is not defined
+
+- name: MySQL | Set the root password
   community.mysql.mysql_user:
     login_unix_socket: "{{ mysql_socket }}"
     login_user: root
     login_host: localhost
-    login_password: ""
+    login_password: "{{ mysql_root_password if mysql_password_login.version is defined else '' }}"
     name: 'root'
     password: "{{ mysql_root_password }}"
+  no_log: true
   when:
     - running_on_server
     - mysql_server
-    - install_app_key.changed
+    - mysql_password_login.version is defined or mysql_passwordless_login.version is defined
 
 # Not sure why we still have this - believe it may have been required for MariaDB as a clustered system
 # - name: MySQL | remove unix_plugin
@@ -93,6 +140,16 @@
 #   when:
 #     - running_on_server
 #     - install_app_key.changed
+
+- name: MySQL | create the log directory
+  ansible.builtin.file:
+    path: "{{ mysql_log_dir }}"
+    state: directory
+    owner: "{{ mysql_log_owner }}"
+    group: "{{ mysql_log_group }}"
+    mode: "0750"
+  when:
+    - mysql_server
 
 - name: MySQL | configure mysql server
   community.general.ini_file:
