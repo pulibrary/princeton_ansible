@@ -17,6 +17,55 @@
     - filter
     - vhost_alias
 
+# The JSON log format is defined before any virtual host refers to it, because
+# Apache refuses to start when a site names a log format it has not read yet.
+- name: define the JSON access log
+  ansible.builtin.template:
+    src: "json-access-log.conf.j2"
+    dest: "/etc/apache2/conf-available/{{ apache_json_access_log_conf }}.conf"
+    mode: 0644
+  when: apache_json_access_log
+  notify: restart apache
+
+- name: turn the JSON access log on
+  ansible.builtin.file:
+    src: "/etc/apache2/conf-available/{{ apache_json_access_log_conf }}.conf"
+    dest: "/etc/apache2/conf-enabled/{{ apache_json_access_log_conf }}.conf"
+    state: link
+  when: apache_json_access_log
+  notify: restart apache
+
+# Leaving both enabled would record every request twice.
+- name: turn off the text access log the JSON one replaces
+  ansible.builtin.file:
+    path: "/etc/apache2/conf-enabled/{{ apache_text_access_log_conf }}.conf"
+    state: absent
+  when: apache_json_access_log
+  notify: restart apache
+
+- name: turn the JSON access log back off
+  ansible.builtin.file:
+    path: "/etc/apache2/conf-enabled/{{ apache_json_access_log_conf }}.conf"
+    state: absent
+  when: not apache_json_access_log
+  notify: restart apache
+
+- name: check for the packaged text access log config
+  ansible.builtin.stat:
+    path: "/etc/apache2/conf-available/{{ apache_text_access_log_conf }}.conf"
+  register: text_access_log_available
+  when: not apache_json_access_log
+
+- name: restore the text access log
+  ansible.builtin.file:
+    src: "/etc/apache2/conf-available/{{ apache_text_access_log_conf }}.conf"
+    dest: "/etc/apache2/conf-enabled/{{ apache_text_access_log_conf }}.conf"
+    state: link
+  when:
+    - not apache_json_access_log
+    - text_access_log_available.stat.exists
+  notify: restart apache
+
 - name: check for update of config needed
   ansible.builtin.lineinfile:
     dest: "/etc/apache2/sites-available/000-default.conf"
@@ -27,10 +76,13 @@
   ignore_errors: true
   register: update_config
 
+# Hosts logging JSON always get the managed site file, otherwise a site that
+# still carries the packaged text access log would keep writing plain lines and
+# the JSON log would stay empty.
 - name: modify the default apache site
   ansible.builtin.template:
     src: "vhosts24.conf.j2"
     dest: "/etc/apache2/sites-available/000-default.conf"
     mode: 0644
-  when: update_config.msg == "line added" or force_vhosts_update
+  when: update_config.msg == "line added" or force_vhosts_update or apache_json_access_log
   notify: restart apache

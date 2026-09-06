@@ -6,3 +6,17 @@ apache:
 apache_listen_port: 80
 datadog_trace_environment: ''
 force_vhosts_update: false
+
+# Apache can write one JSON object per request instead of a line of text, which
+# means the log shipper hands SigNoz real fields rather than picking a line
+# apart with a regex that breaks on quotes in user agents.
+apache_json_access_log: false
+
+# Kept under /var/log/apache2 with a .log suffix so the distribution's existing
+# logrotate rule for apache covers it without a second rule.
+apache_json_access_log_path: "/var/log/apache2/access_json.log"
+
+# Name of the Apache config that defines the JSON log, and the text access log
+# it replaces. Writing both would record every request twice.
+apache_json_access_log_conf: "pul-json-access-log"
+apache_text_access_log_conf: "other-vhosts-access-log"

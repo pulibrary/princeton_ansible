@@ -17,6 +17,31 @@ apache:
 
 ```
 
+JSON access logging
+-------------------
+
+Apache normally writes one line of text per request, which a log shipper has to
+pick apart with a regex that breaks whenever a user agent or referrer contains a
+quote. Turning this on makes Apache record each request as a JSON object
+instead, so SigNoz receives real fields and the status, response size and
+duration arrive as numbers that can be sorted and charted:
+
+```yaml
+apache_json_access_log: true
+```
+
+While it is on:
+
+* requests are written to `/var/log/apache2/access_json.log`, which the
+  distribution's existing logrotate rule for Apache already covers
+* the text access log it replaces (`other_vhosts_access.log`) is turned off, so
+  no request is recorded twice
+* the managed site file is kept up to date, because a site that carries its own
+  access log ignores the one the server defines
+
+Anything reading the old text log, such as a Datadog file check, has to be
+pointed at the new path.
+
 Example Playbook
 ----------------
 
