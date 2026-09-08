@@ -21,3 +21,44 @@
     changed_when: false
     failed_when:
       - process | length == 0
+
+  - name: make a request that has a quote in the user agent
+    ansible.builtin.uri:
+      url: http://localhost/?q=search%20term
+      status_code: [200, 403, 404]
+      headers:
+        User-Agent: 'Mozilla/5.0 ("quoted" agent)'
+        Referer: http://referrer.example/page?a=1
+
+  - name: read the access log
+    ansible.builtin.slurp:
+      src: /var/log/apache2/access_json.log
+    register: access_log
+
+  - name: test that the request was recorded as usable JSON
+    ansible.builtin.assert:
+      that:
+        - record.method == 'GET'
+        - "'q=search%20term' in record.target"
+        - record.status == 200
+        - record.status is not string
+        - record.bytes_sent is not string
+        - record.duration_us is not string
+        - record.user_agent == 'Mozilla/5.0 (\"quoted\" agent)'
+        - record.referrer == 'http://referrer.example/page?a=1'
+      fail_msg: "Apache is not recording requests as JSON the shipper can read"
+    vars:
+      record: >-
+        {{ (access_log.content | b64decode).splitlines()
+           | select('search', 'search%20term') | first | from_json }}
+
+  - name: check the text access log the JSON one replaces
+    ansible.builtin.stat:
+      path: /etc/apache2/conf-enabled/other-vhosts-access-log.conf
+    register: text_access_log_conf
+
+  - name: test that requests are not also recorded as text
+    ansible.builtin.assert:
+      that:
+        - not text_access_log_conf.stat.exists
+      fail_msg: "Requests are being written to both a JSON and a text log"

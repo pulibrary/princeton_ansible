@@ -6,7 +6,6 @@ This role installs and manages connections to mariadb. The role supports differe
 Requirements
 ------------
 
-
 Role Variables
 --------------
 
@@ -39,3 +38,31 @@ If installing a new mariadb server
 ```bash
 mysql_server: true
 ```
+
+Logging
+-------
+
+The role turns on the two logs we ship to SigNoz and makes sure MariaDB owns
+the directory they live in:
+
+* the error log, at `/var/log/mysql/mysql_error.log`
+* the slow query log, at `/var/log/mysql/mysql_slow.log`, holding every query
+  that takes longer than two seconds
+
+MariaDB can only write these as plain text, so the OpenTelemetry collector
+(installed by the `otel_collector` role) does the conversion: it pulls the
+timestamp, severity, connection, schema, timing and row counts out of each
+entry and sends them to SigNoz as structured fields. Slow queries can then be
+sorted by how long they ran or how many rows they scanned, rather than being
+searched as text.
+
+To log queries at a different threshold, or to turn slow query logging off:
+
+```bash
+mysql_long_query_time: 5
+mysql_slow_query_log: false
+```
+
+If you change `mysql_error_log` or `mysql_slow_query_log_file`, update the
+matching `filelog` receiver paths in
+`group_vars/mysql/{staging,production}.yml` so the shipper keeps finding them.

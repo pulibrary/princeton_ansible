@@ -6,6 +6,13 @@
     ServerName {{ apache.servername }}
 
     LimitRequestFieldSize 16380
+{% if apache_json_access_log %}
+
+    # Records each request as JSON so the log shipper can hand SigNoz real
+    # fields. Named here as well as at server level because a virtual host that
+    # sets its own access log ignores the one the server defines.
+    CustomLog {{ apache_json_access_log_path }} pul_json
+{% endif %}
 
     <Directory {{ apache.docroot }}>
         AllowOverride All

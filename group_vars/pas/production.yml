@@ -51,8 +51,10 @@ datadog_typed_checks:
       instances:
         - apache_status_url: http://127.0.0.1/server-status?auto
       logs:
+        # Apache now records requests as JSON in this file instead of writing a
+        # line of text to other_vhosts_access.log.
         - type: file
-          path: /var/log/apache2/other_vhosts_access.log
+          path: /var/log/apache2/access_json.log
           service: pas
           source: apache
           sourcecategory: http_web_access
@@ -63,20 +65,15 @@ datadog_typed_checks:
           source: apache
           sourcecategory: http_web_access
           tags: "pas, env:prod, role:pas"
+        # Craft starts a new file each day, so the name carries the date.
         - type: file
-          path: /opt/pas_cap/current/storage/logs/web.log
+          path: /opt/pas_cap/current/storage/logs/web-*.log
           service: pas
           source: pas
           sourcecategory: pas
           tags: "pas, env:prod, role:pas"
         - type: file
           path: /opt/pas_cap/current/storage/logs/phperrors.log
-          service: pas
-          source: pas
-          sourcecategory: pas
-          tags: "pas, env:prod, role:pas"
-        - type: file
-          path: /opt/pas_cap/current/storage/logs/web-404s.log
           service: pas
           source: pas
           sourcecategory: pas
@@ -108,25 +105,49 @@ otel_receivers:
       http:
         endpoint: 127.0.0.1:4318
 
+  # Apache writes these records as JSON (see apache_json_access_log in
+  # group_vars/pas/common.yml), so there is no line format to pick apart and a
+  # quote in a user agent cannot break a record.
   filelog/apache2-access:
     include:
-      - /var/log/apache2/access.log
-      - /var/log/apache2/other_vhosts_access.log
-      - /opt/pas_cap/current/storage/logs/web.log
-      - /opt/pas_cap/current/storage/logs/phperrors.log
-      - /opt/pas_cap/current/storage/logs/web-404s.log
+      - /var/log/apache2/access_json.log
     exclude:
       - /var/log/apache2/*.gz
     start_at: end
     include_file_path: true
     include_file_name: true
     operators:
-      - type: regex_parser
-        id: parse_apache_vhost_access
-        regex: '^(?P<vhost>[^ ]+) (?P<client_ip>[0-9a-fA-F:.]+) (?P<ident>[^ ]+) (?P<user>[^ ]+) \[(?P<timestamp>[^\]]+)\] "(?P<method>[A-Z]+) (?P<target>[^ ]+) (?P<protocol>HTTP/[0-9.]+)" (?P<status>[0-9]{3}) (?P<bytes_sent>[0-9]+|-) "(?P<referrer>[^"]*)" "(?P<user_agent>[^"]*)"$'
-        timestamp:
-          parse_from: attributes.timestamp
-          layout: '%d/%b/%Y:%H:%M:%S %z'
+      - type: json_parser
+        id: parse_apache_access_json
+        parse_from: body
+        on_error: send
+
+      - type: time_parser
+        id: parse_apache_access_timestamp
+        parse_from: attributes.timestamp
+        layout_type: gotime
+        layout: "2006-01-02T15:04:05-0700"
+        on_error: send
+
+      # Apache writes the status as a number, so the response class becomes a
+      # severity without any string handling.
+      - type: severity_parser
+        id: parse_apache_access_severity
+        parse_from: attributes.status
+        preset: none
+        # Without this the severity would read as the status code itself.
+        overwrite_text: true
+        mapping:
+          info:
+            - min: 100
+              max: 399
+          warn:
+            - min: 400
+              max: 499
+          error:
+            - min: 500
+              max: 599
+        on_error: send
 
       - type: move
         from: attributes.client_ip
@@ -152,6 +173,12 @@ otel_receivers:
         from: attributes.referrer
         to: attributes.http.request.header.referer
 
+      - type: add
+        field: attributes.log_type
+        value: apache_access
+
+  # Apache can only write its error log as text, so the shipper turns each entry
+  # into structured fields instead.
   filelog/apache2-error:
     include:
       - /var/log/apache2/error.log
@@ -160,13 +187,177 @@ otel_receivers:
     start_at: end
     include_file_path: true
     include_file_name: true
+    # Continuation lines and stack traces belong with the entry above them.
+    multiline:
+      line_start_pattern: '^\[[A-Z][a-z]{2} [A-Z][a-z]{2} [ \d]\d '
     operators:
       - type: regex_parser
         id: parse_apache_error
-        regex: '^\[(?P<timestamp>[^\]]+)\] \[(?P<module>[^:\]]+)(?::(?P<severity>[^\]]+))?\] \[pid (?P<pid>[0-9]+)(?::tid (?P<tid>[0-9]+))?\](?: \[client (?P<client_ip>[^\]]+)\])? (?P<message>.*)$'
-        timestamp:
-          parse_from: attributes.timestamp
-          layout: '%a %b %d %H:%M:%S.%f %Y'
+        regex: '^\[(?P<timestamp>[^\]]+)\] \[(?P<module>[^:\]]+)(?::(?P<level>[^\]]+))?\] \[pid (?P<pid>\d+)(?::tid (?P<tid>\d+))?\](?: \[client (?P<client_ip>[^\]]+)\])? (?P<message>[\s\S]*)$'
+        parse_from: body
+        on_error: send
+
+      - type: time_parser
+        id: parse_apache_error_timestamp
+        parse_from: attributes.timestamp
+        layout_type: strptime
+        layout: '%a %b %d %H:%M:%S.%f %Y'
+        on_error: send
+
+      - type: severity_parser
+        id: parse_apache_error_severity
+        parse_from: attributes.level
+        mapping:
+          debug:
+            - debug
+            - trace1
+            - trace2
+            - trace3
+            - trace4
+            - trace5
+            - trace6
+            - trace7
+            - trace8
+          info:
+            - info
+            - notice
+          warn:
+            - warn
+          error:
+            - error
+          fatal:
+            - crit
+            - alert
+            - emerg
+        on_error: send
+
+      - type: move
+        id: move_apache_error_message_to_body
+        from: attributes.message
+        to: body
+        on_error: send
+
+      - type: add
+        field: attributes.log_type
+        value: apache_error
+
+  # Craft writes one line per entry through Monolog, which the shipper splits
+  # into the channel, the severity and the code path that logged it. Craft
+  # starts a new file every day, hence the date in the names. These entries used
+  # to be read with the Apache access regex, so nothing came out of them.
+  filelog/craft:
+    include:
+      - /opt/pas_cap/current/storage/logs/web-*.log
+      - /opt/pas_cap/current/storage/logs/queue-*.log
+      - /opt/pas_cap/current/storage/logs/console-*.log
+    exclude:
+      - /opt/pas_cap/current/storage/logs/*.gz
+    start_at: end
+    include_file_path: true
+    include_file_name: true
+    multiline:
+      line_start_pattern: '^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} \['
+    operators:
+      - type: regex_parser
+        id: parse_craft_log
+        regex: '^(?P<timestamp>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) \[(?P<channel>[^.\]]+)\.(?P<level>[A-Z]+)\] \[(?P<category>[^\]]*)\] (?P<message>[\s\S]*)$'
+        parse_from: body
+        on_error: send
+
+      # Craft writes local time without an offset, so the shipper has to be
+      # told which zone the server keeps.
+      - type: time_parser
+        id: parse_craft_timestamp
+        parse_from: attributes.timestamp
+        layout_type: strptime
+        layout: '%Y-%m-%d %H:%M:%S'
+        location: America/New_York
+        on_error: send
+
+      - type: severity_parser
+        id: parse_craft_severity
+        parse_from: attributes.level
+        mapping:
+          debug:
+            - DEBUG
+          info:
+            - INFO
+            - NOTICE
+          warn:
+            - WARNING
+          error:
+            - ERROR
+          fatal:
+            - CRITICAL
+            - ALERT
+            - EMERGENCY
+        on_error: send
+
+      - type: move
+        id: move_craft_message_to_body
+        from: attributes.message
+        to: body
+        on_error: send
+
+      - type: add
+        field: attributes.log_type
+        value: craft
+
+  # PHP writes its own errors here, with the stack trace on the lines that
+  # follow, so the trace stays attached to the error it belongs to.
+  filelog/php-errors:
+    include:
+      - /opt/pas_cap/current/storage/logs/phperrors.log
+    exclude:
+      - /opt/pas_cap/current/storage/logs/*.gz
+    start_at: end
+    include_file_path: true
+    include_file_name: true
+    multiline:
+      line_start_pattern: '^\[\d{2}-[A-Za-z]{3}-\d{4} '
+    operators:
+      - type: regex_parser
+        id: parse_php_error
+        regex: '^\[(?P<timestamp>\d{2}-[A-Za-z]{3}-\d{4} \d{2}:\d{2}:\d{2})[^\]]*\] PHP (?P<level>[A-Za-z ]+?):\s+(?P<message>[\s\S]*)$'
+        parse_from: body
+        on_error: send
+
+      - type: time_parser
+        id: parse_php_error_timestamp
+        parse_from: attributes.timestamp
+        layout_type: strptime
+        layout: '%d-%b-%Y %H:%M:%S'
+        location: America/New_York
+        on_error: send
+
+      - type: severity_parser
+        id: parse_php_error_severity
+        parse_from: attributes.level
+        mapping:
+          info:
+            - Notice
+          warn:
+            - Warning
+            - Deprecated
+            - Startup Warning
+          error:
+            - Recoverable fatal error
+          fatal:
+            - Fatal error
+            - Parse error
+            - Core error
+            - Compile error
+        on_error: send
+
+      - type: move
+        id: move_php_error_message_to_body
+        from: attributes.message
+        to: body
+        on_error: send
+
+      - type: add
+        field: attributes.log_type
+        value: php_error
 
   hostmetrics:
     collection_interval: 30s
@@ -179,6 +370,19 @@ otel_receivers:
       network: {}
 
 otel_processors:
+  # The optional parts of a text log line come through as empty attributes when
+  # they are absent, which clutters every record in SigNoz.
+  transform/drop_empty_fields:
+    error_mode: ignore
+    log_statements:
+      - context: log
+        statements:
+          - delete_key(attributes, "tid") where attributes["tid"] == ""
+          - delete_key(attributes, "client_ip") where attributes["client_ip"] == ""
+          - delete_key(attributes, "category") where attributes["category"] == ""
+          - delete_key(attributes, "user") where attributes["user"] == "-"
+          - delete_key(attributes, "referrer") where attributes["referrer"] == "-"
+
   batch:
     send_batch_max_size: 1024
     send_batch_size: 512
@@ -216,8 +420,11 @@ otel_service_pipelines:
     receivers:
       - filelog/apache2-access
       - filelog/apache2-error
+      - filelog/craft
+      - filelog/php-errors
     processors:
       - resource
+      - transform/drop_empty_fields
       - batch
     exporters:
       - loadbalancing

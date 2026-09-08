@@ -1,0 +1,14 @@
+# {{ ansible_managed }}
+#
+# One JSON object per request, so the log shipper can send SigNoz real fields
+# instead of a line of text. Apache escapes quotes and control characters in
+# header values, so a user agent containing a quote cannot break the record.
+#
+# Status, size and duration are written unquoted because Apache always fills
+# them in with a number, which keeps them sortable rather than arriving as
+# strings that have to be converted later.
+{% raw %}
+LogFormat "{\"timestamp\":\"%{%Y-%m-%dT%H:%M:%S%z}t\",\"vhost\":\"%v\",\"client_ip\":\"%a\",\"user\":\"%u\",\"method\":\"%m\",\"target\":\"%U%q\",\"protocol\":\"%H\",\"status\":%>s,\"bytes_sent\":%B,\"duration_us\":%D,\"referrer\":\"%{Referer}i\",\"user_agent\":\"%{User-Agent}i\"}" pul_json
+{% endraw %}
+
+CustomLog {{ apache_json_access_log_path }} pul_json
