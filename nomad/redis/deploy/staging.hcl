@@ -32,6 +32,13 @@ job "redis-staging" {
       min_healthy_time = "30s"
     }
 
+    restart {
+      attempts = 10
+      delay = "15s"
+      render_templates = true
+    }
+
+
     network {
       port "redis" {
         static = 6379
@@ -168,7 +175,7 @@ job "redis-staging" {
       config {
         image = "redis:8.10-alpine"
         entrypoint = ["/bin/sh", "-c"]
-        args = ["mkdir -p /data/redis /data/sentinel && { [ -f /data/redis/redis.conf ] || cp /local/redis.conf /data/redis/redis.conf; } && { { [ -f /data/sentinel/sentinel.conf ] && grep -q \"monitor\" /data/sentinel/sentinel.conf; } || cp /local/sentinel.conf /data/sentinel/sentinel.conf; }"]
+        args = ["mkdir -p /data/redis /data/sentinel && { [ -f /data/redis/redis.conf ] || cp /local/redis.conf /data/redis/redis.conf; } && { { [ -f /data/sentinel/sentinel.conf ] && grep -q \"monitor\" /data/sentinel/sentinel.conf; } || { grep -q \"monitor\" /local/sentinel.conf && cp /local/sentinel.conf /data/sentinel/sentinel.conf; }; }"]
       }
 
       volume_mount {
