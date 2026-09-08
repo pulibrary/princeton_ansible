@@ -83,12 +83,7 @@
   loop: "{{ orangelight_logrotate_rules }}"
   loop_control:
     label: "{{ item.name }}"
-  register: orangelight_logrotate_files
+  notify: reload_logrotate
   when:
     - orangelight_logrotate_rules is defined
     - orangelight_logrotate_rules | length > 0
-
-- name: Orangelight | reload logrotate configuration
-  ansible.builtin.command: logrotate --force /etc/logrotate.conf
-  become: true
-  when: orangelight_logrotate_files is changed
