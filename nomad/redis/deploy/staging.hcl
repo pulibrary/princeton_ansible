@@ -168,7 +168,7 @@ job "redis-staging" {
       config {
         image = "redis:8.10-alpine"
         entrypoint = ["/bin/sh", "-c"]
-        args = ["mkdir -p /data/redis /data/sentinel && { [ -f /data/redis/redis.conf ] || cp /local/redis.conf /data/redis/redis.conf; } && { [ -f /data/sentinel/sentinel.confz ] || cp /local/sentinel.conf /data/sentinel/sentinel.conf; }"]
+        args = ["mkdir -p /data/redis /data/sentinel && { [ -f /data/redis/redis.conf ] || cp /local/redis.conf /data/redis/redis.conf; } && { [ -f /data/sentinel/sentinel.conf ] || cp /local/sentinel.conf /data/sentinel/sentinel.conf; }"]
       }
 
       volume_mount {
@@ -197,7 +197,7 @@ job "redis-staging" {
 
         {{- if ne (env "NOMAD_ALLOC_INDEX") "0" }}
 
-        {{- with service "redis-staging|any" }}
+        {{- with service "index-0.redis-staging|any" }}
         {{- with index . 0 }}
         replicaof {{ .Address }} {{ .Port }}
         {{- end }}
@@ -213,7 +213,7 @@ job "redis-staging" {
         perms = "0640"
         data = <<EOF
         sentinel resolve-hostnames yes
-        {{- with service "redis-staging|any" }}
+        {{- with service "index-0.redis-staging|any" }}
         {{- with index . 0 }}
         sentinel monitor redis-staging {{ .Address }} {{ .Port }} 2
         {{- end }}
