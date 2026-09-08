@@ -18,18 +18,28 @@ app_otel_env: "{{ ruby_app_otel_env | default([]) }}"
 running_on_server: true
 rails_app_site_config_services:
   - nginx
-logrotate_rules:
-  - name: "ruby_app"
+# Rotation for the logs an application writes itself. This uses a role specific
+# variable name on purpose: the shared logrotate_rules is already claimed
+# further up the dependency chain, so rules placed there never reach the hosts
+# that run an application.
+ruby_app_logrotate_rules:
+  - name: "{{ app_name }}"
     paths:
       - "/opt/{{ app_directory }}/current/log/*.log"
+      # Apps that emit structured logs for our observability stack write a
+      # second file alongside the plain text one, and it grows just as fast.
+      - "/opt/{{ app_directory }}/current/log/*.json"
     options:
       rotate: "5"
       maxsize: "500M"
       create_mode: "{{ logrotate_global_defaults.create_mode }}"
-      create_owner: "{{ logrotate_global_defaults.create_owner }}"
-      create_group: "{{ logrotate_global_defaults.create_group }}"
+      create_owner: "{{ deploy_user }}"
+      create_group: "{{ deploy_user }}"
       su_user: "{{ logrotate_global_defaults.su_user }}"
       su_group: "{{ logrotate_global_defaults.su_group }}"
+      # The app and its workers hold the log file open, so truncate in place
+      # rather than renaming it out from under a running process.
+      copytruncate: true
 check_mk_health_url: 'localhost/health.json'
 # postgres test VM settings
 postgres_port: 5432
