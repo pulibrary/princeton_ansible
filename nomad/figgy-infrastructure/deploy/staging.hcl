@@ -9,6 +9,70 @@ job "figgy-infrastructure-staging" {
   # Set a higher priority because this job only works on these boxes.
   priority = 60
 
+  group "memcached" {
+    count = 1
+    # Remove from consul, wait 10s, then shut down.
+    shutdown_delay = "10s"
+
+    update {
+      max_parallel = 1
+      health_check = "checks"
+      min_healthy_time = "30s"
+      healthy_deadline = "5m"
+      progress_deadline = "15m"
+      auto_revert = true
+    }
+
+    migrate {
+      max_parallel = 1
+      health_check = "checks"
+      min_healthy_time = "30s"
+    }
+
+    network {
+      port "memcached" {
+        to = 11211
+      }
+
+      dns {
+        servers = ["172.17.0.1", "128.112.129.209", "8.8.8.8", "8.8.4.4"]
+      }
+    }
+
+    service {
+      port = "memcached"
+      tags = ["logging"]
+
+      check {
+        type = "tcp"
+        port = "memcached"
+        interval = "10s"
+        timeout = "2s"
+      }
+    }
+
+    task "memcached" {
+      driver = "docker"
+
+      config {
+        image = "memcached:1.6-alpine"
+        ports = ["memcached"]
+        extra_hosts = ["host.containers.internal:host-gateway"]
+        args = [
+          # 512 MB of cache. It was 64 before, but y'know, we got ram.
+          "--memory-limit=512",
+          "--threads=4",
+          # 4MB largest single thing cached.
+          "--max-item-size=4M"
+        ]
+      }
+      resources {
+        cpu = 1000
+        memory = 1024
+      }
+    }
+  }
+
   group "rabbitmq" {
     count = 3
 
