@@ -27,45 +27,6 @@ postgres_port: "5432"
 rails_app_env: "production"
 passenger_max_pool_size: 30
 scsb_auth_key: "{{ vault_scsb_auth_key }}"
-datadog_api_key: "{{ vault_datadog_key }}"
-datadog_config:
-  tags: "application:orangelight, environment:production, type:webserver"
-  apm_enabled: "true"
-  log_enabled: true
-  process_config:
-    enabled: "true"
-  apm_config:
-    analyzed_spans:
-      orangelight|rack.request: 1
-    filter_tags:
-      reject: ["http.useragent:nginx/1.23.4 (health check)", "operation:heartbeat", "operation:job_fetch", "operation:scheduled_push", "operation:scheduled_poller_wait"]
-datadog_typed_checks:
-  - type: process
-    configuration:
-      init_config:
-      instances:
-        - name: orangelight
-          service: orangelight
-          search_string:
-            - nginx
-  - type: nginx
-    configuration:
-      init_config:
-      instances:
-        - nginx_status_url: http://localhost:80/nginx_status/
-      logs:
-        - type: file
-          path: /var/log/nginx/access.log
-          source: nginx
-          service: orangelight
-        - type: file
-          path: /var/log/nginx/error.log
-          source: nginx
-          service: orangelight
-        - type: file
-          path: /opt/orangelight/current/log/production.log
-          source: rails
-          service: orangelight
 # beyla
 beyla_enabled: true
 beyla_service_name: orangelight
