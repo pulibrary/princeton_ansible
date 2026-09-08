@@ -73,7 +73,7 @@
     - running_on_server
     - sneakers_service_file.changed
 
-- name: Orangelight | create logrotate configuration for sneakers
+- name: Orangelight | create logrotate configurations
   ansible.builtin.template:
     src: "../../common/templates/logrotate_rules.j2"
     dest: "/etc/logrotate.d/{{ item.name }}"
@@ -81,16 +81,9 @@
     owner: root
     group: root
   loop: "{{ orangelight_logrotate_rules }}"
-  when: 
+  loop_control:
+    label: "{{ item.name }}"
+  notify: reload_logrotate
+  when:
     - orangelight_logrotate_rules is defined
     - orangelight_logrotate_rules | length > 0
-
-- name: Orangelight | check if sneakers logrotate configuration has changed
-  ansible.builtin.stat:
-    path: /etc/logrotate.d/sneakers
-  register: sneakers_logrotate_file
-
-- name: Orangelight | reload logrotate configuration
-  ansible.builtin.command: logrotate --force /etc/logrotate.conf
-  become: true
-  when: sneakers_logrotate_file.changed
