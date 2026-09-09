@@ -175,7 +175,7 @@ job "redis-staging" {
       config {
         image = "redis:8.10-alpine"
         entrypoint = ["/bin/sh", "-c"]
-        args = ["mkdir -p /data/redis /data/sentinel && { [ -f /data/redis/redis.conf ] || cp /local/redis.conf /data/redis/redis.conf; } && { { [ -f /data/sentinel/sentinel.conf ] && grep -q \"monitor\" /data/sentinel/sentinel.conf; } || { grep -q \"monitor\" /local/sentinel.conf && cp /local/sentinel.conf /data/sentinel/sentinel.conf; }; }"]
+        args = ["mkdir -p /data/redis /data/sentinel && { { [ -f /data/redis/redis.conf ] && grep -q \"Bootstrap\" /data/redis/redis.conf; } || { grep -q \"Bootstrap\" /local/redis.conf && cp /local/redis.conf /data/redis/redis.conf; }; } && { { [ -f /data/sentinel/sentinel.conf ] && grep -q \"monitor\" /data/sentinel/sentinel.conf; } || { grep -q \"monitor\" /local/sentinel.conf && cp /local/sentinel.conf /data/sentinel/sentinel.conf; }; }"]
       }
 
       volume_mount {
@@ -206,9 +206,13 @@ job "redis-staging" {
 
         {{- with service "index-0.redis-staging|any" }}
         {{- with index . 0 }}
+        # Bootstrap Secondary
         replicaof {{ .Address }} {{ .Port }}
         {{- end }}
         {{- end }}
+        {{- end }}
+        {{- if eq (env "NOMAD_ALLOC_INDEX") "0" }}
+        # Bootstrap Primary
         {{- end }}
         EOF
       }
