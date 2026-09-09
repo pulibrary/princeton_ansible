@@ -30,3 +30,19 @@
     check_mode: true
     register: conf
     failed_when: (conf is changed) or (conf is failed)
+
+  - name: read the application logrotate configuration
+    ansible.builtin.slurp:
+      path: /etc/logrotate.d/ruby_app
+    register: ruby_app_logrotate_config
+
+  - name: test that application logs rotate without interrupting the app
+    ansible.builtin.assert:
+      that:
+        - "'/opt/ruby_app/current/log/*.log' in ruby_app_logrotate_config.content | b64decode"
+        - "'/opt/ruby_app/current/log/*.json' in ruby_app_logrotate_config.content | b64decode"
+        - "'daily' in ruby_app_logrotate_config.content | b64decode"
+        - "'rotate 5' in ruby_app_logrotate_config.content | b64decode"
+        - "'maxsize 500M' in ruby_app_logrotate_config.content | b64decode"
+        - "'copytruncate' in ruby_app_logrotate_config.content | b64decode"
+      msg: "The application logrotate configuration is missing or incorrect"

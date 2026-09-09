@@ -12,3 +12,9 @@
     running_on_server and
     (item in services.keys()|list|map('split', '.')| map('first')) and
     'restart_services' not in ansible_skip_tags
+
+- name: "reload logrotate"
+  ansible.builtin.command: "logrotate --force {{ common_logrotate_conf }}"
+  register: ruby_app_logrotate_reload
+  changed_when: ruby_app_logrotate_reload.rc == 0
+  when: running_on_server | default(true)
