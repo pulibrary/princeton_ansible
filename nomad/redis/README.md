@@ -4,6 +4,10 @@ This is a highly available Redis cluster using Redis + Sentinels. It's intended 
 
 We use three redis servers watched by three Sentinels, which manage failover of the primary if any go down. Sidekiq does not support Redis Cluster, so this is the only HA setup we can support.
 
+## Deploying
+
+There must be dynamic host volumes set up for this job to pick up. To configure them, look at `group_vars/nomad_redis/[env].yml`. The count there must match the count in the HCL files.
+
 ## Reasoning
 
 A Redis cluster is moderately complex. Its main benefit is this way we don't need to worry about persistent storage on a single node, allowing us to rebuild any Nomad machine without significant downtime.
@@ -25,6 +29,17 @@ If you're migrating to the cluster you can migrate the data by bringing down all
 You can get the current primary IP by running `ssh deploy@nomad-host-prod1.lib.princeton.edu nomad exec -task sentinel -job redis-staging redis-cli -p 26379 SENTINEL get-master-addr-by-name redis-staging`
 
 You can get the password in `group_vars/all/vault.yml`.
+
+## Wiping the Cluster
+
+If you need to fully reset the cluster do the following:
+
+1. Stop the job
+1. `ssh deploy@nomad-host-prod1.lib.princeton.edu`
+1. `nomad volume status -type host | grep redis-staging-cluster`
+1. For each volume: `nomad volume delete -type host <volume-id>`
+1. Run the playbook (to recreate volumes)
+1. Start the job
 
 ## Warnings
 
