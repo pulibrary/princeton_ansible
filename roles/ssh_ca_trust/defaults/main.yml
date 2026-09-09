@@ -1,0 +1,39 @@
+---
+# defaults/main.yml
+#
+# Configures an SSH host to accept certificates signed by the step-ca SSH User
+# CA. No secrets are involved; this role is safe to apply fleet-wide (it is a
+# good candidate to fold into `common` role once the pilot graduates).
+
+# The SSH User CA public key (contents of ssh_user_ca_key.pub on the CA). This
+# is shared data: define it once in group_vars/all. The step_ca role prints it.
+ssh_ca_user_ca_public_key: ""
+
+# installed key matches before touching sshd.
+ssh_ca_user_ca_fingerprint: ""
+
+ssh_ca_trusted_keys_path: /etc/ssh/trusted_user_ca_keys.pem
+ssh_ca_sshd_dropin_path: /etc/ssh/sshd_config.d/60-ssh-ca-access.conf
+ssh_ca_auth_principals_dir: /etc/ssh/auth_principals
+
+ssh_ca_disable_password_auth: true
+ssh_ca_disable_kbdinteractive: true
+
+# Optional sshd AllowUsers list. Use this when the base image restricts SSH to
+# pulsys so certificate-backed local users are not blocked by that restriction.
+ssh_ca_allowed_users: []
+
+# Local operator group (matches the principal issued by the CA template).
+ssh_ca_operator_group: pulsys
+
+# Users who may log in via certificate. Each entry maps a local account to the
+# cert principals allowed to assume it. Token-derived principals from the
+# step_ca OIDC provisioner are typically Entra email addresses:
+#
+# ssh_ca_users:
+#   - name: alice
+#     principals:
+#       - alice@princeton.edu
+#     create_local_user: true            # default true
+#     groups: []                         # no supplementary/admin groups
+ssh_ca_users: []

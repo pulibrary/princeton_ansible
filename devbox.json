@@ -9,7 +9,8 @@
     "git",
     "podman@5.8.6",
     "ruby@4.0.6",
-    "ruby_3_4@3.4.8"
+    "ruby_3_4@3.4.8",
+    "step-cli@0.30.6"
   ],
   "env": {
     "PYTHON_VERSION":              "3.13",
@@ -22,14 +23,14 @@
     "UV_PYTHON":                   "3.13",
     "UV_PYTHON_PREFERENCE":        "managed",
     "ANSIBLE_VAULT_PASSWORD_FILE": "$DEVBOX_PROJECT_ROOT/bin/lastpass-ansible",
-    "ANSIBLE_VAULT_IDENTITY_LIST": "pul@$DEVBOX_PROJECT_ROOT/bin/lastpass-ansible,princeton@$DEVBOX_PROJECT_ROOT/bin/lastpass-ansible,ansible@$DEVBOX_PROJECT_ROOT/bin/lastpass-ansible,default@$DEVBOX_PROJECT_ROOT/bin/lastpass-ansible"
+    "ANSIBLE_VAULT_IDENTITY_LIST": "pul@$DEVBOX_PROJECT_ROOT/bin/lastpass-ansible,princeton@$DEVBOX_PROJECT_ROOT/bin/lastpass-ansible,ansible@$DEVBOX_PROJECT_ROOT/bin/lastpass-ansible,default@$DEVBOX_PROJECT_ROOT/bin/lastpass-ansible",
   },
   "shell": {
     "init_hook": [
       // Strip ASDF shims from path to prevent ansible python lookup from finding bad installs.
       "export PATH=$(echo \"$PATH\" | tr ':' '\\n' | grep -v '\\.asdf/shims' | tr '\\n' ':' | sed 's/:$//')",
       "echo 'Welcome to the Devbox shell!'",
-      "echo 'Run \"devbox run init\" to set up the Python environment'"
+      "echo 'Run \"devbox run init\" to set up the Python environment'",
     ],
     "scripts": {
       "init": [
@@ -37,11 +38,11 @@
         "test -d .venv && echo 'Virtual environment ready' || echo 'Failed to create virtual environment'",
         "gem install --no-document lastpass-ansible",
         "ansible-galaxy collection install prometheus.prometheus",
-        "echo 'Setup complete!'"
+        "echo 'Setup complete!'",
       ],
       "setup": [
         "git config core.hooksPath .githooks",
-        "echo 'Git hooks configured: .githooks'"
+        "echo 'Git hooks configured: .githooks'",
       ],
       "update-deps": [
         "uv lock --upgrade",
@@ -52,12 +53,12 @@
       ],
       "clean": [
         "rm -rf .venv",
-        "rm -rf .devbox"
+        "rm -rf .devbox",
       ],
       "test": [
         "ansible --version",
         "ansible-lint --version",
-        "molecule --version"
+        "molecule --version",
       ],
       "env-info": [
         "echo \"ANSIBLE_VAULT_IDENTITY_LIST: ${ANSIBLE_VAULT_IDENTITY_LIST:-<unset>}\"",
@@ -65,14 +66,14 @@
         "echo \"LPASS_AGENT_TIMEOUT: ${LPASS_AGENT_TIMEOUT} (9 hours)\"",
         "command -v lpass && lpass --version || echo 'LastPass CLI: not installed'",
         "command -v lastpass-ansible && echo \"lastpass-ansible: $(command -v lastpass-ansible)\" || echo 'lastpass-ansible: not found'",
-        "command -v ansible && ansible --version | head -n1 || echo 'Ansible: not installed'"
+        "command -v ansible && ansible --version | head -n1 || echo 'Ansible: not installed'",
       ],
       "mtest": [
-        "env -u ANSIBLE_VAULT_IDENTITY_LIST -u ANSIBLE_VAULT_PASSWORD_FILE molecule test"
+        "env -u ANSIBLE_VAULT_IDENTITY_LIST -u ANSIBLE_VAULT_PASSWORD_FILE molecule test",
       ],
       "mconverge": [
-        "env -u ANSIBLE_VAULT_IDENTITY_LIST -u ANSIBLE_VAULT_PASSWORD_FILE molecule converge"
-      ]
-    }
-  }
+        "env -u ANSIBLE_VAULT_IDENTITY_LIST -u ANSIBLE_VAULT_PASSWORD_FILE molecule converge",
+      ],
+    },
+  },
 }

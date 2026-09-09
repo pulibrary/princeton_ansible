@@ -1,0 +1,15 @@
+---
+# handlers/main.yml -- ssh_ca_trust
+# "Validate" is defined before "Restart" so a bad config aborts the restart.
+
+- name: Validate sshd configuration
+  ansible.builtin.command:
+    argv:
+      - /usr/sbin/sshd
+      - -t
+  changed_when: false
+
+- name: Restart sshd
+  ansible.builtin.service:
+    name: "{{ ssh_ca_sshd_service }}"
+    state: restarted

@@ -1,0 +1,40 @@
+---
+
+- name: Create the step system group
+  ansible.builtin.group:
+    name: "{{ step_ca_group }}"
+    system: true
+
+- name: Create the step system user
+  ansible.builtin.user:
+    name: "{{ step_ca_user }}"
+    group: "{{ step_ca_group }}"
+    home: "{{ step_ca_path }}"
+    shell: "{{ step_ca_nologin_shell }}"
+    system: true
+    create_home: false
+
+- name: Create the STEPPATH directory
+  ansible.builtin.file:
+    path: "{{ step_ca_path }}"
+    state: directory
+    owner: "{{ step_ca_user }}"
+    group: "{{ step_ca_group }}"
+    mode: "0700"
+
+- name: Pre-create the runtime database directory
+  ansible.builtin.file:
+    path: "{{ step_ca_path }}/db"
+    state: directory
+    owner: "{{ step_ca_user }}"
+    group: "{{ step_ca_group }}"
+    mode: "0700"
+
+- name: Install the CA key password file
+  ansible.builtin.copy:
+    content: "{{ step_ca_password }}\n"
+    dest: "{{ step_ca_password_file }}"
+    owner: "{{ step_ca_user }}"
+    group: "{{ step_ca_group }}"
+    mode: "0600"
+  no_log: true

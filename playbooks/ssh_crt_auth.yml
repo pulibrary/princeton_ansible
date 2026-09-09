@@ -1,0 +1,17 @@
+---
+# Configure hosts to trust the Library SSH User Certificate Authority.
+#
+# This playbook installs the CA public key into sshd, creates local Unix users,
+# and writes each user's AuthorizedPrincipalsFile entry. After this runs,
+# people can SSH to these hosts with short-lived certificates issued by
+# step-ca/Entra instead of relying on long-lived personal SSH keys.
+
+- name: Configure SSH certificate authentication
+  hosts: ssh_crt_auth
+  remote_user: pulsys
+  become: true
+  vars_files:
+    - ../group_vars/step_ca/main.yml
+    - ../group_vars/all/vars.yml
+  roles:
+    - role: ssh_ca_trust
