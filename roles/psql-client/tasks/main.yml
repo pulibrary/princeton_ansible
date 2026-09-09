@@ -33,6 +33,22 @@
     role_attr_flags: "{{ application_dbuser_role_attr_flags }}"
     state: "present"
 
+- name: Gather databases already present on the postgres server
+  run_once: true
+  delegate_to: "{{ postgres_host }}"
+  become: true
+  become_user: postgres
+  check_mode: false
+  community.postgresql.postgresql_info:
+    login_user: "{{ postgres_admin_user }}"
+    login_password: "{{ vault_postgres_admin_password }}"
+    filter: databases
+  register: postgres_server_info
+
+- name: Record whether the app database already exists
+  ansible.builtin.set_fact:
+    application_db_exists: "{{ application_db_name in (postgres_server_info.databases | default({})) }}"
+
 - name: Ensure postgres database for app exists
   run_once: true
   delegate_to: "{{ postgres_host }}"
@@ -44,10 +60,10 @@
     # login_port: "{{ postgres_port }}"
     login_user: "{{ postgres_admin_user }}"
     login_password: "{{ vault_postgres_admin_password }}"
-    encoding: "{{ postgres_database_encoding }}"
-    lc_collate: "{{ postgres_database_lc_collate }}"
-    lc_ctype: "{{ postgres_database_lc_ctype }}"
-    template: "{{ postgres_database_template }}"
+    encoding: "{{ omit if application_db_exists | bool else postgres_database_encoding }}"
+    lc_collate: "{{ omit if application_db_exists | bool else postgres_database_lc_collate }}"
+    lc_ctype: "{{ omit if application_db_exists | bool else postgres_database_lc_ctype }}"
+    template: "{{ omit if application_db_exists | bool else postgres_database_template }}"
     owner: "{{ application_dbuser_name }}"
     state: "present"
   # changed_when: false
