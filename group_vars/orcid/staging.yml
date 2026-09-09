@@ -104,6 +104,32 @@ otel_receivers:
         field: attributes.service_name
         value: orcid
 
+  filelog/app-logs:
+    include:
+      - /opt/{{ ruby_app_directory }}/shared/log/{{ ruby_app_env }}.json
+    start_at: end
+    include_file_path: true
+    include_file_name: true
+    operators:
+      - type: json_parser
+        parse_from: body
+        on_error: send
+        timestamp:
+          parse_from: attributes.timestamp
+          layout_type: gotime
+          layout: "2006-01-02T15:04:05.999999Z07:00"
+        severity:
+          parse_from: attributes.level
+      - type: add
+        field: attributes.log_type
+        value: "app-log"
+      - type: add
+        field: attributes.service_name
+        value: orcid
+      - type: add
+        field: attributes.app_env
+        value: "{{ ruby_app_env }}"
+
   hostmetrics:
     collection_interval: 30s
     scrapers:
@@ -152,6 +178,7 @@ otel_service_pipelines:
     receivers:
       - filelog/nginx-access
       - filelog/nginx-error
+      - filelog/app-logs
     processors:
       - resource
       - batch
