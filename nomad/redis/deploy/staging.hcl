@@ -161,6 +161,7 @@ job "redis-staging" {
     }
 
     # Redis & Sentinel both overwrite their .conf files constantly to keep state on the cluster. We'll give it some startup values, then leave it alone after that.
+    # On first start up, point everything at whatever Consul says is "index-0". After that, Sentinel and Redis will manage the cluster state. They discover the other nodes by querying that index-0 node.
     task "seed-config" {
       driver = "docker"
       user = "999:999"
@@ -183,6 +184,8 @@ job "redis-staging" {
         destination = "/data"
       }
 
+      # The "Bootstrap" comments below are checked during the first-boot copy phase to make sure that the node knows about the first leader.
+      # Do NOT delete those without having a different strategy in place, the cluster will come up disconnected from one another.
       template {
         destination = "local/redis.conf"
         uid = 1000999
@@ -199,6 +202,7 @@ job "redis-staging" {
         save ""
         maxmemory-policy noeviction
 
+        # Don't do anything unless it's replicated.
         min-replicas-to-write 1
         min-replicas-max-lag 10
 
