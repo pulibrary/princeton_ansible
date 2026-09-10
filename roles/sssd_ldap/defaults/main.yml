@@ -1,0 +1,61 @@
+---
+# defaults file for roles/sssd_ldap
+#
+# Resolve and authenticate Active Directory accounts over LDAPS without joining
+# the domain. There is no computer object, no keytab and no Kerberos, so this
+# works on Ubuntu, where the realm join in ad_join cannot run: that role needs
+# authselect-compat and krb5-workstation, which Ubuntu does not package.
+
+# Active Directory DNS domain and the base to search for accounts.
+sssd_ldap_domain: pu.win.princeton.edu
+sssd_ldap_search_base: dc=pu,dc=win,dc=princeton,dc=edu
+
+# Domain controllers, in preference order. LDAPS (636) is required because the
+# user's password is sent in a simple bind.
+sssd_ldap_uri:
+  - ldaps://pdom21tlkp.pu.win.princeton.edu
+  - ldaps://pdom20sopx.pu.win.princeton.edu
+  - ldaps://pdom22f0ho.pu.win.princeton.edu
+  - ldaps://pdom23i4fp.pu.win.princeton.edu
+
+# Service account for directory lookups. Authenticating a user is a separate
+# bind as that user, so this account only needs read access.
+sssd_ldap_bind_dn: "{{ sssd_bind_dn }}"
+sssd_ldap_bind_password: "{{ sssd_bind_dn_password }}"
+
+# Certificate validation for the LDAPS connection. The role refuses to run if
+# this is relaxed, because user passwords cross this channel.
+sssd_ldap_tls_reqcert: demand
+
+# Accounts permitted to log in, rendered as simple_allow_users. Keeping access
+# control here rather than in sshd AllowUsers means one place decides it.
+# Leave empty to allow every account the directory resolves.
+sssd_ldap_allow_users: []
+
+# Take uidNumber and gidNumber from Active Directory instead of deriving IDs
+# from the SID, so UIDs match the realm-joined hosts and file ownership on
+# shared storage stays consistent. Accounts without those attributes will not
+# resolve while this is false.
+sssd_ldap_id_mapping: false
+
+sssd_ldap_default_shell: /bin/bash
+
+# Matches the fallback_homedir on the realm-joined hosts, so a home directory
+# has the same name everywhere.
+sssd_ldap_fallback_homedir: /home/%u@%d
+
+# Create home directories on first login. Directory accounts have no home until
+# something makes one, and an SFTP session that lands in a missing directory
+# fails in a way that looks like a permissions problem.
+sssd_ldap_create_homedir: true
+
+# Cache credentials so a brief directory outage does not stop file transfers.
+sssd_ldap_cache_credentials: true
+
+# Manage the PAM stack so directory accounts can authenticate. Set to false if
+# another role owns PAM on the host.
+sssd_ldap_configure_pam: true
+
+# Verify at the end of the run that each permitted account resolves. This turns
+# a silent misconfiguration into a failed play.
+sssd_ldap_verify_accounts: true
