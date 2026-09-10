@@ -1,0 +1,174 @@
+---
+# tasks/preflight.yml -- prove the directory is usable before configuring sssd.
+#
+# Without this, an untrusted certificate, a wrong bind identity and a missing
+# account all surface the same way: sssd starts, `sssctl config-check` passes,
+# and then every lookup returns "no such user".
+#
+# The checks use ldapwhoami and ldapsearch rather than openssl, because they
+# perform exactly the operation sssd performs, over the same encrypted
+# connection, and their error messages separate a TLS failure from a rejected
+# bind. LDAPTLS_* is set explicitly so the test trusts the same CA bundle sssd
+# is configured with, rather than whatever /etc/ldap/ldap.conf happens to say.
+
+- name: Sssd_ldap | Stage the lookup password out of the process list
+  ansible.builtin.copy:
+    content: "{{ sssd_ldap_bind_password }}"
+    dest: /root/.sssd_ldap_preflight
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+  changed_when: false
+
+- name: Sssd_ldap | Run the pre-flight directory checks
+  vars:
+    sssd_ldap_preflight_env:
+      LDAPTLS_CACERT: "{{ sssd_ldap_tls_cacert | default(sssd_ldap_default_cacert) }}"
+      LDAPTLS_REQCERT: "{{ sssd_ldap_tls_reqcert }}"
+  block:
+    # One operation covers both the encrypted connection and the lookup
+    # identity. A TLS problem stops it before the bind is attempted, and the two
+    # produce different errors.
+    - name: Sssd_ldap | Connect and bind as the lookup account
+      ansible.builtin.command:
+        argv:
+          - ldapwhoami
+          - -x
+          - -H
+          - "ldaps://{{ sssd_ldap_preflight_host }}"
+          - -D
+          - "{{ sssd_ldap_bind_dn }}"
+          - -y
+          - /root/.sssd_ldap_preflight
+      register: sssd_ldap_bind_check
+      changed_when: false
+      failed_when: false
+      environment: "{{ sssd_ldap_preflight_env }}"
+
+    - name: Sssd_ldap | Fail if the encrypted connection could not be made
+      ansible.builtin.assert:
+        that:
+          # Matched without the apostrophe in "Can't", to keep this expression
+          # free of nested quoting.
+          - "'contact LDAP server' not in
+             (sssd_ldap_bind_check.stderr | default(''))"
+        fail_msg: >-
+          Could not open an LDAPS connection to
+          {{ sssd_ldap_preflight_host }}:636. LDAP said:
+          "{{ sssd_ldap_bind_check.stderr | default('') | trim }}".
+          Either port 636 is not reachable from this host, or the controller's
+          certificate is not trusted by
+          {{ sssd_ldap_tls_cacert | default(sssd_ldap_default_cacert) }}. If the
+          controllers use an internal CA, install it and point
+          sssd_ldap_tls_cacert at it. Do not relax certificate checking: the
+          user's password is sent over this connection.
+        success_msg: >-
+          LDAPS to {{ sssd_ldap_preflight_host }} works and its certificate is
+          trusted
+
+    - name: Sssd_ldap | Fail if the lookup account was rejected
+      ansible.builtin.assert:
+        that:
+          - sssd_ldap_bind_check.rc == 0
+        fail_msg: >-
+          The encrypted connection worked, but the directory rejected the lookup
+          account "{{ sssd_ldap_bind_dn }}".
+          {{ sssd_ldap_bind_reasons | dict2items
+             | selectattr('key', 'in', sssd_ldap_bind_check.stderr | default(''))
+             | map(attribute='value') | list | first
+             | default('LDAP said: '
+                       ~ (sssd_ldap_bind_check.stderr | default('') | trim)) }}
+          The password comes from vault_sssd_dn_password and the identity from
+          vault_sssd_bind_dn.
+        success_msg: >-
+          Lookup bind succeeded as {{ sssd_ldap_bind_check.stdout | trim }}
+      vars:
+        # Active Directory returns the same generic "Invalid credentials" for
+        # every one of these and hides the real reason in a numeric sub-code.
+        sssd_ldap_bind_reasons:
+          "data 525": >-
+            Active Directory does not know that account. vault_sssd_bind_dn must
+            be a full distinguished name or a userPrincipalName such as
+            doas-libsftp@{{ sssd_ldap_domain }}; a bare account name works for
+            the Kerberos domain join but not for this kind of connection.
+          "data 52e": >-
+            The account exists but the password was rejected. Check
+            vault_sssd_dn_password against the directory, remembering it was
+            rotated recently.
+          "data 530": "That account is not permitted to log on at this time."
+          "data 531": >-
+            That account is not permitted to log on from this host, which is a
+            workstation restriction in the directory.
+          "data 532": "The password for that account has expired."
+          "data 533": "That account is disabled."
+          "data 701": "That account has expired."
+          "data 773": "That account must change its password before it can bind."
+          "data 775": "That account is locked out."
+
+    # Do the accounts exist, with the POSIX attributes sssd needs? The same
+    # filter sssd uses, so a match here means sssd will match too.
+    - name: Sssd_ldap | Look for each permitted account in the directory
+      ansible.builtin.command:
+        argv:
+          - ldapsearch
+          - -x
+          - -LLL
+          - -H
+          - "ldaps://{{ sssd_ldap_preflight_host }}"
+          - -D
+          - "{{ sssd_ldap_bind_dn }}"
+          - -y
+          - /root/.sssd_ldap_preflight
+          - -b
+          - "{{ sssd_ldap_search_base }}"
+          - "(sAMAccountName={{ item }})"
+          - dn
+          - uidNumber
+          - gidNumber
+      loop: "{{ sssd_ldap_allow_users }}"
+      register: sssd_ldap_dir_check
+      changed_when: false
+      failed_when: false
+      environment: "{{ sssd_ldap_preflight_env }}"
+
+    - name: Sssd_ldap | Report what the directory returned
+      ansible.builtin.debug:
+        msg: >-
+          {{ item.item }}:
+          {{ item.stdout_lines | default([]) | join(' | ')
+             if (item.rc == 0 and (item.stdout | trim | length) > 0)
+             else 'NOT FOUND under ' ~ sssd_ldap_search_base }}
+      loop: "{{ sssd_ldap_dir_check.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Sssd_ldap | Fail if an account is missing or has no POSIX identity
+      ansible.builtin.assert:
+        that:
+          - item.rc == 0
+          - item.stdout | trim | length > 0
+          - "'uidNumber:' in item.stdout"
+          - "'gidNumber:' in item.stdout"
+        fail_msg: >-
+          {{ item.item }} is not usable from this host.
+          {{ 'The directory returned no such account under '
+             ~ sssd_ldap_search_base ~ '. Check the spelling of sAMAccountName,
+             and that the search base covers the OU the account lives in.'
+             if (item.stdout | trim | length) == 0
+             else 'The account exists but is missing uidNumber or gidNumber,
+             which sssd needs while sssd_ldap_id_mapping is false. Either have
+             those attributes populated in the directory, or set
+             sssd_ldap_id_mapping to true, which changes the UID and therefore
+             the ownership of the drop directories.' }}
+        success_msg: "{{ item.item }} has a POSIX identity in the directory"
+      loop: "{{ sssd_ldap_dir_check.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+  always:
+    - name: Sssd_ldap | Remove the staged lookup password
+      ansible.builtin.file:
+        path: /root/.sssd_ldap_preflight
+        state: absent
+      changed_when: false
