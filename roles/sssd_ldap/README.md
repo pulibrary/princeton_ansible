@@ -3,6 +3,10 @@
 Resolve and authenticate **Active Directory** accounts over LDAPS using sssd,
 without joining the domain.
 
+See [AUTH_FLOW.md](AUTH_FLOW.md) for diagrams of how the SFTP transfer accounts
+`almasftp` and `lib-aspacesftp` are resolved and authenticated, and how to read
+a failure.
+
 ## Why this exists
 
 `ad_join` performs a full realm join and only works on Rocky: it installs
@@ -42,9 +46,16 @@ sssd_ldap_search_base: dc=pu,dc=win,dc=princeton,dc=edu
 sssd_ldap_uri:
   - ldaps://pdom21tlkp.pu.win.princeton.edu
 
-# Lookup account, from group_vars/all (vault).
+# Lookup account, from vault. A bare name is qualified with
+# sssd_ldap_upn_suffix, because an LDAP simple bind needs a full distinguished
+# name or a login name, not the bare name a Kerberos join accepts.
 sssd_ldap_bind_dn: "{{ sssd_bind_dn }}"
 sssd_ldap_bind_password: "{{ sssd_bind_dn_password }}"
+
+# The login-name suffix the directory publishes, which is NOT necessarily the
+# domain name. Here accounts live in pu.win.princeton.edu but log in as
+# name@princeton.edu.
+sssd_ldap_upn_suffix: princeton.edu
 
 # Only these accounts may log in. Empty allows anyone the directory resolves.
 sssd_ldap_allow_users:

@@ -26,7 +26,28 @@
     sssd_ldap_preflight_env:
       LDAPTLS_CACERT: "{{ sssd_ldap_tls_cacert | default(sssd_ldap_default_cacert) }}"
       LDAPTLS_REQCERT: "{{ sssd_ldap_tls_reqcert }}"
+    # dc= components the configured domain implies. For example
+    # pu.win.princeton.edu means dc=pu,dc=win,dc=princeton,dc=edu.
+    sssd_ldap_expected_dc: "dc={{ sssd_ldap_domain.split('.') | join(',dc=') }}"
+    sssd_ldap_bind_dc: >-
+      {{ sssd_ldap_bind_dn | regex_search('[dD][cC]=.*$') | default('', true) }}
   block:
+    # A lookup account can legitimately live in another domain of the same
+    # forest, so a component mismatch is a strong hint rather than proof. Report
+    # it and let the bind itself decide, instead of refusing to try.
+    - name: Sssd_ldap | Note if the lookup identity names another domain
+      ansible.builtin.debug:
+        msg: >-
+          The lookup identity "{{ sssd_ldap_bind_dn }}" ends in
+          "{{ sssd_ldap_bind_dc | trim }}", while {{ sssd_ldap_domain }} is
+          "{{ sssd_ldap_expected_dc }}". That is only correct if the account
+          really lives in another domain of the forest, and a controller for
+          {{ sssd_ldap_domain }} will not resolve a name from a domain it does
+          not hold. Attempting the bind anyway.
+      when:
+        - sssd_ldap_bind_dc | trim | length > 0
+        - (sssd_ldap_bind_dc | trim | lower) != (sssd_ldap_expected_dc | lower)
+
     # One operation covers both the encrypted connection and the lookup
     # identity. A TLS problem stops it before the bind is attempted, and the two
     # produce different errors.
@@ -74,13 +95,24 @@
         fail_msg: >-
           The encrypted connection worked, but the directory rejected the lookup
           account "{{ sssd_ldap_bind_dn }}".
-          {{ sssd_ldap_bind_reasons | dict2items
+          {{ ('The likely cause is the domain in that name: it ends in "'
+              ~ (sssd_ldap_bind_dc | trim) ~ '" but a controller for '
+              ~ sssd_ldap_domain ~ ' only resolves names ending in "'
+              ~ sssd_ldap_expected_dc ~ '". ')
+             if (sssd_ldap_bind_dc | trim | length > 0
+                 and (sssd_ldap_bind_dc | trim | lower)
+                     != (sssd_ldap_expected_dc | lower))
+             else '' }}{{ sssd_ldap_bind_reasons | dict2items
              | selectattr('key', 'in', sssd_ldap_bind_check.stderr | default(''))
              | map(attribute='value') | list | first
              | default('LDAP said: '
                        ~ (sssd_ldap_bind_check.stderr | default('') | trim)) }}
-          The password comes from vault_sssd_dn_password and the identity from
-          vault_sssd_bind_dn.
+          Find the account's authoritative name by running
+          `ansible-playbook playbooks/utils/ad_account_lookup.yml
+          -e 'lookup_names=NAME'`, which reads it from the directory using a
+          joined host's own credentials. Do not hand-write the name: a plausible
+          looking one that names the wrong domain or the wrong container is
+          rejected with this same error.
         success_msg: >-
           Lookup bind succeeded as {{ sssd_ldap_bind_check.stdout | trim }}
       vars:
@@ -90,12 +122,14 @@
           "data 525": >-
             Active Directory does not know that account. vault_sssd_bind_dn must
             be a full distinguished name or a userPrincipalName such as
-            doas-libsftp@{{ sssd_ldap_domain }}; a bare account name works for
+            libops@{{ sssd_ldap_domain }}; a bare account name works for
             the Kerberos domain join but not for this kind of connection.
           "data 52e": >-
-            The account exists but the password was rejected. Check
-            vault_sssd_dn_password against the directory, remembering it was
-            rotated recently.
+            The directory resolved the identity but rejected the password. Note
+            that Active Directory also returns this code for a distinguished
+            name it cannot resolve, so confirm vault_sssd_bind_dn names an
+            account that exists and is enabled, then check
+            vault_sssd_dn_password.
           "data 530": "That account is not permitted to log on at this time."
           "data 531": >-
             That account is not permitted to log on from this host, which is a
