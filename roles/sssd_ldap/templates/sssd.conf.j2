@@ -1,0 +1,57 @@
+#jinja2: trim_blocks: True, lstrip_blocks: True
+# {{ ansible_managed }}
+# Active Directory over LDAPS, without a domain join. Managed by sssd_ldap.
+
+[sssd]
+config_file_version = 2
+domains = {{ sssd_ldap_domain }}
+services = nss, pam
+
+[nss]
+filter_users = root
+filter_groups = root
+
+[pam]
+
+[domain/{{ sssd_ldap_domain }}]
+# The ldap provider rather than ad: no computer object and no Kerberos, so this
+# same configuration works on Ubuntu and on Rocky.
+id_provider = ldap
+auth_provider = ldap
+# Password changes are not done over SFTP, and allowing them here would need
+# write access for the lookup account.
+chpass_provider = none
+{% if sssd_ldap_allow_users | length > 0 %}
+access_provider = simple
+simple_allow_users = {{ sssd_ldap_allow_users | join(', ') }}
+{% else %}
+access_provider = permit
+{% endif %}
+
+ldap_uri = {{ sssd_ldap_uri | join(', ') }}
+# Tells sssd to read POSIX attributes the way Active Directory stores them.
+ldap_schema = ad
+ldap_search_base = {{ sssd_ldap_search_base }}
+ldap_default_bind_dn = {{ sssd_ldap_bind_dn }}
+ldap_default_authtok = {{ sssd_ldap_bind_password }}
+
+# Log in with the short account name, matching the realm-joined hosts.
+ldap_user_name = sAMAccountName
+
+# The user's password travels in a simple bind, so the channel must be
+# encrypted and the server certificate must be verified.
+ldap_id_use_start_tls = false
+ldap_tls_reqcert = {{ sssd_ldap_tls_reqcert }}
+ldap_tls_cacert = {{ sssd_ldap_tls_cacert | default(sssd_ldap_default_cacert) }}
+
+# Active Directory returns referrals that sssd cannot follow; chasing them makes
+# every lookup slow or hang.
+ldap_referrals = false
+
+ldap_id_mapping = {{ sssd_ldap_id_mapping | string }}
+# Never enumerate: this directory is far too large to list.
+enumerate = false
+cache_credentials = {{ sssd_ldap_cache_credentials | string }}
+default_shell = {{ sssd_ldap_default_shell }}
+fallback_homedir = {{ sssd_ldap_fallback_homedir }}
+use_fully_qualified_names = False

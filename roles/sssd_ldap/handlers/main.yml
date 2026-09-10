@@ -1,0 +1,15 @@
+---
+# handlers file for roles/sssd_ldap
+# "Validate" runs before "Restart" so a bad config never triggers a restart.
+
+- name: Validate sssd configuration
+  ansible.builtin.command:
+    argv:
+      - sssctl
+      - config-check
+  changed_when: false
+
+- name: Restart sssd
+  ansible.builtin.service:
+    name: "{{ sssd_ldap_service }}"
+    state: restarted
