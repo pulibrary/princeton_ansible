@@ -1,0 +1,39 @@
+---
+- name: Converge
+  hosts: all
+  become: true
+  vars:
+    # Normally derived from ssh_ca_users, which prepare.yml stands in for.
+    ssh_ca_users:
+      - name: alice
+        principals:
+          - alice@princeton.edu
+      - name: bob
+        principals:
+          - bob@princeton.edu
+
+  pre_tasks:
+    # Mirrors what roles/xrdp writes when xrdp_listen_address is set to
+    # 127.0.0.1. That role owns the port line, so this scenario supplies its
+    # output rather than installing a full XFCE desktop to get it.
+    #
+    # Deliberately no restart here. prepare.yml leaves an ineffective "address"
+    # key behind, so the role removes it, queues a restart, and has to flush
+    # that handler before reading the socket. Restarting here would hide an
+    # ordering bug: in the real playbook roles/xrdp queues the same restart and
+    # handlers do not run until the whole roles section is done.
+    - name: Bind the listener to loopback, as roles/xrdp does
+      community.general.ini_file:
+        path: /etc/xrdp/xrdp.ini
+        section: Globals
+        option: port
+        value: "tcp://127.0.0.1:3389"
+        no_extra_spaces: true
+        owner: root
+        group: root
+        mode: "0644"
+
+  tasks:
+    - name: Include the xrdp_ca_login role
+      ansible.builtin.include_role:
+        name: xrdp_ca_login
