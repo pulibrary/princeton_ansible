@@ -3,7 +3,49 @@
   hosts: all
   vars:
     running_on_server: false
+    almasftp_user: almasftp
+    aspaceftp_user: lib-aspacesftp
+    # Sample (non-production) SSH User CA public key for testing only.
+    ssh_ca_user_ca_public_key: >-
+      ssh-ed25519
+      AAAAC3NzaC1lZDI1NTE5AAAAIK7xQ8mDq3sJZr0Yb1nQwVZ2pT4fLm9aHcX0sN6eUwQk
+      ssh_user_ca_key
+    ssh_ca_operator_group: pulsys
+    # Empty so the role emits no AllowUsers, matching hosts where another role
+    # already manages that directive.
+    ssh_ca_allowed_users: []
+    ssh_ca_password_auth_users:
+      - almasftp
+      - lib-aspacesftp
+    # On a real host these come from Active Directory, so the role never
+    # creates them.
+    ssh_ca_users: []
+    lib_sftp_group_members: []
   become: true
+  pre_tasks:
+    - name: Ensure the operator group exists (normally provisioned elsewhere)
+      ansible.builtin.group:
+        name: "{{ ssh_ca_operator_group }}"
+        state: present
+
+    # Molecule has no directory attached, so stand in for the accounts and the
+    # group that Active Directory would otherwise supply over NSS. lib_sftp
+    # asserts these resolve before it chowns anything.
+    - name: Stand in for the directory-provided group
+      ansible.builtin.group:
+        name: pusvc-g
+        gid: 20204
+        state: present
+
+    - name: Stand in for the directory-provided transfer accounts
+      ansible.builtin.user:
+        name: "{{ item }}"
+        group: pusvc-g
+        shell: /bin/bash
+        create_home: true
+      loop:
+        - "{{ almasftp_user }}"
+        - "{{ aspaceftp_user }}"
   tasks:
     - name: "Include lib_sftp"
       ansible.builtin.include_role:
