@@ -13,19 +13,11 @@ deploy_user_local_keys:
     key: "{{ lookup('file', '../roles/lib_sftp/files/id_ed25519.pub') }}"
 
 # Only these two directory accounts may authenticate. This is sssd's
-# simple_allow_users, which keeps access control in one place rather than
-# splitting it across sshd drop-in files.
+# simple_allow_users, so access control lives in one place rather than being
+# split across sshd drop-in files.
 sssd_ldap_allow_users:
   - "{{ almasftp_user }}"
   - "{{ aspaceftp_user }}"
-
-# No certificate-backed local accounts on this host. Staff shell access comes
-# from group_vars/step_ca/main.yml; the transfer accounts use a password.
-ssh_ca_users: []
-
-# ssh_ca_allowed_users and ssh_ca_password_auth_users are set in
-# group_vars/sftp/common.yml, so the sandbox and the joined hosts agree on who
-# may log in and who keeps a password.
 
 # Directory accounts are not in /etc/passwd, so usermod cannot add them to a
 # local group. pusvc-g comes from Active Directory with gid 20204 and is already

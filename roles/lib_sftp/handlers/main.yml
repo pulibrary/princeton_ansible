@@ -1,2 +1,16 @@
 ---
 # handlers file for roles/lib_sftp
+# "Validate" is defined before "Restart" so a bad configuration never reaches a
+# restart and locks everyone out of the host.
+
+- name: Validate sshd configuration
+  ansible.builtin.command:
+    argv:
+      - /usr/sbin/sshd
+      - -t
+  changed_when: false
+
+- name: Restart sshd
+  ansible.builtin.service:
+    name: "{{ lib_sftp_sshd_service }}"
+    state: restarted

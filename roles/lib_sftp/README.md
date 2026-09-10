@@ -30,10 +30,24 @@ The role begins by asserting that `almasftp_user` and `aspaceftp_user` resolve.
 Without that check, a missing identity provider surfaces later as a confusing
 "chown failed" on the drop directories.
 
+`lib_sftp_password_auth_users` (both transfer accounts by default) are given
+password **and** keyboard-interactive authentication in a `Match User` block, so
+the rest of the host keeps whatever policy it already had. Both are enabled
+because they are separate methods: an interactive client uses either, but an
+automated one is often built for only one.
+
+`lib_sftp_allow_users` adds those accounts to sshd's `AllowUsers`, together with
+`pulsys` and the deploy user. Where any `AllowUsers` exists on a host, an account
+named in none of them is refused however else it is permitted, so listing them is
+not optional. Including the administrative accounts means this role cannot lock
+anyone out on a host where nothing else writes that directive.
+
+Set `lib_sftp_manage_sshd: false` to leave sshd alone entirely.
+
 Dependencies
 ------------
 
-`ssh_ca_trust` and `deploy_user`.
+`deploy_user`.
 
 This role deliberately does **not** pull in an identity provider, because it
 differs per operating system. Add one in the playbook:
@@ -46,9 +60,12 @@ differs per operating system. Add one in the playbook:
   See `playbooks/sandbox_sftp.yml`.
 
 Either way the accounts live in the directory, never in `/etc/passwd`.
-`ssh_ca_trust` adds certificate trust for staff logins and turns off password
-authentication host-wide, so list the transfer accounts in
-`ssh_ca_password_auth_users` to exempt them.
+
+This role writes its own sshd drop-in so the transfer accounts can authenticate
+with a password, listing them in `lib_sftp_password_auth_users` and
+`lib_sftp_allow_users`. It does not need the SSH certificate role: certificates
+solve staff shell access, which is a separate concern from a service account
+that can only send a password.
 
 See [AUTH_FLOW.md](AUTH_FLOW.md) for diagrams of how each login is
 authenticated, how to diagnose a failure, and the pitfalls to avoid.

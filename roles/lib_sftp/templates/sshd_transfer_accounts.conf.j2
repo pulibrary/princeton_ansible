@@ -1,0 +1,29 @@
+#jinja2: trim_blocks: True, lstrip_blocks: True
+# {{ ansible_managed }}
+# SFTP transfer accounts, managed by the lib_sftp role.
+#
+# Alma and ArchivesSpace deposit files with a password. They cannot present a
+# key or a certificate, so these accounts need password authentication even
+# where the host image turns it off.
+
+{% if lib_sftp_allow_users | length > 0 %}
+# AllowUsers accumulates across every sshd_config.d file rather than the first
+# one winning, so this adds to any list the image or another role wrote. But if
+# any AllowUsers exists anywhere, an account named in none of them is refused,
+# so the transfer accounts have to appear here.
+AllowUsers {{ lib_sftp_allow_users | join(' ') }}
+{% endif %}
+{% if lib_sftp_password_auth_users | length > 0 %}
+
+# Password and keyboard-interactive are separate SSH methods. An interactive
+# client quietly uses either, so a successful human login proves nothing about
+# an automated one: Alma drives transfers with a Java library that may negotiate
+# only one of the two. Both are enabled so neither choice fails.
+#
+# The trailing `Match all` restores the global context, so anything parsed after
+# this file is not silently made conditional on these users.
+Match User {{ lib_sftp_password_auth_users | join(',') }}
+    PasswordAuthentication yes
+    KbdInteractiveAuthentication yes
+Match all
+{% endif %}

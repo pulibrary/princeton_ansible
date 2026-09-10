@@ -5,6 +5,7 @@
   vars:
     almasftp_user: almasftp
     aspaceftp_user: lib-aspacesftp
+    lib_sftp_dropin: /etc/ssh/sshd_config.d/70-sftp-transfer-accounts.conf
   tasks:
     - name: Read the alma drop directories
       ansible.builtin.stat:
@@ -43,28 +44,30 @@
 
     - name: Read the managed sshd drop-in
       ansible.builtin.slurp:
-        src: /etc/ssh/sshd_config.d/60-ssh-ca-access.conf
-      register: lib_sftp_dropin
+        src: "{{ lib_sftp_dropin }}"
+      register: lib_sftp_conf
 
     # Both methods must be on: an automated client may negotiate either, and
     # enabling only one breaks transfers while human logins keep working.
-    - name: Assert the transfer accounts keep both password methods
+    - name: Assert the transfer accounts get both password methods
       ansible.builtin.assert:
         that:
           - "'Match User almasftp,lib-aspacesftp'
-             in (lib_sftp_dropin.content | b64decode)"
+             in (lib_sftp_conf.content | b64decode)"
           - "'PasswordAuthentication yes'
-             in (lib_sftp_dropin.content | b64decode)"
+             in (lib_sftp_conf.content | b64decode)"
           - "'KbdInteractiveAuthentication yes'
-             in (lib_sftp_dropin.content | b64decode)"
-          - "'Match all' in (lib_sftp_dropin.content | b64decode)"
+             in (lib_sftp_conf.content | b64decode)"
+          - "'Match all' in (lib_sftp_conf.content | b64decode)"
 
-    - name: Assert no AllowUsers was emitted
+    # A password is useless if AllowUsers excludes the account.
+    - name: Assert the transfer accounts are permitted by AllowUsers
       ansible.builtin.assert:
         that:
-          - "'AllowUsers' not in (lib_sftp_dropin.content | b64decode)"
-        fail_msg: >-
-          The role emitted AllowUsers even though ssh_ca_allowed_users is empty.
+          - "'AllowUsers' in (lib_sftp_conf.content | b64decode)"
+          - "almasftp_user in (lib_sftp_conf.content | b64decode)"
+          - "aspaceftp_user in (lib_sftp_conf.content | b64decode)"
+          - "'pulsys' in (lib_sftp_conf.content | b64decode)"
 
     - name: Read the effective sshd policy for a transfer account
       ansible.builtin.command:
@@ -82,7 +85,10 @@
           - "'passwordauthentication yes' in lib_sftp_sshd_transfer.stdout"
           - "'kbdinteractiveauthentication yes'
              in lib_sftp_sshd_transfer.stdout"
+          - "almasftp_user in (lib_sftp_sshd_transfer.stdout_lines
+             | select('match', '^allowusers ') | join(' '))"
 
+    # The Match block must not leak into other users' sessions.
     - name: Read the effective sshd policy for an ordinary account
       ansible.builtin.command:
         argv:
@@ -93,7 +99,10 @@
       register: lib_sftp_sshd_other
       changed_when: false
 
-    - name: Assert everyone else still needs a certificate or a key
+    - name: Assert the keyboard-interactive exemption did not leak
       ansible.builtin.assert:
         that:
-          - "'passwordauthentication no' in lib_sftp_sshd_other.stdout"
+          - "'kbdinteractiveauthentication no' in lib_sftp_sshd_other.stdout"
+        fail_msg: >-
+          The Match block leaked into other users' sessions, so the exemption is
+          not scoped to the transfer accounts.

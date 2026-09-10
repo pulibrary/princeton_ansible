@@ -1,13 +1,35 @@
 ---
 # defaults file for roles/lib_sftp
 
-# Group that owns the SFTP drop directories. On Active Directory joined hosts
-# the directory supplies this group, so the role finds it already present.
-# Elsewhere (for example the sandbox) the role creates it locally.
+# Group that owns the SFTP drop directories. On hosts that get their identities
+# from Active Directory this group arrives from the directory (gid 20204) and is
+# already the transfer accounts' primary group, so the role finds it present.
 lib_sftp_owner_group: pusvc-g
 
 # Local accounts to add to the drop directory group. Leave empty whenever the
 # transfer accounts come from a directory: Active Directory supplies their group
-# membership, and Entra ID accounts cannot be added to a local group with
-# usermod at all.
+# membership, and usermod cannot modify an account absent from /etc/passwd.
 lib_sftp_group_members: []
+
+# Manage an sshd drop-in so the transfer accounts can authenticate with a
+# password. Set to false if sshd is configured elsewhere on the host.
+lib_sftp_manage_sshd: true
+lib_sftp_sshd_dropin_path: /etc/ssh/sshd_config.d/70-sftp-transfer-accounts.conf
+
+# Accounts that authenticate with a password because their remote partner
+# cannot present a key or a certificate. Rendered into a `Match User` block so
+# the rest of the host keeps whatever policy it already had.
+lib_sftp_password_auth_users:
+  - "{{ almasftp_user }}"
+  - "{{ aspaceftp_user }}"
+
+# Accounts to add to sshd's AllowUsers. Where any AllowUsers exists, an account
+# in none of them is refused however else it is permitted, so the transfer
+# accounts have to be listed. pulsys and the deploy user are included so this
+# role never locks out administrative access on a host where nothing else
+# writes the directive.
+lib_sftp_allow_users:
+  - pulsys
+  - "{{ deploy_user | default('deploy') }}"
+  - "{{ almasftp_user }}"
+  - "{{ aspaceftp_user }}"
