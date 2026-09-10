@@ -35,6 +35,14 @@
     name: "{{ sssd_ldap_packages }}"
     state: present
 
+# Prove the directory is reachable and usable before writing any configuration.
+# sssd reports a certificate problem, a bad bind identity and a missing account
+# identically, as "no such user", so check them here where they can be told
+# apart.
+- name: Sssd_ldap | Pre-flight directory checks
+  ansible.builtin.include_tasks: preflight.yml
+  when: sssd_ldap_preflight | bool
+
 - name: Sssd_ldap | Write the sssd configuration
   ansible.builtin.template:
     src: sssd.conf.j2
@@ -189,14 +197,67 @@
         that:
           - item.rc == 0
         fail_msg: >-
-          {{ item.item }} did not resolve through sssd. Check that the account
-          exists in {{ sssd_ldap_domain }}, that uidNumber and gidNumber are
-          populated on it (required while sssd_ldap_id_mapping is false), that
-          this host reaches {{ sssd_ldap_uri | join(', ') }} on port 636, and
-          that the LDAPS certificate is trusted by
-          {{ sssd_ldap_tls_cacert | default(sssd_ldap_default_cacert) }}.
-          `sssctl domain-status {{ sssd_ldap_domain }}` shows the connection
-          state.
+          {{ item.item }} did not resolve through sssd, even though the
+          pre-flight checks showed the directory has it. The sssd log above
+          says why. The usual cause is that sssd is not being consulted:
+          confirm `sss` is present on the passwd line of /etc/nsswitch.conf,
+          and that the PAM and NSS modules for sssd are installed.
       loop: "{{ sssd_ldap_resolved.results }}"
       loop_control:
         label: "{{ item.item }}"
+
+  # Failing here means sssd is running with a valid config but not answering.
+  # Collect the evidence that explains it rather than leaving the operator to
+  # go looking for it.
+  rescue:
+    - name: Sssd_ldap | Read the sssd domain status
+      ansible.builtin.command:
+        argv:
+          - sssctl
+          - domain-status
+          - "{{ sssd_ldap_domain }}"
+      register: sssd_ldap_status
+      changed_when: false
+      failed_when: false
+
+    - name: Sssd_ldap | Read the nsswitch lookup order
+      ansible.builtin.command:
+        argv:
+          - grep
+          - -E
+          - "^(passwd|group|shadow):"
+          - /etc/nsswitch.conf
+      register: sssd_ldap_nsswitch
+      changed_when: false
+      failed_when: false
+
+    - name: Sssd_ldap | Read recent sssd log lines
+      ansible.builtin.shell:
+        cmd: >-
+          set -o pipefail;
+          journalctl -u sssd --since '10 minutes ago' --no-pager
+          | tail -30 || true
+      args:
+        executable: /bin/bash
+      register: sssd_ldap_journal
+      changed_when: false
+      failed_when: false
+
+    - name: Sssd_ldap | Report why the lookup failed
+      ansible.builtin.debug:
+        msg:
+          - "domain status:"
+          - "{{ sssd_ldap_status.stdout_lines | default(['no output']) }}"
+          - "nsswitch:"
+          - "{{ sssd_ldap_nsswitch.stdout_lines | default(['no output']) }}"
+          - "recent sssd log:"
+          - "{{ sssd_ldap_journal.stdout_lines | default(['no output']) }}"
+
+    - name: Sssd_ldap | Stop with the original failure
+      ansible.builtin.fail:
+        msg: >-
+          sssd is running but not resolving the permitted accounts. The domain
+          status, nsswitch order and log lines above show why. If the domain
+          status is Offline, sssd could not reach or bind to the directory even
+          though the pre-flight bind succeeded, which usually means
+          /etc/sssd/sssd.conf disagrees with what was tested.
