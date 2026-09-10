@@ -7,29 +7,14 @@ allowed_ssh_users:
   - almasftp
   - lib-aspacesftp
 
-# lib_sftp pulls in ssh_ca_trust, which sets PasswordAuthentication no for the
-# host so staff log in with certificates. The two transfer accounts must keep
-# password logins: Alma and ArchivesSpace push files with a password and cannot
-# present a certificate.
-#
-# Both password and keyboard-interactive are enabled for them, because those are
-# separate SSH methods. An interactive ssh client will use either, so a human
-# login proves nothing about an automated one; Alma uses the Java JSch library,
-# which may negotiate only one of the two.
-ssh_ca_password_auth_users:
+# The transfer accounts and their sshd settings are the lib_sftp role's own
+# defaults, which already cover both of these. They are named here only so the
+# list of accounts that may log in to an SFTP host is visible in one place.
+lib_sftp_password_auth_users:
   - "{{ almasftp_user }}"
   - "{{ aspaceftp_user }}"
 
-# If any AllowUsers exists anywhere in the sshd configuration, an account not
-# named in one is refused, whatever else permits it. The base image and
-# deploy_user both write one, so the transfer accounts must be listed too or
-# they are locked out with the password still correct.
-#
-# AllowUsers accumulates across every sshd_config.d file rather than the first
-# one winning, so this line adds to the others instead of replacing them.
-# pulsys and deploy are repeated so this list is safe even on a host where
-# nothing else sets AllowUsers.
-ssh_ca_allowed_users:
+lib_sftp_allow_users:
   - pulsys
   - deploy
   - "{{ almasftp_user }}"
