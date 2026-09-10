@@ -79,24 +79,6 @@ on every remote session, so the login fails even with the correct password.
 On the Proxmox nodes sshd is only the first layer Veeam has to get through; the
 [veeam_proxmox](../veeam_proxmox) role covers sudo and the Proxmox API.
 
-## Avoid two roles writing `AllowUsers`
-
-`AllowUsers` **accumulates**: every line in `sshd_config` and in every
-`sshd_config.d` drop-in is appended to one list, so two roles each adding a line
-both take effect. Verify with
-`sshd -T -C user=name,host=h,addr=1.2.3.4 | grep -i allowusers`.
-
-Scalar keywords behave the opposite way. `PasswordAuthentication`,
-`KbdInteractiveAuthentication` and friends take the **first** value parsed, and
-`Include /etc/ssh/sshd_config.d/*.conf` sits at the top of the file on Debian
-and RHEL alike. A drop-in that sorts earlier therefore wins outright, which is
-why `60-ssh-ca-access.conf` beats anything set later in `sshd_config`.
-
-Keep access control in one place regardless. When an identity role already
-restricts who may authenticate (`simple_allow_users` in sssd, or
-`entraid_join_pam_allow_groups`), set `ssh_ca_allowed_users: []` so this role
-emits no `AllowUsers` at all.
-
 ## Password and keyboard-interactive are different methods
 
 `PasswordAuthentication` and `KbdInteractiveAuthentication` are separate SSH
