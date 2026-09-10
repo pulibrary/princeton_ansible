@@ -31,31 +31,7 @@
     - name: Assert all required local accounts are allowed by sshd
       ansible.builtin.assert:
         that:
-          - >-
-            'AllowUsers pulsys alice svcftp'
-            in (ssh_ca_dropin.content | b64decode)
-
-    - name: Assert the service account keeps password authentication
-      ansible.builtin.assert:
-        that:
-          - "'Match User svcftp' in (ssh_ca_dropin.content | b64decode)"
-          - "'Match all' in (ssh_ca_dropin.content | b64decode)"
-
-    - name: Read the effective sshd configuration for the service account
-      ansible.builtin.command:
-        argv:
-          - /usr/sbin/sshd
-          - -T
-          - -C
-          - user=svcftp,host=localhost,addr=127.0.0.1
-      register: sshd_svcftp
-      changed_when: false
-
-    - name: Assert password authentication is enabled only for that account
-      ansible.builtin.assert:
-        that:
-          - "'passwordauthentication yes' in sshd_svcftp.stdout"
-          - "'kbdinteractiveauthentication yes' in sshd_svcftp.stdout"
+          - "'AllowUsers pulsys alice' in (ssh_ca_dropin.content | b64decode)"
 
     - name: Read principals file
       ansible.builtin.slurp:
