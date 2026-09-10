@@ -1,20 +1,99 @@
 ---
 - name: Verify
   hosts: all
-  gather_facts: false
+  become: true
+  vars:
+    almasftp_user: almasftp
+    aspaceftp_user: lib-aspacesftp
   tasks:
-    - name: Check ruby package status
-      ansible.builtin.package:
-        name: "{{ item }}"
-        state: present
-      check_mode: true
-      register: pkg_status
+    - name: Read the alma drop directories
+      ansible.builtin.stat:
+        path: "{{ item }}"
       loop:
-        - ruby-switch
-        - ruby2.6-dev
-        - ruby2.6
+        - /alma/bursar
+        - /alma/publishing
+        - /alma/recap
+      register: lib_sftp_alma_dirs
 
-    - name: Test for ruby packages
+    - name: Assert the alma drop directories belong to the transfer account
       ansible.builtin.assert:
         that:
-          - not pkg_status.changed
+          - item.stat.exists
+          - item.stat.isdir
+          - item.stat.pw_name == almasftp_user
+          - item.stat.gr_name == 'pusvc-g'
+        fail_msg: "{{ item.item }} is not owned by {{ almasftp_user }}:pusvc-g"
+      loop: "{{ lib_sftp_alma_dirs.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Read the aspace drop directory
+      ansible.builtin.stat:
+        path: /alma/aspace
+      register: lib_sftp_aspace_dir
+
+    # 0775 so both the owner and the shared group can write.
+    - name: Assert the aspace drop directory is group writable
+      ansible.builtin.assert:
+        that:
+          - lib_sftp_aspace_dir.stat.exists
+          - lib_sftp_aspace_dir.stat.pw_name == aspaceftp_user
+          - lib_sftp_aspace_dir.stat.gr_name == 'pusvc-g'
+          - lib_sftp_aspace_dir.stat.mode == '0775'
+
+    - name: Read the managed sshd drop-in
+      ansible.builtin.slurp:
+        src: /etc/ssh/sshd_config.d/60-ssh-ca-access.conf
+      register: lib_sftp_dropin
+
+    # Both methods must be on: an automated client may negotiate either, and
+    # enabling only one breaks transfers while human logins keep working.
+    - name: Assert the transfer accounts keep both password methods
+      ansible.builtin.assert:
+        that:
+          - "'Match User almasftp,lib-aspacesftp'
+             in (lib_sftp_dropin.content | b64decode)"
+          - "'PasswordAuthentication yes'
+             in (lib_sftp_dropin.content | b64decode)"
+          - "'KbdInteractiveAuthentication yes'
+             in (lib_sftp_dropin.content | b64decode)"
+          - "'Match all' in (lib_sftp_dropin.content | b64decode)"
+
+    - name: Assert no AllowUsers was emitted
+      ansible.builtin.assert:
+        that:
+          - "'AllowUsers' not in (lib_sftp_dropin.content | b64decode)"
+        fail_msg: >-
+          The role emitted AllowUsers even though ssh_ca_allowed_users is empty.
+
+    - name: Read the effective sshd policy for a transfer account
+      ansible.builtin.command:
+        argv:
+          - /usr/sbin/sshd
+          - -T
+          - -C
+          - "user={{ almasftp_user }},host=alma.exlibrisgroup.com,addr=1.2.3.4"
+      register: lib_sftp_sshd_transfer
+      changed_when: false
+
+    - name: Assert sshd offers both methods to the transfer account
+      ansible.builtin.assert:
+        that:
+          - "'passwordauthentication yes' in lib_sftp_sshd_transfer.stdout"
+          - "'kbdinteractiveauthentication yes'
+             in lib_sftp_sshd_transfer.stdout"
+
+    - name: Read the effective sshd policy for an ordinary account
+      ansible.builtin.command:
+        argv:
+          - /usr/sbin/sshd
+          - -T
+          - -C
+          - "user=pulsys,host=somewhere.princeton.edu,addr=5.6.7.8"
+      register: lib_sftp_sshd_other
+      changed_when: false
+
+    - name: Assert everyone else still needs a certificate or a key
+      ansible.builtin.assert:
+        that:
+          - "'passwordauthentication no' in lib_sftp_sshd_other.stdout"
