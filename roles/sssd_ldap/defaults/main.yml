@@ -24,12 +24,17 @@ sssd_ldap_uri:
 # An LDAP simple bind needs a full distinguished name or a userPrincipalName. A
 # bare account name works for Kerberos, and so for the realm join in ad_join,
 # but Active Directory rejects it here. If the value is a bare name it is turned
-# into a userPrincipalName in the domain, which is the only reading that can
-# work.
+# into a userPrincipalName using sssd_ldap_upn_suffix.
 sssd_ldap_bind_dn: >-
   {{ sssd_bind_dn if (',' in sssd_bind_dn or '@' in sssd_bind_dn)
-     else sssd_bind_dn ~ '@' ~ sssd_ldap_domain }}
+     else sssd_bind_dn ~ '@' ~ sssd_ldap_upn_suffix }}
 sssd_ldap_bind_password: "{{ sssd_bind_dn_password }}"
+
+# The userPrincipalName suffix, which is NOT necessarily the Active Directory
+# DNS domain. Here accounts live in pu.win.princeton.edu but their UPNs are
+# name@princeton.edu, because the forest publishes an alternative suffix.
+# Confirm with playbooks/utils/ad_account_lookup.yml before changing this.
+sssd_ldap_upn_suffix: princeton.edu
 
 # Certificate validation for the LDAPS connection. The role refuses to run if
 # this is relaxed, because user passwords cross this channel.
