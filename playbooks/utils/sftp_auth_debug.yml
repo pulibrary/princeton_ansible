@@ -248,7 +248,34 @@
       changed_when: false
       failed_when: false
 
-    - name: Report the two signatures that matter most
+    # "System error" is the signature of a stall rather than a refusal. sssd
+    # returns it to both PAM phases while its back end is wedged or restarting,
+    # which reads like an access denial but is not one.
+    - name: Count PAM System error results
+      ansible.builtin.shell:
+        cmd: >-
+          set -o pipefail;
+          journalctl -u sssd -u ssh -u sshd --since '14 days ago' --no-pager
+          | grep -cE 'pam_sss.*(4 \(System error\)|System error)' || true
+      args:
+        executable: /bin/bash
+      register: debug_syserr
+      changed_when: false
+      failed_when: false
+
+    - name: Count times the directory went offline
+      ansible.builtin.shell:
+        cmd: >-
+          set -o pipefail;
+          journalctl -u sssd --since '14 days ago' --no-pager
+          | grep -c 'Backend is offline' || true
+      args:
+        executable: /bin/bash
+      register: debug_offline
+      changed_when: false
+      failed_when: false
+
+    - name: Report the signatures that matter most
       ansible.builtin.debug:
         msg:
           - "Kerberos 'Preauthentication failed' in 14 days: {{ debug_preauth.stdout | trim }}"
@@ -256,10 +283,21 @@
           - "  rejected it. That is a wrong, changed, or expired password,"
           - "  not a broken join."
           - "sssd back end killed by watchdog in 14 days: {{ debug_watchdog.stdout | trim }}"
-          - "  Non-zero means the AD back end hung and was restarted. While it"
-          - "  is hung, PAM cannot authenticate anyone, so logins fail with no"
-          - "  usable method. That is intermittent by nature and matches a"
-          - "  transfer that sometimes works and sometimes reports Auth cancel."
+          - "  Non-zero means the back end hung and was restarted. While it is"
+          - "  hung, PAM cannot authenticate anyone, so logins fail with no"
+          - "  usable method. Intermittent by nature, which matches a transfer"
+          - "  that sometimes works and sometimes reports Auth cancel."
+          - "PAM 'System error' results in 14 days: {{ debug_syserr.stdout | trim }}"
+          - "  This is a stall, NOT an access denial. sssd returns it to both"
+          - "  the auth and the account phase while its back end is wedged."
+          - "  A genuine policy refusal is 'Permission denied' (6) instead."
+          - "  Tune the ldap_*_timeout and offline_timeout settings in the"
+          - "  sssd_ldap role so a slow controller fails over rather than"
+          - "  blocking past the watchdog."
+          - "Directory went offline in 14 days: {{ debug_offline.stdout | trim }}"
+          - "  Each retry doubles the wait up to offline_timeout_max, so an"
+          - "  uncapped default can keep transfers failing long after the"
+          - "  directory itself recovered."
 
     # Directory-side account state. An expired password or a disabled account
     # resolves through NSS perfectly well but can never authenticate, which is
