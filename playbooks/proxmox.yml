@@ -16,10 +16,26 @@
   remote_user: bootstrap
   become: true
   vars_files:
-    - ../group_vars/proxmox/{{ runtime_env | default('staging') }}.yml
+    - ../group_vars/proxmox/common.yml
     - ../group_vars/all/vars.yml
 
   pre_tasks:
+    # Environment overrides and secrets are optional, so the playbook still
+    # runs on a checkout where neither file exists yet.
+    - name: Load environment overrides when present
+      ansible.builtin.include_vars: "{{ item }}"
+      with_first_found:
+        - files:
+            - "../group_vars/proxmox/{{ runtime_env | default('staging') }}.yml"
+          skip: true
+
+    - name: Load the Proxmox secrets when present
+      ansible.builtin.include_vars: "{{ item }}"
+      with_first_found:
+        - files:
+            - ../group_vars/proxmox/vault.yml
+          skip: true
+
     - name: Install sudo
       ansible.builtin.apt:
         name: sudo
@@ -42,4 +58,4 @@
         validate: /usr/sbin/visudo -cf %s
   roles:
     - role: ssh_ca_trust
-
+    - role: veeam_proxmox

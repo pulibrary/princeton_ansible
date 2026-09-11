@@ -1,0 +1,49 @@
+---
+- name: Prepare
+  hosts: all
+  become: true
+  tasks:
+    # Reproduce the faults found on the real Proxmox nodes, so the role is
+    # tested against the state it actually has to repair rather than a clean
+    # host. This belongs in prepare, not converge: the idempotence check reruns
+    # converge, and reseeding the faults there would make the role correctly
+    # repair them a second time and look non-idempotent.
+    - name: Create an operators group with blanket passwordless sudo
+      ansible.builtin.group:
+        name: opsys
+        state: present
+
+    - name: Grant that group passwordless sudo
+      ansible.builtin.copy:
+        content: |
+          %opsys ALL=(ALL:ALL) NOPASSWD:ALL
+        dest: /etc/sudoers.d/opsys
+        owner: root
+        group: root
+        mode: "0440"
+        validate: /usr/sbin/visudo -cf %s
+
+    - name: Pre-create the Veeam account with that group as its primary
+      # One node had the account made by hand this way. Clearing supplementary
+      # groups cannot move an account out of its primary group, so the role has
+      # to reset that too.
+      ansible.builtin.user:
+        name: veeam-service
+        group: opsys
+        groups:
+          - opsys
+        append: true
+        state: present
+
+    - name: Leave behind a hand-made drop-in that overrides the managed one
+      # Taken from a real node. The name is the trap: sudoers.d is read in
+      # lexical order and the last match wins, so "-bk" is parsed after the
+      # managed file and silently defeats it.
+      ansible.builtin.copy:
+        content: |
+          veeam-service ALL=(ALL) NOPASSWD: /usr/sbin/dmidecode -s system-uuid
+        dest: /etc/sudoers.d/veeam-service-bk
+        owner: root
+        group: root
+        mode: "0440"
+        validate: /usr/sbin/visudo -cf %s

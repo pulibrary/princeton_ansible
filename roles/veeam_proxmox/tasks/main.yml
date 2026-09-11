@@ -1,0 +1,192 @@
+---
+# tasks/main.yml -- veeam_proxmox
+
+- name: Install the packages Veeam expects on the node
+  ansible.builtin.package:
+    name: "{{ veeam_proxmox_packages }}"
+    state: present
+
+- name: Read the installed sudo version
+  ansible.builtin.command:
+    argv:
+      - sudo
+      - --version
+  register: veeam_proxmox_sudo_version_raw
+  changed_when: false
+
+- name: Record the sudo version
+  ansible.builtin.set_fact:
+    veeam_proxmox_sudo_version: >-
+      {{ veeam_proxmox_sudo_version_raw.stdout_lines[0]
+         | regex_search('([0-9]+\.[0-9]+\.[0-9]+)', '\1') | first }}
+
+- name: Assert sudo is new enough for the sudoers entries Veeam requires
+  ansible.builtin.assert:
+    that:
+      - >-
+        veeam_proxmox_sudo_version
+        is version(veeam_proxmox_min_sudo_version, '>=')
+    fail_msg: >-
+      sudo {{ veeam_proxmox_sudo_version }} is installed, but Veeam's sudoers
+      entries use regular expressions that need
+      {{ veeam_proxmox_min_sudo_version }} or newer.
+
+- name: Ensure the sudoers drop-in directory is actually included
+  ansible.builtin.lineinfile:
+    path: /etc/sudoers
+    regexp: '^[#@%]*\s*includedir\s+/etc/sudoers\.d\s*$'
+    line: "@includedir /etc/sudoers.d"
+    insertafter: EOF
+    owner: root
+    group: root
+    mode: "0440"
+    validate: /usr/sbin/visudo -cf %s
+
+- name: Ensure the account has a group of its own
+  ansible.builtin.group:
+    name: "{{ veeam_proxmox_user_group }}"
+    state: present
+
+- name: Create the Veeam service account
+  ansible.builtin.user:
+    name: "{{ veeam_proxmox_user }}"
+    comment: "{{ veeam_proxmox_user_comment }}"
+    shell: "{{ veeam_proxmox_user_shell }}"
+    create_home: true
+    state: present
+    # A shared primary group carries its own sudo rules, and clearing the
+    # supplementary list cannot move an account out of its primary group, so
+    # set both explicitly.
+    group: "{{ veeam_proxmox_user_group }}"
+    # Declared, not appended: membership of a group with blanket NOPASSWD sudo
+    # (the operators group on these nodes) stops sudo prompting and breaks
+    # Veeam. The account needs no groups; its privileges come from the command
+    # list below.
+    groups: "{{ veeam_proxmox_user_groups }}"
+    append: false
+
+- name: Set the service account password
+  ansible.builtin.user:
+    name: "{{ veeam_proxmox_user }}"
+    password: "{{ veeam_proxmox_user_password }}"
+  when: veeam_proxmox_user_password | length > 0
+  no_log: true
+
+- name: Report that the password is managed outside Ansible
+  ansible.builtin.debug:
+    msg: >-
+      veeam_proxmox_user_password is empty, so {{ veeam_proxmox_user }} keeps
+      whatever password it already has. Veeam cannot authenticate until one is
+      set.
+  when: veeam_proxmox_user_password | length == 0
+
+- name: Remove superseded hand-made sudoers drop-ins
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop: "{{ veeam_proxmox_superseded_sudoers }}"
+  loop_control:
+    label: "{{ item | basename }}"
+
+- name: Grant the service account the commands Veeam runs
+  ansible.builtin.template:
+    src: sudoers.j2
+    dest: "{{ veeam_proxmox_sudoers_path }}"
+    owner: root
+    group: root
+    mode: "0440"
+    validate: /usr/sbin/visudo -cf %s
+
+- name: Check whether sudo would skip the password prompt
+  # Veeam supplies the account password to every sudo call, so a rule that
+  # needs no password leaves it waiting for a prompt that never comes. Ask sudo
+  # what it would really do rather than reading the rules: whether NOPASSWD
+  # wins depends on the order sudoers files are parsed, so inspecting them is
+  # misleading. A non-zero result is the healthy one, meaning sudo demands a
+  # password.
+  ansible.builtin.command:
+    argv:
+      - runuser
+      - -u
+      - "{{ veeam_proxmox_user }}"
+      - --
+      - sudo
+      - -n
+      - /usr/sbin/dmidecode
+      - -s
+      - system-uuid
+  register: veeam_proxmox_passwordless
+  changed_when: false
+  failed_when: false
+
+- name: Collect the account's groups for the failure message
+  ansible.builtin.command:
+    argv:
+      - id
+      - -nG
+      - "{{ veeam_proxmox_user }}"
+  register: veeam_proxmox_user_group_names
+  changed_when: false
+  when: veeam_proxmox_passwordless.rc == 0
+
+- name: Collect the account's primary group for the failure message
+  ansible.builtin.command:
+    argv:
+      - id
+      - -gn
+      - "{{ veeam_proxmox_user }}"
+  register: veeam_proxmox_user_primary_group
+  changed_when: false
+  when: veeam_proxmox_passwordless.rc == 0
+
+- name: Find the sudoers rules that waive the password
+  ansible.builtin.command:
+    argv:
+      - grep
+      - -RniE
+      - '^[^#]*NOPASSWD'
+      - /etc/sudoers
+      - /etc/sudoers.d
+  register: veeam_proxmox_nopasswd_rules
+  changed_when: false
+  failed_when: false
+  when: veeam_proxmox_passwordless.rc == 0
+
+- name: Assert sudo still asks the account for a password
+  ansible.builtin.assert:
+    that:
+      - veeam_proxmox_passwordless.rc != 0
+    fail_msg: >-
+      sudo runs commands for {{ veeam_proxmox_user }} without asking for a
+      password, so Veeam will wait for a prompt that never arrives and report
+      "The password request timeout has expired".
+      Primary group:
+      {{ veeam_proxmox_user_primary_group.stdout | default('unknown') }}.
+      All groups:
+      {{ veeam_proxmox_user_group_names.stdout | default('unknown') }}.
+      These rules waive the password:
+      {{ veeam_proxmox_nopasswd_rules.stdout_lines | default([]) }}.
+      If a rule above names one of those groups, that is the cause. If it names
+      the account directly in a file this role does not manage, add that path to
+      veeam_proxmox_superseded_sudoers so it is removed on every node instead of
+      by hand. Remember that sudo applies the last matching rule in lexical
+      order, so a file such as {{ veeam_proxmox_user }}-bk overrides
+      {{ veeam_proxmox_sudoers_path | basename }}.
+
+- name: Confirm sudo permits the command Veeam validates credentials with
+  ansible.builtin.command:
+    argv:
+      - sudo
+      - -l
+      - -U
+      - "{{ veeam_proxmox_user }}"
+      - /usr/sbin/dmidecode
+      - -s
+      - system-uuid
+  register: veeam_proxmox_dmidecode_allowed
+  changed_when: false
+  failed_when: veeam_proxmox_dmidecode_allowed.rc != 0
+
+- name: Configure the matching Proxmox VE account
+  when: veeam_proxmox_manage_pve_user | bool
+  ansible.builtin.include_tasks: pve_user.yml

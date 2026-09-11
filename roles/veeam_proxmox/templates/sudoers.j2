@@ -1,0 +1,10 @@
+#jinja2: trim_blocks: True, lstrip_blocks: True
+# {{ ansible_managed }}
+# Commands Veeam Backup & Replication runs on this node, from Veeam KB4701.
+#
+# PASSWD is deliberate. Veeam sends the account password with every sudo call
+# and reports a credential timeout if sudo does not ask for one, so NOPASSWD
+# breaks the integration rather than easing it.
+{% for command in veeam_proxmox_sudo_commands %}
+{{ veeam_proxmox_user }} ALL=(root) PASSWD: {{ command }}
+{% endfor %}

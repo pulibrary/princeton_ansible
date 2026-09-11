@@ -1,16 +1,28 @@
 #jinja2: trim_blocks: True, lstrip_blocks: True
 # {{ ansible_managed }}
 # SSH certificate authority access, managed by the ssh_ca_trust role.
+{% set password_users = ssh_ca_password_auth_users | reject('none') | reject('equalto', '') | unique | list %}
+{% set allowed_users = (ssh_ca_allowed_users + password_users) | unique | list %}
 
 TrustedUserCAKeys {{ ssh_ca_trusted_keys_path }}
 AuthorizedPrincipalsFile {{ ssh_ca_auth_principals_dir }}/%u
 PubkeyAuthentication yes
 {% if ssh_ca_allowed_users | length > 0 %}
-AllowUsers {{ ssh_ca_allowed_users | join(' ') }}
+AllowUsers {{ allowed_users | join(' ') }}
 {% endif %}
 {% if ssh_ca_disable_password_auth %}
 PasswordAuthentication no
 {% endif %}
 {% if ssh_ca_disable_kbdinteractive %}
 KbdInteractiveAuthentication no
+{% endif %}
+{% if password_users | length > 0 %}
+
+# Service accounts that cannot present a certificate. The trailing `Match all`
+# restores the global context so directives parsed after this include are not
+# silently made conditional.
+Match User {{ password_users | join(',') }}
+    PasswordAuthentication yes
+    KbdInteractiveAuthentication yes
+Match all
 {% endif %}
