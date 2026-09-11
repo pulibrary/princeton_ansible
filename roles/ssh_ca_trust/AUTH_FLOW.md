@@ -156,8 +156,9 @@ flowchart TD
 Entra ID is not an option for password-only service accounts: Himmelblau forces
 MFA for every remote session, so the login fails even with the correct password.
 That is the whole reason `ssh_ca_password_auth_users` exists rather than a
-second identity role. For how Active Directory resolves and authenticates such
-accounts, see [the sssd_ldap authentication flow](../sssd_ldap/AUTH_FLOW.md).
+second identity role. Enabling the SSH layer is rarely the whole job: on the
+Proxmox nodes the Veeam account also needs sudo and Proxmox API privileges, which
+the [veeam_proxmox](../veeam_proxmox/AUTH_FLOW.md) role documents and configures.
 
 Reading a failure
 -----------------
