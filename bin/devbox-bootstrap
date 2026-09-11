@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+# Make sure the project environment is ready to use.
+#
+# Called automatically by .envrc (direnv) every time you enter the project
+# directory, and available as `devbox run bootstrap`. Work is skipped when the
+# dependency lock files have not changed since the last successful run.
+
+set -uo pipefail
+
+root="${DEVBOX_PROJECT_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
+cd "$root" || exit 1
+
+state_dir=".devbox/bootstrap"
+stamp="$state_dir/lockfiles.sha"
+
+hash_files() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    cat "$@" 2>/dev/null | sha256sum | awk '{print $1}'
+  elif command -v shasum >/dev/null 2>&1; then
+    cat "$@" 2>/dev/null | shasum -a 256 | awk '{print $1}'
+  else
+    cat "$@" 2>/dev/null | cksum | awk '{print $1}'
+  fi
+}
+
+current="$(hash_files uv.lock pyproject.toml devbox.lock)"
+
+if [ -x .venv/bin/ansible ] && [ -f "$stamp" ] && [ "$(cat "$stamp")" = "$current" ]; then
+  exit 0
+fi
+
+echo "==> Preparing princeton_ansible environment (this only runs when dependencies change)"
+
+status=0
+
+echo "--> Syncing Python environment"
+uv sync --frozen || status=1
+
+echo "--> Configuring git hooks"
+git config core.hooksPath .githooks || status=1
+
+if ! command -v lastpass-ansible >/dev/null 2>&1; then
+  echo "--> Installing lastpass-ansible gem"
+  gem install --no-document lastpass-ansible || {
+    echo "!!! Could not install the lastpass-ansible gem; vault access may not work"
+    status=1
+  }
+fi
+
+if ! ansible-galaxy collection list prometheus.prometheus >/dev/null 2>&1; then
+  echo "--> Installing prometheus.prometheus collection"
+  ansible-galaxy collection install prometheus.prometheus || status=1
+fi
+
+if [ "$status" -eq 0 ]; then
+  mkdir -p "$state_dir"
+  echo "$current" >"$stamp"
+  echo "==> Environment ready"
+else
+  echo "!!! Environment setup finished with problems; run bin/devbox-bootstrap for details"
+fi
+
+exit "$status"
