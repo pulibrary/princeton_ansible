@@ -7,49 +7,5 @@
     veeam_proxmox_manage_pve_user: false
     veeam_proxmox_user_password: >-
       $6$moleculesalt$socXGF22KXWBXTBZSWaNH9X5FgVDe5uoVpSjhmmNhECRlLt/dokr5LDWbKpS6YwP2fxz18qlVE/E4wE8loe/Y1
-  pre_tasks:
-    # Reproduce the state the Proxmox nodes are really in: an operators group
-    # with blanket NOPASSWD sudo, and the Veeam account already a member of it.
-    # The role must take the account back out, otherwise sudo may stop asking
-    # for a password and Veeam times out waiting for the prompt.
-    - name: Create an operators group with blanket passwordless sudo
-      ansible.builtin.group:
-        name: opsys
-        state: present
-
-    - name: Grant that group passwordless sudo
-      ansible.builtin.copy:
-        content: |
-          %opsys ALL=(ALL:ALL) NOPASSWD:ALL
-        dest: /etc/sudoers.d/opsys
-        owner: root
-        group: root
-        mode: "0440"
-        validate: /usr/sbin/visudo -cf %s
-
-    - name: Pre-create the Veeam account with that group as its primary
-      # The harder half of the real regression: one node had the account
-      # created by hand this way. Clearing supplementary groups cannot move an
-      # account out of its primary group, so the role has to reset that too.
-      ansible.builtin.user:
-        name: veeam-service
-        group: opsys
-        groups:
-          - opsys
-        append: true
-        state: present
-
-    - name: Leave behind a hand-made drop-in that overrides the managed one
-      # Taken from a real node. The name is the trap: sudoers.d is read in
-      # lexical order and the last match wins, so "-bk" is parsed after the
-      # managed file and silently defeats it.
-      ansible.builtin.copy:
-        content: |
-          veeam-service ALL=(ALL) NOPASSWD: /usr/sbin/dmidecode -s system-uuid
-        dest: /etc/sudoers.d/veeam-service-bk
-        owner: root
-        group: root
-        mode: "0440"
-        validate: /usr/sbin/visudo -cf %s
   roles:
     - role: veeam_proxmox
