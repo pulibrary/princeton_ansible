@@ -48,6 +48,27 @@ ldap_tls_cacert = {{ sssd_ldap_tls_cacert | default(sssd_ldap_default_cacert) }}
 # every lookup slow or hang.
 ldap_referrals = false
 
+# Fail fast and recover, rather than blocking a lookup long enough for sssd's
+# own watchdog to kill the back end. While a back end is being restarted, PAM
+# gets "System error" for both the auth and the account phase, which looks like
+# an access denial but is really a stall.
+ldap_network_timeout = {{ sssd_ldap_network_timeout }}
+ldap_opt_timeout = {{ sssd_ldap_opt_timeout }}
+ldap_search_timeout = {{ sssd_ldap_search_timeout }}
+
+# Recycle connections before Active Directory drops them. Both this and the
+# server's MaxConnIdleTime default to 900 seconds, so sssd can pick up a
+# connection the domain controller has just closed and then block on it.
+ldap_connection_expire_timeout = {{ sssd_ldap_connection_expire_timeout }}
+ldap_connection_idle_timeout = {{ sssd_ldap_connection_idle_timeout }}
+
+# How long to stay offline before retrying, so a brief outage does not keep
+# file transfers failing for minutes afterwards. Each failed retry doubles the
+# wait up to the cap; the default cap of 3600 can leave sssd offline for an
+# hour after a short blip.
+offline_timeout = {{ sssd_ldap_offline_timeout }}
+offline_timeout_max = {{ sssd_ldap_offline_timeout_max }}
+
 ldap_id_mapping = {{ sssd_ldap_id_mapping | string }}
 # Never enumerate: this directory is far too large to list.
 enumerate = false
