@@ -1,0 +1,282 @@
+---
+# tasks file for roles/sssd_ldap
+- name: Load OS-specific variables
+  ansible.builtin.include_vars: >-
+    {{ lookup('ansible.builtin.first_found', params) }}
+  vars:
+    params:
+      files:
+        - "{{ ansible_facts['os_family'] }}.yml"
+      paths:
+        - "vars"
+
+- name: Sssd_ldap | Assert the lookup credentials were provided
+  ansible.builtin.assert:
+    that:
+      - sssd_ldap_bind_dn | length > 0
+      - sssd_ldap_bind_password | length > 0
+    fail_msg: >-
+      sssd_ldap_bind_dn and sssd_ldap_bind_password must be set. They normally
+      come from sssd_bind_dn and sssd_bind_dn_password in group_vars/all.
+      Note that vault_sssd_dn_password is also defined in
+      group_vars/sftp/vault.yml, which a play loads later and so wins. Rotating
+      the credential in group_vars/all alone has no effect on these hosts.
+
+- name: Sssd_ldap | Refuse to send passwords to an unverified directory
+  ansible.builtin.assert:
+    that:
+      - sssd_ldap_tls_reqcert in ['demand', 'hard']
+      - sssd_ldap_uri | select('search', '^ldaps://') | list | length
+        == sssd_ldap_uri | length
+    fail_msg: >-
+      Every URI must be ldaps:// and sssd_ldap_tls_reqcert must be demand or
+      hard. Authentication sends the user's password in an LDAP simple bind, so
+      the channel has to be encrypted and the server verified.
+
+- name: Sssd_ldap | Install sssd and the LDAP back end
+  ansible.builtin.package:
+    name: "{{ sssd_ldap_packages }}"
+    state: present
+
+# Prove the directory is reachable and usable before writing any configuration.
+# sssd reports a certificate problem, a bad bind identity and a missing account
+# identically, as "no such user", so check them here where they can be told
+# apart.
+- name: Sssd_ldap | Pre-flight directory checks
+  ansible.builtin.include_tasks: preflight.yml
+  when: sssd_ldap_preflight | bool
+
+- name: Sssd_ldap | Write the sssd configuration
+  ansible.builtin.template:
+    src: sssd.conf.j2
+    dest: /etc/sssd/sssd.conf
+    owner: root
+    group: root
+    # sssd refuses to start if this is group or world readable, and it holds the
+    # lookup account password.
+    mode: "0600"
+  no_log: true
+  notify:
+    - Validate sssd configuration
+    - Restart sssd
+
+- name: Sssd_ldap | Resolve users and groups through sssd
+  ansible.builtin.lineinfile:
+    path: /etc/nsswitch.conf
+    regexp: "^{{ item }}:"
+    line: "{{ item }}:         files sss"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - passwd
+    - group
+    - shadow
+  notify:
+    - Restart sssd
+
+- name: Sssd_ldap | Configure PAM
+  when: sssd_ldap_configure_pam | bool
+  block:
+    - name: Sssd_ldap | Enable the sssd PAM profiles on Debian
+      ansible.builtin.command:
+        argv:
+          - pam-auth-update
+          - --enable
+          - "{{ item }}"
+      loop: "{{ sssd_ldap_pam_profiles }}"
+      when: ansible_facts['os_family'] == "Debian"
+      changed_when: true
+      environment:
+        DEBIAN_FRONTEND: noninteractive
+
+    # ad_join installs a custom authselect profile. Refuse to overwrite it
+    # rather than silently replacing another role's PAM configuration.
+    - name: Sssd_ldap | Read the current authselect profile on RedHat
+      ansible.builtin.command:
+        argv:
+          - authselect
+          - current
+      register: sssd_ldap_authselect_current
+      changed_when: false
+      failed_when: false
+      when: ansible_facts['os_family'] == "RedHat"
+
+    - name: Sssd_ldap | Select the sssd authselect profile on RedHat
+      ansible.builtin.command:
+        argv:
+          - authselect
+          - select
+          - "{{ sssd_ldap_authselect_profile }}"
+          - with-mkhomedir
+          - --force
+      when:
+        - ansible_facts['os_family'] == "RedHat"
+        - "'custom/' not in sssd_ldap_authselect_current.stdout | default('')"
+      changed_when: true
+
+    - name: Sssd_ldap | Warn that a custom PAM profile was left alone
+      ansible.builtin.debug:
+        msg: >-
+          authselect is using
+          {{ sssd_ldap_authselect_current.stdout_lines | default([]) | first | default('') }},
+          which another role owns (ad_join installs custom/pul-sssd). Leaving it
+          untouched. If this host should authenticate over LDAP instead, remove
+          the realm join first.
+      when:
+        - ansible_facts['os_family'] == "RedHat"
+        - "'custom/' in sssd_ldap_authselect_current.stdout | default('')"
+
+- name: Sssd_ldap | Enable home directory creation on first login
+  ansible.builtin.service:
+    name: oddjobd
+    enabled: true
+    state: started
+  when:
+    - ansible_facts['os_family'] == "RedHat"
+    - sssd_ldap_create_homedir | bool
+
+- name: Sssd_ldap | Enable and start sssd
+  ansible.builtin.service:
+    name: "{{ sssd_ldap_service }}"
+    enabled: true
+    state: started
+
+# Apply the configuration now, so the directory is answering before any later
+# role tries to chown files to a directory-provided account.
+- name: Sssd_ldap | Apply the configuration before continuing
+  ansible.builtin.meta: flush_handlers
+
+- name: Sssd_ldap | Verify the permitted accounts resolve
+  when:
+    - sssd_ldap_verify_accounts | bool
+    - sssd_ldap_allow_users | length > 0
+  block:
+    # sssd caches negative lookups, so a cache left from an earlier failed run
+    # can make a correct configuration look broken.
+    - name: Sssd_ldap | Expire the sssd cache before checking
+      ansible.builtin.command:
+        argv:
+          - sss_cache
+          - -E
+      changed_when: false
+      failed_when: false
+
+    # sssd needs a moment after a restart before it answers lookups, so retry
+    # rather than failing on a cold cache.
+    - name: Sssd_ldap | Wait for the directory to start answering
+      ansible.builtin.command:
+        argv:
+          - id
+          - "{{ sssd_ldap_allow_users | first }}"
+      register: sssd_ldap_first_lookup
+      changed_when: false
+      until: sssd_ldap_first_lookup.rc == 0
+      retries: 10
+      delay: 6
+      failed_when: false
+
+    - name: Sssd_ldap | Look each permitted account up through NSS
+      ansible.builtin.command:
+        argv:
+          - id
+          - "{{ item }}"
+      loop: "{{ sssd_ldap_allow_users }}"
+      register: sssd_ldap_resolved
+      changed_when: false
+      failed_when: false
+
+    - name: Sssd_ldap | Report which accounts resolved
+      ansible.builtin.debug:
+        msg: >-
+          {{ item.item }}:
+          {{ item.stdout if item.rc == 0 else 'DID NOT RESOLVE' }}
+      loop: "{{ sssd_ldap_resolved.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Sssd_ldap | Fail if the directory did not return an account
+      ansible.builtin.assert:
+        that:
+          - item.rc == 0
+        fail_msg: >-
+          {{ item.item }} did not resolve through sssd, even though the
+          pre-flight checks showed the directory has it. The sssd log above
+          says why. The usual cause is that sssd is not being consulted:
+          confirm `sss` is present on the passwd line of /etc/nsswitch.conf,
+          and that the PAM and NSS modules for sssd are installed.
+      loop: "{{ sssd_ldap_resolved.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+  # Failing here means sssd is running with a valid config but not answering.
+  # Collect the evidence that explains it rather than leaving the operator to
+  # go looking for it.
+  rescue:
+    - name: Sssd_ldap | Read the sssd domain status
+      ansible.builtin.command:
+        argv:
+          - sssctl
+          - domain-status
+          - "{{ sssd_ldap_domain }}"
+      register: sssd_ldap_status
+      changed_when: false
+      failed_when: false
+
+    # A stall long enough to outlast the configured timeouts usually means the
+    # configuration on the host predates them, so report what is actually in
+    # force rather than what this run intended.
+    - name: Sssd_ldap | Read the timeouts in force on the host
+      ansible.builtin.command:
+        argv:
+          - grep
+          - -E
+          - "timeout"
+          - /etc/sssd/sssd.conf
+      register: sssd_ldap_live_timeouts
+      changed_when: false
+      failed_when: false
+
+    - name: Sssd_ldap | Read the nsswitch lookup order
+      ansible.builtin.command:
+        argv:
+          - grep
+          - -E
+          - "^(passwd|group|shadow):"
+          - /etc/nsswitch.conf
+      register: sssd_ldap_nsswitch
+      changed_when: false
+      failed_when: false
+
+    - name: Sssd_ldap | Read recent sssd log lines
+      ansible.builtin.shell:
+        cmd: >-
+          set -o pipefail;
+          journalctl -u sssd --since '10 minutes ago' --no-pager
+          | tail -30 || true
+      args:
+        executable: /bin/bash
+      register: sssd_ldap_journal
+      changed_when: false
+      failed_when: false
+
+    - name: Sssd_ldap | Report why the lookup failed
+      ansible.builtin.debug:
+        msg:
+          - "domain status:"
+          - "{{ sssd_ldap_status.stdout_lines | default(['no output']) }}"
+          - "nsswitch:"
+          - "{{ sssd_ldap_nsswitch.stdout_lines | default(['no output']) }}"
+          - "timeouts in force on the host:"
+          - "{{ sssd_ldap_live_timeouts.stdout_lines | default(['none set']) }}"
+          - "recent sssd log:"
+          - "{{ sssd_ldap_journal.stdout_lines | default(['no output']) }}"
+
+    - name: Sssd_ldap | Stop with the original failure
+      ansible.builtin.fail:
+        msg: >-
+          sssd is running but not resolving the permitted accounts. The domain
+          status, nsswitch order and log lines above show why. If the domain
+          status is Offline, sssd could not reach or bind to the directory even
+          though the pre-flight bind succeeded, which usually means
+          /etc/sssd/sssd.conf disagrees with what was tested.

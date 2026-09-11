@@ -1,0 +1,96 @@
+---
+# Build the sandbox SFTP host.
+#
+# This host is Ubuntu, so it cannot run the realm join in ad_join: that role
+# installs authselect-compat and krb5-workstation, which Ubuntu does not
+# package. It reaches the same Active Directory over LDAPS with sssd_ldap, so
+# almasftp and lib-aspacesftp remain directory accounts (uid 351149 and 354336,
+# primary group pusvc-g) and authenticate with a password. Staging and
+# production stay on ad_join; see playbooks/lib_sftp.yml.
+#
+# sssd_ldap runs before lib_sftp so the directory is answering by the time the
+# drop directories are chowned to accounts that only exist in the directory.
+#
+#   ansible-playbook playbooks/sandbox_sftp.yml
+#
+# Afterwards, prove the transfer login works the way Alma does it:
+#
+#   ssh -o PreferredAuthentications=password almasftp@sandbox-sftp1.princeton.edu
+#
+- name: Build the sandbox SFTP host
+  hosts: libsftp_sandbox
+  remote_user: pulsys
+  become: true
+
+  vars:
+    post_install: |
+      Verify the transfer accounts can actually log in:
+        ssh -o PreferredAuthentications=password almasftp@{{ inventory_hostname }}
+        ssh -o PreferredAuthentications=keyboard-interactive almasftp@{{ inventory_hostname }}
+      Both should succeed. Alma uses JSch and may negotiate either one.
+
+  pre_tasks:
+    - name: Load the deploy user private key
+      ansible.builtin.set_fact:
+        deploy_id_rsa_private_key: >-
+          {{ lookup('file', '../roles/lib_sftp/files/id_ed25519') }}
+
+  vars_files:
+    - ../group_vars/all/vars.yml
+    - ../group_vars/sftp/vault.yml
+    - ../group_vars/sftp/common.yml
+    - ../group_vars/sftp/sandbox.yml
+
+  roles:
+    - role: ../roles/sssd_ldap
+    - role: ../roles/lib_sftp
+
+  post_tasks:
+    # This is the check that matters. sshd -T resolves every drop-in and Match
+    # block, so it reports what a real login would get rather than what any one
+    # file says.
+    - name: Ask sshd what a transfer account login would actually get
+      ansible.builtin.command:
+        argv:
+          - sshd
+          - -T
+          - -C
+          - "user={{ item }},host=alma.exlibrisgroup.com,addr=1.2.3.4"
+      loop:
+        - "{{ almasftp_user }}"
+        - "{{ aspaceftp_user }}"
+      register: sandbox_sftp_effective
+      changed_when: false
+
+    # A password is useless if AllowUsers excludes the account: sshd refuses it
+    # with the credentials still correct, which the client reports as a method
+    # failure rather than a rejected password.
+    - name: Assert the transfer accounts can really authenticate
+      ansible.builtin.assert:
+        that:
+          - "'passwordauthentication yes' in item.stdout"
+          - "'kbdinteractiveauthentication yes' in item.stdout"
+          - >-
+            item.stdout_lines | select('match', '^allowusers ') | list | length == 0
+            or item.item in (item.stdout_lines
+              | select('match', '^allowusers ')
+              | map('regex_replace', '^allowusers ', '')
+              | join(' ')).split()
+        fail_msg: >-
+          {{ item.item }} cannot log in with a password on this host.
+          Effective settings:
+          {{ item.stdout_lines
+             | select('match', '^(passwordauthentication|kbdinteractiveauthentication|allowusers)')
+             | list }}.
+          Both password methods must be yes, and if any AllowUsers is present
+          the account has to appear in it.
+        success_msg: >-
+          {{ item.item }} can authenticate with a password and is permitted by
+          AllowUsers
+      loop: "{{ sandbox_sftp_effective.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Post role reminders
+      ansible.builtin.debug:
+        msg: "{{ post_install.split('\n') }}"

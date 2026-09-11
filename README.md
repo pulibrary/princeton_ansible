@@ -125,6 +125,26 @@ Inside the Devbox shell, you can run:
 | `devbox run test` | Verify Ansible tools installation |
 | `devbox run env-info` | Display current environment configuration |
 
+Cloud CLIs
+----------
+
+The Devbox shell also provides the cloud command line tools:
+
+| Tool | Used for |
+|------|----------|
+| `aws` (`awscli2`) | AWS resources |
+| `az` (`azure-cli`) | Microsoft Entra ID and Azure resources |
+| `step` (`step-cli`) | SSH certificates from the Library step-ca |
+
+`az` is needed to inspect Entra ID accounts, for example when confirming that a
+service account on a host is the same identity as its Entra object:
+
+```sh
+az login
+az ad user show --id almasftp@princeton.edu \
+  --query '{upn:userPrincipalName, oid:id, immutableId:onPremisesImmutableId, synced:onPremisesSyncEnabled}'
+```
+
 Developing
 ----------
 
