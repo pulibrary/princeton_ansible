@@ -53,9 +53,15 @@ sssd_ldap_id_mapping: false
 
 sssd_ldap_default_shell: /bin/bash
 
-# Matches the fallback_homedir on the realm-joined hosts, so a home directory
-# has the same name everywhere.
-sssd_ldap_fallback_homedir: /home/%u@%d
+# Home directory path, matching the realm-joined hosts so an account has the
+# same home everywhere.
+#
+# The obvious value, /home/%u@%d, is not enough: sssd expands %d to the domain
+# section's name, and ad_join labels that section with the uppercase Kerberos
+# realm while this role uses the lowercase DNS domain. The same template would
+# therefore produce a different path here, and any job with the staging path
+# built in would miss. Uppercase it explicitly instead of relying on %d.
+sssd_ldap_fallback_homedir: "/home/%u@{{ sssd_ldap_domain | upper }}"
 
 # Create home directories on first login. Directory accounts have no home until
 # something makes one, and an SFTP session that lands in a missing directory
