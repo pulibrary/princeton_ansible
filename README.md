@@ -18,9 +18,10 @@ Do these things once, after you clone this repo.
 ### Mac
 
 1. Install [Docker Desktop](https://docs.docker.com/desktop/install/mac-install/)
-2. Run `bin/first-time-setup.sh` - this installs Devbox and all language/tooling dependencies
+2. Run `bin/first-time-setup.sh` - this installs Devbox, direnv, and all language/tooling dependencies
 3. If you encounter Nix build user errors, run: `./fix-nix-build-users.sh`
-4. Follow the steps under "Every time setup"
+4. Open a new terminal so the direnv shell hook is active
+5. Follow the steps under "Every time setup"
 
 ### Microsoft Windows/ Ubuntu
 
@@ -29,26 +30,38 @@ Do these things once, after you clone this repo.
 ### Linux
 
 1. Install Docker
-2. Run `bin/first-time-setup.sh` - this installs Devbox and all dependencies
-3. Follow the steps under "Every time setup"
+2. Run `bin/first-time-setup.sh` - this installs Devbox, direnv, and all dependencies
+3. Open a new terminal so the direnv shell hook is active
+4. Follow the steps under "Every time setup"
 
 Every time setup
 ----------------
 
-Run these commands every time you use this repo:
+The repo ships an `.envrc`, so direnv loads the Devbox environment automatically
+when you `cd` into the project. The first time (and after `git pull` changes the
+`.envrc`) direnv asks you to approve it:
 
 ```bash
-# Enter the Devbox development environment
-devbox shell
+cd princeton_ansible
+direnv allow
 
-# Initialize the Python environment (first time in new shell)
-devbox run init
-
-# Login to LastPass
+# Login to LastPass (once per 9 hours)
 lpass login <your-netid@princeton.edu>
 ```
 
-The Devbox environment provides:
+Entering the directory will:
+
+- Load the Devbox packages and environment variables (no `devbox shell` needed)
+- Sync the Python virtual environment whenever `uv.lock`, `pyproject.toml`, or
+  `devbox.lock` change
+- Install the `lastpass-ansible` gem and the `prometheus.prometheus` collection
+  if they are missing
+- Configure the git hooks that prevent committing unencrypted vault files
+
+If you prefer to work without direnv, `devbox shell` followed by
+`devbox run bootstrap` gives you the same environment.
+
+The environment provides:
 
 - Python virtual environment with all Ansible tools
 - ANSIBLE_VAULT_PASSWORD_FILE configured to use lastpass-ansible
@@ -60,7 +73,7 @@ Now you can run tests (See "Running molecule tests") or playbooks (See "Usage")
 Validate that everything is installed correctly
 -----------------------------------------------
 
-Make sure Docker is running, then from inside the Devbox shell:
+Make sure Docker is running, then from the project directory:
 
 ```bash
 # Verify tools are available
@@ -80,14 +93,31 @@ Troubleshooting Setup
 
 ### Ansible Command Not Found / Reinstall deps
 
-If `ansible` or other Python tools aren't found in your Devbox shell (e.g. a fresh clone):
+If `ansible` or other Python tools aren't found (e.g. a fresh clone):
 
 ```bash
-# Exit and re-enter devbox shell
-exit
-devbox shell
-devbox run init
+# Re-run the environment bootstrap
+devbox run bootstrap
+
+# Or force a full reload of the direnv environment
+direnv reload
 ```
+
+### direnv Is Not Loading the Environment
+
+```bash
+# Confirm direnv is installed and hooked into your shell
+direnv version
+
+# Approve the .envrc (needed after it changes)
+direnv allow
+
+# See what direnv is doing
+direnv reload
+```
+
+If `direnv: command not found`, install it with `devbox global add direnv` and
+add `eval "$(direnv hook zsh)"` (or `bash`) to your shell profile.
 
 ### LastPass Authentication Issues
 
@@ -118,10 +148,11 @@ Inside the Devbox shell, you can run:
 
 | Command | Description |
 |---------|-------------|
+| `devbox run bootstrap` | Make sure the environment is ready (runs automatically via direnv) |
 | `devbox run init` | Initialize Python environment and dependencies |
 | `devbox run update-deps` | Upgrade Python dependencies and refresh `uv.lock` |
 | `devbox run lock` | Refresh `uv.lock` after editing `pyproject.toml` |
-| `devbox run clean` | Remove virtual environment and Devbox cache |
+| `devbox run clean` | Remove virtual environment, Devbox cache, and direnv cache |
 | `devbox run test` | Verify Ansible tools installation |
 | `devbox run env-info` | Display current environment configuration |
 
