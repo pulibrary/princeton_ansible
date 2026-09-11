@@ -299,6 +299,34 @@
           - "  uncapped default can keep transfers failing long after the"
           - "  directory itself recovered."
 
+    # sshd reports an account-phase failure in its own words, which can name a
+    # cause that is not real. Count those so they are recognised as a symptom.
+    - name: Count account-phase messages from sshd
+      ansible.builtin.shell:
+        cmd: >-
+          set -o pipefail;
+          journalctl -u ssh -u sshd --since '14 days ago' --no-pager
+          | grep -cE 'PAM: User account has expired|by PAM account configuration' || true
+      args:
+        executable: /bin/bash
+      register: debug_sshd_pam_msg
+      changed_when: false
+      failed_when: false
+
+    - name: Report messages that can name the wrong cause
+      ansible.builtin.debug:
+        msg:
+          - "sshd account-phase messages in 14 days: {{ debug_sshd_pam_msg.stdout | trim }}"
+          - "  sshd prints whatever the PAM stack returned, which after a"
+          - "  pam_sss failure can be specific but untrue, such as"
+          - "  'User account has expired'. Trust the pam_sss line instead:"
+          - "  4 is a stall, 6 is a real refusal. Confirm the account itself"
+          - "  with playbooks/utils/ad_account_lookup.yml, where"
+          - "  userAccountControl 66048 means enabled and never expiring."
+          - "  'monitor_read: unpermitted request' alongside these is sshd's"
+          - "  privilege separation reacting to a conversation that already"
+          - "  broke, not a separate fault."
+
     # Directory-side account state. An expired password or a disabled account
     # resolves through NSS perfectly well but can never authenticate, which is
     # easy to misread as an sshd or sssd fault.

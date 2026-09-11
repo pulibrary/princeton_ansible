@@ -223,6 +223,20 @@
       changed_when: false
       failed_when: false
 
+    # A stall long enough to outlast the configured timeouts usually means the
+    # configuration on the host predates them, so report what is actually in
+    # force rather than what this run intended.
+    - name: Sssd_ldap | Read the timeouts in force on the host
+      ansible.builtin.command:
+        argv:
+          - grep
+          - -E
+          - "timeout"
+          - /etc/sssd/sssd.conf
+      register: sssd_ldap_live_timeouts
+      changed_when: false
+      failed_when: false
+
     - name: Sssd_ldap | Read the nsswitch lookup order
       ansible.builtin.command:
         argv:
@@ -253,6 +267,8 @@
           - "{{ sssd_ldap_status.stdout_lines | default(['no output']) }}"
           - "nsswitch:"
           - "{{ sssd_ldap_nsswitch.stdout_lines | default(['no output']) }}"
+          - "timeouts in force on the host:"
+          - "{{ sssd_ldap_live_timeouts.stdout_lines | default(['none set']) }}"
           - "recent sssd log:"
           - "{{ sssd_ldap_journal.stdout_lines | default(['no output']) }}"
 
