@@ -152,6 +152,45 @@ interface.
 Reading a failure
 -----------------
 
+### Misleading messages in the SSH log
+
+One failure in the account phase is reported by several components at once, and
+only one of them is authoritative. From a real failure on the sandbox:
+
+```text
+pam_sss(sshd:auth): authentication success            <- the password was fine
+pam_sss(sshd:account): Access denied ... 4 (System error)
+error: PAM: User account has expired for almasftp
+fatal: monitor_read: unpermitted request 104
+```
+
+Read those as **one** event, not four:
+
+| Line | What it actually means |
+| --- | --- |
+| `pam_sss ... 4 (System error)` | **the authoritative one.** sssd could not answer. A genuine policy refusal is `6 (Permission denied)`. |
+| `PAM: User account has expired` | sshd reporting whatever the PAM stack returned once `pam_sss` had failed. **Not literally true.** Check the directory before believing it. |
+| `monitor_read: unpermitted request 104` | sshd's privilege-separated monitor rejecting a request from its child after the conversation had already broken. A downstream symptom. |
+
+The expiry message is the dangerous one: specific, plausible and wrong.
+`playbooks/utils/ad_account_lookup.yml` reports `userAccountControl` for each
+account, and `66048` means enabled with a non-expiring password, so any
+"expired" message on these accounts is a misreport.
+
+Note also that the auth phase can succeed while the account phase fails moments
+later. Cached credentials satisfy the password check without the directory, so a
+working password proves nothing about whether sssd is currently healthy.
+
+### The gap between the lines is the clue
+
+A stall shows up as elapsed time. On the sandbox the account phase failed **24
+seconds** after its own auth succeeded, far longer than any configured LDAP
+timeout, so the query was not merely slow: the back end was wedged or
+restarting. Compare the timestamps before assuming a policy decision was made
+at all.
+
+### Active Directory sub-codes
+
 Active Directory returns the same "invalid credentials" for many different
 problems and hides the real reason in a numeric sub-code. The role decodes
 these, but when checking by hand:
