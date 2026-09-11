@@ -29,10 +29,13 @@
     "init_hook": [
       // Strip ASDF shims from path to prevent ansible python lookup from finding bad installs.
       "export PATH=$(echo \"$PATH\" | tr ':' '\\n' | grep -v '\\.asdf/shims' | tr '\\n' ':' | sed 's/:$//')",
-      "echo 'Welcome to the Devbox shell!'",
-      "echo 'Run \"devbox run init\" to set up the Python environment'",
+      // Stay quiet when direnv loads this environment automatically on cd.
+      "if [ -z \"${DIRENV_IN_ENVRC:-}\" ]; then echo 'Welcome to the Devbox shell!'; echo 'Run \"devbox run bootstrap\" if tools are missing'; fi",
     ],
     "scripts": {
+      "bootstrap": [
+        "bin/devbox-bootstrap",
+      ],
       "init": [
         "uv sync --frozen",
         "test -d .venv && echo 'Virtual environment ready' || echo 'Failed to create virtual environment'",
@@ -54,6 +57,7 @@
       "clean": [
         "rm -rf .venv",
         "rm -rf .devbox",
+        "rm -rf .direnv",
       ],
       "test": [
         "ansible --version",
