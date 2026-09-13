@@ -1,0 +1,18 @@
+---
+# by default this playbook runs in the sandbox environment
+# to run in production, pass '-e runtime_env=production'
+- name: Nomad Solr | Provision Variables & Infrastructure
+  # The [0] picks the first nomad server, since we just run the
+  # nomad commands there.
+  hosts: "nomad_servers_{{ runtime_env | default('sandbox') }}[0]"
+  remote_user: pulsys
+  become: true
+
+  # Vault files (env-agnostic secrets or per-env keys within)
+  vars_files:
+    # This will auto include group_vars/nomad_sandbox.yml
+    # This will auto include group_vars/nomad_servers.yml
+    - ../group_vars/nomad/vault.yml
+    - "../group_vars/nomad_solr/{{ runtime_env | default('sandbox') }}.yml"
+  roles:
+    - role: roles/nomad_app
