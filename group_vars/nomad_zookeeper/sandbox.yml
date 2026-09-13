@@ -1,9 +1,10 @@
 ---
+# The zookeeper image runs as uid 1000, and Docker on the clients uses
+# userns-remap, so the volume has to be owned by the remapped uid.
+nomad_zookeeper_container_uid: 1000
 nomad_volumes:
-  # Docker runs with userns-remap (dockremap:1000000), so the host uid/gid is
-  # the in-container zookeeper user (1000) plus that offset.
   - name: 'zookeeper-sandbox'
     count: 3
     node_pool: 'sandbox'
-    uid: 1001000
-    gid: 1001000
+    uid: "{{ nomad_docker_userns_offset + nomad_zookeeper_container_uid }}"
+    gid: "{{ nomad_docker_userns_offset + nomad_zookeeper_container_uid }}"

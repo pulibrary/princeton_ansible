@@ -25,6 +25,10 @@ volume so a rescheduled allocation keeps its state.
 
 ## Wiping the Ensemble
 
+The playbook only creates volumes that don't exist yet, it never changes an
+existing one. So if the ownership was wrong, or you want to start over, the
+volumes have to be deleted and recreated:
+
 1. Stop the job
 1. `ssh deploy@nomad-host-sandbox1.lib.princeton.edu`
 1. `nomad volume status -type host | grep zookeeper-sandbox`
@@ -34,3 +38,17 @@ volume so a rescheduled allocation keeps its state.
 
 Wiping Zookeeper discards all Solr cloud state (collections, configsets, and
 cluster topology), so Solr must be reindexed afterwards.
+
+## Troubleshooting
+
+`/docker-entrypoint.sh: line 47: /data/myid: Permission denied` means the host
+volume isn't writable by the container's user. Check what the directory is
+actually owned by on the client that's running the allocation:
+
+```bash
+ssh pulsys@nomad-client-sandbox1.lib.princeton.edu \
+  'sudo ls -lnd /container_data/zookeeper-sandbox*'
+```
+
+The owner must be the container uid plus the userns-remap offset (1001000).
+If it isn't, delete and recreate the volumes as described above.
