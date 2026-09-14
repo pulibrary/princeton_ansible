@@ -8,6 +8,8 @@ Installs and configures [Grafana Beyla](https://www.google.com/search?q=https://
 
 - **Dependencies**: Ensure `tar` is installed on the target machine to unarchive the release.
 
+- **Downloads**: The release tarball is cached under `/opt/beyla/releases`. If it is already there the download is skipped, so re-running the role does not depend on reaching the internet.
+
 ## Role Variables
 
 The following variables are defined in `defaults/main.yml` and can be overridden to customize the installation and configuration.
@@ -17,7 +19,8 @@ The following variables are defined in `defaults/main.yml` and can be overridden
 | **Variable**          | **Default** | **Description**                                                                   |
 | --------------------- | ----------- | --------------------------------------------------------------------------------- |
 | **`beyla_enabled`**   | `false`     | Main toggle for the role. Must be set to `true` to install and configure Beyla. |
-| **`beyla_version`**   | `"3.15.0"`  | The version of Grafana Beyla to download and install.                             |
+| **`beyla_version`**   | `"3.35.0"`  | The version of Grafana Beyla to download and install.                             |
+| **`beyla_platform`**  | `linux-amd64` | Release platform suffix used to build the download URL.                         |
 | **`beyla_user`**      | `root`      | System user to run the Beyla systemd service. (Requires eBPF/proc access).        |
 | **`beyla_group`**     | `root`      | System group to run the Beyla systemd service.                                    |
 | **`beyla_log_level`** | `info`      | The logging verbosity for the Beyla daemon.                                       |
@@ -45,6 +48,8 @@ Beyla needs to know which processes or ports to instrument. You can provide thes
 | **Variable**            | **Default**             | **Description**                                    |
 | ----------------------- | ----------------------- | -------------------------------------------------- |
 | **`beyla_install_dir`** | `/opt/beyla`            | Base installation directory.                       |
+| **`beyla_releases_dir`** | `/opt/beyla/releases`  | Where unpacked releases and the cached tarball live. |
+| **`beyla_download_dir`** | `/opt/beyla/releases`  | Directory the release tarball is downloaded into.  |
 | **`beyla_config_dir`**  | `/etc/beyla`            | Directory for Beyla configuration files.           |
 | **`beyla_binary_path`** | `/usr/local/bin/beyla`  | Destination path for the executable binary.        |
 | **`beyla_config_path`** | `/etc/beyla/config.yml` | Destination path for the main configuration file.  |
@@ -63,7 +68,7 @@ Here is an example of how to include and configure this role in your playbook to
   become: true
   vars:
     beyla_enabled: true
-    beyla_version: "3.15.0"
+    beyla_version: "3.35.0"
     beyla_service_name: "nginx-frontend"
     beyla_environment: "production"
     beyla_open_ports:
