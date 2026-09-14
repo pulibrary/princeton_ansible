@@ -1,17 +1,27 @@
 ---
 beyla_enabled: false
 
-beyla_version: "3.28.0"
-beyla_release_dir: "{{ beyla_install_dir }}/releases/{{ beyla_version }}"
-beyla_archive_path: "/tmp/beyla-linux-amd64-v{{ beyla_version }}.tar.gz"
-
-beyla_download_url: "https://github.com/grafana/beyla/releases/download/v{{ beyla_version }}/beyla-linux-amd64-v{{ beyla_version }}.tar.gz"
+# The version of Beyla to install. PUL targets amd64.
+beyla_version: "3.35.0"
+beyla_platform: "linux-amd64"
 
 beyla_install_dir: /opt/beyla
+beyla_releases_dir: "{{ beyla_install_dir }}/releases"
+beyla_release_dir: "{{ beyla_releases_dir }}/{{ beyla_version }}"
+beyla_release_binary: "{{ beyla_release_dir }}/beyla"
 beyla_config_dir: /etc/beyla
 beyla_config_path: /etc/beyla/config.yml
 beyla_env_path: /etc/default/beyla
 beyla_binary_path: /usr/local/bin/beyla
+
+# Where the release tarball is kept. Downloading it outside of /tmp means it
+# survives reboots and tmp cleaners, so it only has to be fetched once.
+beyla_archive_name: "beyla-{{ beyla_platform }}-v{{ beyla_version }}.tar.gz"
+beyla_download_dir: "{{ beyla_releases_dir }}"
+beyla_archive_path: "{{ beyla_download_dir }}/{{ beyla_archive_name }}"
+beyla_download_base_url: "https://github.com/grafana/beyla/releases/download"
+beyla_download_url: >-
+  {{ beyla_download_base_url }}/v{{ beyla_version }}/{{ beyla_archive_name }}
 
 # Prefer exporting to the local collector on each app host.
 beyla_otlp_endpoint: "http://127.0.0.1:4318"
