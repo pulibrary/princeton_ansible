@@ -1,0 +1,46 @@
+---
+# Remote desktop with Entra ID sign-in, and nothing else.
+#
+# This deliberately does NOT apply the bitcurator role. That role creates a
+# local bcadmin account with a shared password, which is precisely what Entra ID
+# authentication is meant to replace. Use this playbook to build or test a
+# desktop where every user signs in with their own netid.
+#
+# Role order matters: himmelblau_entra_id only configures remote desktop support
+# when XRDP is already installed, so xrdp has to run first. In a single play the
+# roles are applied in order, so this works as written.
+- name: configure a remote desktop with Entra ID logins
+  hosts: sandboxes
+  remote_user: pulsys
+  become: true
+  vars_files:
+    - ../group_vars/himmelblau/common.yml
+    - ../group_vars/himmelblau/vault.yml
+    - ../group_vars/bitcurator/desktop.yml
+  roles:
+    - role: xrdp
+    - role: himmelblau_entra_id
+
+  post_tasks:
+    # Fails the run if remote desktop was silently skipped, which is what
+    # happens when XRDP is missing and is easy to miss in the output.
+    - name: confirm the remote desktop PAM stack was installed
+      ansible.builtin.stat:
+        path: /etc/pam.d/xrdp-sesman
+      register: xrdp_pam_stack
+
+    - name: assert remote desktop is wired up for Entra ID
+      ansible.builtin.assert:
+        that:
+          - xrdp_pam_stack.stat.exists
+        fail_msg: >-
+          /etc/pam.d/xrdp-sesman is missing on {{ inventory_hostname }}, so
+          remote desktop logins will not consult Entra ID. Check whether the
+          xrdp role installed the session manager.
+        quiet: true
+
+    - name: tell everyone on slack you ran an ansible playbook
+      community.general.slack:
+        token: "{{ vault_pul_slack_token }}"
+        msg: "Ansible ran `{{ ansible_play_name }}` on {{ inventory_hostname }}"
+        channel: "{{ slack_alerts_channel }}"

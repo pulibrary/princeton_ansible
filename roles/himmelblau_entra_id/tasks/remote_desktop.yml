@@ -1,0 +1,49 @@
+---
+# Remote desktop (XRDP) sign-in for Entra ID users.
+#
+# XRDP authenticates through its own PAM service (xrdp-sesman), which does not
+# pick up the himmelblau stacks unless it includes the common-* files. On top of
+# that, XRDP's login window can only carry a single password prompt, so the
+# device-code MFA conversation cannot be completed there. Password-only console
+# authentication (see himmelblau_allow_console_password_only) plus dropping xrdp
+# from the always-require-MFA deny list is what makes remote desktop usable.
+
+- name: Himmelblau (remote desktop) | look for XRDP
+  ansible.builtin.stat:
+    path: /usr/sbin/xrdp-sesman
+  register: _himmelblau_xrdp
+
+- name: Himmelblau (remote desktop) | configure XRDP PAM and session support
+  when: _himmelblau_xrdp.stat.exists
+  block:
+    - name: Himmelblau (remote desktop) | write XRDP PAM stacks
+      ansible.builtin.template:
+        src: xrdp-pam.j2
+        dest: "/etc/pam.d/{{ item }}"
+        owner: root
+        group: root
+        mode: "0644"
+        backup: true
+      loop: "{{ himmelblau_remote_desktop_pam_services }}"
+
+    - name: Himmelblau (remote desktop) | ensure local groups exist
+      ansible.builtin.group:
+        name: "{{ item }}"
+        state: present
+      loop: "{{ himmelblau_remote_desktop_local_groups }}"
+
+    # XRDP starts the session as the Entra ID user, so systemd-logind has to
+    # hand out an XDG_RUNTIME_DIR for the XFCE session bus to come up.
+    - name: Himmelblau (remote desktop) | ensure logind is running
+      ansible.builtin.systemd:
+        name: systemd-logind
+        enabled: true
+        state: started
+
+- name: Himmelblau (remote desktop) | report missing XRDP
+  ansible.builtin.debug:
+    msg: >-
+      XRDP is not installed on {{ inventory_hostname }}, so remote desktop PAM
+      configuration was skipped. Apply roles/xrdp first if this host should
+      accept remote desktop logins.
+  when: not _himmelblau_xrdp.stat.exists

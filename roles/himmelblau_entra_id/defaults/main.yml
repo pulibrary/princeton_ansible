@@ -4,9 +4,17 @@ himmelblau_domain: "princeton.edu"
 himmelblau_tenant_id: "2ff60116-7431-425d-b5af-077d7791bda4"
 himmelblau_show_enrollment_instructions: true
 
-# Service name differs: Ubuntu uses "ssh", RHEL-family uses "sshd"
-himmelblau_ssh_service: >-
-  {{ 'sshd' if ansible_os_family in ['RedHat'] else 'ssh' }}
+# Prove local accounts still pass PAM account management before SSH is
+# restarted, so a broken stack fails the play instead of locking you out.
+himmelblau_verify_pam: true
+
+# Ubuntu is the only platform supported by this role
+himmelblau_ssh_service: ssh
+himmelblau_restart_sshd: true
+
+# Package installation runs detached because himmelblau-sshd-config's postinst
+# restarts ssh underneath us. Seconds allowed for the install plus reconnect.
+himmelblau_apt_async_timeout: 1800
 
 # Ubuntu Repos
 himmelblau_ubuntu_repo_baseurl: "https://packages.himmelblau-idm.org/stable/latest/deb/ubuntu22.04"
@@ -14,31 +22,182 @@ himmelblau_ubuntu_key_url: "https://packages.himmelblau-idm.org/himmelblau.asc"
 himmelblau_ubuntu_keyring: "/usr/share/keyrings/himmelblau.gpg"
 himmelblau_ubuntu_repo_file: "himmelblau"
 
-# Rocky
-himmelblau_rocky_repo_baseurl: "https://packages.himmelblau-idm.org/stable/latest/rpm/el{{ ansible_distribution_major_version }}/$basearch/"
-himmelblau_rpm_signing_key: "https://packages.himmelblau-idm.org/himmelblau.asc"
-
-# ssh config
-allow_users: ["ac2754", "ar1789", "fkayiwa", "gpmenos", "jkazmier", "vk4273"]
-allow_groups: []
-allow_users_enable: true
-sshd_config_d_path: /etc/ssh/sshd_config.d
-allow_users_filename: 99-allow-users-global.conf
-
-# Ubuntu packages
+# Ubuntu packages.
+#
+# himmelblau-qr-greeter is deliberately absent: it is a GNOME Shell extension
+# for the GDM login screen and declares "Depends: gnome-shell". On an XFCE
+# desktop running LightDM that pulls in GNOME Shell and gdm3, which hijacks the
+# default display manager and breaks the desktop we are trying to reach over
+# RDP. Only add it on hosts that actually run GNOME/GDM.
 himmelblau_packages_deb:
   - himmelblau
   - nss-himmelblau
   - pam-himmelblau
   - himmelblau-sso
   - himmelblau-sshd-config
-  - himmelblau-qr-greeter
 
-# Rocky packages
-himmelblau_packages_rpm:
-  - himmelblau
-  - nss-himmelblau
-  - pam-himmelblau
-  - himmelblau-sso
-  - himmelblau-sshd-config
-  - himmelblau-qr-greeter
+# Pulled in as Recommends by the packages above, but named explicitly because
+# install_recommends is off: pam-himmelblau's postinst needs patch, and the
+# daemon needs tpm2-tools to talk to a TPM when one is present.
+himmelblau_extra_packages:
+  - patch
+  - tpm2-tools
+
+# Recommends are off so a desktop host cannot acquire a second display manager
+# or a stray desktop environment behind our back.
+himmelblau_install_recommends: false
+
+# Refuse to run if the package set would drag in a competing desktop or display
+# manager. Set to false only if you really do want GNOME on this host.
+himmelblau_guard_desktop_packages: true
+himmelblau_forbidden_packages:
+  - gdm3
+  - gnome-shell
+  - gnome-session
+  - ubuntu-desktop
+  - ubuntu-desktop-minimal
+
+himmelblau_pam_packages:
+  - libpam-modules
+  - libpam-pwquality
+  - libpam-sss
+
+# Options appended to pam_himmelblau.so in the auth stack. mfa_poll_prompt
+# makes SSH show MFA polling text (see himmelblau_mfa_poll_prompt_services).
+himmelblau_pam_auth_args: >-
+  ignore_unknown_user mfa_poll_prompt
+  socket=/var/run/himmelblaud/socket
+  connect_timeout_ms=3000 retries=2
+
+# himmelblau.conf identity settings
+himmelblau_home_attr: CN
+himmelblau_home_alias: CN
+himmelblau_idmap_range: "5000000-5999999"
+
+# Windows Hello PIN.
+#
+# xrdp's PAM conversation function (sesman/verify_user_pam.c) constrains what is
+# possible here, and it is worth being precise about how:
+#
+#   * PAM_TEXT_INFO messages are discarded outright (the reply struct is zeroed),
+#     so MFA text such as "enter the number 41" never reaches the client. It is
+#     only written to /var/log/xrdp-sesman.log.
+#   * Every PAM_PROMPT_ECHO_OFF is answered with the same string, the password
+#     from the login box. xrdp cannot ask the user anything further.
+#
+# So a remote desktop sign-in has exactly one secret to offer and can display
+# nothing back. Only single-prompt authentication can work: a Hello PIN typed
+# into the password field.
+himmelblau_enable_hello: true
+# Himmelblau classes remote desktop as a remote service, because the client
+# address appears in PAM_RHOST, and remote services skip Hello unless one of the
+# two settings below is enabled. Without either, enabling Hello alone does not
+# fix remote desktop sign-in.
+#
+# This accepts the PIN by itself for remote services. Upstream recommends Hello
+# TOTP instead, and for SSH that is the better choice, but the setting is global
+# rather than per-service and TOTP cannot work over remote desktop: it needs a
+# second prompt that xrdp answers with the PIN again. Enabling it breaks remote
+# desktop sign-in entirely.
+#
+# The tradeoff accepted here is that remote desktop is a single factor at the
+# login window. Access to the port is already restricted to campus and VPN
+# ranges by the firewall role, and the PIN is device-bound: it is sealed to this
+# host and is not recoverable from Entra ID.
+himmelblau_allow_remote_hello: true
+# Requires a local TOTP code alongside the PIN. Leave false while remote desktop
+# matters. Enabling it is only appropriate on hosts reached solely over SSH.
+himmelblau_enable_hello_totp: false
+# Let people sign in with "netid" instead of "netid@princeton.edu"
+himmelblau_cn_name_mapping: true
+# Local groups every Entra ID user is added to
+himmelblau_local_groups:
+  - users
+
+# Entra ID groups whose members get local sudo rights. This is how to grant
+# administrative access to Entra ID users: by group membership, rather than by
+# relaxing authentication with NOPASSWD sudo rules. Members authenticate to sudo
+# with their Hello PIN as normal.
+#
+# Entra group names are not unique, so these must be group Object ID GUIDs.
+himmelblau_sudo_groups: []
+himmelblau_local_sudo_group: sudo
+
+# Graphical and console logins (XRDP, LightDM, TTY) may authenticate with a
+# password only. Entra ID Conditional Access still forces MFA when it applies.
+himmelblau_allow_console_password_only: true
+
+# PAM services that must always perform MFA. Himmelblau ships xrdp and vnc in
+# this list, which blocks remote desktop sign-in outright because the XRDP
+# login window cannot render the device-code MFA conversation. Both are left
+# out here so remote desktop falls back to password plus Conditional Access.
+himmelblau_password_only_remote_services_deny_list:
+  - ssh
+  - telnet
+  - ftp
+  - rsh
+  - rlogin
+  - rexec
+  - cockpit
+  - mosh
+
+# PAM services that need an extra "press enter" prompt to flush MFA polling text
+himmelblau_mfa_poll_prompt_services:
+  - ssh
+  - cockpit
+  - xrdp
+
+# Preferred MFA method. Empty means use whatever the user has set in Entra ID.
+#
+# Push notification can require typing a displayed number into Microsoft
+# Authenticator, and that number is only visible where the login prompt can
+# render informational text. Graphical and remote desktop logins frequently
+# cannot, which leaves the user holding a push they have no way to complete.
+# PhoneAppOTP avoids the problem entirely: the code is read from the app and
+# typed in, so nothing has to be displayed back to the user.
+#
+#   PhoneAppNotification  push notification (may use number matching)
+#   PhoneAppOTP           verification code from the Authenticator app
+#   OneWaySMS             text message code
+#   TwoWayVoiceMobile     phone call to mobile
+himmelblau_mfa_method: ""
+
+# Remote desktop (XRDP) sign-in for Entra ID users. Tasks are skipped
+# automatically on hosts where XRDP is not installed.
+himmelblau_remote_desktop_enable: true
+himmelblau_remote_desktop_pam_services:
+  - xrdp-sesman
+# Extra local groups desktop sessions need for sound, display and removable media
+himmelblau_remote_desktop_local_groups:
+  - audio
+  - video
+  - plugdev
+  - netdev
+
+# ssh config
+allow_users: ["ac2754", "ar1789", "fkayiwa", "gpmenos", "jkazmier", "vk4273"]
+# Local service accounts that must never be excluded by AllowUsers. Ansible
+# itself connects as pulsys, so leaving it out of the allowlist locks the
+# automation (and any human using it) out of the host on the next sshd restart.
+# root is deliberately absent: adding it here would re-permit root SSH.
+allow_users_always: ["pulsys"]
+allow_groups: []
+allow_users_enable: true
+sshd_config_d_path: /etc/ssh/sshd_config.d
+allow_users_filename: 99-allow-users-global.conf
+
+# Break-glass SSH: a second sshd instance that never consults PAM, so a broken
+# PAM stack or an unresponsive himmelblaud cannot lock you out of the host.
+# Intended for use while this role is being rolled out or debugged.
+himmelblau_breakglass_enable: true
+himmelblau_breakglass_port: 2202
+himmelblau_breakglass_users: ["pulsys"]
+# Restrict who may reach the break-glass port. Empty means no restriction.
+himmelblau_breakglass_listen_address: "0.0.0.0"
+
+# Himmelblau's own offline breakglass: lets MFA Entra ID users sign in with a
+# cached password verifier when Entra ID is unreachable. Unrelated to the
+# break-glass SSH above, which covers local accounts. Off by default because it
+# weakens MFA if the device is stolen.
+himmelblau_offline_breakglass_enabled: false
+himmelblau_offline_breakglass_ttl: "2h"

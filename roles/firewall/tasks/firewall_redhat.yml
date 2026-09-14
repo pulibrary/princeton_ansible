@@ -79,6 +79,18 @@
   loop: "{{ firewall_checkmk_cidrs }}"
   when: firewall_allow_checkmk | bool
 
+- name: Firewall | Allow remote desktop from approved networks with firewalld
+  ansible.posix.firewalld:
+    rich_rule: >-
+      rule family="ipv4" source address="{{ item }}"
+      port protocol="tcp" port="{{ firewall_rdp_port }}" accept
+    zone: "{{ firewall_zone }}"
+    permanent: true
+    immediate: true
+    state: enabled
+  loop: "{{ firewall_rdp_cidrs }}"
+  when: firewall_allow_rdp | bool
+
 - name: Firewall | Apply additional firewalld rules
   ansible.posix.firewalld:
     rich_rule: >-

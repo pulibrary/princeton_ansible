@@ -67,6 +67,17 @@
   loop: "{{ firewall_checkmk_cidrs }}"
   when: firewall_allow_checkmk | bool
 
+- name: Firewall | Allow remote desktop from approved networks with UFW
+  community.general.ufw:
+    rule: allow
+    direction: in
+    proto: tcp
+    port: "{{ firewall_rdp_port }}"
+    from_ip: "{{ item }}"
+    comment: Remote desktop
+  loop: "{{ firewall_rdp_cidrs }}"
+  when: firewall_allow_rdp | bool
+
 - name: Firewall | Apply additional UFW rules
   community.general.ufw:
     rule: "{{ item.rule | default('allow') }}"

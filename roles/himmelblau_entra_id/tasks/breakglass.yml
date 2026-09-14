@@ -1,0 +1,113 @@
+---
+# Break-glass SSH access.
+#
+# This role rewrites the PAM stacks and puts himmelblaud into the NSS chain.
+# Both are on the critical path for logging in, so a mistake in either, or a
+# daemon that stops answering, makes the host unreachable and forces a console
+# session or a rebuild. The break-glass instance is a second sshd on its own
+# port with UsePAM no and public key authentication only, so it keeps working
+# when the primary login path does not.
+#
+# It is established before any PAM or NSS change is made, so it is already
+# listening if a later task breaks authentication.
+
+- name: Himmelblau (break-glass) | confirm the break-glass accounts exist locally
+  ansible.builtin.getent:
+    database: passwd
+    key: "{{ item }}"
+  loop: "{{ himmelblau_breakglass_users }}"
+  register: himmelblau_breakglass_accounts
+
+# A break-glass instance nobody holds a key for is worse than none at all,
+# because it gives false confidence. Public keys are the only accepted
+# credential, so refuse to enable the instance without them.
+- name: Himmelblau (break-glass) | check for authorized keys
+  ansible.builtin.stat:
+    path: "~{{ item }}/.ssh/authorized_keys"
+  loop: "{{ himmelblau_breakglass_users }}"
+  register: himmelblau_breakglass_keys
+
+- name: Himmelblau (break-glass) | require at least one usable key
+  ansible.builtin.assert:
+    that:
+      - himmelblau_breakglass_keys.results
+        | selectattr('stat.exists')
+        | selectattr('stat.size', 'gt', 0)
+        | list | length > 0
+    fail_msg: >-
+      None of {{ himmelblau_breakglass_users | join(', ') }} have a populated
+      ~/.ssh/authorized_keys on {{ inventory_hostname }}. The break-glass SSH
+      instance accepts public keys only, so enabling it would produce a port
+      nobody can log in through. Deploy keys first (roles/deploy_user) or set
+      himmelblau_breakglass_enable=false and keep a console session open.
+    quiet: true
+
+- name: Himmelblau (break-glass) | write the sshd configuration
+  ansible.builtin.template:
+    src: sshd_breakglass_config.j2
+    dest: /etc/ssh/sshd_config_breakglass
+    owner: root
+    group: root
+    mode: "0600"
+    validate: "/usr/sbin/sshd -t -f %s"
+  register: himmelblau_breakglass_config
+
+- name: Himmelblau (break-glass) | install the systemd unit
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/ssh-breakglass.service
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Managed by Ansible (roles/himmelblau_entra_id)
+      [Unit]
+      Description=Break-glass SSH daemon (no PAM, key auth only)
+      Documentation=man:sshd(8) man:sshd_config(5)
+      After=network.target
+      # Deliberately no dependency on ssh.service or himmelblaud.service: this
+      # unit must survive their failure.
+      StartLimitIntervalSec=0
+
+      [Service]
+      Type=simple
+      ExecStartPre=/usr/sbin/sshd -t -f /etc/ssh/sshd_config_breakglass
+      ExecStart=/usr/sbin/sshd -D -e -f /etc/ssh/sshd_config_breakglass
+      ExecReload=/bin/kill -HUP $MAINPID
+      KillMode=process
+      Restart=always
+      RestartSec=2
+      RuntimeDirectory=sshd-breakglass
+      RuntimeDirectoryPreserve=yes
+
+      [Install]
+      WantedBy=multi-user.target
+  register: himmelblau_breakglass_unit
+
+- name: Himmelblau (break-glass) | reload systemd
+  ansible.builtin.systemd:
+    daemon_reload: true
+  when: himmelblau_breakglass_unit is changed
+
+- name: Himmelblau (break-glass) | enable and start the instance
+  ansible.builtin.systemd:
+    name: ssh-breakglass.service
+    enabled: true
+    state: "{{ 'restarted' if (himmelblau_breakglass_config is changed or himmelblau_breakglass_unit is changed) else 'started' }}"
+
+- name: Himmelblau (break-glass) | confirm the port is listening
+  ansible.builtin.wait_for:
+    port: "{{ himmelblau_breakglass_port }}"
+    host: 127.0.0.1
+    timeout: 30
+
+- name: Himmelblau (break-glass) | how to use it
+  ansible.builtin.debug:
+    msg: >-
+      Break-glass SSH is listening on port {{ himmelblau_breakglass_port }} for
+      {{ himmelblau_breakglass_users | join(', ') }}. If authentication breaks,
+      reach the host with:
+      ssh -p {{ himmelblau_breakglass_port }}
+      {{ himmelblau_breakglass_users | first }}@{{ inventory_hostname }}
+      This port bypasses PAM entirely, so verify it works from your workstation
+      before making further changes. A campus firewall may block it, in which
+      case console access remains the fallback.
