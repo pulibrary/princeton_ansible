@@ -1,0 +1,60 @@
+---
+# What a person has to do after this role has run. Printed because the steps are
+# not discoverable from the host: an RDP client pointed straight at it fails
+# with nothing that hints at a tunnel, and the tunnel command has to run on the
+# person's own machine rather than on the server.
+
+- name: Desktop CA login | first sign-in instructions
+  ansible.builtin.debug:
+    msg: |
+      Remote desktop on {{ host }} is reached over an SSH tunnel. The login
+      window listens on loopback only, so a certificate is required before its
+      password is ever asked for.
+
+      EVERY COMMAND BELOW RUNS ON THE PERSON'S OWN COMPUTER, not on the server.
+      Running the tunnel command on the server itself reports
+      "bind [127.0.0.1]:{{ rdp_port }}: Address already in use", because the
+      desktop is already listening there.
+
+      1. Once per computer, trust the certificate authority. The fingerprint is
+         in group_vars/step_ca/vault.yml:
+
+           step ca bootstrap --ca-url {{ xrdp_ca_login_ca_url }} \
+             --fingerprint <fingerprint>
+
+      2. Once per person, set the desktop password. This is a local password
+         used only by the login window, not an Entra ID password:
+
+           step ssh login <netid>@princeton.edu
+           ssh <netid>@{{ host }}
+           sudo {{ xrdp_ca_login_helper_path }}
+           exit
+
+      3. Whenever the desktop is needed. Certificates are short lived, so the
+         first command is repeated once they expire:
+
+           step ssh login <netid>@princeton.edu
+           ssh -L {{ rdp_port }}:localhost:{{ rdp_port }} <netid>@{{ host }}
+
+         Leave that session open, and point the RDP client at:
+
+           localhost:{{ rdp_port }}
+
+         Point it at "localhost", NOT at {{ host }}. An RDP client aimed at the
+         server itself cannot connect, because nothing outside this host answers
+         on the desktop port. That is the intended behaviour.
+
+      Troubleshooting:
+        * RDP client reports it cannot connect (0x204 on macOS) -> the client is
+          aimed at {{ host }} instead of localhost, or the SSH session holding
+          the tunnel has ended
+        * "Address already in use" on the ssh command -> it is being run on the
+          server rather than on the person's own computer
+        * sign-in refused at the login window -> the desktop password is wrong
+          or was never set; redo step 2
+        * session opens then closes -> a session startup problem, not
+          authentication: see /var/log/xrdp-sesman.log and
+          /tmp/xrdp-startwm-<user>-<display>.log
+  vars:
+    rdp_port: "{{ xrdp_ca_login_port }}"
+    host: "{{ xrdp_ca_login_public_name }}"

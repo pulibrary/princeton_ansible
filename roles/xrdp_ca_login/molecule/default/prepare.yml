@@ -1,0 +1,117 @@
+---
+# Stand in for roles/ssh_ca_trust, but install the real xrdp so the binding
+# check runs against a real listening socket.
+#
+# The first version of this scenario faked xrdp with a script that never
+# listened on 3389. Everything passed, and the exposure check was vacuous: it
+# could not have detected a login window on the network, which is the one thing
+# it exists to detect. Installing the real daemon is what makes the check
+# meaningful.
+- name: Prepare
+  hosts: all
+  become: true
+  tasks:
+    - name: Update cache
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 600
+
+    - name: Install OpenSSH server
+      ansible.builtin.apt:
+        name: openssh-server
+        state: present
+
+    - name: Generate host keys if the image has none
+      ansible.builtin.command:
+        cmd: ssh-keygen -A
+        creates: /etc/ssh/ssh_host_ed25519_key
+
+    # --- Stands in for roles/xrdp ---
+
+    # xrdp alone, without the XFCE desktop: this scenario tests sign-in policy,
+    # not the desktop session. iproute2 provides ss, dbus is needed by logind.
+    - name: Install xrdp and its supporting packages
+      ansible.builtin.apt:
+        name:
+          - xrdp
+          - dbus
+          - dbus-user-session
+          - iproute2
+        state: present
+
+    # Deliberately the packaged default, listening on every interface. The role
+    # must find this state exposed, so the scenario starts from the wrong side
+    # of the property under test rather than assuming it right.
+    - name: Listen on every interface, as the package ships
+      community.general.ini_file:
+        path: /etc/xrdp/xrdp.ini
+        section: Globals
+        option: port
+        value: "3389"
+        no_extra_spaces: true
+        owner: root
+        group: root
+        mode: "0644"
+
+    # The state sandbox-bitcur2 was left in by a first attempt that used an
+    # "address" key. xrdp ignores it, so the file read as though it were bound
+    # to loopback while the daemon listened on every interface. The role has to
+    # remove it.
+    #
+    # Seeded here rather than in converge so that converge stays idempotent:
+    # re-adding it on every run would leave the role removing it on every run.
+    - name: Add the ineffective address setting the role must clean up
+      community.general.ini_file:
+        path: /etc/xrdp/xrdp.ini
+        section: Globals
+        option: address
+        value: "127.0.0.1"
+        no_extra_spaces: true
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Start xrdp with the packaged configuration
+      ansible.builtin.systemd:
+        name: xrdp
+        state: restarted
+        enabled: true
+
+    # xrdp forks a child that re-opens the socket, so there is a short window
+    # after the restart returns in which nothing is listening yet.
+    - name: Wait for the listener to come up
+      ansible.builtin.wait_for:
+        host: 127.0.0.1
+        port: 3389
+        timeout: 30
+
+    - name: Confirm the port really is exposed before the role runs
+      ansible.builtin.shell:
+        cmd: >-
+          set -o pipefail
+          && ss -H -ltn | awk '{print $4}' | grep -v '^127\.' | grep ':3389$'
+        executable: /bin/bash
+      register: prepare_exposed
+      changed_when: false
+
+    # --- Stands in for roles/ssh_ca_trust ---
+
+    - name: Stand in for the trusted CA key
+      ansible.builtin.copy:
+        dest: /etc/ssh/trusted_user_ca_keys.pem
+        owner: root
+        group: root
+        mode: "0644"
+        content: >-
+          ssh-ed25519
+          AAAAC3NzaC1lZDI1NTE5AAAAIK7xQ8mDq3sJZr0Yb1nQwVZ2pT4fLm9aHcX0sN6eUwQk
+          molecule
+
+    - name: Create the certificate-backed accounts
+      ansible.builtin.user:
+        name: "{{ item }}"
+        shell: /bin/bash
+        create_home: true
+      loop:
+        - alice
+        - bob
