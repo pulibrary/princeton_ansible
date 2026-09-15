@@ -15,5 +15,39 @@
     - ../group_vars/nomad/vault.yml
     - ../group_vars/nomad_redis/vault.yml
     - "../group_vars/nomad_redis/{{ runtime_env | default('staging') }}.yml"
+  vars:
+    deploy_file: "{{ playbook_dir }}/../nomad/redis/deploy/{{ runtime_env | default('staging') }}.hcl"
   roles:
     - role: roles/nomad_app
+  tasks:
+    - name: 'Plan the deploy'
+      delegate_to: "localhost"
+      become: false
+      # There's a -json-output in Nomad 2.0.5+, but nix doesn't have it yet.
+      ansible.builtin.command:
+        cmd: "nomad job plan {{ deploy_file }}"
+      environment:
+        NOMAD_ADDR: "https://nomad.lib.princeton.edu"
+        NOMAD_TOKEN: "{{ pul_nomad_management_token }}"
+      register: nomad_plan
+      changed_when: false
+      failed_when: nomad_plan.rc not in [0, 1]
+      check_mode: false
+
+    # Delegate to the nomad binary so it blocks until it deploys. The ansible general role
+    # doesn't.
+    - name: 'Deploy Nomad App'
+      delegate_to: "localhost"
+      become: false
+      # Parse and pass the check-index from plan, juuusttt in case.
+      ansible.builtin.command:
+        cmd: >-
+          nomad job run
+          -check-index {{ nomad_plan.stdout | regex_search('Job Modify Index: (\d+)', '\1') | first }}
+          {{ deploy_file }}
+      environment:
+        NOMAD_ADDR: "https://nomad.lib.princeton.edu"
+        NOMAD_TOKEN: "{{ pul_nomad_management_token }}"
+      # Make sure there's a change in Job for the plan diff, if there's not then
+      # what's up there is what we have, so no point.
+      when: nomad_plan.stdout is search('^[+-][^ ]* Job:', multiline=True)
