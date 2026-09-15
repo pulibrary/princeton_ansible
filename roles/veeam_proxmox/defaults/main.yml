@@ -1,0 +1,108 @@
+---
+# defaults/main.yml -- veeam_proxmox
+#
+# Prepares a Proxmox VE node so Veeam Backup & Replication can manage it with a
+# dedicated, non-root service account. Veeam drives the node over SSH as this
+# account and elevates individual commands with sudo, so three things have to
+# line up: the account exists with a password, sudo grants exactly the commands
+# Veeam runs, and the same name exists in Proxmox with API privileges.
+#
+# The sudo command list comes from Veeam KB4701 and must match the plug-in
+# version in use. Veeam expects PASSWD (not NOPASSWD): it supplies the
+# account's password to each sudo call, and validation fails if sudo never
+# asks.
+
+veeam_proxmox_user: veeam-service
+veeam_proxmox_user_comment: "Veeam Backup and Replication service account"
+veeam_proxmox_user_shell: /bin/bash
+
+# Supplementary groups for the account, declared rather than appended. Keep this
+# empty: the Proxmox nodes give their operators group blanket NOPASSWD sudo, and
+# an account that inherits that gets no password prompt, which is the one thing
+# Veeam cannot tolerate. Everything the account may do is listed explicitly in
+# veeam_proxmox_sudo_commands.
+veeam_proxmox_user_groups: []
+
+# Primary group for the account, kept separate from the supplementary list
+# above because clearing supplementary groups cannot move an account out of its
+# primary one. An account created by hand with a shared primary group keeps that
+# group's sudo rules, so give it a group of its own.
+veeam_proxmox_user_group: "{{ veeam_proxmox_user }}"
+
+# Crypt hash of the account password, normally from a vault. Leave empty to
+# leave an existing password untouched (useful when it was set by hand).
+# Generate with:
+#   ansible localhost -m debug \
+#     -a "msg={{ 'secret' | password_hash('sha512') }}"
+veeam_proxmox_user_password: ""
+
+veeam_proxmox_sudoers_path: "/etc/sudoers.d/{{ veeam_proxmox_user }}"
+
+# Earlier hand-made drop-ins for this account, removed so they cannot override
+# the managed one. Listed explicitly rather than matched by wildcard, because
+# deleting sudoers files a glob happened to catch is not a risk worth taking.
+#
+# Names matter more than they look. sudo reads /etc/sudoers.d in lexical order
+# and the last matching rule wins, so "veeam-service-bk" is parsed after
+# "veeam-service" and silently overrides it. Had the same file been named
+# "veeam-service.bk" sudo would have ignored it outright, since it skips names
+# containing a dot.
+veeam_proxmox_superseded_sudoers:
+  - "{{ veeam_proxmox_sudoers_path }}-bk"
+  - "{{ veeam_proxmox_sudoers_path }}-old"
+  - "{{ veeam_proxmox_sudoers_path }}-orig"
+
+# Veeam's sudoers entries use regular expressions in command arguments, which
+# sudo only understands from 1.9.10 onwards.
+veeam_proxmox_min_sudo_version: "1.9.10"
+
+# Proxmox VE ships neither sudo nor dmidecode. A missing dmidecode is the most
+# common cause of credential validation failing.
+veeam_proxmox_packages:
+  - sudo
+  - dmidecode
+
+# Proxmox API privileges are separate from host privileges and are not
+# granular: Veeam needs the built-in Administrator role to enumerate VMs, read
+# storage and manage locks.
+veeam_proxmox_manage_pve_user: true
+veeam_proxmox_pve_realm: pam
+veeam_proxmox_pve_acl_path: /
+veeam_proxmox_pve_role: Administrator
+
+# Where to look for the Proxmox user management command. Packaging has moved it
+# between sbin and bin, so the role searches rather than assuming a path.
+veeam_proxmox_pveum_candidates:
+  - /usr/sbin/pveum
+  - /usr/bin/pveum
+
+# Commands Veeam runs through sudo, from KB4701 for plug-in 13.2.0.457. Keep
+# these verbatim: the negations and anchors are what stop the entries from
+# granting more than Veeam needs. Several exceed the usual line length and must
+# stay on one line, because folding would insert whitespace inside an anchored
+# regular expression and stop it matching.
+veeam_proxmox_sudo_commands:
+  - '/usr/sbin/dmidecode -s system-uuid'
+  - >-
+    /usr/bin/kvm -S *,!/usr/bin/kvm -S *-netdev*,!/usr/bin/kvm -S *-fsdev*,
+    !/usr/bin/kvm -S *netdev=*,!/usr/bin/kvm -S *fsdev=*,
+    !/usr/bin/kvm -S *-net*,!/usr/bin/kvm -S *net=*
+  - '/usr/bin/qemu-img info *'
+  - '/usr/bin/qemu-img create *'
+  - '/usr/sbin/qm create *,!/usr/sbin/qm create * --hookscript*'
+  - '/usr/sbin/qm ^showcmd [0-9]+ --pretty$'
+  - '/usr/sbin/qm ^unlock [0-9]+$'
+  - '/usr/bin/socat ^TCP-LISTEN:[0-9]+,bind=127\.0\.0\.1 UNIX-CONNECT:/[a-zA-Z0-9_./-]+$'
+  - '/usr/bin/mkdir -p /var/lib/vz/snippets/'
+  - '/usr/bin/pvenode cert info --output-format json'
+  - '/usr/bin/pvesh ^get storage/([a-zA-Z0-9_-]+) --output json$'
+  - '/usr/bin/pvesh ^set /nodes/([a-zA-Z0-9_-]+)/qemu/([0-9]+)/config --lock ([a-zA-Z]+)$'
+  - '/usr/bin/pkill -9 -e -f -x socat *'
+  - '/usr/sbin/lvchange -ay *'
+  - '/usr/sbin/lvchange -an *'
+  - '/usr/bin/rbd device map *'
+  - '/usr/bin/mv ^-n /tmp/([a-zA-Z0-9_-]+\.config) /var/lib/vz/snippets/([a-zA-Z0-9_-]+\.config)$'
+  - '/usr/bin/rm ^(/[a-zA-Z0-9_/-]+/VeeamTmp[a-zA-Z0-9_.-]+\s*)+$'
+  - '/usr/bin/rm ^-f /[a-zA-Z0-9_/-]+/VeeamTmp[a-zA-Z0-9_.-]+$'
+  - '/usr/bin/rm ^-f /var/lib/vz/snippets/[a-zA-Z0-9_-]+\.config$'
+  - '/usr/bin/rm ^-f /var/lib/vz/template/iso/[a-zA-Z0-9_.-]+\.img$'
