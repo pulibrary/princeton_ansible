@@ -1,13 +1,64 @@
 ---
 # tasks file for roles/lib_sftp
 
+- name: Load OS-specific variables
+  ansible.builtin.include_vars: >-
+    {{ lookup('ansible.builtin.first_found', params) }}
+  vars:
+    params:
+      files:
+        - "{{ ansible_facts['os_family'] }}.yml"
+        - default.yml
+      paths:
+        - "vars"
+
+# The transfer accounts and the group that owns the drop directories come from
+# the directory, so assert they resolve before anything tries to chown to them.
+# Without this the file tasks fail with a confusing "chown failed" instead of
+# saying that the identity provider is not working.
+- name: Lib_sftp | Confirm the transfer accounts resolve
+  ansible.builtin.command:
+    argv:
+      - id
+      - "{{ item }}"
+  loop:
+    - "{{ almasftp_user }}"
+    - "{{ aspaceftp_user }}"
+  register: lib_sftp_account_check
+  changed_when: false
+  failed_when: false
+
+- name: Lib_sftp | Fail with a clear reason if an account is missing
+  ansible.builtin.assert:
+    that:
+      - item.rc == 0
+    fail_msg: >-
+      {{ item.item }} does not resolve on this host. These are directory
+      accounts, so an identity role has to run before lib_sftp: ad_join on
+      Rocky, or sssd_ldap on Ubuntu. Check with `getent passwd {{ item.item }}`.
+  loop: "{{ lib_sftp_account_check.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+
+- name: Lib_sftp | Ensure the drop directory group exists
+  ansible.builtin.group:
+    name: "{{ lib_sftp_owner_group }}"
+    state: present
+
+- name: Lib_sftp | Add local transfer accounts to the drop directory group
+  ansible.builtin.user:
+    name: "{{ item }}"
+    groups: "{{ lib_sftp_owner_group }}"
+    append: true
+  loop: "{{ lib_sftp_group_members }}"
+
 - name: Lib_sftp | create alma directory drop
   ansible.builtin.file:
     path: "{{ item }}"
     state: directory
     recurse: true
     owner: "{{ almasftp_user }}"
-    group: "pusvc-g"
+    group: "{{ lib_sftp_owner_group }}"
     mode: "0755"
   loop:
     - "/alma/bursar"
@@ -27,25 +78,58 @@
     state: directory
     recurse: true
     owner: "{{ aspaceftp_user }}"
-    group: "pusvc-g"
+    group: "{{ lib_sftp_owner_group }}"
     mode: "0775"
 
+# Alma and ArchivesSpace deposit files with a password, so these accounts need
+# password authentication even where the host image turns it off. Owned here
+# rather than by an SSH certificate role, because it is a property of the
+# transfer accounts and applies whether or not the host trusts certificates.
+- name: Lib_sftp | Allow the transfer accounts to authenticate with a password
+  ansible.builtin.template:
+    src: sshd_transfer_accounts.conf.j2
+    dest: "{{ lib_sftp_sshd_dropin_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+  # Deliberately no validate: here. `sshd -t -f` on a drop-in alone fails
+  # because the fragment has no host key, so it would reject every correct
+  # file. The handlers validate the whole configuration instead, and are
+  # ordered so a bad one never reaches a restart.
+  when: lib_sftp_manage_sshd | bool
+  notify:
+    - Validate sshd configuration
+    - Restart sshd
+
+# ansible.builtin.package rather than apt: the package names differ per OS and
+# staging and production are Rocky while the sandbox is Ubuntu.
 - name: Lib_sftp | Set up Perl modules
-  ansible.builtin.apt:
-    name: "{{ item }}"
+  ansible.builtin.package:
+    name: "{{ lib_sftp_perl_packages }}"
     state: present
-  loop:
-    - cpanminus
-    - libssh2-1-dev
   when: running_on_server
 
 - name: Lib_sftp | Install perl modules
-  ansible.builtin.command: cpanm {{ item }}
+  ansible.builtin.command: cpanm --notest {{ item }}
   loop:
     - Net::SFTP::Foreign::Backend::Net_SSH2
     - Net::SFTP::Foreign
+  register: lib_sftp_cpanm
+  changed_when: "'is up to date' not in lib_sftp_cpanm.stdout"
   when: running_on_server
 
+- name: Lib_sftp | Ensure the Checkmk local check directory exists
+  ansible.builtin.file:
+    path: /usr/lib/check_mk_agent/local
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: running_on_server
+
+# This check logs in over SFTP with a password, which is exactly the failure
+# mode that is hardest to notice: the accounts keep resolving while the
+# transfers silently stop working.
 - name: Lib_sftp | create local checkmk check
   ansible.builtin.copy:
     src: sftp_with_pass_check.sh
