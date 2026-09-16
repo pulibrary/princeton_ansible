@@ -1,0 +1,55 @@
+#!/usr/bin/bash
+{{ ansible_managed | comment }}
+# Checkmk local check — PostgreSQL production backup verification
+# Today's dumps land in exactly one tier, so all three are searched:
+#   {{ postgres_backup_root }}/{monthly,weekly,daily}/YYYYMMDD/*-YYYYMMDD{{ postgres_backup_file_suffix }}
+
+STATE_OK=0
+STATE_WARN=1
+STATE_CRIT=2
+STATE_UNKNOWN=3
+
+CURRENT_DATE=$(date +%Y%m%d)
+BACKUP_ENV="{{ postgres_gcs_backup_environment }}"
+BACKUP_ROOT="{{ postgres_backup_root }}"
+
+service_name="postgresql_backup_${BACKUP_ENV}"
+backup_dir=""
+backup_tier=""
+
+for tier in monthly weekly daily; do
+  if [ -d "${BACKUP_ROOT}/${tier}/${CURRENT_DATE}" ]; then
+    backup_dir="${BACKUP_ROOT}/${tier}/${CURRENT_DATE}"
+    backup_tier="$tier"
+    break
+  fi
+done
+
+if [ -z "$backup_dir" ]; then
+  echo "${STATE_CRIT} ${service_name} - CRITICAL: No backup directory for ${CURRENT_DATE} under ${BACKUP_ROOT}"
+  echo "${STATE_CRIT} postgresql_backup_summary count=0 missing=1 - CRITICAL: Missing backups for: {{ postgres_backup_prefix }}-${BACKUP_ENV}"
+  exit 0
+fi
+
+backup_count=$(find "$backup_dir" -name "*-${CURRENT_DATE}{{ postgres_backup_file_suffix }}" | wc -l)
+
+if [ "$backup_count" -eq 0 ]; then
+  echo "${STATE_CRIT} ${service_name} - CRITICAL: No backups found in ${backup_dir}"
+  echo "${STATE_CRIT} postgresql_backup_summary count=0 missing=1 - CRITICAL: Missing backups for: {{ postgres_backup_prefix }}-${BACKUP_ENV}"
+  exit 0
+fi
+
+databases=$(find "$backup_dir" -name "*-${CURRENT_DATE}{{ postgres_backup_file_suffix }}" \
+  | sed -e "s|$backup_dir/||g" -e "s|-${CURRENT_DATE}{{ postgres_backup_file_suffix }}||g" \
+  | tr '\n' ' ')
+
+# The globals dump carries roles and tablespaces, which per-database dumps omit.
+if [ ! -f "${backup_dir}/globals-${CURRENT_DATE}.sql.gz" ]; then
+  echo "${STATE_WARN} ${service_name} count=${backup_count} - WARNING: ${backup_count} ${backup_tier} backups on ${CURRENT_DATE} but the globals dump is missing: ${databases}"
+  echo "${STATE_WARN} postgresql_backup_summary count=${backup_count} - WARNING: Globals dump missing for ${CURRENT_DATE}"
+  exit 0
+fi
+
+echo "${STATE_OK} ${service_name} count=${backup_count} - OK: Found ${backup_count} ${backup_tier} backups for {{ postgres_backup_prefix }} ${BACKUP_ENV} on ${CURRENT_DATE}: ${databases}"
+echo "${STATE_OK} postgresql_backup_summary count=${backup_count} - OK: All PostgreSQL backups completed successfully for ${CURRENT_DATE}"
+exit 0

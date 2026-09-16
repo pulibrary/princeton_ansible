@@ -100,3 +100,78 @@ postgres_tcp_keepalives_count: 0
 
 # bypass molecule test
 postgres_leader: localhost
+
+# cloud backup
+# gcsfuse mounts a GCS bucket so PostgreSQL dumps land in object storage.
+# We only back up production, so this stays off everywhere else.
+postgres_gcs_backup_enabled: false
+postgres_gcs_backup_environment: "production"
+postgres_gcs_bucket_name: "pul-postgres-backup"
+postgres_gcs_mountpoint: "/var/backups/postgresql/cloud_backup"
+postgres_gcs_key_path: "/etc/postgres-backup-account-key.json"
+postgres_gcs_key_src: "files/postgres-backup-production-account-key.json"
+postgres_gcs_service_name: "postgres-gcs-backup.service"
+postgres_gcs_user: "postgres"
+postgres_gcs_group: "postgres"
+postgres_gcsfuse_directory: "/var/log/gcsfuse"
+# Where gcsfuse stages writes before uploading. Before v3.0 it stages an entire
+# file here, so this needs room for the largest dump and defaults to /tmp if
+# left unset.
+postgres_gcsfuse_temp_directory: "/var/backups/postgresql/gcsfuse-tmp"
+postgres_backup_prefix: "postgresql{{ postgres_version }}"
+postgres_backup_file_suffix: ".dump"
+postgresql_gcsfuse_logrotate_rules: []
+
+# Scheduled dumps
+# Rotated daily/weekly/monthly dumps of every database, modeled on
+# https://wiki.postgresql.org/wiki/Automated_Backup_on_Linux
+postgres_backup_schedule_enabled: false
+postgres_backup_root: >-
+  {{ postgres_gcs_mountpoint }}/{{ postgres_backup_prefix }}/{{ postgres_gcs_backup_environment }}
+postgres_backup_staging_dir: "/var/backups/postgresql/staging"
+postgres_backup_script_path: "/usr/local/bin/pg_backup_rotated.sh"
+postgres_backup_service_name: "postgres-backup.service"
+postgres_backup_timer_name: "postgres-backup.timer"
+postgres_backup_bin_dir: "/usr/lib/postgresql/{{ postgres_version }}/bin"
+postgres_backup_user: "postgres"
+postgres_backup_host: ""
+# Dumps run overnight; the delay keeps a fleet from starting in lockstep.
+postgres_backup_on_calendar: "*-*-* 01:30:00"
+postgres_backup_randomized_delay: "900"
+postgres_backup_timeout: "6h"
+postgres_backup_nice: 10
+# The idle I/O class yields to all other disk activity, which can stall a dump
+# on a busy server indefinitely. Lowest-priority best-effort still defers to
+# PostgreSQL without starving.
+postgres_backup_io_class: "best-effort"
+postgres_backup_io_priority: 7
+postgres_backup_compression_level: 6
+# Staging the dump and then uploading it can each hold a full copy on local
+# disk, so free space is checked against this multiple of the largest database.
+# gcsfuse 3.0 and later stream writes straight to the bucket and need no second
+# local copy, so 1 is right for those hosts.
+postgres_backup_space_factor: 2
+# Hard floor: a dump is aborted rather than allowed to fill the filesystem that
+# also holds PostgreSQL's data directory. An incomplete backup beats an outage.
+postgres_backup_min_free_mb: 10240
+postgres_backup_space_guard_interval: 10
+# A dump can outlive a PostgreSQL restart (maintenance, a config reload, an
+# Ansible run), which drops its connection mid-table. Retrying makes that a
+# pause instead of a failed backup.
+postgres_backup_retries: 2
+postgres_backup_retry_delay: 60
+postgres_backup_startup_wait: 300
+# Custom-format dumps restore selectively with pg_restore; plain SQL is
+# bulkier and off by default.
+postgres_backup_enable_custom: true
+postgres_backup_enable_plain: false
+postgres_backup_enable_globals: true
+postgres_backup_schema_only_databases: []
+postgres_backup_exclude_databases: []
+# Retention. 7 = Sunday for the weekly copy.
+postgres_backup_days_to_keep: 7
+postgres_backup_weeks_to_keep: 5
+postgres_backup_months_to_keep: 3
+postgres_backup_day_of_week_to_keep: 7
+# Force a run during the play even when backups already exist.
+postgres_backup_run_now: false
