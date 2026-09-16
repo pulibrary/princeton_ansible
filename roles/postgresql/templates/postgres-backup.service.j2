@@ -1,0 +1,18 @@
+[Unit]
+Description=Rotated PostgreSQL dump of every database
+Documentation=https://wiki.postgresql.org/wiki/Automated_Backup_on_Linux
+After={{ postgres_service_name }}
+{% if postgres_gcs_backup_enabled | bool %}
+After={{ postgres_gcs_service_name }}
+Requires={{ postgres_gcs_service_name }}
+{% endif %}
+
+[Service]
+Type=oneshot
+User={{ postgres_backup_user }}
+Group={{ postgres_gcs_group }}
+Nice={{ postgres_backup_nice }}
+IOSchedulingClass={{ postgres_backup_io_class }}
+IOSchedulingPriority={{ postgres_backup_io_priority }}
+TimeoutStartSec={{ postgres_backup_timeout }}
+ExecStart={{ postgres_backup_script_path }}

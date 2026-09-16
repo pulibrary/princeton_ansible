@@ -71,6 +71,42 @@ postgresql_logrotate_rules:
       su_user: "{{ logrotate_global_defaults.su_user }}"
       su_group: "{{ logrotate_global_defaults.su_group }}"
 
+# gcsfuse cloud backup
+# Production is the only environment we back up.
+postgres_gcs_backup_enabled: true
+postgres_gcs_backup_environment: "production"
+postgres_gcs_bucket_name: "pul-postgres15-backup"
+gcsfuse_directory: "/var/log/gcsfuse"
+postgres_gcsfuse_directory: "{{ gcsfuse_directory }}"
+
+# Nightly rotated dumps of every database, written to the mounted bucket.
+# Retention: 7 daily, 5 weekly (Sunday), 3 monthly (first of the month).
+postgres_backup_schedule_enabled: true
+postgres_backup_on_calendar: "*-*-* 01:30:00"
+postgres_backup_days_to_keep: 7
+postgres_backup_weeks_to_keep: 5
+postgres_backup_months_to_keep: 3
+postgres_backup_day_of_week_to_keep: 7
+# gcsfuse 3.x streams writes straight to the bucket, so publishing a dump does
+# not need a second local copy of it.
+postgres_backup_space_factor: 1
+postgres_backup_min_free_mb: 20480
+
+postgresql_gcsfuse_logrotate_rules:
+  - name: "gcsfuse"
+    paths:
+      - "{{ postgres_gcsfuse_directory }}/*.log"
+    options:
+      rotate: "{{ logrotate_global_defaults.rotate }}"
+      maxsize: "{{ logrotate_global_defaults.maxsize }}"
+      create_mode: "{{ logrotate_global_defaults.create_mode }}"
+      create_owner: postgres
+      create_group: postgres
+      su_user: "{{ logrotate_global_defaults.su_user }}"
+      su_group: "{{ logrotate_global_defaults.su_group }}"
+      postrotate: |
+        systemctl reload postgres-gcs-backup.service 2>/dev/null || true
+
 # beyla
 beyla_enabled: true
 beyla_service_name: postgresql
