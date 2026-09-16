@@ -160,6 +160,99 @@ otel_receivers:
           (?P<status>\d{3}) (?P<bytes_sent>\S+) (?P<duration_ms>\d+)$
         on_error: send
 
+      # SolrCloud addresses a replica by its core name, and the core name
+      # encodes the collection, shard and replica, as in
+      # /solr/catalog-production1_shard1_replica_n31/update
+      - type: regex_parser
+        id: parse_solr_request_core
+        if: 'attributes.url != nil and attributes.url matches "_shard[0-9]+_replica_"'
+        parse_from: attributes.url
+        regex: '^/solr/(?P<solr_core>(?P<solr_collection>.+?)_(?P<solr_shard>shard[0-9]+)_(?P<solr_replica>replica_[a-z][0-9]+))(?:/(?P<solr_handler>[^?]*))?'
+        on_error: send
+
+      # Requests addressed by collection or alias name have no shard or
+      # replica segment, as in /solr/catalog/select
+      - type: regex_parser
+        id: parse_solr_request_collection
+        if: >-
+          attributes.url != nil
+          and attributes.url matches "^/solr/[^/?#]+/[^?]"
+          and not (attributes.url matches "^/solr/(admin/|.+_shard[0-9]+_replica_)")
+        parse_from: attributes.url
+        regex: '^/solr/(?P<solr_collection>[^/?#]+)/(?P<solr_handler>[^?]*)'
+        on_error: send
+
+      # Node level endpoints such as /solr/admin/collections belong to no
+      # collection, so only the handler is worth keeping.
+      - type: regex_parser
+        id: parse_solr_request_admin
+        if: 'attributes.url != nil and attributes.url matches "^/solr/admin/"'
+        parse_from: attributes.url
+        regex: '^/solr/(?P<solr_handler>admin/[^?]*)'
+        on_error: send
+
+      # Group the handlers into a few request types so that traffic can be
+      # summarised without knowing every Solr endpoint name.
+      - type: add
+        id: add_solr_request_type_query
+        if: >-
+          attributes.solr_handler != nil
+          and attributes.solr_handler matches "^(select|query|get|export|spell|suggest|terms|tvrh|browse)$"
+        field: attributes.solr_request_type
+        value: query
+
+      - type: add
+        id: add_solr_request_type_update
+        if: 'attributes.solr_handler != nil and attributes.solr_handler matches "^update"'
+        field: attributes.solr_request_type
+        value: update
+
+      - type: add
+        id: add_solr_request_type_admin
+        if: 'attributes.solr_handler != nil and attributes.solr_handler matches "^admin/"'
+        field: attributes.solr_request_type
+        value: admin
+
+      - type: add
+        id: add_solr_request_type_other
+        if: 'attributes.solr_request_type == nil'
+        field: attributes.solr_request_type
+        value: other
+
+      # distrib=false marks a per shard subquery fanned out by a coordinating
+      # node, so top level queries can be told apart from internal ones.
+      - type: regex_parser
+        id: parse_solr_request_distrib
+        if: 'attributes.url != nil and attributes.url matches "[?&]distrib="'
+        parse_from: attributes.url
+        regex: '[?&]distrib=(?P<solr_distrib>[^&]+)'
+        on_error: send
+
+      # update.distrib says how an update reached this replica, FROMLEADER
+      # meaning that the shard leader forwarded it.
+      - type: regex_parser
+        id: parse_solr_request_update_distrib
+        if: 'attributes.url != nil and attributes.url matches "update\\.distrib="'
+        parse_from: attributes.url
+        regex: '[?&]update\.distrib=(?P<solr_update_distrib>[^&]+)'
+        on_error: send
+
+      # distrib.from names the node and replica that forwarded the update.
+      # Jetty logs the raw request target, so its URL may be percent encoded.
+      - type: regex_parser
+        id: parse_solr_request_distrib_from_host
+        if: 'attributes.url != nil and attributes.url matches "distrib\\.from="'
+        parse_from: attributes.url
+        regex: '[?&]distrib\.from=https?(?:%3A|:)(?:%2F|/){2}(?P<solr_distrib_from_host>[^%&:/]+)'
+        on_error: send
+
+      - type: regex_parser
+        id: parse_solr_request_distrib_from_core
+        if: 'attributes.url != nil and attributes.url matches "distrib\\.from="'
+        parse_from: attributes.url
+        regex: '[?&]distrib\.from=[^&]*?(?:%2F|/)solr(?:%2F|/)(?P<solr_distrib_from_core>[^%&/]+)'
+        on_error: send
+
       - type: add
         id: add_solr_request_log_type
         field: attributes.log_type
