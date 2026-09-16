@@ -1,0 +1,166 @@
+---
+- name: Verify
+  hosts: all
+  become: true
+  vars:
+    veeam_proxmox_user: veeam-service
+  tasks:
+    - name: Confirm the service account exists with a bash shell
+      ansible.builtin.command:
+        argv:
+          - getent
+          - passwd
+          - "{{ veeam_proxmox_user }}"
+      register: veeam_proxmox_passwd_entry
+      changed_when: false
+
+    - name: Assert the shell Veeam requires
+      ansible.builtin.assert:
+        that:
+          - "'/bin/bash' in veeam_proxmox_passwd_entry.stdout"
+
+    - name: Confirm the account has a password set
+      ansible.builtin.command:
+        argv:
+          - passwd
+          - -S
+          - "{{ veeam_proxmox_user }}"
+      register: veeam_proxmox_password_status
+      changed_when: false
+
+    - name: Assert the password is usable
+      ansible.builtin.assert:
+        that:
+          - "' P ' in veeam_proxmox_password_status.stdout"
+        fail_msg: >-
+          The account has no usable password, so Veeam cannot authenticate:
+          {{ veeam_proxmox_password_status.stdout }}
+
+    - name: Read the sudoers drop-in
+      ansible.builtin.slurp:
+        src: "/etc/sudoers.d/{{ veeam_proxmox_user }}"
+      register: veeam_proxmox_sudoers
+
+    - name: Assert the commands are granted with a password prompt
+      ansible.builtin.assert:
+        that:
+          - >-
+            'PASSWD: /usr/sbin/dmidecode -s system-uuid'
+            in (veeam_proxmox_sudoers.content | b64decode)
+          - "'NOPASSWD:' not in (veeam_proxmox_sudoers.content | b64decode)"
+
+    - name: Assert the drop-in directory is included by the main sudoers file
+      ansible.builtin.command:
+        argv:
+          - grep
+          - -qx
+          - "@includedir /etc/sudoers.d"
+          - /etc/sudoers
+      changed_when: false
+
+    - name: Look for superseded drop-ins that would override the managed one
+      ansible.builtin.stat:
+        path: /etc/sudoers.d/veeam-service-bk
+      register: veeam_proxmox_leftover
+
+    - name: Assert the superseded drop-in was removed
+      ansible.builtin.assert:
+        that:
+          - not veeam_proxmox_leftover.stat.exists
+        fail_msg: >-
+          A hand-made drop-in is still present and sorts after the managed file,
+          so its rules win.
+
+    - name: Read the effective sudo rules for the account
+      ansible.builtin.command:
+        argv:
+          - sudo
+          - -l
+          - -U
+          - "{{ veeam_proxmox_user }}"
+      register: veeam_proxmox_sudo_rules
+      changed_when: false
+
+    - name: Assert sudo resolved the rules
+      ansible.builtin.assert:
+        that:
+          - "'dmidecode' in veeam_proxmox_sudo_rules.stdout"
+
+    - name: Read the account's supplementary groups
+      ansible.builtin.command:
+        argv:
+          - id
+          - -nG
+          - "{{ veeam_proxmox_user }}"
+      register: veeam_proxmox_group_names
+      changed_when: false
+
+    - name: Read the account's primary group
+      ansible.builtin.command:
+        argv:
+          - id
+          - -gn
+          - "{{ veeam_proxmox_user }}"
+      register: veeam_proxmox_primary_group
+      changed_when: false
+
+    - name: Assert the account was taken out of the passwordless sudo group
+      ansible.builtin.assert:
+        that:
+          - "'opsys' not in veeam_proxmox_group_names.stdout.split()"
+          - veeam_proxmox_primary_group.stdout.strip() != 'opsys'
+        fail_msg: >-
+          The account still belongs to opsys, which grants blanket NOPASSWD
+          sudo. Primary group is
+          {{ veeam_proxmox_primary_group.stdout }}, all groups are
+          {{ veeam_proxmox_group_names.stdout }}. Whether that suppresses the
+          password prompt depends on the order sudoers files are parsed, so it
+          must not be left to chance.
+
+    - name: Check whether sudo would run a command without a password
+      ansible.builtin.command:
+        argv:
+          - runuser
+          - -u
+          - "{{ veeam_proxmox_user }}"
+          - --
+          - sudo
+          - -n
+          - /usr/sbin/dmidecode
+          - -s
+          - system-uuid
+      register: veeam_proxmox_passwordless
+      changed_when: false
+      failed_when: false
+
+    - name: Assert sudo demands a password, which is what Veeam answers
+      ansible.builtin.assert:
+        that:
+          - veeam_proxmox_passwordless.rc != 0
+        fail_msg: >-
+          sudo ran the command with no password prompt, so Veeam would wait
+          for a prompt that never arrives.
+
+    - name: Assert sudo permits the command Veeam validates credentials with
+      ansible.builtin.command:
+        argv:
+          - sudo
+          - -l
+          - -U
+          - "{{ veeam_proxmox_user }}"
+          - /usr/sbin/dmidecode
+          - -s
+          - system-uuid
+      changed_when: false
+
+    - name: Assert an unrelated command is refused
+      ansible.builtin.command:
+        argv:
+          - sudo
+          - -l
+          - -U
+          - "{{ veeam_proxmox_user }}"
+          - /bin/bash
+      register: veeam_proxmox_sudo_bash
+      changed_when: false
+      failed_when: veeam_proxmox_sudo_bash.rc == 0
