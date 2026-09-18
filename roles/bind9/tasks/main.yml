@@ -1,35 +1,70 @@
 ---
-- name: bind9 | Install local nameserver
+- name: Bind9 | Install local nameserver
   ansible.builtin.apt:
-    name: ["bind9"]
+    name: "{{ bind9_packages }}"
     state: present
+  become: true
 
-- name: bind9 | Start nameserver
+- name: Bind9 | Configure named
+  ansible.builtin.template:
+    src: named.conf.options.j2
+    dest: "{{ bind9_options_file }}"
+    owner: root
+    group: bind
+    mode: "0644"
+  become: true
+  notify:
+    - Restart bind
+
+- name: Bind9 | Set named startup options
+  ansible.builtin.template:
+    src: named.default.j2
+    dest: "{{ bind9_defaults_file }}"
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  notify:
+    - Restart bind
+
+- name: Bind9 | Check for legacy startup options file
+  ansible.builtin.stat:
+    path: "{{ bind9_legacy_defaults_file }}"
+  register: bind9_legacy_defaults
+
+- name: Bind9 | Set named startup options on older releases
+  ansible.builtin.template:
+    src: named.default.j2
+    dest: "{{ bind9_legacy_defaults_file }}"
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  when: bind9_legacy_defaults.stat.exists
+  notify:
+    - Restart bind
+
+- name: Bind9 | Verify named configuration is valid
+  ansible.builtin.command: named-checkconf
+  become: true
+  changed_when: false
+
+- name: Bind9 | Start nameserver
   ansible.builtin.service:
-    name: bind9
+    name: "{{ bind9_service_name }}"
     enabled: true
     state: started
+  become: true
   when: running_on_server
 
 #####
 # Note these are not tested because docker will not allow it
 #
-- name: bind9 | Remove other nameservers
-  ansible.builtin.lineinfile:
-    dest: "/etc/resolv.conf"
-    state: absent
-    regexp: '.*nameserver.*'
-  when: running_on_server
-
-- name: bind9 | Use local dns nameserver
-  ansible.builtin.lineinfile:
-    dest: "/etc/resolv.conf"
-    state: present
-    line: 'nameserver 127.0.0.53'
-  notify:
-    - restart bind
-  when: running_on_server
-
+- name: Bind9 | Point the host at its local resolver
+  ansible.builtin.include_tasks: resolver.yml
+  when:
+    - running_on_server
+    - bind9_manage_resolv_conf
 #
 # End - untested
 #####
