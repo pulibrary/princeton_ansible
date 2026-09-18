@@ -1,0 +1,23 @@
+---
+# Writing the file replaces any systemd-resolved symlink in a single atomic
+# rename, so /etc/resolv.conf is never missing or half written, and the file
+# the symlink pointed at is left alone. Deleting the symlink first would open
+# a window with no resolver configuration at all.
+- name: Bind9 | Resolver | Write /etc/resolv.conf
+  ansible.builtin.template:
+    src: resolv.conf.j2
+    dest: /etc/resolv.conf
+    owner: root
+    group: root
+    mode: "0644"
+    follow: false
+    backup: true
+  become: true
+  register: bind9_resolv_conf_written
+
+- name: Bind9 | Resolver | Report where the previous resolv.conf was saved
+  ansible.builtin.debug:
+    msg: >-
+      Previous resolv.conf saved as
+      {{ bind9_resolv_conf_written.backup_file }}
+  when: bind9_resolv_conf_written.backup_file is defined

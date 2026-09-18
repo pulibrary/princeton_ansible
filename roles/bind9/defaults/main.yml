@@ -1,2 +1,41 @@
 ---
 running_on_server: false
+
+bind9_packages:
+  - bind9
+  - bind9-utils
+
+# Our network does not route IPv6. Keeping named on IPv4 avoids AAAA
+# lookups that can only time out before falling back to A records.
+bind9_ipv4_only: true
+bind9_named_options: "-u bind{{ ' -4' if bind9_ipv4_only else '' }}"
+
+# Campus resolvers. named caches answers and forwards to these so that
+# internal names keep resolving.
+bind9_forwarders:
+  - 128.112.129.209
+  - 128.112.129.7
+  - 128.112.129.50
+bind9_forward_policy: only
+
+bind9_listen_on:
+  - 127.0.0.1
+bind9_allow_query:
+  - localhost
+bind9_recursion: true
+bind9_allow_recursion: "{{ bind9_allow_query }}"
+bind9_dnssec_validation: auto
+
+# Point the host at its own named instance, keeping the campus resolvers
+# as a fallback so a named outage cannot take DNS down with it.
+bind9_manage_resolv_conf: true
+bind9_resolver_address: 127.0.0.1
+bind9_resolv_nameservers: "{{ [bind9_resolver_address] + bind9_forwarders }}"
+# Hosts live in both princeton.edu and lib.princeton.edu. Searching the
+# host's own domain first and then princeton.edu keeps every short name that
+# resolves today resolving, since OIT hands out "search princeton.edu".
+bind9_resolv_base_search:
+  - princeton.edu
+bind9_resolv_search: "{{ (([ansible_facts.domain | default('')] |
+  select() | list) + bind9_resolv_base_search) | unique }}"
+bind9_resolv_options: []
