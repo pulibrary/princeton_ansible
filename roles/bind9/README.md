@@ -43,6 +43,80 @@ Role Variables
 `/etc/resolv.conf` is only touched when `running_on_server` is true, because
 containers do not allow it.
 
+DNS cache lifetime and reset
+----------------------------
+
+This role does not override BIND's cache TTL settings. Each cached answer
+has its own expiry; there is no single interval that clears the entire cache.
+The BIND 9.18 defaults are:
+
+| Answer type | Cache lifetime |
+| --- | --- |
+| Positive answers (such as A, AAAA, and CNAME records) | The TTL received from the upstream resolver, capped by `max-cache-ttl`: 604800 seconds (7 days). |
+| Negative answers (NXDOMAIN or no records of the requested type) | The negative TTL derived from the zone's SOA record, capped by `max-ncache-ttl`: 10800 seconds (3 hours). |
+
+These are maximums, not fixed retention periods. For example, an answer
+received with a TTL of 300 seconds normally expires after five minutes.
+A campus resolver may return a partially elapsed TTL from its own cache.
+The role does not enable serving expired answers.
+
+See the [BIND cache settings reference](https://bind9.readthedocs.io/en/stable/reference.html#namedconf-statement-max-cache-ttl).
+Check `named -V` when troubleshooting a host running a different BIND version.
+
+### Inspect the remaining TTL
+
+Query the local resolver directly on the affected host (`dig` is provided
+by Ubuntu's `dnsutils` package):
+
+```bash
+dig @127.0.0.1 lib-solr-prod9.princeton.edu A +noall +answer
+```
+
+The second column is the remaining TTL in seconds. Repeat the query to
+observe it counting down; a refreshed answer can increase the TTL.
+For a negative response, include the status and SOA record:
+
+```bash
+dig @127.0.0.1 lib-solr-prod9.princeton.edu A +noall +comments +answer +authority
+```
+
+### Clear the local cache
+
+Run one of these commands on the affected host. Start with the smallest
+scope needed:
+
+```bash
+# Clear all cached record types for one name, including negative answers.
+sudo rndc flushname lib-solr-prod9.princeton.edu
+
+# Clear a domain and every name beneath it.
+sudo rndc flushtree lib.princeton.edu
+
+# Clear the entire local BIND cache.
+sudo rndc flush
+```
+
+These commands leave `named` running. Subsequent queries refill the cache.
+For aliases, clear the CNAME target as well if its address changed.
+See the [BIND rndc reference](https://bind9.readthedocs.io/en/v9.18.39/manpages.html#rndc-name-server-control-utility).
+
+Verify resolution afterward:
+
+```bash
+dig @127.0.0.1 lib-solr-prod9.princeton.edu A +noall +answer
+```
+
+Flushing affects only this host's BIND cache. Campus forwarders may still
+return an old answer until their TTL expires; compare with a direct query:
+
+```bash
+dig @128.112.129.209 lib-solr-prod9.princeton.edu A +noall +answer
+```
+
+Applications can also maintain their own DNS caches. `resolvectl flush-caches`
+clears systemd-resolved's cache, not BIND's cache. A BIND restart is unnecessary
+for routine cache clearing.
+
 Dependencies
 ------------
 
