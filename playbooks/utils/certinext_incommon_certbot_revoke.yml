@@ -1,10 +1,14 @@
 ---
-# you MUST run this playbook on a single host with '--limit' for example `ansible-playbook -e domain_name=orcid-staging --limit adc-dev2.princeton.edu playbooks/utils/incommon_certbot_revoke.yml`
+# you MUST run this playbook on a single host with '--limit'
+# you MUST provide a reason for revoking the certificate
+# see https://letsencrypt.org/docs/revoking/
+# NOTE: the docs mention 'unspecified' as an option, but it does not work
+# valid options for 'cert_reason' are:
+# cessationOfOperation, keyCompromise, and superseded
+# most use cases will be 'superseded'
+# for example `ansible-playbook -e domain_name=orcid-staging --limit adc-dev2.princeton.edu playbooks/utils/certinext_incommon_certbot_revoke.yml -e cert_reason=superseded`
 # to run in production, you must add '-e runtime_env=production'
-# based on this URL https://letsencrypt.org/docs/revoking/ 
 # example: ansible-playbook playbooks/utils/certinext_incommon_certbot_revoke.yml -e runtime_env=production -e domain_name=historicperiodicals --limit adc-prod1.princeton.edu -e cert_reason=cessationOfOperation
-# most use cases will be 'superseded' 
-#note: unspecified does not work
 # Run the playbook on the inactive load balancer first
 # if the 'nginx -t' check fails, we probably didn't delete an obsolete config file
 # run 'playbooks/nginx.yml' (or nginx_staging.yml) following the comments for removing obsolete config
