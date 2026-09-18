@@ -326,3 +326,33 @@
     - mysql_users is defined
     - running_on_server
   no_log: true
+
+- name: MySQL | Configure cloud backup mounts
+  ansible.builtin.include_tasks:
+    file: backup_gcs_mount.yml
+    apply:
+      tags: [google_cloud]
+  when:
+    - mysql_gcs_backup_enabled | bool
+    - runtime_env | default('staging') == mysql_gcs_backup_environment
+    - mysql_server | default(false) | bool
+    - ansible_os_family == "Debian"
+  tags: [google_cloud]
+
+# Any pending MariaDB restart has to happen before a dump starts, otherwise
+# the restart kills the dump's connection halfway through a table.
+- name: MySQL | Apply pending MariaDB restarts before backing up
+  ansible.builtin.meta: flush_handlers
+  tags: [google_cloud]
+
+- name: MySQL | Schedule rotated database dumps
+  ansible.builtin.include_tasks:
+    file: backup_schedule.yml
+    apply:
+      tags: [google_cloud]
+  when:
+    - mysql_backup_schedule_enabled | bool
+    - runtime_env | default('staging') == mysql_gcs_backup_environment
+    - mysql_server | default(false) | bool
+    - ansible_os_family == "Debian"
+  tags: [google_cloud]

@@ -4,6 +4,44 @@ mysql_host: "mysql-db-prod1.princeton.edu"
 mysql_bind_address: "0.0.0.0"
 mysql_root_password: "{{ vault_mysql_root_password }}"
 
+# gcsfuse cloud backup
+# Production is the only environment we back up. This stays off until the
+# service account key for the bucket is committed to
+# roles/mysql/files/mysql-backup-production-account-key.json.
+mysql_gcs_backup_enabled: true
+mysql_gcs_backup_environment: "production"
+mysql_gcs_bucket_name: "pul-mysql-backup"
+gcsfuse_directory: "/var/log/gcsfuse"
+mysql_gcsfuse_directory: "{{ gcsfuse_directory }}"
+
+# Nightly rotated dumps of every database, written to the mounted bucket.
+# Retention: 7 daily, 5 weekly (Sunday), 3 monthly (first of the month).
+mysql_backup_schedule_enabled: false
+mysql_backup_on_calendar: "*-*-* 02:30:00"
+mysql_backup_days_to_keep: 7
+mysql_backup_weeks_to_keep: 5
+mysql_backup_months_to_keep: 3
+mysql_backup_day_of_week_to_keep: 7
+# gcsfuse 3.x streams writes straight to the bucket, so publishing a dump does
+# not need a second local copy of it.
+mysql_backup_space_factor: 1
+mysql_backup_min_free_mb: 20480
+
+mysql_gcsfuse_logrotate_rules:
+  - name: "gcsfuse"
+    paths:
+      - "{{ mysql_gcsfuse_directory }}/*.log"
+    options:
+      rotate: "{{ logrotate_global_defaults.rotate }}"
+      maxsize: "{{ logrotate_global_defaults.maxsize }}"
+      create_mode: "{{ logrotate_global_defaults.create_mode }}"
+      create_owner: mysql
+      create_group: mysql
+      su_user: "{{ logrotate_global_defaults.su_user }}"
+      su_group: "{{ logrotate_global_defaults.su_group }}"
+      postrotate: |
+        systemctl reload mysql-gcs-backup.service 2>/dev/null || true
+
 datadog_api_key: "{{ vault_datadog_key }}"
 datadog_service_name:
 datadog_environment: prod
