@@ -1,0 +1,213 @@
+---
+# Read-only diagnostic. Run this before committing to the sssd_ldap approach.
+#
+# It answers the three things that decide whether Active Directory over LDAPS is
+# viable for the SFTP transfer accounts:
+#
+#   1. Can this host reach the domain controllers on TCP 636?
+#   2. Does the host's CA bundle validate the controllers' certificates?
+#      (sssd_ldap refuses to relax this, because the password is sent in a bind.)
+#   3. Do almasftp and lib-aspacesftp exist in the directory with the POSIX
+#      attributes sssd needs when it is not mapping IDs from the SID?
+#
+# Nothing on the host is reconfigured. The only change is installing the
+# read-only LDAP client tools, which is what ldapsearch needs.
+#
+#   ansible-playbook playbooks/utils/ldaps_probe.yml
+#
+# Override the target with -e probe_hosts=some_group to check another host.
+- name: Probe Active Directory over LDAPS
+  hosts: "{{ probe_hosts | default('libsftp_sandbox') }}"
+  remote_user: pulsys
+  become: true
+
+  vars_files:
+    - ../../group_vars/all/vars.yml
+    - ../../group_vars/all/vault.yml
+    - ../../group_vars/sftp/common.yml
+
+  vars:
+    # Accounts to look for. These are the two that authenticate with a password.
+    probe_accounts:
+      - "{{ almasftp_user }}"
+      - "{{ aspaceftp_user }}"
+
+  tasks:
+    - name: Load the directory settings so the controller list has one source
+      ansible.builtin.include_vars:
+        file: ../../roles/sssd_ldap/defaults/main.yml
+
+    # The CA bundle path lives in the role's OS-specific vars, not its defaults.
+    - name: Load the OS-specific directory settings
+      ansible.builtin.include_vars:
+        file: "../../roles/sssd_ldap/vars/{{ ansible_facts['os_family'] }}.yml"
+
+    - name: Reduce the LDAPS URIs to bare hostnames
+      ansible.builtin.set_fact:
+        probe_dc_hosts: >-
+          {{ sssd_ldap_uri | map('regex_replace', '^ldaps?://', '')
+             | map('regex_replace', ':.*$', '') | list }}
+
+    - name: Report what is about to be probed
+      ansible.builtin.debug:
+        msg:
+          - "host: {{ inventory_hostname }} ({{ ansible_facts['distribution'] }} {{ ansible_facts['distribution_version'] }})"
+          - "controllers: {{ probe_dc_hosts | join(', ') }}"
+          - "search base: {{ sssd_ldap_search_base }}"
+          - "accounts: {{ probe_accounts | join(', ') }}"
+
+    # 1. Reachability. A blocked port is the most likely reason this whole
+    #    approach is a dead end, so fail fast rather than hang.
+    - name: Check TCP 636 on each domain controller
+      ansible.builtin.wait_for:
+        host: "{{ item }}"
+        port: 636
+        timeout: 8
+        state: started
+      loop: "{{ probe_dc_hosts }}"
+      register: probe_tcp
+      failed_when: false
+      changed_when: false
+
+    - name: Summarise reachability
+      ansible.builtin.debug:
+        msg: >-
+          {{ item.item }}:636
+          {{ 'reachable' if not item.failed else 'UNREACHABLE (' + (item.msg | default('timed out')) + ')' }}
+      loop: "{{ probe_tcp.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Record which controllers answered
+      ansible.builtin.set_fact:
+        probe_live_dcs: >-
+          {{ probe_tcp.results | rejectattr('failed') | map(attribute='item') | list }}
+
+    - name: Stop if no controller is reachable
+      ansible.builtin.fail:
+        msg: >-
+          No domain controller answered on 636 from {{ inventory_hostname }}.
+          Active Directory over LDAPS is not usable from this host, so the
+          transfer accounts need SSH public keys instead of a password. The
+          alma-sftp keys already in keys/ are the starting point.
+      when: probe_live_dcs | length == 0
+
+    # 2. Certificate validation, checked against the same trust store sssd uses.
+    - name: Verify the LDAPS certificate against the system trust store
+      ansible.builtin.shell:
+        cmd: >-
+          set -o pipefail;
+          echo |
+          openssl s_client -connect {{ item }}:636
+          -CAfile {{ sssd_ldap_tls_cacert | default(sssd_ldap_default_cacert) }}
+          2>/dev/null |
+          sed -n 's/^\(Verify return code:.*\)$/\1/p;s/^\( *subject=.*\)$/\1/p'
+      args:
+        executable: /bin/bash
+      loop: "{{ probe_live_dcs }}"
+      register: probe_tls
+      failed_when: false
+      changed_when: false
+
+    - name: Summarise certificate validation
+      ansible.builtin.debug:
+        msg: >-
+          {{ item.item }}: {{ item.stdout_lines | default(['no TLS response']) | join(' | ') }}
+      loop: "{{ probe_tls.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    # 3. Do the accounts exist, and do they carry uidNumber/gidNumber? Without
+    #    those, sssd cannot resolve them while ldap_id_mapping is false.
+    - name: Look the accounts up in the directory
+      when: sssd_ldap_bind_dn | length > 0
+      block:
+        - name: Install the read-only LDAP client tools
+          ansible.builtin.package:
+            name: "{{ 'ldap-utils' if ansible_facts['os_family'] == 'Debian' else 'openldap-clients' }}"
+            state: present
+
+        - name: Stage the lookup password out of the process list
+          ansible.builtin.copy:
+            content: "{{ sssd_ldap_bind_password }}"
+            dest: /root/.ldaps_probe_secret
+            owner: root
+            group: root
+            mode: "0600"
+          no_log: true
+
+        - name: Search for each account
+          ansible.builtin.command:
+            argv:
+              - ldapsearch
+              - -x
+              - -LLL
+              - -H
+              - "ldaps://{{ probe_live_dcs | first }}"
+              - -D
+              - "{{ sssd_ldap_bind_dn }}"
+              - -y
+              - /root/.ldaps_probe_secret
+              - -b
+              - "{{ sssd_ldap_search_base }}"
+              - "(sAMAccountName={{ item }})"
+              # POSIX attributes sssd needs to resolve the account.
+              - dn
+              - uidNumber
+              - gidNumber
+              - unixHomeDirectory
+              - loginShell
+              # Identity evidence for the audit trail. objectGUID comes back
+              # base64 encoded, which is the same form Entra stores as
+              # onPremisesImmutableId for a synced account.
+              - sAMAccountName
+              - userPrincipalName
+              - objectGUID
+              - objectSid
+              - whenCreated
+              - userAccountControl
+          loop: "{{ probe_accounts }}"
+          register: probe_lookup
+          failed_when: false
+          changed_when: false
+
+        - name: Summarise the directory lookups
+          ansible.builtin.debug:
+            msg: >-
+              {{ item.item }}:
+              {{ 'bind or search FAILED -> ' + (item.stderr | default('') | trim)
+                 if item.rc != 0
+                 else ('NOT FOUND in ' + sssd_ldap_search_base
+                       + ' (cloud-only Entra account, or a different name in AD)'
+                       if (item.stdout | trim | length) == 0
+                       else item.stdout_lines | join(' | ')) }}
+          loop: "{{ probe_lookup.results }}"
+          loop_control:
+            label: "{{ item.item }}"
+
+      always:
+        - name: Remove the staged password
+          ansible.builtin.file:
+            path: /root/.ldaps_probe_secret
+            state: absent
+
+    - name: How to read these results
+      ansible.builtin.debug:
+        msg:
+          - "Verify return code: 0 (ok) means the CA bundle trusts the controller."
+          - "Anything else means set sssd_ldap_tls_cacert to the issuing CA."
+          - "An account with uidNumber and gidNumber will resolve through sssd."
+          - "An account missing them needs sssd_ldap_id_mapping: true, which"
+          - "changes its UID and so changes ownership of the drop directories."
+          - "A bind failure with reachable controllers usually means the lookup"
+          - "account lacks read access, not that LDAPS is blocked."
+          - ""
+          - "For the audit trail: the base64 value after 'objectGUID::' is the"
+          - "same value Entra stores as onPremisesImmutableId for a synced"
+          - "account. Matching them proves the account authenticating here is"
+          - "the same identity as the Entra object the auditors are looking at."
+          - "Compare with: az ad user show --id almasftp@princeton.edu"
+          - "  --query '{upn:userPrincipalName, oid:id,"
+          - "  immutableId:onPremisesImmutableId, synced:onPremisesSyncEnabled}'"
+          - "If NOT FOUND above, the account is cloud-only in Entra and no"
+          - "LDAP or AD approach can authenticate it."

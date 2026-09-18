@@ -1,0 +1,25 @@
+---
+# sandbox-sftp1 is Ubuntu, so it cannot use ad_join: that role performs a realm
+# join with authselect-compat and krb5-workstation, neither of which Ubuntu
+# packages. It reaches the same Active Directory over LDAPS with sssd_ldap
+# instead, so almasftp and lib-aspacesftp stay directory accounts and keep
+# authenticating with a password. No local accounts and no stored password.
+#
+# Entra ID is deliberately not used here: Himmelblau forces MFA on every remote
+# session, so a password-only service account cannot log in over SSH.
+host_ad_name: sandbox-sftp1.princeton.edu
+deploy_user_local_keys:
+  - name: 'bibdata-worker-staging1'
+    key: "{{ lookup('file', '../roles/lib_sftp/files/id_ed25519.pub') }}"
+
+# Only these two directory accounts may authenticate. This is sssd's
+# simple_allow_users, so access control lives in one place rather than being
+# split across sshd drop-in files.
+sssd_ldap_allow_users:
+  - "{{ almasftp_user }}"
+  - "{{ aspaceftp_user }}"
+
+# Directory accounts are not in /etc/passwd, so usermod cannot add them to a
+# local group. pusvc-g comes from Active Directory with gid 20204 and is already
+# their primary group, so no local membership is needed.
+lib_sftp_group_members: []

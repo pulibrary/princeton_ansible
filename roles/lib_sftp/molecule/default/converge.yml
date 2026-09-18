@@ -3,7 +3,38 @@
   hosts: all
   vars:
     running_on_server: false
+    almasftp_user: almasftp
+    aspaceftp_user: lib-aspacesftp
+    lib_sftp_group_members: []
   become: true
+  pre_tasks:
+    # Molecule has no directory attached, so stand in for the accounts and the
+    # group that Active Directory would otherwise supply over NSS. lib_sftp
+    # asserts these resolve before it chowns anything.
+    - name: Stand in for the directory-provided group
+      ansible.builtin.group:
+        name: pusvc-g
+        gid: 20204
+        state: present
+
+    - name: Stand in for the directory-provided transfer accounts
+      ansible.builtin.user:
+        name: "{{ item }}"
+        group: pusvc-g
+        shell: /bin/bash
+        create_home: true
+      loop:
+        - "{{ almasftp_user }}"
+        - "{{ aspaceftp_user }}"
+
+    # A container image has no host key, and the role's handler validates the
+    # whole sshd configuration before restarting.
+    - name: Ensure sshd has a host key to validate against
+      ansible.builtin.command:
+        argv:
+          - ssh-keygen
+          - -A
+      changed_when: false
   tasks:
     - name: "Include lib_sftp"
       ansible.builtin.include_role:

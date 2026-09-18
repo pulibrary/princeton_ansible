@@ -1,0 +1,120 @@
+---
+# defaults file for roles/sssd_ldap
+#
+# Resolve and authenticate Active Directory accounts over LDAPS without joining
+# the domain. There is no computer object, no keytab and no Kerberos, so this
+# works on Ubuntu, where the realm join in ad_join cannot run: that role needs
+# authselect-compat and krb5-workstation, which Ubuntu does not package.
+
+# Active Directory DNS domain and the base to search for accounts.
+sssd_ldap_domain: pu.win.princeton.edu
+sssd_ldap_search_base: dc=pu,dc=win,dc=princeton,dc=edu
+
+# Domain controllers, in preference order. LDAPS (636) is required because the
+# user's password is sent in a simple bind.
+sssd_ldap_uri:
+  - ldaps://pdom21tlkp.pu.win.princeton.edu
+  - ldaps://pdom20sopx.pu.win.princeton.edu
+  - ldaps://pdom22f0ho.pu.win.princeton.edu
+  - ldaps://pdom23i4fp.pu.win.princeton.edu
+
+# Service account for directory lookups. Authenticating a user is a separate
+# bind as that user, so this account only needs read access.
+#
+# An LDAP simple bind needs a full distinguished name or a userPrincipalName. A
+# bare account name works for Kerberos, and so for the realm join in ad_join,
+# but Active Directory rejects it here. If the value is a bare name it is turned
+# into a userPrincipalName using sssd_ldap_upn_suffix.
+sssd_ldap_bind_dn: >-
+  {{ sssd_bind_dn if (',' in sssd_bind_dn or '@' in sssd_bind_dn)
+     else sssd_bind_dn ~ '@' ~ sssd_ldap_upn_suffix }}
+sssd_ldap_bind_password: "{{ sssd_bind_dn_password }}"
+
+# The userPrincipalName suffix, which is NOT necessarily the Active Directory
+# DNS domain. Here accounts live in pu.win.princeton.edu but their UPNs are
+# name@princeton.edu, because the forest publishes an alternative suffix.
+# Confirm with playbooks/utils/ad_account_lookup.yml before changing this.
+sssd_ldap_upn_suffix: princeton.edu
+
+# Certificate validation for the LDAPS connection. The role refuses to run if
+# this is relaxed, because user passwords cross this channel.
+sssd_ldap_tls_reqcert: demand
+
+# Accounts permitted to log in, rendered as simple_allow_users. Keeping access
+# control here rather than in sshd AllowUsers means one place decides it.
+# Leave empty to allow every account the directory resolves.
+sssd_ldap_allow_users: []
+
+# Take uidNumber and gidNumber from Active Directory instead of deriving IDs
+# from the SID, so UIDs match the realm-joined hosts and file ownership on
+# shared storage stays consistent. Accounts without those attributes will not
+# resolve while this is false.
+sssd_ldap_id_mapping: false
+
+sssd_ldap_default_shell: /bin/bash
+
+# Home directory path, matching the realm-joined hosts so an account has the
+# same home everywhere.
+#
+# The obvious value, /home/%u@%d, is not enough: sssd expands %d to the domain
+# section's name, and ad_join labels that section with the uppercase Kerberos
+# realm while this role uses the lowercase DNS domain. The same template would
+# therefore produce a different path here, and any job with the staging path
+# built in would miss. Uppercase it explicitly instead of relying on %d.
+sssd_ldap_fallback_homedir: "/home/%u@{{ sssd_ldap_domain | upper }}"
+
+# Create home directories on first login. Directory accounts have no home until
+# something makes one, and an SFTP session that lands in a missing directory
+# fails in a way that looks like a permissions problem.
+sssd_ldap_create_homedir: true
+
+# Cache credentials so a brief directory outage does not stop file transfers.
+sssd_ldap_cache_credentials: true
+
+# Timeouts. sssd runs a watchdog over its own back end and kills it if an
+# operation blocks for too long. During that restart PAM gets "System error"
+# for both the auth and the account phase, which reads like an access denial
+# but is really a stall. These values make a slow or dead controller fail fast
+# enough to fail over to the next one instead.
+#
+# Defaults are 6, 8 and 6 respectively.
+sssd_ldap_network_timeout: 3
+sssd_ldap_opt_timeout: 5
+sssd_ldap_search_timeout: 5
+
+# Active Directory closes idle LDAP connections after MaxConnIdleTime, which
+# also defaults to 900 seconds. Keeping a connection for exactly as long as the
+# server does means sssd can pick up one the controller has just closed and then
+# block on it. Recycling sooner removes that race.
+sssd_ldap_connection_expire_timeout: 540
+sssd_ldap_connection_idle_timeout: 300
+
+# How long sssd stays offline before retrying. The default of 60 seconds leaves
+# transfers failing for a full minute after a momentary blip.
+sssd_ldap_offline_timeout: 15
+
+# Each failed retry doubles the wait, up to this cap. The default cap is 3600,
+# so a directory that is briefly unreachable can leave sssd offline for an hour
+# and every file transfer failing with it. Capped low so recovery stays quick.
+# sssd advises a cap of at least four times offline_timeout.
+sssd_ldap_offline_timeout_max: 120
+
+# Manage the PAM stack so directory accounts can authenticate. Set to false if
+# another role owns PAM on the host.
+sssd_ldap_configure_pam: true
+
+# Test the LDAPS certificate, the lookup bind and the accounts themselves before
+# writing any configuration. sssd reports a certificate problem, a wrong bind
+# identity and a missing account all as "no such user", so these checks run the
+# same bind first and say which it is.
+sssd_ldap_preflight: true
+
+# Controller used for the pre-flight checks. Defaults to the first configured
+# URI with the scheme stripped.
+sssd_ldap_preflight_host: >-
+  {{ sssd_ldap_uri | first | regex_replace('^ldaps?://', '')
+     | regex_replace(':.*$', '') }}
+
+# Verify at the end of the run that each permitted account resolves. This turns
+# a silent misconfiguration into a failed play.
+sssd_ldap_verify_accounts: true

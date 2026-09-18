@@ -1,0 +1,180 @@
+---
+# Find the authoritative name of an Active Directory account.
+#
+# Run this on a host that is already joined to the domain (staging or
+# production). It uses that host's machine credentials, so no password is
+# needed, and it searches the Global Catalog rather than a single domain, so it
+# finds the account whichever domain of the forest holds it. That is the
+# question to answer before setting a lookup identity for sssd_ldap.
+#
+#   ansible-playbook playbooks/utils/ad_account_lookup.yml -e 'lookup_names=libops'
+#   ansible-playbook playbooks/utils/ad_account_lookup.yml \
+#     -e 'lookup_names=libops,almasftp,lib-aspacesftp'
+#
+# Nothing is changed. The Kerberos ticket it obtains is discarded afterwards.
+#
+# Do not run this against the Ubuntu sandbox: it is deliberately not joined, so
+# it has no machine credentials and no Kerberos tools. That is the whole reason
+# it authenticates over LDAPS instead.
+- name: Look up Active Directory accounts from a joined host
+  hosts: "{{ lookup_hosts | default('libsftp_staging') }}"
+  remote_user: pulsys
+  become: true
+  gather_facts: false
+
+  vars:
+    lookup_names: ""
+    # A Global Catalog server. Unlike an ordinary domain controller port, this
+    # answers for every domain in the forest, so an account in another domain is
+    # still found. The joined host reports its own in `sssctl domain-status`.
+    lookup_gc_host: pdom21tlkp.pu.win.princeton.edu
+    lookup_gc_port: 3268
+    lookup_ccache: FILE:/tmp/krb5cc_ad_account_lookup
+
+  tasks:
+    - name: Require at least one account name
+      ansible.builtin.assert:
+        that:
+          - lookup_names | length > 0
+        fail_msg: >-
+          Pass the accounts to look up, for example
+          -e 'lookup_names=libops,almasftp'
+
+    - name: Split the requested names
+      ansible.builtin.set_fact:
+        lookup_account_list: >-
+          {{ lookup_names.split(',') | map('trim')
+             | reject('equalto', '') | list }}
+
+    - name: Look the accounts up
+      block:
+        # kinit with no principal guesses host/<fqdn>@REALM. On these hosts the
+        # DNS name and the Active Directory domain differ, so that guess does
+        # not exist in the directory. Read the real principal from the keytab
+        # instead.
+        - name: Read the machine principal from the host keytab
+          ansible.builtin.shell:
+            cmd: >-
+              set -o pipefail;
+              klist -k /etc/krb5.keytab
+              | awk '/\$@|host\//{print $2; exit}'
+          args:
+            executable: /bin/bash
+          register: lookup_principal
+          changed_when: false
+
+        - name: Fail if the host has no usable machine principal
+          ansible.builtin.assert:
+            that:
+              - lookup_principal.stdout | trim | length > 0
+            fail_msg: >-
+              No machine principal found in /etc/krb5.keytab, so this host
+              cannot query the directory with its own credentials. Run this
+              against a domain-joined host instead.
+
+        - name: Get a Kerberos ticket as the machine account
+          ansible.builtin.command:
+            argv:
+              - kinit
+              - -k
+              - -t
+              - /etc/krb5.keytab
+              - "{{ lookup_principal.stdout | trim }}"
+          register: lookup_kinit
+          changed_when: false
+          environment:
+            KRB5CCNAME: "{{ lookup_ccache }}"
+
+        - name: Find each account anywhere in the forest
+          ansible.builtin.command:
+            argv:
+              - ldapsearch
+              - -Y
+              - GSSAPI
+              - -LLL
+              - -o
+              - ldif-wrap=no
+              - -H
+              - "ldap://{{ lookup_gc_host }}:{{ lookup_gc_port }}"
+              # An empty base against the Global Catalog searches every domain
+              # in the forest, so this does not assume which one holds the
+              # account.
+              - -b
+              - ""
+              - "(sAMAccountName={{ item }})"
+              - distinguishedName
+              - userPrincipalName
+              - sAMAccountName
+              - userAccountControl
+              - uidNumber
+              - gidNumber
+          loop: "{{ lookup_account_list }}"
+          register: lookup_results
+          changed_when: false
+          failed_when: false
+          environment:
+            KRB5CCNAME: "{{ lookup_ccache }}"
+
+        - name: Report what the forest holds for each account
+          ansible.builtin.debug:
+            msg: >-
+              {{ item.item }}:
+              {{ item.stdout_lines | default([]) | reject('match', '^$') | list
+                 if (item.stdout | default('') | trim | length) > 0
+                 else 'NOT FOUND anywhere in the forest. Check the spelling of
+                 sAMAccountName; the name may differ from the display name.' }}
+          loop: "{{ lookup_results.results }}"
+          loop_control:
+            label: "{{ item.item }}"
+
+        # Print the value to store, rather than leaving it to be reassembled by
+        # hand. A userPrincipalName is preferred when the account has one: it is
+        # short, and its suffix is whatever the directory actually publishes,
+        # which is not always the Active Directory DNS domain.
+        - name: Give the exact value to store for each account
+          ansible.builtin.debug:
+            msg: >-
+              {{ item.item }}:
+              {{ ((item.stdout_lines | select('match', '^userPrincipalName: ')
+                   | first | regex_replace('^userPrincipalName: ', ''))
+                  if (item.stdout_lines | default([])
+                      | select('match', '^userPrincipalName: ') | list | length > 0)
+                  else ('no userPrincipalName, so use the full distinguished
+                        name, quoted because it contains spaces: "'
+                        ~ (item.stdout_lines
+                           | select('match', '^distinguishedName: ') | first
+                           | regex_replace('^distinguishedName: ', '')) ~ '"'))
+                 if (item.stdout | default('') | trim | length) > 0
+                 else 'not found, nothing to store' }}
+          loop: "{{ lookup_results.results }}"
+          loop_control:
+            label: "{{ item.item }}"
+
+        - name: Explain how to read the result
+          ansible.builtin.debug:
+            msg:
+              - "userPrincipalName is the value to use for vault_sssd_bind_dn."
+              - "It cannot get the domain components wrong the way a full"
+              - "distinguished name can."
+              - ""
+              - "distinguishedName shows which domain actually holds the"
+              - "account. If its dc= components are not"
+              - "dc=pu,dc=win,dc=princeton,dc=edu then sssd_ldap has to point at"
+              - "controllers for that domain instead."
+              - ""
+              - "userAccountControl: 512 is a normal enabled account, 514 is"
+              - "disabled, 66048 is enabled with a non-expiring password, and"
+              - "8388608 means the password has expired."
+              - ""
+              - "An account with no uidNumber or gidNumber will not resolve"
+              - "while sssd_ldap_id_mapping is false."
+
+      always:
+        - name: Discard the Kerberos ticket
+          ansible.builtin.command:
+            argv:
+              - kdestroy
+              - -c
+              - "{{ lookup_ccache }}"
+          changed_when: false
+          failed_when: false
