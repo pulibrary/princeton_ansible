@@ -4,8 +4,6 @@ postgres_version: 15
 postgres_admin_user: "postgres"
 rails_app_site_config_services:
   - nginx
-  - "{{ sidekiq_worker_name }}"
-  - pulmap-sneakers
 passenger_app_root: "/opt/pulmap/current/public"
 passenger_app_env: "{{ rails_app_env }}"
 passenger_server_name: "pulmap.princeton.edu"
@@ -13,11 +11,6 @@ passenger_ruby: "/usr/local/bin/ruby"
 passenger_extra_http_config:
   - "passenger_preload_bundler on;"
 desired_nodejs_version: "v24.16.0"
-pulmap_rabbit_user: '{{vault_rabbit_production_user}}'
-pulmap_rabbit_password: '{{vault_rabbit_production_password}}'
-pulmap_rabbit_host: '{{ figgy_rabbit_host }}'
-pulmap_rabbit_port: '{{ figgy_rabbit_port }}'
-pulmap_rabbit_server: 'amqp://{{pulmap_rabbit_user}}:{{pulmap_rabbit_password}}@{{pulmap_rabbit_host}}:{{ pulmap_rabbit_port }}'
 pulmap_solr_url: "http://{{ pulmap_solr_host }}:8983/solr/{{ pulmap_solr_collection }}"
 rails_app_name: "pulmap"
 rails_app_directory: "pulmap"
@@ -57,31 +50,17 @@ rails_app_vars:
     value: '{{ pulmap_db_host }}'
   - name: PULMAP_DB_PASSWORD
     value: '{{ application_dbuser_password }}'
-  - name: PULMAP_RABBIT_SERVER
-    value: '{{ pulmap_rabbit_server }}'
   - name: PULMAP_SECRET_KEY_BASE
     value: '{{ pulmap_secret_key_base }}'
   - name: PULMAP_ADMIN_NETIDS
     value: '{{ sidekiq_netids | join(" ") }}'
-  - name: PULMAP_REDIS_URL
-    value: 'maps-prod2.princeton.edu'
-  - name: PULMAP_REDIS_DB
-    value: '0'
   - name: HONEYBADGER_API_KEY
     value: '{{ pulmap_honeybadger_api_key }}'
   - name: PULMAP_DOWNLOAD_PATH
     value: '/opt/pulmap/shared/maplab/pulmap/downloads'
-  - name: GOOGLE_CLOUD_BUCKET
-    value: 'pulmap-storage'
-  - name: GOOGLE_CLOUD_CREDENTIALS
-    value: '/home/{{deploy_user}}/cloud_config/google_cloud_credentials.json'
-  - name: GOOGLE_CLOUD_PROJECT
-    value: 'pulibrary-figgy-storage-1'
   - name: NODE_OPTIONS
     value: '--openssl-legacy-provider'
 ruby_version_override: "ruby-3.4.8"
-sneakers_workers: GeoblacklightEventHandler
-sneakers_worker_name: pulmap-sneakers
 datadog_api_key: "{{ vault_datadog_key }}"
 datadog_config:
   tags: "application:pulmap, environment:production, type:webserverj"

@@ -36,3 +36,15 @@ ssh_ca_users:
   - { name: jkazmier, principals: [jkazmier@princeton.edu] }
   - { name: kayiwa, principals: [kayiwa@princeton.edu] }
   - { name: vkarasic, principals: [vkarasic@princeton.edu] }
+
+# The Veeam backup appliance logs in as a local service account with a
+# password; it cannot present an SSH certificate. Keep password logins working
+# for that one account instead of re-enabling passwords for the whole host.
+ssh_ca_password_auth_users:
+  - "{{ veeam_proxmox_user }}"
+
+# Host and Proxmox API access for that account. The password hash lives in
+# group_vars/proxmox/vault.yml; until it is added the account keeps whatever
+# password it already has.
+veeam_proxmox_user: veeam-service
+veeam_proxmox_user_password: "{{ vault_veeam_service_password | default('') }}"

@@ -1,0 +1,108 @@
+---
+# Schedule rotated dumps of every database with systemd
+
+- name: PostgreSQL | Ensure backup tier directories exist
+  ansible.builtin.file:
+    path: "{{ postgres_backup_root }}/{{ item }}"
+    state: directory
+    owner: "{{ postgres_backup_user }}"
+    group: "{{ postgres_gcs_group }}"
+    mode: "0750"
+  loop:
+    - daily
+    - weekly
+    - monthly
+  when: running_on_server
+
+- name: PostgreSQL | Ensure backup staging directory exists
+  ansible.builtin.file:
+    path: "{{ postgres_backup_staging_dir }}"
+    state: directory
+    owner: "{{ postgres_backup_user }}"
+    group: "{{ postgres_gcs_group }}"
+    mode: "0750"
+  when: running_on_server
+
+- name: PostgreSQL | Install rotated backup script
+  ansible.builtin.template:
+    src: pg_backup_rotated.sh.j2
+    dest: "{{ postgres_backup_script_path }}"
+    owner: root
+    group: root
+    mode: "0755"
+  register: postgres_backup_script
+  when: running_on_server
+
+- name: PostgreSQL | Create backup service
+  ansible.builtin.template:
+    src: postgres-backup.service.j2
+    dest: "/etc/systemd/system/{{ postgres_backup_service_name }}"
+    owner: root
+    group: root
+    mode: "0644"
+  register: postgres_backup_service_unit
+  when: running_on_server
+
+- name: PostgreSQL | Create backup timer
+  ansible.builtin.template:
+    src: postgres-backup.timer.j2
+    dest: "/etc/systemd/system/{{ postgres_backup_timer_name }}"
+    owner: root
+    group: root
+    mode: "0644"
+  register: postgres_backup_timer_unit
+  when: running_on_server
+
+- name: PostgreSQL | Reload systemd for backup units
+  ansible.builtin.systemd:
+    daemon_reload: true
+  when:
+    - running_on_server
+    - postgres_backup_service_unit.changed or postgres_backup_timer_unit.changed
+
+- name: PostgreSQL | Enable and start backup timer
+  ansible.builtin.systemd:
+    name: "{{ postgres_backup_timer_name }}"
+    enabled: true
+    masked: false
+    state: >-
+      {{ 'restarted' if postgres_backup_timer_unit.changed else 'started' }}
+  when: running_on_server
+
+- name: PostgreSQL | Look for existing backups
+  ansible.builtin.find:
+    paths:
+      - "{{ postgres_backup_root }}/daily"
+      - "{{ postgres_backup_root }}/weekly"
+      - "{{ postgres_backup_root }}/monthly"
+    file_type: directory
+    patterns: "[0-9]*"
+  register: postgres_existing_backups
+  changed_when: false
+  when: running_on_server
+
+# The timer only fires at its scheduled hour, so without this the backup tree
+# stays empty (and monitoring stays CRITICAL) until the next night.
+- name: PostgreSQL | Run the first backup now
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/systemctl
+      - start
+      - --no-block
+      - "{{ postgres_backup_service_name }}"
+  changed_when: true
+  when:
+    - running_on_server
+    - >-
+      postgres_backup_run_now | bool
+      or postgres_existing_backups.matched | default(0) == 0
+
+- name: PostgreSQL | Report how to follow the backup run
+  ansible.builtin.debug:
+    msg:
+      - "Backup timer: systemctl list-timers {{ postgres_backup_timer_name }}"
+      - "Backup progress: journalctl -fu {{ postgres_backup_service_name }}"
+      - >-
+        Verify:
+        /usr/lib/check_mk_agent/local/check_postgresql_backup.sh
+  when: running_on_server

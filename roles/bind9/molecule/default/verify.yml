@@ -2,18 +2,52 @@
 - name: Verify
   hosts: all
   gather_facts: false
-  tasks:
-  - name: check bind9 package status
-    package:
-      name: "{{ item }}"
-      state: present
-    check_mode: true
-    register: pkg_status
-    loop:
+  become: true
+  vars:
+    bind9_expected_packages:
       - bind9
+      - bind9-utils
+  tasks:
+    - name: Check bind9 package status
+      ansible.builtin.package:
+        name: "{{ item }}"
+        state: present
+      check_mode: true
+      register: bind9_pkg_status
+      loop: "{{ bind9_expected_packages }}"
 
-  - name: test for bind9 packages
-    assert:
-      that:
-        - not pkg_status.changed
+    - name: Test for bind9 packages
+      ansible.builtin.assert:
+        that:
+          - not bind9_pkg_status.changed
 
+    - name: Read named startup options
+      ansible.builtin.slurp:
+        src: /etc/default/named
+      register: bind9_named_defaults
+
+    - name: Test that named starts in IPv4-only mode
+      ansible.builtin.assert:
+        that:
+          - '''OPTIONS="-u bind -4"'' in bind9_startup_options'
+        fail_msg: "named is not pinned to IPv4 in /etc/default/named"
+      vars:
+        bind9_startup_options: "{{ bind9_named_defaults.content | b64decode }}"
+
+    - name: Read named options
+      ansible.builtin.slurp:
+        src: /etc/bind/named.conf.options
+      register: bind9_named_options
+
+    - name: Test that named neither listens nor forwards over IPv6
+      ansible.builtin.assert:
+        that:
+          - "'listen-on-v6 { none; };' in bind9_options"
+          - "'forward only;' in bind9_options"
+        fail_msg: "named.conf.options allows IPv6 or is missing forwarders"
+      vars:
+        bind9_options: "{{ bind9_named_options.content | b64decode }}"
+
+    - name: Test that the named configuration parses
+      ansible.builtin.command: named-checkconf
+      changed_when: false

@@ -75,8 +75,8 @@ cd roles/common
 env -u ANSIBLE_VAULT_IDENTITY_LIST -u ANSIBLE_VAULT_PASSWORD_FILE molecule test
 ```
 
-Troubleshooting Setup
----------------------
+Troubleshooting
+---------------
 
 ### Ansible Command Not Found / Reinstall deps
 
@@ -89,6 +89,18 @@ devbox shell
 devbox run init
 ```
 
+### DevBox is borked
+
+If your DevBox environment is acting wonky, or you're unsure if it might be causing some weird behavior, delete the local virtual environment and start over:
+
+```bash
+# Delete your python venv
+rm -rf .venv
+# Delete and recreate devbox shell
+rm -rf .devbox
+devbox shell
+devbox run init
+```
 ### LastPass Authentication Issues
 
 If you get vault password errors when running playbooks:

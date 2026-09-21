@@ -1,0 +1,27 @@
+{{ ansible_managed | comment('c') }}
+options {
+    directory "/var/cache/bind";
+
+{% if bind9_forwarders | length > 0 %}
+    forwarders {
+{% for forwarder in bind9_forwarders %}
+        {{ forwarder }};
+{% endfor %}
+    };
+    forward {{ bind9_forward_policy }};
+
+{% endif %}
+    listen-on port 53 { {{ bind9_listen_on | join('; ') }}; };
+{% if bind9_ipv4_only %}
+    // IPv6 is not routed here, so named neither listens nor queries over it.
+    listen-on-v6 { none; };
+{% else %}
+    listen-on-v6 { any; };
+{% endif %}
+
+    recursion {{ 'yes' if bind9_recursion else 'no' }};
+    allow-query { {{ bind9_allow_query | join('; ') }}; };
+    allow-recursion { {{ bind9_allow_recursion | join('; ') }}; };
+
+    dnssec-validation {{ bind9_dnssec_validation }};
+};

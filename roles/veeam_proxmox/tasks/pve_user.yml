@@ -1,0 +1,102 @@
+---
+# tasks/pve_user.yml -- veeam_proxmox
+#
+# Host privileges and Proxmox API privileges are separate. sudo covers what
+# Veeam runs on the node; these tasks cover what it calls through the Proxmox
+# API, which needs the built-in Administrator role. In a cluster this
+# configuration is shared, so the tasks are serialised and skip work that is
+# already in place rather than being applied per node.
+
+- name: Look for the Proxmox user management command
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop: "{{ veeam_proxmox_pveum_candidates }}"
+  register: veeam_proxmox_pveum
+
+- name: Record where the Proxmox user management command lives
+  ansible.builtin.set_fact:
+    veeam_proxmox_pveum_path: >-
+      {{ veeam_proxmox_pveum.results
+         | selectattr('stat.exists')
+         | map(attribute='stat.path')
+         | first | default('') }}
+
+- name: Assert this host really is a Proxmox VE server
+  ansible.builtin.assert:
+    that:
+      - veeam_proxmox_pveum_path | length > 0
+    fail_msg: >-
+      No pveum command was found in
+      {{ veeam_proxmox_pveum_candidates | join(', ') }}, so Proxmox API
+      privileges cannot be granted. Veeam needs them to enumerate VMs and take
+      snapshots, so skipping this quietly would leave backups broken for a
+      reason that surfaces much later. If this host is not a Proxmox node yet,
+      set veeam_proxmox_manage_pve_user to false for it. Otherwise find the
+      command with 'dpkg -S pveum' and add its path to
+      veeam_proxmox_pveum_candidates.
+
+- name: Configure Proxmox API access
+  block:
+    - name: Read the existing Proxmox users
+      ansible.builtin.command:
+        argv:
+          - "{{ veeam_proxmox_pveum_path }}"
+          - user
+          - list
+          - --output-format
+          - json
+      register: veeam_proxmox_pve_users
+      changed_when: false
+
+    - name: Record the Proxmox user id
+      ansible.builtin.set_fact:
+        veeam_proxmox_pve_userid: >-
+          {{ veeam_proxmox_user }}@{{ veeam_proxmox_pve_realm }}
+
+    - name: Create the Proxmox user
+      ansible.builtin.command:
+        argv:
+          - "{{ veeam_proxmox_pveum_path }}"
+          - user
+          - add
+          - "{{ veeam_proxmox_pve_userid }}"
+          - --comment
+          - "{{ veeam_proxmox_user_comment }}"
+      throttle: 1
+      when: >-
+        veeam_proxmox_pve_userid not in
+        (veeam_proxmox_pve_users.stdout | from_json | map(attribute='userid'))
+      changed_when: true
+
+    - name: Read the existing Proxmox permissions
+      ansible.builtin.command:
+        argv:
+          - "{{ veeam_proxmox_pveum_path }}"
+          - acl
+          - list
+          - --output-format
+          - json
+      register: veeam_proxmox_pve_acl
+      changed_when: false
+
+    - name: Grant the Proxmox role Veeam requires
+      ansible.builtin.command:
+        argv:
+          - "{{ veeam_proxmox_pveum_path }}"
+          - acl
+          - modify
+          - "{{ veeam_proxmox_pve_acl_path }}"
+          - --users
+          - "{{ veeam_proxmox_pve_userid }}"
+          - --roles
+          - "{{ veeam_proxmox_pve_role }}"
+          - --propagate
+          - "1"
+      throttle: 1
+      when: >-
+        (veeam_proxmox_pve_acl.stdout | from_json
+          | selectattr('path', 'equalto', veeam_proxmox_pve_acl_path)
+          | selectattr('ugid', 'equalto', veeam_proxmox_pve_userid)
+          | selectattr('roleid', 'equalto', veeam_proxmox_pve_role)
+          | list | length) == 0
+      changed_when: true

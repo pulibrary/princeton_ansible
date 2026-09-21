@@ -1,24 +1,23 @@
 #SPDX-License-Identifier: MIT-0
 ---
 # tasks file for roles/beyla
-- name: Beyla | Ensure install and config directories exist
+- name: Beyla | Ensure install, config and release directories exist
   ansible.builtin.file:
-    path: "{{ item.path }}"
-    state: directory
-    owner: root
-    group: root
-    mode: "{{ item.mode }}"
-  loop:
-    - { path: "{{ beyla_install_dir }}", mode: "0755" }
-    - { path: "{{ beyla_config_dir }}", mode: "0755" }
-  when: beyla_enabled | bool
-- name: Beyla | Ensure release directory exists
-  ansible.builtin.file:
-    path: "{{ beyla_release_dir }}"
+    path: "{{ item }}"
     state: directory
     owner: root
     group: root
     mode: "0755"
+  loop: >-
+    {{ [beyla_install_dir, beyla_config_dir, beyla_releases_dir,
+        beyla_release_dir, beyla_download_dir] | unique }}
+  when: beyla_enabled | bool
+
+- name: Beyla | Look for an already downloaded release archive
+  ansible.builtin.stat:
+    path: "{{ beyla_archive_path }}"
+    get_checksum: false
+  register: beyla_archive
   when: beyla_enabled | bool
 
 - name: Beyla | Download amd64 release archive
@@ -26,19 +25,22 @@
     url: "{{ beyla_download_url }}"
     dest: "{{ beyla_archive_path }}"
     mode: "0644"
-  when: beyla_enabled | bool
+    force: false
+  when:
+    - beyla_enabled | bool
+    - not beyla_archive.stat.exists
 
 - name: Beyla | Unarchive release
   ansible.builtin.unarchive:
     src: "{{ beyla_archive_path }}"
     dest: "{{ beyla_release_dir }}"
     remote_src: true
-    creates: "{{ beyla_release_dir }}/beyla"
+    creates: "{{ beyla_release_binary }}"
   when: beyla_enabled | bool
 
 - name: Beyla | Install binary
   ansible.builtin.copy:
-    src: "{{ beyla_release_dir }}/beyla"
+    src: "{{ beyla_release_binary }}"
     dest: "{{ beyla_binary_path }}"
     owner: root
     group: root

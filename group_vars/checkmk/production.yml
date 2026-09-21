@@ -55,6 +55,13 @@ otel_service_name: otelcol-contrib
 otel_service_user: root
 otel_service_group: root
 
+# Validate the rendered Collector configuration before restarting it.
+# The installed Collector must support http_check and body validations.
+otel_validate_config: true
+otel_validate_cmd: >-
+  {{ otel_binary_path }} validate
+  --config {{ otel_config_path }}
+
 otel_default_resource_attributes:
   host.name: "{{ inventory_hostname }}"
   service.name: checkmk
@@ -75,36 +82,83 @@ otel_receivers:
     protocols:
       grpc:
         endpoint: 127.0.0.1:4317
-
       http:
         endpoint: 127.0.0.1:4318
 
-  # Checkmk logs which use Python-style numeric severity levels.
-  #
-  # Observed examples:
-  #   [15] debug-ish / verbose
-  #   [20] info
-  #   [40] error
-  #
-  # Only WARN (30) and above will reach SigNoz because this receiver
-  # passes through filter/warn_and_above in the logs pipeline.
+  # Public website probes run from each Checkmk host
+  # Identify targets by http.url and probing hosts by probe.location.
+  # Both Checkmk hosts probe these same public production URLs; each
+  # exports to the SigNoz environment selected by the host mapping above.
+  http_check/websites:
+    collection_interval: 60s
+    metrics:
+      httpcheck.validation.passed:
+        enabled: true
+      httpcheck.validation.failed:
+        enabled: true
+      httpcheck.response.size:
+        enabled: true
+      httpcheck.tls.cert_remaining:
+        enabled: true
+    targets:
+      # ILLIAD Website
+      - endpoint: "https://princeton.illiad.oclc.org/logon/"
+        method: GET
+        timeout: 10s
+        validations:
+          - contains: "All current Princeton University faculty, students, and staff with an active NetID."
+
+      # AEON Website
+      - endpoint: "https://princeton.aeon.atlas-sys.com/logon"
+        method: GET
+        timeout: 10s
+        validations:
+          - contains: "All current Princeton University faculty, students, and staff with an active NetID."
+
+      # EZproxy Client
+      # Body validation is performed here. Enforce exact HTTP 200 with
+      # a separate SigNoz alert on httpcheck.status: select the observed
+      # response (value = 1) whose http.status_code is not 200.
+      # Also alert on connection errors and missing probe/validation data.
+      # A 2xx-only availability alert does not enforce exact HTTP 200.
+      - endpoint: "https://login.ezproxy.princeton.edu/login?url=https%3A%2F%2Fwww.washingtonpost.com"
+        method: GET
+        timeout: 10s
+        validations:
+          - contains: "If your browser does not continue automatically"
+
+  # solr9 check
+  # probe solr
+  http_check/solr9:
+    collection_interval: 60s
+
+    targets:
+      - endpoint: "http://lib-solr-prod1.princeton.edu:8983/solr/geniza/admin/ping?wt=json&distrib=true&indent=true"
+        method: GET
+        timeout: 10s
+
+      - endpoint: "http://lib-solr-prod2.princeton.edu:8983/solr/geniza/admin/ping?wt=json&distrib=true&indent=true"
+        method: GET
+        timeout: 10s
+
+      - endpoint: "http://lib-solr-prod3.princeton.edu:8983/solr/geniza/admin/ping?wt=json&distrib=true&indent=true"
+        method: GET
+        timeout: 10s
+
+  # Checkmk logs use Python-style numeric severity levels.
+  # Only WARN (30) and above reach SigNoz through filter/warn_and_above.
   filelog/checkmk:
     include:
       - "/omd/sites/{{ checkmk_site_name }}/var/log/*.log"
-
     exclude:
-      # CMC uses a different numeric logging/verbosity scale and is
-      # handled by its own receiver and pipeline below.
+      # CMC uses a different logging scale and has its own pipeline.
       - "/omd/sites/{{ checkmk_site_name }}/var/log/cmc.log"
-
       # Ignore rotated logs.
       - "/omd/sites/{{ checkmk_site_name }}/var/log/*.gz"
       - "/omd/sites/{{ checkmk_site_name }}/var/log/*.[0-9]"
-
     start_at: end
     include_file_name: true
     include_file_path: true
-
     operators:
       - type: regex_parser
         regex: '^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:,\d{3})? \[(?P<severity>[0-9]+)\]'
@@ -120,56 +174,41 @@ otel_receivers:
             error: 40
             fatal: 50
           overwrite_text: true
-
       - type: add
         field: attributes["log.source"]
         value: checkmk
-
       - type: add
         field: attributes["checkmk.site.name"]
         value: "{{ checkmk_site_name }}"
 
-  # CMC does not use the same numeric severity scale as the other
-  # Checkmk logs. For example, observed "[4]" records can contain
-  # actual errors. Keep CMC logs unfiltered rather than risk dropping
-  # operationally useful errors.
+  # CMC records such as [4] can contain actual errors. Keep unfiltered.
   # https://docs.checkmk.com/latest/en/notifications.html
   filelog/checkmk-cmc:
     include:
       - "/omd/sites/{{ checkmk_site_name }}/var/log/cmc.log"
-
     exclude:
       - "/omd/sites/{{ checkmk_site_name }}/var/log/cmc.log.*"
-
     start_at: end
     include_file_name: true
     include_file_path: true
-
     operators:
       - type: add
         field: attributes["log.source"]
         value: checkmk-cmc
-
       - type: add
         field: attributes["checkmk.site.name"]
         value: "{{ checkmk_site_name }}"
 
-  # Apache error log only.
-  #
-  # access_log is intentionally not collected because HTTP access
-  # records do not have WARN/ERROR severity semantics.
+  # Apache error log only; access logs have no WARN/ERROR semantics.
   filelog/checkmk-apache-error:
     include:
       - "/omd/sites/{{ checkmk_site_name }}/var/log/apache/error_log"
-
     exclude:
       - "/omd/sites/{{ checkmk_site_name }}/var/log/apache/*.gz"
       - "/omd/sites/{{ checkmk_site_name }}/var/log/apache/*.[0-9]"
-
     start_at: end
     include_file_name: true
     include_file_path: true
-
     operators:
       - type: regex_parser
         regex: '^\[[^\]]+\] \[[^:\]]+:(?P<severity>[^\]]+)\]'
@@ -197,28 +236,18 @@ otel_receivers:
               - alert
               - emerg
           overwrite_text: true
-
       - type: add
         field: attributes["log.source"]
         value: checkmk-apache
-
       - type: add
         field: attributes["checkmk.site.name"]
         value: "{{ checkmk_site_name }}"
 
-  # System logs at warning severity and above.
-  #
-  # This replaces direct file tailing of:
-  #   /var/log/syslog
-  #   /var/log/auth.log
-  #
-  # journald performs the priority filtering before sending records
-  # into the Collector pipeline.
-  # https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/main/receiver/journaldreceiver/README.md
+  # Journald filters priority before sending records into the Collector.
+  # Replaces direct tailing of /var/log/syslog and /var/log/auth.log.
   journald/system:
     start_at: end
     priority: warning
-
     operators:
       - type: add
         field: attributes["log.source"]
@@ -226,16 +255,11 @@ otel_receivers:
 
   hostmetrics:
     collection_interval: 30s
-
     scrapers:
       cpu: {}
-
       load: {}
-
       memory: {}
-
       disk: {}
-
       filesystem:
         exclude_fs_types:
           match_type: strict
@@ -262,11 +286,8 @@ otel_receivers:
             - sysfs
             - tmpfs
             - tracefs
-
       network: {}
-
       paging: {}
-
       processes: {}
 
 otel_processors:
@@ -275,11 +296,33 @@ otel_processors:
     limit_mib: 512
     spike_limit_mib: 128
 
-  # Drop any parsed log record below WARN.
-  #
-  # This applies to the normal Checkmk logs, Apache error logs,
-  # and journald/system. CMC logs intentionally use a separate
-  # pipeline without this processor.
+  # Runs only on probe metrics, after the shared resource processor.
+  resource/probes:
+    attributes:
+      - key: service.name
+        value: uptime-probes
+        action: upsert
+      - key: service.version
+        action: delete
+      - key: probe.location
+        value: "{{ inventory_hostname }}"
+        action: upsert
+
+  resource/solr9-probes:
+    attributes:
+      - key: application
+        value: geniza
+        action: upsert
+
+      - key: probe.target.service
+        value: solr9
+        action: upsert
+
+      - key: probe.target.environment
+        value: production
+        action: upsert
+
+  # CMC intentionally uses a separate pipeline without this filter.
   filter/warn_and_above:
     error_mode: ignore
     log_conditions:
@@ -293,25 +336,20 @@ otel_processors:
 otel_exporters:
   loadbalancing:
     routing_key: service
-
     protocol:
       otlp:
         timeout: 10s
-
         tls:
           insecure: true
-
         sending_queue:
           enabled: true
           num_consumers: 10
           queue_size: 5000
-
         retry_on_failure:
           enabled: true
           initial_interval: 5s
           max_interval: 30s
           max_elapsed_time: 300s
-
     resolver:
       static:
         hostnames: "{{ otel_signoz_backends }}"
@@ -319,33 +357,41 @@ otel_exporters:
 otel_extensions: {}
 
 otel_service_pipelines:
+  metrics/solr9-probes:
+    receivers:
+      - http_check/solr9
+
+    processors:
+      - memory_limiter
+      - resource
+      - resource/probes
+      - resource/solr9-probes
+      - batch
+
+    exporters:
+      - loadbalancing
   # WARN and above only.
   logs:
     receivers:
       - filelog/checkmk
       - filelog/checkmk-apache-error
       - journald/system
-
     processors:
       - memory_limiter
       - resource
       - filter/warn_and_above
       - batch
-
     exporters:
       - loadbalancing
 
-  # CMC uses a different logging level scheme, so do not apply
-  # the generic WARN severity filter.
+  # CMC does not use the generic WARN severity filter.
   logs/cmc:
     receivers:
       - filelog/checkmk-cmc
-
     processors:
       - memory_limiter
       - resource
       - batch
-
     exporters:
       - loadbalancing
 
@@ -353,24 +399,32 @@ otel_service_pipelines:
     receivers:
       - hostmetrics
       - otlp/beyla
-
     processors:
       - memory_limiter
       - resource
       - batch
+    exporters:
+      - loadbalancing
 
+  # Dedicated pipeline for all three website probes.
+  metrics/probes:
+    receivers:
+      - http_check/websites
+    processors:
+      - memory_limiter
+      - resource
+      - resource/probes
+      - batch
     exporters:
       - loadbalancing
 
   traces:
     receivers:
       - otlp/beyla
-
     processors:
       - memory_limiter
       - resource
       - batch
-
     exporters:
       - loadbalancing
 

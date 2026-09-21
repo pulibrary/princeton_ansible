@@ -26,7 +26,7 @@ All variables are defined in `defaults/main.yml` with sensible defaults. Here ar
 
 ### Version Settings
 
-```
+```text
 yaml
 solr_cloud_download_version: "9.2.0"  # Solr version to install
 solr_cloud_url: "https://mirror-server/solr/{{ solr_cloud_download_version }}/{{ solr_cloud_package }}"
@@ -34,7 +34,7 @@ solr_cloud_url: "https://mirror-server/solr/{{ solr_cloud_download_version }}/{{
 
 ### User and Directories
 
-```
+```text
 yaml
 solr_user: deploy
 solr_group: deploy
@@ -49,7 +49,7 @@ solr_versioned_dir: "/opt/solr-{{ solr_cloud_download_version }}"
 
 ### JVM Settings
 
-```
+```text
 yaml
 solr_heap: "20g"  # JVM heap size
 ```
@@ -61,7 +61,7 @@ collectors (OpenTelemetry Collector, Datadog) can index fields such as
 `level`, `logger`, `collection`, `core` and `trace_id` without regular
 expressions, and multi-line stack traces stay in a single record.
 
-```
+```text
 yaml
 solr_log_json_enabled: true       # false falls back to plain text
 solr_log_json_service_name: solr  # value of the "service" field
@@ -87,7 +87,7 @@ The Jetty access log used to be written straight to a new
 gives it the same JSON envelope, escaping and size-based rotation as the
 other logs, with the access log entry itself in the `message` field:
 
-```
+```text
 yaml
 solr_request_log_file: "/solr/logs/solr_request.log"
 solr_request_log_format: '%{client}a - %u "%r" %s %O %{ms}T'
@@ -95,12 +95,33 @@ solr_request_log_format: '%{client}a - %u "%r" %s %O %{ms}T'
 
 Leftover daily files from the old writer are removed by the role.
 
+The collector splits that `message` field apart and, because a SolrCloud
+request URL names the replica it is aimed at, turns the URL into fields
+that make per collection traffic, replication and error rates searchable:
+
+| Field | Example | Meaning |
+| --- | --- | --- |
+| `solr_collection` | `catalog-production1` | collection or alias hit |
+| `solr_core` | `catalog-production1_shard1_replica_n31` | replica hit |
+| `solr_shard` | `shard1` | shard of that replica |
+| `solr_replica` | `replica_n31` | replica within the shard |
+| `solr_handler` | `update`, `select`, `admin/ping` | endpoint asked for |
+| `solr_request_type` | `query`, `update`, `admin`, `other` | handler group |
+| `solr_distrib` | `false` | set on per shard subqueries |
+| `solr_update_distrib` | `FROMLEADER` | how an update arrived |
+| `solr_distrib_from_host` | `lib-solr-prod3.princeton.edu` | forwarding node |
+| `solr_distrib_from_core` | `catalog-production1_shard1_replica_n33` | forwarding replica |
+
+Requests with no collection, such as `/solr/admin/collections`, keep only
+the handler. The operators live in the `otel_receivers` variable in
+`group_vars/solr9cloud/`.
+
 Two logs cannot be JSON. The garbage collection log is written by the JVM's
 own `-Xlog` framework, which has no JSON output, and the console log is the
 raw standard output of the start script. Both are parsed into fields by the
 collector instead.
 
-```
+```text
 yaml
 solr_gc_log_file: "/solr/logs/solr_gc.log"
 solr_gc_log_file_count: 9
@@ -109,7 +130,7 @@ solr_gc_log_file_size: 20M
 
 ### ZooKeeper Configuration
 
-```
+```text
 yaml
 solr_zookeeper_hosts:
   - "zk1.example.com:2181"
@@ -122,7 +143,7 @@ solr_znode: "solr9"  # or "solr8" for Solr 8.x
 
 This role sets the following critical system properties for Solr:
 
-```
+```text
 -Dsolr.solr.home=/solr
 -Dsolr.solr.home=/solr/data
 -Dsolr.log.dir=/solr/logs
@@ -137,7 +158,7 @@ This role sets the following critical system properties for Solr:
 
 The role creates the following directory structure for a clean, maintainable installation:
 
-```
+```text
 /opt/solr -> /opt/solr-9.2.0     # Symlink to the versioned directory
 /opt/solr-9.2.0/                 # Versioned installation
 /solr/                           # Solr home
@@ -149,7 +170,7 @@ The role creates the following directory structure for a clean, maintainable ins
 
 ## Example Playbook
 
-```
+```text
 yaml
 ---
 - hosts: solr_servers
@@ -177,7 +198,7 @@ yaml
 
 You can manually start Solr with debugging enabled:
 
-```
+```text
 bash
 sudo -u deploy /opt/solr/bin/solr start -f -v
 ```
