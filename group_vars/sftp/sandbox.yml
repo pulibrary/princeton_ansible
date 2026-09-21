@@ -2,19 +2,44 @@
 # sandbox-sftp1 is Ubuntu, so it cannot use ad_join: that role performs a realm
 # join with authselect-compat and krb5-workstation, neither of which Ubuntu
 # packages. It reaches the same Active Directory over LDAPS with sssd_ldap
-# instead, so almasftp and lib-aspacesftp stay directory accounts and keep
-# authenticating with a password. No local accounts and no stored password.
+# instead, so almasftp and lib-aspacesftp stay directory accounts. No local
+# accounts and no stored password.
 #
 # Entra ID is deliberately not used here: Himmelblau forces MFA on every remote
-# session, so a password-only service account cannot log in over SSH.
+# session, so a service account that cannot complete MFA is refused over SSH.
 host_ad_name: sandbox-sftp1.princeton.edu
 deploy_user_local_keys:
   - name: 'bibdata-worker-staging1'
     key: "{{ lookup('file', '../roles/lib_sftp/files/id_ed25519.pub') }}"
 
-# Only these two directory accounts may authenticate. This is sssd's
-# simple_allow_users, so access control lives in one place rather than being
-# split across sshd drop-in files.
+# The transfer accounts authenticate with a key here rather than a password,
+# unlike staging and production. sshd checks a key itself, so a login no longer
+# depends on the directory answering in time, there is no password to rotate,
+# and the account phase stalls that were failing transfers stop mattering.
+#
+# Add each partner's public key as they supply it. Until then the accounts have
+# no way to log in, and the role says so rather than leaving it to be
+# discovered when a transfer fails.
+lib_sftp_transfer_keys: []
+#  - account: "{{ almasftp_user }}"
+#    comment: alma-sandbox
+#    key: "ssh-ed25519 AAAA..."
+#  - account: "{{ aspaceftp_user }}"
+#    comment: archivesspace-sandbox
+#    key: "ssh-ed25519 AAAA..."
+
+# Overrides group_vars/sftp/common.yml, where staging and production still need
+# a password. Empty here so the sandbox accepts keys only.
+lib_sftp_password_auth_users: []
+
+# The directory is used to resolve these accounts, not to authorise them: sshd
+# decides that from the key and its AllowUsers list. Leaving sssd's own access
+# check out of the login path removes the last place a slow directory could
+# refuse a login that should have succeeded.
+sssd_ldap_access_provider: permit
+
+# Still verified at the end of the run, because the accounts must resolve for
+# sshd to find their uid and for the drop directories to be chowned to them.
 sssd_ldap_allow_users:
   - "{{ almasftp_user }}"
   - "{{ aspaceftp_user }}"

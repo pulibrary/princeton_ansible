@@ -47,20 +47,37 @@
         src: "{{ lib_sftp_dropin }}"
       register: lib_sftp_conf
 
-    # Both methods must be on: an automated client may negotiate either, and
-    # enabling only one breaks transfers while human logins keep working.
-    - name: Assert the transfer accounts get both password methods
+    # Keys, not a password: sshd checks a key itself, so the login does not
+    # depend on the directory answering.
+    - name: Assert sshd is told to accept keys from the central location
       ansible.builtin.assert:
         that:
-          - "'Match User almasftp,lib-aspacesftp'
+          - "'PubkeyAuthentication yes'
              in (lib_sftp_conf.content | b64decode)"
-          - "'PasswordAuthentication yes'
+          - "'/etc/ssh/authorized_keys.d/%u'
              in (lib_sftp_conf.content | b64decode)"
-          - "'KbdInteractiveAuthentication yes'
-             in (lib_sftp_conf.content | b64decode)"
-          - "'Match all' in (lib_sftp_conf.content | b64decode)"
 
-    # A password is useless if AllowUsers excludes the account.
+    # Replacing the default location instead of adding to it would lock out
+    # every account whose key lives in its own home, including pulsys.
+    - name: Assert the default authorized keys location is still honoured
+      ansible.builtin.assert:
+        that:
+          - "'.ssh/authorized_keys /etc/ssh/authorized_keys.d/%u'
+             in (lib_sftp_conf.content | b64decode)"
+        fail_msg: >-
+          The drop-in replaced the default AuthorizedKeysFile rather than adding
+          to it, which locks out accounts that keep a key in their own home.
+
+    - name: Assert no password exemption was written
+      ansible.builtin.assert:
+        that:
+          - "'PasswordAuthentication yes'
+             not in (lib_sftp_conf.content | b64decode)"
+        fail_msg: >-
+          A password exemption was written even though this host is configured
+          for keys only.
+
+    # A key is useless if AllowUsers excludes the account.
     - name: Assert the transfer accounts are permitted by AllowUsers
       ansible.builtin.assert:
         that:
@@ -68,6 +85,37 @@
           - "almasftp_user in (lib_sftp_conf.content | b64decode)"
           - "aspaceftp_user in (lib_sftp_conf.content | b64decode)"
           - "'pulsys' in (lib_sftp_conf.content | b64decode)"
+
+    - name: Read the installed key files
+      ansible.builtin.slurp:
+        src: "/etc/ssh/authorized_keys.d/{{ item }}"
+      loop:
+        - "{{ almasftp_user }}"
+        - "{{ aspaceftp_user }}"
+      register: lib_sftp_key_files
+
+    # Two keys for one account is the rotation case: add the new one, wait for
+    # the partner to switch, then remove the old one.
+    - name: Assert both of the alma keys were installed together
+      ansible.builtin.assert:
+        that:
+          - "(lib_sftp_key_files.results[0].content | b64decode).split('\n')
+             | select('match', '^ssh-') | list | length == 2"
+        fail_msg: >-
+          Expected two keys for {{ almasftp_user }}, so a key can be rotated
+          without an outage.
+
+    - name: Read the key file permissions
+      ansible.builtin.stat:
+        path: "/etc/ssh/authorized_keys.d/{{ almasftp_user }}"
+      register: lib_sftp_key_stat
+
+    # sshd ignores a key file that anyone other than root can write to.
+    - name: Assert the key file is root owned and not group writable
+      ansible.builtin.assert:
+        that:
+          - lib_sftp_key_stat.stat.pw_name == 'root'
+          - lib_sftp_key_stat.stat.mode == '0644'
 
     - name: Read the effective sshd policy for a transfer account
       ansible.builtin.command:
@@ -79,17 +127,16 @@
       register: lib_sftp_sshd_transfer
       changed_when: false
 
-    - name: Assert sshd offers both methods to the transfer account
+    - name: Assert sshd offers keys and not a password
       ansible.builtin.assert:
         that:
-          - "'passwordauthentication yes' in lib_sftp_sshd_transfer.stdout"
-          - "'kbdinteractiveauthentication yes'
-             in lib_sftp_sshd_transfer.stdout"
+          - "'pubkeyauthentication yes' in lib_sftp_sshd_transfer.stdout"
+          - "'passwordauthentication no' in lib_sftp_sshd_transfer.stdout"
           - "almasftp_user in (lib_sftp_sshd_transfer.stdout_lines
              | select('match', '^allowusers ') | join(' '))"
 
-    # The Match block must not leak into other users' sessions.
-    - name: Read the effective sshd policy for an ordinary account
+    # Administrative access must survive the AuthorizedKeysFile change.
+    - name: Read the effective sshd policy for an administrative account
       ansible.builtin.command:
         argv:
           - /usr/sbin/sshd
@@ -99,10 +146,13 @@
       register: lib_sftp_sshd_other
       changed_when: false
 
-    - name: Assert the keyboard-interactive exemption did not leak
+    - name: Assert administrative accounts keep their own key location
       ansible.builtin.assert:
         that:
-          - "'kbdinteractiveauthentication no' in lib_sftp_sshd_other.stdout"
+          - "'.ssh/authorized_keys' in (lib_sftp_sshd_other.stdout_lines
+             | select('match', '^authorizedkeysfile ') | join(' '))"
+          - "'pulsys' in (lib_sftp_sshd_other.stdout_lines
+             | select('match', '^allowusers ') | join(' '))"
         fail_msg: >-
-          The Match block leaked into other users' sessions, so the exemption is
-          not scoped to the transfer accounts.
+          pulsys can no longer use a key from its own home directory, so this
+          change would lock out administrative access.

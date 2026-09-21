@@ -1,24 +1,32 @@
 #jinja2: trim_blocks: True, lstrip_blocks: True
 # {{ ansible_managed }}
 # SFTP transfer accounts, managed by the lib_sftp role.
-#
-# Alma and ArchivesSpace deposit files with a password. They cannot present a
-# key or a certificate, so these accounts need password authentication even
-# where the host image turns it off.
 
 {% if lib_sftp_allow_users | length > 0 %}
 # AllowUsers accumulates across every sshd_config.d file rather than the first
-# one winning, so this adds to any list the image or another role wrote. But if
-# any AllowUsers exists anywhere, an account named in none of them is refused,
-# so the transfer accounts have to appear here.
+# one winning, so this adds to whatever list the image or another role wrote.
+# But if any AllowUsers exists anywhere, an account named in none of them is
+# refused however else it is permitted, so these have to be listed here.
 AllowUsers {{ lib_sftp_allow_users | join(' ') }}
+{% endif %}
+{% if lib_sftp_transfer_keys | length > 0 %}
+
+# Keys for the transfer accounts are kept in a root-owned directory rather than
+# in each account's home, because these are directory accounts whose home is
+# only created on first login.
+#
+# The default location is listed FIRST and kept deliberately: replacing it
+# instead of adding to it would lock out every account that keeps its key in its
+# own home, including pulsys and the deploy user.
+AuthorizedKeysFile .ssh/authorized_keys {{ lib_sftp_authorized_keys_dir }}/%u
+PubkeyAuthentication yes
 {% endif %}
 {% if lib_sftp_password_auth_users | length > 0 %}
 
-# Password and keyboard-interactive are separate SSH methods. An interactive
-# client quietly uses either, so a successful human login proves nothing about
-# an automated one: Alma drives transfers with a Java library that may negotiate
-# only one of the two. Both are enabled so neither choice fails.
+# Accounts whose remote partner cannot present a key. Password and
+# keyboard-interactive are separate SSH methods, and an automated client is
+# often built for only one of them, so both are enabled rather than guessing
+# which it will ask for.
 #
 # The trailing `Match all` restores the global context, so anything parsed after
 # this file is not silently made conditional on these users.

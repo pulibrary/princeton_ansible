@@ -24,10 +24,17 @@
 
   vars:
     post_install: |
-      Verify the transfer accounts can actually log in:
-        ssh -o PreferredAuthentications=password almasftp@{{ inventory_hostname }}
-        ssh -o PreferredAuthentications=keyboard-interactive almasftp@{{ inventory_hostname }}
-      Both should succeed. Alma uses JSch and may negotiate either one.
+      The transfer accounts authenticate with a key on this host, so each
+      partner has to be given the matching private key and configured to use it.
+      Until a key is added to lib_sftp_transfer_keys the accounts cannot log in,
+      and this run says so rather than leaving it to be found when a transfer
+      fails.
+
+      Once a key is installed, verify from a host holding the private half:
+        ssh -i /path/to/key -o PreferredAuthentications=publickey \
+          almasftp@{{ inventory_hostname }}
+
+      Staging and production still use a password; see group_vars/sftp/common.yml.
 
   pre_tasks:
     - name: Load the deploy user private key
@@ -62,14 +69,13 @@
       register: sandbox_sftp_effective
       changed_when: false
 
-    # A password is useless if AllowUsers excludes the account: sshd refuses it
-    # with the credentials still correct, which the client reports as a method
-    # failure rather than a rejected password.
+    # A credential is useless if AllowUsers excludes the account: sshd refuses
+    # the login with the credential still correct, which a client reports as a
+    # method failure rather than a rejected key or password.
     - name: Assert the transfer accounts can really authenticate
       ansible.builtin.assert:
         that:
-          - "'passwordauthentication yes' in item.stdout"
-          - "'kbdinteractiveauthentication yes' in item.stdout"
+          - "'pubkeyauthentication yes' in item.stdout"
           - >-
             item.stdout_lines | select('match', '^allowusers ') | list | length == 0
             or item.item in (item.stdout_lines
@@ -77,15 +83,14 @@
               | map('regex_replace', '^allowusers ', '')
               | join(' ')).split()
         fail_msg: >-
-          {{ item.item }} cannot log in with a password on this host.
-          Effective settings:
+          {{ item.item }} cannot log in on this host. Effective settings:
           {{ item.stdout_lines
-             | select('match', '^(passwordauthentication|kbdinteractiveauthentication|allowusers)')
+             | select('match', '^(pubkeyauthentication|passwordauthentication|authorizedkeysfile|allowusers)')
              | list }}.
-          Both password methods must be yes, and if any AllowUsers is present
+          Key authentication must be enabled, and if any AllowUsers is present
           the account has to appear in it.
         success_msg: >-
-          {{ item.item }} can authenticate with a password and is permitted by
+          {{ item.item }} can authenticate with a key and is permitted by
           AllowUsers
       loop: "{{ sandbox_sftp_effective.results }}"
       loop_control:
