@@ -48,19 +48,57 @@
     that:
       - item in (lib_sftp_transfer_keys | map(attribute='account') | list)
         or item in lib_sftp_password_auth_users
+        or item in lib_sftp_accounts_awaiting_keys
     fail_msg: >-
       {{ item }} has neither a key in lib_sftp_transfer_keys nor an entry in
-      lib_sftp_password_auth_users, so it would not be able to log in. Add the
-      partner's public key, which is preferred, or list the account for password
-      authentication where the partner cannot manage a key.
+      lib_sftp_password_auth_users, so it cannot log in. Add the partner's
+      public key, which is preferred, or list the account in
+      lib_sftp_password_auth_users where the partner cannot manage a key. If a
+      key has been requested but not yet supplied, add the account to
+      lib_sftp_accounts_awaiting_keys so the wait is recorded rather than
+      looking like an oversight.
     success_msg: >-
-      {{ item }} can authenticate with
-      {{ 'a key' if item in (lib_sftp_transfer_keys | map(attribute='account') | list)
-         else 'a password' }}
+      {{ item }}
+      {{ 'can authenticate with a key'
+         if item in (lib_sftp_transfer_keys | map(attribute='account') | list)
+         else ('can authenticate with a password'
+               if item in lib_sftp_password_auth_users
+               else 'is awaiting a key and cannot log in yet') }}
   loop:
     - "{{ almasftp_user }}"
     - "{{ aspaceftp_user }}"
   when: lib_sftp_manage_sshd | bool
+
+# Deliberately loud. The drop directories for a waiting account are still
+# created and chowned, so the host looks finished while the account cannot
+# actually log in. Without this the wait is only noticed when a transfer fails.
+- name: Lib_sftp | Report accounts that cannot log in yet
+  ansible.builtin.debug:
+    msg: >-
+      {{ item }} has no key and no password, so it CANNOT log in. It is listed in
+      lib_sftp_accounts_awaiting_keys, so this run treats that as expected. Its
+      drop directories are still created and owned correctly, and transfers will
+      work as soon as the partner's public key is added to
+      lib_sftp_transfer_keys. Remove it from lib_sftp_accounts_awaiting_keys at
+      the same time.
+  loop: "{{ lib_sftp_accounts_awaiting_keys }}"
+  when:
+    - lib_sftp_manage_sshd | bool
+    - item not in (lib_sftp_transfer_keys | map(attribute='account') | list)
+    - item not in lib_sftp_password_auth_users
+
+# Catches the opposite mistake: the key arrives and is configured, but the
+# account is left on the waiting list, so nobody notices the wait is over.
+- name: Lib_sftp | Note accounts that no longer need to be on the waiting list
+  ansible.builtin.debug:
+    msg: >-
+      {{ item }} now has a credential configured, so it can be removed from
+      lib_sftp_accounts_awaiting_keys.
+  loop: "{{ lib_sftp_accounts_awaiting_keys }}"
+  when:
+    - lib_sftp_manage_sshd | bool
+    - item in (lib_sftp_transfer_keys | map(attribute='account') | list)
+      or item in lib_sftp_password_auth_users
 
 # A malformed key is accepted by the template and then silently ignored by sshd,
 # which looks exactly like the partner using the wrong key.
@@ -153,6 +191,57 @@
   notify:
     - Validate sshd configuration
     - Restart sshd
+
+# The pattern check earlier only proves a key starts like one. A key that is
+# truncated, or has had a line break introduced while being copied, still
+# matches the pattern, and sshd then ignores it silently, which looks exactly
+# like the partner presenting the wrong key. ssh-keygen parses it properly.
+- name: Lib_sftp | Verify the installed keys parse as real public keys
+  ansible.builtin.command:
+    argv:
+      - ssh-keygen
+      - -l
+      - -f
+      - "{{ lib_sftp_authorized_keys_dir }}/{{ item }}"
+  loop: "{{ lib_sftp_transfer_keys | map(attribute='account') | unique | list }}"
+  register: lib_sftp_key_parse
+  changed_when: false
+  failed_when: false
+  when:
+    - lib_sftp_manage_sshd | bool
+    - lib_sftp_transfer_keys | length > 0
+
+- name: Lib_sftp | Report the fingerprint of every usable key
+  ansible.builtin.debug:
+    msg: >-
+      {{ item.item }}:
+      {{ item.stdout_lines | default(['no usable key found']) }}
+  loop: "{{ lib_sftp_key_parse.results | default([]) }}"
+  loop_control:
+    label: "{{ item.item | default('n/a') }}"
+  when: lib_sftp_key_parse is not skipped
+
+- name: Lib_sftp | Fail if an installed key cannot be parsed
+  ansible.builtin.assert:
+    that:
+      - item.rc == 0
+      - item.stdout_lines | default([]) | length
+        == (lib_sftp_transfer_keys
+            | selectattr('account', 'equalto', item.item) | list | length)
+    fail_msg: >-
+      One of the keys for {{ item.item }} is not usable, so sshd will ignore it
+      and the partner's login will fail as though it presented the wrong key.
+      ssh-keygen reported:
+      "{{ (item.stderr | default('') | trim) or (item.stdout | default('') | trim) }}".
+      The usual cause is a line break introduced while copying, since each key
+      has to be on one line. Expected
+      {{ lib_sftp_transfer_keys | selectattr('account', 'equalto', item.item) | list | length }}
+      key(s) for this account; ssh-keygen could read
+      {{ item.stdout_lines | default([]) | length }}.
+  loop: "{{ lib_sftp_key_parse.results | default([]) }}"
+  loop_control:
+    label: "{{ item.item | default('n/a') }}"
+  when: lib_sftp_key_parse is not skipped
 
 # Remove a key file once an account no longer has keys configured, so revoking
 # access is a matter of editing the variable rather than remembering to clean up
