@@ -37,6 +37,18 @@ lib_sftp_transfer_keys: []
 # what sshd requires under StrictModes for a file outside the user's home.
 lib_sftp_authorized_keys_dir: /etc/ssh/authorized_keys.d
 
+# Log what each SFTP session actually does: which directories it listed, which
+# files it opened, and how many bytes it wrote. Without this the log shows a
+# session opening and nothing more, so "the partner connected but no files
+# arrived" cannot be told apart from "the partner wrote them somewhere else".
+#
+# internal-sftp rather than a path to sftp-server, because the binary lives in a
+# different place on Debian and RHEL and the built-in server avoids having to
+# know which. Subsystem is first-wins and the drop-in directory is included at
+# the top of sshd_config, so this takes precedence over the host's own line.
+lib_sftp_sftp_logging: true
+lib_sftp_sftp_log_level: INFO
+
 # Accounts that authenticate with a password because their remote partner cannot
 # present a key. Empty here on purpose: a password is the fallback rather than
 # the norm, so a host only gets one where its group_vars ask for it. Rendered

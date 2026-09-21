@@ -9,6 +9,19 @@
 # refused however else it is permitted, so these have to be listed here.
 AllowUsers {{ lib_sftp_allow_users | join(' ') }}
 {% endif %}
+{% if lib_sftp_sftp_logging %}
+
+# Record what each SFTP session does: directories listed, files opened, bytes
+# written. Without this the log shows a session opening and nothing else, so a
+# partner that connects but delivers no files looks identical to one that wrote
+# the files somewhere unexpected.
+#
+# Subsystem is first-wins and this directory is included at the top of
+# sshd_config, so this line takes precedence over the host's own. internal-sftp
+# is used rather than a path because the sftp-server binary sits in a different
+# place on Debian and RHEL.
+Subsystem sftp internal-sftp -l {{ lib_sftp_sftp_log_level }}
+{% endif %}
 {% if lib_sftp_transfer_keys | length > 0 %}
 
 # Keys for the transfer accounts are kept in a root-owned directory rather than
