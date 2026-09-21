@@ -42,9 +42,19 @@ lib_sftp_transfer_keys:
     key: "ssh-ed25519 AAAA..."
 ```
 
-Several entries may name the same account; all of its keys go into one file,
-which is how a key is rotated without an outage. Add the new one, wait for the
-partner to switch, then remove the old one.
+**An account may hold as many keys as it needs.** Several entries naming the same
+account are written to that account's single file, and sshd accepts a login using
+any of them. That is how a key is replaced without an outage: add the new one,
+wait for the partner to switch, then remove the old one. It is also how two
+systems can use the same account with separate keys.
+
+After installing the keys the role runs `ssh-keygen` over each file and reports
+the fingerprints. That matters more than it sounds: a key that has picked up a
+line break while being copied still looks right and still matches a pattern
+check, but sshd silently ignores it, which is indistinguishable from the partner
+using the wrong key. `ssh-keygen` also returns success while skipping a bad key
+among good ones, so the role compares how many keys it could read against how
+many were configured.
 
 Keys are written to `/etc/ssh/authorized_keys.d/%u`, root-owned, rather than to
 each account's home. These are directory accounts whose home is created on first
@@ -60,6 +70,13 @@ interactive client uses either, but an automated one is often built for only one
 
 The role fails if an account has neither a key nor a password exemption, since
 that combination silently prevents it logging in at all.
+
+`lib_sftp_accounts_awaiting_keys` is the exception, for an account whose key has
+been requested from the partner but not yet supplied. Listing it there lets the
+run finish and prints a notice that the account cannot log in yet; its drop
+directories are still created and owned correctly. Without it the only ways to
+get a run to complete are to comment the account out of the role, which stops it
+being checked at all, or to give it a password it is not meant to have.
 
 `lib_sftp_allow_users` adds those accounts to sshd's `AllowUsers`, together with
 `pulsys` and the deploy user. Where any `AllowUsers` exists on a host, an account
