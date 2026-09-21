@@ -1,0 +1,12 @@
+#jinja2: trim_blocks: True, lstrip_blocks: True
+# {{ ansible_managed }}
+# Authorized keys for {{ item }}, managed by the lib_sftp role.
+#
+# Root-owned and outside the account's home on purpose: this is a directory
+# account whose home is only created on first login, so a key kept in the home
+# could not be read on the first connection.
+{% for entry in lib_sftp_transfer_keys | selectattr('account', 'equalto', item) %}
+
+# {{ entry.comment | default('no comment recorded') }}
+{{ entry.key | trim }}
+{% endfor %}

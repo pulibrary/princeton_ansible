@@ -40,10 +40,22 @@ sssd_ldap_upn_suffix: princeton.edu
 # this is relaxed, because user passwords cross this channel.
 sssd_ldap_tls_reqcert: demand
 
-# Accounts permitted to log in, rendered as simple_allow_users. Keeping access
-# control here rather than in sshd AllowUsers means one place decides it.
-# Leave empty to allow every account the directory resolves.
+# Accounts this host expects the directory to resolve. Used to verify at the end
+# of a run that lookups actually work, and, when sssd_ldap_access_provider is
+# 'simple', also as the list permitted to log in.
 sssd_ldap_allow_users: []
+
+# Whether sssd decides who may log in, or only who exists.
+#
+#   simple  sssd refuses anyone outside sssd_ldap_allow_users. Defence in depth
+#           where a password is the credential.
+#   permit  sssd answers identity questions only. Appropriate where sshd already
+#           decides access, for example by requiring a key and listing the
+#           accounts in AllowUsers. It also keeps the account phase out of the
+#           login path, which matters because a stalled directory returns the
+#           same "system error" there as a genuine refusal, and that reads as a
+#           denial of an account that is perfectly healthy.
+sssd_ldap_access_provider: simple
 
 # Take uidNumber and gidNumber from Active Directory instead of deriving IDs
 # from the SID, so UIDs match the realm-joined hosts and file ownership on

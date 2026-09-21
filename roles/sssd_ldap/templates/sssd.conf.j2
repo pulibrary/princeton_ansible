@@ -21,10 +21,14 @@ auth_provider = ldap
 # Password changes are not done over SFTP, and allowing them here would need
 # write access for the lookup account.
 chpass_provider = none
-{% if sssd_ldap_allow_users | length > 0 %}
+{% if sssd_ldap_access_provider == 'simple' and sssd_ldap_allow_users | length > 0 %}
 access_provider = simple
 simple_allow_users = {{ sssd_ldap_allow_users | join(', ') }}
 {% else %}
+# Access is decided by sshd, from the key presented and its AllowUsers list, so
+# sssd only resolves identities. That also keeps a slow directory from refusing
+# a login during the account phase, which returns the same "system error" for a
+# stall as for a genuine refusal.
 access_provider = permit
 {% endif %}
 

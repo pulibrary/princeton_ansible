@@ -12,8 +12,16 @@ Who authenticates how
 
 | Login | Method | Verified by |
 | --- | --- | --- |
-| `almasftp`, `lib-aspacesftp` | Password | Active Directory, through PAM |
-| `pulsys`, `deploy` | SSH public key | local `authorized_keys` |
+| `almasftp`, `lib-aspacesftp` on the sandbox | SSH public key | sshd, from `/etc/ssh/authorized_keys.d/%u` |
+| `almasftp`, `lib-aspacesftp` on staging and production | Password | Active Directory, through PAM |
+| `pulsys`, `deploy` | SSH public key | local `~/.ssh/authorized_keys` |
+
+A key is preferred wherever the partner can be configured for one. sshd checks
+it itself, so the login does not depend on the directory answering, there is no
+credential to rotate, and multi-factor policies do not apply. Staging and
+production still use a password because that is what Alma and ArchivesSpace send
+today; changing them needs the integration profile at each partner changed
+first.
 
 For how Active Directory resolves and authenticates the two transfer accounts,
 see [the sssd_ldap authentication flow](../sssd_ldap/AUTH_FLOW.md). This document
@@ -22,9 +30,9 @@ covers only the SFTP host itself.
 What sshd is asked to allow
 ---------------------------
 
-Alma and ArchivesSpace can present neither a key nor a certificate, so these two
-accounts need password authentication even where the host image switches it off.
-The role writes one drop-in that does exactly that, scoped to those accounts.
+The role writes one drop-in covering exactly what its accounts need: a key where
+the partner can manage one, a password only where it cannot, and the account
+names added to `AllowUsers` either way.
 
 ```mermaid
 ---
@@ -34,10 +42,10 @@ flowchart TD
   L["Connection as some user"] --> A{"Named in any<br/>AllowUsers line?"}
   A -->|no| DENY(["Refused, whatever<br/>else permits it"])
   A -->|yes| M{"Named in the<br/>Match User block?"}
-  M -->|"yes: almasftp,<br/>lib-aspacesftp"| PW["Password and<br/>keyboard-interactive<br/>both offered"]
-  M -->|no| KEY["Whatever the host<br/>already allowed,<br/>normally keys only"]
-  PW --> PAM["PAM asks Active Directory"]
-  KEY --> AK["sshd checks authorized_keys"]
+  M -->|"yes: a password<br/>fallback account"| PW["Password and<br/>keyboard-interactive<br/>both offered"]
+  M -->|no| KEY["Key only"]
+  PW --> PAM["PAM asks Active Directory,<br/>so a slow directory can<br/>fail the login"]
+  KEY --> AK["sshd checks the key itself,<br/>no directory involved"]
 ```
 
 Two details in that diagram cause most real failures.
@@ -48,12 +56,19 @@ account named in none of them is refused however else it is permitted. The
 transfer accounts are therefore listed explicitly, alongside `pulsys` and the
 deploy user so the role can never lock out administrative access.
 
-**Password and keyboard-interactive are separate methods.** An interactive `ssh`
-client quietly uses either, so a successful human login proves nothing about an
-automated one. Alma drives transfers with a Java library that may negotiate only
-one of the two, and Rocky's stock `50-redhat.conf` ships
-`ChallengeResponseAuthentication no`, which disables keyboard-interactive
-host-wide. Both are enabled for these accounts so neither choice fails.
+**Password and keyboard-interactive are separate methods.** Where a password is
+still in use, both are enabled. An interactive `ssh` client quietly uses either,
+so a successful human login proves nothing about an automated one: Alma drives
+transfers with a Java library that may negotiate only one, and Rocky's stock
+`50-redhat.conf` ships `ChallengeResponseAuthentication no`, which disables
+keyboard-interactive host-wide.
+
+**Keys live outside the accounts' homes.** These are directory accounts whose
+home is only created on first login, so a key kept in the home could not be read
+on the very first connection. They go in a root-owned
+`/etc/ssh/authorized_keys.d/%u` instead. The default location is kept **first**
+in `AuthorizedKeysFile`: replacing it rather than adding to it would lock out
+every account that does keep a key in its own home, `pulsys` included.
 
 How the roles combine
 ---------------------

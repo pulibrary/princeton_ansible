@@ -30,11 +30,36 @@ The role begins by asserting that `almasftp_user` and `aspaceftp_user` resolve.
 Without that check, a missing identity provider surfaces later as a confusing
 "chown failed" on the drop directories.
 
-`lib_sftp_password_auth_users` (both transfer accounts by default) are given
-password **and** keyboard-interactive authentication in a `Match User` block, so
-the rest of the host keeps whatever policy it already had. Both are enabled
-because they are separate methods: an interactive client uses either, but an
-automated one is often built for only one.
+`lib_sftp_transfer_keys` holds the public keys the partners supply, and is the
+preferred way to authenticate these accounts: sshd checks a key itself, so the
+login does not depend on the directory answering, there is no credential to
+rotate, and multi-factor policies do not apply.
+
+```yaml
+lib_sftp_transfer_keys:
+  - account: "{{ almasftp_user }}"
+    comment: alma-production
+    key: "ssh-ed25519 AAAA..."
+```
+
+Several entries may name the same account; all of its keys go into one file,
+which is how a key is rotated without an outage. Add the new one, wait for the
+partner to switch, then remove the old one.
+
+Keys are written to `/etc/ssh/authorized_keys.d/%u`, root-owned, rather than to
+each account's home. These are directory accounts whose home is created on first
+login, so a key in the home could not be read on the first connection. The
+default location stays **first** in `AuthorizedKeysFile`, because replacing it
+would lock out every account that does keep a key in its own home.
+
+`lib_sftp_password_auth_users` (empty by default) is the fallback for a partner
+that cannot manage a key. Those accounts get password **and**
+keyboard-interactive in a `Match User` block, so the rest of the host keeps
+whatever policy it had. Both are enabled because they are separate methods: an
+interactive client uses either, but an automated one is often built for only one.
+
+The role fails if an account has neither a key nor a password exemption, since
+that combination silently prevents it logging in at all.
 
 `lib_sftp_allow_users` adds those accounts to sshd's `AllowUsers`, together with
 `pulsys` and the deploy user. Where any `AllowUsers` exists on a host, an account
