@@ -110,6 +110,17 @@ otel_receivers:
         field: attributes.service_name
         value: "approvals"
 
+  filelog/app-log:
+    include: ["/opt/approvals/current/log/{{ rails_app_env }}.log"]
+    start_at: end
+    operators:
+      - type: add
+        field: attributes.log_type
+        value: "app-log"
+      - type: add
+        field: attributes.service_name
+        value: "approvals"
+
   hostmetrics:
     collection_interval: 30s
     scrapers:
@@ -158,6 +169,7 @@ otel_service_pipelines:
     receivers:
       - filelog/nginx-access
       - filelog/nginx-error
+      - filelog/app-log
     processors:
       - resource
       - batch
