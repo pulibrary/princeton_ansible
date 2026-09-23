@@ -1,0 +1,524 @@
+# SPDX-License-Identifier: MIT-0
+---
+# tasks file for fleet_mysql
+#
+# This mirrors the mysql role task for task; the differences are all places
+# where Oracle MySQL needs different handling from MariaDB, and each one is
+# commented where it appears.
+
+# These have no defaults, because whether a host is a server or only a client
+# has to be a deliberate choice rather than something quietly assumed. Checking
+# them first means a missing one is reported before the role has installed
+# packages or added an apt repository.
+- name: Fleet MySQL | Assert the required variables are set
+  ansible.builtin.assert:
+    that:
+      - mysql_server is defined
+      - mysql_root_password is defined
+      - mysql_root_password | length > 0
+    fail_msg: >-
+      mysql_server and mysql_root_password must both be set for
+      {{ inventory_hostname }}. They normally come from a group_vars file
+      loaded through the playbook's vars_files, the way
+      group_vars/fleet_mysql/production.yml is.
+
+# Oracle builds its Ubuntu packages for amd64 only, so this fails up front
+# rather than part way through an apt run with a missing-index error.
+- name: Fleet MySQL | Assert the host architecture is supported
+  ansible.builtin.assert:
+    that:
+      - ansible_architecture in mysql_supported_architectures
+    fail_msg: >-
+      {{ inventory_hostname }} is {{ ansible_architecture }}. Oracle publishes
+      MySQL for Ubuntu on amd64 only, so this role cannot install a server
+      here.
+
+- name: Fleet MySQL | Install pkg-config
+  ansible.builtin.apt:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - pkg-config
+    - python3-dev
+    # Needed to read the repository signing key before apt will trust it.
+    - gnupg
+    # Answering the installer's root password question needs
+    # debconf-get-selections, which ships separately from debconf itself and is
+    # not on a minimal Ubuntu.
+    - debconf-utils
+
+# MariaDB and MySQL both claim mysql-server and mysql-client, so installing one
+# on a host that already runs the other would silently swap the database out
+# from under its data directory.
+- name: Fleet MySQL | Look for an installed MariaDB server
+  ansible.builtin.command: dpkg-query --show --showformat=${Package}\\n mariadb-server-core
+  register: mysql_mariadb_installed
+  changed_when: false
+  failed_when: false
+
+- name: Fleet MySQL | Refuse to replace MariaDB with MySQL
+  ansible.builtin.fail:
+    msg: >-
+      {{ inventory_hostname }} already has MariaDB installed. This role
+      installs Oracle MySQL, which conflicts with it at the package level.
+      Use a host that has no database server on it yet.
+  when: mysql_mariadb_installed.rc == 0
+
+- name: Fleet MySQL | Ensure the apt keyring directory exists
+  ansible.builtin.file:
+    path: "{{ mysql_apt_key_path | dirname }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+# Scoped to this one repository with signed-by, rather than added to
+# trusted.gpg.d where it would be trusted for every repository on the host.
+- name: Fleet MySQL | Install the MySQL apt key
+  ansible.builtin.get_url:
+    url: "{{ mysql_apt_key_url }}"
+    dest: "{{ mysql_apt_key_path }}"
+    mode: "0644"
+    owner: root
+    group: root
+  register: install_app_key
+
+# An expired key makes every later apt run fail with a confusing signature
+# error, so the expiry date is checked while the cause is still obvious.
+- name: Fleet MySQL | Read the apt key
+  ansible.builtin.command: "gpg --show-keys --with-colons {{ mysql_apt_key_path }}"
+  register: mysql_apt_key_info
+  changed_when: false
+
+- name: Fleet MySQL | Assert the apt key is the expected one and still valid
+  ansible.builtin.assert:
+    that:
+      - mysql_apt_key_fingerprint in mysql_apt_key_info.stdout
+      # An empty expiry field means the key never expires.
+      - >-
+        mysql_apt_key_expiry | length == 0
+        or mysql_apt_key_expiry | int > ansible_date_time.epoch | int
+    fail_msg: >-
+      The key at {{ mysql_apt_key_url }} is not
+      {{ mysql_apt_key_fingerprint }} or has expired. Oracle publishes a
+      renewed copy under a new year in the filename; point
+      mysql_apt_key_url at it and update mysql_apt_key_fingerprint.
+    success_msg: >-
+      MySQL apt key {{ mysql_apt_key_fingerprint }} is valid.
+  vars:
+    mysql_apt_key_expiry: >-
+      {{ mysql_apt_key_info.stdout_lines
+         | select('match', '^pub:')
+         | map('split', ':')
+         | map(attribute=6)
+         | first | default('') }}
+
+- name: Fleet MySQL | Install MySQL repository
+  ansible.builtin.apt_repository:
+    repo: >-
+      deb [arch={{ mysql_apt_architectures }} signed-by={{ mysql_apt_key_path }}]
+      {{ mysql_apt_repo_url }} {{ ansible_distribution_release }}
+      {{ mysql_apt_repo_component }} {{ mysql_apt_tools_component }}
+    filename: mysql
+    state: present
+    update_cache: false
+  register: mysql_repo_added
+
+- name: Fleet MySQL | Update apt cache after adding MySQL repository
+  ansible.builtin.command: apt-get update
+  when: install_app_key.changed or mysql_repo_added.changed
+  register: mysql_cache_update
+  retries: 3
+  delay: 5
+  until: mysql_cache_update.rc == 0
+  changed_when: false
+  failed_when: false
+
+- name: Fleet MySQL | Display errors if update failed
+  ansible.builtin.debug:
+    msg: |
+      Return code: {{ mysql_cache_update.rc }}
+      STDERR: {{ mysql_cache_update.stderr }}
+  when:
+    - install_app_key.changed or mysql_repo_added.changed
+    - mysql_cache_update.rc != 0
+
+- name: Fleet MySQL | Fail if update failed
+  ansible.builtin.fail:
+    msg: "Cache update failed after adding MySQL repository"
+  when:
+    - install_app_key.changed or mysql_repo_added.changed
+    - mysql_cache_update.rc != 0
+
+- name: Fleet MySQL | Install database client packages
+  ansible.builtin.apt:
+    name: "{{ mysql_client_packages }}"
+    state: present
+    install_recommends: false
+  when:
+    - running_on_server
+
+# MariaDB leaves a fresh root account passwordless; Oracle's packaging asks for
+# the root password during installation instead. Answering that question here
+# is what keeps the install unattended, and it means root has the password we
+# want from the first moment the server runs.
+- name: Fleet MySQL | Preseed the root password
+  ansible.builtin.debconf:
+    name: mysql-community-server
+    question: "{{ item }}"
+    value: "{{ mysql_root_password }}"
+    vtype: password
+  loop:
+    - mysql-community-server/root-pass
+    - mysql-community-server/re-root-pass
+  no_log: true
+  when:
+    - mysql_server
+
+# Leaving this unanswered stops the install to ask whether to weaken
+# authentication for MySQL 5.x clients. Everything here is a current client.
+- name: Fleet MySQL | Preseed strong password authentication
+  ansible.builtin.debconf:
+    name: mysql-community-server
+    question: mysql-server/default-auth-override
+    value: Use Strong Password Encryption (RECOMMENDED)
+    vtype: select
+  when:
+    - mysql_server
+
+- name: Fleet MySQL | install mysql
+  ansible.builtin.apt:
+    name: "{{ mysql_packages }}"
+    state: present
+  when:
+    - mysql_server
+
+- name: Fleet MySQL | Restart MySQL
+  ansible.builtin.service:
+    name: mysql
+    state: restarted
+  when:
+    - running_on_server
+    - mysql_server
+    - install_app_key.changed
+
+# The preseeded password is what the server starts life with, but a server that
+# has been through here before may have been changed by hand. Rather than
+# assuming, find out which login works, so a rerun against a live database sets
+# the password again instead of failing.
+- name: Fleet MySQL | Check whether root accepts the password we have
+  community.mysql.mysql_info:
+    login_unix_socket: "{{ mysql_socket }}"
+    login_user: root
+    login_password: "{{ mysql_root_password }}"
+    filter: version
+  register: mysql_password_login
+  changed_when: false
+  failed_when: false
+  no_log: true
+  when:
+    - running_on_server
+    - mysql_server
+
+- name: Fleet MySQL | Check whether root can log in without a password
+  community.mysql.mysql_info:
+    login_unix_socket: "{{ mysql_socket }}"
+    login_user: root
+    login_password: ""
+    filter: version
+  register: mysql_passwordless_login
+  changed_when: false
+  failed_when: false
+  no_log: true
+  when:
+    - running_on_server
+    - mysql_server
+    - mysql_password_login.version is not defined
+
+- name: Fleet MySQL | Fail when root cannot be reached at all
+  ansible.builtin.fail:
+    msg: >-
+      Cannot log in to MySQL on {{ inventory_hostname }} as root. The
+      password in mysql_root_password is rejected and the account is not
+      passwordless, so the vaulted password no longer matches the database.
+      Reconcile the two before rerunning.
+  when:
+    - running_on_server
+    - mysql_server
+    - mysql_password_login.version is not defined
+    - mysql_passwordless_login.version is not defined
+
+# Fleet refuses to start against anything it cannot migrate, so the version is
+# confirmed here rather than at deployment time.
+- name: Fleet MySQL | Assert the server is Oracle MySQL 8.0.44 or later
+  ansible.builtin.assert:
+    that:
+      - "'MariaDB' not in mysql_running_version"
+      - mysql_running_version is version('8.0.44', '>=')
+    fail_msg: >-
+      {{ inventory_hostname }} is running '{{ mysql_running_version }}'.
+      Fleet requires Oracle MySQL 8.0.44 or later.
+    success_msg: "{{ inventory_hostname }} is running MySQL {{ mysql_running_version }}."
+  vars:
+    mysql_running_version: >-
+      {{ mysql_password_login.version.full
+         | default(mysql_passwordless_login.version.full, true) }}
+  when:
+    - running_on_server
+    - mysql_server
+
+- name: Fleet MySQL | Set the root password
+  community.mysql.mysql_user:
+    login_unix_socket: "{{ mysql_socket }}"
+    login_user: root
+    login_host: localhost
+    login_password: "{{ mysql_root_password if mysql_password_login.version is defined else '' }}"
+    name: 'root'
+    # plugin_auth_string rather than password: see mysql_authentication_plugin.
+    plugin: "{{ mysql_authentication_plugin }}"
+    plugin_auth_string: "{{ mysql_root_password }}"
+    salt: "{{ mysql_root_salt | default(omit, true) }}"
+  no_log: true
+  when:
+    - running_on_server
+    - mysql_server
+    - mysql_password_login.version is defined or mysql_passwordless_login.version is defined
+
+- name: Fleet MySQL | create the log directory
+  ansible.builtin.file:
+    path: "{{ mysql_log_dir }}"
+    state: directory
+    owner: "{{ mysql_log_owner }}"
+    group: "{{ mysql_log_group }}"
+    mode: "0750"
+  when:
+    - mysql_server
+
+- name: Fleet MySQL | configure mysql server
+  community.general.ini_file:
+    dest: "{{ mysql_configuration_destination }}/{{ mysql_configuration_file_prefix }}{{ mysql_name }}-server.cnf"
+    section: "{{ item.section }}"
+    option: "{{ item.option }}"
+    value: "{{ item.value }}"
+    mode: "0644"
+  loop: "{{ mysql_configuration_options }}"
+  loop_control:
+    label: "{{ item.option }}"
+  when:
+    - mysql_server
+  notify:
+    - restart mysql server
+
+- name: Fleet MySQL | configure mysql client
+  community.general.ini_file:
+    dest: "{{ mysql_configuration_destination }}/{{ mysql_configuration_file_prefix }}{{ mysql_name }}-client.cnf"
+    section: client
+    option: socket
+    value: "{{ mysql_socket }}"
+    mode: "0644"
+  when:
+    - mysql_server
+
+- name: Fleet MySQL | start and enable mysql
+  ansible.builtin.service:
+    name: "mysql"
+    state: started
+    enabled: true
+  when:
+    - running_on_server
+    - mysql_server
+
+- name: Fleet MySQL | add root my.cnf
+  ansible.builtin.template:
+    src: my.cnf.j2
+    dest: /root/.my.cnf
+    mode: "0640"
+  when:
+    - running_on_server
+    - mysql_server
+
+- name: Fleet MySQL | add "{{ deploy_user }}" my.cnf
+  ansible.builtin.template:
+    src: "deploy_user_my_cnf.j2"
+    dest: "//home/{{ deploy_user }}/.my.cnf"
+    owner: "{{ deploy_user }}"
+    mode: "0600"
+  when:
+    - not mysql_server
+
+# The mysql role also creates root@<hostname>, which is reachable from the
+# network. This server is reached over the network by applications, so root is
+# kept to the loopback addresses and applications get their own accounts
+# through mysql_users.
+- name: Fleet MySQL | create local root accounts
+  community.mysql.mysql_user:
+    host: "{{ item }}"
+    name: root
+    plugin: "{{ mysql_authentication_plugin }}"
+    plugin_auth_string: "{{ mysql_root_password }}"
+    salt: "{{ mysql_root_salt | default(omit, true) }}"
+    login_host: "{{ mysql_host }}"
+    login_unix_socket: "{{ mysql_socket }}"
+    login_user: root
+    login_password: "{{ mysql_root_password }}"
+  loop: "{{ mysql_root_hosts }}"
+  no_log: true
+  when:
+    - running_on_server
+    - mysql_server
+
+# MySQL 8 ships without anonymous accounts or a test database, so unlike the
+# MariaDB role there is nothing to remove. They are still checked for, because
+# an upgraded or hand-built server can have them.
+- name: Fleet MySQL | remove Anonymous users in the database
+  community.mysql.mysql_user:
+    name: ''
+    host: "{{ item }}"
+    state: absent
+    login_host: "{{ mysql_host }}"
+    login_unix_socket: "{{ mysql_socket }}"
+    login_user: root
+    login_password: "{{ mysql_root_password }}"
+  with_items:
+    - localhost
+    - "{{ ansible_hostname }}"
+    - 127.0.0.1
+  no_log: true
+  when:
+    - running_on_server
+    - mysql_server
+
+- name: Fleet MySQL | Remove the test database
+  community.mysql.mysql_db:
+    name: test
+    state: absent
+    login_host: "{{ mysql_host }}"
+    login_unix_socket: "{{ mysql_socket }}"
+    login_user: root
+    login_password: "{{ mysql_root_password }}"
+  no_log: true
+  when:
+    - running_on_server
+    - mysql_server
+  notify:
+    - restart mysql server
+
+- name: Fleet MySQL | create databases on server
+  community.mysql.mysql_db:
+    name: "{{ item.name }}"
+    state: "{{ item.state | default('present') }}"
+    target: "{{ item.target | default(omit) }}"
+    encoding: "{{ item.encoding | default(omit) }}"
+    collation: "{{ item.collation | default(omit) }}"
+    login_host: "{{ mysql_host }}"
+    login_unix_socket: "{{ mysql_socket }}"
+    login_user: root
+    login_password: "{{ mysql_root_password }}"
+  loop: "{{ mysql_databases }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when:
+    - running_on_server
+    - mysql_databases is defined
+    - mysql_server
+  no_log: true
+
+- name: Fleet MySQL | create databases as a client connection
+  community.mysql.mysql_db:
+    name: "{{ item.name }}"
+    state: "{{ item.state | default('present') }}"
+    target: "{{ item.target | default(omit) }}"
+    encoding: "{{ item.encoding | default(omit) }}"
+    collation: "{{ item.collation | default(omit) }}"
+    login_unix_socket: "{{ mysql_socket }}"
+    login_host: "{{ mysql_host }}"
+    login_user: root
+    login_password: "{{ mysql_root_password }}"
+  delegate_to: "{{ mysql_host }}"
+  loop: "{{ mysql_databases }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when:
+    - running_on_server
+    - mysql_databases is defined
+    - not mysql_server
+  no_log: true
+
+- name: Fleet MySQL | create users on server
+  community.mysql.mysql_user:
+    name: "{{ item.name }}"
+    state: present
+    # plugin_auth_string rather than password: see mysql_authentication_plugin.
+    plugin: "{{ item.plugin | default(mysql_authentication_plugin) }}"
+    plugin_auth_string: "{{ item.password }}"
+    salt: "{{ item.salt | default(omit, true) }}"
+    priv: "{{ item.priv | default(omit) }}"  # least privilege access preferred
+    host: "{{ item.host | default(omit) }}"
+    host_all: "{{ item.host_all | default(omit) }}"
+    update_password: "{{ item.update_password | default(omit) }}"
+    login_host: "{{ mysql_host }}"
+    login_unix_socket: "{{ mysql_socket }}"
+    login_user: root
+    login_password: "{{ mysql_root_password }}"
+  loop: "{{ mysql_users }}"
+  loop_control:
+    label: "{{ item.name }}@{{ item.host | default('%') }}"
+  when:
+    - running_on_server
+    - mysql_users is defined
+    - mysql_server
+  no_log: true
+
+- name: Fleet MySQL | create users as a client connection
+  community.mysql.mysql_user:
+    name: "{{ item.name }}"
+    state: present
+    plugin: "{{ item.plugin | default(mysql_authentication_plugin) }}"
+    plugin_auth_string: "{{ item.password | default(omit) }}"
+    salt: "{{ item.salt | default(omit, true) }}"
+    priv: "{{ item.priv | default(omit) }}"  # least privilege access preferred
+    host: "{{ item.host }}"
+    update_password: "{{ item.update_password | default(omit) }}"
+    login_host: "{{ mysql_host }}"
+    login_user: root
+    login_password: "{{ mysql_root_password }}"
+    login_unix_socket: "{{ mysql_socket }}"
+  delegate_to: "{{ mysql_host }}"
+  loop: "{{ mysql_users }}"
+  loop_control:
+    label: "{{ item.name }}@{{ item.host }}"
+  when:
+    - mysql_users is defined
+    - running_on_server
+    - not mysql_server
+  no_log: true
+
+- name: Fleet MySQL | Configure cloud backup mounts
+  ansible.builtin.include_tasks:
+    file: backup_gcs_mount.yml
+    apply:
+      tags: [google_cloud]
+  when:
+    - mysql_gcs_backup_enabled | bool
+    - runtime_env | default('staging') == mysql_gcs_backup_environment
+    - mysql_server | default(false) | bool
+    - ansible_os_family == "Debian"
+  tags: [google_cloud]
+
+# Any pending MySQL restart has to happen before a dump starts, otherwise
+# the restart kills the dump's connection halfway through a table.
+- name: Fleet MySQL | Apply pending MySQL restarts before backing up
+  ansible.builtin.meta: flush_handlers
+  tags: [google_cloud]
+
+- name: Fleet MySQL | Schedule rotated database dumps
+  ansible.builtin.include_tasks:
+    file: backup_schedule.yml
+    apply:
+      tags: [google_cloud]
+  when:
+    - mysql_backup_schedule_enabled | bool
+    - runtime_env | default('staging') == mysql_gcs_backup_environment
+    - mysql_server | default(false) | bool
+    - ansible_os_family == "Debian"
+  tags: [google_cloud]

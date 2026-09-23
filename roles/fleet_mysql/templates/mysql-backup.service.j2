@@ -1,0 +1,17 @@
+[Unit]
+Description=Rotated MySQL dump of every database
+After=mysql.service
+{% if mysql_gcs_backup_enabled | bool %}
+After={{ mysql_gcs_service_name }}
+Requires={{ mysql_gcs_service_name }}
+{% endif %}
+
+[Service]
+Type=oneshot
+User={{ mysql_backup_user }}
+Group={{ mysql_backup_group }}
+Nice={{ mysql_backup_nice }}
+IOSchedulingClass={{ mysql_backup_io_class }}
+IOSchedulingPriority={{ mysql_backup_io_priority }}
+TimeoutStartSec={{ mysql_backup_timeout }}
+ExecStart={{ mysql_backup_script_path }}
