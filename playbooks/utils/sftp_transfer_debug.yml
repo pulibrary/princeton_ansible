@@ -1,0 +1,283 @@
+---
+# Diagnose an SFTP transfer that connects but does not deliver files.
+#
+# A login that succeeds proves only that the credential was accepted. Everything
+# after that is invisible in the default log: the SSH server records the session
+# opening and nothing else, so a partner that connected and wrote nothing looks
+# exactly like one that wrote its files somewhere unexpected.
+#
+# This collects the session-side facts: whether the account has a home directory
+# to land in, whether it can write to the drop directories, what is actually in
+# them, and whether anything belonging to the account was written anywhere else.
+#
+#   ansible-playbook playbooks/utils/sftp_transfer_debug.yml \
+#     -e probe_hosts=libsftp_sandbox
+#
+# Read-only apart from one write test, which creates a file in a drop directory
+# and removes it again. Pass -e transfer_debug_write_test=false to skip it.
+- name: Diagnose SFTP transfers that connect but deliver nothing
+  hosts: "{{ probe_hosts | default('libsftp_sandbox') }}"
+  remote_user: pulsys
+  become: true
+
+  vars_files:
+    - ../../group_vars/sftp/vault.yml
+    - ../../group_vars/sftp/common.yml
+
+  vars:
+    transfer_debug_accounts:
+      - "{{ almasftp_user }}"
+      - "{{ aspaceftp_user }}"
+    transfer_debug_write_test: true
+    # Directories the partners deposit into, from the lib_sftp role.
+    transfer_debug_drop_dirs:
+      - /alma/bursar
+      - /alma/datasync_processing
+      - /alma/fund_adjustment
+      - /alma/invoice_status
+      - /alma/invoices
+      - /alma/people
+      - /alma/pod
+      - /alma/publishing
+      - /alma/recap
+      - /alma/scsb_renewals
+      - /alma/aspace
+
+  tasks:
+    - name: Identify the host
+      ansible.builtin.debug:
+        msg: >-
+          {{ inventory_hostname }}:
+          {{ ansible_facts['distribution'] }}
+          {{ ansible_facts['distribution_version'] }}
+
+    # An SFTP client's first act is usually to resolve its working directory,
+    # which is the home directory. If that does not exist, some clients stop
+    # there and report a vague failure, having transferred nothing.
+    - name: Look up each account, including its home directory
+      ansible.builtin.command:
+        argv:
+          - getent
+          - passwd
+          - "{{ item }}"
+      loop: "{{ transfer_debug_accounts }}"
+      register: transfer_debug_passwd
+      changed_when: false
+      failed_when: false
+
+    - name: Record the home directory each account is given
+      ansible.builtin.set_fact:
+        transfer_debug_homes: >-
+          {{ dict(transfer_debug_passwd.results
+             | map(attribute='item') | list
+             | zip(transfer_debug_passwd.results
+                   | map(attribute='stdout') | list
+                   | map('regex_replace', '^(?:[^:]*:){5}([^:]*):.*$', '\1')
+                   | list)) }}
+
+    - name: Check whether those home directories exist
+      ansible.builtin.stat:
+        path: "{{ transfer_debug_homes[item] }}"
+      loop: "{{ transfer_debug_accounts }}"
+      register: transfer_debug_home_stat
+      when: transfer_debug_homes[item] | default('') | length > 0
+
+    - name: Report the home directory situation
+      ansible.builtin.debug:
+        msg: >-
+          {{ item.item }}: home is {{ transfer_debug_homes[item.item] | default('unknown') }}
+          {{ '-- exists, owned by ' ~ item.stat.pw_name
+             if (item.stat.exists | default(false))
+             else '-- DOES NOT EXIST. An SFTP client that resolves its working
+             directory on connect may fail here and transfer nothing. It is
+             created on first login by pam_mkhomedir, so if a login has
+             succeeded and it is still missing, that PAM step is not running.' }}
+      loop: "{{ transfer_debug_home_stat.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+      when: transfer_debug_home_stat is not skipped
+
+    # Is the log even capable of showing a transfer? Without -l on the Subsystem
+    # line the SFTP server records nothing at all.
+    - name: Read the effective SFTP subsystem
+      ansible.builtin.shell:
+        cmd: >-
+          set -o pipefail;
+          sshd -T 2>/dev/null | grep -i '^subsystem' || true
+      args:
+        executable: /bin/bash
+      register: transfer_debug_subsystem
+      changed_when: false
+      failed_when: false
+
+    - name: Report whether transfers are being logged
+      ansible.builtin.debug:
+        msg:
+          - "subsystem: {{ transfer_debug_subsystem.stdout | default('none') | trim }}"
+          - "{{ 'Transfers ARE logged, so the journal shows every file opened.'
+               if ('-l' in (transfer_debug_subsystem.stdout | default('')))
+               else 'Transfers are NOT logged: the subsystem has no -l option, so
+               the journal will show a session opening and nothing else. Run the
+               sandbox_sftp playbook to add logging, then ask the partner to
+               retry.' }}"
+
+    # What is actually in the drop directories, and when did it arrive? Files
+    # already present would mean the transfer worked and the partner is looking
+    # in the wrong place.
+    - name: List the drop directories with timestamps
+      ansible.builtin.shell:
+        cmd: >-
+          set -o pipefail;
+          ls -la --time-style=long-iso {{ item }} 2>&1 | tail -n +2 || true
+      args:
+        executable: /bin/bash
+      loop: "{{ transfer_debug_drop_dirs }}"
+      register: transfer_debug_listing
+      changed_when: false
+      failed_when: false
+
+    - name: Report drop directories that contain anything
+      ansible.builtin.debug:
+        msg: >-
+          {{ item.item }}:
+          {{ item.stdout_lines | reject('match', '^total|^d') | list
+             | default(['empty'], true) }}
+      loop: "{{ transfer_debug_listing.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+      when: item.stdout_lines | reject('match', '^total|^d') | list | length > 0
+
+    - name: Name the drop directories that are empty
+      ansible.builtin.debug:
+        msg: >-
+          empty:
+          {{ transfer_debug_listing.results
+             | selectattr('stdout_lines')
+             | rejectattr('stdout_lines', 'search', '^-')
+             | map(attribute='item') | list }}
+
+    # Files owned by a transfer account but outside the drop directories mean the
+    # partner is writing to the wrong path, most often its home directory because
+    # its configuration uses a relative path.
+    - name: Look for files the accounts wrote anywhere else
+      ansible.builtin.shell:
+        cmd: >-
+          set -o pipefail;
+          find /home /tmp /var/tmp /srv /alma -xdev -user {{ item }} -type f
+          -mtime -14 -printf '%TY-%Tm-%Td %TH:%TM  %s bytes  %p\n' 2>/dev/null
+          | sort | tail -40 || true
+      args:
+        executable: /bin/bash
+      loop: "{{ transfer_debug_accounts }}"
+      register: transfer_debug_stray
+      changed_when: false
+      failed_when: false
+
+    - name: Report anything written in the last fortnight
+      ansible.builtin.debug:
+        msg: >-
+          {{ item.item }} wrote:
+          {{ item.stdout_lines | default(['nothing found in the last 14 days'], true) }}
+      loop: "{{ transfer_debug_stray.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    # Ownership and mode look right in an Ansible run, but the only proof is
+    # writing as the account itself.
+    - name: Confirm the accounts can really write to a drop directory
+      when: transfer_debug_write_test | bool
+      block:
+        - name: Write a file as each account
+          ansible.builtin.command:
+            argv:
+              - sudo
+              - -u
+              - "{{ item }}"
+              - touch
+              - "/alma/publishing/.transfer-debug-{{ item }}"
+          loop: "{{ transfer_debug_accounts }}"
+          register: transfer_debug_write
+          changed_when: false
+          failed_when: false
+
+        - name: Report the write test
+          ansible.builtin.debug:
+            msg: >-
+              {{ item.item }}:
+              {{ 'can write to /alma/publishing'
+                 if item.rc == 0
+                 else 'CANNOT write to /alma/publishing -- '
+                      ~ (item.stderr | default('') | trim) }}
+          loop: "{{ transfer_debug_write.results }}"
+          loop_control:
+            label: "{{ item.item }}"
+
+      always:
+        - name: Remove the test files
+          ansible.builtin.file:
+            path: "/alma/publishing/.transfer-debug-{{ item }}"
+            state: absent
+          loop: "{{ transfer_debug_accounts }}"
+          changed_when: false
+
+    # A full filesystem fails a write with an error the partner may report only
+    # as a generic transfer failure.
+    - name: Check free space where the files land
+      ansible.builtin.shell:
+        cmd: >-
+          set -o pipefail;
+          df -h /alma 2>&1 | tail -n +1 || true
+      args:
+        executable: /bin/bash
+      register: transfer_debug_df
+      changed_when: false
+      failed_when: false
+
+    - name: Report free space
+      ansible.builtin.debug:
+        msg: "{{ transfer_debug_df.stdout_lines | default(['unknown']) }}"
+
+    - name: Read any SFTP session records from the journal
+      ansible.builtin.shell:
+        cmd: >-
+          set -o pipefail;
+          journalctl -t internal-sftp -t sftp-server --since '14 days ago'
+          --no-pager 2>/dev/null | tail -40 || true
+      args:
+        executable: /bin/bash
+      register: transfer_debug_sftp_log
+      changed_when: false
+      failed_when: false
+
+    - name: Report SFTP session records
+      ansible.builtin.debug:
+        msg: >-
+          {{ transfer_debug_sftp_log.stdout_lines
+             | default(['nothing recorded, which is expected while the subsystem
+             has no -l option'], true) }}
+
+    - name: What to conclude
+      ansible.builtin.debug:
+        msg:
+          - "Files present in a drop directory:"
+          - "  the transfer worked. If the partner reports otherwise it is"
+          - "  reading a different path, or collecting from somewhere it did"
+          - "  not write to."
+          - ""
+          - "Files owned by the account outside /alma:"
+          - "  the partner is writing to the wrong path. A file under the home"
+          - "  directory usually means its configuration uses a relative path,"
+          - "  so it lands in the home instead of the intended directory."
+          - ""
+          - "Home directory missing:"
+          - "  some clients resolve their working directory immediately on"
+          - "  connect and give up if it is absent, having sent nothing."
+          - ""
+          - "Write test failed:"
+          - "  ownership or mode on the drop directory is wrong, or the"
+          - "  filesystem is full or mounted read-only."
+          - ""
+          - "Everything above looks right and still nothing arrives:"
+          - "  enable SFTP logging, ask the partner to retry, then read the"
+          - "  journal. It names every directory listed and file opened, which"
+          - "  settles whether the partner attempted a transfer at all."
