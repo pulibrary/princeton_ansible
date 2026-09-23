@@ -1,0 +1,33 @@
+#!/bin/bash
+
+set -u
+
+MICROK8S="/snap/bin/microk8s"
+NAMESPACE="{{ fleet_namespace }}"
+SERVICE_NAME="Fleet server"
+
+read -r desired ready < <(
+  "${MICROK8S}" kubectl -n "${NAMESPACE}" get deploy {{ fleet_deployment_name }} \
+    -o 'jsonpath={.spec.replicas} {.status.readyReplicas}' \
+    2>/dev/null
+)
+
+if [[ -z "${desired:-}" ]]; then
+  echo "2 \"${SERVICE_NAME}\" - Unable to read the Fleet deployment in namespace ${NAMESPACE}"
+  exit 0
+fi
+
+ready="${ready:-0}"
+perfdata="ready_replicas=${ready};;;0;${desired}"
+
+if (( ready == 0 )); then
+  echo "2 \"${SERVICE_NAME}\" ${perfdata} No Fleet pods are ready (${ready}/${desired})"
+  exit 0
+fi
+
+if (( ready < desired )); then
+  echo "1 \"${SERVICE_NAME}\" ${perfdata} Only ${ready} of ${desired} Fleet pods are ready"
+  exit 0
+fi
+
+echo "0 \"${SERVICE_NAME}\" ${perfdata} All ${ready} of ${desired} Fleet pods are ready"
