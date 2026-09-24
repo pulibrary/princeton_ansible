@@ -1,0 +1,48 @@
+---
+# Shared settings for the Fleet agent install, loaded by the playbooks in the
+# directory above. They live here so every playbook that enrolls hosts builds
+# the same package and agrees on where things are written.
+
+  # Where fleetd reports in. fleet_hostname comes from group_vars/fleet.
+  fleet_client_url: "https://{{ fleet_hostname }}"
+  fleet_client_enroll_secret: "{{ vault_fleet_enroll_secret }}"
+
+  # Built packages are kept out of the repository and reused across runs, so
+  # enrolling a second group later does not rebuild them.
+  fleet_client_build_dir: "{{ lookup('env', 'TMPDIR') | default('/tmp', true) }}/fleet-packages"
+  fleet_client_remote_dir: /opt/fleet-packages
+  # Records which package a host was given, so later runs can tell whether it
+  # still matches the settings below.
+  fleet_client_installed_fingerprint_path: /opt/orbit/.ansible_fleet_package
+  # The node key Fleet hands back on a successful enrollment. Its presence is
+  # the only reliable proof that a host actually reached Fleet.
+  fleet_client_node_key_path: /opt/orbit/secret-orbit-node-key.txt
+  # Orbit downloads osqueryd before it enrolls, so first enrollment takes a
+  # few minutes. 20 x 30s allows ten.
+  fleet_client_enroll_retries: 20
+  fleet_client_enroll_delay: 30
+
+  # Initial hosts are servers with no graphical session, so Fleet Desktop (a
+  # menu bar app for end users) is left out. Remote script execution stays
+  # off: configuration belongs in this repository, not in ad hoc scripts run
+  # from a web interface.
+  fleet_client_desktop: false
+  fleet_client_enable_scripts: false
+
+  # How often fleetd checks for its own updates.
+  fleet_client_update_interval: 1h
+  fleet_client_orbit_channel: stable
+  fleet_client_osqueryd_channel: stable
+
+  fleet_client_force_build: false
+  fleet_client_force_install: false
+
+  # fleetd ships deb and rpm packages only. Anything else (FreeBSD
+  # workstations) is skipped rather than failed, so this can run against a
+  # broad group.
+  fleet_client_package_type: >-
+    {{ {'Debian': 'deb', 'RedHat': 'rpm'}[ansible_os_family] | default('') }}
+  fleet_client_arch: >-
+    {{ {'x86_64': 'amd64', 'aarch64': 'arm64'}[ansible_architecture] | default('') }}
+  fleet_client_supported: >-
+    {{ fleet_client_package_type | length > 0 and fleet_client_arch | length > 0 }}

@@ -1,0 +1,326 @@
+---
+# Builds the fleetd package on the controller and installs it on the host, then
+# waits for Fleet to confirm the host enrolled.
+#
+# Included by the fleet client playbooks in the directory above so the install
+# logic is not duplicated once per platform. Settings come from
+# ../vars/fleet_client.yml.
+- name: Fleet agent | Populate service facts
+  ansible.builtin.service_facts:
+  tags:
+    - always
+
+- name: Fleet agent | Build and install fleetd
+  when: fleet_client_supported | bool
+  block:
+    # Building on the controller means one package per platform serves
+    # every host, rather than each host needing fleetctl and a toolchain.
+    - name: Fleet agent | Locate fleetctl on the controller
+      ansible.builtin.command: which fleetctl
+      register: fleet_client_fleetctl
+      changed_when: false
+      failed_when: false
+      check_mode: false
+      delegate_to: localhost
+      become: false
+      run_once: true
+
+    - name: Fleet agent | Fail when fleetctl is missing
+      ansible.builtin.assert:
+        that:
+          - fleet_client_fleetctl.rc == 0
+        fail_msg: >-
+          fleetctl was not found on the Ansible controller. fleetd packages
+          carry the Fleet URL and enroll secret, so they have to be
+          generated with fleetctl rather than fetched from a repository.
+          fleetctl is in this repository's devbox.json, so the usual cause
+          is running outside the devbox environment. Start it with `devbox
+          shell` (or prefix the command with `devbox run`) and rerun. If
+          the environment is already active, run `devbox install`.
+      run_once: true
+
+    - name: Fleet agent | Ensure the controller build directory exists
+      ansible.builtin.file:
+        path: "{{ fleet_client_build_dir }}"
+        state: directory
+        mode: "0700"
+      delegate_to: localhost
+      become: false
+      run_once: true
+
+    # One package covers every host of the same platform, so the build is
+    # keyed on platform rather than on hostname.
+    - name: Fleet agent | Name the package for this platform
+      ansible.builtin.set_fact:
+        fleet_client_package: >-
+          {{ fleet_client_build_dir }}/fleet-osquery_{{ fleet_client_arch }}.{{ fleet_client_package_type }}
+        # The URL, enroll secret and flags are baked into the package, so a
+        # cached one is only reusable while they are unchanged. Fingerprint
+        # them and rebuild when the fingerprint moves: rotating the enroll
+        # secret would otherwise keep installing a package holding the old
+        # one, and the hosts would fail to enroll for no visible reason.
+        fleet_client_fingerprint: >-
+          {{ [
+               fleet_client_url,
+               fleet_client_enroll_secret,
+               fleet_client_package_type,
+               fleet_client_arch,
+               fleet_client_update_interval,
+               fleet_client_orbit_channel,
+               fleet_client_osqueryd_channel,
+               fleet_client_desktop,
+               fleet_client_enable_scripts,
+             ] | join('|') | hash('sha256') }}
+
+    - name: Fleet agent | Check whether the package was already built
+      ansible.builtin.stat:
+        path: "{{ fleet_client_package }}"
+      register: fleet_client_built
+      delegate_to: localhost
+      become: false
+
+    - name: Fleet agent | Read the fingerprint of the cached package
+      ansible.builtin.slurp:
+        src: "{{ fleet_client_package }}.fingerprint"
+      register: fleet_client_cached_fingerprint
+      failed_when: false
+      delegate_to: localhost
+      become: false
+      when: fleet_client_built.stat.exists
+
+    - name: Fleet agent | Decide whether the package needs building
+      ansible.builtin.set_fact:
+        fleet_client_needs_build: >-
+          {{ not fleet_client_built.stat.exists
+             or fleet_client_force_build | bool
+             or (fleet_client_cached_fingerprint.content | default('') | b64decode | trim)
+                != fleet_client_fingerprint }}
+
+    # outfile keeps the filename predictable; without it fleetctl writes
+    # the agent version into the name and there is nothing to match on.
+    - name: Fleet agent | Build the fleetd package on the controller
+      ansible.builtin.command:
+        argv: >-
+          {{
+            [
+              fleet_client_fleetctl.stdout | trim,
+              'package',
+              '--type=' ~ fleet_client_package_type,
+              '--arch=' ~ fleet_client_arch,
+              '--fleet-url=' ~ fleet_client_url,
+              '--enroll-secret=' ~ fleet_client_enroll_secret,
+              '--outfile=' ~ fleet_client_package,
+              '--update-interval=' ~ fleet_client_update_interval,
+              '--orbit-channel=' ~ fleet_client_orbit_channel,
+              '--osqueryd-channel=' ~ fleet_client_osqueryd_channel,
+              '--disable-open-folder',
+            ]
+            + (['--fleet-desktop'] if fleet_client_desktop | bool else [])
+            + (['--enable-scripts'] if fleet_client_enable_scripts | bool else [])
+          }}
+        chdir: "{{ fleet_client_build_dir }}"
+      register: fleet_client_build
+      changed_when: fleet_client_build.rc == 0
+      no_log: true
+      delegate_to: localhost
+      become: false
+      throttle: 1
+      when: fleet_client_needs_build | bool
+
+    # Written only after a successful build, so an interrupted run rebuilds
+    # rather than trusting a half-written package.
+    - name: Fleet agent | Record the fingerprint of the built package
+      ansible.builtin.copy:
+        content: "{{ fleet_client_fingerprint }}"
+        dest: "{{ fleet_client_package }}.fingerprint"
+        mode: "0600"
+      delegate_to: localhost
+      become: false
+      throttle: 1
+      when: fleet_client_needs_build | bool
+
+    - name: Fleet agent | Confirm the package was produced
+      ansible.builtin.stat:
+        path: "{{ fleet_client_package }}"
+      register: fleet_client_ready
+      delegate_to: localhost
+      become: false
+
+    - name: Fleet agent | Fail when the package is missing
+      ansible.builtin.assert:
+        that:
+          - fleet_client_ready.stat.exists
+          - fleet_client_ready.stat.size | int > 0
+        fail_msg: >-
+          fleetctl did not produce {{ fleet_client_package }}. Run the
+          fleetctl package command by hand to see why.
+
+    # The host records which package it was given, so a changed enroll
+    # secret, Fleet URL or update channel reinstalls everywhere on the next
+    # run. Comparing here rather than relying on whether this run happened
+    # to rebuild keeps every host in a batch reaching the same conclusion.
+    - name: Fleet agent | Read the fingerprint of the installed agent
+      ansible.builtin.slurp:
+        src: "{{ fleet_client_installed_fingerprint_path }}"
+      register: fleet_client_host_fingerprint
+      failed_when: false
+
+    - name: Fleet agent | Install fleetd
+      when: >-
+        'orbit.service' not in ansible_facts.services
+        or (fleet_client_host_fingerprint.content | default('') | b64decode | trim)
+           != fleet_client_fingerprint
+        or fleet_client_force_install | bool
+      block:
+        - name: Fleet agent | Ensure the package directory exists on the host
+          ansible.builtin.file:
+            path: "{{ fleet_client_remote_dir }}"
+            state: directory
+            owner: root
+            group: root
+            mode: "0700"
+
+        # The package embeds the enroll secret, so it is readable by root
+        # alone and removed once installed.
+        - name: Fleet agent | Copy the package to the host
+          ansible.builtin.copy:
+            src: "{{ fleet_client_package }}"
+            dest: "{{ fleet_client_remote_dir }}/{{ fleet_client_package | basename }}"
+            owner: root
+            group: root
+            mode: "0600"
+          register: fleet_client_copied
+
+        # dpkg and rpm are used directly rather than the apt and dnf
+        # modules. Rotating the enroll secret changes the contents of the
+        # package but not its version, and the apt module skips any .deb
+        # whose version already matches what is installed, so the new
+        # settings would never reach the host. fleetd declares no
+        # dependencies, so nothing is lost by not going through a package
+        # manager.
+        - name: Fleet agent | Install the agent (Debian)
+          ansible.builtin.command:
+            argv:
+              - dpkg
+              - --install
+              - "{{ fleet_client_copied.dest }}"
+          register: fleet_client_dpkg
+          changed_when: fleet_client_dpkg.rc == 0
+          when: ansible_os_family == "Debian"
+
+        # --replacepkgs lets the same version be laid down again, which rpm
+        # otherwise refuses.
+        - name: Fleet agent | Install the agent (RedHat)
+          ansible.builtin.command:
+            argv:
+              - rpm
+              - --upgrade
+              - --replacepkgs
+              - "{{ fleet_client_copied.dest }}"
+          register: fleet_client_rpm
+          changed_when: fleet_client_rpm.rc == 0
+          when: ansible_os_family == "RedHat"
+
+        - name: Fleet agent | Start and enable the agent
+          ansible.builtin.service:
+            name: orbit
+            state: started
+            enabled: true
+
+        # The package writes its settings on install, so the service has to
+        # be restarted to pick up a changed enroll secret or Fleet URL.
+        - name: Fleet agent | Restart the agent onto the new settings
+          ansible.builtin.service:
+            name: orbit
+            state: restarted
+          when: fleet_client_host_fingerprint.content is defined
+
+        # Written last so a failed install is retried rather than recorded
+        # as done.
+        - name: Fleet agent | Record what was installed
+          ansible.builtin.copy:
+            content: "{{ fleet_client_fingerprint }}"
+            dest: "{{ fleet_client_installed_fingerprint_path }}"
+            owner: root
+            group: root
+            mode: "0600"
+
+      always:
+        - name: Fleet agent | Remove the package from the host
+          ansible.builtin.file:
+            path: "{{ fleet_client_remote_dir }}"
+            state: absent
+
+    - name: Fleet agent | Check the agent is running
+      ansible.builtin.systemd:
+        name: orbit
+      register: fleet_client_status
+      changed_when: false
+
+    - name: Fleet agent | Assert the agent is running
+      ansible.builtin.assert:
+        that:
+          - fleet_client_status.status.ActiveState == "active"
+        fail_msg: >-
+          The fleetd service is {{ fleet_client_status.status.ActiveState }}
+          on {{ inventory_hostname }}. Check `journalctl -u orbit` for the
+          reason.
+        success_msg: "The fleetd service is running."
+
+    # A running service is not the same as an enrolled host: orbit stays
+    # "active" and retries forever when the Fleet server rejects it, so the
+    # host never appears in Fleet while everything here looks healthy.
+    # Enrollment is only proven by the node key the server hands back, which
+    # orbit writes to disk, so that file is what gets waited on.
+    #
+    # It does not appear immediately. Orbit first downloads osqueryd from
+    # Fleet's update server, which took about four minutes in testing, and
+    # only then enrolls.
+    - name: Fleet agent | Wait for the host to enroll into Fleet
+      ansible.builtin.stat:
+        path: "{{ fleet_client_node_key_path }}"
+      register: fleet_client_node_key
+      changed_when: false
+      retries: "{{ fleet_client_enroll_retries }}"
+      delay: "{{ fleet_client_enroll_delay }}"
+      until: >-
+        fleet_client_node_key.stat.exists
+        and fleet_client_node_key.stat.size | int > 0
+      failed_when: false
+
+    # The log carries the server's own reason for refusing, which is far
+    # more use than "it did not enroll".
+    - name: Fleet agent | Collect the agent log when enrolment did not happen
+      ansible.builtin.command:
+        argv:
+          - journalctl
+          - --unit=orbit
+          - --no-pager
+          - --lines=30
+      register: fleet_client_log
+      changed_when: false
+      failed_when: false
+      when: not fleet_client_node_key.stat.exists | default(false)
+
+    - name: Fleet agent | Report why the host did not enroll
+      ansible.builtin.debug:
+        msg: >-
+          {{ ['Agent log follows:'] + (fleet_client_log.stdout_lines | default([])) }}
+      when: not fleet_client_node_key.stat.exists | default(false)
+
+    - name: Fleet agent | Fail when the host did not enroll
+      ansible.builtin.assert:
+        that:
+          - fleet_client_node_key.stat.exists | default(false)
+        fail_msg: >-
+          fleetd is running on {{ inventory_hostname }} but never enrolled
+          into Fleet, so the host will not appear in the Fleet UI. The agent
+          log above gives the server's reason. 'unauthenticated, or invalid
+          token' means vault_fleet_enroll_secret does not match a secret
+          Fleet will accept: copy it from Fleet under Hosts > Add hosts, put
+          it in group_vars/fleet/vault.yml, and rerun. A connection or
+          certificate error instead means the host cannot reach
+          {{ fleet_client_url }}.
+        success_msg: >-
+          {{ inventory_hostname }} is enrolled into Fleet and will appear in
+          the UI.
