@@ -1,0 +1,121 @@
+---
+# To run the playbook:
+# confirm that the agent is installed already on your machine(s)
+# if it is not, run playbooks/utils/checkmk_agent.yml to install the CheckMK agent
+# rule_group environment variable specifies which rule group to apply to the hosts
+# by default the rails rule group will be applied
+# to run in with the another group, pass '-e rule_group=group_name'
+# by default this playbook runs in the staging environment
+# to run in production, pass '-e runtime_env=production'
+# For example `ansible-playbook playbooks/utils/checkmk_add_local_checks.yml --ask-vault-pass --limit=pdc-describe-staging2.princeton.edu`
+#  will run with the staging runtime environment and the rails rule group on pdc-describe-staging2
+
+- name: Install CheckMk local check scripts on host
+  hosts: "{{ runtime_env | default ('staging') }}"
+  remote_user: pulsys
+  become: true
+
+  vars_files:
+    - ../../group_vars/all/vault.yml
+    - ../../group_vars/checkmk/{{ runtime_env | default('staging') }}.yml
+    - ../../group_vars/checkmk/rule_{{ rule_group | default('rails') }}.yml
+    - ../../group_vars/checkmk/agent_common.yml
+    - ../../group_vars/checkmk/vault.yml
+
+  vars:
+    cmk_local_dir: /usr/lib/check_mk_agent/local
+    cmk_secret_dir: /etc/check_mk
+    secret_env_path: "{{ cmk_secret_dir }}/scsb_export_datadump.env"
+    in_recap_group: "{{ (group_names | select('search', 'recap_') | list | length) > 0 }}"
+
+  pre_tasks:
+      - name: stop playbook if you didn't use --limit
+        fail:
+          msg: "you must use -l or --limit"
+        when: ansible_limit is not defined
+        run_once: true
+      - name: set stripped agent hostname (only content before the first .) as fact
+        ansible.builtin.set_fact:
+          checkmk_agent_host_name: "{{ inventory_hostname | regex_search('^[^.]*') }}"
+
+  tasks:
+    - name: Fail early if token missing (only on recap_* hosts)
+      ansible.builtin.assert:
+        that:
+          - scsb_api_key is defined
+          - scsb_api_key | length > 0
+        fail_msg: "scsb_api_key is undefined/empty. Put it in group_vars/checkmk/vault.yml (vault)."
+      when: in_recap_group
+      no_log: true
+
+    - name: Ensure Checkmk dirs exist (recap_* only)
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+      loop:
+        - "{{ cmk_local_dir }}"
+        - "{{ cmk_secret_dir }}"
+      when: in_recap_group
+
+    - name: Install secret env file with API key (root-only) (recap_* only)
+      ansible.builtin.copy:
+        dest: "{{ secret_env_path }}"
+        owner: root
+        group: root
+        mode: "0600"
+        content: |
+          # SCSB local check secrets
+          SCSB_API_KEY={{ scsb_api_key }}
+      when: in_recap_group
+      no_log: true  # do not leak secret
+
+    - name: Install SCSB local check (shell) (recap_* only)
+      ansible.builtin.template:
+        src: "group_vars/checkmk/local_check_templates/scsb_export_datadump.sh.j2"
+        dest: "{{ cmk_local_dir }}/scsb_export_datadump"
+        owner: root
+        group: root
+        mode: "0755"
+      when: in_recap_group
+
+    - name: Ensure curl present (recap_* only)
+      ansible.builtin.package:
+        name: curl
+        state: present
+      when: in_recap_group
+
+    - name: Remove check and secret from non-recap hosts
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - "{{ cmk_local_dir }}/scsb_export_datadump"
+        - "{{ secret_env_path }}"
+      when: not in_recap_group
+
+    - name: write hostname using jinja2
+      ansible.builtin.template:
+        src: "../../group_vars/checkmk/local_check_templates/{{ item.template }}"
+        dest: "/usr/lib/check_mk_agent/local/{{ item.dest }}"
+        mode: "+x"
+      with_items: "{{ checkmk_local_scripts }}"
+
+    - name: "Add new local services on hosts."
+      checkmk.general.discovery:
+        server_url: "{{checkmk_agent_server_protocol}}://{{ checkmk_agent_server }}"
+        site: "{{ checkmk_agent_site }}"
+        automation_user: "{{ checkmk_agent_user }}"
+        automation_secret: "{{ vault_automation_secret }}"
+        hosts: "{{ checkmk_agent_host_name }}"
+        state: "new"
+
+    - name: "Start activation including foreign changes."
+      checkmk.general.activation:
+        server_url: "{{checkmk_agent_server_protocol}}://{{ checkmk_agent_server }}"
+        site: "{{ checkmk_agent_site }}"
+        automation_user: "{{ checkmk_agent_user }}"
+        automation_secret: "{{ vault_automation_secret }}"
+        force_foreign_changes: 'true'
