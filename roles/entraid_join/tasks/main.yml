@@ -9,6 +9,22 @@
   ansible.builtin.include_tasks: rocky.yml
   when: ansible_os_family == "RedHat"
 
+- name: Entraid_join | Configure Himmelblau confidential client secret
+  ansible.builtin.command:
+    cmd: >
+      aad-tool cred secret
+      --client-id {{ entraid_join_client_id }}
+      --domain {{ entraid_join_domain }}
+      --secret {{ entraid_join_client_secret }}
+  no_log: true
+  when:
+    - entraid_join_configure_client_secret | bool
+    - entraid_join_client_id | length > 0
+    - entraid_join_client_secret | length > 0
+  notify:
+    - restart himmelblaud
+    - restart himmelblaud-tasks
+
 - name: Entraid_join | Ensure krb5 include directory exists
   ansible.builtin.file:
     path: /etc/krb5.conf.d

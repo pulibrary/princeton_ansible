@@ -3,5 +3,16 @@
   hosts: sandbox-{{ runtime_env | default('ad') }}.lib.princeton.edu
   remote_user: pulsys
   become: true
+  vars_files:
+    - ../group_vars/entraid/vars.yml
+    - ../group_vars/entraid/vault.yml
   roles:
     - role: entraid_join
+  post_tasks:
+    - name: restart auth
+      ansible.builtin.service:
+        name: "{{ item }}"
+        state: restarted
+      loop:
+        - himmelblaud
+        - sshd
