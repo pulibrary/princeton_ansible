@@ -70,7 +70,11 @@
     - name: Test that bind9 is running
       ansible.builtin.assert:
         that:
-          - ansible_facts.services['bind9.service'].state == 'running'
+          - >-
+            (ansible_facts.services.get('named.service', {}).get('state') ==
+            'running') or
+            (ansible_facts.services.get('bind9.service', {}).get('state') ==
+            'running')
         fail_msg: "bind9 is not running"
 
     - name: Test that the named configuration parses
