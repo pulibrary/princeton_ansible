@@ -37,7 +37,7 @@
 # the include during the bind9 role run.
 - name: Pul_nomad | consul | Inspect BIND configuration directory
   ansible.builtin.stat:
-    path: "{{ pul_nomad_bind9_config_dir }}"
+    path: /etc/bind
   register: pul_nomad_bind9_config_dir_stat
   tags:
     - bind9
@@ -45,7 +45,7 @@
 
 - name: Pul_nomad | consul | Ensure BIND configuration directory exists
   ansible.builtin.file:
-    path: "{{ pul_nomad_bind9_config_dir }}"
+    path: /etc/bind
     state: directory
     owner: root
     group: root
@@ -59,7 +59,7 @@
 - name: Pul_nomad | consul | Configure Consul forwarding zone
   ansible.builtin.template:
     src: consul/consul.conf.j2
-    dest: "{{ pul_nomad_bind9_consul_config_file }}"
+    dest: /etc/bind/consul.conf
     owner: root
     group: root
     mode: "0644"
@@ -80,7 +80,7 @@
         - dns
   vars:
     bind9_config_includes:
-      - "{{ pul_nomad_bind9_consul_config_file }}"
+      - /etc/bind/consul.conf
     # Consul's private zone is intentionally unsigned.
     bind9_dnssec_validation: "no"
     bind9_remove_dnsmasq: true
