@@ -1,0 +1,68 @@
+#!/usr/bin/bash
+{{ ansible_managed | comment }}
+# Checkmk local check -- NFS backup verification
+#
+# Checks the age of the marker the sync script writes, not merely that the mount
+# exists. A mounted bucket with nothing being copied into it is the failure worth
+# catching: it looks completely healthy from the outside.
+
+STATE_OK=0
+STATE_WARN=1
+STATE_CRIT=2
+
+MOUNTPOINT={{ nfsserver_backup_mountpoint | quote }}
+MARKER="${MOUNTPOINT}/{{ nfsserver_backup_prefix }}/.last_backup"
+LOG={{ nfsserver_backup_log | quote }}
+MAX_AGE_HOURS={{ nfsserver_backup_max_age_hours }}
+service_name="nfs_backup_{{ runtime_env | default('staging') }}"
+
+if ! findmnt --noheadings --mountpoint "$MOUNTPOINT" >/dev/null 2>&1; then
+  echo "${STATE_CRIT} ${service_name} - CRITICAL: GCS backup mount (${MOUNTPOINT}) is not mounted"
+  exit 0
+fi
+
+# The mount table can list a mount whose FUSE process has died. Every read of it
+# fails, so a check that stopped at findmnt would report OK on a dead mount.
+if ! stat --dereference --format=%F "$MOUNTPOINT" >/dev/null 2>&1; then
+  echo "${STATE_CRIT} ${service_name} - CRITICAL: GCS backup mount (${MOUNTPOINT}) is mounted but not accessible"
+  exit 0
+fi
+
+# A backup that has started failing is invisible to the age check below until the
+# last good marker goes stale, which is up to a day. Ask systemd how the most
+# recent run ended so a broken backup is reported on the next check instead.
+sync_result=$(systemctl show {{ nfsserver_backup_sync_service }} \
+  --property=Result --value 2>/dev/null)
+
+if [ -n "$sync_result" ] && [ "$sync_result" != "success" ]; then
+  echo "${STATE_CRIT} ${service_name} - CRITICAL: Last backup run failed (systemd Result=${sync_result}); see ${LOG}"
+  exit 0
+fi
+
+if [ ! -f "$MARKER" ]; then
+  echo "${STATE_CRIT} ${service_name} - CRITICAL: No backup has completed yet (${MARKER} is missing)"
+  exit 0
+fi
+
+marker_epoch=$(stat --format=%Y "$MARKER" 2>/dev/null)
+if [ -z "$marker_epoch" ]; then
+  echo "${STATE_CRIT} ${service_name} - CRITICAL: Could not read backup marker ${MARKER}"
+  exit 0
+fi
+
+now_epoch=$(date +%s)
+age_hours=$(( (now_epoch - marker_epoch) / 3600 ))
+last_run=$(date -d "@${marker_epoch}" --iso-8601=seconds)
+
+if [ "$age_hours" -ge "$(( MAX_AGE_HOURS * 2 ))" ]; then
+  echo "${STATE_CRIT} ${service_name} age=${age_hours} - CRITICAL: Last NFS backup was ${age_hours}h ago (${last_run})"
+  exit 0
+fi
+
+if [ "$age_hours" -ge "$MAX_AGE_HOURS" ]; then
+  echo "${STATE_WARN} ${service_name} age=${age_hours} - WARNING: Last NFS backup was ${age_hours}h ago (${last_run})"
+  exit 0
+fi
+
+echo "${STATE_OK} ${service_name} age=${age_hours} - OK: Last NFS backup completed ${age_hours}h ago (${last_run})"
+exit 0
