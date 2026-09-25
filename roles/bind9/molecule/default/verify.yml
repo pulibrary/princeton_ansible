@@ -48,21 +48,14 @@
       vars:
         bind9_options: "{{ bind9_named_options.content | b64decode }}"
 
-    - name: Read Consul forwarding zone
-      ansible.builtin.slurp:
-        src: /etc/bind/consul.conf
-      register: bind9_consul_zone
-
-    - name: Test that Consul queries are forwarded to its DNS agent
+    - name: Test that Consul forwarding is disabled by default
       ansible.builtin.assert:
         that:
-          - '''include "/etc/bind/consul.conf";'' in bind9_options'
-          - '''zone "consul" IN'' in bind9_consul_config'
-          - "'127.0.0.1 port 8600' in bind9_consul_config"
-        fail_msg: "The Consul forwarding zone is not configured"
+          - '''include "/etc/bind/consul.conf";'' not in bind9_options'
+          - "'dnssec-validation auto;' in bind9_options"
+        fail_msg: "Consul forwarding is configured when it should be disabled"
       vars:
         bind9_options: "{{ bind9_named_options.content | b64decode }}"
-        bind9_consul_config: "{{ bind9_consul_zone.content | b64decode }}"
 
     - name: Read service state
       ansible.builtin.service_facts:

@@ -1,9 +1,8 @@
-PUL Nomad
-=========
+# PUL Nomad
 
 Configures a Nomad/Consul cluster for deployment of PUL's container applications. Sets up Nomad & Consul Clients and Servers on VMs.
 
-# Design Considerations
+## Design Considerations
 
 1. After initial setup, this role should be runnable on a single VM.
 1. Prefer explicit configuration over excessive variables and defaults.
@@ -12,7 +11,7 @@ Configures a Nomad/Consul cluster for deployment of PUL's container applications
 1. Use idempotent modules when possible to reduce complex check/act loops.
 1. Separate "server" VMs from "client" VMs when possible, as has been our pattern.
 
-# Running a local cluster and testing
+## Running a local cluster and testing
 
 1. `cd` to this role's directory.
 1. `molecule reset`
@@ -21,7 +20,7 @@ Configures a Nomad/Consul cluster for deployment of PUL's container applications
 1. Visit `http://localhost:8500` for Consul.
 1. `molecule verify` to run tests.
 
-# Cluster Install Workflow (what this role does)
+## Cluster Install Workflow (what this role does)
 
 1. Install & Start Consul Server Software on Server VMs (necessary for the rest of the infrastructure to talk to)
 1. Install BIND and configure Consul DNS forwarding
@@ -32,9 +31,9 @@ Configures a Nomad/Consul cluster for deployment of PUL's container applications
 1. Install & Start Nomad Client Software on Client VMs
 1. Configure Applications
 
-# Architecture Documentation
+## Architecture Documentation
 
-## Variable Documentation
+### Variable Documentation
 
 Variables have defaults in [`defaults/main.yml`](defaults/main.yml) and may be defined in [`group_vars`](../../group_vars) within `nomad_cluster.yml`, `nomad_servers.yml`, `nomad_clients.yml`, `nomad_clients_<env>.yml`, or for specific hosts in [`host_vars`](../../host_vars/) to enable host volumes
 
@@ -44,23 +43,27 @@ Variables have defaults in [`defaults/main.yml`](defaults/main.yml) and may be d
 * `nomad_version` - version of nomad to install - [releases](https://github.com/hashicorp/nomad/releases)
 * `nomad_podman_version` - version of nomad's podman plugin to install - [releases](https://github.com/hashicorp/nomad-driver-podman/releases)
 * `nomad_node_pool` - pool to assign to a client VM. Right now we have `staging` and `production` - VMs in VMWare's staging infrastructure with the Nomad client software have this set to `staging` and VMs in VMWare's production infrastructure with the Nomad client software have this set to `production`.
-* `nomad_host_volumes` - map of host volumes to create and make available to containers. See [Host Volumes](#host-volumes) for more. Example: 
-    ```
+* `nomad_host_volumes` - map of host volumes to create and make available to containers. See [Host Volumes](#host-volumes) for more. Example:
+
+    ```text
     nomad_host_volumes:
       - name: loki
         path: '/container_data/loki'
         read_only: false
     ```
+
 * `nomad_meta` - map of meta attributes to assign to the Nomad host. Example:
-    ```
+
+    ```text
     nomad_meta:
       node_type: 'worker'
     ```
+
 * `consul_gossip_encryption_key` - Gossip encryption key for consul/nomad server software.
 * `consul_acl_management_token` Consul management token. See [Permissions & ACLs](#permissions--acls)
 * `pul_nomad_management_token` Nomad management token. See [Permissions & ACLs](#permissions--acls)
 
-## Consul
+### Consul
 
 Consul is a service registration system with a DNS API.
 
@@ -72,13 +75,13 @@ route anything to services that are broken. For example, if one figgy container 
 
 We use Consul with Nomad, because our nginx load balancer can query Consul for machines for a specific service and automatically adjust when Nomad scales a service without reconfiguring nginx.
 
-### Server Types
+#### Server Types
 
 Consul has "server" software and "client" software.
 
 Our cluster consists of 3 server instances, one on each `nomad-host-*.lib.princeton.edu` VM, and a client software install on every client VM (`nomad-client-*.lib.princeton.edu`)
 
-### Configuration
+#### Configuration
 
 Every Consul installation (clients and servers) have a primary configuration at `/etc/consul.d/consul.hcl` which we create from [`templates/consul/consul.hcl.j2`](templates/consul/consul.hcl.j2). You can find all the possible configuration values in the [documentation](https://developer.hashicorp.com/consul/docs/reference/agent/configuration-file) (you may need to navigate the table of contents on the left to find more options.)
 
@@ -86,25 +89,25 @@ Every Consul server install has an extra configuration at `/etc/consul.d/server.
 
 The "gossip encryption key" is a key used to encrypt communication between Consul server installs. We use the same key for both Consul & Nomad.
 
-### BIND
+#### BIND
 
 Consul runs a DNS interface on port 8600, but most applications look for DNS on port 53.
 We install BIND as the host's caching resolver. It forwards requests for
 `*.consul` to `127.0.0.1:8600` and other requests to Princeton's DNS servers.
 
 We don't run Consul on port 53 because while it can forward DNS requests to
-other Princeton's DNS it  overrides their TTL to be 0, which will quickly overwhelm
+other Princeton's DNS it overrides their TTL to be 0, which will quickly overwhelm
 Princeton's DNS server.
 
-#### Configuring BIND
+##### Configuring BIND
 
-The shared [`bind9`](../bind9/README.md) role manages the resolver. On Ubuntu,
-its main options are in `/etc/bind/named.conf.options` and its Consul forwarding
-zone is in `/etc/bind/consul.conf`. The migration stops and removes dnsmasq
-before BIND starts, ensuring only BIND can claim TCP and UDP port 53 after a
-reboot.
+The shared [`bind9`](../bind9/README.md) role manages the resolver, while this
+role owns the Consul forwarding zone. On Ubuntu, the main options are in
+`/etc/bind/named.conf.options` and the Consul forwarding zone is in
+`/etc/bind/consul.conf`. The migration stops and removes dnsmasq before BIND
+starts, ensuring only BIND can claim TCP and UDP port 53 after a reboot.
 
-#### Debugging BIND
+##### Debugging BIND
 
 Compare `dig @127.0.0.1 -p 8600 consul.service.consul SRV` with
 `dig @127.0.0.1 consul.service.consul SRV`. The first query tests Consul
@@ -112,7 +115,7 @@ directly and the second tests the BIND forwarding path on port 53.
 
 Use `sudo rndc flush` to clear BIND's cache when troubleshooting changed IPs.
 
-## Nomad
+### Nomad
 
 Nomad is a container orchestrator.
 
@@ -123,7 +126,7 @@ client goes down it will launch the container on a different client.
 We install Podman on our Nomad client VMs so they can run containers without us
 having to rely on Docker.
 
-### VM Types
+#### VM Types
 
 Nomad has "server" and "client" installations and configurations.
 
@@ -138,7 +141,7 @@ Client installs run jobs. In our case, containers executed by Podman. These are 
 
 At PUL every Nomad Server VM has a Nomad Server installation and a Consul server installation, and every Nomad Client VM has a Nomad Client installation and a Consul client installation.
 
-### Configuration
+#### Configuration
 
 Nomad's full configuration reference can be found in their [documentation](https://developer.hashicorp.com/nomad/docs/configuration). You may have to use the table of contents to see details of all the sections.
 
@@ -150,13 +153,13 @@ Every Client install gets `/etc/nomad.d/client.hcl` created from [`templates/nom
 
 The "gossip encryption key" is a key used to encrypt communication between Nomad server installations. We use the same key for both Consul & Nomad.
 
-### Consul Interaction
+#### Consul Interaction
 
 Nomad uses Consul for clustering (the Nomad server installs find each other by querying
 Consul) and service discovery (when you launch a job in Nomad it can register a
 service in Consul that we can point to from our load balancers.)
 
-### Host Volumes
+#### Host Volumes
 
 Host volumes are a way for containers to save data to the underlying client VM. Most containers have no need for persistent data on disk - they store that data in a database or something similar, but if we run a database or something like that in Nomad it might need a host volume. A host volume is a folder on the client which the container maps - if a job (service) requires a certain host volume it will only ever get scheduled on a node which has that volume. In those cases, because we are tying the job (service) to a specific node, we must ensure high availability through some other means (e.g "cloud" mode on Solr, clusters in Postgres, HA Mode in Redis, etc.)
 
@@ -164,7 +167,7 @@ Nomad has a useful [tutorial](https://developer.hashicorp.com/nomad/tutorials/st
 
 More recent versions of Nomad have "dynamic host volumes" which would allow us to create these on the fly, not in Ansible, but we're not upgraded enough for that. Nomad has a [tutorial](https://developer.hashicorp.com/nomad/tutorials/stateful-workloads/stateful-workloads-dynamic-host-volumes) for those.
 
-### Application Configurations
+#### Application Configurations
 
 Containers deployed to the Nomad cluster may still need external systems provisioned and variables persisted to Nomad. For example an application may need a postgres database set up on our cluster, secrets installed into Nomad (which are currently in Ansible Vault), or other configuration done.
 
@@ -174,7 +177,7 @@ This pattern may change in the future. If you want to run a playbook without run
 
 Similarly, to update a single app's configuration you can do something like `ansible-playbook playbooks/nomad.yml --tags dpulc`, because the include tasks all have tags on them.
 
-## Permissions & ACLs
+### Permissions & ACLs
 
 Both [Consul](https://developer.hashicorp.com/consul/docs/secure/acl) and [Nomad](https://developer.hashicorp.com/nomad/tutorials/access-control/access-control) have ACLs (Access Control Lists) to restrict the permissions each has on the other and how developers interact with them.
 
@@ -182,12 +185,12 @@ This documentation hopes to make it clear how we implement ACLs in this role.
 
 ACLs are pretty complicated. As you read through this, it's important to know that a "Token" is just a UUID - they look something like `7a18b48d-a511-439b-9edf-8f4a267eb653`.
 
-### Management Tokens
+#### Management Tokens
 
 When the Nomad server installations are first provisioned we define a "management token" (variables `pul_nomad_management_token` and `consul_acl_management_token`).
 These tokens are full-access tokens that can do anything in the system. We use them in Ansible to provision more restrictive tokens, and developers can use them to navigate the system if needed.
 
-### Consul Tokens
+#### Consul Tokens
 
 These are set up in `tasks/consul/acl.yml`.
 
@@ -198,19 +201,19 @@ Every client and server VM in the cluster has Consul installed. Some tokens are 
 1. **Nomad Server Token (global)**: Nomad's server uses this token to talk to Consul to learn about each other's existence, manage ACLs, and update Consul services. Every Nomad Server VM has this configured. Defined in [nomad/configure_server.yml](tasks/nomad/configure_server.yml)
 1. **Nomad Client Token (global)**: Nomad's client uses this token to update Consul services as they're deployed into Nomad. Every Nomad Client VM install has this configured. Defined in [nomad/configure_client.yml](tasks/nomad/configure_client.yml)
 
-### Nomad Tokens
+#### Nomad Tokens
 
 We don't currently have any special nomad tokens, just the management token. We create that token when we [bootstrap](https://developer.hashicorp.com/nomad/tutorials/access-control/access-control-bootstrap) Nomad's ACL system in [nomad/server.yml](tasks/nomad/server.yml)
 
-# Refreshing the Gossip Encryption Key
+## Refreshing the Gossip Encryption Key
 
 To refresh the gossip encryption key for consul (`consul_gossip_encryption_key`), generate a new key and save it to the vault. To generate the key, run:
 
 `docker run --rm hashicorp/consul keygen`
 
-# Common Tasks
+## Common Tasks
 
-## Upgrading Nomad or Consul
+### Upgrading Nomad or Consul
 
 Nomad and Consul are built to be largely backwards compatible. Nomad has good [documentation](https://developer.hashicorp.com/nomad/docs/upgrade#upgrade-process), but the process is effectively:
 

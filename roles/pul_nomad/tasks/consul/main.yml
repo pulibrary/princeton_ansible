@@ -33,6 +33,34 @@
 - name: pul_nomad | consul | Install ACLs
   ansible.builtin.import_tasks: acl.yml
 
+# Create the directory before installing BIND so named-checkconf can validate
+# the include during the bind9 role run.
+- name: Pul_nomad | consul | Ensure BIND configuration directory exists
+  ansible.builtin.file:
+    path: "{{ pul_nomad_bind9_config_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  become: true
+  tags:
+    - bind9
+    - dns
+
+- name: Pul_nomad | consul | Configure Consul forwarding zone
+  ansible.builtin.template:
+    src: consul/consul.conf.j2
+    dest: "{{ pul_nomad_bind9_consul_config_file }}"
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  notify:
+    - restart bind
+  tags:
+    - bind9
+    - dns
+
 # Install BIND and forward .consul requests to the local Consul agent.
 - name: Pul_nomad | consul | Install BIND
   ansible.builtin.include_role:
@@ -42,7 +70,8 @@
         - bind9
         - dns
   vars:
-    bind9_consul_enabled: true
+    bind9_config_includes:
+      - "{{ pul_nomad_bind9_consul_config_file }}"
     # Consul's private zone is intentionally unsigned.
     bind9_dnssec_validation: "no"
     bind9_remove_dnsmasq: true

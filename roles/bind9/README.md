@@ -35,10 +35,7 @@ Role Variables
 | `bind9_allow_query` | `[localhost]` | Who may query this resolver. |
 | `bind9_recursion` | `true` | Answer recursive queries. |
 | `bind9_dnssec_validation` | `auto` | DNSSEC validation mode. |
-| `bind9_consul_enabled` | `false` | Include a forwarding zone for Consul DNS. |
-| `bind9_consul_domain` | `consul` | Domain forwarded to the local Consul agent. |
-| `bind9_consul_address` | `127.0.0.1` | Consul DNS listener address. |
-| `bind9_consul_port` | `8600` | Consul DNS listener port. |
+| `bind9_config_includes` | `[]` | Additional caller-managed configuration files to include. |
 | `bind9_remove_dnsmasq` | `false` | Stop and remove dnsmasq before BIND claims port 53. |
 | `bind9_manage_service` | `running_on_server` | Enable and start the platform's BIND service. |
 | `bind9_manage_resolv_conf` | `true` | Let this role own `/etc/resolv.conf`. |
@@ -123,14 +120,12 @@ Applications can also maintain their own DNS caches. `resolvectl flush-caches`
 clears systemd-resolved's cache, not BIND's cache. A BIND restart is unnecessary
 for routine cache clearing.
 
-Consul service discovery
+Additional configuration
 ------------------------
 
-Set `bind9_consul_enabled: true` to render `consul.conf` and include it from
-the main BIND options file. Queries below `consul` are then forwarded only to
-the local Consul DNS listener at `127.0.0.1:8600`. The Nomad role enables this
-setting, disables DNSSEC validation for the private unsigned zone, and removes
-the legacy dnsmasq service before starting BIND.
+Callers can use `bind9_config_includes` to include configuration files they
+manage. The `pul_nomad` role owns its Consul forwarding zone and passes that
+file to this role for inclusion.
 
 Dependencies
 ------------
