@@ -1,0 +1,22 @@
+---
+# handlers/main.yml -- xrdp_ca_login
+
+- name: restart xrdp
+  ansible.builtin.service:
+    name: xrdp
+    state: restarted
+
+# "validate" is defined before "restart" so a rejected config aborts before the
+# restart. These hosts are reached only over SSH, so a bad drop-in that took
+# effect would remove the one way back in.
+- name: validate sshd configuration
+  ansible.builtin.command:
+    argv:
+      - /usr/sbin/sshd
+      - -t
+  changed_when: false
+
+- name: restart sshd
+  ansible.builtin.service:
+    name: "{{ ssh_ca_sshd_service | default('ssh') }}"
+    state: restarted
