@@ -35,6 +35,14 @@
 
 # Create the directory before installing BIND so named-checkconf can validate
 # the include during the bind9 role run.
+- name: Pul_nomad | consul | Inspect BIND configuration directory
+  ansible.builtin.stat:
+    path: "{{ pul_nomad_bind9_config_dir }}"
+  register: pul_nomad_bind9_config_dir_stat
+  tags:
+    - bind9
+    - dns
+
 - name: Pul_nomad | consul | Ensure BIND configuration directory exists
   ansible.builtin.file:
     path: "{{ pul_nomad_bind9_config_dir }}"
@@ -43,6 +51,7 @@
     group: root
     mode: "0755"
   become: true
+  when: not pul_nomad_bind9_config_dir_stat.stat.exists
   tags:
     - bind9
     - dns
