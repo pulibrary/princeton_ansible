@@ -37,14 +37,14 @@ Role Variables
 | `bind9_dnssec_validation` | `auto` | DNSSEC validation mode. |
 | `bind9_config_includes` | `[]` | Additional caller-managed configuration files to include. |
 | `bind9_remove_dnsmasq` | `false` | Stop and remove dnsmasq before BIND claims port 53. |
-| `bind9_manage_service` | `running_on_server` | Enable and start the platform's BIND service. |
 | `bind9_manage_resolv_conf` | `true` | Let this role own `/etc/resolv.conf`. |
 | `bind9_resolver_address` | `127.0.0.1` | Address written first in `/etc/resolv.conf`. |
 | `bind9_resolv_search` | host domain | `search` domains for `/etc/resolv.conf`. |
-| `running_on_server` | `false` | Skip service and `resolv.conf` changes in containers. |
+| `running_on_server` | `false` | Skip `/etc/resolv.conf` changes in containers. |
 
-`/etc/resolv.conf` is only touched when `running_on_server` is true, because
-containers do not allow it.
+`/etc/resolv.conf` is only touched when `running_on_server` is true. Docker
+bind-mounts its generated resolver file into containers, so Ansible cannot
+atomically replace it during Molecule tests.
 
 DNS cache lifetime and reset
 ----------------------------
