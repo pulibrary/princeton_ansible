@@ -24,7 +24,7 @@ Configures a Nomad/Consul cluster for deployment of PUL's container applications
 # Cluster Install Workflow (what this role does)
 
 1. Install & Start Consul Server Software on Server VMs (necessary for the rest of the infrastructure to talk to)
-1. Install DNSMasq
+1. Install BIND and configure Consul DNS forwarding
 1. Install & Start Consul Client Software on Client VMs
 1. Install Consul ACLs & Tokens
 1. Install & Start Nomad Server Software on Server VMs
@@ -86,27 +86,31 @@ Every Consul server install has an extra configuration at `/etc/consul.d/server.
 
 The "gossip encryption key" is a key used to encrypt communication between Consul server installs. We use the same key for both Consul & Nomad.
 
-### DNSMasq
+### BIND
 
 Consul runs a DNS interface on port 8600, but most applications look for DNS on port 53.
-We install DNSMasq as a DNS proxy which will both cache DNS requests and forward
-any requests for `*.consul` to `127.0.0.1:8600`.
+We install BIND as the host's caching resolver. It forwards requests for
+`*.consul` to `127.0.0.1:8600` and other requests to Princeton's DNS servers.
 
 We don't run Consul on port 53 because while it can forward DNS requests to
 other Princeton's DNS it  overrides their TTL to be 0, which will quickly overwhelm
 Princeton's DNS server.
 
-#### Configuring DNSMasq
+#### Configuring BIND
 
-DNSMasq's main config file is at `/etc/dnsmasq.conf` which we create from [`files/dnsmasq/dnsmasq.conf`](files/dnsmasq/dnsmasq.conf). The main thing we do there is comment out `bind-interfaces` [#5485](https://github.com/pulibrary/princeton_ansible/pull/5485).
+The shared [`bind9`](../bind9/README.md) role manages the resolver. On Ubuntu,
+its main options are in `/etc/bind/named.conf.options` and its Consul forwarding
+zone is in `/etc/bind/consul.conf`. The migration stops and removes dnsmasq
+before BIND starts, ensuring only BIND can claim TCP and UDP port 53 after a
+reboot.
 
-There's a second config file at `/etc/dnsmasq.d/dnsmasq-10-consul` which we create from [`templates/dnsmasq/dnsmasq-10-consul.j2`](templates/dnsmasq/dnsmasq-10-consul.j2). It configures Princeton's DNS servers and the fallback to Consul for `.consul` DNS requests.
+#### Debugging BIND
 
-#### Debugging DNSMasq
+Compare `dig @127.0.0.1 -p 8600 consul.service.consul SRV` with
+`dig @127.0.0.1 consul.service.consul SRV`. The first query tests Consul
+directly and the second tests the BIND forwarding path on port 53.
 
-To test if DNSMasq is working on a client, run `dig @127.0.0.1 -p 8600 consul.service.consul ANY` and compare it to the results of `dig consul.service.consul ANY`. If they have the same answers, DNSMasq is working.
-
-If you need to flush the DNS Cache because IPs have changed, you can restart DNSMasq with `sudo service dnsmasq restart`
+Use `sudo rndc flush` to clear BIND's cache when troubleshooting changed IPs.
 
 ## Nomad
 

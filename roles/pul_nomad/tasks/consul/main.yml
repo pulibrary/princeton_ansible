@@ -33,7 +33,19 @@
 - name: pul_nomad | consul | Install ACLs
   ansible.builtin.import_tasks: acl.yml
 
-# Install DNSMasq
-- name: pul_nomad | consul | Install DNSMasq
-  ansible.builtin.import_tasks: dnsmasq.yml
-  tags: dnsmasq
+# Install BIND and forward .consul requests to the local Consul agent.
+- name: Pul_nomad | consul | Install BIND
+  ansible.builtin.include_role:
+    name: bind9
+    apply:
+      tags:
+        - bind9
+        - dns
+  vars:
+    bind9_consul_enabled: true
+    # Consul's private zone is intentionally unsigned.
+    bind9_dnssec_validation: "no"
+    bind9_remove_dnsmasq: true
+  tags:
+    - bind9
+    - dns
