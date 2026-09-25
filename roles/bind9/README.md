@@ -35,6 +35,12 @@ Role Variables
 | `bind9_allow_query` | `[localhost]` | Who may query this resolver. |
 | `bind9_recursion` | `true` | Answer recursive queries. |
 | `bind9_dnssec_validation` | `auto` | DNSSEC validation mode. |
+| `bind9_consul_enabled` | `false` | Include a forwarding zone for Consul DNS. |
+| `bind9_consul_domain` | `consul` | Domain forwarded to the local Consul agent. |
+| `bind9_consul_address` | `127.0.0.1` | Consul DNS listener address. |
+| `bind9_consul_port` | `8600` | Consul DNS listener port. |
+| `bind9_remove_dnsmasq` | `false` | Stop and remove dnsmasq before BIND claims port 53. |
+| `bind9_manage_service` | `running_on_server` | Enable and start the platform's BIND service. |
 | `bind9_manage_resolv_conf` | `true` | Let this role own `/etc/resolv.conf`. |
 | `bind9_resolver_address` | `127.0.0.1` | Address written first in `/etc/resolv.conf`. |
 | `bind9_resolv_search` | host domain | `search` domains for `/etc/resolv.conf`. |
@@ -69,7 +75,7 @@ Query the local resolver directly on the affected host (`dig` is provided
 by Ubuntu's `dnsutils` package):
 
 ```bash
-dig @127.0.0.1 lib-solr-prod9.princeton.edu A +noall +answer
+dig @127.0.0.1 lib-solr9-prod.princeton.edu A +noall +answer
 ```
 
 The second column is the remaining TTL in seconds. Repeat the query to
@@ -77,7 +83,7 @@ observe it counting down; a refreshed answer can increase the TTL.
 For a negative response, include the status and SOA record:
 
 ```bash
-dig @127.0.0.1 lib-solr-prod9.princeton.edu A +noall +comments +answer +authority
+dig @127.0.0.1 lib-solr9-prod.princeton.edu A +noall +comments +answer +authority
 ```
 
 ### Clear the local cache
@@ -87,7 +93,7 @@ scope needed:
 
 ```bash
 # Clear all cached record types for one name, including negative answers.
-sudo rndc flushname lib-solr-prod9.princeton.edu
+sudo rndc flushname lib-solr9-prod.princeton.edu
 
 # Clear a domain and every name beneath it.
 sudo rndc flushtree lib.princeton.edu
@@ -103,19 +109,28 @@ See the [BIND rndc reference](https://bind9.readthedocs.io/en/v9.18.39/manpages.
 Verify resolution afterward:
 
 ```bash
-dig @127.0.0.1 lib-solr-prod9.princeton.edu A +noall +answer
+dig @127.0.0.1 lib-solr9-prod.princeton.edu A +noall +answer
 ```
 
 Flushing affects only this host's BIND cache. Campus forwarders may still
 return an old answer until their TTL expires; compare with a direct query:
 
 ```bash
-dig @128.112.129.209 lib-solr-prod9.princeton.edu A +noall +answer
+dig @128.112.129.209 lib-solr9-prod.princeton.edu A +noall +answer
 ```
 
 Applications can also maintain their own DNS caches. `resolvectl flush-caches`
 clears systemd-resolved's cache, not BIND's cache. A BIND restart is unnecessary
 for routine cache clearing.
+
+Consul service discovery
+------------------------
+
+Set `bind9_consul_enabled: true` to render `consul.conf` and include it from
+the main BIND options file. Queries below `consul` are then forwarded only to
+the local Consul DNS listener at `127.0.0.1:8600`. The Nomad role enables this
+setting, disables DNSSEC validation for the private unsigned zone, and removes
+the legacy dnsmasq service before starting BIND.
 
 Dependencies
 ------------

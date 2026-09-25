@@ -4,6 +4,8 @@ running_on_server: false
 bind9_packages:
   - bind9
   - bind9-utils
+bind9_manage_service: "{{ running_on_server }}"
+bind9_remove_dnsmasq: false
 
 # Our network does not route IPv6. Keeping named on IPv4 avoids AAAA
 # lookups that can only time out before falling back to A records.
@@ -25,6 +27,15 @@ bind9_allow_query:
 bind9_recursion: true
 bind9_allow_recursion: "{{ bind9_allow_query }}"
 bind9_dnssec_validation: auto
+
+# Nomad enables this to forward service discovery queries to the local
+# Consul agent. It is optional so the role remains useful as a plain caching
+# resolver on other hosts.
+bind9_consul_enabled: false
+bind9_consul_domain: consul
+bind9_consul_address: 127.0.0.1
+bind9_consul_port: 8600
+bind9_consul_config_file: "{{ bind9_config_dir }}/consul.conf"
 
 # Point the host at its own named instance, keeping the campus resolvers
 # as a fallback so a named outage cannot take DNS down with it.
