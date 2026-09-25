@@ -1,0 +1,14 @@
+# {{ ansible_managed }}
+session [default=1]                     pam_permit.so
+session requisite                       pam_deny.so
+session required                        pam_permit.so
+
+# A home directory must exist before a desktop session can start in it
+session required        pam_mkhomedir.so skel=/etc/skel umask=0027
+session optional        pam_himmelblau.so
+session required        pam_unix.so
+{% if 'sss' in himmelblau_pam_available %}
+session optional        pam_sss.so
+{% endif %}
+session optional        pam_systemd.so
+session optional        pam_umask.so

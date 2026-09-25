@@ -1,0 +1,54 @@
+---
+# Himmelblau configuration must exist before the packages are installed.
+#
+# nss-himmelblau's postinst adds "himmelblau" to the passwd, group, shadow and
+# initgroups lines in /etc/nsswitch.conf. From that moment every NSS lookup on
+# the host is routed through nss_himmelblau, which talks to himmelblaud. If the
+# daemon has no domains configured it cannot answer, so later postinsts that
+# look up a user (and dpkg itself) block on a daemon that is waiting for the
+# configuration dpkg has not let us write yet. Writing the config first breaks
+# that deadlock.
+
+- name: Himmelblau | create configuration directory
+  ansible.builtin.file:
+    path: /etc/himmelblau
+    state: directory
+    mode: "0755"
+    owner: root
+    group: root
+
+- name: Himmelblau | write configuration
+  ansible.builtin.template:
+    src: himmelblau.conf.j2
+    dest: /etc/himmelblau/himmelblau.conf
+    mode: "0644"
+    owner: root
+    group: root
+  notify: restart himmelblaud
+
+- name: Himmelblau | write systemd modification (ensure path exists)
+  ansible.builtin.file:
+    path: /etc/systemd/system/himmelblaud.service.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Himmelblau | write systemd modification
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/himmelblaud.service.d/10-dirs.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      [Service]
+      Type=notify
+      RuntimeDirectory=himmelblaud
+      RuntimeDirectoryMode=0750
+      StateDirectory=himmelblaud
+      StateDirectoryMode=0750
+      CacheDirectory=himmelblaud
+      CacheDirectoryMode=0750
+      UMask=0027
+      Environment=HIMMELBLAU_SOCKET=/var/run/himmelblaud/socket
+  notify: restart himmelblaud

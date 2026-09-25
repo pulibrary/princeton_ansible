@@ -1,10 +1,14 @@
-# {{ ansible_managed | comment }}
+{{ ansible_managed | comment }}
 # constrain SSH access
-
-{% if allow_users | length > 0 -%}
-AllowUsers {{ allow_users | join(' ') }}
+{#
+  allow_users_always keeps local service accounts (notably the account Ansible
+  connects as) in the allowlist. Without it an AllowUsers line built only from
+  Entra ID netids locks the automation out of the host.
+#}
+{% set effective_users = (allow_users_always + allow_users) | unique | list %}
+{% if effective_users | length > 0 -%}
+AllowUsers {{ effective_users | join(' ') }}
 {% endif -%}
 {% if allow_groups | length > 0 -%}
 AllowGroups {{ allow_groups | join(' ') }}
 {% endif -%}
-

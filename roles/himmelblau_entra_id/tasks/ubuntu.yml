@@ -24,70 +24,126 @@
     repo: "deb [signed-by={{ himmelblau_ubuntu_keyring }}] {{ himmelblau_ubuntu_repo_baseurl }} ./ "
     filename: "{{ himmelblau_ubuntu_repo_file }}"
     state: present
-    update_cache: false
-
-- name: Himmelblau (Ubuntu) | apt update
-  ansible.builtin.apt:
-    update_cache: false
-
-- name: Himmelblau (Ubuntu) | install packages
-  ansible.builtin.apt:
-    name: "{{ himmelblau_packages_deb }}"
-    state: present
-    # Avoid tripping over unrelated duplicate-entries warnings:
-    #
-# Ubuntu (Jammy/Noble)
-- name: Himmelblau PAM deps
-  ansible.builtin.apt:
-    name:
-      - libpam-sss
-      - libpam-pwquality
-    state: present
     update_cache: true
 
-- name: Himmelblau | create configuration directory
-  ansible.builtin.file:
-    path: /etc/himmelblau
-    state: directory
-    mode: "0755"
-    owner: root
-    group: root
+- name: Himmelblau (Ubuntu) | work out what the package set would install
+  ansible.builtin.command:
+    argv: >-
+      {{ ['apt-get', 'install', '--simulate', '--quiet']
+         + (['--no-install-recommends'] if not himmelblau_install_recommends | bool else [])
+         + himmelblau_packages_deb + himmelblau_extra_packages }}
+  register: himmelblau_apt_simulate
+  changed_when: false
+  environment:
+    DEBIAN_FRONTEND: noninteractive
 
-- name: Himmelblau | write configuration
-  ansible.builtin.template:
-    src: himmelblau.conf.j2
-    dest: /etc/himmelblau/himmelblau.conf
-    mode: "0644"
-    owner: root
-    group: root
-  notify: restart himmelblaud
+- name: Himmelblau (Ubuntu) | collect packages apt would newly install
+  ansible.builtin.set_fact:
+    himmelblau_apt_new_packages: >-
+      {{ himmelblau_apt_simulate.stdout_lines
+         | select('match', '^Inst ')
+         | map('regex_replace', '^Inst ([^ ]+).*$', '\1')
+         | list }}
 
-- name: Himmelblau | write systemd modification (ensure path exists)
-  ansible.builtin.file:
-    path: /etc/systemd/system/himmelblaud.service.d
-    state: directory
-    owner: root
-    group: root
-    mode: "0755"
+# A desktop environment or second display manager appearing here means an
+# unwanted dependency crept into the package list. Installing gdm3 alongside
+# LightDM triggers dpkg's default-display-manager prompt and can leave an
+# Xubuntu host unable to start a session at all.
+- name: Himmelblau (Ubuntu) | refuse to replace the desktop or display manager
+  ansible.builtin.assert:
+    that:
+      - (himmelblau_apt_new_packages | intersect(himmelblau_forbidden_packages)) | length == 0
+    fail_msg: >-
+      Installing {{ himmelblau_packages_deb | join(', ') }} on {{ inventory_hostname }}
+      would also install
+      {{ (himmelblau_apt_new_packages | intersect(himmelblau_forbidden_packages)) | join(', ') }}.
+      That replaces the display manager or desktop environment on this host.
+      Drop the offending package (himmelblau-qr-greeter requires gnome-shell) or
+      set himmelblau_guard_desktop_packages=false if this is intentional.
+    quiet: true
+  when: himmelblau_guard_desktop_packages | bool
 
-- name: Himmelblau | write systemd modification
-  ansible.builtin.copy:
-    dest: /etc/systemd/system/himmelblaud.service.d/10-dirs.conf
-    owner: root
-    group: root
-    mode: "0644"
-    content: |
-      [Service]
-      Type=notify
-      RuntimeDirectory=himmelblaud
-      RuntimeDirectoryMode=0750
-      StateDirectory=himmelblaud
-      StateDirectoryMode=0750
-      CacheDirectory=himmelblaud
-      CacheDirectoryMode=0750
-      UMask=0027
-      Environment=HIMMELBLAU_SOCKET=/var/run/himmelblaud/socket
-  notify: restart himmelblaud
+- name: Himmelblau - Protect SSH from the package postinst
+  ansible.builtin.include_tasks: sshd_resilience.yml
+
+# Established before any PAM or NSS change, so an emergency route into the host
+# already exists if a later task breaks authentication.
+# this will go out before we merge
+- name: Himmelblau - Establish break-glass SSH access
+  ansible.builtin.include_tasks: breakglass.yml
+  when: himmelblau_breakglass_enable | bool
+
+# Must run before the packages land. See configure.yml for why.
+- name: Himmelblau - Write configuration before installing packages
+  ansible.builtin.include_tasks: configure.yml
+
+# himmelblau-sshd-config's postinst calls "systemctl restart ssh" directly.
+# ssh.service uses KillMode=process so established sessions survive, but the
+# stop deletes /run/sshd, which is why new connections were refused until the
+# resilience drop-in above was in place. Running the install detached also means
+# a dropped connection cannot leave dpkg half configured.
+- name: Himmelblau (Ubuntu) | install packages (detached from the SSH session)
+  ansible.builtin.apt:
+    name: "{{ himmelblau_packages_deb + himmelblau_extra_packages }}"
+    state: present
+    install_recommends: "{{ himmelblau_install_recommends | bool }}"
+  async: "{{ himmelblau_apt_async_timeout }}"
+  poll: 0
+  register: himmelblau_apt_job
+
+- name: Himmelblau (Ubuntu) | wait for SSH to come back after the postinst restart
+  ansible.builtin.wait_for_connection:
+    delay: 10
+    sleep: 5
+    timeout: "{{ himmelblau_apt_async_timeout }}"
+
+- name: Himmelblau (Ubuntu) | wait for the package install to finish
+  ansible.builtin.async_status:
+    jid: "{{ himmelblau_apt_job.ansible_job_id }}"
+  register: himmelblau_apt_result
+  until: himmelblau_apt_result.finished
+  retries: "{{ (himmelblau_apt_async_timeout | int / 10) | round | int }}"
+  delay: 10
+
+- name: Himmelblau (Ubuntu) | finish any interrupted dpkg configuration
+  ansible.builtin.command: dpkg --configure --pending
+  register: himmelblau_dpkg_pending
+  changed_when: himmelblau_dpkg_pending.stdout | length > 0
+  environment:
+    DEBIAN_FRONTEND: noninteractive
+
+- name: Himmelblau (Ubuntu) | ensure SSH is still listening after package install
+  ansible.builtin.systemd:
+    name: "{{ himmelblau_ssh_service }}"
+    enabled: true
+    state: started
+
+# nss_himmelblau is in the NSS chain from here on. A lookup that blocks means
+# the daemon cannot answer, and every later task that resolves a user or group
+# would hang the same way, so fail fast with a usable message instead.
+- name: Himmelblau (Ubuntu) | check that name lookups are not blocking on the daemon
+  ansible.builtin.command: timeout 15 getent passwd root
+  register: himmelblau_nss_check
+  changed_when: false
+  failed_when: false
+
+- name: Himmelblau (Ubuntu) | report a blocked NSS chain
+  ansible.builtin.assert:
+    that:
+      - himmelblau_nss_check.rc == 0
+    fail_msg: >-
+      Name service lookups on {{ inventory_hostname }} are hanging or failing
+      (rc={{ himmelblau_nss_check.rc }}) now that nss-himmelblau is in
+      /etc/nsswitch.conf. himmelblaud is not answering on
+      /var/run/himmelblaud/socket. Check 'journalctl -u himmelblaud' and confirm
+      /etc/himmelblau/himmelblau.conf has a domains setting.
+    quiet: true
+
+- name: Himmelblau (Ubuntu) | install PAM dependencies
+  ansible.builtin.apt:
+    name: "{{ himmelblau_pam_packages }}"
+    state: present
+    update_cache: true
 
 # NSS
 - name: Himmelblau (Ubuntu) | ensure nsswitch passwd entry
@@ -104,8 +160,15 @@
     line: 'group:          files himmelblau systemd'
     backup: true
 
+- name: Himmelblau - Discover available PAM modules
+  ansible.builtin.include_tasks: pam_modules.yml
+
 - name: Himmelblau - Include strict PAM for Ubuntu
   ansible.builtin.include_tasks: ubuntu_pam_strict.yml
+
+- name: Himmelblau - Include remote desktop support
+  ansible.builtin.include_tasks: remote_desktop.yml
+  when: himmelblau_remote_desktop_enable | bool
 
 - name: Himmelblau | enable & start service
   ansible.builtin.systemd:
@@ -127,6 +190,35 @@
     path: /etc/ssh/sshd_config
     regexp: '^(?!#)\s*KbdInteractiveAuthentication\s+no\b.*$'
     replace: '# \g<0>'
+
+# Writing an AllowUsers line that omits the account Ansible connects as locks
+# this automation out of the host on the next sshd restart.
+# Writing an AllowUsers line that omits the account Ansible connects as locks
+# this automation out of the host on the next sshd restart.
+#
+# The SSH login account is ansible_user (the play's remote_user), NOT
+# ansible_user_id: the latter is a gathered fact reporting the effective user
+# after become, which is root and would make this check meaningless. SUDO_USER
+# and ansible_user_id are fallbacks for when remote_user is left to ssh_config.
+- name: Himmelblau | determine which account Ansible logs in as
+  ansible.builtin.set_fact:
+    himmelblau_ssh_login_user: >-
+      {{ ansible_user
+         | default(ansible_ssh_user)
+         | default(ansible_env.SUDO_USER)
+         | default(ansible_user_id) }}
+
+- name: Himmelblau | verify the connecting account survives the SSH allowlist
+  ansible.builtin.assert:
+    that:
+      - himmelblau_ssh_login_user in (allow_users_always + allow_users)
+    fail_msg: >-
+      This play logs in as '{{ himmelblau_ssh_login_user }}', which is not in
+      allow_users_always ({{ allow_users_always | join(', ') }}) or allow_users.
+      Writing {{ allow_users_filename }} would deny that account and lock
+      Ansible out of {{ inventory_hostname }}. Add it to allow_users_always.
+    quiet: true
+  when: allow_users_enable | default(true)
 
 - name: Himmelblau | manage {{ allow_users_filename }}
   ansible.builtin.template:
@@ -151,11 +243,22 @@
   changed_when: false
   failed_when: sshd_validate.rc != 0
 
+# Last chance to catch a PAM mistake while existing sessions still work.
+- name: Himmelblau - Verify local authentication before restarting SSH
+  ansible.builtin.include_tasks: verify_pam.yml
+  when: himmelblau_verify_pam | bool
+
 - name: Himmelblau | bounce SSH daemon
   ansible.builtin.systemd:
     name: "{{ himmelblau_ssh_service }}"
     state: restarted
   when: himmelblau_restart_sshd | default(true)
+
+- name: Himmelblau | confirm a new SSH session can be established
+  ansible.builtin.wait_for_connection:
+    delay: 5
+    sleep: 5
+    timeout: 60
 
 - name: Himmelblau | wait for daemon socket
   ansible.builtin.wait_for:
@@ -163,11 +266,38 @@
     state: present
     timeout: 30
 
-- name: Himmelblau | enrollment instructions
+# There is no separate enrollment command. himmelblaud is only the daemon and
+# takes no tenant argument; the device joins Entra ID automatically the first
+# time a user authenticates successfully.
+- name: Himmelblau | first sign-in instructions
   ansible.builtin.debug:
     msg: |
-      Device enrollment must be completed manually:
-      1. Run: sudo himmelblaud -e {{ himmelblau_tenant_id }}
-      2. Follow the device code flow
-      3. Approve device in Entra ID portal
+      Each user needs a Hello PIN before remote desktop will work. Enrol it from
+      a terminal, where MFA prompts such as "enter the number NN" display
+      correctly. The remote desktop login window discards informational text, so
+      enrolling from there is not possible.
+
+      An administrator can enrol on a user's behalf:
+
+        sudo aad-tool auth-test -D <netid>@{{ himmelblau_domain }}
+
+      This prompts for the user's Entra ID password, runs MFA, then asks them to
+      set and confirm a PIN. It needs root because the himmelblaud socket is
+      root-owned, so the user must be present at an administrator's session.
+
+      Users who already have a shell on this host can enrol themselves, with no
+      administrator rights, because pam_himmelblau implements the PAM
+      password-change step:
+
+        ssh <netid>@{{ inventory_hostname }}
+        passwd
+
+      That changes the local Hello PIN, NOT the Entra ID password, and says so.
+
+      Afterwards, sign in to remote desktop with the PIN in the password field.
+
+      Check the daemon side with:
+
+        sudo aad-tool status
+        sudo journalctl -u himmelblaud -n 50 --no-pager
   when: himmelblau_show_enrollment_instructions | default(true)

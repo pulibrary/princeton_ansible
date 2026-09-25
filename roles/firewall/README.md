@@ -8,7 +8,7 @@ The role:
 - configures UFW on Debian-family hosts and firewalld on Red Hat-family hosts;
 - allows all traffic from trusted networks;
 - restricts SSH and HTTP to approved networks;
-- optionally permits BigFix and CheckMK;
+- optionally permits BigFix, CheckMK, and remote desktop;
 - disables IPv4 and IPv6 ICMP redirects and adds runtime DROP rules; and
 - installs and configures fail2ban for SSH.
 
@@ -33,8 +33,28 @@ firewalld_zone: public
 firewall_allow_http: true
 firewall_allow_bigfix: true
 firewall_allow_checkmk: true
+firewall_allow_rdp: false
 firewall_fail2ban_enabled: true
 ```
+
+## Remote desktop
+
+`firewall_allow_rdp` opens `firewall_rdp_port` (3389) to `firewall_rdp_cidrs`:
+campus wired plus both VPN ranges, matching the networks trusted for SSH.
+
+It is off by default so only hosts that actually serve a desktop expose the
+port. The `xrdp` role depends on this role and switches it on, so applying
+`xrdp` is enough:
+
+```yaml
+# roles/xrdp/meta/main.yml
+dependencies:
+  - role: firewall
+    firewall_allow_rdp: true
+```
+
+`firewall_trusted_cidrs` does not make this redundant: it permits the library
+private subnet and the load balancers, not the VPN ranges staff connect from.
 
 ## Trusted networks
 

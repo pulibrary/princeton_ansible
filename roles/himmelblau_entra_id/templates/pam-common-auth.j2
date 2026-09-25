@@ -1,0 +1,17 @@
+# {{ ansible_managed }}
+#
+# pam_localuser sends accounts that exist in /etc/passwd down the pam_unix
+# branch and everyone else down the himmelblau branch. Without it, local
+# accounts such as pulsys cannot authenticate at all, which breaks sudo, the
+# console and the remote desktop greeter.
+auth    required                                pam_env.so
+auth    [default=1 ignore=ignore success=ok]    pam_localuser.so
+auth    [success=2 default=ignore]              pam_unix.so nullok try_first_pass
+auth    [success=1 default=ignore]              pam_himmelblau.so {{ himmelblau_pam_auth_args }}
+# fallback if no module above succeeded
+auth    requisite                               pam_deny.so
+# prime the stack with a positive return value
+auth    required                                pam_permit.so
+{% if 'cap' in himmelblau_pam_available %}
+auth    optional                                pam_cap.so
+{% endif %}
