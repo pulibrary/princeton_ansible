@@ -123,9 +123,6 @@ What this means is you can write job files, tell Nomad to deploy them, and Nomad
 will automatically find a client VM in the cluster that can run them. If that
 client goes down it will launch the container on a different client.
 
-We install Podman on our Nomad client VMs so they can run containers without us
-having to rely on Docker.
-
 #### VM Types
 
 Nomad has "server" and "client" installations and configurations.
