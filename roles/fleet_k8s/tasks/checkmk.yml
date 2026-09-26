@@ -1,0 +1,41 @@
+---
+- name: Fleet | Ensure Checkmk local check directory exists
+  ansible.builtin.file:
+    path: /usr/lib/check_mk_agent/local
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when:
+    - fleet_checkmk_enabled | default(false) | bool
+    - inventory_hostname == fleet_checkmk_monitor_host
+
+- name: Fleet | Install Checkmk health local check
+  ansible.builtin.template:
+    src: check_fleet_health.sh.j2
+    dest: /usr/lib/check_mk_agent/local/check_fleet_health.sh
+    owner: root
+    group: root
+    mode: "0755"
+  when:
+    - fleet_checkmk_enabled | default(false) | bool
+    - inventory_hostname == fleet_checkmk_monitor_host
+
+- name: Fleet | Verify Checkmk health local check
+  ansible.builtin.command:
+    cmd: /usr/lib/check_mk_agent/local/check_fleet_health.sh
+  register: fleet_checkmk_health_result
+  changed_when: false
+  failed_when: false
+  when:
+    - fleet_checkmk_enabled | default(false) | bool
+    - inventory_hostname == fleet_checkmk_monitor_host
+    - checkmk_verify_local | default(false) | bool
+
+- name: Fleet | Show Checkmk health local check result
+  ansible.builtin.debug:
+    var: fleet_checkmk_health_result.stdout
+  when:
+    - fleet_checkmk_enabled | default(false) | bool
+    - inventory_hostname == fleet_checkmk_monitor_host
+    - checkmk_verify_local | default(false) | bool

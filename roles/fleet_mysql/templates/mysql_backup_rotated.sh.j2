@@ -1,0 +1,517 @@
+#!/usr/bin/env bash
+{{ ansible_managed | comment }}
+# Rotated MySQL backups, modeled on the PostgreSQL role's rotated dumps.
+# Dumps every database, keeps daily/weekly/monthly copies, and prunes old
+# copies. Writes to a local staging directory first so a slow or interrupted
+# object-store upload never leaves a half-written dump in the backup tree.
+
+set -u
+set -o pipefail
+
+SCRIPT_NAME="$(basename "$0")"
+
+BACKUP_ROOT="{{ mysql_backup_root }}"
+STAGING_DIR="{{ mysql_backup_staging_dir }}"
+CREDENTIALS_FILE="{{ mysql_backup_credentials_path }}"
+
+DAYS_TO_KEEP={{ mysql_backup_days_to_keep }}
+WEEKS_TO_KEEP={{ mysql_backup_weeks_to_keep }}
+MONTHS_TO_KEEP={{ mysql_backup_months_to_keep }}
+DAY_OF_WEEK_TO_KEEP={{ mysql_backup_day_of_week_to_keep }}
+
+RETRIES={{ mysql_backup_retries }}
+RETRY_DELAY={{ mysql_backup_retry_delay }}
+STARTUP_WAIT={{ mysql_backup_startup_wait }}
+SPACE_FACTOR={{ mysql_backup_space_factor }}
+MIN_FREE_MB={{ mysql_backup_min_free_mb }}
+MIN_FREE_BYTES=$((MIN_FREE_MB * 1024 * 1024))
+GUARD_INTERVAL={{ mysql_backup_space_guard_interval }}
+SPACE_ABORT=0
+POLL_INTERVAL=5
+
+COMPRESSION_LEVEL={{ mysql_backup_compression_level }}
+DUMP_OPTIONS="{{ mysql_backup_dump_options }}"
+
+ENABLE_GRANTS_BACKUPS={{ 'yes' if mysql_backup_enable_grants | bool else 'no' }}
+
+# Databases dumped without table data.
+SCHEMA_ONLY_LIST="{{ mysql_backup_schema_only_databases | join(' ') }}"
+# Databases skipped entirely.
+EXCLUDE_LIST="{{ mysql_backup_exclude_databases | join(' ') }}"
+
+FILE_SUFFIX="{{ mysql_backup_file_suffix }}"
+
+FAILURES=0
+
+log() {
+  printf '%s %s: %s\n' "$(date --iso-8601=seconds)" "$SCRIPT_NAME" "$*" >&2
+}
+
+fail() {
+  log "ERROR: $*"
+  FAILURES=$((FAILURES + 1))
+}
+
+# A host that once ran MariaDB can still have mariadb-dump on its PATH, and
+# pointing that at a MySQL 8 server produces dumps that quietly lose
+# definitions. The MySQL clients are therefore required by name.
+DUMP_BIN="$(command -v mysqldump || true)"
+CLIENT_BIN="$(command -v mysql || true)"
+ADMIN_BIN="$(command -v mysqladmin || true)"
+
+if [ -z "$DUMP_BIN" ] || [ -z "$CLIENT_BIN" ] || [ -z "$ADMIN_BIN" ]; then
+  log "ERROR: MySQL client tools are not installed"
+  exit 1
+fi
+
+client() {
+  "$CLIENT_BIN" --defaults-file="$CREDENTIALS_FILE" \
+    --skip-column-names --batch "$@"
+}
+
+usage() {
+  cat <<USAGE
+Usage: $SCRIPT_NAME [--tier daily|weekly|monthly] [--prune-only]
+
+With no arguments the tier is chosen automatically: monthly on the first of
+the month, weekly on day ${DAY_OF_WEEK_TO_KEEP} of the week, daily otherwise.
+USAGE
+}
+
+in_list() {
+  local needle="$1"
+  local haystack="$2"
+  local item
+  for item in $haystack; do
+    [ "$item" = "$needle" ] && return 0
+  done
+  return 1
+}
+
+# Tiers are named by date so retention does not depend on object-store
+# timestamps, which gcsfuse synthesizes for directories.
+prune_tier() {
+  local tier="$1"
+  local keep_days="$2"
+  local tier_dir="${BACKUP_ROOT}/${tier}"
+
+  if [ "$keep_days" -le 0 ] || [ ! -d "$tier_dir" ]; then
+    return 0
+  fi
+
+  local cutoff
+  cutoff="$(date --date="${keep_days} days ago" +%Y%m%d)"
+
+  local dir name
+  for dir in "$tier_dir"/*; do
+    [ -d "$dir" ] || continue
+    name="$(basename "$dir")"
+    case "$name" in
+      [0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]) ;;
+      *) continue ;;
+    esac
+    if [ "$name" -lt "$cutoff" ]; then
+      log "pruning expired ${tier} backup ${name}"
+      rm -rf "$dir" || fail "could not prune ${dir}"
+    fi
+  done
+}
+
+prune_all() {
+  prune_tier daily "$DAYS_TO_KEEP"
+  prune_tier weekly "$((WEEKS_TO_KEEP * 7))"
+  prune_tier monthly "$((MONTHS_TO_KEEP * 31))"
+}
+
+file_size() {
+  local bytes
+  bytes="$(stat --format=%s "$1" 2>/dev/null)" || {
+    echo "unknown size"
+    return
+  }
+  numfmt --to=iec --suffix=B "$bytes" 2>/dev/null || echo "${bytes}B"
+}
+
+# Dumps are written to staging and only then moved into the backup tree, so
+# a partial file is never visible to the monitoring check. Staging is local
+# disk and the backup tree is object storage, so this move is a full upload,
+# not a rename: it is logged because for a large database it dominates the
+# run and would otherwise look like a hang.
+publish() {
+  local staged="$1"
+  local final="$2"
+  local started="$SECONDS"
+  local size
+  size="$(file_size "$staged")"
+
+  log "uploading $(basename "$final") (${size})"
+  if mv "$staged" "$final"; then
+    log "published $(basename "$final") (${size}) in $((SECONDS - started))s"
+    return 0
+  fi
+
+  rm -f "$staged" "$final"
+  return 1
+}
+
+free_bytes() {
+  df --output=avail --block-size=1 "$1" 2>/dev/null | tail -1 | tr -d ' '
+}
+
+database_size() {
+  local bytes
+  bytes="$(client --execute="select coalesce(sum(data_length + index_length), 0)
+                            from information_schema.tables
+                            where table_schema = '${1}'" 2>/dev/null)" || return 0
+  case "$bytes" in
+    ''|*[!0-9]*) return 0 ;;
+  esac
+  numfmt --to=iec --suffix=B "$bytes" 2>/dev/null || echo "${bytes}B"
+}
+
+# Staging holds one complete dump, and publishing it to object storage can
+# stage a second copy on local disk, so the run needs room for both. Dumps are
+# gzipped, which makes sizing off the raw table data pessimistic; this warns
+# rather than aborts so a conservative estimate can never block an otherwise
+# healthy backup.
+warn_on_low_staging_space() {
+  local needed available required
+
+  needed="$(client --execute="select coalesce(max(total), 0) from (
+                                select sum(data_length + index_length) as total
+                                from information_schema.tables
+                                group by table_schema) sizes" 2>/dev/null)" || return 0
+
+  case "$needed" in
+    ''|*[!0-9]*) return 0 ;;
+  esac
+
+  available="$(free_bytes "$STAGING_DIR")"
+  case "$available" in
+    ''|*[!0-9]*) return 0 ;;
+  esac
+
+  required=$((needed * SPACE_FACTOR))
+
+  if [ "$available" -lt "$required" ]; then
+    log "WARNING: ${STAGING_DIR} has $((available / 1024 / 1024))MB free;" \
+      "the largest database is $((needed / 1024 / 1024))MB and publishing may" \
+      "need $((required / 1024 / 1024))MB including the upload's own staging"
+  fi
+}
+
+list_databases() {
+  client --execute="select schema_name from information_schema.schemata
+                    order by schema_name"
+}
+
+# A dump that outlives a server restart (maintenance, a config reload, an
+# Ansible run) loses its connection mid-table. Waiting here turns that into a
+# short pause and a retry instead of a failed backup.
+wait_for_server() {
+  local waited=0
+
+  while [ "$waited" -lt "$STARTUP_WAIT" ]; do
+    if "$ADMIN_BIN" --defaults-file="$CREDENTIALS_FILE" ping --silent \
+      >/dev/null 2>&1; then
+      [ "$waited" -gt 0 ] && log "server accepted connections after ${waited}s"
+      return 0
+    fi
+    if [ "$waited" -eq 0 ]; then
+      log "waiting for MySQL to accept connections"
+    fi
+    sleep "$POLL_INTERVAL"
+    waited=$((waited + POLL_INTERVAL))
+  done
+
+  return 1
+}
+
+# Runs a dump while watching free space, and aborts it if the filesystem gets
+# close to full. A dump is not worth an outage: filling the disk that holds
+# MySQL's data directory would take the database down, so an incomplete
+# backup is the better failure.
+run_guarded() {
+  local description="$1"
+  shift
+  local pid free rc
+
+  "$@" &
+  pid=$!
+
+  while kill -0 "$pid" 2>/dev/null; do
+    free="$(free_bytes "$STAGING_DIR")"
+    case "$free" in
+      ''|*[!0-9]*) free="" ;;
+    esac
+
+    if [ -n "$free" ] && [ "$free" -lt "$MIN_FREE_BYTES" ]; then
+      log "ERROR: only $((free / 1024 / 1024))MB free where dumps are staged," \
+        "under the ${MIN_FREE_MB}MB floor: aborting ${description}"
+      SPACE_ABORT=1
+      pkill -TERM -P "$pid" 2>/dev/null || true
+      kill -TERM "$pid" 2>/dev/null || true
+      wait "$pid" 2>/dev/null || true
+      return 1
+    fi
+
+    sleep "$GUARD_INTERVAL"
+  done
+
+  wait "$pid"
+  rc=$?
+  return "$rc"
+}
+
+# Runs a dump, retrying when the server was unreachable or went away, and
+# leaves the caller to publish only on success.
+attempt() {
+  local description="$1"
+  shift
+  local tries=0
+
+  while : ; do
+    if run_guarded "$description" "$@"; then
+      return 0
+    fi
+
+    # Running out of disk will not fix itself, and retrying only risks
+    # filling what little space is left.
+    if [ "$SPACE_ABORT" -eq 1 ]; then
+      return 1
+    fi
+
+    tries=$((tries + 1))
+    if [ "$tries" -gt "$RETRIES" ]; then
+      return 1
+    fi
+
+    log "${description} failed, retry ${tries}/${RETRIES} in ${RETRY_DELAY}s"
+    sleep "$RETRY_DELAY"
+    wait_for_server || {
+      log "server still unreachable, giving up on ${description}"
+      return 1
+    }
+  done
+}
+
+# Per-database dumps carry no accounts, so the grants of every account are
+# written out separately. This is the MySQL equivalent of pg_dumpall
+# --globals-only.
+#
+# MySQL reserves three internal accounts for the server's own use. They are
+# created by the installer and cannot be recreated by a restore, so they are
+# left out.
+dump_grants_once() {
+  local staged="$1"
+  local account
+
+  rm -f "$staged"
+  {
+    echo "-- MySQL accounts and grants as of $(date --iso-8601=seconds)"
+    client --execute="select concat(quote(user), '@', quote(host))
+                      from mysql.user
+                      where user not in ('mysql.infoschema',
+                                         'mysql.session',
+                                         'mysql.sys')
+                      order by user, host" \
+    | while read -r account; do
+        [ -n "$account" ] || continue
+        echo ""
+        echo "-- ${account}"
+        client --execute="show create user ${account}" | sed -e 's/$/;/'
+        client --execute="show grants for ${account}" | sed -e 's/$/;/'
+      done
+    echo ""
+    echo "FLUSH PRIVILEGES;"
+  } | gzip -"${COMPRESSION_LEVEL}" > "$staged"
+}
+
+dump_grants() {
+  local date_stamp="$1"
+  local target_dir="$2"
+  local staged="${STAGING_DIR}/grants-${date_stamp}.sql.gz"
+  local final="${target_dir}/grants-${date_stamp}.sql.gz"
+
+  log "dumping accounts and grants"
+  if attempt "grants dump" dump_grants_once "$staged"; then
+    publish "$staged" "$final" || fail "could not publish grants dump"
+  else
+    rm -f "$staged"
+    fail "dump of accounts and grants failed"
+  fi
+}
+
+dump_database_once() {
+  local staged="$1"
+  local schema_only_opt="$2"
+  local database="$3"
+
+  rm -f "$staged"
+  "$DUMP_BIN" --defaults-file="$CREDENTIALS_FILE" $DUMP_OPTIONS \
+    $schema_only_opt --databases "$database" \
+    | gzip -"${COMPRESSION_LEVEL}" > "$staged"
+}
+
+dump_database() {
+  local database="$1"
+  local date_stamp="$2"
+  local target_dir="$3"
+  local schema_only_opt=""
+  local label="$database"
+
+  if in_list "$database" "$SCHEMA_ONLY_LIST"; then
+    schema_only_opt="--no-data"
+    label="${database}_schema"
+    log "dumping ${database} (schema only)"
+  else
+    log "dumping ${database} ($(database_size "$database"))"
+  fi
+
+  local staged="${STAGING_DIR}/${label}-${date_stamp}${FILE_SUFFIX}"
+  local final="${target_dir}/${label}-${date_stamp}${FILE_SUFFIX}"
+
+  if attempt "dump of ${database}" \
+    dump_database_once "$staged" "$schema_only_opt" "$database"; then
+    publish "$staged" "$final" || fail "could not publish dump of ${database}"
+  else
+    rm -f "$staged"
+    fail "dump of ${database} failed"
+  fi
+}
+
+TIER=""
+PRUNE_ONLY="no"
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --tier)
+      TIER="${2:-}"
+      shift 2
+      ;;
+    --tier=*)
+      TIER="${1#*=}"
+      shift
+      ;;
+    --prune-only)
+      PRUNE_ONLY="yes"
+      shift
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      usage >&2
+      exit 2
+      ;;
+  esac
+done
+
+if [ "$PRUNE_ONLY" = "yes" ]; then
+  prune_all
+  exit "$([ "$FAILURES" -eq 0 ] && echo 0 || echo 1)"
+fi
+
+DATE_STAMP="$(date +%Y%m%d)"
+DAY_OF_MONTH="$(date +%d)"
+DAY_OF_WEEK="$(date +%u)"
+
+if [ -z "$TIER" ]; then
+  if [ "$DAY_OF_MONTH" = "01" ] && [ "$MONTHS_TO_KEEP" -gt 0 ]; then
+    TIER="monthly"
+  elif [ "$DAY_OF_WEEK" = "$DAY_OF_WEEK_TO_KEEP" ] && [ "$WEEKS_TO_KEEP" -gt 0 ]; then
+    TIER="weekly"
+  else
+    TIER="daily"
+  fi
+fi
+
+case "$TIER" in
+  daily|weekly|monthly) ;;
+  *)
+    log "ERROR: unknown tier '${TIER}'"
+    usage >&2
+    exit 2
+    ;;
+esac
+
+TARGET_DIR="${BACKUP_ROOT}/${TIER}/${DATE_STAMP}"
+
+if ! wait_for_server; then
+  log "ERROR: MySQL did not accept connections within ${STARTUP_WAIT}s"
+  exit 1
+fi
+
+mkdir -p "$STAGING_DIR" || {
+  log "ERROR: cannot create staging directory ${STAGING_DIR}"
+  exit 1
+}
+mkdir -p "$TARGET_DIR" || {
+  log "ERROR: cannot create backup directory ${TARGET_DIR}"
+  exit 1
+}
+
+log "starting ${TIER} backup into ${TARGET_DIR}"
+
+# Stale staging files are dumps from a run that died before publishing. They
+# waste disk and are never valid, so clear them before starting.
+find "$STAGING_DIR" -maxdepth 1 -type f -delete 2>/dev/null || true
+
+STARTING_FREE="$(free_bytes "$STAGING_DIR")"
+case "$STARTING_FREE" in
+  ''|*[!0-9]*) STARTING_FREE="" ;;
+esac
+
+if [ -n "$STARTING_FREE" ]; then
+  log "$((STARTING_FREE / 1024 / 1024))MB free where dumps are staged" \
+    "(floor ${MIN_FREE_MB}MB)"
+  if [ "$STARTING_FREE" -lt "$MIN_FREE_BYTES" ]; then
+    log "ERROR: free space is already under the ${MIN_FREE_MB}MB floor"
+    exit 1
+  fi
+fi
+
+warn_on_low_staging_space
+
+if [ "$ENABLE_GRANTS_BACKUPS" = "yes" ]; then
+  dump_grants "$DATE_STAMP" "$TARGET_DIR"
+fi
+
+DATABASES=""
+if ! DATABASES="$(attempt 'listing databases' list_databases)"; then
+  DATABASES=""
+fi
+
+if [ -z "$DATABASES" ]; then
+  log "ERROR: could not list databases"
+  exit 1
+fi
+
+DUMPED=0
+for database in $DATABASES; do
+  if in_list "$database" "$EXCLUDE_LIST"; then
+    log "skipping excluded database ${database}"
+    continue
+  fi
+  dump_database "$database" "$DATE_STAMP" "$TARGET_DIR"
+  DUMPED=$((DUMPED + 1))
+
+  # Out of disk applies to every remaining database, so stop rather than
+  # reporting the same failure once per database.
+  if [ "$SPACE_ABORT" -eq 1 ]; then
+    log "ERROR: stopping backup, no space left for the remaining databases"
+    break
+  fi
+done
+
+prune_all
+
+log "finished ${TIER} backup: ${DUMPED} database(s), ${FAILURES} failure(s)" \
+  "in $((SECONDS / 60))m $((SECONDS % 60))s"
+
+if [ "$FAILURES" -gt 0 ]; then
+  exit 1
+fi
+
+exit 0

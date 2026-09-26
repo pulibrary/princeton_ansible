@@ -1,0 +1,158 @@
+---
+# defaults file for fleet_mysql
+#
+# The address mysql should bind to.
+mysql_bind_address: "127.0.0.1"
+
+
+# The buffer pool size.
+mysql_innodb_buffer_pool_size: 1G
+
+# The io capacity.
+mysql_innodb_io_capacity: 4000
+
+# the host
+mysql_host: 127.0.0.1
+
+# MySQL's X Protocol opens a second listener on port 33060. Nothing here speaks
+# it, so it stays off.
+mysql_enable_mysqlx: false
+
+# MySQL 8.4 removed the mysql_native_password plugin, but the Ansible MySQL
+# modules still reach for it on any server older than 9.7, so every account is
+# created against this plugin by name instead.
+mysql_authentication_plugin: caching_sha2_password
+# Without a salt the modules cannot tell a stored hash apart from the password
+# it came from, so password tasks report "changed" on every run. Setting a
+# 20-character salt makes the hash reproducible and the tasks idempotent. Do
+# the same per account with a `salt` key in mysql_users.
+mysql_root_salt: ""
+
+# Root accounts to create beyond the packaged root@localhost. The mysql role
+# also creates root@<hostname>, which is reachable over the network; this role
+# keeps root to the loopback interface and expects application accounts to be
+# declared in mysql_users instead.
+mysql_root_hosts:
+  - localhost
+  - 127.0.0.1
+  - ::1
+
+# Fleet stores every timestamp in UTC and compares them against the database
+# clock, so the server runs on UTC regardless of the host's timezone.
+mysql_default_time_zone: "+00:00"
+
+# Where MySQL writes its logs. The log shipper reads these files and turns
+# every entry into a structured record before sending it to SigNoz.
+mysql_log_dir: /var/log/mysql
+mysql_log_owner: mysql
+mysql_log_group: adm
+mysql_error_log: "{{ mysql_log_dir }}/mysql_error.log"
+
+# Queries slower than mysql_long_query_time seconds are recorded so they can be
+# searched and sorted in SigNoz.
+mysql_slow_query_log: true
+mysql_slow_query_log_file: "{{ mysql_log_dir }}/mysql_slow.log"
+mysql_long_query_time: 2
+
+# cloud backup
+# gcsfuse mounts a GCS bucket so MySQL dumps land in object storage.
+# We only back up production, so this stays off everywhere else.
+mysql_gcs_backup_enabled: false
+mysql_gcs_backup_environment: "production"
+mysql_gcs_bucket_name: "pul-mariadb-backup"
+mysql_gcs_mountpoint: "/var/backups/mysql/cloud_backup"
+mysql_gcs_key_path: "/etc/mysql-backup-account-key.json"
+mysql_gcs_key_src: "files/mysql-backup-production-account-key.json"
+mysql_gcs_service_name: "mysql-gcs-backup.service"
+mysql_gcs_user: "mysql"
+mysql_gcs_group: "mysql"
+mysql_gcsfuse_directory: "/var/log/gcsfuse"
+# Where gcsfuse stages writes before uploading. Before v3.0 it stages an entire
+# file here, so this needs room for the largest dump and defaults to /tmp if
+# left unset.
+mysql_gcsfuse_temp_directory: "/var/backups/mysql/gcsfuse-tmp"
+# Dumps from this role land under their own prefix in the bucket so they are
+# never confused with the MariaDB servers' dumps.
+mysql_backup_prefix: "mysql"
+mysql_backup_file_suffix: ".sql.gz"
+mysql_gcsfuse_logrotate_rules: []
+
+# Scheduled dumps
+# Rotated daily/weekly/monthly dumps of every database, mirroring the
+# postgresql role's backups.
+mysql_backup_schedule_enabled: false
+mysql_backup_root: >-
+  {{ mysql_gcs_mountpoint }}/{{ mysql_backup_prefix }}/{{ mysql_gcs_backup_environment }}
+mysql_backup_staging_dir: "/var/backups/mysql/staging"
+mysql_backup_script_path: "/usr/local/bin/mysql_backup_rotated.sh"
+mysql_backup_credentials_path: "/etc/mysql/mysql-backup.cnf"
+mysql_backup_service_name: "mysql-backup.service"
+mysql_backup_timer_name: "mysql-backup.timer"
+# The dump runs as root so it can read its own credentials file and write to
+# the mounted bucket without further grants.
+mysql_backup_user: "root"
+mysql_backup_group: "root"
+# Dumps connect over the local socket unless a host is named here.
+mysql_backup_host: ""
+mysql_backup_port: 3306
+# Reusing root means backups work without vaulting another password. Point
+# these at a dedicated account to dump with the least privilege instead.
+mysql_backup_db_user: "root"
+mysql_backup_db_password: "{{ mysql_root_password }}"
+# MySQL 8 splits off the dynamic privileges a consistent dump needs, so the
+# backup account is granted those by name in addition to the static ones.
+mysql_backup_db_priv: >-
+  *.*:SELECT,SHOW VIEW,TRIGGER,EVENT,LOCK TABLES,RELOAD,PROCESS,REPLICATION CLIENT,
+  BACKUP_ADMIN,SYSTEM_VARIABLES_ADMIN
+# Dumps run overnight; the delay keeps a fleet from starting in lockstep.
+mysql_backup_on_calendar: "*-*-* 02:30:00"
+mysql_backup_randomized_delay: "900"
+mysql_backup_timeout: "6h"
+mysql_backup_nice: 10
+# The idle I/O class yields to all other disk activity, which can stall a dump
+# on a busy server indefinitely. Lowest-priority best-effort still defers to
+# MySQL without starving.
+mysql_backup_io_class: "best-effort"
+mysql_backup_io_priority: 7
+mysql_backup_compression_level: 6
+# --single-transaction dumps InnoDB without blocking writers, the rest keep
+# stored programs, and the character set stops utf8mb4 data being mangled.
+# MySQL's mysqldump records the binary log position by default, which needs
+# privileges a restore does not, so that is turned off.
+mysql_backup_dump_options: >-
+  --single-transaction --quick --routines --triggers --events
+  --default-character-set=utf8mb4 --set-gtid-purged=OFF --no-tablespaces
+# Accounts and their privileges live outside any single database, so they are
+# written out separately, the way pg_dumpall dumps globals.
+mysql_backup_enable_grants: true
+mysql_backup_schema_only_databases: []
+# These three are views onto the server's own state and cannot be restored.
+# MySQL keeps its own account tables in the `mysql` database, which the grants
+# dump covers in a restorable form, so the raw tables are skipped too.
+mysql_backup_exclude_databases:
+  - information_schema
+  - performance_schema
+  - sys
+  - mysql
+# Staging the dump and then uploading it can each hold a full copy on local
+# disk, so free space is checked against this multiple of the largest database.
+# gcsfuse 3.0 and later stream writes straight to the bucket and need no second
+# local copy, so 1 is right for those hosts.
+mysql_backup_space_factor: 2
+# Hard floor: a dump is aborted rather than allowed to fill the filesystem that
+# also holds MySQL's data directory. An incomplete backup beats an outage.
+mysql_backup_min_free_mb: 10240
+mysql_backup_space_guard_interval: 10
+# A dump can outlive a MySQL restart (maintenance, a config reload, an
+# Ansible run), which drops its connection mid-table. Retrying makes that a
+# pause instead of a failed backup.
+mysql_backup_retries: 2
+mysql_backup_retry_delay: 60
+mysql_backup_startup_wait: 300
+# Retention. 7 = Sunday for the weekly copy.
+mysql_backup_days_to_keep: 7
+mysql_backup_weeks_to_keep: 5
+mysql_backup_months_to_keep: 3
+mysql_backup_day_of_week_to_keep: 7
+# Force a run during the play even when backups already exist.
+mysql_backup_run_now: false

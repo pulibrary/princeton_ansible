@@ -1,0 +1,98 @@
+hostName: {{ fleet_hostname }}
+replicas: {{ fleet_replicas }}
+imageRepository: {{ fleet_image_repository }}
+imageTag: {{ fleet_image_tag }}
+
+resources:
+  limits:
+    cpu: {{ fleet_cpu_limit }}
+    memory: {{ fleet_memory_limit }}
+  requests:
+    cpu: {{ fleet_cpu_request }}
+    memory: {{ fleet_memory_request }}
+
+ingress:
+  enabled: {{ fleet_ingress_enabled | bool | lower }}
+  className: {{ fleet_ingress_class_name }}
+  annotations:
+{% if fleet_ingress_annotations %}
+{{ fleet_ingress_annotations | to_nice_yaml(indent=2) | indent(4, true) }}
+{% else %}
+    {}
+{% endif %}
+  hosts:
+    - host: {{ fleet_hostname }}
+      paths:
+        - path: /
+          pathType: Prefix
+{% if fleet_ingress_tls_secret_name | length > 0 %}
+  tls:
+    - secretName: {{ fleet_ingress_tls_secret_name }}
+      hosts:
+        - {{ fleet_hostname }}
+{% else %}
+  tls: []
+{% endif %}
+
+fleet:
+  listenPort: {{ fleet_listen_port }}
+  secretName: {{ fleet_secret_name }}
+  autoApplySQLMigrations: true
+  tls:
+    enabled: {{ fleet_tls_enabled | bool | lower }}
+  logging:
+    debug: {{ fleet_logging_debug | bool | lower }}
+    json: {{ fleet_logging_json | bool | lower }}
+    disableBanner: false
+  license:
+{% if fleet_license_key | length > 0 %}
+    secretName: {{ fleet_license_secret_name }}
+    licenseKey: license-key
+{% else %}
+    secretName: ""
+    licenseKey: license-key
+{% endif %}
+
+vulnProcessing:
+  dedicated: {{ fleet_vuln_processing_dedicated | bool | lower }}
+
+osquery:
+  logging:
+    statusPlugin: {{ fleet_osquery_status_plugin }}
+    resultPlugin: {{ fleet_osquery_result_plugin }}
+    filesystem:
+      statusLogFile: osquery_status
+      resultLogFile: osquery_result
+      enableRotation: true
+      enableCompression: true
+      volumeSize: {{ fleet_osquery_log_volume_size }}
+
+database:
+  secretName: {{ fleet_database_secret_name }}
+  address: {{ fleet_database_host }}:{{ fleet_database_port }}
+  database: {{ fleet_database_name }}
+  username: {{ fleet_database_username }}
+  passwordKey: {{ fleet_database_password_key }}
+  maxOpenConns: {{ fleet_database_max_open_conns }}
+  maxIdleConns: {{ fleet_database_max_idle_conns }}
+  connMaxLifetime: {{ fleet_database_conn_max_lifetime }}
+  tls:
+    enabled: {{ fleet_database_tls_enabled | bool | lower }}
+    config: ""
+    serverName: ""
+
+cache:
+  address: {{ fleet_cache_host }}:{{ fleet_cache_port }}
+  database: "{{ fleet_cache_database }}"
+  usePassword: {{ fleet_cache_use_password | bool | lower }}
+  secretName: {{ fleet_cache_secret_name }}
+  passwordKey: {{ fleet_cache_password_key }}
+
+environments:
+  FLEET_SERVER_PRIVATE_KEY: "{{ fleet_server_private_key }}"
+
+mysql:
+  enabled: false
+
+redis:
+  enabled: false
