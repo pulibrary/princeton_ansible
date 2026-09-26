@@ -48,6 +48,28 @@
       vars:
         bind9_options: "{{ bind9_named_options.content | b64decode }}"
 
+    - name: Test that Consul forwarding is disabled by default
+      ansible.builtin.assert:
+        that:
+          - '''include "/etc/bind/consul.conf";'' not in bind9_options'
+          - "'dnssec-validation auto;' in bind9_options"
+        fail_msg: "Consul forwarding is configured when it should be disabled"
+      vars:
+        bind9_options: "{{ bind9_named_options.content | b64decode }}"
+
+    - name: Read service state
+      ansible.builtin.service_facts:
+
+    - name: Test that bind9 is running
+      ansible.builtin.assert:
+        that:
+          - >-
+            (ansible_facts.services.get('named.service', {}).get('state') ==
+            'running') or
+            (ansible_facts.services.get('bind9.service', {}).get('state') ==
+            'running')
+        fail_msg: "bind9 is not running"
+
     - name: Test that the named configuration parses
       ansible.builtin.command: named-checkconf
       changed_when: false

@@ -50,7 +50,7 @@
         fail_msg: "Consul cluster has no leader"
         success_msg: "Consul cluster has a leader: {{ consul_leader.content }}"
 
-    # Test Consul DNS directly on port 8600 instead of relying on DNSMasq
+    # First test Consul directly so failures distinguish Consul from BIND.
     - name: Query Consul DNS directly for consul service
       ansible.builtin.command: dig @127.0.0.1 -p 8600 consul.service.consul SRV +short
       register: consul_dns_direct
@@ -64,6 +64,60 @@
           - consul_dns_direct.stdout | length > 0
         fail_msg: "Consul DNS not responding on port 8600"
         success_msg: "Consul DNS is working"
+
+    - name: Read BIND options
+      ansible.builtin.slurp:
+        src: /etc/bind/named.conf.options
+      register: bind9_named_options
+
+    - name: Read Consul forwarding zone
+      ansible.builtin.slurp:
+        src: /etc/bind/consul.conf
+      register: bind9_consul_zone
+
+    - name: Verify BIND is configured to forward Consul queries
+      ansible.builtin.assert:
+        that:
+          - '''include "/etc/bind/consul.conf";'' in bind9_options'
+          - "'dnssec-validation no;' in bind9_options"
+          - '''zone "consul" IN'' in bind9_consul_config'
+          - "'127.0.0.1 port 8600' in bind9_consul_config"
+        fail_msg: "The Consul forwarding zone is not configured"
+      vars:
+        bind9_options: "{{ bind9_named_options.content | b64decode }}"
+        bind9_consul_config: "{{ bind9_consul_zone.content | b64decode }}"
+
+    - name: Query Consul DNS through BIND on port 53
+      ansible.builtin.command: dig @127.0.0.1 consul.service.consul SRV +short
+      register: consul_dns_via_bind
+      changed_when: false
+
+    - name: Query Consul DNS through BIND over TCP
+      ansible.builtin.command: >-
+        dig @127.0.0.1 consul.service.consul SRV +short +tcp
+      register: consul_dns_via_bind_tcp
+      changed_when: false
+
+    - name: Verify BIND forwards Consul DNS queries
+      ansible.builtin.assert:
+        that:
+          - consul_dns_via_bind.stdout | length > 0
+          - consul_dns_via_bind_tcp.stdout | length > 0
+        fail_msg: "BIND did not forward the Consul query to port 8600"
+        success_msg: "Consul DNS is available through BIND on TCP/UDP port 53"
+
+    - name: Check that dnsmasq is not installed
+      ansible.builtin.package:
+        name: dnsmasq
+        state: absent
+      check_mode: true
+      register: dnsmasq_package
+
+    - name: Verify dnsmasq was removed
+      ansible.builtin.assert:
+        that:
+          - not dnsmasq_package.changed
+        fail_msg: "dnsmasq is still installed"
 
 - name: Verify Nomad Cluster on Servers
   hosts: nomad_servers
