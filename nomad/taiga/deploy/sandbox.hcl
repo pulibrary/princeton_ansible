@@ -42,6 +42,13 @@ job "taiga-sandbox" {
   group "taiga" {
     count = 1
 
+    # Required for Nomad's Workload Identity model to authorize this
+    # group to register its service with Consul (see nomad/zookeeper and
+    # nomad/solr, which need it for the same reason). Without it, nothing
+    # gets registered — confirmed via `consul catalog services` returning
+    # empty, not just missing "taiga-sandbox".
+    consul {}
+
     shutdown_delay = "10s"
 
     # taiga-back, taiga-async, and the gateway all need to see the same
@@ -78,12 +85,21 @@ job "taiga-sandbox" {
     }
 
     network {
-      mode = "host"
+      # Mode defaults to "bridge" (Nomad's CNI networking), which is what
+      # every other docker-driver job in this repo relies on implicitly.
+      # This cluster's Docker daemon runs with userns-remap enabled, and
+      # Docker refuses "--network=host" for any container while
+      # userns-remap is on, so "host" mode isn't an option here (it's
+      # only what the old podman-driver version of this job used). All
+      # tasks in a group still share one network namespace under bridge
+      # mode, so sibling tasks still reach each other over 127.0.0.1.
 
       # Front, back, events, protected, and rabbitmq bind ports that are
       # hardcoded inside their upstream images, so they're reserved as
-      # static. Only the gateway's listen port is ours to choose, so it's
-      # left dynamic (Nomad still registers it with Consul for nginxplus).
+      # static with no "to", which maps the host port straight through to
+      # the same container port. Only the gateway's listen port is ours
+      # to choose, so it's left dynamic (Nomad still registers it with
+      # Consul for nginxplus).
       port "http" {}
       port "front" {
         static = 80
@@ -139,7 +155,6 @@ job "taiga-sandbox" {
       # like the upstream docker-compose does.
       config {
         image        = "docker.io/library/rabbitmq:3.13.6-management-alpine"
-        network_mode = "host"
       }
 
       template {
@@ -180,7 +195,6 @@ job "taiga-sandbox" {
 
       config {
         image        = "docker.io/library/busybox:1.37"
-        network_mode = "host"
         entrypoint   = ["/bin/sh", "-c"]
         args = [
           "until nc -z -w 2 127.0.0.1 5672; do echo 'waiting for RabbitMQ'; sleep 2; done; until nc -z -w 2 sandbox-postgresql1.lib.princeton.edu 5432; do echo 'waiting for PostgreSQL'; sleep 2; done",
@@ -198,7 +212,6 @@ job "taiga-sandbox" {
 
       config {
         image        = "docker.io/robrotheram/taiga-back-openid:${var.taiga_back_openid_version}"
-        network_mode = "host"
         entrypoint   = ["/bin/bash", "-c"]
         # taiga-back's image ships /taiga-back/static and /taiga-back/media
         # as plain directories; swap them for symlinks into the sticky
@@ -264,7 +277,6 @@ job "taiga-sandbox" {
 
       config {
         image        = "docker.io/taigaio/taiga-back:${var.taiga_back_version}"
-        network_mode = "host"
         entrypoint   = ["/bin/bash", "-c"]
         args = [
           "mkdir -p /persistence/static /persistence/media && rm -rf /taiga-back/static /taiga-back/media && ln -s /persistence/static /taiga-back/static && ln -s /persistence/media /taiga-back/media && exec /taiga-back/docker/async_entrypoint.sh",
@@ -313,7 +325,6 @@ job "taiga-sandbox" {
 
       config {
         image        = "docker.io/taigaio/taiga-events:${var.taiga_events_version}"
-        network_mode = "host"
       }
 
       template {
@@ -341,7 +352,6 @@ job "taiga-sandbox" {
 
       config {
         image        = "docker.io/taigaio/taiga-protected:${var.taiga_protected_version}"
-        network_mode = "host"
       }
 
       template {
@@ -368,7 +378,6 @@ job "taiga-sandbox" {
 
       config {
         image        = "docker.io/robrotheram/taiga-front-openid:${var.taiga_front_openid_version}"
-        network_mode = "host"
       }
 
       template {
@@ -403,7 +412,6 @@ job "taiga-sandbox" {
 
       config {
         image        = "docker.io/library/nginx:1.19-alpine"
-        network_mode = "host"
         entrypoint   = ["/bin/sh", "-c"]
         args = [
           "mkdir -p /taiga /persistence/static /persistence/media && ln -sfn /persistence/static /taiga/static && ln -sfn /persistence/media /taiga/media && exec nginx -g 'daemon off;'",
@@ -413,8 +421,8 @@ job "taiga-sandbox" {
         ]
       }
 
-      # Routes to the sibling tasks over loopback, since the whole group
-      # shares the host network namespace.
+      # Routes to the sibling tasks over loopback, since every task in a
+      # group shares one network namespace regardless of bridge vs host mode.
       template {
         destination = "local/taiga.conf"
         change_mode = "restart"
