@@ -165,7 +165,7 @@ job "taiga-sandbox" {
         ports      = ["http"]
         entrypoint = ["/bin/bash", "-c"]
         args = [
-          "mkdir -p /persistence/static /persistence/media && rm -rf /taiga-back/static /taiga-back/media && ln -s /persistence/static /taiga-back/static && ln -s /persistence/media /taiga-back/media && python3 -c 'p = \"/taiga-back/taiga/projects/migrations/0046_triggers_to_update_tags_colors.py\"; s = open(p).read(); s = s.replace(\"array_agg_mult (anyarray)\", \"array_agg_mult (anycompatiblearray)\"); s = s.replace(\"= anyarray\", \"= anycompatiblearray\"); open(p, \"w\").write(s)' && exec /taiga-back/docker/entrypoint.sh --timeout 120",
+          "mkdir -p /persistence/static /persistence/media && rm -rf /taiga-back/static /taiga-back/media && ln -s /persistence/static /taiga-back/static && ln -s /persistence/media /taiga-back/media && python3 -c 'p = \"/taiga-back/taiga/projects/migrations/0046_triggers_to_update_tags_colors.py\"; s = open(p).read(); s = s.replace(\"array_agg_mult (anyarray)\", \"array_agg_mult (anycompatiblearray)\"); s = s.replace(\"= anyarray\", \"= anycompatiblearray\"); open(p, \"w\").write(s)' && python3 -c 'p = \"/taiga-back/settings/config.py\"; s = open(p).read(); s = s.replace(\"DEBUG = False\", \"DEBUG = True\"); open(p, \"w\").write(s)' && exec /taiga-back/docker/entrypoint.sh --timeout 120",
         ]
       }
 
