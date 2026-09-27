@@ -93,6 +93,7 @@ job "taiga-sandbox" {
 
       config {
         image = "docker.io/library/rabbitmq:3.13.6-management-alpine"
+        ports = ["amqp"]
       }
 
       template {
@@ -161,6 +162,7 @@ job "taiga-sandbox" {
 
       config {
         image      = "docker.io/robrotheram/taiga-back-openid:${var.taiga_back_openid_version}"
+        ports      = ["http"]
         entrypoint = ["/bin/bash", "-c"]
         # taiga-back's image ships /taiga-back/static and /taiga-back/media
         # as plain directories; swap them for symlinks into the sticky
@@ -329,6 +331,7 @@ job "taiga-sandbox" {
 
       config {
         image = "docker.io/taigaio/taiga-events:${var.taiga_events_version}"
+        ports = ["http"]
       }
 
       template {
@@ -389,6 +392,7 @@ job "taiga-sandbox" {
 
       config {
         image = "docker.io/taigaio/taiga-protected:${var.taiga_protected_version}"
+        ports = ["http"]
       }
 
       template {
@@ -445,6 +449,7 @@ job "taiga-sandbox" {
 
       config {
         image = "docker.io/robrotheram/taiga-front-openid:${var.taiga_front_openid_version}"
+        ports = ["http"]
       }
 
       template {
@@ -520,6 +525,7 @@ job "taiga-sandbox" {
 
       config {
         image      = "docker.io/library/nginx:1.19-alpine"
+        ports      = ["http"]
         entrypoint = ["/bin/sh", "-c"]
         args = [
           "mkdir -p /taiga /persistence/static /persistence/media && ln -sfn /persistence/static /taiga/static && ln -sfn /persistence/media /taiga/media && exec nginx -g 'daemon off;'",
