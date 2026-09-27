@@ -573,6 +573,20 @@ job "taiga-sandbox" {
             # Remove once this is root-caused.
             error_log /dev/stderr info;
 
+            # The failing requests never show a proxy attempt in the log
+            # above at all (no upstream connect, successful or failed) --
+            # meaning nginx is rejecting them before location routing even
+            # happens, which is consistent with its own default error
+            # page (no CORS headers, text/html) rather than anything from
+            # taiga-back. The one thing distinctive about these requests:
+            # the Referer header is the full /login?code=...&session_
+            # state=... URL, and Entra ID (with Continuous Access
+            # Evaluation) issues authorization codes long enough to push
+            # that single header past nginx's small stock defaults.
+            # Bumped generously; safe to leave in place either way.
+            client_header_buffer_size 32k;
+            large_client_header_buffer_size 4 32k;
+
             client_max_body_size 100M;
             charset utf-8;
 
