@@ -201,6 +201,13 @@ job "taiga-sandbox" {
         # only needs the token-exchange settings; OPENID_URL and
         # OPENID_NAME are consumed by taiga-front below instead.
         ENABLE_OPENID=True
+        # Without this, taiga_contrib_openid_auth.services.openid_register
+        # rejects any OpenID login for a user with no existing Taiga
+        # account ("registrations have been disabled by the
+        # Administrator") -- there's no other way in, since this image's
+        # entrypoint never seeds the taigaio/taiga-back
+        # users/fixtures/initial_user.json admin/123123 account.
+        PUBLIC_REGISTER_ENABLED=True
         OPENID_USER_URL={{ .OPENID_USER_URL }}
         OPENID_TOKEN_URL={{ .OPENID_TOKEN_URL }}
         OPENID_CLIENT_ID={{ .OPENID_CLIENT_ID }}
