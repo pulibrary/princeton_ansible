@@ -48,12 +48,9 @@ job "taiga-sandbox" {
     auto_revert       = true
   }
 
-  restart {
-    attempts = 5
-    interval = "15m"
-    delay    = "15s"
-    mode     = "delay"
-  }
+  # "restart" isn't valid at the job level (only job -> group and
+  # job -> group -> task), unlike update/reschedule which are -- so this
+  # same block is repeated in each group below instead.
 
   reschedule {
     delay          = "30s"
@@ -64,6 +61,13 @@ job "taiga-sandbox" {
 
   group "rabbitmq" {
     count = 1
+
+    restart {
+      attempts = 5
+      interval = "15m"
+      delay    = "15s"
+      mode     = "delay"
+    }
 
     network {
       port "amqp" {
@@ -114,6 +118,13 @@ job "taiga-sandbox" {
 
   group "back" {
     count = 1
+
+    restart {
+      attempts = 5
+      interval = "15m"
+      delay    = "15s"
+      mode     = "delay"
+    }
 
     # taiga-back, taiga-async, and the gateway all need to see the same
     # static/media files. There's only one replica of this volume, so
@@ -217,6 +228,13 @@ job "taiga-sandbox" {
   group "async" {
     count = 1
 
+    restart {
+      attempts = 5
+      interval = "15m"
+      delay    = "15s"
+      mode     = "delay"
+    }
+
     volume "data" {
       type            = "host"
       source          = "taiga-sandbox"
@@ -280,6 +298,13 @@ job "taiga-sandbox" {
   group "events" {
     count = 1
 
+    restart {
+      attempts = 5
+      interval = "15m"
+      delay    = "15s"
+      mode     = "delay"
+    }
+
     network {
       port "http" {
         static = 8888
@@ -333,6 +358,13 @@ job "taiga-sandbox" {
   group "protected" {
     count = 1
 
+    restart {
+      attempts = 5
+      interval = "15m"
+      delay    = "15s"
+      mode     = "delay"
+    }
+
     network {
       port "http" {
         static = 8003
@@ -381,6 +413,13 @@ job "taiga-sandbox" {
 
   group "front" {
     count = 1
+
+    restart {
+      attempts = 5
+      interval = "15m"
+      delay    = "15s"
+      mode     = "delay"
+    }
 
     network {
       port "http" {
@@ -438,6 +477,13 @@ job "taiga-sandbox" {
 
   group "gateway" {
     count = 1
+
+    restart {
+      attempts = 5
+      interval = "15m"
+      delay    = "15s"
+      mode     = "delay"
+    }
 
     consul {}
 
