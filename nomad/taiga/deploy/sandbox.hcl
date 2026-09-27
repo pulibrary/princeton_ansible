@@ -39,107 +39,46 @@ job "taiga-sandbox" {
   type        = "service"
   node_pool   = "sandbox"
 
-  group "taiga" {
+  update {
+    max_parallel      = 1
+    health_check      = "checks"
+    min_healthy_time  = "20s"
+    healthy_deadline  = "10m"
+    progress_deadline = "15m"
+    auto_revert       = true
+  }
+
+  restart {
+    attempts = 5
+    interval = "15m"
+    delay    = "15s"
+    mode     = "delay"
+  }
+
+  reschedule {
+    delay          = "30s"
+    delay_function = "exponential"
+    max_delay      = "5m"
+    unlimited      = true
+  }
+
+  group "rabbitmq" {
     count = 1
 
-    # Required for Nomad's Workload Identity model to authorize this
-    # group to register its service with Consul (see nomad/zookeeper and
-    # nomad/solr, which need it for the same reason). Without it, nothing
-    # gets registered — confirmed via `consul catalog services` returning
-    # empty, not just missing "taiga-sandbox".
-    consul {}
-
-    shutdown_delay = "10s"
-
-    # taiga-back, taiga-async, and the gateway all need to see the same
-    # static/media files, so they share one sticky volume via subdirectories.
-    volume "data" {
-      type            = "host"
-      source          = "taiga-sandbox"
-      access_mode     = "single-node-single-writer"
-      attachment_mode = "file-system"
-      sticky          = true
-    }
-
-    update {
-      max_parallel      = 1
-      health_check      = "checks"
-      min_healthy_time  = "20s"
-      healthy_deadline  = "10m"
-      progress_deadline = "15m"
-      auto_revert       = true
-    }
-
-    restart {
-      attempts = 5
-      interval = "15m"
-      delay    = "15s"
-      mode     = "delay"
-    }
-
-    reschedule {
-      delay          = "30s"
-      delay_function = "exponential"
-      max_delay      = "5m"
-      unlimited      = true
-    }
-
     network {
-      # Mode defaults to "bridge" (Nomad's CNI networking), which is what
-      # every other docker-driver job in this repo relies on implicitly.
-      # This cluster's Docker daemon runs with userns-remap enabled, and
-      # Docker refuses "--network=host" for any container while
-      # userns-remap is on, so "host" mode isn't an option here (it's
-      # only what the old podman-driver version of this job used). All
-      # tasks in a group still share one network namespace under bridge
-      # mode, so sibling tasks still reach each other over 127.0.0.1.
-
-      # Front, back, events, protected, and rabbitmq bind ports that are
-      # hardcoded inside their upstream images, so they're reserved as
-      # static with no "to", which maps the host port straight through to
-      # the same container port. Only the gateway's listen port is ours
-      # to choose, so it's left dynamic (Nomad still registers it with
-      # Consul for nginxplus).
-      port "http" {}
-      port "front" {
-        static = 80
-      }
-      port "back" {
-        static = 8000
-      }
-      port "events" {
-        static = 8888
-      }
-      port "protected" {
-        static = 8003
-      }
-      port "rabbitmq" {
+      port "amqp" {
         static = 5672
-      }
-
-      dns {
-        servers = ["172.17.0.1", "128.112.129.209", "128.112.129.7"]
       }
     }
 
     service {
-      name = "taiga-sandbox"
-      port = "http"
-      tags = ["logging"]
+      name     = "taiga-rabbitmq-sandbox"
+      provider = "nomad"
+      port     = "amqp"
 
-      # No check_restart here on purpose: this check can only pass once
-      # the gateway is up, which depends on the prestart tasks
-      # (await-infrastructure, rabbitmq) finishing first. A check_restart
-      # would fail immediately (nothing's listening yet), hit its limit
-      # after the grace period, and restart the whole allocation
-      # including those prestart tasks -- resetting them before they can
-      # ever finish and permanently deadlocking the deployment. Recovery
-      # from a real, ongoing failure is already handled by restart{},
-      # reschedule{}, and update.healthy_deadline above.
       check {
-        type     = "http"
-        port     = "http"
-        path     = "/"
+        type     = "tcp"
+        port     = "amqp"
         interval = "15s"
         timeout  = "5s"
       }
@@ -148,17 +87,8 @@ job "taiga-sandbox" {
     task "rabbitmq" {
       driver = "docker"
 
-      lifecycle {
-        hook    = "prestart"
-        sidecar = true
-      }
-
-      # A single broker handles both celery's task queue and the events
-      # websocket fan-out; Taiga's own consumers create the queues they
-      # need, so there's no need to run two separate brokers per-service
-      # like the upstream docker-compose does.
       config {
-        image        = "docker.io/library/rabbitmq:3.13.6-management-alpine"
+        image = "docker.io/library/rabbitmq:3.13.6-management-alpine"
       }
 
       template {
@@ -171,16 +101,8 @@ job "taiga-sandbox" {
         RABBITMQ_DEFAULT_USER={{ .RABBITMQ_USER }}
         RABBITMQ_DEFAULT_PASS={{ .RABBITMQ_PASS }}
         RABBITMQ_DEFAULT_VHOST={{ .RABBITMQ_VHOST }}
-        RABBITMQ_NODE_IP_ADDRESS=127.0.0.1
-        RABBITMQ_MNESIA_BASE=/persistence/rabbitmq/mnesia
-        RABBITMQ_LOG_BASE=/persistence/rabbitmq/log
         {{- end }}
         EOF
-      }
-
-      volume_mount {
-        volume      = "data"
-        destination = "/persistence"
       }
 
       resources {
@@ -188,26 +110,38 @@ job "taiga-sandbox" {
         memory = 768
       }
     }
+  }
 
-    task "await-infrastructure" {
-      driver = "docker"
+  group "back" {
+    count = 1
 
-      lifecycle {
-        hook    = "prestart"
-        sidecar = false
+    # taiga-back, taiga-async, and the gateway all need to see the same
+    # static/media files. There's only one replica of this volume, so
+    # Nomad's scheduler forces all three groups onto the same node.
+    volume "data" {
+      type            = "host"
+      source          = "taiga-sandbox"
+      access_mode     = "single-node-multi-writer"
+      attachment_mode = "file-system"
+      sticky          = true
+    }
+
+    network {
+      port "http" {
+        static = 8000
       }
+    }
 
-      config {
-        image        = "docker.io/library/busybox:1.37"
-        entrypoint   = ["/bin/sh", "-c"]
-        args = [
-          "until nc -z -w 2 127.0.0.1 5672; do echo 'waiting for RabbitMQ'; sleep 2; done; until nc -z -w 2 sandbox-postgresql1.lib.princeton.edu 5432; do echo 'waiting for PostgreSQL'; sleep 2; done",
-        ]
-      }
+    service {
+      name     = "taiga-back-sandbox"
+      provider = "nomad"
+      port     = "http"
 
-      resources {
-        cpu    = 50
-        memory = 32
+      check {
+        type     = "tcp"
+        port     = "http"
+        interval = "15s"
+        timeout  = "5s"
       }
     }
 
@@ -215,8 +149,8 @@ job "taiga-sandbox" {
       driver = "docker"
 
       config {
-        image        = "docker.io/robrotheram/taiga-back-openid:${var.taiga_back_openid_version}"
-        entrypoint   = ["/bin/bash", "-c"]
+        image      = "docker.io/robrotheram/taiga-back-openid:${var.taiga_back_openid_version}"
+        entrypoint = ["/bin/bash", "-c"]
         # taiga-back's image ships /taiga-back/static and /taiga-back/media
         # as plain directories; swap them for symlinks into the sticky
         # volume before handing off to the image's own entrypoint.
@@ -244,8 +178,11 @@ job "taiga-sandbox" {
         DEFAULT_FROM_EMAIL={{ .EMAIL_DEFAULT_FROM }}
         EMAIL_USE_TLS=False
         EMAIL_USE_SSL=False
-        RABBITMQ_USER={{ .RABBITMQ_USER }}
-        RABBITMQ_PASS={{ .RABBITMQ_PASS }}
+        {{- $rmq := "" }}
+        {{- range nomadService "taiga-rabbitmq-sandbox" }}{{ $rmq = (printf "%s:%d" .Address .Port) }}{{ end }}
+        CELERY_BROKER_URL=amqp://{{ .RABBITMQ_USER }}:{{ .RABBITMQ_PASS }}@{{ $rmq }}/{{ .RABBITMQ_VHOST }}
+        EVENTS_PUSH_BACKEND=taiga.events.backends.rabbitmq.EventsPushBackend
+        EVENTS_PUSH_BACKEND_URL=amqp://{{ .RABBITMQ_USER }}:{{ .RABBITMQ_PASS }}@{{ $rmq }}/{{ .RABBITMQ_VHOST }}
         ENABLE_TELEMETRY=False
         # taiga-contrib-openid-auth (baked into this image). taiga-back
         # only needs the token-exchange settings; OPENID_URL and
@@ -275,13 +212,25 @@ job "taiga-sandbox" {
         memory = 1024
       }
     }
+  }
+
+  group "async" {
+    count = 1
+
+    volume "data" {
+      type            = "host"
+      source          = "taiga-sandbox"
+      access_mode     = "single-node-multi-writer"
+      attachment_mode = "file-system"
+      sticky          = true
+    }
 
     task "taiga-async" {
       driver = "docker"
 
       config {
-        image        = "docker.io/taigaio/taiga-back:${var.taiga_back_version}"
-        entrypoint   = ["/bin/bash", "-c"]
+        image      = "docker.io/taigaio/taiga-back:${var.taiga_back_version}"
+        entrypoint = ["/bin/bash", "-c"]
         args = [
           "mkdir -p /persistence/static /persistence/media && rm -rf /taiga-back/static /taiga-back/media && ln -s /persistence/static /taiga-back/static && ln -s /persistence/media /taiga-back/media && exec /taiga-back/docker/async_entrypoint.sh",
         ]
@@ -306,8 +255,11 @@ job "taiga-sandbox" {
         DEFAULT_FROM_EMAIL={{ .EMAIL_DEFAULT_FROM }}
         EMAIL_USE_TLS=False
         EMAIL_USE_SSL=False
-        RABBITMQ_USER={{ .RABBITMQ_USER }}
-        RABBITMQ_PASS={{ .RABBITMQ_PASS }}
+        {{- $rmq := "" }}
+        {{- range nomadService "taiga-rabbitmq-sandbox" }}{{ $rmq = (printf "%s:%d" .Address .Port) }}{{ end }}
+        CELERY_BROKER_URL=amqp://{{ .RABBITMQ_USER }}:{{ .RABBITMQ_PASS }}@{{ $rmq }}/{{ .RABBITMQ_VHOST }}
+        EVENTS_PUSH_BACKEND=taiga.events.backends.rabbitmq.EventsPushBackend
+        EVENTS_PUSH_BACKEND_URL=amqp://{{ .RABBITMQ_USER }}:{{ .RABBITMQ_PASS }}@{{ $rmq }}/{{ .RABBITMQ_VHOST }}
         ENABLE_TELEMETRY=False
         {{- end }}
         EOF
@@ -323,12 +275,35 @@ job "taiga-sandbox" {
         memory = 512
       }
     }
+  }
+
+  group "events" {
+    count = 1
+
+    network {
+      port "http" {
+        static = 8888
+      }
+    }
+
+    service {
+      name     = "taiga-events-sandbox"
+      provider = "nomad"
+      port     = "http"
+
+      check {
+        type     = "tcp"
+        port     = "http"
+        interval = "15s"
+        timeout  = "5s"
+      }
+    }
 
     task "taiga-events" {
       driver = "docker"
 
       config {
-        image        = "docker.io/taigaio/taiga-events:${var.taiga_events_version}"
+        image = "docker.io/taigaio/taiga-events:${var.taiga_events_version}"
       }
 
       template {
@@ -338,8 +313,11 @@ job "taiga-sandbox" {
 
         data = <<-EOF
         {{- with nomadVar "nomad/jobs/taiga-sandbox" }}
+        {{- $rmq := "" }}
+        {{- range nomadService "taiga-rabbitmq-sandbox" }}{{ $rmq = (printf "%s:%d" .Address .Port) }}{{ end }}
         RABBITMQ_USER={{ .RABBITMQ_USER }}
         RABBITMQ_PASS={{ .RABBITMQ_PASS }}
+        RABBITMQ_URL=amqp://{{ .RABBITMQ_USER }}:{{ .RABBITMQ_PASS }}@{{ $rmq }}/{{ .RABBITMQ_VHOST }}
         TAIGA_SECRET_KEY={{ .SECRET_KEY }}
         {{- end }}
         EOF
@@ -350,12 +328,35 @@ job "taiga-sandbox" {
         memory = 256
       }
     }
+  }
+
+  group "protected" {
+    count = 1
+
+    network {
+      port "http" {
+        static = 8003
+      }
+    }
+
+    service {
+      name     = "taiga-protected-sandbox"
+      provider = "nomad"
+      port     = "http"
+
+      check {
+        type     = "tcp"
+        port     = "http"
+        interval = "15s"
+        timeout  = "5s"
+      }
+    }
 
     task "taiga-protected" {
       driver = "docker"
 
       config {
-        image        = "docker.io/taigaio/taiga-protected:${var.taiga_protected_version}"
+        image = "docker.io/taigaio/taiga-protected:${var.taiga_protected_version}"
       }
 
       template {
@@ -376,12 +377,35 @@ job "taiga-sandbox" {
         memory = 128
       }
     }
+  }
+
+  group "front" {
+    count = 1
+
+    network {
+      port "http" {
+        static = 80
+      }
+    }
+
+    service {
+      name     = "taiga-front-sandbox"
+      provider = "nomad"
+      port     = "http"
+
+      check {
+        type     = "tcp"
+        port     = "http"
+        interval = "15s"
+        timeout  = "5s"
+      }
+    }
 
     task "taiga-front" {
       driver = "docker"
 
       config {
-        image        = "docker.io/robrotheram/taiga-front-openid:${var.taiga_front_openid_version}"
+        image = "docker.io/robrotheram/taiga-front-openid:${var.taiga_front_openid_version}"
       }
 
       template {
@@ -410,13 +434,47 @@ job "taiga-sandbox" {
         memory = 128
       }
     }
+  }
+
+  group "gateway" {
+    count = 1
+
+    consul {}
+
+    volume "data" {
+      type            = "host"
+      source          = "taiga-sandbox"
+      access_mode     = "single-node-multi-writer"
+      attachment_mode = "file-system"
+      sticky          = true
+    }
+
+    network {
+      port "http" {}
+    }
+
+    service {
+      name = "taiga-sandbox"
+      port = "http"
+      tags = ["logging"]
+
+      # No check_restart here on purpose: it deadlocked this exact job
+      # once already. See nomad/taiga/README.md.
+      check {
+        type     = "http"
+        port     = "http"
+        path     = "/"
+        interval = "15s"
+        timeout  = "5s"
+      }
+    }
 
     task "gateway" {
       driver = "docker"
 
       config {
-        image        = "docker.io/library/nginx:1.19-alpine"
-        entrypoint   = ["/bin/sh", "-c"]
+        image      = "docker.io/library/nginx:1.19-alpine"
+        entrypoint = ["/bin/sh", "-c"]
         args = [
           "mkdir -p /taiga /persistence/static /persistence/media && ln -sfn /persistence/static /taiga/static && ln -sfn /persistence/media /taiga/media && exec nginx -g 'daemon off;'",
         ]
@@ -425,13 +483,19 @@ job "taiga-sandbox" {
         ]
       }
 
-      # Routes to the sibling tasks over loopback, since every task in a
-      # group shares one network namespace regardless of bridge vs host mode.
       template {
         destination = "local/taiga.conf"
         change_mode = "restart"
 
         data = <<-EOF
+        {{- $front := "127.0.0.1:1" }}
+        {{- range nomadService "taiga-front-sandbox" }}{{ $front = (printf "%s:%d" .Address .Port) }}{{ end }}
+        {{- $back := "127.0.0.1:1" }}
+        {{- range nomadService "taiga-back-sandbox" }}{{ $back = (printf "%s:%d" .Address .Port) }}{{ end }}
+        {{- $events := "127.0.0.1:1" }}
+        {{- range nomadService "taiga-events-sandbox" }}{{ $events = (printf "%s:%d" .Address .Port) }}{{ end }}
+        {{- $protected := "127.0.0.1:1" }}
+        {{- range nomadService "taiga-protected-sandbox" }}{{ $protected = (printf "%s:%d" .Address .Port) }}{{ end }}
         server {
             listen {{ env "NOMAD_PORT_http" }} default_server;
 
@@ -439,7 +503,7 @@ job "taiga-sandbox" {
             charset utf-8;
 
             location / {
-                proxy_pass http://127.0.0.1:80/;
+                proxy_pass http://{{ $front }}/;
                 proxy_pass_header Server;
                 proxy_set_header Host $http_host;
                 proxy_redirect off;
@@ -448,7 +512,7 @@ job "taiga-sandbox" {
             }
 
             location /api/ {
-                proxy_pass http://127.0.0.1:8000/api/;
+                proxy_pass http://{{ $back }}/api/;
                 proxy_pass_header Server;
                 proxy_set_header Host $http_host;
                 proxy_redirect off;
@@ -457,7 +521,7 @@ job "taiga-sandbox" {
             }
 
             location /admin/ {
-                proxy_pass http://127.0.0.1:8000/admin/;
+                proxy_pass http://{{ $back }}/admin/;
                 proxy_pass_header Server;
                 proxy_set_header Host $http_host;
                 proxy_redirect off;
@@ -486,12 +550,12 @@ job "taiga-sandbox" {
                 proxy_set_header X-Scheme $scheme;
                 proxy_set_header X-Forwarded-Proto $scheme;
                 proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-                proxy_pass http://127.0.0.1:8003/;
+                proxy_pass http://{{ $protected }}/;
                 proxy_redirect off;
             }
 
             location /events {
-                proxy_pass http://127.0.0.1:8888/events;
+                proxy_pass http://{{ $events }}/events;
                 proxy_http_version 1.1;
                 proxy_set_header Upgrade $http_upgrade;
                 proxy_set_header Connection "upgrade";
