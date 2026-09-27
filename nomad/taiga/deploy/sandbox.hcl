@@ -562,6 +562,17 @@ job "taiga-sandbox" {
         server {
             listen {{ env "NOMAD_PORT_http" }} default_server;
 
+            # Temporary: the default "error" level isn't showing anything
+            # for a 500 that returns nginx's own default error page (no
+            # CORS headers, Content-Type: text/html) for POST /api/v1/auth
+            # -- neither this gateway's error log nor taiga-back's own
+            # logs show any trace of it. "info" (not "debug" -- the stock
+            # nginx:1.19-alpine build isn't a --with-debug build, so a
+            # "debug" level silently produces nothing) should at least
+            # show the upstream connection attempt and what came back.
+            # Remove once this is root-caused.
+            error_log /dev/stderr info;
+
             client_max_body_size 100M;
             charset utf-8;
 
