@@ -209,12 +209,19 @@ job "taiga-sandbox" {
         OPENID_TOKEN_URL={{ .OPENID_TOKEN_URL }}
         OPENID_CLIENT_ID={{ .OPENID_CLIENT_ID }}
         OPENID_CLIENT_SECRET={{ .OPENID_CLIENT_SECRET }}
-        # Must match the frontend plugin's authorize-request scope
-        # (front/coffee/openid-auth.coffee hardcodes "User.Read" with no
-        # env override), since the token exchange has to ask for a scope
-        # the user actually consented to. "User.Read" is a valid Graph
-        # scope and still works against graph.microsoft.com/oidc/userinfo.
-        OPENID_SCOPE=User.Read
+        # Must match the frontend plugin's actual authorize-request scope,
+        # or Microsoft's token endpoint rejects the exchange with
+        # invalid_grant (confirmed against a real login attempt's network
+        # trace). The plugin's front/coffee/openid-auth.coffee source on
+        # GitHub defaults this to "User.Read" with no env override, but
+        # the deployed robrotheram/taiga-front-openid:latest image is
+        # evidently built from a different version that defaults to
+        # "openid email" instead -- same kind of version drift as the
+        # stale migration patched in taiga-back's args above. "openid
+        # email" is also the more correct pairing for
+        # graph.microsoft.com/oidc/userinfo anyway (that's the actual
+        # OIDC userinfo endpoint, not a general Graph API call).
+        OPENID_SCOPE=openid email
         {{- end }}
         EOF
       }
