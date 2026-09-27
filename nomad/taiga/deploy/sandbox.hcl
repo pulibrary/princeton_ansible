@@ -164,11 +164,8 @@ job "taiga-sandbox" {
         image      = "docker.io/robrotheram/taiga-back-openid:${var.taiga_back_openid_version}"
         ports      = ["http"]
         entrypoint = ["/bin/bash", "-c"]
-        # taiga-back's image ships /taiga-back/static and /taiga-back/media
-        # as plain directories; swap them for symlinks into the sticky
-        # volume before handing off to the image's own entrypoint.
         args = [
-          "mkdir -p /persistence/static /persistence/media && rm -rf /taiga-back/static /taiga-back/media && ln -s /persistence/static /taiga-back/static && ln -s /persistence/media /taiga-back/media && exec /taiga-back/docker/entrypoint.sh",
+          "mkdir -p /persistence/static /persistence/media && rm -rf /taiga-back/static /taiga-back/media && ln -s /persistence/static /taiga-back/static && ln -s /persistence/media /taiga-back/media && python3 -c 'p = \"/taiga-back/taiga/projects/migrations/0046_triggers_to_update_tags_colors.py\"; s = open(p).read(); s = s.replace(\"array_agg_mult (anyarray)\", \"array_agg_mult (anycompatiblearray)\"); s = s.replace(\"= anyarray\", \"= anycompatiblearray\"); open(p, \"w\").write(s)' && exec /taiga-back/docker/entrypoint.sh",
         ]
       }
 
