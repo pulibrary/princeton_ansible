@@ -127,17 +127,21 @@ job "taiga-sandbox" {
       port = "http"
       tags = ["logging"]
 
+      # No check_restart here on purpose: this check can only pass once
+      # the gateway is up, which depends on the prestart tasks
+      # (await-infrastructure, rabbitmq) finishing first. A check_restart
+      # would fail immediately (nothing's listening yet), hit its limit
+      # after the grace period, and restart the whole allocation
+      # including those prestart tasks -- resetting them before they can
+      # ever finish and permanently deadlocking the deployment. Recovery
+      # from a real, ongoing failure is already handled by restart{},
+      # reschedule{}, and update.healthy_deadline above.
       check {
         type     = "http"
         port     = "http"
         path     = "/"
         interval = "15s"
         timeout  = "5s"
-
-        check_restart {
-          limit = 5
-          grace = "5m"
-        }
       }
     }
 
