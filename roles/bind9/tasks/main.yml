@@ -1,4 +1,42 @@
 ---
+- name: Bind9 | Inspect installed services for dnsmasq migration
+  ansible.builtin.service_facts:
+  when: bind9_remove_dnsmasq
+
+- name: Bind9 | Preserve upstream DNS during dnsmasq migration
+  ansible.builtin.include_tasks: resolver.yml
+  when:
+    - bind9_remove_dnsmasq
+    - running_on_server
+    - bind9_manage_resolv_conf
+
+- name: Bind9 | Stop legacy dnsmasq before claiming port 53
+  ansible.builtin.service:
+    name: dnsmasq
+    enabled: false
+    state: stopped
+  become: true
+  when:
+    - bind9_remove_dnsmasq
+    - "'dnsmasq.service' in (ansible_facts.services | default({}))"
+
+- name: Bind9 | Remove legacy dnsmasq package
+  ansible.builtin.package:
+    name: dnsmasq
+    state: absent
+  become: true
+  when: bind9_remove_dnsmasq
+
+- name: Bind9 | Remove legacy dnsmasq configuration
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  become: true
+  loop:
+    - /etc/dnsmasq.conf
+    - /etc/dnsmasq.d/10-consul
+  when: bind9_remove_dnsmasq
+
 - name: Bind9 | Install local nameserver
   ansible.builtin.apt:
     name: "{{ bind9_packages }}"
@@ -55,16 +93,9 @@
     enabled: true
     state: started
   become: true
-  when: running_on_server
 
-#####
-# Note these are not tested because docker will not allow it
-#
 - name: Bind9 | Point the host at its local resolver
   ansible.builtin.include_tasks: resolver.yml
   when:
     - running_on_server
     - bind9_manage_resolv_conf
-#
-# End - untested
-#####
