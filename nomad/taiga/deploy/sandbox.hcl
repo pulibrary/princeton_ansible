@@ -180,8 +180,13 @@ job "taiga-sandbox" {
       }
 
       template {
-        destination = "${NOMAD_TASK_DIR}/patch.py"
-        change_mode = "noop"
+        # "local/patch.py", not "${NOMAD_TASK_DIR}/patch.py" -- the
+        # latter rendered nothing at all (confirmed: /local stayed
+        # completely empty), while this exact relative form is what the
+        # gateway task's template already uses successfully elsewhere in
+        # this same job for local/taiga.conf.
+        destination = "local/patch.py"
+        change_mode = "restart"
 
         data = <<-EOF
         # Patches applied to robrotheram/taiga-back-openid:latest before
