@@ -164,16 +164,6 @@ job "taiga-sandbox" {
         image      = "docker.io/robrotheram/taiga-back-openid:${var.taiga_back_openid_version}"
         ports      = ["http"]
         entrypoint = ["/bin/bash", "-c"]
-        # The patch logic lives in its own template-rendered file
-        # (below) instead of an inline python3 -c string. An earlier
-        # version crammed two nested python3 -c '...' invocations with
-        # escaped quotes into this single args string, and something in
-        # the submit/render pipeline silently truncated it mid-string
-        # (confirmed: GitHub served the correct, complete source, but
-        # `nomad job inspect` showed a shorter string cut off right at
-        # the second invocation) -- HCL job specs apparently aren't a
-        # safe place for that much nested quoting. A real file avoids
-        # the whole problem.
         args = [
           "mkdir -p /persistence/static /persistence/media && rm -rf /taiga-back/static /taiga-back/media && ln -s /persistence/static /taiga-back/static && ln -s /persistence/media /taiga-back/media && python3 /local/patch.py && exec /taiga-back/docker/entrypoint.sh --timeout 120",
         ]
@@ -191,7 +181,38 @@ job "taiga-sandbox" {
         data = <<-EOF
         # Patches applied to robrotheram/taiga-back-openid:latest before
         # it starts. See nomad/taiga/README.md for the full story on each.
+        #
+        # Rendered for alloc {{ env "NOMAD_ALLOC_ID" }}. That reference is
+        # otherwise unused -- it exists because this template previously
+        # had zero {{ }} directives (pure static content) and never
+        # rendered at all, not even onto the host-side alloc directory
+        # (`nomad alloc fs` showed it plainly missing). Every other
+        # template in this job that DOES render has at least one dynamic
+        # directive (nomadVar/nomadService/env); this line tests whether
+        # that's the actual difference.
 
+        # 1. Migration 0046 was built from a taiga-back snapshot that
+        #    predates https://github.com/taigaio/taiga-back/issues/54
+        #    being fixed: its CREATE AGGREGATE uses the pre-PG14 anyarray
+        #    signature, which fails with "function array_cat(anyarray,
+        #    anyarray) does not exist" on any PostgreSQL >= 14, regardless
+        #    of which specific instance.
+        p = "/taiga-back/taiga/projects/migrations/0046_triggers_to_update_tags_colors.py"
+        s = open(p).read()
+        s = s.replace("array_agg_mult (anyarray)", "array_agg_mult (anycompatiblearray)")
+        s = s.replace("= anyarray", "= anycompatiblearray")
+        open(p, "w").write(s)
+
+        # 2. Temporary: DEBUG=True to see a real traceback for the 500 on
+        #    POST /api/v1/auth during a genuine OpenID login (a dummy code
+        #    only exercises Microsoft's immediate-rejection path, not the
+        #    success path that does the real user lookup/creation).
+        #    Revert once this is root-caused.
+        p = "/taiga-back/settings/config.py"
+        s = open(p).read()
+        s = s.replace("DEBUG = False", "DEBUG = True")
+        open(p, "w").write(s)
+        EOF
       }
 
       template {
