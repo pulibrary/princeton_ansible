@@ -56,7 +56,9 @@ job "kaneo-sandbox" {
 
       env {
         KANEO_CLIENT_URL = "https://kaneo-sandbox.lib.princeton.edu"
-        TRUSTED_PROXIES  = "10.0.0.0/8,127.0.0.0/8,::1/128"
+        # adc-dev1/adc-dev2 (the nginxplus proxy) and the nomad sandbox
+        # clients all live in 172.20.80.0/24, not 10.0.0.0/8.
+        TRUSTED_PROXIES  = "172.16.0.0/12,127.0.0.0/8,::1/128"
       }
 
       template {
@@ -80,6 +82,8 @@ job "kaneo-sandbox" {
         GITHUB_APP_NAME={{ .GITHUB_APP_NAME }}
         GITHUB_WEBHOOK_SECRET={{ .GITHUB_WEBHOOK_SECRET }}
         GITHUB_PRIVATE_KEY_BASE64={{ .GITHUB_PRIVATE_KEY_BASE64 }}
+        GITHUB_OAUTH_CLIENT_ID={{ .GITHUB_OAUTH_CLIENT_ID }}
+        GITHUB_OAUTH_CLIENT_SECRET={{ .GITHUB_OAUTH_CLIENT_SECRET }}
         {{- end -}}
         EOF
       }
