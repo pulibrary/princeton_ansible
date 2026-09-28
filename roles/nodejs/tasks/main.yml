@@ -64,6 +64,16 @@
     creates: /usr/local/node-{{ desired_nodejs_version }}-linux-x64
     remote_src: true
 
+- name: Nodejs | Install corepack
+  ansible.builtin.command:
+    cmd: "/usr/local/node-{{ desired_nodejs_version }}-linux-x64/bin/npm install -g corepack"
+    creates: "/usr/local/node-{{ desired_nodejs_version }}-linux-x64/lib/node_modules/corepack"
+  environment:
+    PATH: "/usr/local/node-{{ desired_nodejs_version }}-linux-x64/bin:/usr/bin:/bin"
+  when:
+    - use_yarn
+    - nodejs_yarn_berry_enabled | bool
+
 - name: Nodejs | create symbolic links for node, npm, npx, and corepack
   ansible.builtin.file:
     src: "{{ item.src }}"
