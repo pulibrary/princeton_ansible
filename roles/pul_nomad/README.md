@@ -113,6 +113,8 @@ Compare `dig @127.0.0.1 -p 8600 consul.service.consul SRV` with
 `dig @127.0.0.1 consul.service.consul SRV`. The first query tests Consul
 directly and the second tests the BIND forwarding path on port 53.
 
+Also make sure that `dig @172.20.80.31 consul.service.consul SRV` returns answers from any box in the private IP range (by ssh'ing into it and running that command).
+
 Use `sudo rndc flush` to clear BIND's cache when troubleshooting changed IPs.
 
 ### Nomad
