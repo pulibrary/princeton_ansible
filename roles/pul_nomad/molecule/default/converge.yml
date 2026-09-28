@@ -6,7 +6,20 @@
     running_on_server: false
       # Nomad can't detect CPU in molecule containers, so give it a default.
     pulibrary_nomad_cpu_total_compute: "2000"
+  pre_tasks:
+    # pul_nomad's "restart bind" handler expects BIND to already be
+    # installed and running, same as when playbooks/nomad.yml runs the
+    # bind9 role ahead of pul_nomad in production.
+    - name: Update apt cache
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 600
+      become: true
   tasks:
+    - name: "Include bind9"
+      ansible.builtin.include_role:
+        name: "bind9"
+
     - name: "Include pul_nomad"
       ansible.builtin.include_role:
         name: "pul_nomad"
