@@ -63,3 +63,15 @@
   when:
     - "(runtime_env | default('staging')) == 'production'"
   notify: reload postgresql
+- name: 'Nomad App | Postgresql | ensure all nomad clients are in pg_hba'
+  ansible.builtin.lineinfile:
+    path: "/etc/postgresql/{{ postgres_version }}/main/pg_hba.conf"
+    line: "host  all  all  {{ nomad_host }} md5"
+  delegate_to: "{{ item.db_host }}"
+  run_once: true
+  loop: "{{ groups['nomad_clients_sandbox'] }}"
+  loop_control:
+    loop_var: nomad_host
+  when:
+    - "(runtime_env | default('staging')) == 'sandbox'"
+  notify: reload postgresql
