@@ -43,6 +43,21 @@
     state: present
   become: true
 
+- name: Bind9 | Ensure caller-provided config includes exist
+  # Callers like pul_nomad own zone files that named.conf.options includes
+  # (via bind9_config_includes) but that they don't write until after this
+  # role runs. Seed an empty placeholder so named-checkconf below succeeds
+  # on a first run; the caller overwrites it with real content afterward.
+  ansible.builtin.copy:
+    dest: "{{ item }}"
+    content: ""
+    force: false
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  loop: "{{ bind9_config_includes }}"
+
 - name: Bind9 | Configure named
   ansible.builtin.template:
     src: named.conf.options.j2

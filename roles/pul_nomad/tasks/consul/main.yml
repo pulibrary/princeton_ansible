@@ -39,9 +39,6 @@
   ansible.builtin.stat:
     path: /etc/bind
   register: pul_nomad_bind9_config_dir_stat
-  tags:
-    - bind9
-    - dns
 
 - name: Pul_nomad | consul | Ensure BIND configuration directory exists
   ansible.builtin.file:
@@ -52,9 +49,6 @@
     mode: "0755"
   become: true
   when: not pul_nomad_bind9_config_dir_stat.stat.exists
-  tags:
-    - bind9
-    - dns
 
 - name: Pul_nomad | consul | Configure Consul forwarding zone
   ansible.builtin.template:
@@ -66,24 +60,3 @@
   become: true
   notify:
     - restart bind
-  tags:
-    - bind9
-    - dns
-
-# Install BIND and forward .consul requests to the local Consul agent.
-- name: Pul_nomad | consul | Install BIND
-  ansible.builtin.include_role:
-    name: bind9
-    apply:
-      tags:
-        - bind9
-        - dns
-  vars:
-    bind9_config_includes:
-      - /etc/bind/consul.conf
-    # Consul's private zone is intentionally unsigned.
-    bind9_dnssec_validation: "no"
-    bind9_remove_dnsmasq: true
-  tags:
-    - bind9
-    - dns
