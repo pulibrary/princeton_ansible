@@ -164,9 +164,29 @@ job "taiga-sandbox" {
         image      = "docker.io/robrotheram/taiga-back-openid:${var.taiga_back_openid_version}"
         ports      = ["http"]
         entrypoint = ["/bin/bash", "-c"]
+        # The patch logic lives in its own template-rendered file
+        # (below) instead of an inline python3 -c string. An earlier
+        # version crammed two nested python3 -c '...' invocations with
+        # escaped quotes into this single args string, and something in
+        # the submit/render pipeline silently truncated it mid-string
+        # (confirmed: GitHub served the correct, complete source, but
+        # `nomad job inspect` showed a shorter string cut off right at
+        # the second invocation) -- HCL job specs apparently aren't a
+        # safe place for that much nested quoting. A real file avoids
+        # the whole problem.
         args = [
-          "mkdir -p /persistence/static /persistence/media && rm -rf /taiga-back/static /taiga-back/media && ln -s /persistence/static /taiga-back/static && ln -s /persistence/media /taiga-back/media && python3 -c 'p = \"/taiga-back/taiga/projects/migrations/0046_triggers_to_update_tags_colors.py\"; s = open(p).read(); s = s.replace(\"array_agg_mult (anyarray)\", \"array_agg_mult (anycompatiblearray)\"); s = s.replace(\"= anyarray\", \"= anycompatiblearray\"); open(p, \"w\").write(s)' && python3 -c 'p = \"/taiga-back/settings/config.py\"; s = open(p).read(); s = s.replace(\"DEBUG = False\", \"DEBUG = True\"); open(p, \"w\").write(s)' && exec /taiga-back/docker/entrypoint.sh --timeout 120",
+          "mkdir -p /persistence/static /persistence/media && rm -rf /taiga-back/static /taiga-back/media && ln -s /persistence/static /taiga-back/static && ln -s /persistence/media /taiga-back/media && python3 /local/patch.py && exec /taiga-back/docker/entrypoint.sh --timeout 120",
         ]
+      }
+
+      template {
+        destination = "${NOMAD_TASK_DIR}/patch.py"
+        change_mode = "noop"
+
+        data = <<-EOF
+        # Patches applied to robrotheram/taiga-back-openid:latest before
+        # it starts. See nomad/taiga/README.md for the full story on each.
+
       }
 
       template {
