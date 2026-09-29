@@ -12,7 +12,7 @@ On each run, the role:
 
 1. Ensures the download directory (`{{ golang_download_dir }}`) exists.
 2. Derives the correct architecture string (`amd64` / `arm64`) from
-   `ansible_architecture` if you didn’t override `golang_arch`.
+   `ansible_facts['architecture']` if you didn’t override `golang_arch`.
 3. Downloads the versioned Go tarball
    (`go{{ golang_version }}.linux-{{ golang_arch }}.tar.gz`) from `go.dev`
    into `{{ golang_download_dir }}` if the file does **not** already exist.
@@ -43,7 +43,7 @@ Defined in `roles/golang/defaults/main.yml`:
 golang_version: "1.25.5"
 
 # Architecture string for Go tarball. Override if needed.
-# Normally auto-detected from ansible_architecture, but you can force it.
+# Normally auto-detected from ansible_facts['architecture'], but you can force it.
 golang_arch: "amd64"
 
 # Where to cache downloaded tarballs

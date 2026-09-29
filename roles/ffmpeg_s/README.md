@@ -19,7 +19,7 @@ This role compiles FFmpeg from source along with numerous codec libraries, provi
 |----------|---------|-------------|
 | `ffmpeg_s_prefix` | `/opt/ffmpeg` | Base installation directory |
 | `ffmpeg_s_version` | `8.0.1` | FFmpeg version to build |
-| `ffmpeg_s_make_jobs` | `{{ ansible_processor_vcpus }}` | Parallel make jobs |
+| `ffmpeg_s_make_jobs` | `{{ ansible_facts['processor_vcpus'] }}` | Parallel make jobs |
 | `ffmpeg_s_symlink_targets` | `[ffmpeg, ffprobe, ffplay]` | Binaries to symlink to `/usr/local/bin` |
 
 ### Derived Variables

@@ -150,7 +150,7 @@ Allowing other hosts on the subnet to use this resolver:
       vars:
         bind9_listen_on:
           - 127.0.0.1
-          - "{{ ansible_default_ipv4.address }}"
+          - "{{ ansible_facts['default_ipv4'].address }}"
         bind9_allow_query:
           - localhost
           - 128.112.0.0/16

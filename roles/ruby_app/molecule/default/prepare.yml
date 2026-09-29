@@ -8,10 +8,10 @@
     - name: Assert postgres molecule host is amd64
       ansible.builtin.assert:
         that:
-          - ansible_architecture == postgres_supported_architecture
+          - ansible_facts['architecture'] == postgres_supported_architecture
         fail_msg: >-
           The psql-client Molecule scenario only supports amd64 containers.
-          This container reports {{ ansible_architecture }}.
+          This container reports {{ ansible_facts['architecture'] }}.
 
     - name: Make sure CA certificates and curl are available
       ansible.builtin.apt:
@@ -40,7 +40,7 @@
         content: |
           Types: {{ postgres_apt_source_types }}
           URIs: {{ postgres_apt_repository_uri }}
-          Suites: {{ ansible_distribution_release }}-pgdg
+          Suites: {{ ansible_facts['distribution_release'] }}-pgdg
           Architectures: {{ postgres_apt_architecture }}
           Components: {{ postgres_apt_components }}
           Signed-By: {{ postgres_apt_key_path }}

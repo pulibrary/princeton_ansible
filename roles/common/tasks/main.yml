@@ -4,8 +4,8 @@
     name: "{{ inventory_hostname }}"
   when:
     - running_on_server
-    - ansible_os_family != "FreeBSD"
-    - "ansible_hostname not in inventory_hostname"
+    - ansible_facts['os_family'] != "FreeBSD"
+    - "ansible_facts['hostname'] not in inventory_hostname"
   tags: "update_hostname"
 
 # Must run BEFORE any package install: pre-built images may carry
@@ -13,7 +13,7 @@
 - name: Common | Configure package mirrors
   ansible.builtin.include_tasks: mirrors.yml
   when:
-    - ansible_os_family != "FreeBSD"
+    - ansible_facts['os_family'] != "FreeBSD"
     - running_on_server != false # This breaks arm64 CPUs for molecule tests.
 
 - name: Common | Install common shared packages
@@ -24,7 +24,7 @@
   loop:
     - "{{ common_shared_packages }}"
   when:
-    - ansible_os_family != "FreeBSD"
+    - ansible_facts['os_family'] != "FreeBSD"
 
 - name: Common | Install common ubuntu packages
   ansible.builtin.package:
@@ -33,7 +33,7 @@
   loop:
     - "{{ common_ubuntu_packages }}"
   when:
-    - ansible_os_family == "Debian"
+    - ansible_facts['os_family'] == "Debian"
 
 - name: Common | Install common RHEL packages
   ansible.builtin.dnf:
@@ -42,7 +42,7 @@
   loop:
     - "{{ common_rhel_packages }}"
   when:
-    - ansible_os_family == "RedHat"
+    - ansible_facts['os_family'] == "RedHat"
 
 - name: Common | Install common FreeBSD packages
   ansible.builtin.package:
@@ -51,7 +51,7 @@
   loop:
     - "{{ common_freebsd_packages }}"
   when:
-    - ansible_os_family == "FreeBSD"
+    - ansible_facts['os_family'] == "FreeBSD"
 
 - name: Common | copy tmux.conf
   ansible.builtin.template:
@@ -78,14 +78,14 @@
     mode: "0755"
     owner: root
     group: root
-  when: ansible_service_mgr=="systemd"
+  when: ansible_facts['service_mgr']=="systemd"
 
 - name: Common | override default logrotate timer
   ansible.builtin.template:
     src: "logrotate_timer.j2"
     dest: "/etc/systemd/system/logrotate.timer.d/override.conf"
     mode: "0644"
-  when: ansible_service_mgr=="systemd"
+  when: ansible_facts['service_mgr']=="systemd"
   notify:
     - reload logrotate timer settings
 
@@ -95,7 +95,7 @@
     state: directory
     mode: "0755"
     owner: root
-    group: "{{ 'wheel' if ansible_os_family == 'FreeBSD' else 'root' }}"
+    group: "{{ 'wheel' if ansible_facts['os_family'] == 'FreeBSD' else 'root' }}"
   when:
     - logrotate_rules is defined
     - logrotate_rules | selectattr('enabled', 'undefined') | list | length > 0
@@ -107,7 +107,7 @@
     dest: "{{ common_logrotate_dir }}/{{ item.name }}"
     mode: "0644"
     owner: root
-    group: "{{ 'wheel' if ansible_os_family == 'FreeBSD' else 'root' }}"
+    group: "{{ 'wheel' if ansible_facts['os_family'] == 'FreeBSD' else 'root' }}"
   loop: "{{ logrotate_rules }}"
   when:
     - logrotate_rules is defined
@@ -123,7 +123,7 @@
     owner: root
     group: root
   when:
-    - ansible_service_mgr=="systemd"
+    - ansible_facts['service_mgr']=="systemd"
 
 - name: Common | configure journald log limits
   ansible.builtin.template:
@@ -133,7 +133,7 @@
     owner: root
     group: root
   when:
-    - ansible_service_mgr=="systemd"
+    - ansible_facts['service_mgr']=="systemd"
   notify:
     - restart journald
 
@@ -154,7 +154,7 @@
     mode: '0755'
   when:
     - running_on_server
-    - ansible_os_family != "FreeBSD"
+    - ansible_facts['os_family'] != "FreeBSD"
 
 - name: Common | Check if dua is already installed system-wide
   ansible.builtin.stat:
@@ -162,7 +162,7 @@
   register: dua_system_stat_result
   when:
     - running_on_server
-    - ansible_os_family != "FreeBSD"
+    - ansible_facts['os_family'] != "FreeBSD"
 
 - name: Common | Install dua-cli system-wide if not already present
   ansible.builtin.shell: "{{ dua_system_install_command }}"
@@ -170,7 +170,7 @@
     creates: "{{ dua_system_executable }}"
   when:
     - running_on_server
-    - ansible_os_family != "FreeBSD"
+    - ansible_facts['os_family'] != "FreeBSD"
     - not dua_system_stat_result.stat.exists
 
 - name: Common | Verify dua installation
@@ -179,7 +179,7 @@
   changed_when: false
   when:
     - running_on_server
-    - ansible_os_family != "FreeBSD"
+    - ansible_facts['os_family'] != "FreeBSD"
     - not dua_system_stat_result.stat.exists
   failed_when: dua_version_result.rc != 0
 
@@ -188,7 +188,7 @@
     msg: "dua-cli version: {{ dua_version_result.stdout }}"
   when:
     - running_on_server
-    - ansible_os_family != "FreeBSD"
+    - ansible_facts['os_family'] != "FreeBSD"
     - dua_version_result.stdout is defined and dua_version_result.rc == 0
 
 - name: Common | Check for checkmk agent binary
@@ -206,7 +206,7 @@
     group: root
   when:
     - running_on_server
-    - ansible_os_family != "FreeBSD"
+    - ansible_facts['os_family'] != "FreeBSD"
     - checkmk_binary_stat.stat.exists
 
 - name: Common | install and update chronyd
@@ -225,4 +225,4 @@
     dest: /etc/profile.d/history-timestamp.sh
     mode: "0644"
     owner: root
-    group: "{{ 'wheel' if ansible_os_family == 'FreeBSD' else 'root' }}"
+    group: "{{ 'wheel' if ansible_facts['os_family'] == 'FreeBSD' else 'root' }}"

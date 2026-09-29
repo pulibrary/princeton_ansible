@@ -64,7 +64,7 @@
     # Cortex XDR
     - name: Install XDR except on FreeBSD
       when:
-        - ansible_distribution != "FreeBSD"
+        - ansible_facts['distribution'] != "FreeBSD"
         - "'traps_pmd.service' not in ansible_facts.services"
       block:
         - name: Download the XDR deb file (Ubuntu)
@@ -75,7 +75,7 @@
             creates: "/opt/{{ cortex_install }}.deb"
             remote_src: true
           when:
-            - ansible_os_family == "Debian"
+            - ansible_facts['os_family'] == "Debian"
 
         - name: Download the XDR rpm file (RedHat)
           ansible.builtin.unarchive:
@@ -85,14 +85,14 @@
             creates: "/opt/{{ cortex_install }}.rpm"
             remote_src: true
           when:
-            - ansible_os_family == "RedHat"
+            - ansible_facts['os_family'] == "RedHat"
 
         - name: Install Cortex XDR dependencies (RedHat)
           ansible.builtin.dnf:
             name: selinux-policy-devel
             state: present
           when:
-            - ansible_os_family == "RedHat"
+            - ansible_facts['os_family'] == "RedHat"
 
         - name: Create /etc/panw directory
           ansible.builtin.file:
@@ -116,7 +116,7 @@
           ansible.builtin.apt:
             deb: "/opt/{{ cortex_install }}.deb"
           when:
-            - ansible_os_family == "Debian"
+            - ansible_facts['os_family'] == "Debian"
 
         - name: Install XDR agent (RedHat)
           ansible.builtin.dnf:
@@ -124,7 +124,7 @@
             state: present
             disable_gpg_check: true
           when:
-            - ansible_os_family == "RedHat"
+            - ansible_facts['os_family'] == "RedHat"
 
         - name: Run cytool checkin
           ansible.builtin.command:
@@ -219,7 +219,7 @@
         checksum_algorithm: sha256
       register: rapid7_remote_pem
       when:
-        - ansible_distribution != "FreeBSD"
+        - ansible_facts['distribution'] != "FreeBSD"
       tags:
         - rapid7
         - rapid7_scan_assistant
@@ -230,7 +230,7 @@
       register: rapid7_remote_pem_content
       failed_when: false
       when:
-        - ansible_distribution != "FreeBSD"
+        - ansible_facts['distribution'] != "FreeBSD"
       tags:
         - rapid7
         - rapid7_scan_assistant
@@ -248,7 +248,7 @@
       changed_when: false
       failed_when: false
       when:
-        - ansible_distribution != "FreeBSD"
+        - ansible_facts['distribution'] != "FreeBSD"
         - rapid7_remote_pem.stat.exists | default(false)
       tags:
         - rapid7
@@ -286,7 +286,7 @@
       changed_when: false
       failed_when: false
       when:
-        - ansible_distribution != "FreeBSD"
+        - ansible_facts['distribution'] != "FreeBSD"
       tags:
         - rapid7
         - rapid7_scan_assistant
@@ -302,7 +302,7 @@
       changed_when: false
       failed_when: false
       when:
-        - ansible_distribution != "FreeBSD"
+        - ansible_facts['distribution'] != "FreeBSD"
       tags:
         - rapid7
         - rapid7_scan_assistant
@@ -317,7 +317,7 @@
       changed_when: false
       failed_when: false
       when:
-        - ansible_os_family == "Debian"
+        - ansible_facts['os_family'] == "Debian"
       tags:
         - rapid7
         - rapid7_scan_assistant
@@ -336,7 +336,7 @@
       changed_when: false
       failed_when: false
       when:
-        - ansible_os_family == "Debian"
+        - ansible_facts['os_family'] == "Debian"
         - "'Status: active' in rapid7_ufw_status.stdout"
       tags:
         - rapid7
@@ -352,7 +352,7 @@
       changed_when: false
       failed_when: false
       when:
-        - ansible_os_family == "RedHat"
+        - ansible_facts['os_family'] == "RedHat"
       tags:
         - rapid7
         - rapid7_scan_assistant
@@ -372,7 +372,7 @@
       changed_when: false
       failed_when: false
       when:
-        - ansible_os_family == "RedHat"
+        - ansible_facts['os_family'] == "RedHat"
         - rapid7_firewalld_status.rc == 0
       tags:
         - rapid7
@@ -383,7 +383,7 @@
         rapid7_firewall_happy_path: >-
           {{
             (
-              ansible_os_family == "Debian"
+              ansible_facts['os_family'] == "Debian"
               and
               (
                 "Status: inactive"
@@ -400,7 +400,7 @@
             )
             or
             (
-              ansible_os_family == "RedHat"
+              ansible_facts['os_family'] == "RedHat"
               and
               (
                 rapid7_firewalld_status.rc | default(1) != 0
@@ -416,12 +416,12 @@
             )
             or
             (
-              ansible_os_family
+              ansible_facts['os_family']
               not in ["Debian", "RedHat"]
             )
           }}
       when:
-        - ansible_distribution != "FreeBSD"
+        - ansible_facts['distribution'] != "FreeBSD"
       tags:
         - rapid7
         - rapid7_scan_assistant
@@ -495,7 +495,7 @@
             )
           }}
       when:
-        - ansible_distribution != "FreeBSD"
+        - ansible_facts['distribution'] != "FreeBSD"
       tags:
         - rapid7
         - rapid7_scan_assistant
@@ -506,7 +506,7 @@
           Rapid7 Insight Agent and Scan Assistant are healthy.
           Installation and repair blocks will be skipped.
       when:
-        - ansible_distribution != "FreeBSD"
+        - ansible_facts['distribution'] != "FreeBSD"
         - rapid7_happy_path
       tags:
         - rapid7
@@ -515,7 +515,7 @@
     # Happy path failed: install or repair both Rapid7 components
     - name: Happy path failed | Install or repair Rapid7
       when:
-        - ansible_distribution != "FreeBSD"
+        - ansible_facts['distribution'] != "FreeBSD"
         - not rapid7_happy_path
       tags:
         - rapid7
@@ -530,7 +530,7 @@
             group: root
             mode: "0644"
           when:
-            - ansible_os_family == "Debian"
+            - ansible_facts['os_family'] == "Debian"
 
         - name: Happy path failed | Download Insight Agent rpm package
           ansible.builtin.get_url:
@@ -541,7 +541,7 @@
             group: root
             mode: "0644"
           when:
-            - ansible_os_family == "RedHat"
+            - ansible_facts['os_family'] == "RedHat"
 
         - name: Happy path failed | Install Rapid7 signing key
           ansible.builtin.rpm_key:
@@ -549,20 +549,20 @@
             key: >-
               https://us.storage.endpoint.ingress.rapid7.com/com.rapid7.razor.public/endpoint/agent/latest/linux/x86_64/Rapid7_public_key.pub
           when:
-            - ansible_os_family == "RedHat"
+            - ansible_facts['os_family'] == "RedHat"
 
         - name: Happy path failed | Install Insight Agent deb package
           ansible.builtin.apt:
             deb: /tmp/rapid7-insight-agent_latest_amd64.deb
           when:
-            - ansible_os_family == "Debian"
+            - ansible_facts['os_family'] == "Debian"
 
         - name: Happy path failed | Install Insight Agent rpm package
           ansible.builtin.dnf:
             name: /tmp/rapid7-insight-agent-latest.x86_64.rpm
             state: present
           when:
-            - ansible_os_family == "RedHat"
+            - ansible_facts['os_family'] == "RedHat"
 
         - name: Happy path failed | Read Insight Agent deb version
           ansible.builtin.command:
@@ -574,7 +574,7 @@
           register: rapid7_deb_version
           changed_when: false
           when:
-            - ansible_os_family == "Debian"
+            - ansible_facts['os_family'] == "Debian"
 
         - name: Happy path failed | Read Insight Agent rpm version
           ansible.builtin.command:
@@ -586,7 +586,7 @@
           register: rapid7_rpm_version
           changed_when: false
           when:
-            - ansible_os_family == "RedHat"
+            - ansible_facts['os_family'] == "RedHat"
 
         - name: Happy path failed | Set Insight Agent version
           ansible.builtin.set_fact:
@@ -594,7 +594,7 @@
               {{
                 (
                   rapid7_deb_version.stdout
-                  if ansible_os_family == "Debian"
+                  if ansible_facts['os_family'] == "Debian"
                   else rapid7_rpm_version.stdout
                 ).split("-")[0]
               }}
@@ -633,7 +633,7 @@
             group: root
             mode: "0644"
           when:
-            - ansible_os_family == "Debian"
+            - ansible_facts['os_family'] == "Debian"
 
         - name: Happy path failed | Download Scan Assistant rpm package
           ansible.builtin.get_url:
@@ -644,13 +644,13 @@
             group: root
             mode: "0644"
           when:
-            - ansible_os_family == "RedHat"
+            - ansible_facts['os_family'] == "RedHat"
 
         - name: Happy path failed | Install Scan Assistant deb package
           ansible.builtin.apt:
             deb: /tmp/R7ScanAssistant_amd64.deb
           when:
-            - ansible_os_family == "Debian"
+            - ansible_facts['os_family'] == "Debian"
 
         - name: Happy path failed | Install Scan Assistant rpm package
           ansible.builtin.dnf:
@@ -658,7 +658,7 @@
             state: present
             disable_gpg_check: true
           when:
-            - ansible_os_family == "RedHat"
+            - ansible_facts['os_family'] == "RedHat"
 
         - name: Happy path failed | Verify Scan Assistant config exists
           ansible.builtin.stat:
@@ -747,7 +747,7 @@
             name: ufw
             state: present
           when:
-            - ansible_os_family == "Debian"
+            - ansible_facts['os_family'] == "Debian"
 
         - name: Happy path failed | Allow Scan Engine through UFW
           community.general.ufw:
@@ -759,14 +759,14 @@
             comment: Rapid7 Scan Assistant
           loop: "{{ rapid7_scan_assistant_engine_ips }}"
           when:
-            - ansible_os_family == "Debian"
+            - ansible_facts['os_family'] == "Debian"
 
         - name: Happy path failed | Install firewalld Python support
           ansible.builtin.dnf:
             name: python3-firewall
             state: present
           when:
-            - ansible_os_family == "RedHat"
+            - ansible_facts['os_family'] == "RedHat"
             - rapid7_firewalld_status.rc == 0
 
         - name: Happy path failed | Allow Scan Engine through firewalld
@@ -783,7 +783,7 @@
             state: enabled
           loop: "{{ rapid7_scan_assistant_engine_ips }}"
           when:
-            - ansible_os_family == "RedHat"
+            - ansible_facts['os_family'] == "RedHat"
             - rapid7_firewalld_status.rc == 0
 
         # Happy path failed: start and verify both services
