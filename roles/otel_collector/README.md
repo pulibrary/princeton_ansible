@@ -95,7 +95,7 @@ See `defaults/main.yml` for the full list. Key ones:
 
    otel_exporters:
      otlp:
-       endpoint: "http://sandbox-signoz1.lib.princeton.edu:4317"
+       endpoint: "http://127.0.0.1:4317"
        tls: { insecure: true }
      debug: { verbosity: basic }
 
