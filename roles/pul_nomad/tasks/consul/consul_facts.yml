@@ -86,11 +86,12 @@
     - name: 'pul_nomad | consul | Set discovered_default_ipv4 for hosts missing network facts'
       ansible.builtin.set_fact:
         discovered_default_ipv4:
-          address: "{{ (hostname_ips.results | selectattr('item', 'equalto', item) | first).stdout.split() | first }}"
+          address: "{{ (hostname_ips.results | selectattr('item', 'equalto', item) | selectattr('stdout', 'defined') | first).stdout.split() | first }}"
       delegate_to: "{{ item }}"
       delegate_facts: true
       loop: "{{ groups[nomad_server_group] }}"
       when:
+        - nomad_server_ips | length == 0
         - hostname_ips is defined
         - hostname_ips.results is defined
         - hostvars[item].discovered_default_ipv4 is not defined
