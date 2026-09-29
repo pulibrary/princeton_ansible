@@ -3,6 +3,34 @@
 This role installs **otelcol-contrib** and renders a fully data-driven `config.yaml`.  
 You define receivers/processors/exporters/pipelines in `group_vars` or `host_vars`, and the role does the rest.
 
+## Data flow
+
+```mermaid
+flowchart LR
+  subgraph host["Application host"]
+    beyla["Beyla (eBPF)"]
+    app["App / host metrics"]
+    otelhost["OTel Collector (otelcol-contrib)"]
+    beyla -- "OTLP :4318" --> otelhost
+    app -- "filelog / hostmetrics" --> otelhost
+  end
+
+  otelhost -- "OTLP gRPC/HTTP" --> otelsignoz
+
+  subgraph k8s["microk8s: platform namespace"]
+    otelsignoz["SigNoz OTel Collector<br/>NodePort 32317/32318"]
+    ch[("ClickHouse")]
+    query["SigNoz Query Service"]
+    ui["SigNoz UI"]
+    otelsignoz -- "clickhousetraces / signozclickhousemetrics / clickhouselogsexporter" --> ch
+    ch --> query --> ui
+  end
+
+  browser["Browser"] --> edge["nginxplus edge (TLS)"] --> ingress["k8s ingress"] --> ui
+```
+
+This role is the "app-host" collector on the left: it tails logs (`filelog`), scrapes host/DB metrics, and optionally receives eBPF-captured traces/metrics from [Beyla](../beyla/) over local OTLP, then forwards everything to SigNoz's own OTel Collector.
+
 ## What it does
 
 - Downloads and unpacks a specific `otelcol-contrib` version to `/opt/otelcol`.
@@ -80,4 +108,6 @@ See `defaults/main.yml` for the full list. Key ones:
        receivers: ["hostmetrics", "postgresql"]
        processors: ["resource", "batch"]
        exporters: ["otlp", "debug"]
+
+```text
 ```
