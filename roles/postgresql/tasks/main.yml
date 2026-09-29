@@ -4,13 +4,13 @@
 # clusters run on Ubuntu; the standalone server for Tower runs on RHEL
 - name: Include OS-specific vars
   ansible.builtin.include_vars:
-    file: "{{ ansible_os_family | lower }}.yml"
+    file: "{{ ansible_facts['os_family'] | lower }}.yml"
   # These vars name the service and package paths every other task builds on,
   # so they must load even when the play is limited to a subset of tags.
   tags: [always]
 
 - name: Include OS-specific install tasks
-  ansible.builtin.include_tasks: install_{{ ansible_os_family | lower }}.yml
+  ansible.builtin.include_tasks: install_{{ ansible_facts['os_family'] | lower }}.yml
 
 - name: Ensure PostgreSQL is enabled and started
   ansible.builtin.service:
@@ -38,7 +38,7 @@
   when:
     - postgres_gcs_backup_enabled | bool
     - runtime_env | default('staging') == postgres_gcs_backup_environment
-    - ansible_os_family == "Debian"
+    - ansible_facts['os_family'] == "Debian"
   tags: [google_cloud]
 
 - name: Add replication postgresql configuration
@@ -126,5 +126,5 @@
   when:
     - postgres_backup_schedule_enabled | bool
     - runtime_env | default('staging') == postgres_gcs_backup_environment
-    - ansible_os_family == "Debian"
+    - ansible_facts['os_family'] == "Debian"
   tags: [google_cloud]

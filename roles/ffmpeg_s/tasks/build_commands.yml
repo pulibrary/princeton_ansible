@@ -41,7 +41,7 @@
         # Work around 'curl 16 Error in the HTTP2 framing layer'
         GIT_HTTP_VERSION: "HTTP/1.1"
         # Also put our custom bin dir in PATH at the process level
-        PATH: "/opt/ffmpeg/bin:{{ ansible_env.PATH | default('/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin') }}"
+        PATH: "/opt/ffmpeg/bin:{{ ansible_facts['env'].PATH | default('/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin') }}"
       register: x264_build
       retries: 3
       delay: 15
@@ -61,7 +61,7 @@
           -DENABLE_SVE=OFF \
           -DENABLE_SVE2=OFF \
           -DENABLE_SVE2_BITPERM=OFF \
-          {% if ansible_architecture in ['aarch64', 'arm64'] -%}
+          {% if ansible_facts['architecture'] in ['aarch64', 'arm64'] -%}
           -DCMAKE_C_FLAGS="-march=armv8-a" \
           -DCMAKE_CXX_FLAGS="-march=armv8-a" \
           {% endif -%}
@@ -71,8 +71,8 @@
       args:
         creates: "{{ ffmpeg_s_build_dir }}/bin/x265"
       environment:
-        PATH: "/opt/ffmpeg/bin:{{ ansible_env.PATH | default('/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin') }}"
-        PKG_CONFIG_PATH: "/opt/ffmpeg/build/lib/pkgconfig:{{ ansible_env.PKG_CONFIG_PATH | default('') }}"
+        PATH: "/opt/ffmpeg/bin:{{ ansible_facts['env'].PATH | default('/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin') }}"
+        PKG_CONFIG_PATH: "/opt/ffmpeg/build/lib/pkgconfig:{{ ansible_facts['env'].PKG_CONFIG_PATH | default('') }}"
       register: x265_build
       retries: 3
       delay: 15
@@ -153,9 +153,9 @@
         make install
       args:
         creates: "{{ ffmpeg_s_build_dir }}/lib/libaom.a"
-      when: ansible_architecture == "x86_64"
+      when: ansible_facts['architecture'] == "x86_64"
       environment:
-        PATH: "/opt/ffmpeg/bin:{{ ansible_env.PATH | default('/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin') }}"
+        PATH: "/opt/ffmpeg/bin:{{ ansible_facts['env'].PATH | default('/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin') }}"
 
     - name: Build and install libdav1d
       ansible.builtin.shell: |
@@ -177,7 +177,7 @@
       args:
         creates: "{{ ffmpeg_s_build_dir }}/lib/libdav1d.a"
       environment:
-        PATH: "/opt/ffmpeg/bin:{{ ansible_env.PATH | default('/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin') }}"
+        PATH: "/opt/ffmpeg/bin:{{ ansible_facts['env'].PATH | default('/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin') }}"
 
     - name: Build and install libvmaf
       ansible.builtin.shell: |
@@ -308,9 +308,9 @@
       args:
         creates: "/opt/ffmpeg/bin/ffmpeg"
       environment:
-        PATH: "/opt/ffmpeg/bin:{{ ansible_env.PATH | default('/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin') }}"
+        PATH: "/opt/ffmpeg/bin:{{ ansible_facts['env'].PATH | default('/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin') }}"
         TMPDIR: "/opt/ffmpeg/tmp"
-        PKG_CONFIG_PATH: "/opt/ffmpeg/build/lib/pkgconfig:{{ ansible_env.PKG_CONFIG_PATH | default('') }}"
+        PKG_CONFIG_PATH: "/opt/ffmpeg/build/lib/pkgconfig:{{ ansible_facts['env'].PKG_CONFIG_PATH | default('') }}"
 
 - name: Create /usr/local/bin symlinks for ffmpeg tools
   ansible.builtin.file:

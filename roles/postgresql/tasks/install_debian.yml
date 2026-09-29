@@ -45,21 +45,21 @@
     name: locales
     state: present
     update_cache: true
-  when: ansible_os_family == "Debian"
+  when: ansible_facts['os_family'] == "Debian"
 
 - name: PostgreSQL | enable postgres locale
   ansible.builtin.lineinfile:
     path: /etc/locale.gen
     regexp: "^#?{{ postgres_locale }} UTF-8"
     line: "{{ postgres_locale }} UTF-8"
-  when: ansible_os_family == "Debian"
+  when: ansible_facts['os_family'] == "Debian"
   register: postgres_locale_enabled
 
 - name: PostgreSQL | generate postgres locale
   ansible.builtin.command: locale-gen
   environment: "{{ postgres_env }}"
   when:
-    - ansible_os_family == "Debian"
+    - ansible_facts['os_family'] == "Debian"
     - postgres_locale_enabled.changed
 
 - name: Ubuntu | install postgresql server packages

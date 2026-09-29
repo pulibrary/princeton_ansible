@@ -2,17 +2,17 @@
 # roles/zfs
 #
 - name: ZFS -  OS-specific variables
-  ansible.builtin.include_vars: "{{ ansible_os_family }}.yml"
-  when: ansible_os_family in ['Debian', 'RedHat']
+  ansible.builtin.include_vars: "{{ ansible_facts['os_family'] }}.yml"
+  when: ansible_facts['os_family'] in ['Debian', 'RedHat']
 
 - name: ZFS - assert supported OS family
   ansible.builtin.assert:
     that:
-      - ansible_os_family in ['Debian', 'RedHat']
-    fail_msg: "roles/zfs supports Debian and RedHat families only (got: {{ ansible_os_family }})"
+      - ansible_facts['os_family'] in ['Debian', 'RedHat']
+    fail_msg: "roles/zfs supports Debian and RedHat families only (got: {{ ansible_facts['os_family'] }})"
 
 - name: ZFS - load OS-specific variables
-  ansible.builtin.include_vars: "{{ ansible_os_family }}.yml"
+  ansible.builtin.include_vars: "{{ ansible_facts['os_family'] }}.yml"
 
 - name: ZFS - enforce pool name "tank" (pools)
   ansible.builtin.assert:
@@ -31,7 +31,7 @@
   when: zfs_datasets | length > 0
 
 - name: ZFS - install on RedHat-based systems
-  when: ansible_os_family == 'RedHat'
+  when: ansible_facts['os_family'] == 'RedHat'
   block:
     - name: Install EPEL repository
       ansible.builtin.package:
@@ -61,7 +61,7 @@
       loop: "{{ zfs_services }}"
 
 - name: ZFS on Debian-based systems
-  when: ansible_os_family == 'Debian'
+  when: ansible_facts['os_family'] == 'Debian'
   block:
     - name: Install ZFS packages
       ansible.builtin.apt:

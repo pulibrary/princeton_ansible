@@ -3,7 +3,7 @@
 - name: Common - Build package metadata cache
   ansible.builtin.dnf:
     update_cache: true
-  when: ansible_pkg_mgr == 'dnf'
+  when: ansible_facts['pkg_mgr'] == 'dnf'
   register: dnf_cache
   retries: 5
   delay: 3
@@ -12,7 +12,7 @@
 - name: Common - Build package metadata cache (yum fallback)
   ansible.builtin.yum:
     update_cache: true
-  when: ansible_pkg_mgr == 'yum'
+  when: ansible_facts['pkg_mgr'] == 'yum'
   register: yum_cache
   retries: 5
   delay: 3
@@ -20,9 +20,9 @@
 
 - name: Common | Determine Ubuntu codename
   ansible.builtin.set_fact:
-    ubuntu_codename: "{{ ansible_distribution_release | default(ansible_lsb.codename) }}"
+    ubuntu_codename: "{{ ansible_facts['distribution_release'] | default(ansible_facts['lsb'].codename) }}"
   when:
-    - ansible_os_family == "Debian"
+    - ansible_facts['os_family'] == "Debian"
 
 # remove math mirror repo - we should delete this eventually
 - name: Common | Remove Princeton math mirror repository files
@@ -34,7 +34,7 @@
     - /etc/apt/sources.list.d/pul_postgresql.list
     - /etc/apt/sources.list.d/pul_yarn.list
   when:
-    - ansible_os_family == "Debian"
+    - ansible_facts['os_family'] == "Debian"
   register: math_mirror_files_removed
   ignore_errors: true
 
@@ -45,7 +45,7 @@
     file_type: file
   register: princeton_files
   when:
-    - ansible_os_family == "Debian"
+    - ansible_facts['os_family'] == "Debian"
 
 - name: Common | Delete found Princeton mirror files
   ansible.builtin.file:
@@ -53,7 +53,7 @@
     state: absent
   loop: "{{ princeton_files.files }}"
   when:
-    - ansible_os_family == "Debian"
+    - ansible_facts['os_family'] == "Debian"
     - princeton_files.files | length > 0
 
 - name: Common | Check whether main sources.list is present
@@ -61,14 +61,14 @@
     path: /etc/apt/sources.list
   register: sources_list
   when:
-    - ansible_os_family == "Debian"
+    - ansible_facts['os_family'] == "Debian"
 
 - name: Common | Check whether sources.list backup exists
   ansible.builtin.stat:
     path: /etc/apt/sources.list.pre-ansible
   register: sources_list_backup
   when:
-    - ansible_os_family == "Debian"
+    - ansible_facts['os_family'] == "Debian"
     - sources_list.stat.exists
 
 - name: Common | Backup original sources.list (one-time)
@@ -80,7 +80,7 @@
     owner: root
     group: root
   when:
-    - ansible_os_family == "Debian"
+    - ansible_facts['os_family'] == "Debian"
     - sources_list.stat.exists
     - not (sources_list_backup.stat.exists | default(false))
 
@@ -90,7 +90,7 @@
     regexp: '^(deb(?:-src)?\s+(?:\[[^]]*\]\s+)?https?://(?:[a-z0-9.-]+\.)?(?:archive|security)\.ubuntu\.com/ubuntu/?)\s+'
     replace: '# \1 '
   when:
-    - ansible_os_family == "Debian"
+    - ansible_facts['os_family'] == "Debian"
     - sources_list.stat.exists
 
 - name: Common | Check whether deb822 Ubuntu sources are present
@@ -98,7 +98,7 @@
     path: /etc/apt/sources.list.d/ubuntu.sources
   register: ubuntu_deb822_sources
   when:
-    - ansible_os_family == "Debian"
+    - ansible_facts['os_family'] == "Debian"
 
 - name: Common | Check whether deb822 sources already provide the Ubuntu archives
   ansible.builtin.command:
@@ -109,7 +109,7 @@
   changed_when: false
   failed_when: false
   when:
-    - ansible_os_family == "Debian"
+    - ansible_facts['os_family'] == "Debian"
     - ubuntu_deb822_sources.stat.exists
 
 # Ubuntu 24.04 and later ship the archives in deb822 format. Adding our own
@@ -120,7 +120,7 @@
   ansible.builtin.set_fact:
     common_deb822_provides_archives: "{{ (ubuntu_deb822_sources.stat.exists | default(false)) and (deb822_archive_check.rc | default(1)) == 0 }}"
   when:
-    - ansible_os_family == "Debian"
+    - ansible_facts['os_family'] == "Debian"
 
 - name: Common | Configure Ubuntu archive repositories as primary source
   ansible.builtin.copy:
@@ -136,7 +136,7 @@
       deb http://archive.ubuntu.com/ubuntu {{ ubuntu_codename }}-backports main restricted universe multiverse
       deb http://security.ubuntu.com/ubuntu {{ ubuntu_codename }}-security main restricted universe multiverse
   when:
-    - ansible_os_family == "Debian"
+    - ansible_facts['os_family'] == "Debian"
     - not common_deb822_provides_archives
 
 - name: Common | Remove redundant archive list when deb822 sources provide them
@@ -144,7 +144,7 @@
     path: /etc/apt/sources.list.d/99-ubuntu-archive.list
     state: absent
   when:
-    - ansible_os_family == "Debian"
+    - ansible_facts['os_family'] == "Debian"
     - common_deb822_provides_archives
 
 # fix redis
@@ -156,14 +156,14 @@
       # Force IPv4 for APT to avoid IPv6 connection timeouts
       Acquire::ForceIPv4 "true";
   when:
-    - ansible_os_family == "Debian"
+    - ansible_facts['os_family'] == "Debian"
 
 - name: Common | Remove problematic Redis PPA if it exists (connection issues)
   ansible.builtin.file:
     path: /etc/apt/sources.list.d/ppa_redislabs_redis_jammy.list
     state: absent
   when:
-    - ansible_os_family == "Debian"
+    - ansible_facts['os_family'] == "Debian"
   ignore_errors: true
 
 # fix postgresql
@@ -201,7 +201,7 @@
         state: absent
       when: postgres_repo.stat.exists
   when:
-    - ansible_os_family == "Debian"
+    - ansible_facts['os_family'] == "Debian"
   ignore_errors: true
 
 - name: Common | Clean apt cache
@@ -209,7 +209,7 @@
     clean: true
     lock_timeout: 300
   when:
-    - ansible_os_family == "Debian"
+    - ansible_facts['os_family'] == "Debian"
   changed_when: false
 
 - name: Common | Update apt cache
@@ -217,7 +217,7 @@
     update_cache: true
     cache_valid_time: 3600
   when:
-    - ansible_os_family == "Debian"
+    - ansible_facts['os_family'] == "Debian"
   register: apt_cache_update
   retries: 5
   delay: 5
@@ -229,17 +229,17 @@
   changed_when: false
   failed_when: false
   when:
-    - ansible_os_family == "Debian"
+    - ansible_facts['os_family'] == "Debian"
 
 - name: Common | Display math mirror status
   ansible.builtin.debug:
     msg: "Math mirror status: {{ 'REMOVED' if math_mirror_check.rc != 0 else 'STILL PRESENT' }}"
   when:
-    - ansible_os_family == "Debian"
+    - ansible_facts['os_family'] == "Debian"
 
 - name: Common | Display apt cache update status
   ansible.builtin.debug:
     msg: "APT cache updated successfully using Ubuntu archives"
   when:
-    - ansible_os_family == "Debian"
+    - ansible_facts['os_family'] == "Debian"
     - apt_cache_update is success

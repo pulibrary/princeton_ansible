@@ -2,13 +2,13 @@
 # redis apt repo
 redis_apt_key_url: "https://packages.redis.io/gpg"
 redis_keyring_path: "/usr/share/keyrings/redis-archive-keyring.gpg"
-redis_apt_repository: "deb [signed-by={{ redis_keyring_path }}] https://packages.redis.io/deb {{ ansible_distribution_release }} main"
+redis_apt_repository: "deb [signed-by={{ redis_keyring_path }}] https://packages.redis.io/deb {{ ansible_facts['distribution_release'] }} main"
 
 redis__user: "redis"
 redis__group: "redis"
 # File descriptor limit for Redis (limits.d for the redis user and systemd unit descriptor)
 redis_limit_nofile: 65536
-redis__domain: "{{ ansible_domain if ansible_domain else ansible_hostname }}"
+redis__domain: "{{ ansible_facts['domain'] if ansible_facts['domain'] else ansible_facts['hostname'] }}"
 redis__server_bind: "0.0.0.0"
 redis__auth_password: "{{ vault_redis__auth_password | default('change_me') }}"
 redis__server_port: "6379"
@@ -35,7 +35,7 @@ redis__server_syslog_facility: "local0"
 redis__server_maxmemory_limit: "0.8"
 #
 # Maximum amount of system memory available for Redis Server in bytes.
-redis__server_maxmemory: "{{ ((ansible_memtotal_mb|int * 1024 * 1024) *
+redis__server_maxmemory: "{{ ((ansible_facts['memtotal_mb']|int * 1024 * 1024) *
   redis__server_maxmemory_limit|float) | round | int }}"
 # Specify the policy used by Redis Server for key expiration.
 redis__server_maxmemory_policy: "volatile-lru"

@@ -25,7 +25,7 @@
           state: present
           key: https://software.bigfix.com/download/bes/95/RPM-GPG-KEY-BigFix-9-V2
         when:
-          - ansible_os_family == "RedHat"
+          - ansible_facts['os_family'] == "RedHat"
 
       - name: Create bigfix directory
         ansible.builtin.file:
@@ -49,7 +49,7 @@
           group: pulsys
           mode: "0644"
         when:
-        - ansible_os_family == "Debian"
+        - ansible_facts['os_family'] == "Debian"
 
       - name: Download the bigfix deb file (RedHat)
         ansible.builtin.get_url:
@@ -59,20 +59,20 @@
           group: pulsys
           mode: "0644"
         when:
-        - ansible_os_family == "RedHat"
+        - ansible_facts['os_family'] == "RedHat"
 
       - name: install BESClient agent (Ubuntu)
         ansible.builtin.apt:
           deb: "/tmp/BESAgent-10.0.7.52-debian6.amd64.deb"
         when:
-          - ansible_os_family == "Debian"
+          - ansible_facts['os_family'] == "Debian"
 
       - name: install BESClient agent (RedHat)
         ansible.builtin.dnf:
           name: "/tmp/BESAgent-10.0.7.52-rhel6.x86_64.rpm"
           state: present
         when:
-          - ansible_os_family == "RedHat"
+          - ansible_facts['os_family'] == "RedHat"
 
       - name: Launch the BigFix client
         ansible.builtin.command: /etc/init.d/besclient start

@@ -11,7 +11,7 @@
     chrony_owner: root
     chrony_group: root
   when:
-    - ansible_os_family == "Debian"
+    - ansible_facts['os_family'] == "Debian"
 
 - name: Common - set chrony facts RedHat
   ansible.builtin.set_fact:
@@ -22,7 +22,7 @@
     chrony_owner: root
     chrony_group: root
   when:
-    - ansible_os_family == "RedHat"
+    - ansible_facts['os_family'] == "RedHat"
 
 - name: Common - set chrony facts FreeBSD
   ansible.builtin.set_fact:
@@ -33,14 +33,14 @@
     chrony_owner: root
     chrony_group: wheel
   when:
-    - ansible_os_family == "FreeBSD"
+    - ansible_facts['os_family'] == "FreeBSD"
 
 - name: Common - Uninstall NTP package
   ansible.builtin.package:
     name: ntp
     state: absent
   when:
-    - ansible_os_family != "FreeBSD"
+    - ansible_facts['os_family'] != "FreeBSD"
 
 - name: Common - Install Chrony package
   ansible.builtin.package:
@@ -55,7 +55,7 @@
     group: "{{ chrony_group }}"
     mode: "0755"
   when:
-    - ansible_os_family in ["Debian", "FreeBSD"]
+    - ansible_facts['os_family'] in ["Debian", "FreeBSD"]
 
 - name: Common - configure chronyd in chrony.conf
   ansible.builtin.template:
@@ -73,7 +73,7 @@
     state: absent
   notify: restart chrony
   when:
-    - ansible_os_family == "Debian"
+    - ansible_facts['os_family'] == "Debian"
 
 - name: Common - add pool.ntp.org to sources.d
   ansible.builtin.blockinfile:
@@ -87,14 +87,14 @@
     group: "{{ chrony_group }}"
   notify: restart chrony
   when:
-    - ansible_os_family in ["Debian", "FreeBSD"]
+    - ansible_facts['os_family'] in ["Debian", "FreeBSD"]
 
 - name: Common - enable chronyd in rc.conf on FreeBSD
   community.general.sysrc:
     name: chronyd_enable
     value: "YES"
   when:
-    - ansible_os_family == "FreeBSD"
+    - ansible_facts['os_family'] == "FreeBSD"
 
 - name: Common - ensure Chronyd service is enabled and started
   ansible.builtin.service:

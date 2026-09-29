@@ -16,7 +16,7 @@
           - "'clamav-daemon' in ansible_facts.packages"
         fail_msg: "ClamAV packages are not installed"
         success_msg: "ClamAV packages are installed"
-      when: ansible_os_family == 'Debian'
+      when: ansible_facts['os_family'] == 'Debian'
 
     - name: Verify ClamAV packages are installed (RedHat)
       ansible.builtin.assert:
@@ -24,31 +24,31 @@
           - "'clamav' in ansible_facts.packages"
         fail_msg: "ClamAV packages are not installed"
         success_msg: "ClamAV packages are installed"
-      when: ansible_os_family == 'RedHat'
+      when: ansible_facts['os_family'] == 'RedHat'
 
     - name: Get clamav daemon service status (Debian)
       ansible.builtin.systemd:
         name: clamav-daemon
       register: clamav_daemon_status
-      when: ansible_os_family == 'Debian'
+      when: ansible_facts['os_family'] == 'Debian'
 
     - name: Get clamav daemon service status (RedHat)
       ansible.builtin.systemd:
         name: clamd@scan
       register: clamav_daemon_status
-      when: ansible_os_family == 'RedHat'
+      when: ansible_facts['os_family'] == 'RedHat'
 
     - name: Check ClamAV daemon config exists (Debian)
       ansible.builtin.stat:
         path: /etc/clamav/clamd.conf
       register: clamd_conf_debian
-      when: ansible_os_family == 'Debian'
+      when: ansible_facts['os_family'] == 'Debian'
 
     - name: Check ClamAV daemon config exists (RedHat)
       ansible.builtin.stat:
         path: /etc/clamd.d/scan.conf
       register: clamd_conf_redhat
-      when: ansible_os_family == 'RedHat'
+      when: ansible_facts['os_family'] == 'RedHat'
 
     - name: Verify ClamAV config file exists (Debian)
       ansible.builtin.assert:
@@ -56,7 +56,7 @@
           - clamd_conf_debian.stat.exists
         fail_msg: "ClamAV daemon config file does not exist"
         success_msg: "ClamAV daemon config file exists"
-      when: ansible_os_family == 'Debian'
+      when: ansible_facts['os_family'] == 'Debian'
 
     - name: Verify ClamAV config file exists (RedHat)
       ansible.builtin.assert:
@@ -64,7 +64,7 @@
           - clamd_conf_redhat.stat.exists
         fail_msg: "ClamAV daemon config file does not exist"
         success_msg: "ClamAV daemon config file exists"
-      when: ansible_os_family == 'RedHat'
+      when: ansible_facts['os_family'] == 'RedHat'
 
     - name: Verify clamscan command is available
       ansible.builtin.command: which clamscan

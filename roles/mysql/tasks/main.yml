@@ -18,7 +18,7 @@
 
 - name: MySQL | Install MariaDB repository
   ansible.builtin.apt_repository:
-    repo: "deb [arch=amd64,arm64] https://dlm.mariadb.com/repo/mariadb-server/11.rolling/repo/ubuntu {{ ansible_distribution_release }} main"
+    repo: "deb [arch=amd64,arm64] https://dlm.mariadb.com/repo/mariadb-server/11.rolling/repo/ubuntu {{ ansible_facts['distribution_release'] }} main"
     state: present
     validate_certs: false
     update_cache: false
@@ -213,7 +213,7 @@
     login_user: root
     login_password: "{{ mysql_root_password }}"
   loop:
-    - "{{ ansible_hostname }}"
+    - "{{ ansible_facts['hostname'] }}"
     - 127.0.0.1
     - ::1
     - localhost
@@ -229,7 +229,7 @@
     state: absent
   with_items:
     - localhost
-    - "{{ ansible_hostname }}"
+    - "{{ ansible_facts['hostname'] }}"
     - 127.0.0.1
   when:
     - running_on_server
@@ -336,7 +336,7 @@
     - mysql_gcs_backup_enabled | bool
     - runtime_env | default('staging') == mysql_gcs_backup_environment
     - mysql_server | default(false) | bool
-    - ansible_os_family == "Debian"
+    - ansible_facts['os_family'] == "Debian"
   tags: [google_cloud]
 
 # Any pending MariaDB restart has to happen before a dump starts, otherwise
@@ -354,5 +354,5 @@
     - mysql_backup_schedule_enabled | bool
     - runtime_env | default('staging') == mysql_gcs_backup_environment
     - mysql_server | default(false) | bool
-    - ansible_os_family == "Debian"
+    - ansible_facts['os_family'] == "Debian"
   tags: [google_cloud]

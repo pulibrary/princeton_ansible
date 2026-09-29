@@ -39,31 +39,31 @@
     - name: Backup original sources.list
       ansible.builtin.copy:
         src: /etc/apt/sources.list
-        dest: "/etc/apt/sources.list.backup.{{ ansible_date_time.epoch }}"
+        dest: "/etc/apt/sources.list.backup.{{ ansible_facts['date_time'].epoch }}"
         remote_src: true
         backup: true
-      when: ansible_os_family == "Debian"
+      when: ansible_facts['os_family'] == "Debian"
 
     - name: Remove duplicate Ubuntu archive entries from main sources.list
       ansible.builtin.replace:
         path: /etc/apt/sources.list
         regexp: '^(deb(?:-src)?\s+https?://(?:[a-z]+\.)?archive\.ubuntu\.com/ubuntu)\s+'
         replace: '# \1'
-      when: ansible_os_family == "Debian"
+      when: ansible_facts['os_family'] == "Debian"
 
     - name: Remove duplicate security.ubuntu.com entries from main sources.list
       ansible.builtin.replace:
         path: /etc/apt/sources.list
         regexp: '^(deb(?:-src)?\s+https?://security\.ubuntu\.com/ubuntu)\s+'
         replace: '# \1'
-      when: ansible_os_family == "Debian"
+      when: ansible_facts['os_family'] == "Debian"
 
     - name: Remove duplicate us.archive.ubuntu.com entries from main sources.list
       ansible.builtin.replace:
         path: /etc/apt/sources.list
         regexp: '^(deb(?:-src)?\s+https?://us\.archive\.ubuntu\.com/ubuntu)\s+'
         replace: '# \1'
-      when: ansible_os_family == "Debian"
+      when: ansible_facts['os_family'] == "Debian"
 
     - name: Configure Ubuntu archive repositories (primary source)
       ansible.builtin.copy:
@@ -72,12 +72,12 @@
         content: |
           # Managed by Ansible
           # Ubuntu Archive repositories - No Princeton math mirror
-          # Configured on {{ ansible_date_time.iso8601 }}
+          # Configured on {{ ansible_facts['date_time'].iso8601 }}
           
-          deb http://archive.ubuntu.com/ubuntu {{ ansible_distribution_release }} main restricted universe multiverse
-          deb http://archive.ubuntu.com/ubuntu {{ ansible_distribution_release }}-updates main restricted universe multiverse
-          deb http://archive.ubuntu.com/ubuntu {{ ansible_distribution_release }}-backports main restricted universe multiverse
-          deb http://security.ubuntu.com/ubuntu {{ ansible_distribution_release }}-security main restricted universe multiverse
+          deb http://archive.ubuntu.com/ubuntu {{ ansible_facts['distribution_release'] }} main restricted universe multiverse
+          deb http://archive.ubuntu.com/ubuntu {{ ansible_facts['distribution_release'] }}-updates main restricted universe multiverse
+          deb http://archive.ubuntu.com/ubuntu {{ ansible_facts['distribution_release'] }}-backports main restricted universe multiverse
+          deb http://security.ubuntu.com/ubuntu {{ ansible_facts['distribution_release'] }}-security main restricted universe multiverse
 
     - name: Force IPv4 for APT (fixes Launchpad PPA timeouts)
       ansible.builtin.copy:
