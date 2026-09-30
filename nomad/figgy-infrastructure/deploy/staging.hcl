@@ -246,7 +246,7 @@ job "figgy-infrastructure-staging" {
 
       resources {
         cpu = 1000
-        memory = 512
+        memory = 2048
       }
     }
   }
