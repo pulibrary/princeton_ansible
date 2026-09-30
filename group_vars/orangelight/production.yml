@@ -96,6 +96,19 @@ otel_receivers:
         severity:
           parse_from: attributes.level
 
+  filelog/sneakers:
+    include:
+      - "/var/log/sneakers/sneakers.log"
+      - "/opt/{{ rails_app_directory }}/current/log/sneakers.log"
+    start_at: end
+    operators:
+      - type: add
+        field: attributes.log_type
+        value: "sneakers"
+      - type: add
+        field: attributes.service_name
+        value: "orangelight"
+
   hostmetrics:
     collection_interval: 30s
     scrapers:
@@ -145,6 +158,7 @@ otel_service_pipelines:
       - filelog/nginx-access
       - filelog/nginx-error
       - filelog/orangelight-app-log
+      - filelog/sneakers
     processors:
       - resource
       - batch

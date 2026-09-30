@@ -176,6 +176,20 @@ otel_receivers:
         field: attributes.rails_env
         value: "{{ rails_app_env }}"
 
+  filelog/sneakers:
+    include: ["/opt/{{ rails_app_directory }}/shared/log/sneakers.log"]
+    start_at: end
+    operators:
+      - type: add
+        field: attributes.log_type
+        value: "sneakers"
+      - type: add
+        field: attributes.service_name
+        value: "{{ rails_app_name }}"
+      - type: add
+        field: attributes.rails_env
+        value: "{{ rails_app_env }}"
+
   hostmetrics:
     collection_interval: 30s
     scrapers:
@@ -225,6 +239,7 @@ otel_service_pipelines:
       - filelog/nginx-access
       - filelog/nginx-error
       - filelog/rails-logs
+      - filelog/sneakers
     processors:
       - resource
       - batch
