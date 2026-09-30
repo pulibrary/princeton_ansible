@@ -241,7 +241,7 @@ job "figgy-infrastructure-production" {
       template {
         destination = "local/enabled_plugins"
         change_mode = "restart"
-        data = "[rabbitmq_management,rabbitmq_prometheus,rabbitmq_peer_discovery_consul].\n"
+        data = "[rabbitmq_management,rabbitmq_prometheus,rabbitmq_peer_discovery_consul,rabbitmq_shovel,rabbitmq_shovel_management].\n"
       }
 
       resources {
