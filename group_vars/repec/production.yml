@@ -27,35 +27,9 @@ application_host_protocol: 'https'
 
 passenger_extra_config: "rewrite ^/econlib/RePEc/pri(.*)$ /$1;"
 
-datadog_api_key: "{{ vault_datadog_key }}"
+entra_client_id: '{{ vault_repec_prod_entra_client_id }}'
+entra_client_secret: '{{ vault_repec_prod_entra_client_secret }}'
 
-datadog_config:
-  log_enabled: true
-  apm_enabled: true
-  process_config:
-    enabled: true
-  apm_config:
-    analyzed_spans:
-      repec|rack.request: 1
-    filter_tags:
-      reject: ["http.useragent:nginx/1.23.4 (health check)", "operation:heartbeat", "operation:job_fetch", "operation:scheduled_push", "operation:scheduled_poller_wait"]
-datadog_checks:
-  tls:
-    init_config:
-    instances:
-      - server: repec.princeton.edu
-        port: 443
-        tags:
-          - 'tls_service:repec'
-  repec_datadog_ruby_check:
-    init_config:
-    logs:
-      - type: file
-        path: /opt/repec/current/log/production.log
-        service: repec
-        source: ruby
-        sourcecategory: sourcecode
-        tags: "repec, environment:production, role:repec"
 # beyla
 beyla_enabled: true
 beyla_service_name: repec
