@@ -96,6 +96,76 @@ otel_receivers:
         severity:
           parse_from: attributes.level
 
+  filelog/sneakers:
+    include:
+      - "/var/log/sneakers/sneakers.log"
+      - "/opt/{{ rails_app_directory }}/current/log/sneakers.log"
+    start_at: end
+    include_file_path: true
+    include_file_name: true
+    operators:
+      - type: router
+        id: route_sneakers
+        default: add_sneakers_log_type
+        routes:
+          # {"timestamp":"...","level":"info","name":"Sneakers",...}
+          - output: parse_sneakers_json
+            expr: 'body matches "^[{]"'
+          # I, [2026-09-30T12:15:09.560200 #765817]  INFO -- : message
+          - output: parse_sneakers_ruby_logger
+            expr: 'body matches "^[A-Z], "'
+          # 2026-09-30T12:15:10Z p-765817 t-2tk INFO: message
+          - output: parse_sneakers_production
+            expr: 'body matches "^[0-9]{4}-[0-9]{2}-[0-9]{2}T"'
+
+      - type: json_parser
+        id: parse_sneakers_json
+        parse_from: body
+        timestamp:
+          parse_from: attributes.timestamp
+          layout_type: strptime
+          layout: '%Y-%m-%dT%H:%M:%S.%fZ'
+        severity:
+          parse_from: attributes.level
+        on_error: send
+        output: add_sneakers_log_type
+
+      - type: regex_parser
+        id: parse_sneakers_ruby_logger
+        parse_from: body
+        regex: '^(?P<severity_initial>[A-Z]), \[(?P<timestamp>\S+) #(?P<pid>\d+)\]\s+(?P<level>[A-Z]+) -- (?P<progname>[^:]*): (?P<message>.*)$'
+        timestamp:
+          parse_from: attributes.timestamp
+          layout_type: strptime
+          layout: '%Y-%m-%dT%H:%M:%S.%f'
+        severity:
+          parse_from: attributes.level
+        on_error: send
+        output: add_sneakers_log_type
+
+      - type: regex_parser
+        id: parse_sneakers_production
+        parse_from: body
+        regex: '^(?P<timestamp>[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z) p-(?P<pid>\d+) t-(?P<thread>\S+) (?P<level>[A-Z]+): (?P<message>.*)$'
+        timestamp:
+          parse_from: attributes.timestamp
+          layout_type: strptime
+          layout: '%Y-%m-%dT%H:%M:%SZ'
+        severity:
+          parse_from: attributes.level
+        on_error: send
+        output: add_sneakers_log_type
+
+      - type: add
+        id: add_sneakers_log_type
+        field: attributes.log_type
+        value: "sneakers"
+
+      - type: add
+        id: add_sneakers_service_name
+        field: attributes.service_name
+        value: "orangelight"
+
   hostmetrics:
     collection_interval: 30s
     scrapers:
@@ -145,6 +215,7 @@ otel_service_pipelines:
       - filelog/nginx-access
       - filelog/nginx-error
       - filelog/orangelight-app-log
+      - filelog/sneakers
     processors:
       - resource
       - batch
