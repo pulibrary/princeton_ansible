@@ -109,6 +109,12 @@
     state: started
   become: true
 
+# Restart named with the config above before the host depends on it. Left
+# to the end of the play, a later failure would skip the restart and leave
+# resolv.conf pointing at a named still running the package defaults.
+- name: Bind9 | Apply named configuration before switching resolvers
+  ansible.builtin.meta: flush_handlers
+
 - name: Bind9 | Point the host at its local resolver
   ansible.builtin.include_tasks: resolver.yml
   when:
