@@ -9,22 +9,33 @@
     user_install: false
     include_doc: false
   loop:
-    - name: i18n
-      version: "{{ i18n_version }}"
     - name: capistrano
       version: "{{ cap_version }}"
     - name: activesupport
     - name: airbrussh
+    - name: bcrypt_pbkdf
     - name: capistrano-composer
     - name: capistrano-passenger
     - name: capistrano-rails
     - name: capistrano-rails-console
     - name: capistrano-yarn
     - name: concurrent-ruby
+    - name: ed25519
     - name: flipper
     - name: honeybadger
+    - name: i18n
     - name: net-scp
     - name: net-ssh
     - name: rake
     - name: sshkit
     - name: whenever
+
+- name: towerdeploy | install ssh key for deploying to app servers
+  ansible.builtin.copy:
+    src: "id_ed25519_{{ runtime_env | default('staging') }}"
+    dest: "/home/{{ deploy_user }}/.ssh/id_ed25519"
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+    mode: "0600"
+  no_log: true
+  when: running_on_server
