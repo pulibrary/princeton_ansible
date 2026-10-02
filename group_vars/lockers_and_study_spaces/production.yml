@@ -26,45 +26,142 @@ app_host_name: 'lockers_and_study_spaces.princeton.edu'
 application_host_protocol: 'https'
 running_on_server: true
 lockers_honeybadger_key: '{{ vault_lockers_and_study_spaces_honeybadger_key }}'
-datadog_api_key: "{{ vault_datadog_key }}"
+# beyla
+beyla_enabled: true
+beyla_service_name: lockers
+beyla_environment: production
+beyla_otlp_endpoint: "http://127.0.0.1:4318"
+beyla_otlp_protocol: "http/protobuf"
+beyla_bpf_context_propagation: "all"
 
-datadog_config:
-  log_enabled: true
-  apm_enabled: true
-  process_config:
-    enabled: true
-  apm_config:
-    analyzed_spans:
-      lockers-and-study-spaces|rack.request: 1
-    filter_tags:
-      reject: ["http.useragent:nginx/1.23.4 (health check)", "operation:heartbeat", "operation:job_fetch", "operation:scheduled_push", "operation:scheduled_poller_wait"]
-datadog_typed_checks:
-  - type: tls
-    configuration:
-      init_config:
-      instances:
-        - server: lockers-and-study-spaces.princeton.edu
-          port: 443
-  - type: process
-    configuration:
-      init_config:
-      instances:
-        -   name: lockers-and-study-spaces
-            service: lockers-and-study-spaces
-            search_string:
-              - nginx
-  - type: nginx
-    configuration:
-      init_config:
-      instances:
-        - nginx_status_url: http://localhost:81/nginx_status/
-      logs:
-        - type: file
-          path: /var/log/nginx/access.log
-          source: nginx
-        - type: file
-          path: /var/log/nginx/error.log
-          source: nginx
-        - type: file
-          path: /opt/lockers_and_study_spaces/current/log/production.log
-          source: rails
+beyla_open_ports:
+  - 80
+
+# signoz
+otel_default_resource_attributes:
+  host.name: "{{ inventory_hostname }}"
+  service.name: lockers
+  service.version: production
+  environment: production
+
+otel_receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 127.0.0.1:4317
+      http:
+        endpoint: 127.0.0.1:4318
+  filelog/nginx-access:
+    include: ["/var/log/nginx/access.log"]
+    start_at: end
+    operators:
+      - type: regex_parser
+        regex: '^(?P<remote_addr>[^\s]+) \((?P<remote_user>[^)]*)\) - - \[(?P<time_local>[^\]]+)\] "(?P<method>\S+) (?P<path>\S+) (?P<protocol>[^"]+)" (?P<status>\d+) (?P<body_bytes_sent>\d+) "(?P<http_referer>[^"]*)" "(?P<http_user_agent>[^"]*)"'
+        parse_from: body
+      - type: time_parser
+        parse_from: attributes.time_local
+        layout_type: strptime
+        layout: '%d/%b/%Y:%H:%M:%S %z'
+      - type: add
+        field: attributes.log_type
+        value: "nginx-access"
+      - type: add
+        field: attributes.service_name
+        value: "lockers"
+
+  filelog/nginx-error:
+    include: ["/var/log/nginx/error.log"]
+    start_at: end
+    operators:
+      - type: add
+        field: attributes.log_type
+        value: "nginx-error"
+      - type: add
+        field: attributes.service_name
+        value: "lockers"
+
+  filelog/app-log:
+    include: ["/opt/lockers_and_study_spaces/current/log/{{ rails_app_env }}.log"]
+    start_at: end
+    operators:
+      - type: add
+        field: attributes.log_type
+        value: "app-log"
+      - type: add
+        field: attributes.service_name
+        value: "lockers"
+
+  hostmetrics:
+    collection_interval: 30s
+    scrapers:
+      cpu: {}
+      disk: {}
+      filesystem: {}
+      load: {}
+      memory: {}
+      network: {}
+
+otel_processors:
+  batch:
+    send_batch_max_size: 1024
+    send_batch_size: 512
+    timeout: 30s
+
+otel_exporters:
+  loadbalancing:
+    routing_key: service
+    protocol:
+      otlp:
+        timeout: 10s
+        tls:
+          insecure: true
+        sending_queue:
+          enabled: true
+          num_consumers: 10
+          queue_size: 5000
+        retry_on_failure:
+          enabled: true
+          initial_interval: 5s
+          max_interval: 30s
+          max_elapsed_time: 300s
+    resolver:
+      static:
+        hostnames:
+          - k8s-prod1.lib.princeton.edu:32317
+          - k8s-prod2.lib.princeton.edu:32317
+          - k8s-prod3.lib.princeton.edu:32317
+
+  debug:
+    verbosity: basic
+
+otel_service_pipelines:
+  logs:
+    receivers:
+      - filelog/nginx-access
+      - filelog/nginx-error
+      - filelog/app-log
+    processors:
+      - resource
+      - batch
+    exporters:
+      - loadbalancing
+      - debug
+
+  metrics:
+    receivers:
+      - hostmetrics
+    processors:
+      - resource
+      - batch
+    exporters:
+      - loadbalancing
+      - debug
+
+  traces:
+    receivers:
+      - otlp
+    processors:
+      - resource
+      - batch
+    exporters:
+      - loadbalancing
