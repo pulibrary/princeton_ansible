@@ -1,0 +1,67 @@
+---
+# by default this playbook runs in the staging environment
+# to run in production, pass '-e runtime_env=production'
+- name: Log Shipping | Provision Variables & Infrastructure
+  # Both staging and production abid deploys run on the production Nomad infrastructure.
+  # The [0] picks the first host, since we just run the nomad commands there.
+  hosts: "nomad_production[0]"
+  remote_user: pulsys
+  become: true
+  # Vault files (env-agnostic secrets or per-env keys within)
+  vars_files:
+    # This will auto include group_vars/nomad_production.yml
+    # This will auto include group_vars/nomad_servers.yml
+    - ../group_vars/nomad/vault.yml
+  vars:
+    runtime_env_or_default: "{{ runtime_env | default('staging') }}"
+    nomad_hcl: "{{ playbook_dir }}/../nomad/log-shipping/deploy/{{ runtime_env | default('staging') }}.hcl"
+  roles:
+    - role: roles/nomad_app
+  tasks:
+    - name: Create Nomad policy directory
+      ansible.builtin.file:
+        path: /etc/nomad.d/policies
+        state: directory
+        owner: root
+        group: root
+        mode: '0750'
+
+    - name: Write log shipping workload identity policy
+      ansible.builtin.copy:
+        dest: /etc/nomad.d/policies/log-shipping-policy.hcl
+        owner: root
+        group: root
+        mode: '0640'
+        content: |
+          agent {
+            policy = "read"
+          }
+          node {
+            policy = "read"
+          }
+          namespace "default" {
+            policy = "read"
+            capabilities = ["read-logs"]
+          }
+
+    - name: Create workload identity policy for log shipping staging
+      ansible.builtin.command:
+        cmd: >
+          /usr/local/bin/nomad acl policy apply
+          -namespace default -job log-shipping-staging
+          log-shipping-policy /etc/nomad.d/policies/log-shipping-policy.hcl
+      environment:
+        NOMAD_TOKEN: '{{ pul_nomad_management_token }}'
+      run_once: true
+      changed_when: false
+
+    - name: Create workload identity policy for log shipping prod
+      ansible.builtin.command:
+        cmd: >
+          /usr/local/bin/nomad acl policy apply
+          -namespace default -job log-shipping-production
+          log-shipping-policy-prod /etc/nomad.d/policies/log-shipping-policy.hcl
+      environment:
+        NOMAD_TOKEN: '{{ pul_nomad_management_token }}'
+      run_once: true
+      changed_when: false
