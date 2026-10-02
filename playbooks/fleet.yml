@@ -1,0 +1,56 @@
+---
+# Fleet is only deployed to the production cluster.
+#
+# Fleet runs on Oracle MySQL, which the fleet_mysql role installs on its own
+# host. It cannot use the shared mysql-db-prod1 server, because that runs
+# MariaDB and Fleet's schema migrations fail on MariaDB. See
+# roles/fleet_mysql/README.md.
+#
+# Before the first run, create the two vault files:
+#
+#   ansible-vault create group_vars/fleet/vault.yml
+#     vault_fleet_database_password: <a strong password>
+#     vault_fleet_server_private_key: <openssl rand -base64 32>
+#     vault_fleet_license_key: ""   # only for Fleet Premium
+#
+#   ansible-vault create group_vars/fleet_mysql/vault.yml
+#     vault_fleet_mysql_root_password: <a strong password>
+#
+# Run with:
+#   ansible-playbook playbooks/fleet.yml
+#
+# Once the server is up, hosts are enrolled into it with
+# playbooks/utils/fleet_client_install.yml. That needs one more vaulted value,
+# the enroll secret, which Fleet only shows after the server is running:
+#
+#   ansible-vault edit group_vars/fleet/vault.yml
+#     vault_fleet_enroll_secret: <from Fleet under Hosts > Add hosts>
+
+- name: Gather facts from the Kubernetes cluster nodes
+  hosts: k8s_microk8s_production
+  remote_user: pulsys
+  gather_facts: true
+  tasks: []
+
+# The database server, its fleet database and the per-node grants all come from
+# the role, driven by group_vars/fleet_mysql/production.yml.
+- name: Install the MySQL server Fleet stores its data in
+  hosts: fleet_mysql_production
+  remote_user: pulsys
+  become: true
+  vars_files:
+    - ../group_vars/fleet_mysql/production.yml
+    - ../group_vars/fleet/vault.yml
+    - ../group_vars/fleet_mysql/vault.yml
+  roles:
+    - role: fleet_mysql
+
+- name: Deploy Fleet
+  hosts: k8s_microk8s_primary_production
+  remote_user: pulsys
+  become: true
+  vars_files:
+    - ../group_vars/fleet/production.yml
+    - ../group_vars/fleet/vault.yml
+  roles:
+    - role: fleet_k8s

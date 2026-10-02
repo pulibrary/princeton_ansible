@@ -1,0 +1,51 @@
+---
+# Fleet's database server. This runs Oracle MySQL rather than MariaDB, because
+# Fleet's schema migrations cannot be replayed on MariaDB at all. See
+# roles/fleet_mysql/README.md.
+mysql_server: true
+mysql_host: fleet-mysql-prod1.lib.princeton.edu
+mysql_root_password: "{{ vault_fleet_mysql_root_password }}"
+# Reproducible password hashes, so rerunning the playbook does not report a
+# change every time. A salt is not a secret; it only has to be 20 characters
+# and stay the same once accounts exist.
+mysql_root_salt: "fleetprodrootsalt001"
+
+# The Fleet pods connect from the Kubernetes nodes, so the server listens on
+# all interfaces and the firewall plus per-host grants do the restricting.
+mysql_bind_address: "0.0.0.0"
+
+# Sized for a single application. Raise the buffer pool once the host's memory
+# is known; it should end up around 70% of RAM on a dedicated database server.
+mysql_innodb_buffer_pool_size: 4G
+
+fleet_database_name: fleet
+fleet_database_username: fleet
+
+mysql_databases:
+  - name: "{{ fleet_database_name }}"
+    encoding: utf8mb4
+    # Fleet's own schema uses utf8mb4_unicode_ci.
+    collation: utf8mb4_unicode_ci
+
+# One grant per cluster node rather than a wildcard, so a stolen password is
+# only usable from the nodes that are meant to have it.
+mysql_users: >-
+  {{ groups['k8s_microk8s_production']
+     | map('extract', hostvars, ['ansible_default_ipv4', 'address'])
+     | reject('none')
+     | map('community.general.dict_kv', 'host')
+     | map('combine', {
+         'name': fleet_database_username,
+         'password': vault_fleet_database_password,
+         'priv': fleet_database_name ~ '.*:ALL',
+         'salt': 'fleetproddbusersalt1',
+         'update_password': 'always'
+       })
+     | list }}
+
+# Nightly dumps to Google Cloud Storage, the same arrangement as the MariaDB
+# servers but under their own prefix in the bucket.
+mysql_gcs_backup_enabled: true
+mysql_gcs_backup_environment: production
+mysql_backup_schedule_enabled: true
+mysql_backup_prefix: mysql

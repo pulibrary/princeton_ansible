@@ -1,0 +1,84 @@
+# SPDX-License-Identifier: MIT-0
+---
+fleet_namespace: fleet
+fleet_release_name: fleet
+fleet_chart_repo_name: fleetdm
+fleet_chart_repo_url: https://fleetdm.github.io/fleet/charts
+fleet_chart_ref: fleetdm/fleet
+fleet_chart_version: ""
+fleet_config_dir: /etc/fleet
+
+# The chart derives these names from the release name; they are only overridden
+# if the release is renamed to something that does not contain "fleet".
+fleet_deployment_name: fleet
+fleet_service_name: fleet-service
+fleet_ingress_name: fleet
+
+fleet_image_repository: fleetdm/fleet
+fleet_image_tag: v4.91.1
+fleet_replicas: 3
+fleet_hostname: fleet.lib.princeton.edu
+fleet_listen_port: 8080
+
+fleet_cpu_limit: 1
+fleet_memory_limit: 4Gi
+fleet_cpu_request: 0.1
+fleet_memory_request: 512Mi
+
+# TLS is terminated by the load balancer in front of the cluster ingress, so
+# the Fleet pods themselves serve plain HTTP.
+fleet_tls_enabled: false
+fleet_secret_name: fleet
+
+fleet_ingress_enabled: true
+fleet_ingress_class_name: public
+fleet_ingress_annotations:
+  # Fleet accepts software installer packages up to 3 GB.
+  nginx.ingress.kubernetes.io/proxy-body-size: 3000m
+  nginx.ingress.kubernetes.io/proxy-request-buffering: "off"
+  nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+  nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+fleet_ingress_tls_secret_name: ""
+
+# MySQL
+fleet_database_host: ""
+fleet_database_port: 3306
+fleet_database_name: fleet
+fleet_database_username: fleet
+fleet_database_password: ""
+fleet_database_secret_name: mysql
+fleet_database_password_key: mysql-password
+fleet_database_max_open_conns: 50
+fleet_database_max_idle_conns: 50
+fleet_database_conn_max_lifetime: 0
+fleet_database_tls_enabled: false
+
+# Redis
+fleet_cache_host: ""
+fleet_cache_port: 6379
+fleet_cache_database: "0"
+fleet_cache_use_password: false
+fleet_cache_password: ""
+fleet_cache_secret_name: redis
+fleet_cache_password_key: redis-password
+
+# Fleet Premium license (leave empty for Fleet Free)
+fleet_license_key: ""
+fleet_license_secret_name: fleet-license
+
+# Required for MDM features. Generate with `openssl rand -base64 32`.
+fleet_server_private_key: ""
+
+fleet_vuln_processing_dedicated: false
+fleet_osquery_status_plugin: filesystem
+fleet_osquery_result_plugin: filesystem
+fleet_osquery_log_volume_size: 20Gi
+
+fleet_logging_json: true
+fleet_logging_debug: false
+
+fleet_helm_timeout: 30m
+
+# Checkmk monitoring
+fleet_checkmk_enabled: false
+fleet_checkmk_monitor_host: ""

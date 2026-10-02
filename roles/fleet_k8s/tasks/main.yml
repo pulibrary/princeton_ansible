@@ -1,0 +1,264 @@
+# SPDX-License-Identifier: MIT-0
+---
+- name: Fleet | Assert MySQL connection settings are provided
+  ansible.builtin.assert:
+    that:
+      - fleet_database_host | length > 0
+      - fleet_database_name | length > 0
+      - fleet_database_username | length > 0
+      - fleet_database_password | length > 0
+    fail_msg: >-
+      fleet_database_host, fleet_database_name, fleet_database_username and
+      fleet_database_password must all be set before deploying Fleet.
+
+- name: Fleet | Assert Redis connection settings are provided
+  ansible.builtin.assert:
+    that:
+      - fleet_cache_host | length > 0
+    fail_msg: "fleet_cache_host must be set before deploying Fleet."
+
+- name: Fleet | Assert Redis password is provided when authentication is enabled
+  ansible.builtin.assert:
+    that:
+      - fleet_cache_password | length > 0
+    fail_msg: "fleet_cache_password must be set when fleet_cache_use_password is true."
+  when: fleet_cache_use_password | bool
+
+- name: Fleet | Assert MDM server private key is provided
+  ansible.builtin.assert:
+    that:
+      - fleet_server_private_key | length >= 32
+    fail_msg: >-
+      fleet_server_private_key must be at least 32 characters.
+      Generate one with `openssl rand -base64 32`.
+
+- name: Fleet | Ensure configuration directory exists
+  ansible.builtin.file:
+    path: "{{ fleet_config_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Fleet | Check for nodes whose Ready condition is not true
+  ansible.builtin.shell: >
+    set -o pipefail &&
+    microk8s kubectl get nodes --no-headers |
+    awk '$2 !~ /^Ready(,|$)/ { print $1 ":" $2 }'
+  args:
+    executable: /bin/bash
+  register: fleet_nonready_nodes
+  changed_when: false
+
+- name: Fleet | Assert all cluster nodes have Ready condition true
+  ansible.builtin.assert:
+    that:
+      - fleet_nonready_nodes.stdout | length == 0
+    fail_msg: "Not all Kubernetes nodes have Ready=True: {{ fleet_nonready_nodes.stdout }}"
+
+- name: Fleet | Verify MySQL is reachable from the cluster
+  ansible.builtin.wait_for:
+    host: "{{ fleet_database_host }}"
+    port: "{{ fleet_database_port }}"
+    timeout: 15
+
+- name: Fleet | Verify Redis is reachable from the cluster
+  ansible.builtin.wait_for:
+    host: "{{ fleet_cache_host }}"
+    port: "{{ fleet_cache_port }}"
+    timeout: 15
+
+- name: Fleet | Ensure namespace exists
+  ansible.builtin.command: "microk8s kubectl create namespace {{ fleet_namespace }}"
+  register: fleet_namespace_create
+  changed_when: "'created' in fleet_namespace_create.stdout"
+  failed_when:
+    - fleet_namespace_create.rc != 0
+    - "'AlreadyExists' not in fleet_namespace_create.stderr"
+
+- name: Fleet | Write secret manifests
+  ansible.builtin.template:
+    src: fleet-secrets.yaml.j2
+    dest: "{{ fleet_config_dir }}/secrets.yaml"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+
+- name: Fleet | Apply secret manifests
+  ansible.builtin.command: "microk8s kubectl apply -f {{ fleet_config_dir }}/secrets.yaml"
+  register: fleet_secrets_apply
+  changed_when: "'created' in fleet_secrets_apply.stdout or 'configured' in fleet_secrets_apply.stdout"
+
+- name: Fleet | Write Helm values
+  ansible.builtin.template:
+    src: fleet-values.yaml.j2
+    dest: "{{ fleet_config_dir }}/values.yaml"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+
+- name: Fleet | Add Helm repo
+  ansible.builtin.command: "microk8s helm3 repo add {{ fleet_chart_repo_name }} {{ fleet_chart_repo_url }}"
+  register: fleet_helm_repo_add
+  changed_when:
+    - "'has been added' in fleet_helm_repo_add.stdout"
+  failed_when:
+    - fleet_helm_repo_add.rc != 0
+    - "'already exists' not in fleet_helm_repo_add.stderr"
+    - "'already exists' not in fleet_helm_repo_add.stdout"
+
+- name: Fleet | Update Helm repos
+  ansible.builtin.command: microk8s helm3 repo update
+  changed_when: false
+
+- name: Fleet | Look up the currently deployed image
+  ansible.builtin.command: >-
+    microk8s kubectl -n {{ fleet_namespace }} get deploy {{ fleet_deployment_name }}
+    -o jsonpath={.spec.template.spec.containers[0].image}
+  register: fleet_running_image
+  changed_when: false
+  failed_when: false
+
+- name: Fleet | Set version change facts
+  ansible.builtin.set_fact:
+    fleet_deployment_exists: "{{ fleet_running_image.rc == 0 }}"
+    fleet_version_changed: >-
+      {{ fleet_running_image.rc == 0
+         and fleet_running_image.stdout != fleet_image_repository ~ ':' ~ fleet_image_tag }}
+
+# Fleet runs schema migrations on startup, and those migrations fail when older
+# pods still hold connections to the database. Draining the deployment first
+# keeps an upgrade from corrupting the schema.
+- name: Fleet | Scale the deployment to zero before migrating to a new version
+  ansible.builtin.command: >-
+    microk8s kubectl -n {{ fleet_namespace }}
+    scale --replicas 0 deploy/{{ fleet_deployment_name }}
+  changed_when: true
+  when: fleet_version_changed | bool
+
+- name: Fleet | Wait for all pods to stop before migrating
+  ansible.builtin.command: >-
+    microk8s kubectl -n {{ fleet_namespace }} get pods
+    -l component=fleet-server --no-headers
+  register: fleet_draining_pods
+  changed_when: false
+  retries: 30
+  delay: 10
+  until: "'No resources found' in fleet_draining_pods.stderr or fleet_draining_pods.stdout | length == 0"
+  when: fleet_version_changed | bool
+
+- name: Fleet | Remove the previous migration job
+  ansible.builtin.command: >-
+    microk8s kubectl -n {{ fleet_namespace }} delete job fleet-migration
+    --ignore-not-found
+  register: fleet_migration_job_delete
+  changed_when: "'deleted' in fleet_migration_job_delete.stdout"
+  when: fleet_deployment_exists | bool
+
+- name: Fleet | Build Helm command without chart version
+  ansible.builtin.set_fact:
+    fleet_helm_command:
+      - microk8s
+      - helm3
+      - upgrade
+      - --install
+      - "{{ fleet_release_name }}"
+      - "{{ fleet_chart_ref }}"
+      - --namespace
+      - "{{ fleet_namespace }}"
+      - --create-namespace
+      - --wait
+      - --timeout
+      - "{{ fleet_helm_timeout }}"
+      - -f
+      - "{{ fleet_config_dir }}/values.yaml"
+  when: fleet_chart_version | default('') | length == 0
+
+- name: Fleet | Build Helm command with chart version
+  ansible.builtin.set_fact:
+    fleet_helm_command:
+      - microk8s
+      - helm3
+      - upgrade
+      - --install
+      - "{{ fleet_release_name }}"
+      - "{{ fleet_chart_ref }}"
+      - --version
+      - "{{ fleet_chart_version }}"
+      - --namespace
+      - "{{ fleet_namespace }}"
+      - --create-namespace
+      - --wait
+      - --timeout
+      - "{{ fleet_helm_timeout }}"
+      - -f
+      - "{{ fleet_config_dir }}/values.yaml"
+  when: fleet_chart_version | default('') | length > 0
+
+- name: Fleet | Install or upgrade Fleet
+  block:
+    - name: Fleet | Run Helm
+      ansible.builtin.command:
+        argv: "{{ fleet_helm_command }}"
+      register: fleet_helm_install
+      changed_when:
+        - "'has been upgraded' in fleet_helm_install.stdout or 'has been installed' in fleet_helm_install.stdout"
+  rescue:
+    # Helm only reports that the migration job failed, not why. The job runs as
+    # a pre-install hook and is deleted on success, so on failure its pod is
+    # still around and holds the actual database error.
+    - name: Fleet | Collect migration job logs after a failure
+      ansible.builtin.command: >-
+        microk8s kubectl -n {{ fleet_namespace }} logs
+        job/fleet-migration --tail=50
+      register: fleet_migration_logs
+      changed_when: false
+      failed_when: false
+
+    - name: Fleet | Show why the deployment failed
+      ansible.builtin.debug:
+        msg: >-
+          {{ ['Fleet deployment failed. Migration job output follows.']
+             + (fleet_migration_logs.stdout_lines | default([]))
+             + (fleet_migration_logs.stderr_lines | default([])) }}
+
+    - name: Fleet | Fail with the original Helm error
+      ansible.builtin.fail:
+        msg: "{{ ansible_failed_result.stderr | default(ansible_failed_result.msg) }}"
+
+- name: Fleet | Wait for the deployment to report all replicas ready
+  ansible.builtin.command: >-
+    microk8s kubectl -n {{ fleet_namespace }} get deploy {{ fleet_deployment_name }}
+    -o jsonpath={.status.readyReplicas}
+  register: fleet_ready_replicas
+  changed_when: false
+  retries: 60
+  delay: 10
+  until: fleet_ready_replicas.stdout | default('0') | int >= fleet_replicas | int
+
+- name: Fleet | Wait for the service
+  ansible.builtin.command: "microk8s kubectl -n {{ fleet_namespace }} get svc {{ fleet_service_name }}"
+  register: fleet_service_lookup
+  changed_when: false
+  retries: 30
+  delay: 10
+  until: fleet_service_lookup.rc == 0
+
+- name: Fleet | Confirm the ingress was created
+  ansible.builtin.command: "microk8s kubectl -n {{ fleet_namespace }} get ingress {{ fleet_ingress_name }}"
+  changed_when: false
+  when: fleet_ingress_enabled | bool
+
+- name: Fleet | Check pods, service and ingress
+  ansible.builtin.command: "microk8s kubectl -n {{ fleet_namespace }} get pods,svc,ingress -o wide"
+  changed_when: false
+  register: fleet_resources
+
+- name: Fleet | Show pods, service and ingress
+  ansible.builtin.debug:
+    var: fleet_resources.stdout_lines
+
+- name: Fleet | Add checkmk monitor
+  ansible.builtin.import_tasks: checkmk.yml

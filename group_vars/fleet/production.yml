@@ -1,0 +1,41 @@
+---
+fleet_namespace: fleet
+fleet_hostname: fleet.lib.princeton.edu
+fleet_replicas: 3
+fleet_image_tag: v4.91.1
+
+fleet_ingress_enabled: true
+fleet_ingress_class_name: public
+
+# The Fleet pods serve plain HTTP; TLS is terminated by the load balancer that
+# fronts the cluster ingress.
+fleet_tls_enabled: false
+
+# Its own Oracle MySQL server, installed by the fleet_mysql role. Fleet cannot
+# use the shared mysql-db-prod1 server because that runs MariaDB, which Fleet's
+# schema migrations cannot be applied to.
+fleet_database_host: fleet-mysql-prod1.lib.princeton.edu
+fleet_database_port: 3306
+fleet_database_name: fleet
+fleet_database_username: fleet
+fleet_database_password: "{{ vault_fleet_database_password }}"
+
+# Redis lives outside the cluster on the shared production cache. Database 10
+# is not used by any other application.
+fleet_cache_host: lib-redis-prod1.princeton.edu
+fleet_cache_port: 6379
+fleet_cache_database: "10"
+fleet_cache_use_password: false
+
+# Encrypts MDM secrets at rest. Rotating this makes existing MDM secrets
+# unreadable, so it must stay stable once Fleet is in use.
+fleet_server_private_key: "{{ vault_fleet_server_private_key }}"
+
+# Empty means Fleet Free. Set vault_fleet_license_key to run Fleet Premium.
+fleet_license_key: "{{ vault_fleet_license_key | default('') }}"
+
+fleet_logging_json: true
+
+# Checkmk monitoring
+fleet_checkmk_enabled: true
+fleet_checkmk_monitor_host: k8s-prod1.lib.princeton.edu
