@@ -1,8 +1,6 @@
 ---
 # The tigerdata runner only exists in production, so this playbook takes no
-# runtime_env. It seeds the CircleCI runner token into Nomad; the job itself is
-# First run this playbook `ansible-playbook playbooks/tigerdata_ci_deployer.yml`
-# deployed with 'cd nomad && BRANCH=main ./bin/deploy tigerdata production'.
+# runtime_env.
 - name: Tigerdata CircleCI Deployer | Provision Variables & Infrastructure
   # The [0] picks the first host, since we just run the nomad commands there.
   hosts: "nomad_production[0]"
@@ -16,5 +14,8 @@
     - ../group_vars/nomad/vault.yml
     - "../group_vars/tigerdata/production.yml"
     - ../group_vars/tigerdata/vault.yml
+  vars:
+    runtime_env_or_default: "{{ runtime_env | default('production') }}"
+    nomad_hcl: "{{ playbook_dir }}/../nomad/tigerdata/deploy/production.hcl"
   roles:
     - role: roles/nomad_app
