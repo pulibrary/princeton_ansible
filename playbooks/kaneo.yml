@@ -1,0 +1,21 @@
+---
+# Kaneo only runs in the sandbox Nomad cluster today.
+- name: Kaneo | Provision Variables & Infrastructure
+  # The [0] picks the first sandbox nomad server, since we just run the
+  # nomad commands there.
+  hosts: "nomad_servers_{{ runtime_env | default('sandbox') }}[0]"
+  remote_user: pulsys
+  become: true
+
+  # Vault files (env-agnostic secrets or per-env keys within)
+  vars_files:
+    # This will auto include group_vars/nomad_sandbox.yml
+    # This will auto include group_vars/nomad_servers.yml
+    - ../group_vars/nomad/vault.yml
+    - "../group_vars/kaneo/{{ runtime_env | default('sandbox') }}.yml"
+    - ../group_vars/kaneo/vault.yml
+    # Need postgres info.
+    - ../group_vars/postgresql/vault.yml
+    - "../group_vars/postgresql/{{ runtime_env | default('sandbox') }}.yml"
+  roles:
+    - role: roles/nomad_app
