@@ -7,6 +7,9 @@
   hosts: "nomad_production[0]"
   remote_user: pulsys
   become: true
+  vars:
+    runtime_env_or_default: "{{ runtime_env | default('staging') }}"
+    nomad_hcl: "{{ playbook_dir }}/../nomad/figgy-infrastructure/deploy/{{ runtime_env | default('staging') }}.hcl"
 
   # Vault files (env-agnostic secrets or per-env keys within)
   vars_files:
@@ -21,13 +24,13 @@
     - name: Create consul policy for RabbitMQ peer discovery
       community.general.consul_policy:
         token: '{{ consul_acl_management_token }}'
-        name: 'rabbitmq-{{ runtime_env }}-peer-discovery'
-        description: 'Lets the {{ runtime_env }} brokers find each other via Consul'
+        name: 'rabbitmq-{{ runtime_env_or_default }}-peer-discovery'
+        description: 'Lets the {{ runtime_env_or_default }} brokers find each other via Consul'
         rules: |
-          service_prefix "rabbitmq-{{ runtime_env }}-peers" {
+          service_prefix "rabbitmq-{{ runtime_env_or_default }}-peers" {
             policy = "write"
           }
-          key_prefix "rabbitmq-{{ runtime_env }}" {
+          key_prefix "rabbitmq-{{ runtime_env_or_default }}" {
             policy = "write"
           }
           session_prefix "" {
@@ -38,19 +41,19 @@
     - name: Create consul role for RabbitMQ peer discovery
       community.general.consul_role:
         token: '{{ consul_acl_management_token }}'
-        name: 'nomad-tasks-figgy-infrastructure-{{ runtime_env }}'
+        name: 'nomad-tasks-figgy-infrastructure-{{ runtime_env_or_default }}'
         policies:
-          - name: 'rabbitmq-{{ runtime_env }}-peer-discovery'
+          - name: 'rabbitmq-{{ runtime_env_or_default }}-peer-discovery'
       run_once: true
 
-    - name: Bind figgy-infrastructure-{{ runtime_env }} task identities to that role
+    - name: Bind figgy-infrastructure-{{ runtime_env_or_default }} task identities to that role
       community.general.consul_binding_rule:
         token: '{{ consul_acl_management_token }}'
-        name: 'nomad-tasks-figgy-infrastructure-{{ runtime_env }}'
+        name: 'nomad-tasks-figgy-infrastructure-{{ runtime_env_or_default }}'
         auth_method: 'nomad-workloads'
         bind_type: 'role'
-        bind_name: 'nomad-tasks-figgy-infrastructure-{{ runtime_env }}'
+        bind_name: 'nomad-tasks-figgy-infrastructure-{{ runtime_env_or_default }}'
         selector: >-
           "nomad_service" not in value and
-          value.nomad_job_id == "figgy-infrastructure-{{ runtime_env }}"
+          value.nomad_job_id == "figgy-infrastructure-{{ runtime_env_or_default }}"
       run_once: true
