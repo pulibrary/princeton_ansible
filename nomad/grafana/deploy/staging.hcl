@@ -34,20 +34,43 @@ job "grafana-staging" {
     task "grafana" {
       driver = "docker"
 
+      # Nomad generates a workload JWT with the audience for Entra auth. Then the Entra app trusts Nomad, and boom no rotating secrets in Entra.
+      # The identity is only valid for 15 minutes and auto rotates.
+      identity {
+        name = "entra"
+        aud  = ["api://AzureADTokenExchange"]
+        file = true
+        ttl  = "15m"
+      }
+
       env {
         GF_LOG_LEVEL          = "ERROR"
         GF_LOG_MODE           = "console"
         GF_PATHS_DATA         = "/var/lib/grafana"
         GF_SERVER_DOMAIN      = "grafana-nomad.lib.princeton.edu"
         GF_SERVER_ROOT_URL    = "https://grafana-nomad.lib.princeton.edu"
-        GF_AUTH_GITHUB_ENABLED = true
-        GF_AUTH_GITHUB_ALLOW_SIGN_UP = true
-        GF_AUTH_GITHUB_AUTO_LOGIN = false
-        # The team ID below is the systems developers team in pulibrary.
-        GF_AUTH_GITHUB_TEAM_IDS = "195225"
-        GF_AUTH_GITHUB_ALLOWED_ORGANIZATIONS = "pulibrary"
-        GF_AUTH_GITHUB_ROLE_ATTRIBUTE_PATH = "[login=='tpendragon'][0] && 'GrafanaAdmin' || 'Editor'"
-        GF_AUTH_GITHUB_ALLOW_ASSIGN_GRAFANA_ADMIN = true
+        # Auth via EntraID. The app is set up so the GrafanaAdmin role has the library devops team as admins, and the library devops users as viewers.
+        GF_AUTH_AZUREAD_ENABLED = true
+        GF_AUTH_AZUREAD_NAME = "Princeton"
+        GF_AUTH_AZUREAD_ALLOW_SIGN_UP = true
+        GF_AUTH_AZUREAD_AUTO_LOGIN = true
+        # Only allow login w/ Entra. Turn these off if everything explodes.
+        GF_AUTH_DISABLE_LOGIN_FORM = true
+        GF_AUTH_BASIC_ENABLED = false
+        GF_AUTH_AZUREAD_CLIENT_ID = "37a12f8b-d40a-46e2-96c8-963227d25ad4"
+        GF_AUTH_AZUREAD_SCOPES = "openid email profile"
+        GF_AUTH_AZUREAD_AUTH_URL = "https://login.microsoftonline.com/2ff60116-7431-425d-b5af-077d7791bda4/oauth2/v2.0/authorize"
+        GF_AUTH_AZUREAD_TOKEN_URL = "https://login.microsoftonline.com/2ff60116-7431-425d-b5af-077d7791bda4/oauth2/v2.0/token"
+        GF_AUTH_AZUREAD_ALLOWED_ORGANIZATIONS = "2ff60116-7431-425d-b5af-077d7791bda4"
+        GF_AUTH_AZUREAD_CLIENT_AUTHENTICATION = "workload_identity"
+        GF_AUTH_AZUREAD_WORKLOAD_IDENTITY_TOKEN_FILE = "/secrets/nomad_entra.jwt"
+        GF_AUTH_AZUREAD_FEDERATED_CREDENTIAL_AUDIENCE = "api://AzureADTokenExchange"
+        # If they don't have a role assigned, don't let 'em log in.
+        GF_AUTH_AZUREAD_ROLE_ATTRIBUTE_STRICT = true
+        GF_AUTH_AZUREAD_ALLOW_ASSIGN_GRAFANA_ADMIN = true
+        # Links accounts created by the old GitHub login to Entra by email.
+        # We can delete this once everyone has logged in via Entra.
+        GF_AUTH_OAUTH_ALLOW_INSECURE_EMAIL_LOOKUP = true
         # Database configuration
         GF_DATABASE_TYPE = "postgres"
       }
@@ -58,8 +81,6 @@ job "grafana-staging" {
         change_mode = "restart"
         data = <<EOF
         {{- with nomadVar "nomad/jobs/grafana-staging/grafana" -}}
-        GF_AUTH_GITHUB_CLIENT_ID = {{ .GH_CLIENT_ID }}
-        GF_AUTH_GITHUB_CLIENT_SECRET = {{ .GH_SECRET }}
         GF_DATABASE_HOST = {{ .DB_HOST }}
         GF_DATABASE_NAME = {{ .DB_NAME }}
         GF_DATABASE_USER = {{ .DB_USER }}

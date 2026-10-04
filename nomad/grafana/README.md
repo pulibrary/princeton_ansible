@@ -19,7 +19,9 @@ Loki is a logging endpoint. Ours is configured to have logs shipped to it from P
 
 Grafana is a dashboard building and visualization application. You can find ours, on VPN, at [https://grafana-nomad.princeton.edu](https://grafana-nomad.lib.princeton.edu).
 
-Grafana Github logins are restricted to the pulibrary Systems Developers team.
+Grafana logins have an EntraID application that federates auth through Nomad workload identities.
+
+There's a GrafanaAdmin and Viewer role in the Entra app, and the devops:admins group is set to GrafanaAdmin, the devops:users group is set to Viewers. Ideally we shouldn't have to fuss with it, since Grafana pulls those memberships on login.
 
 ## [Promtail](https://grafana.com/docs/loki/latest/send-data/promtail/)
 
