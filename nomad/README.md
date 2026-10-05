@@ -9,45 +9,9 @@ We have two Nomad environments available:
 - **Production** (`production`) - Live production services
 - **Sandbox** (`sandbox`) - Development and experimental environment
 
-## Secrets
+## Secrets & Deployment
 
-Secrets for Nomad projects are handled by provisioning the nomad cluster via:
-
-```bash
-# For production
-ansible-playbook playbooks/nomad.yml -e runtime_env=production --tags [projectname]
-
-# For sandbox
-ansible-playbook playbooks/nomad.yml -e runtime_env=sandbox --limit nomad_sandbox --tags [projectname]
-```
-
-## Deployment
-
-Starting in `princeton_ansible`:
-
-1. `cd nomad`
-2. `BRANCH=<branchname> ./bin/deploy <app> <env>`
-
-Where:
-- `<app>` should be the same name as one of the directories in `nomad/`
-- `<env>` should be one of: `production` or `sandbox`
-- The environment should match one of the files in `nomad/<app>/deploy/`
-
-### Examples
-
-```bash
-# Deploy to production (default branch: main)
-./bin/deploy myapp production
-
-# Deploy specific branch to sandbox
-BRANCH=feature-branch ./bin/deploy myapp sandbox
-
-# Deploy to sandbox for testing
-./bin/deploy myapp sandbox
-
-# Deploy from different repository
-REPO=my-other-repo ./bin/deploy myapp sandbox
-```
+The playbooks for individual projects controls deploying and provisioning secrets for these applications. For an example, see [../playbooks/nomad_redis.yml].
 
 ## Logging into Nomad
 
