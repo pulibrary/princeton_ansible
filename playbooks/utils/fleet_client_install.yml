@@ -1,0 +1,67 @@
+---
+# Installs Fleet's agent (fleetd) so a host enrolls itself into Fleet, following
+# https://fleetdm.com/guides/enroll-hosts#cli
+#
+# fleetd has no apt or yum repository. The agent is distributed as a package
+# generated per deployment with the Fleet URL and enroll secret baked into it,
+# so this playbook builds that package on the Ansible controller with
+# `fleetctl package` and then installs the result on each host.
+#
+# The controller needs fleetctl, which is in this repository's devbox.json, so
+# run this from inside the devbox environment:
+#
+#   devbox shell
+#
+# Docker is NOT needed: .deb and .rpm are built in process. It is only required
+# for macOS .pkg and Windows .msi, which this playbook does not build.
+#
+# This playbook logs in as pulsys. The Proxmox hosts have no pulsys account, so
+# they are enrolled with fleet_client_proxmox.yml instead.
+#
+# You MUST limit this playbook to a host or group:
+#
+#   ansible-playbook playbooks/utils/fleet_client_install.yml --limit figgy_production
+#
+# Rerunning is safe and makes no changes while the settings are unchanged.
+# Changing the enroll secret, the Fleet URL or any of the settings in
+# vars/fleet_client.yml is picked up automatically: the package is rebuilt and
+# every host that still has the old one is reinstalled and restarted.
+#
+# To reinstall a host whose settings have not changed (repairing a broken
+# agent), pass:
+#
+#   -e fleet_client_force_install=true
+#
+# To rebuild the package when nothing tracked has changed (picking up a newer
+# fleetd from a newer fleetctl), pass:
+#
+#   -e fleet_client_force_build=true
+
+- name: Install the Fleet agent on a host
+  hosts: all
+  remote_user: pulsys
+  become: true
+  serial: "{{ concurrent_vms | default('5') }}"
+
+  vars_files:
+    - ../../group_vars/all/vars.yml
+    - ../../group_vars/all/vault.yml
+    - ../../group_vars/fleet/production.yml
+    - ../../group_vars/fleet/vault.yml
+    - vars/fleet_client.yml
+
+  pre_tasks:
+    - name: Stop the playbook if you did not use --limit
+      ansible.builtin.fail:
+        msg: >-
+          You must use -l or --limit. This playbook enrolls hosts into Fleet
+          and would otherwise run against every host in the inventory.
+      when: ansible_limit is not defined
+      run_once: true
+
+    - name: Fleet agent | Check the settings and the platform
+      ansible.builtin.include_tasks: tasks/fleet_client_checks.yml
+
+  tasks:
+    - name: Fleet agent | Build and install the agent
+      ansible.builtin.include_tasks: tasks/fleet_client.yml

@@ -1,0 +1,56 @@
+#!/usr/bin/bash
+{{ ansible_managed | comment }}
+# Checkmk local check - MySQL production backup verification
+# Today's dumps land in exactly one tier, so all three are searched:
+#   {{ mysql_backup_root }}/{monthly,weekly,daily}/YYYYMMDD/*-YYYYMMDD{{ mysql_backup_file_suffix }}
+
+STATE_OK=0
+STATE_WARN=1
+STATE_CRIT=2
+STATE_UNKNOWN=3
+
+CURRENT_DATE=$(date +%Y%m%d)
+BACKUP_ENV="{{ mysql_gcs_backup_environment }}"
+BACKUP_ROOT="{{ mysql_backup_root }}"
+
+service_name="mysql_backup_${BACKUP_ENV}"
+backup_dir=""
+backup_tier=""
+
+for tier in monthly weekly daily; do
+  if [ -d "${BACKUP_ROOT}/${tier}/${CURRENT_DATE}" ]; then
+    backup_dir="${BACKUP_ROOT}/${tier}/${CURRENT_DATE}"
+    backup_tier="$tier"
+    break
+  fi
+done
+
+if [ -z "$backup_dir" ]; then
+  echo "${STATE_CRIT} ${service_name} - CRITICAL: No backup directory for ${CURRENT_DATE} under ${BACKUP_ROOT}"
+  echo "${STATE_CRIT} mysql_backup_summary count=0 missing=1 - CRITICAL: Missing backups for: {{ mysql_backup_prefix }}-${BACKUP_ENV}"
+  exit 0
+fi
+
+# The grants file shares the dump suffix, so it is excluded from the per-database count.
+backup_count=$(find "$backup_dir" -name "*-${CURRENT_DATE}{{ mysql_backup_file_suffix }}" -not -name "grants-*" | wc -l)
+
+if [ "$backup_count" -eq 0 ]; then
+  echo "${STATE_CRIT} ${service_name} - CRITICAL: No backups found in ${backup_dir}"
+  echo "${STATE_CRIT} mysql_backup_summary count=0 missing=1 - CRITICAL: Missing backups for: {{ mysql_backup_prefix }}-${BACKUP_ENV}"
+  exit 0
+fi
+
+databases=$(find "$backup_dir" -name "*-${CURRENT_DATE}{{ mysql_backup_file_suffix }}" -not -name "grants-*" \
+  | sed -e "s|$backup_dir/||g" -e "s|-${CURRENT_DATE}{{ mysql_backup_file_suffix }}||g" \
+  | tr '\n' ' ')
+
+# The grants dump carries the accounts and privileges, which per-database dumps omit.
+if [ ! -f "${backup_dir}/grants-${CURRENT_DATE}.sql.gz" ]; then
+  echo "${STATE_WARN} ${service_name} count=${backup_count} - WARNING: ${backup_count} ${backup_tier} backups on ${CURRENT_DATE} but the grants dump is missing: ${databases}"
+  echo "${STATE_WARN} mysql_backup_summary count=${backup_count} - WARNING: Grants dump missing for ${CURRENT_DATE}"
+  exit 0
+fi
+
+echo "${STATE_OK} ${service_name} count=${backup_count} - OK: Found ${backup_count} ${backup_tier} backups for {{ mysql_backup_prefix }} ${BACKUP_ENV} on ${CURRENT_DATE}: ${databases}"
+echo "${STATE_OK} mysql_backup_summary count=${backup_count} - OK: All MySQL backups completed successfully for ${CURRENT_DATE}"
+exit 0

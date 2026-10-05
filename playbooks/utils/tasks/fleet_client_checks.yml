@@ -1,0 +1,22 @@
+---
+# Guards shared by the fleet client playbooks: the settings have to be present
+# before anything is built, and hosts fleetd has no package for are reported
+# rather than failed.
+- name: Fleet agent | Assert the enroll secret and URL are set
+  ansible.builtin.assert:
+    that:
+      - fleet_hostname | default('') | length > 0
+      - fleet_client_enroll_secret | default('') | length > 0
+    fail_msg: >-
+      fleet_hostname and vault_fleet_enroll_secret must both be set.
+      The enroll secret is shown in Fleet under Hosts > Add hosts; store it
+      in group_vars/fleet/vault.yml as vault_fleet_enroll_secret.
+  run_once: true
+
+- name: Fleet agent | Report hosts this playbook cannot enroll
+  ansible.builtin.debug:
+    msg: >-
+      Skipping {{ inventory_hostname }}: fleetd is packaged for Debian and
+      RedHat on amd64 and arm64, and this host is
+      {{ ansible_os_family }}/{{ ansible_architecture }}.
+  when: not fleet_client_supported | bool

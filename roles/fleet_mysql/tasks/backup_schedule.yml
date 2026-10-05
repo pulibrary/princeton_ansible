@@ -1,0 +1,139 @@
+---
+# Schedule rotated dumps of every database with systemd
+
+# gcsfuse forces every file and directory in the bucket to the uid and gid it
+# was mounted with, so these are created as that user: any other owner would
+# make the chown fail against the mount.
+- name: Fleet MySQL | Ensure backup tier directories exist
+  ansible.builtin.file:
+    path: "{{ mysql_backup_root }}/{{ item }}"
+    state: directory
+    owner: "{{ mysql_gcs_user }}"
+    group: "{{ mysql_gcs_group }}"
+    mode: "0750"
+  loop:
+    - daily
+    - weekly
+    - monthly
+  when: running_on_server
+
+- name: Fleet MySQL | Ensure backup staging directory exists
+  ansible.builtin.file:
+    path: "{{ mysql_backup_staging_dir }}"
+    state: directory
+    owner: "{{ mysql_backup_user }}"
+    group: "{{ mysql_backup_group }}"
+    mode: "0750"
+  when: running_on_server
+
+# A dedicated least-privilege account keeps the dumps from needing the root
+# password. Left at the default the backup reuses root, so nothing new has to
+# be vaulted before backups can start.
+- name: Fleet MySQL | Create the backup database user
+  community.mysql.mysql_user:
+    name: "{{ mysql_backup_db_user }}"
+    password: "{{ mysql_backup_db_password }}"
+    host: localhost
+    priv: "{{ mysql_backup_db_priv }}"
+    login_host: "{{ mysql_host }}"
+    login_unix_socket: "{{ mysql_socket }}"
+    login_user: root
+    login_password: "{{ mysql_root_password }}"
+  no_log: true
+  when:
+    - running_on_server
+    - mysql_backup_db_user != 'root'
+
+- name: Fleet MySQL | Install backup credentials file
+  ansible.builtin.template:
+    src: mysql_backup_cnf.j2
+    dest: "{{ mysql_backup_credentials_path }}"
+    owner: "{{ mysql_backup_user }}"
+    group: "{{ mysql_backup_group }}"
+    mode: "0600"
+  no_log: true
+  when: running_on_server
+
+- name: Fleet MySQL | Install rotated backup script
+  ansible.builtin.template:
+    src: mysql_backup_rotated.sh.j2
+    dest: "{{ mysql_backup_script_path }}"
+    owner: root
+    group: root
+    mode: "0755"
+  register: mysql_backup_script
+  when: running_on_server
+
+- name: Fleet MySQL | Create backup service
+  ansible.builtin.template:
+    src: mysql-backup.service.j2
+    dest: "/etc/systemd/system/{{ mysql_backup_service_name }}"
+    owner: root
+    group: root
+    mode: "0644"
+  register: mysql_backup_service_unit
+  when: running_on_server
+
+- name: Fleet MySQL | Create backup timer
+  ansible.builtin.template:
+    src: mysql-backup.timer.j2
+    dest: "/etc/systemd/system/{{ mysql_backup_timer_name }}"
+    owner: root
+    group: root
+    mode: "0644"
+  register: mysql_backup_timer_unit
+  when: running_on_server
+
+- name: Fleet MySQL | Reload systemd for backup units
+  ansible.builtin.systemd:
+    daemon_reload: true
+  when:
+    - running_on_server
+    - mysql_backup_service_unit.changed or mysql_backup_timer_unit.changed
+
+- name: Fleet MySQL | Enable and start backup timer
+  ansible.builtin.systemd:
+    name: "{{ mysql_backup_timer_name }}"
+    enabled: true
+    masked: false
+    state: >-
+      {{ 'restarted' if mysql_backup_timer_unit.changed else 'started' }}
+  when: running_on_server
+
+- name: Fleet MySQL | Look for existing backups
+  ansible.builtin.find:
+    paths:
+      - "{{ mysql_backup_root }}/daily"
+      - "{{ mysql_backup_root }}/weekly"
+      - "{{ mysql_backup_root }}/monthly"
+    file_type: directory
+    patterns: "[0-9]*"
+  register: mysql_existing_backups
+  changed_when: false
+  when: running_on_server
+
+# The timer only fires at its scheduled hour, so without this the backup tree
+# stays empty (and monitoring stays CRITICAL) until the next night.
+- name: Fleet MySQL | Run the first backup now
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/systemctl
+      - start
+      - --no-block
+      - "{{ mysql_backup_service_name }}"
+  changed_when: true
+  when:
+    - running_on_server
+    - >-
+      mysql_backup_run_now | bool
+      or mysql_existing_backups.matched | default(0) == 0
+
+- name: Fleet MySQL | Report how to follow the backup run
+  ansible.builtin.debug:
+    msg:
+      - "Backup timer: systemctl list-timers {{ mysql_backup_timer_name }}"
+      - "Backup progress: journalctl -fu {{ mysql_backup_service_name }}"
+      - >-
+        Verify:
+        /usr/lib/check_mk_agent/local/check_mysql_backup.sh
+  when: running_on_server

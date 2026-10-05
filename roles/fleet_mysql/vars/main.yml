@@ -1,0 +1,94 @@
+---
+# vars file for fleet_mysql
+#
+# Oracle MySQL, not MariaDB. Fleet's schema migrations cannot be replayed on
+# MariaDB, so this role deliberately installs a different database server from
+# the mysql role while keeping the same variable interface.
+mysql_name: mysql
+
+# MySQL's own APT repository rather than Ubuntu's mysql-server package. Ubuntu
+# ships 8.0.4x, and Fleet requires 8.0.44 or later; the 8.4 LTS series from
+# Oracle is comfortably past that line and is one of the versions Fleet tests
+# against.
+mysql_apt_key_url: https://repo.mysql.com/RPM-GPG-KEY-mysql-2025
+# apt reads armoured keys when the filename ends in .asc, so no dearmouring
+# step is needed.
+mysql_apt_key_path: /etc/apt/keyrings/mysql.asc
+# BCA43417C3B485DD128EC6D4B7B3B788A8D3785C, valid to October 2027. The
+# identically named -2023 file carries the same key with an expiry that has
+# already passed, which apt rejects outright.
+mysql_apt_key_fingerprint: BCA43417C3B485DD128EC6D4B7B3B788A8D3785C
+mysql_apt_repo_url: https://repo.mysql.com/apt/ubuntu
+mysql_apt_repo_component: mysql-8.4-lts
+mysql_apt_tools_component: mysql-tools
+# Oracle publishes amd64 and i386 only. Naming an architecture the repository
+# does not carry makes every later apt run fail on the missing index, so this
+# is deliberately not the "amd64,arm64" the MariaDB role uses.
+mysql_apt_architectures: amd64
+mysql_supported_architectures:
+  - x86_64
+
+mysql_packages:
+  - mysql-server
+  # The Ansible MySQL modules talk to the server through a Python driver.
+  # PyMySQL is pure Python and implements MySQL 8's default caching_sha2_password
+  # authentication; python3-mysqldb links against MariaDB's client library on
+  # Ubuntu, which is the wrong pairing here.
+  - python3-pymysql
+
+mysql_client_packages:
+  - mysql-client
+  - python3-pymysql
+  - python3-dev
+  - libmysqlclient-dev
+
+mysql_service: mysql
+
+mysql_socket: /var/run/mysqld/mysqld.sock
+
+mysql_configuration_options:
+  - option: bind-address
+    section: mysqld
+    value: "{{ mysql_bind_address }}"
+  - option: socket
+    section: mysqld
+    value: "{{ mysql_socket }}"
+  - section: mysqld
+    option: innodb_buffer_pool_size
+    value: "{{ mysql_innodb_buffer_pool_size }}"
+  - section: mysqld
+    option: innodb_io_capacity
+    value: "{{ mysql_innodb_io_capacity }}"
+  - section: mysqld
+    option: log_error
+    value: "{{ mysql_error_log }}"
+  - section: mysqld
+    option: log_output
+    value: FILE
+  - section: mysqld
+    option: slow_query_log
+    value: "{{ 1 if mysql_slow_query_log else 0 }}"
+  - section: mysqld
+    option: slow_query_log_file
+    value: "{{ mysql_slow_query_log_file }}"
+  - section: mysqld
+    option: long_query_time
+    value: "{{ mysql_long_query_time }}"
+  # MySQL's X Protocol listens on a second port that nothing here uses, so it
+  # is switched off rather than left exposed.
+  - section: mysqld
+    option: mysqlx
+    value: "{{ 1 if mysql_enable_mysqlx else 0 }}"
+  # A numeric offset works without the timezone tables a named zone needs.
+  - section: mysqld
+    option: default_time_zone
+    value: "{{ mysql_default_time_zone }}"
+
+mysql_configuration_destination: /etc/mysql/mysql.conf.d
+
+# MySQL reads the files in an included directory in alphabetical order, and the
+# server package ships mysqld.cnf in this same directory setting its own
+# log-error and datadir. Without a prefix that sorts after it, the package file
+# is read last and quietly wins, so log_error never takes effect and the log
+# shipper watches a file that is never written.
+mysql_configuration_file_prefix: "zz-"

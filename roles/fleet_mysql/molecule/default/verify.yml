@@ -1,0 +1,95 @@
+---
+- name: Verify
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Check mysql package status
+      ansible.builtin.package:
+        name: "{{ item }}"
+        state: present
+      check_mode: true
+      register: pkg_status
+      loop:
+        - mysql-server
+        - mysql-client
+
+    - name: Test for mysql packages
+      ansible.builtin.assert:
+        that:
+          - not pkg_status.changed
+
+    # The whole point of this role is that it is not MariaDB, so the absence of
+    # MariaDB is asserted rather than assumed.
+    - name: Look for a MariaDB server
+      ansible.builtin.command: dpkg-query --show --showformat=${Package} mariadb-server-core
+      register: mariadb_present
+      changed_when: false
+      failed_when: false
+
+    - name: Test that MariaDB is not installed
+      ansible.builtin.assert:
+        that:
+          - mariadb_present.rc != 0
+        fail_msg: "MariaDB is installed; this role must install Oracle MySQL"
+
+    - name: Read the installed server version
+      ansible.builtin.command: mysqld --version
+      register: mysqld_version
+      changed_when: false
+
+    # Fleet cannot migrate a database older than 8.0.44, so a build that
+    # installed an older server is a failure even though the packages are all
+    # present.
+    - name: Test that the server is new enough for Fleet
+      ansible.builtin.assert:
+        that:
+          - "'MariaDB' not in mysqld_version.stdout"
+          - reported_version is version('8.0.44', '>=')
+        fail_msg: >-
+          mysqld reports '{{ mysqld_version.stdout }}', which Fleet cannot use
+        success_msg: "mysqld is {{ reported_version }}"
+      vars:
+        reported_version: >-
+          {{ mysqld_version.stdout | regex_search('Ver ([0-9]+\.[0-9]+\.[0-9]+)', '\1') | first }}
+
+    - name: Read the server configuration
+      ansible.builtin.slurp:
+        src: /etc/mysql/mysql.conf.d/zz-mysql-server.cnf
+      register: server_config
+
+    - name: Test that the logs the shipper reads are turned on
+      ansible.builtin.assert:
+        that:
+          - "'log_error = /var/log/mysql/mysql_error.log' in config"
+          - "'slow_query_log = 1' in config"
+          - "'slow_query_log_file = /var/log/mysql/mysql_slow.log' in config"
+          - "'long_query_time = 2' in config"
+        fail_msg: "MySQL is not configured to write the logs SigNoz collects"
+      vars:
+        config: "{{ server_config.content | b64decode }}"
+
+    - name: Test that the extra hardening and clock settings are applied
+      ansible.builtin.assert:
+        that:
+          - "'mysqlx = 0' in config"
+          - "'default_time_zone = +00:00' in config"
+        fail_msg: "MySQL is missing the X Protocol and timezone settings"
+      vars:
+        config: "{{ server_config.content | b64decode }}"
+
+    # A config file MySQL cannot parse leaves the server refusing to start, so
+    # the settings are handed to mysqld for validation rather than only grepped.
+    - name: Test that the server accepts its own configuration
+      ansible.builtin.command: mysqld --validate-config
+      changed_when: false
+
+    - name: Check the log directory
+      ansible.builtin.stat:
+        path: /var/log/mysql
+      register: log_dir
+
+    - name: Test that the log directory belongs to mysql
+      ansible.builtin.assert:
+        that:
+          - log_dir.stat.isdir
+          - log_dir.stat.pw_name == 'mysql'
