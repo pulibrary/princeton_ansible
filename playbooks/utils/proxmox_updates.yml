@@ -1,0 +1,168 @@
+---
+# Applies OS package updates to the Proxmox nodes, one node at a time.
+#
+# by default this playbook runs against proxmox_servers_staging
+# to run against another environment, pass '-e runtime_env=<env>'
+#
+# The Proxmox nodes only accept SSH certificates signed by step-ca (see
+# roles/ssh_ca_trust). Only the accounts listed in ssh_ca_users in
+# group_vars/proxmox/common.yml can log in. Before running this playbook:
+#
+#   1. Bootstrap step once per workstation (fingerprint is in
+#      group_vars/step_ca/vault.yml):
+#        step ca bootstrap --ca-url https://step-ca.lib.princeton.edu:8443 --fingerprint <fingerprint>
+#   2. Get a certificate loaded into your ssh-agent:
+#        step ssh login netid@lib-pxserv01a.princeton.edu
+#   3. Confirm a certificate login works:
+#        ssh -o PreferredAuthentications=publickey -o PasswordAuthentication=no netid@lib-pxserv01a.princeton.edu
+#
+# The playbook connects as your local $USER. If that is not your netid, pass
+# '-e proxmox_ssh_user=<netid>'.
+#
+# Nodes are not rebooted unless you pass '-e proxmox_reboot=true'. Rebooting a
+# node stops (or, under HA, migrates) the guests running on it, so plan
+# accordingly. Without the flag, ops is notified on slack that a reboot is due.
+- name: Preflight checks for Proxmox certificate login
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  become: false
+  vars_files:
+    - ../group_vars/proxmox/common.yml
+  vars:
+    proxmox_login_user: "{{ proxmox_ssh_user | default(lookup('ansible.builtin.env', 'USER')) }}"
+
+  tasks:
+    - name: Proxmox | confirm the connecting account may log in
+      ansible.builtin.assert:
+        that:
+          - proxmox_login_user in (ssh_ca_users | map(attribute='name') | list)
+        fail_msg: >-
+          '{{ proxmox_login_user }}' is not in ssh_ca_users in
+          group_vars/proxmox/common.yml. Pass '-e proxmox_ssh_user=<netid>'
+          if your local user is not your netid.
+
+    - name: Proxmox | look for an SSH certificate in the local ssh-agent
+      ansible.builtin.command: ssh-add -L
+      register: proxmox_agent_keys
+      changed_when: false
+      failed_when: false
+
+    - name: Proxmox | require a step-ca SSH certificate
+      ansible.builtin.assert:
+        that:
+          - "'-cert-v01@openssh.com' in proxmox_agent_keys.stdout"
+        fail_msg: >-
+          No SSH certificate found in your ssh-agent. Run
+          'step ssh login {{ proxmox_login_user }}@lib-pxserv01a.princeton.edu'
+          first (see the header of this playbook).
+
+- name: Update the Proxmox node packages
+  hosts: "proxmox_servers_{{ runtime_env | default('staging') }}"
+  remote_user: "{{ proxmox_ssh_user | default(lookup('ansible.builtin.env', 'USER')) }}"
+  serial: 1
+  become: true
+  vars_files:
+    - ../group_vars/all/vars.yml
+    - ../group_vars/all/vault.yml
+  vars:
+    proxmox_reboot: false
+
+  pre_tasks:
+    - name: Proxmox | check whether the node is in a cluster
+      ansible.builtin.stat:
+        path: /etc/pve/corosync.conf
+      register: proxmox_corosync_conf
+
+    - name: Proxmox | require cluster quorum before touching the node
+      ansible.builtin.command: pvecm status
+      register: proxmox_cluster_status
+      changed_when: false
+      failed_when: proxmox_cluster_status.stdout is not search('Quorate:\s+Yes')
+      when: proxmox_corosync_conf.stat.exists
+
+  tasks:
+    # Proxmox requires dist-upgrade (full-upgrade); a plain upgrade can leave
+    # the node with a broken mix of pve packages.
+    - name: Proxmox | Upgrade all packages
+      ansible.builtin.apt:
+        update_cache: true
+        upgrade: dist
+        force_apt_get: true
+
+    - name: Proxmox | remove dependencies that are no longer required
+      ansible.builtin.apt:
+        autoremove: true
+
+    - name: Proxmox | remove local dependencies that are no longer required
+      ansible.builtin.apt:
+        autoclean: true
+
+    - name: Proxmox | clear out the local repository of retrieved package files
+      ansible.builtin.apt:
+        clean: true
+
+    # Debian does not always write /var/run/reboot-required for Proxmox kernel
+    # updates, so also compare the running kernel with the newest installed.
+    - name: Proxmox | Check if reboot required
+      ansible.builtin.stat:
+        path: /var/run/reboot-required
+      register: reboot_required_file
+
+    - name: Proxmox | find the newest installed kernel
+      ansible.builtin.shell:
+        cmd: set -o pipefail && ls -1 /boot/vmlinuz-* | sed 's|/boot/vmlinuz-||' | sort -V | tail -n 1
+        executable: /bin/bash
+      register: proxmox_newest_kernel
+      changed_when: false
+
+    - name: Proxmox | decide whether the node needs a reboot
+      ansible.builtin.set_fact:
+        proxmox_needs_reboot: >-
+          {{ reboot_required_file.stat.exists
+             or (proxmox_newest_kernel.stdout | length > 0
+                 and proxmox_newest_kernel.stdout != ansible_facts['kernel']) }}
+
+    - name: Proxmox | Reboot if required
+      ansible.builtin.reboot:
+        msg: "Reboot initiated by Ansible because of apt-get updates."
+        connect_timeout: 5
+        reboot_timeout: 900
+        pre_reboot_delay: 0
+        post_reboot_delay: 30
+        test_command: whoami
+      when:
+        - proxmox_needs_reboot | bool
+        - proxmox_reboot | bool
+
+    - name: Proxmox | wait for the cluster to regain quorum after reboot
+      ansible.builtin.command: pvecm status
+      register: proxmox_cluster_status
+      changed_when: false
+      until: proxmox_cluster_status.stdout is search('Quorate:\s+Yes')
+      retries: 30
+      delay: 10
+      when:
+        - proxmox_corosync_conf.stat.exists
+        - proxmox_needs_reboot | bool
+        - proxmox_reboot | bool
+
+    - name: Tell everyone on slack you ran an ansible playbook
+      community.general.slack:
+        token: "{{ vault_pul_slack_token }}"
+        msg: "Ansible ran `{{ ansible_play_name }}` on {{ inventory_hostname }}"
+        channel: "{{ slack_alerts_channel }}"
+      delegate_to: localhost
+      become: false
+
+  post_tasks:
+    - name: Notify ops to reboot the proxmox node if needed
+      community.general.slack:
+        token: "{{ vault_pul_slack_token }}"
+        msg: "@ops {{ inventory_hostname }} needs a reboot"
+        channel: "{{ slack_alerts_channel }}"
+      delegate_to: localhost
+      become: false
+      when:
+        - proxmox_needs_reboot | bool
+        - not (proxmox_reboot | bool)
