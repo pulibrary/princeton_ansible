@@ -118,6 +118,13 @@
     path: /etc/apt/sources.list.d/mysql.list
     state: absent
 
+- name: Fleet MySQL | Ensure python3-debian is installed for deb822_repository
+  ansible.builtin.apt:
+    name: python3-debian
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
 - name: Fleet MySQL | Install MySQL repository
   ansible.builtin.deb822_repository:
     name: mysql
@@ -130,7 +137,6 @@
     architectures: "{{ mysql_apt_architectures }}"
     signed_by: "{{ mysql_apt_key_path }}"
     state: present
-    install_python_debian: true
   register: mysql_repo_added
 
 - name: Fleet MySQL | Update apt cache after adding MySQL repository

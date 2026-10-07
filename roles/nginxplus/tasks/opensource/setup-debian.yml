@@ -7,6 +7,13 @@
     - "nginx_org_packages_{{ ansible_facts['distribution'] | lower }}.list"
     - "nginx_org_packages_mainline_{{ ansible_facts['distribution'] | lower }}.list"
 
+- name: Ensure python3-debian is installed for deb822_repository
+  ansible.builtin.apt:
+    name: python3-debian
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
 - name: Nginxplus - Install Add NGINX Repository
   ansible.builtin.deb822_repository:
     name: nginx-oss
@@ -15,7 +22,6 @@
     suites: ["{{ ansible_facts['distribution_release'] }}"]
     components: [nginx]
     state: present
-    install_python_debian: true
 
 - name: Nginxplus | Clean apt cache
   ansible.builtin.command: apt-get clean

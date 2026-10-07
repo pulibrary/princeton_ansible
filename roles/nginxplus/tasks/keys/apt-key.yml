@@ -17,6 +17,13 @@
     path: /etc/apt/sources.list.d/nginx.list
     state: absent
 
+- name: Nginxplus | Ensure python3-debian is installed for deb822_repository
+  ansible.builtin.apt:
+    name: python3-debian
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
 - name: Nginxplus | Add Nginx repository
   ansible.builtin.deb822_repository:
     name: nginx
@@ -25,7 +32,6 @@
     suites: ["{{ ansible_facts['distribution_release'] }}"]
     components: [nginx]
     state: present
-    install_python_debian: true
 
 - name: Nginxplus | Clean apt cache
   ansible.builtin.command: apt-get clean

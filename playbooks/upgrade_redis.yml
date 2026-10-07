@@ -14,6 +14,13 @@
       - redis-tools
 
   tasks:
+    - name: Ensure python3-debian is installed for deb822_repository
+      ansible.builtin.apt:
+        name: python3-debian
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+
     - name: add the redis repository
       ansible.builtin.deb822_repository:
         name: redislabs-redis
@@ -23,7 +30,6 @@
         components: [main]
         signed_by: "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x60A0586666DE0BA4B481628ACC59E6B43FA6E3CA"
         state: present
-        install_python_debian: true
     - name: Update the repository cache and update redis packages
       ansible.builtin.apt:
         name: "{{ redis_packages }}"
