@@ -15,6 +15,13 @@
         url: "{{ postgres_apt_key_url }}"
         state: present
 
+    - name: Ensure python3-debian is installed for deb822_repository
+      ansible.builtin.apt:
+        name: python3-debian
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+
     - name: Add postgres repository
       ansible.builtin.deb822_repository:
         name: pgdg
@@ -23,7 +30,6 @@
         suites: ["{{ ansible_facts['distribution_release'] }}-pgdg"]
         components: [main]
         state: present
-        install_python_debian: true
 
     - name: Update apt cache after adding postgres repository
       ansible.builtin.apt:

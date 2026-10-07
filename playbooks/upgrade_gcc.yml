@@ -11,6 +11,13 @@
       - g++-11
 
   tasks:
+    - name: Ensure python3-debian is installed for deb822_repository
+      ansible.builtin.apt:
+        name: python3-debian
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+
     - name: add the gcc repository
       ansible.builtin.deb822_repository:
         name: ubuntu-toolchain-r-test
@@ -20,7 +27,6 @@
         components: [main]
         signed_by: "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0xC8EC952E2A0E1FBDC5090F6A2C277A0A352154E5"
         state: present
-        install_python_debian: true
     - name: Update the repository cache and update packages
       ansible.builtin.apt:
         name: "{{ gcc_packages }}"

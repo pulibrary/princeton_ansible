@@ -2,6 +2,11 @@
 
 Jobs in Tower run inside containers called execution environments, or EEs. In our old Tower environment, we ran everything on the default EE and installed the Ansible collections we needed into the EE at runtime. Now we can build custom EEs, building in the collections and other tools we need for each template ahead of time.
 
+## Which EE to use
+
+* ``core_221_environment.yml`` builds ansible-core 2.21 (Ansible 14), the same versions as ``pyproject.toml``. Use it for templates that run roles needing options added after 2.19, such as ``deb822_repository``'s ``install_python_debian``. ansible-core 2.20+ needs Python 3.12, so this EE starts from ``registry.access.redhat.com/ubi9/ubi-minimal``, which needs no registry.redhat.io login.
+* ``core_219_environment.yml`` builds ansible-core 2.19 (Ansible 12) on the AAP 2.4 supported image.
+
 ## Building a new EE
 
 Our custom EEs are built from the YAML files in the ``tower_ees`` directory of the princeton_ansible repo. To build or rebuild an EE:

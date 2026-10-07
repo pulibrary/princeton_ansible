@@ -43,6 +43,14 @@
   ansible.builtin.command: apt-get --allow-releaseinfo-change update
   changed_when: false
 
+- name: Ensure python3-debian is installed for deb822_repository
+  ansible.builtin.apt:
+    name: python3-debian
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  when: not ansible_check_mode
+
 - name: Ensure Datadog repository is up-to-date
   ansible.builtin.deb822_repository:
     name: datadog
@@ -51,7 +59,6 @@
     suites: ["{{ datadog_apt_repo_suite }}"]
     components: "{{ datadog_apt_repo_components }}"
     state: "{% if datadog_agent5 %}absent{% else %}present{% endif %}"
-    install_python_debian: true
   register: datadog_apt_repo_result
   when: not ansible_check_mode
 
@@ -63,7 +70,6 @@
     suites: ["{{ datadog_agent5_apt_repo_suite }}"]
     components: "{{ datadog_agent5_apt_repo_components }}"
     state: "{% if datadog_agent5 %}present{% else %}absent{% endif %}"
-    install_python_debian: true
   register: datadog_agent5_apt_repo_result
   when: not ansible_check_mode
 

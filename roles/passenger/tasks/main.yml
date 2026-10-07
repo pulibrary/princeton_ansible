@@ -140,6 +140,14 @@
     path: /etc/apt/sources.list.d/passenger.list
     state: absent
 
+- name: Phusion | Ensure python3-debian is installed for deb822_repository
+  ansible.builtin.apt:
+    name: python3-debian
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  become: true
+
 - name: Phusion | Add Phusion apt repository
   become: true
   ansible.builtin.deb822_repository:
@@ -149,7 +157,6 @@
     suites: ["{{ ansible_facts['distribution_release'] }}"]
     components: [main]
     state: present
-    install_python_debian: true
   register: passenger_apt_repo
 
 - name: Phusion | Update apt cache after adding Phusion repository

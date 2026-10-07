@@ -59,6 +59,13 @@
     path: /etc/apt/sources.list.d/gitlab_gitlab-ce.list
     state: absent
 
+- name: GitLab | Ensure python3-debian is installed for deb822_repository
+  ansible.builtin.apt:
+    name: python3-debian
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
 - name: GitLab | Add APT repository
   ansible.builtin.deb822_repository:
     name: gitlab_gitlab-ce
@@ -68,7 +75,6 @@
     components: [main]
     signed_by: /etc/apt/keyrings/gitlab_gitlab-ce-archive-keyring.gpg
     state: present
-    install_python_debian: true
 
 - name: GitLab | Update apt cache
   ansible.builtin.apt:

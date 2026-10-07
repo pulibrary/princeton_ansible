@@ -49,6 +49,17 @@
     - nodejs__yarn_upstream | bool
     - not nodejs_yarn_berry_enabled | bool
 
+- name: Nodejs | Ensure python3-debian is installed for deb822_repository
+  ansible.builtin.apt:
+    name: python3-debian
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  when:
+    - use_yarn
+    - nodejs__yarn_upstream | bool
+    - not nodejs_yarn_berry_enabled | bool
+
 - name: Nodejs | Add upstream Yarn APT repository
   ansible.builtin.deb822_repository:
     name: yarn
@@ -58,7 +69,6 @@
     components: [main]
     signed_by: "{{ nodejs__yarn_keyring_path }}"
     state: present
-    install_python_debian: true
   register: nodejs_yarn_apt_repo
   when:
     - use_yarn

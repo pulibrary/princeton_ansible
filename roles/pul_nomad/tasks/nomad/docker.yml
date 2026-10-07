@@ -52,6 +52,13 @@
     path: /etc/apt/sources.list.d/docker.list
     state: absent
 
+- name: 'pul_nomad | nomad | docker | ensure python3-debian is installed for deb822_repository'
+  ansible.builtin.apt:
+    name: python3-debian
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
 - name: 'pul_nomad | nomad | docker | add Docker repository to apt sources'
   ansible.builtin.deb822_repository:
     name: docker
@@ -62,7 +69,6 @@
     architectures: ["{{ dpkg_architecture.stdout }}"]
     signed_by: /etc/apt/keyrings/docker.asc
     state: present
-    install_python_debian: true
   register: pul_nomad_docker_apt_repo
 
 - name: 'pul_nomad | nomad | docker | update apt cache after adding Docker repository'

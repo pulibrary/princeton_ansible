@@ -9,6 +9,13 @@
     path: "/etc/apt/sources.list.d/brightbox-ubuntu-ruby-ng-{{ ansible_facts['distribution_release'] }}.list"
     state: absent
 
+- name: Ruby | Ensure python3-debian is installed for deb822_repository
+  ansible.builtin.apt:
+    name: python3-debian
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
 - name: Ruby | add the Brightbox repository
   ansible.builtin.deb822_repository:
     name: brightbox-ruby-ng
@@ -18,7 +25,6 @@
     components: [main]
     signed_by: "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0xFC1E65C4D60181C7E0A0116F8872ED2718602E9E"
     state: present
-    install_python_debian: true
 
 - name: Ruby | Update apt cache after adding repository
   ansible.builtin.apt:

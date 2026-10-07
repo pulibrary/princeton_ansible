@@ -34,6 +34,13 @@
     - /etc/apt/sources.list.d/postgresql.list
   become: true
 
+- name: Ubuntu | Ensure python3-debian is installed for deb822_repository
+  ansible.builtin.apt:
+    name: python3-debian
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
 - name: Ubuntu | Add PostgreSQL APT repository
   ansible.builtin.deb822_repository:
     name: postgresql
@@ -43,7 +50,6 @@
     components: [main]
     signed_by: "{{ postgres_keyring_path }}"
     state: present
-    install_python_debian: true
   register: postgresql_apt_repo
 
 - name: Ubuntu | Update apt cache after adding PostgreSQL repository
