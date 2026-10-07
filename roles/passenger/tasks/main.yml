@@ -134,15 +134,29 @@
     remote_src: true
 
 # Phusion repository.
+- name: Phusion | Remove legacy Phusion apt source list
+  become: true
+  ansible.builtin.file:
+    path: /etc/apt/sources.list.d/passenger.list
+    state: absent
+
 - name: Phusion | Add Phusion apt repository
   become: true
-  ansible.builtin.apt_repository:
-    repo: >-
-      deb https://oss-binaries.phusionpassenger.com/apt/passenger
-      {{ ansible_facts['distribution_release'] }} main
+  ansible.builtin.deb822_repository:
+    name: passenger
+    types: [deb]
+    uris: https://oss-binaries.phusionpassenger.com/apt/passenger
+    suites: ["{{ ansible_facts['distribution_release'] }}"]
+    components: [main]
     state: present
-    filename: passenger
+    install_python_debian: true
+  register: passenger_apt_repo
+
+- name: Phusion | Update apt cache after adding Phusion repository
+  become: true
+  ansible.builtin.apt:
     update_cache: true
+  when: passenger_apt_repo is changed
 
 - name: Phusion | Prefer Phusion Passenger packages
   become: true

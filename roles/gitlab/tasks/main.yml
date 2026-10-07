@@ -54,12 +54,21 @@
       /etc/apt/keyrings/gitlab_gitlab-ce-archive-keyring.asc
   when: gitlab_ascii_key.changed or not gitlab_gpg_keyring.stat.exists
 
+- name: GitLab | Remove legacy APT source list
+  ansible.builtin.file:
+    path: /etc/apt/sources.list.d/gitlab_gitlab-ce.list
+    state: absent
+
 - name: GitLab | Add APT repository
-  ansible.builtin.apt_repository:
-    repo: "deb [signed-by=/etc/apt/keyrings/gitlab_gitlab-ce-archive-keyring.gpg] https://packages.gitlab.com/gitlab/gitlab-ce/ubuntu/ {{ ansible_facts['distribution_release'] }} main"
-    filename: gitlab_gitlab-ce
+  ansible.builtin.deb822_repository:
+    name: gitlab_gitlab-ce
+    types: [deb]
+    uris: https://packages.gitlab.com/gitlab/gitlab-ce/ubuntu/
+    suites: ["{{ ansible_facts['distribution_release'] }}"]
+    components: [main]
+    signed_by: /etc/apt/keyrings/gitlab_gitlab-ce-archive-keyring.gpg
     state: present
-    update_cache: false
+    install_python_debian: true
 
 - name: GitLab | Update apt cache
   ansible.builtin.apt:

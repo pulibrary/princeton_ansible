@@ -4,11 +4,21 @@
     name: software-properties-common
     state: present
 
+- name: Ruby | remove legacy Brightbox apt source list
+  ansible.builtin.file:
+    path: "/etc/apt/sources.list.d/brightbox-ubuntu-ruby-ng-{{ ansible_facts['distribution_release'] }}.list"
+    state: absent
+
 - name: Ruby | add the Brightbox repository
-  ansible.builtin.apt_repository:
-    repo: "ppa:brightbox/ruby-ng"
+  ansible.builtin.deb822_repository:
+    name: brightbox-ruby-ng
+    types: [deb]
+    uris: https://ppa.launchpadcontent.net/brightbox/ruby-ng/ubuntu
+    suites: ["{{ ansible_facts['distribution_release'] }}"]
+    components: [main]
+    signed_by: "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0xFC1E65C4D60181C7E0A0116F8872ED2718602E9E"
     state: present
-    update_cache: false
+    install_python_debian: true
 
 - name: Ruby | Update apt cache after adding repository
   ansible.builtin.apt:

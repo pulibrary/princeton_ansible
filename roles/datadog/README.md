@@ -28,7 +28,7 @@ subdirectory within `/etc/dd-agent/conf.d`.  For example, a
 into a file called `/etc/dd-agent/conf.d/nginx.d/conf.yaml`.
 - `datadog_config` - Settings to place in the `/etc/dd-agent/datadog.conf` INI file that go under the `[Main]` section.
 - `datadog_config_ex` - Extra INI sections to go in `/etc/dd-agent/datadog.conf` (optional).
-- `datadog_apt_repo` - Override default Datadog `apt` repository
+- `datadog_apt_repo_uri`, `datadog_apt_repo_suite`, `datadog_apt_repo_components` - Override default Datadog `apt` repository
 - `datadog_apt_cache_valid_time` - Override the default apt cache expiration time (default 1 hour)
 - `datadog_apt_key_url` - Override default url to Datadog `apt` key
 - `datadog_apt_key_url_new` - Override default url to the new Datadog `apt` key (in the near future the `apt` repo will have to be checked against this new key instead of the current key)
@@ -54,7 +54,7 @@ To downgrade from agent6 to agent5, you need to:
 Variables:
 
 - `datadog_agent5` - install an agent5 instead of agent5 (default to `false`)
-- `datadog_agent5_apt_repo` - Override default Datadog `apt` repository for agent5
+- `datadog_agent5_apt_repo_uri`, `datadog_agent5_apt_repo_suite`, `datadog_agent5_apt_repo_components` - Override default Datadog `apt` repository for agent5
 
 Dependencies
 ------------

@@ -15,13 +15,20 @@
 
   tasks:
     - name: add the redis repository
-      ansible.builtin.apt_repository:
-        repo: ppa:redislabs/redis
+      ansible.builtin.deb822_repository:
+        name: redislabs-redis
+        types: [deb]
+        uris: https://ppa.launchpadcontent.net/redislabs/redis/ubuntu
+        suites: ["{{ ansible_facts['distribution_release'] }}"]
+        components: [main]
+        signed_by: "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x60A0586666DE0BA4B481628ACC59E6B43FA6E3CA"
         state: present
+        install_python_debian: true
     - name: Update the repository cache and update redis packages
       ansible.builtin.apt:
         name: "{{ redis_packages }}"
         state: latest
+        update_cache: true
         install_recommends: no
         dpkg_options: 'force-confold,force-confdef'
     - name: restart redis

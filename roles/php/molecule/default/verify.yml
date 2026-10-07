@@ -14,12 +14,15 @@
         state: present
       changed_when: false
   
+    - name: Php | Check official sury.org repository source file
+      ansible.builtin.stat:
+        path: /etc/apt/sources.list.d/sury-php.sources
+      register: php_sury_php_sources
+
     - name: Php | Verify official sury.org repository is added
-      ansible.builtin.apt_repository:
-        repo:  "deb https://packages.sury.org/php/ {{ ansible_facts['distribution_release'] }} main"
-        codename: "{{ ansible_facts['distribution_release'] }}"
-        state: present
-      changed_when: false
+      ansible.builtin.assert:
+        that:
+          - php_sury_php_sources.stat.exists
 
     - name: Php | Verify PHP packages are installed
       ansible.builtin.apt:

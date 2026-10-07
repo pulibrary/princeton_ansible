@@ -26,13 +26,11 @@
     state: present
   when: datadog_apt_key_url_new is defined
 
-- name: Ensure Datadog non-https repositories are deprecated
-  ansible.builtin.apt_repository:
-    repo: "{{ item }}"
-    state: "absent"
-  with_items:
-    - "deb http://apt.datadoghq.com/ stable main"
-    - "deb http://apt.datadoghq.com/ stable 6"
+# apt_repository wrote every Datadog line (http and https) to this file.
+- name: Remove legacy Datadog apt source list
+  ansible.builtin.file:
+    path: /etc/apt/sources.list.d/apt_datadoghq_com.list
+    state: absent
   when: not ansible_check_mode
 
 - name: Add an expired key by id from a keyserver
@@ -46,18 +44,33 @@
   changed_when: false
 
 - name: Ensure Datadog repository is up-to-date
-  ansible.builtin.apt_repository:
-    repo: "{{ datadog_apt_repo }}"
+  ansible.builtin.deb822_repository:
+    name: datadog
+    types: [deb]
+    uris: "{{ datadog_apt_repo_uri }}"
+    suites: ["{{ datadog_apt_repo_suite }}"]
+    components: "{{ datadog_apt_repo_components }}"
     state: "{% if datadog_agent5 %}absent{% else %}present{% endif %}"
-    update_cache: true
+    install_python_debian: true
+  register: datadog_apt_repo_result
   when: not ansible_check_mode
 
 - name: (agent5) Ensure Datadog repository is up-to-date
-  ansible.builtin.apt_repository:
-    repo: "{{ datadog_agent5_apt_repo }}"
+  ansible.builtin.deb822_repository:
+    name: datadog-agent5
+    types: [deb]
+    uris: "{{ datadog_agent5_apt_repo_uri }}"
+    suites: ["{{ datadog_agent5_apt_repo_suite }}"]
+    components: "{{ datadog_agent5_apt_repo_components }}"
     state: "{% if datadog_agent5 %}present{% else %}absent{% endif %}"
-    update_cache: true
+    install_python_debian: true
+  register: datadog_agent5_apt_repo_result
   when: not ansible_check_mode
+
+- name: Update apt cache after changing Datadog repositories
+  ansible.builtin.apt:
+    update_cache: true
+  when: datadog_apt_repo_result is changed or datadog_agent5_apt_repo_result is changed
 
 - name: Ensure pinned version of Datadog agent is installed
   ansible.builtin.apt:

@@ -12,12 +12,20 @@
     state: present
     url: https://nginx.org/keys/nginx_signing.key
 
+- name: Nginxplus | Remove legacy Nginx apt source list
+  ansible.builtin.file:
+    path: /etc/apt/sources.list.d/nginx.list
+    state: absent
+
 - name: Nginxplus | Add Nginx repository
-  ansible.builtin.apt_repository:
-    repo: deb http://nginx.org/packages/ubuntu/ {{ ansible_facts['distribution_release'] }} nginx
+  ansible.builtin.deb822_repository:
+    name: nginx
+    types: [deb]
+    uris: http://nginx.org/packages/ubuntu/
+    suites: ["{{ ansible_facts['distribution_release'] }}"]
+    components: [nginx]
     state: present
-    filename: nginx
-    update_cache: false
+    install_python_debian: true
 
 - name: Nginxplus | Clean apt cache
   ansible.builtin.command: apt-get clean

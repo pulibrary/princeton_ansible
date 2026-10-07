@@ -18,12 +18,21 @@
     state: present
   when: running_on_server
 
+- name: PostgreSQL | Remove legacy gcsfuse apt source list
+  ansible.builtin.file:
+    path: /etc/apt/sources.list.d/gcsfuse.list
+    state: absent
+  when: running_on_server
+
 - name: PostgreSQL | Add gcsfuse apt repository
-  ansible.builtin.apt_repository:
-    repo: "deb https://packages.cloud.google.com/apt gcsfuse-{{ ansible_facts['distribution_release'] }} main"
+  ansible.builtin.deb822_repository:
+    name: gcsfuse
+    types: [deb]
+    uris: https://packages.cloud.google.com/apt
+    suites: ["gcsfuse-{{ ansible_facts['distribution_release'] }}"]
+    components: [main]
     state: present
-    filename: gcsfuse
-    update_cache: false
+    install_python_debian: true
   when: running_on_server
 
 - name: PostgreSQL | Install gcsfuse
