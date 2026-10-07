@@ -20,18 +20,31 @@
     state: file
   become: true
 
-- name: Redis | Remove legacy repository file (pre-rename)
+- name: Redis | Remove legacy repository files
   ansible.builtin.file:
-    path: /etc/apt/sources.list.d/pul_redis.list
+    path: "{{ item }}"
     state: absent
+  loop:
+    - /etc/apt/sources.list.d/pul_redis.list
+    - /etc/apt/sources.list.d/redis.list
   become: true
 
 - name: Redis | Add Redis Labs repository
-  ansible.builtin.apt_repository:
-    repo: "{{ redis_apt_repository }}"
+  ansible.builtin.deb822_repository:
+    name: redis
+    types: [deb]
+    uris: "{{ redis_apt_repository_uri }}"
+    suites: ["{{ ansible_facts['distribution_release'] }}"]
+    components: [main]
+    signed_by: "{{ redis_keyring_path }}"
     state: present
-    filename: redis
+    install_python_debian: true
+  register: redis_apt_repo
+
+- name: Redis | Update apt cache after adding Redis repository
+  ansible.builtin.apt:
     update_cache: true
+  when: redis_apt_repo is changed
 
 - name: Redis | install redis packages
   ansible.builtin.apt:

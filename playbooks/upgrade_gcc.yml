@@ -12,9 +12,15 @@
 
   tasks:
     - name: add the gcc repository
-      ansible.builtin.apt_repository:
-        repo: ppa:ubuntu-toolchain-r/test
+      ansible.builtin.deb822_repository:
+        name: ubuntu-toolchain-r-test
+        types: [deb]
+        uris: https://ppa.launchpadcontent.net/ubuntu-toolchain-r/test/ubuntu
+        suites: ["{{ ansible_facts['distribution_release'] }}"]
+        components: [main]
+        signed_by: "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0xC8EC952E2A0E1FBDC5090F6A2C277A0A352154E5"
         state: present
+        install_python_debian: true
     - name: Update the repository cache and update packages
       ansible.builtin.apt:
         name: "{{ gcc_packages }}"

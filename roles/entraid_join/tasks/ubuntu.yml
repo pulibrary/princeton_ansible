@@ -18,12 +18,21 @@
     executable: /bin/bash
     creates: /etc/apt/trusted.gpg.d/himmelblau.gpg
 
+- name: Entraid_join | Remove legacy Himmelblau apt source list
+  ansible.builtin.file:
+    path: /etc/apt/sources.list.d/himmelblau.list
+    state: absent
+
+# The package install below refreshes the apt cache.
 - name: Entraid_join | Configure Himmelblau apt repository
-  ansible.builtin.apt_repository:
-    repo: "deb [arch=amd64] https://packages.himmelblau-idm.org/{{ entraid_join_himmelblau_channel }}/deb/{{ entraid_join_ubuntu_repo_release }}/ ./"
-    filename: himmelblau
+  ansible.builtin.deb822_repository:
+    name: himmelblau
+    types: [deb]
+    uris: "https://packages.himmelblau-idm.org/{{ entraid_join_himmelblau_channel }}/deb/{{ entraid_join_ubuntu_repo_release }}/"
+    suites: ["./"]
+    architectures: [amd64]
     state: present
-    update_cache: true
+    install_python_debian: true
 
 - name: Entraid_join | Install Himmelblau packages on Ubuntu
   ansible.builtin.apt:

@@ -11,10 +11,19 @@
   vars_files:
     - ../group_vars/all/vault.yml
   tasks:
+    - name: Find one-line apt source lists
+      ansible.builtin.find:
+        paths: /etc/apt/sources.list.d
+        patterns: "*.list"
+      register: apt_source_lists
+      when: useless_apt_repo is defined
+
     - name: Remove a repository from sources list
-      ansible.builtin.apt_repository:
-        repo: "{{ useless_apt_repo | default(omit) }}"
+      ansible.builtin.lineinfile:
+        path: "{{ item }}"
+        line: "{{ useless_apt_repo }}"
         state: absent
+      loop: "{{ ['/etc/apt/sources.list'] + apt_source_lists.files | map(attribute='path') | list }}"
       when: useless_apt_repo is defined
 
     - name: Add an expired key by id from a keyserver

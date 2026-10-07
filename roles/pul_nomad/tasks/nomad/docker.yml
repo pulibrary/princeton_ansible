@@ -47,15 +47,28 @@
     mode: "0644"
     force: false
 
+- name: 'pul_nomad | nomad | docker | remove legacy Docker apt source list'
+  ansible.builtin.file:
+    path: /etc/apt/sources.list.d/docker.list
+    state: absent
+
 - name: 'pul_nomad | nomad | docker | add Docker repository to apt sources'
-  ansible.builtin.apt_repository:
-    repo: >-
-      deb [arch={{ dpkg_architecture.stdout }} signed-by=/etc/apt/keyrings/docker.asc]
-      https://download.docker.com/linux/ubuntu
-      {{ ansible_facts['distribution_release'] }} stable
+  ansible.builtin.deb822_repository:
+    name: docker
+    types: [deb]
+    uris: https://download.docker.com/linux/ubuntu
+    suites: ["{{ ansible_facts['distribution_release'] }}"]
+    components: [stable]
+    architectures: ["{{ dpkg_architecture.stdout }}"]
+    signed_by: /etc/apt/keyrings/docker.asc
     state: present
-    filename: docker
+    install_python_debian: true
+  register: pul_nomad_docker_apt_repo
+
+- name: 'pul_nomad | nomad | docker | update apt cache after adding Docker repository'
+  ansible.builtin.apt:
     update_cache: true
+  when: pul_nomad_docker_apt_repo is changed
 
 - name: 'pul_nomad | nomad | docker | install Docker Engine and Compose plugin'
   ansible.builtin.apt:

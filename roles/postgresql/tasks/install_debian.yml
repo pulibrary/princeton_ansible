@@ -31,14 +31,25 @@
   loop:
     - /etc/apt/sources.list.d/apt_postgresql_org_pub_repos_apt.list
     - /etc/apt/sources.list.d/pul_postgresql.list
+    - /etc/apt/sources.list.d/postgresql.list
   become: true
 
 - name: Ubuntu | Add PostgreSQL APT repository
-  ansible.builtin.apt_repository:
-    repo: "{{ postgres_apt_repository }}"
+  ansible.builtin.deb822_repository:
+    name: postgresql
+    types: [deb]
+    uris: "{{ postgresql_apt_repo_uri }}"
+    suites: ["{{ ansible_facts['distribution_release'] }}-pgdg"]
+    components: [main]
+    signed_by: "{{ postgres_keyring_path }}"
     state: present
-    filename: postgresql
+    install_python_debian: true
+  register: postgresql_apt_repo
+
+- name: Ubuntu | Update apt cache after adding PostgreSQL repository
+  ansible.builtin.apt:
     update_cache: true
+  when: postgresql_apt_repo is changed
 
 - name: PostgreSQL | ensure locale package is installed
   ansible.builtin.apt:

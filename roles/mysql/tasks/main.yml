@@ -16,17 +16,26 @@
     mode: '0644'
   register: install_app_key
 
+- name: MySQL | Remove legacy MariaDB apt source list
+  ansible.builtin.file:
+    path: /etc/apt/sources.list.d/dlm_mariadb_com_repo_mariadb_server_11_rolling_repo_ubuntu.list
+    state: absent
+
 - name: MySQL | Install MariaDB repository
-  ansible.builtin.apt_repository:
-    repo: "deb [arch=amd64,arm64] https://dlm.mariadb.com/repo/mariadb-server/11.rolling/repo/ubuntu {{ ansible_facts['distribution_release'] }} main"
+  ansible.builtin.deb822_repository:
+    name: mariadb
+    types: [deb]
+    uris: https://dlm.mariadb.com/repo/mariadb-server/11.rolling/repo/ubuntu
+    suites: ["{{ ansible_facts['distribution_release'] }}"]
+    components: [main]
+    architectures: [amd64, arm64]
     state: present
-    validate_certs: false
-    update_cache: false
-  when: install_app_key.changed
+    install_python_debian: true
+  register: mysql_mariadb_repo_added
 
 - name: MySQL | Update apt cache after adding MariaDB repository
   ansible.builtin.command: apt-get update
-  when: install_app_key.changed
+  when: install_app_key.changed or mysql_mariadb_repo_added.changed
   register: mariadb_cache_update
   retries: 3
   delay: 5
@@ -40,14 +49,14 @@
       Return code: {{ mariadb_cache_update.rc }}
       STDERR: {{ mariadb_cache_update.stderr }}
   when:
-    - install_app_key.changed
+    - install_app_key.changed or mysql_mariadb_repo_added.changed
     - mariadb_cache_update.rc != 0
 
 - name: MySQL | Fail if update failed
   ansible.builtin.fail:
     msg: "Cache update failed after adding MariaDB repository"
   when:
-    - install_app_key.changed
+    - install_app_key.changed or mysql_mariadb_repo_added.changed
     - mariadb_cache_update.rc != 0
 
 - name: MySQL | Install database client packages

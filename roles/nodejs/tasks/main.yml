@@ -40,16 +40,35 @@
     - nodejs__yarn_upstream | bool
     - not nodejs_yarn_berry_enabled | bool
 
-- name: Nodejs | Add upstream Yarn APT repository
-  ansible.builtin.apt_repository:
-    repo: "{{ nodejs__yarn_upstream_repository }}"
-    state: present
-    filename: yarn
-    update_cache: true
+- name: Nodejs | Remove legacy upstream Yarn apt source list
+  ansible.builtin.file:
+    path: /etc/apt/sources.list.d/yarn.list
+    state: absent
   when:
     - use_yarn
     - nodejs__yarn_upstream | bool
     - not nodejs_yarn_berry_enabled | bool
+
+- name: Nodejs | Add upstream Yarn APT repository
+  ansible.builtin.deb822_repository:
+    name: yarn
+    types: [deb]
+    uris: "{{ nodejs__yarn_upstream_uri }}"
+    suites: [stable]
+    components: [main]
+    signed_by: "{{ nodejs__yarn_keyring_path }}"
+    state: present
+    install_python_debian: true
+  register: nodejs_yarn_apt_repo
+  when:
+    - use_yarn
+    - nodejs__yarn_upstream | bool
+    - not nodejs_yarn_berry_enabled | bool
+
+- name: Nodejs | Update apt cache after adding Yarn repository
+  ansible.builtin.apt:
+    update_cache: true
+  when: nodejs_yarn_apt_repo is changed
 
 - name: Nodejs | uninstall any apt-installed node
   ansible.builtin.apt:

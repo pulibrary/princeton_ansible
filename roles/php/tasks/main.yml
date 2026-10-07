@@ -9,12 +9,20 @@
       - apt-transport-https
       - dirmngr
 
+- name: Php | Remove legacy sury.org apt source list
+  ansible.builtin.file:
+    path: /etc/apt/sources.list.d/packages_sury_org_php.list
+    state: absent
+
 - name: Php | Add official sury.org repository
-  ansible.builtin.apt_repository:
-    repo:  "deb https://packages.sury.org/php/ {{ ansible_facts['distribution_release'] }} main"
-    codename: "{{ ansible_facts['distribution_release'] }}"
+  ansible.builtin.deb822_repository:
+    name: sury-php
+    types: [deb]
+    uris: https://packages.sury.org/php/
+    suites: ["{{ ansible_facts['distribution_release'] }}"]
+    components: [main]
     state: present
-    update_cache: false
+    install_python_debian: true
 
 - name: Add the Sury.org GPG key
   ansible.builtin.apt_key:

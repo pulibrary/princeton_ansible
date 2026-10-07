@@ -1,11 +1,19 @@
 # tasks/repos.yml
 ---
-- name: Ensure universe repo is enabled
-  ansible.builtin.apt_repository:
-    repo: "deb http://archive.ubuntu.com/ubuntu {{ ansible_facts['distribution_release'] }} universe"
-    state: present
+- name: Remove legacy universe/multiverse apt source list
+  ansible.builtin.file:
+    path: /etc/apt/sources.list.d/archive_ubuntu_com_ubuntu.list
+    state: absent
 
-- name: Ensure multiverse repo is enabled
-  ansible.builtin.apt_repository:
-    repo: "deb http://archive.ubuntu.com/ubuntu {{ ansible_facts['distribution_release'] }} multiverse"
+# Signed-By must match the stock ubuntu.sources entry for the same archive,
+# otherwise apt refuses to load the conflicting sources.
+- name: Ensure universe and multiverse repos are enabled
+  ansible.builtin.deb822_repository:
+    name: ubuntu-universe-multiverse
+    types: [deb]
+    uris: http://archive.ubuntu.com/ubuntu
+    suites: ["{{ ansible_facts['distribution_release'] }}"]
+    components: [universe, multiverse]
+    signed_by: /usr/share/keyrings/ubuntu-archive-keyring.gpg
     state: present
+    install_python_debian: true

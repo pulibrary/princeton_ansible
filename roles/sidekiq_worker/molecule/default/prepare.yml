@@ -16,10 +16,18 @@
         state: present
 
     - name: Add postgres repository
-      ansible.builtin.apt_repository:
-        repo: "{{ postgres_apt_repository }}"
-        update_cache: true
+      ansible.builtin.deb822_repository:
+        name: pgdg
+        types: [deb]
+        uris: "{{ postgres_apt_repository_uri }}"
+        suites: ["{{ ansible_facts['distribution_release'] }}-pgdg"]
+        components: [main]
         state: present
+        install_python_debian: true
+
+    - name: Update apt cache after adding postgres repository
+      ansible.builtin.apt:
+        update_cache: true
 
     - name: Install Postgresql and Python on DB host
       ansible.builtin.apt:

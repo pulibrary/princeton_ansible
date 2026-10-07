@@ -113,15 +113,24 @@
          | map(attribute=6)
          | first | default('') }}
 
+- name: Fleet MySQL | Remove legacy MySQL apt source list
+  ansible.builtin.file:
+    path: /etc/apt/sources.list.d/mysql.list
+    state: absent
+
 - name: Fleet MySQL | Install MySQL repository
-  ansible.builtin.apt_repository:
-    repo: >-
-      deb [arch={{ mysql_apt_architectures }} signed-by={{ mysql_apt_key_path }}]
-      {{ mysql_apt_repo_url }} {{ ansible_distribution_release }}
-      {{ mysql_apt_repo_component }} {{ mysql_apt_tools_component }}
-    filename: mysql
+  ansible.builtin.deb822_repository:
+    name: mysql
+    types: [deb]
+    uris: "{{ mysql_apt_repo_url }}"
+    suites: ["{{ ansible_distribution_release }}"]
+    components:
+      - "{{ mysql_apt_repo_component }}"
+      - "{{ mysql_apt_tools_component }}"
+    architectures: "{{ mysql_apt_architectures }}"
+    signed_by: "{{ mysql_apt_key_path }}"
     state: present
-    update_cache: false
+    install_python_debian: true
   register: mysql_repo_added
 
 - name: Fleet MySQL | Update apt cache after adding MySQL repository

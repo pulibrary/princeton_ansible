@@ -19,12 +19,20 @@
   args:
     creates: "{{ himmelblau_ubuntu_keyring }}"
 
+- name: Himmelblau (Ubuntu) | remove legacy apt source list
+  ansible.builtin.file:
+    path: "/etc/apt/sources.list.d/{{ himmelblau_ubuntu_repo_file }}.list"
+    state: absent
+
 - name: Himmelblau (Ubuntu) | add apt repo
-  ansible.builtin.apt_repository:
-    repo: "deb [signed-by={{ himmelblau_ubuntu_keyring }}] {{ himmelblau_ubuntu_repo_baseurl }} ./ "
-    filename: "{{ himmelblau_ubuntu_repo_file }}"
+  ansible.builtin.deb822_repository:
+    name: "{{ himmelblau_ubuntu_repo_file }}"
+    types: [deb]
+    uris: "{{ himmelblau_ubuntu_repo_baseurl }}"
+    suites: ["./"]
+    signed_by: "{{ himmelblau_ubuntu_keyring }}"
     state: present
-    update_cache: false
+    install_python_debian: true
 
 - name: Himmelblau (Ubuntu) | apt update
   ansible.builtin.apt:

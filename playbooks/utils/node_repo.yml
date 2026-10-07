@@ -32,12 +32,16 @@
       failed_when: false
       become: yes
 
-    - name: Create clean pul_yarn.list
-      ansible.builtin.apt_repository:
-        filename: pul_yarn
-        repo: "deb [signed-by=/usr/share/keyrings/yarn-archive-keyring.gpg] https://dl.yarnpkg.com/debian/ stable main"
+    - name: Create clean pul_yarn.sources
+      ansible.builtin.deb822_repository:
+        name: pul_yarn
+        types: [deb]
+        uris: https://dl.yarnpkg.com/debian/
+        suites: [stable]
+        components: [main]
+        signed_by: /usr/share/keyrings/yarn-archive-keyring.gpg
         state: present
-        update_cache: no
+        install_python_debian: true
 
     # --- UPGRADE ---
     - name: Ubuntu | Upgrade all packages
