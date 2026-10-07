@@ -2,25 +2,26 @@
 version: 3
 
 images:
+  # ansible-core 2.20+ needs Python 3.12+, which the AAP 2.4 ee-supported
+  # images do not ship. UBI 9 minimal also needs no registry.redhat.io login.
   base_image:
-    name: registry.redhat.io/ansible-automation-platform-24/ee-supported-rhel9:1.0
+    name: registry.access.redhat.com/ubi9/ubi-minimal:latest
 
 dependencies:
   ansible_core:
-    package_pip: ansible-core==2.19.4
+    package_pip: ansible-core==2.21.5
 
   ansible_runner:
     package_pip: ansible-runner
 
   python_interpreter:
-    # The base image defaults to Python 3.9, so install and use 3.11.
-    package_system: python3.11
-    python_path: /usr/bin/python3.11
+    package_system: python3.12
+    python_path: /usr/bin/python3.12
 
   galaxy:
     collections:
       - name: checkmk.general
-        version: 6.4.1
+        version: 6.5.0
 
       - name: paloaltonetworks.panos
         version: 3.2.0
@@ -32,7 +33,8 @@ dependencies:
         version: 2.0.0
 
   python:
-    - ansible==12.2.0
+    # Ansible 14 pins ansible-core 2.21; Ansible 12 would pull 2.19 back in.
+    - ansible==14.5.0
     - six
     - psutil
     - requests
@@ -41,9 +43,15 @@ dependencies:
 
   system:
     - git
-    - python3-dnf
-    - python3.11-pip
-    - python3.11-devel
+    - openssh-clients
+    - rsync
+    - python3.12-pip
+    - python3.12-devel
+
+additional_build_steps:
+  append_final:
+    # UBI only installs python3.12; localhost tasks look for /usr/bin/python3.
+    - RUN ln -sf /usr/bin/python3.12 /usr/bin/python3
 
 options:
   package_manager_path: /usr/bin/microdnf
