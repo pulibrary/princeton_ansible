@@ -126,7 +126,7 @@ sudo journalctl --disk-usage
 | Variable                    | Default                              | Description                                            |
 | --------------------------- | ------------------------------------ | ------------------------------------------------------ |
 | `logrotate_global_defaults` | See defaults file                    | Base settings for all logrotate configurations.        |
-| `logrotate_rules`           | `[ - name: "falcon-sensor" … ]`      | List of custom logrotate jobs for `/etc/logrotate.d/`. |
+| `logrotate_rules`           | undefined (no custom jobs)           | List of custom logrotate jobs for `/etc/logrotate.d/`. |
 
 The role provides a flexible, hierarchical approach to log rotation:
 
