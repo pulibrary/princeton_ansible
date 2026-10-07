@@ -1,0 +1,52 @@
+---
+# ansible-core 2.21 EE. Needed for module options added after 2.19, such as
+# deb822_repository's install_python_debian (2.20+).
+# to build an EE, run `ansible-builder build`; see README.md
+version: 3
+
+images:
+  # ansible-core 2.20+ needs Python 3.12+ on the controller, which the AAP 2.4
+  # ee-supported images do not ship, so build up from UBI 9 instead. It is
+  # also pullable without registry.redhat.io credentials.
+  base_image:
+    name: registry.access.redhat.com/ubi9/ubi-minimal:latest
+
+dependencies:
+  python_interpreter:
+    package_system: python3.12
+    python_path: /usr/bin/python3.12
+
+  ansible_core:
+    # Kept in step with ansible-core in pyproject.toml.
+    package_pip: ansible-core==2.21.5
+  ansible_runner:
+    package_pip: ansible-runner
+
+  galaxy:
+    # ONLY list collections that are NOT part of the standard Ansible package
+    collections:
+      - name: checkmk.general
+        version: 6.5.0
+      - name: paloaltonetworks.panos
+        version: 3.2.0
+      - name: servicenow.servicenow
+        version: 1.0.6
+
+  python:
+    # "The Kitchen Sink" - the ~100 collections (community.general,
+    # ansible.posix, etc.) that ship with Ansible 14, which pins ansible-core
+    # 2.21. Kept in step with pyproject.toml.
+    - ansible==14.5.0
+    - six
+    - psutil
+    - requests
+    - google-auth
+
+  system:
+    - git
+    - openssh-clients
+    - rsync
+    - python3.12-pip
+
+options:
+  package_manager_path: /usr/bin/microdnf
