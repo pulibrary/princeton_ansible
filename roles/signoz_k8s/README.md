@@ -33,7 +33,7 @@ All variables are defined in `defaults/main.yml` and can be overridden in your p
 | `signoz_chart_repo_name` | `signoz`                   | Local name for the SigNoz Helm repository.                                     |
 | `signoz_chart_repo_url`  | `https://charts.signoz.io` | URL of the SigNoz Helm repository.                                             |
 | `signoz_chart_ref`       | `signoz/signoz`            | Helm chart reference (`<repo>/<chart>`).                                       |
-| `signoz_chart_version`   | `"0.144.0"`                | Specific chart version to install. If empty, the latest version is used.       |
+| `signoz_chart_version`   | `"0.145.0"`                | Specific chart version to install. If empty, the latest version is used.       |
 | `signoz_storage_class`   | `nfs`                      | Storage class to use for persistent volumes (passed to `global.storageClass`). |
 | `signoz_service_type`    | `NodePort`                 | Kubernetes service type for the SigNoz frontend.                               |
 | `signoz_http_node_port`  | `32080`                    | NodePort number when `signoz_service_type` is `NodePort`.                      |
