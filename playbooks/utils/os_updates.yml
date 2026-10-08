@@ -15,8 +15,10 @@
     - ../group_vars/all/vault.yml
 
   tasks:
+    # output is discarded because some keyrings contain non-UTF8 uids,
+    # which ansible-core refuses to deserialize
     - name: Ubuntu | refresh keys
-      ansible.builtin.command: /usr/bin/apt-key adv --refresh-keys --keyserver keyserver.ubuntu.com
+      ansible.builtin.shell: /usr/bin/apt-key adv --refresh-keys --keyserver keyserver.ubuntu.com > /dev/null 2>&1
       become: true
       when: ansible_facts['os_family'] == "Debian"
 
