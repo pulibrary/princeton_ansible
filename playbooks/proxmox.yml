@@ -1,4 +1,13 @@
 ---
+# by default this playbook runs in the staging environment
+# to run in the sandbox, pass '-e runtime_env=sandbox'
+#
+# A fresh node has no bootstrap account yet, so the first run connects as
+# root with its password:
+#   ansible-playbook playbooks/proxmox.yml --ask-pass -e runtime_env=sandbox -e proxmox_remote_user=root
+# After that run sshd only accepts SSH certificates, so connect as an opsys
+# account with your step-ca certificate loaded (no --ask-pass):
+#   ansible-playbook playbooks/proxmox.yml -e runtime_env=sandbox -e proxmox_remote_user=<netid>
 - name: proxmox add host to CA
   hosts: step_ca
   remote_user: pulsys
@@ -13,7 +22,7 @@
 
 - name: proxmox add users to host
   hosts: proxmox_servers_{{ runtime_env | default('staging') }}
-  remote_user: bootstrap
+  remote_user: "{{ proxmox_remote_user | default('bootstrap') }}"
   become: true
   vars_files:
     - ../group_vars/proxmox/common.yml
