@@ -5,9 +5,25 @@
 # A fresh node has no bootstrap account yet, so the first run connects as
 # root with its password:
 #   ansible-playbook playbooks/proxmox.yml --ask-pass -e runtime_env=sandbox -e proxmox_ssh_user=root
-# After that run sshd only accepts SSH certificates, so connect as an opsys
-# account with your step-ca certificate loaded (no --ask-pass):
-#   ansible-playbook playbooks/proxmox.yml -e runtime_env=sandbox -e proxmox_ssh_user=<netid>
+#
+# --ask-pass only works on that first run. The ssh_ca_trust role sets
+# 'PasswordAuthentication no' for every account (root included, only the
+# Veeam service account is exempt), so once it has run sshd accepts nothing
+# but step-ca SSH certificates and a password run fails with
+# 'Permission denied (publickey)'.
+#
+# Every later run connects as an account from ssh_ca_users in
+# group_vars/proxmox/common.yml (members of opsys, which have passwordless
+# sudo). Your certificate must carry that account's principal, for example
+# <user>@princeton.edu, so sign in to Entra as that user:
+#   step ssh login <user>@princeton.edu
+#   ssh -o PreferredAuthentications=publickey <user>@<node>   # confirm first
+#   ansible-playbook playbooks/proxmox.yml -e runtime_env=sandbox -e proxmox_ssh_user=<user>
+#
+# If no certificate login works (the first run stopped after sshd was locked
+# down but before the accounts existed), recover from the Proxmox web console
+# on :8006 as root: remove /etc/ssh/sshd_config.d/60-ssh-ca-access.conf,
+# restart ssh, then repeat the first run.
 - name: proxmox add host to CA
   hosts: step_ca
   remote_user: pulsys
