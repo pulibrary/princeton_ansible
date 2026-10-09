@@ -4,10 +4,10 @@
 #
 # A fresh node has no bootstrap account yet, so the first run connects as
 # root with its password:
-#   ansible-playbook playbooks/proxmox.yml --ask-pass -e runtime_env=sandbox -e proxmox_remote_user=root
+#   ansible-playbook playbooks/proxmox.yml --ask-pass -e runtime_env=sandbox -e proxmox_ssh_user=root
 # After that run sshd only accepts SSH certificates, so connect as an opsys
 # account with your step-ca certificate loaded (no --ask-pass):
-#   ansible-playbook playbooks/proxmox.yml -e runtime_env=sandbox -e proxmox_remote_user=<netid>
+#   ansible-playbook playbooks/proxmox.yml -e runtime_env=sandbox -e proxmox_ssh_user=<netid>
 - name: proxmox add host to CA
   hosts: step_ca
   remote_user: pulsys
@@ -22,7 +22,7 @@
 
 - name: proxmox add users to host
   hosts: proxmox_servers_{{ runtime_env | default('staging') }}
-  remote_user: "{{ proxmox_remote_user | default('bootstrap') }}"
+  remote_user: "{{ proxmox_ssh_user | default('bootstrap') }}"
   become: true
   vars_files:
     - ../group_vars/proxmox/common.yml
@@ -44,6 +44,53 @@
         - files:
             - ../group_vars/proxmox/vault.yml
           skip: true
+
+    # Nodes without a subscription get 401 from enterprise.proxmox.com, which
+    # fails every apt cache update. Switch those nodes to the no-subscription
+    # repositories; subscribed nodes keep the enterprise ones.
+    - name: Check the Proxmox subscription status
+      ansible.builtin.command: pvesubscription get
+      register: proxmox_subscription
+      changed_when: false
+
+    - name: Switch unsubscribed nodes to the no-subscription repositories
+      when: "'status: active' not in proxmox_subscription.stdout | lower"
+      block:
+        - name: Find the enterprise repository files
+          ansible.builtin.stat:
+            path: "/etc/apt/sources.list.d/{{ item }}"
+          loop:
+            - pve-enterprise.sources
+            - ceph.sources
+          register: proxmox_enterprise_sources
+
+        - name: Disable the enterprise repositories
+          ansible.builtin.lineinfile:
+            path: "{{ item.stat.path }}"
+            regexp: "^Enabled:"
+            line: "Enabled: false"
+            insertafter: "^Types:"
+          loop: "{{ proxmox_enterprise_sources.results | selectattr('stat.exists') | list }}"
+          loop_control:
+            label: "{{ item.item }}"
+
+        - name: Add the no-subscription repositories
+          ansible.builtin.copy:
+            dest: "/etc/apt/sources.list.d/{{ item.name }}.sources"
+            content: |
+              Types: deb
+              URIs: {{ item.uri }}
+              Suites: {{ ansible_facts['distribution_release'] }}
+              Components: {{ item.component }}
+              Signed-By: /usr/share/keyrings/proxmox-archive-keyring.gpg
+            owner: root
+            group: root
+            mode: "0644"
+          loop:
+            - { name: pve-no-subscription, uri: "http://download.proxmox.com/debian/pve", component: pve-no-subscription }
+            - { name: ceph-no-subscription, uri: "http://download.proxmox.com/debian/ceph-squid", component: no-subscription }
+          loop_control:
+            label: "{{ item.name }}"
 
     - name: Install sudo
       ansible.builtin.apt:
