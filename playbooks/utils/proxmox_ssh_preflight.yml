@@ -67,3 +67,41 @@
           No SSH certificate found in your ssh-agent. Run
           'step ssh login {{ proxmox_login_user }}@princeton.edu'
           first (see the header of playbooks/utils/proxmox_ssh_preflight.yml).
+
+    # A browser already signed in to Entra as someone else issues their
+    # certificate, so a certificate being present is not enough: it must
+    # carry one of the principals this account accepts.
+    - name: Proxmox | read the principals of the certificates in the ssh-agent
+      ansible.builtin.shell:
+        cmd: >-
+          set -o pipefail &&
+          ssh-add -L | grep -- '-cert-v01@openssh.com' |
+          while read -r cert; do printf '%s\n' "$cert" | ssh-keygen -L -f -; done
+        executable: /bin/bash
+      register: proxmox_agent_certs
+      changed_when: false
+
+    - name: Proxmox | require a certificate for the connecting account
+      vars:
+        proxmox_expected_principals: >-
+          {{ (ssh_ca_users | selectattr('name', 'equalto', proxmox_login_user) | first).principals }}
+        proxmox_cert_principals: >-
+          {{ proxmox_agent_certs.stdout
+             | regex_findall('(?s)Principals:\s*\n(.*?)\n\s*Critical Options:')
+             | join('\n') | split | list }}
+      ansible.builtin.assert:
+        that:
+          - proxmox_expected_principals | intersect(proxmox_cert_principals) | length > 0
+        fail_msg: >-
+          No certificate in your ssh-agent lets you log in as
+          '{{ proxmox_login_user }}': it needs one of
+          {{ proxmox_expected_principals | join(', ') }}, but the loaded
+          certificates carry {{ proxmox_cert_principals | join(', ') or 'no principals' }}.
+          The browser probably signed in to Entra as a different account. Run
+          'step ssh logout {{ proxmox_login_user }}@princeton.edu', then
+          'STEP_OPEN_BROWSER=0 step ssh login {{ proxmox_login_user }}@princeton.edu
+          --provisioner "Princeton Entra OIDC"' and open the URL in a browser
+          profile signed in as {{ proxmox_login_user }}.
+        success_msg: >-
+          Certificate for '{{ proxmox_login_user }}' found
+          ({{ proxmox_expected_principals | intersect(proxmox_cert_principals) | join(', ') }}).
