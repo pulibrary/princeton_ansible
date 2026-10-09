@@ -134,3 +134,30 @@ Once role is complete user will need to run the following steps.
 
   2. login into the server with `step ssh login netid@lib-pxserv01a.princeton.edu`
   3. login into the server with `ssh -o PreferredAuthentications=publickey -o PasswordAuthentication=no netid@lib-pxserv01a.princeton.edu`
+
+### Troubleshooting
+
+`Permission denied (publickey)` with a certificate loaded usually means the
+certificate carries the wrong principal. step-ca takes the principals from the
+Entra account that signed in, not from the identity passed to `step ssh login`,
+so a browser already signed in as you issues your certificate even when you
+asked for another account. Check what you got:
+
+```sh
+ssh-add -L | grep cert-v01 | ssh-keygen -L -f - | grep -A3 Principals
+```
+
+To sign in as a different account (for example `libdoas`), remove the wrong
+certificate and log in again without launching the default browser, naming the
+OIDC provisioner so step does not prompt for one:
+
+```sh
+step ssh logout libdoas@princeton.edu   # the identity used at login, not the principal
+STEP_OPEN_BROWSER=0 step ssh login libdoas@princeton.edu \
+  --provisioner "Princeton Entra OIDC"
+```
+
+Open the printed URL in a browser profile signed in as that account. Do not
+use a private/incognito window: Conditional Access requires a registered
+device, and private windows hide the device identity, so Entra rejects the
+sign-in with error 53003 (`Device state: Unregistered`).

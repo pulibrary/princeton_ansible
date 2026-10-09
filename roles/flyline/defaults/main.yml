@@ -1,0 +1,26 @@
+---
+# defaults/main.yml -- flyline
+#
+# Flyline (https://github.com/HalFrgrd/flyline) is a Bash loadable builtin that
+# replaces readline. This role installs it once per host; it is opt-in, so no
+# shell loads it until a user adds it to their own ~/.bashrc:
+#
+#   enable -f /usr/local/lib/bash/libflyline.so flyline
+
+flyline_version: v1.9.0
+
+# Release target triple for each CPU architecture Ansible reports.
+flyline_targets:
+  x86_64: x86_64-unknown-linux-gnu
+  aarch64: aarch64-unknown-linux-gnu
+flyline_target: "{{ flyline_targets[ansible_facts['architecture']] }}"
+
+flyline_release_url: >-
+  https://github.com/HalFrgrd/flyline/releases/download/{{ flyline_version
+  }}/libflyline-{{ flyline_version }}-{{ flyline_target }}.tar.gz
+
+# Each release unpacks into its own directory; the loadable path is a symlink
+# to the current one, so an upgrade or rollback is a single variable change.
+flyline_install_root: /usr/local/lib/flyline
+# /usr/local/lib/bash is on Bash's default BASH_LOADABLES_PATH (5.2+).
+flyline_loadable_path: /usr/local/lib/bash/libflyline.so

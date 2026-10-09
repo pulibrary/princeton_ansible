@@ -4,58 +4,17 @@
 # by default this playbook runs against proxmox_servers_staging
 # to run against another environment, pass '-e runtime_env=<env>'
 #
-# The Proxmox nodes only accept SSH certificates signed by step-ca (see
-# roles/ssh_ca_trust). Only the accounts listed in ssh_ca_users in
-# group_vars/proxmox/common.yml can log in. Before running this playbook:
+# Logging in needs a step-ca SSH certificate (password logins and --ask-pass
+# are refused); see proxmox_ssh_preflight.yml for the steps to run first.
 #
-#   1. Bootstrap step once per workstation (fingerprint is in
-#      group_vars/step_ca/vault.yml):
-#        step ca bootstrap --ca-url https://step-ca.lib.princeton.edu:8443 --fingerprint <fingerprint>
-#   2. Get a certificate loaded into your ssh-agent:
-#        step ssh login netid@lib-pxserv01a.princeton.edu
-#   3. Confirm a certificate login works:
-#        ssh -o PreferredAuthentications=publickey -o PasswordAuthentication=no netid@lib-pxserv01a.princeton.edu
-#
-# The playbook connects as your local $USER. If that is not your netid, pass
-# '-e proxmox_ssh_user=<netid>'.
+#   ansible-playbook playbooks/utils/proxmox_updates.yml \
+#     -e runtime_env=sandbox -e proxmox_ssh_user=<user>
 #
 # Nodes are not rebooted unless you pass '-e proxmox_reboot=true'. Rebooting a
 # node stops (or, under HA, migrates) the guests running on it, so plan
 # accordingly. Without the flag, ops is notified on slack that a reboot is due.
 - name: Preflight checks for Proxmox certificate login
-  hosts: localhost
-  connection: local
-  gather_facts: false
-  become: false
-  vars_files:
-    - ../group_vars/proxmox/common.yml
-  vars:
-    proxmox_login_user: "{{ proxmox_ssh_user | default(lookup('ansible.builtin.env', 'USER')) }}"
-
-  tasks:
-    - name: Proxmox | confirm the connecting account may log in
-      ansible.builtin.assert:
-        that:
-          - proxmox_login_user in (ssh_ca_users | map(attribute='name') | list)
-        fail_msg: >-
-          '{{ proxmox_login_user }}' is not in ssh_ca_users in
-          group_vars/proxmox/common.yml. Pass '-e proxmox_ssh_user=<netid>'
-          if your local user is not your netid.
-
-    - name: Proxmox | look for an SSH certificate in the local ssh-agent
-      ansible.builtin.command: ssh-add -L
-      register: proxmox_agent_keys
-      changed_when: false
-      failed_when: false
-
-    - name: Proxmox | require a step-ca SSH certificate
-      ansible.builtin.assert:
-        that:
-          - "'-cert-v01@openssh.com' in proxmox_agent_keys.stdout"
-        fail_msg: >-
-          No SSH certificate found in your ssh-agent. Run
-          'step ssh login {{ proxmox_login_user }}@lib-pxserv01a.princeton.edu'
-          first (see the header of this playbook).
+  ansible.builtin.import_playbook: proxmox_ssh_preflight.yml
 
 - name: Update the Proxmox node packages
   hosts: "proxmox_servers_{{ runtime_env | default('staging') }}"
