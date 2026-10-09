@@ -1,0 +1,47 @@
+---
+# tasks/main.yml -- flyline
+#
+# Installs the library only. Nothing system-wide loads it: each user opts in
+# from their own ~/.bashrc, so root and service shells stay on readline.
+
+- name: Flyline | create the release directory
+  ansible.builtin.file:
+    path: "{{ flyline_install_root }}/{{ flyline_version }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Flyline | download the release
+  ansible.builtin.get_url:
+    url: "{{ flyline_release_url }}"
+    dest: "{{ flyline_install_root }}/{{ flyline_version }}/libflyline.tar.gz"
+    checksum: "sha256:{{ flyline_release_url }}.sha256"
+    owner: root
+    group: root
+    mode: "0644"
+  register: flyline_download
+
+- name: Flyline | unpack the release
+  ansible.builtin.unarchive:
+    src: "{{ flyline_download.dest }}"
+    dest: "{{ flyline_install_root }}/{{ flyline_version }}"
+    remote_src: true
+    owner: root
+    group: root
+    creates: "{{ flyline_install_root }}/{{ flyline_version }}/libflyline.so.{{ flyline_version | regex_replace('^v', '') }}"
+
+- name: Flyline | create the Bash loadables directory
+  ansible.builtin.file:
+    path: "{{ flyline_loadable_path | dirname }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Flyline | point the loadable at the current release
+  ansible.builtin.file:
+    src: "{{ flyline_install_root }}/{{ flyline_version }}/libflyline.so.{{ flyline_version | regex_replace('^v', '') }}"
+    dest: "{{ flyline_loadable_path }}"
+    state: link
+    force: true
