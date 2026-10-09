@@ -101,6 +101,22 @@ otel_receivers:
     include: ["/opt/{{ rails_app_directory }}/shared/log/*.json"]
     start_at: end
     operators:
+      # Rails writes one SemanticLogger JSON object per line (including the
+      # Sidekiq worker); parse it so level, timestamp and job fields are queryable.
+      - type: json_parser
+        parse_from: body
+        parse_to: attributes
+        on_error: send_quiet
+        timestamp:
+          parse_from: attributes.timestamp
+          layout_type: gotime
+          layout: "2006-01-02T15:04:05.999999999Z07:00"
+        severity:
+          parse_from: attributes.level
+      - type: move
+        if: 'attributes.message != nil'
+        from: attributes.message
+        to: body
       - type: add
         field: attributes.log_type
         value: "app-log"
@@ -126,6 +142,22 @@ otel_processors:
     send_batch_max_size: 1024
     send_batch_size: 512
     timeout: 30s
+
+  # Flatten the parsed Rails JSON (exception.name, named_tags.class, ...) so
+  # SigNoz can filter on it. The stack trace is set aside first so each frame
+  # does not become its own attribute key.
+  transform/rails-json:
+    error_mode: ignore
+    log_statements:
+      - context: log
+        conditions:
+          - attributes["log_type"] == "app-log"
+        statements:
+          - set(cache["stack_trace"], attributes["exception"]["stack_trace"]) where attributes["exception"] != nil
+          - delete_key(attributes["exception"], "stack_trace") where attributes["exception"] != nil
+          - delete_key(attributes["exception"]["cause"], "stack_trace") where attributes["exception"]["cause"] != nil
+          - flatten(attributes)
+          - set(attributes["exception.stack_trace"], cache["stack_trace"]) where cache["stack_trace"] != nil
 
 otel_exporters:
   loadbalancing:
@@ -162,6 +194,7 @@ otel_service_pipelines:
       - filelog/rails-logs
     processors:
       - resource
+      - transform/rails-json
       - batch
     exporters:
       - loadbalancing
