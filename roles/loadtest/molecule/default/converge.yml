@@ -1,0 +1,22 @@
+---
+- name: Converge
+  hosts: all
+  vars:
+    running_on_server: false
+    deploy_user: deploy
+  become: true
+  pre_tasks:
+    - name: Create the deploy user for testing
+      ansible.builtin.user:
+        name: deploy
+        shell: /bin/bash
+    # the openjdk role depends on common, which cannot start chrony in a container
+    - name: Install a JRE for testing
+      ansible.builtin.apt:
+        name: openjdk-17-jre-headless
+        state: present
+        update_cache: true
+  tasks:
+    - name: "Include loadtest"
+      ansible.builtin.include_role:
+        name: loadtest

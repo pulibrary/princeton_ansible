@@ -1,28 +1,107 @@
 ---
 # tasks file for roles/loadtest
-- name: loadtest | get JMeter archive
-  ansible.builtin.get_url:
-    url: https://dlcdn.apache.org//jmeter/binaries/apache-jmeter-5.5.tgz
-    dest: /tmp/apache-jmeter-5.5.tgz
+- name: Loadtest | install prerequisites
+  ansible.builtin.apt:
+    name:
+      - tar
+      - gzip
+      - unzip
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
 
-- name: loadtest | unarchive JMeter
+# JMeter
+- name: Loadtest | download JMeter {{ loadtest_jmeter_version }}
+  ansible.builtin.get_url:
+    url: "{{ loadtest_jmeter_url }}"
+    dest: "/tmp/apache-jmeter-{{ loadtest_jmeter_version }}.tgz"
+    checksum: "sha512:{{ loadtest_jmeter_sha512 }}"
+    mode: "0644"
+
+- name: Loadtest | unarchive JMeter
   ansible.builtin.unarchive:
-    src: /tmp/apache-jmeter-5.5.tgz
-    dest: /opt
+    src: "/tmp/apache-jmeter-{{ loadtest_jmeter_version }}.tgz"
+    dest: "{{ loadtest_jmeter_install_dir }}"
+    creates: "{{ loadtest_jmeter_home }}/bin/jmeter"
+    owner: root
+    group: root
     remote_src: true
 
-- name: loadtest | add bash_profile
-  ansible.builtin.blockinfile:
-    path: "/home/{{ deploy_user }}/.bashrc"
-    marker: "# {mark} ANSIBLE MANAGED BLOCK"
-    block: |
-      export JMETER_HOME=/opt/apache-jmeter-5.5
-      export PATH=$JMETER_HOME/bin:$PATH
-    insertbefore: "# If not running interactively, don't do anything"
-  when: running_on_server
+- name: Loadtest | point the jmeter symlink at the current version
+  ansible.builtin.file:
+    src: "{{ loadtest_jmeter_home }}"
+    dest: "{{ loadtest_jmeter_install_dir }}/jmeter"
+    state: link
 
-- name: loadtest | update JMeter configuration
-  ansible.builtin.lineinfile: >
-              dest=/opt/apache-jmeter-5.5/bin/user.properties
-              state=present
-              line="resultcollector.action_if_file_exists=DELETE"
+- name: Loadtest | put JMeter on the PATH
+  ansible.builtin.file:
+    src: "{{ loadtest_jmeter_install_dir }}/jmeter/bin/jmeter"
+    dest: /usr/local/bin/jmeter
+    state: link
+
+- name: Loadtest | set JMETER_HOME for login shells
+  ansible.builtin.template:
+    src: jmeter.sh.j2
+    dest: /etc/profile.d/jmeter.sh
+    mode: "0644"
+
+- name: Loadtest | configure the JMeter heap
+  ansible.builtin.template:
+    src: setenv.sh.j2
+    dest: "{{ loadtest_jmeter_home }}/bin/setenv.sh"
+    mode: "0755"
+
+- name: Loadtest | update JMeter user.properties
+  ansible.builtin.lineinfile:
+    path: "{{ loadtest_jmeter_home }}/bin/user.properties"
+    line: "{{ item }}"
+    state: present
+  loop: "{{ loadtest_jmeter_user_properties }}"
+
+# k6
+- name: Loadtest | download k6 {{ loadtest_k6_version }}
+  ansible.builtin.get_url:
+    url: "{{ loadtest_k6_url }}"
+    dest: "/tmp/{{ loadtest_k6_name }}.tar.gz"
+    checksum: "{{ loadtest_k6_checksums[loadtest_k6_arch] }}"
+    mode: "0644"
+
+- name: Loadtest | unarchive k6
+  ansible.builtin.unarchive:
+    src: "/tmp/{{ loadtest_k6_name }}.tar.gz"
+    dest: /opt
+    creates: "/opt/{{ loadtest_k6_name }}/k6"
+    owner: root
+    group: root
+    remote_src: true
+
+- name: Loadtest | put k6 on the PATH
+  ansible.builtin.file:
+    src: "/opt/{{ loadtest_k6_name }}/k6"
+    dest: /usr/local/bin/k6
+    state: link
+
+# deploy user workspace
+- name: Loadtest | create the load test workspace
+  ansible.builtin.file:
+    path: "{{ loadtest_workspace }}/{{ item }}"
+    state: directory
+    owner: "{{ loadtest_user }}"
+    group: "{{ loadtest_user }}"
+    mode: "0755"
+  loop:
+    - jmeter
+    - k6
+    - results
+
+- name: Loadtest | install sample test scripts
+  ansible.builtin.template:
+    src: "{{ item.src }}"
+    dest: "{{ loadtest_workspace }}/{{ item.dest }}"
+    owner: "{{ loadtest_user }}"
+    group: "{{ loadtest_user }}"
+    mode: "0644"
+    force: false
+  loop:
+    - {src: smoke.js.j2, dest: k6/smoke.js}
+    - {src: README.md.j2, dest: README.md}

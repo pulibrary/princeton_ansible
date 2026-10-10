@@ -1,8 +1,9 @@
 ---
-# by default this playbook runs in the production (only) environment
-# this server is used to run JMeter load tests against other PUL servers
-- name: build the loadtest server
-  hosts: loadtest_production
+# by default this playbook runs in the staging environment (loadtest1)
+# to run in production, pass '-e runtime_env=production'
+# this server is used to run JMeter and k6 load tests against other PUL servers
+- name: Build the loadtest server
+  hosts: loadtest_{{ runtime_env | default('staging') }}
   remote_user: pulsys
   become: true
   vars_files:
@@ -10,11 +11,11 @@
   roles:
     - role: common
     - role: deploy_user
-    - role: roles/openjdk
-    - role: roles/loadtest
+    - role: openjdk
+    - role: loadtest
 
   post_tasks:
-    - name: tell everyone on slack you ran an ansible playbook
+    - name: Tell everyone on slack you ran an ansible playbook
       community.general.slack:
         token: "{{ vault_pul_slack_token }}"
         msg: "Ansible ran `{{ ansible_play_name }}` on {{ inventory_hostname }}"
