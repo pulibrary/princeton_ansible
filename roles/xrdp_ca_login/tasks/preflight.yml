@@ -1,0 +1,69 @@
+---
+# Check the two things this role is an overlay on. Both failures are otherwise
+# diagnosed at the login window, where the symptom says nothing about the cause.
+
+- name: Desktop CA login (preflight) | ensure the socket tools are installed
+  ansible.builtin.package:
+    name: "{{ xrdp_ca_login_packages }}"
+    state: present
+  when: xrdp_ca_login_assert_not_exposed | bool
+
+- name: Desktop CA login (preflight) | look for the session manager
+  ansible.builtin.stat:
+    path: /usr/sbin/xrdp-sesman
+  register: xrdp_ca_login_sesman
+
+- name: Desktop CA login (preflight) | require the desktop to be built
+  ansible.builtin.assert:
+    that:
+      - xrdp_ca_login_sesman.stat.exists
+    fail_msg: >-
+      XRDP is not installed on {{ inventory_hostname }}. This role configures
+      sign-in for a desktop that roles/xrdp has already built, so apply that
+      role first in the same play.
+    quiet: true
+
+# The xrdp package ships this stack wired to the local password. A missing one
+# refuses every sign-in, and the client reports nothing more useful than a
+# failed login.
+- name: Desktop CA login (preflight) | look for the session manager PAM stack
+  ansible.builtin.stat:
+    path: "{{ xrdp_ca_login_pam_service }}"
+  register: xrdp_ca_login_pam
+
+- name: Desktop CA login (preflight) | require a PAM stack for the login window
+  ansible.builtin.assert:
+    that:
+      - xrdp_ca_login_pam.stat.exists
+    fail_msg: >-
+      {{ xrdp_ca_login_pam_service }} is missing on {{ inventory_hostname }}, so
+      the login window has no way to check a password and every sign-in will be
+      refused. The xrdp package normally ships this file.
+    quiet: true
+
+- name: Desktop CA login (preflight) | look for the trusted CA key
+  ansible.builtin.stat:
+    path: "{{ xrdp_ca_login_trusted_keys_path }}"
+  register: xrdp_ca_login_ca_key
+
+# Without this, SSH still works by whatever means it did before, but nothing
+# links a desktop session to an Entra ID identity, which is the entire point.
+- name: Desktop CA login (preflight) | require the host to trust the CA
+  ansible.builtin.assert:
+    that:
+      - xrdp_ca_login_ca_key.stat.exists
+    fail_msg: >-
+      {{ inventory_hostname }} does not trust the SSH user certificate
+      authority, so a forwarded desktop port would not be gated on an Entra ID
+      sign-in. Apply roles/ssh_ca_trust first in the same play.
+    quiet: true
+
+- name: Desktop CA login (preflight) | require at least one desktop user
+  ansible.builtin.assert:
+    that:
+      - xrdp_ca_login_users | length > 0
+    fail_msg: >-
+      xrdp_ca_login_users is empty, so this desktop would have no one able to
+      sign in. It defaults to the accounts in ssh_ca_users; set that, or set
+      this list explicitly.
+    quiet: true

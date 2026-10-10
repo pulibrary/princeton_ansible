@@ -1,0 +1,100 @@
+---
+# defaults/main.yml -- xrdp_ca_login
+#
+# Desktop sign-in for hosts whose identity comes from the Library certificate
+# authority (roles/step_ca + roles/ssh_ca_trust) rather than from a shared local
+# account or a cloud directory attached to PAM.
+#
+# Apply after roles/xrdp (which builds the desktop) and after roles/ssh_ca_trust
+# (which creates the accounts).
+
+# Local accounts allowed to open a desktop session. Derived from the certificate
+# trust list by default so the two cannot drift: everyone who may reach the host
+# by certificate may open a desktop, and nobody else.
+xrdp_ca_login_users: >-
+  {{ ssh_ca_users | default([]) | map(attribute='name') | list }}
+
+# Group holding the desktop users. Membership is what the self-service password
+# command checks, and what its sudoers rule is scoped to.
+xrdp_ca_login_group: rdpusers
+
+# Groups a desktop session needs for sound, display and removable media.
+xrdp_ca_login_session_groups:
+  - audio
+  - video
+  - plugdev
+  - netdev
+
+# Keeping the login window off the network is the whole security argument for
+# this role. The window can only collect a password, so if it were reachable
+# directly that password would be the only thing standing in front of a desktop
+# session. Bound to loopback, the only route to it is a port forwarded inside an
+# SSH session, and SSH on these hosts accepts short-lived certificates rather
+# than passwords. Reaching the login window requires a current Entra ID sign-in.
+#
+# The bind address itself is set through roles/xrdp, which owns the port line in
+# xrdp.ini:
+#
+#   xrdp_listen_address: 127.0.0.1
+#
+# This role verifies the outcome rather than setting it, so the two roles cannot
+# overwrite each other's work on every run.
+
+# Fail the run if the RDP port is listening on anything other than loopback.
+# Catches a package update, a hand edit, or a setting that looks right and does
+# nothing, any of which would quietly put the login window back on the network.
+xrdp_ca_login_assert_not_exposed: true
+
+# Port the check looks for, taken from roles/xrdp.
+xrdp_ca_login_port: "{{ xrdp_port | default(3389) }}"
+
+# The name people actually type to reach this host, used in the printed
+# instructions and in the self-service password command.
+#
+# Deliberately not `hostname -f`. A host can report "localhost" for that, and
+# these workstations do, which produced instructions telling people to tunnel
+# the host to itself: the command appeared to succeed, held a useless tunnel,
+# and collided with the desktop's own listener. inventory_hostname is the name
+# the person used to reach the host, so it is the name that works.
+xrdp_ca_login_public_name: "{{ inventory_hostname }}"
+
+# Provides `ss`, which the check above reads. Present on Ubuntu server images
+# already, so this is normally a no-op; naming it means the check cannot fail
+# for want of the tool it depends on.
+xrdp_ca_login_packages:
+  - iproute2
+
+# Where roles/ssh_ca_trust installed the CA public key. Checked, not written: a
+# host that does not trust the CA would leave the desktop ungated.
+xrdp_ca_login_trusted_keys_path: >-
+  {{ ssh_ca_trusted_keys_path
+     | default('/etc/ssh/trusted_user_ca_keys.pem') }}
+
+# Permit port forwarding in sshd, which is how the desktop is reached. sshd
+# allows it by default; stating it means a hardened base image cannot silently
+# cut off desktop access.
+xrdp_ca_login_sshd_dropin_path: /etc/ssh/sshd_config.d/70-xrdp-tunnel.conf
+
+# Self-service command each person uses to set the password for their own
+# desktop session.
+#
+# Certificates authenticate the SSH connection, but no certificate authority can
+# answer a PAM password prompt, and xrdp answers every prompt with the single
+# string typed into its login box. So the desktop keeps an ordinary local
+# password. Nobody issues or shares it: each person sets their own over a
+# certificate-backed SSH session, and it is useless without one.
+xrdp_ca_login_password_helper: true
+xrdp_ca_login_helper_path: /usr/local/sbin/set-desktop-password
+xrdp_ca_login_helper_sudoers_path: /etc/sudoers.d/xrdp-desktop-password
+
+# PAM service the session manager authenticates through. The xrdp package ships
+# this file already wired to the local password stack; the role only checks it
+# is present, since a missing one refuses every sign-in for reasons that look
+# nothing like a PAM problem.
+xrdp_ca_login_pam_service: /etc/pam.d/xrdp-sesman
+
+# Print the steps a person has to follow after this has run.
+xrdp_ca_login_show_instructions: true
+
+# Certificate authority people authenticate against, used only in that message.
+xrdp_ca_login_ca_url: https://step-ca.lib.princeton.edu:8443

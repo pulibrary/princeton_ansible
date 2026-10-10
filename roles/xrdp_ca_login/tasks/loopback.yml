@@ -1,0 +1,101 @@
+---
+# Keep the login window off the network, and keep the tunnel that replaces it
+# working.
+#
+# The bind address itself belongs to roles/xrdp, via xrdp_listen_address,
+# because that role owns the port line in xrdp.ini. If both roles wrote it they
+# would overwrite each other on every run and restart xrdp each time, killing
+# live desktop sessions. This role verifies the result instead of setting it.
+
+# xrdp has no "address" setting: the bind address is part of the port value. An
+# "address" key is accepted in silence and does nothing, so a host carrying one
+# looks configured for loopback while listening on every interface. Remove it so
+# the file cannot be read as if it were doing something.
+- name: Desktop CA login (loopback) | remove the ineffective address setting
+  community.general.ini_file:
+    path: /etc/xrdp/xrdp.ini
+    section: Globals
+    option: address
+    state: absent
+    no_extra_spaces: true
+  notify: restart xrdp
+
+- name: Desktop CA login (loopback) | allow the port to be forwarded over SSH
+  block:
+    - name: Desktop CA login (loopback) | ensure the sshd drop-in dir exists
+      ansible.builtin.file:
+        path: "{{ xrdp_ca_login_sshd_dropin_path | dirname }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Desktop CA login (loopback) | permit port forwarding in sshd
+      ansible.builtin.template:
+        src: sshd_xrdp_tunnel.conf.j2
+        dest: "{{ xrdp_ca_login_sshd_dropin_path }}"
+        owner: root
+        group: root
+        mode: "0644"
+      notify:
+        - validate sshd configuration
+        - restart sshd
+
+# Handlers would otherwise run at the end of the play, which is after the check
+# below. roles/xrdp queues its own "restart xrdp" when it rewrites the port, so
+# without this the check reads the binding the daemon had before that change.
+- name: Desktop CA login (loopback) | apply pending service restarts
+  ansible.builtin.meta: flush_handlers
+
+# Proves the property the whole design rests on, rather than trusting that a
+# config setting had the effect it was meant to have. Reading the live socket is
+# the point: an ignored or misspelled setting looks fine in the file.
+- name: Desktop CA login (loopback) | confirm the login window is not exposed
+  when: xrdp_ca_login_assert_not_exposed | bool
+  block:
+    # xrdp forks a child that re-opens the socket, so for a moment after a
+    # restart nothing is listening. Reading the sockets in that window would
+    # find no exposure and pass for the wrong reason, so wait for the listener
+    # first. Loopback is the right thing to wait for either way, since a
+    # listener on every interface answers there too.
+    - name: Desktop CA login (loopback) | wait for the listener to settle
+      ansible.builtin.wait_for:
+        host: 127.0.0.1
+        port: "{{ xrdp_ca_login_port }}"
+        timeout: 30
+
+    - name: Desktop CA login (loopback) | read the listening sockets
+      ansible.builtin.command:
+        argv:
+          - ss
+          - -H
+          - -ltn
+      register: xrdp_ca_login_sockets
+      changed_when: false
+
+    - name: Desktop CA login (loopback) | assert the login window is not exposed
+      ansible.builtin.assert:
+        that:
+          - xrdp_ca_login_exposed | length == 0
+        fail_msg: >-
+          The remote desktop port is listening on a network address on
+          {{ inventory_hostname }}
+          ({{ xrdp_ca_login_exposed | join(', ') }}), so the login window can be
+          reached without a certificate and its password is the only thing in
+          front of a session. Set xrdp_listen_address to 127.0.0.1 for this
+          host; note that xrdp takes the bind address as part of the port value
+          (port=tcp://127.0.0.1:{{ xrdp_ca_login_port }}) and silently ignores
+          an "address" setting.
+        success_msg: >-
+          The remote desktop port is bound to loopback only, so reaching the
+          login window requires a forwarded port inside an authenticated SSH
+          session.
+        quiet: true
+      vars:
+        xrdp_ca_login_exposed: >-
+          {{ xrdp_ca_login_sockets.stdout_lines
+             | map('split')
+             | map(attribute=3)
+             | select('search', ':' ~ xrdp_ca_login_port ~ '$')
+             | reject('search', '^(127\.|\[::1\])')
+             | list }}
