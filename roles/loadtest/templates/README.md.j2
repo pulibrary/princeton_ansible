@@ -1,0 +1,21 @@
+# Load testing on {{ inventory_hostname }}
+
+Managed by the `loadtest` role in pulibrary/princeton_ansible.
+
+| Tool   | Version                       | Command          |
+|--------|-------------------------------|------------------|
+| JMeter | {{ loadtest_jmeter_version }} | `jmeter`         |
+| k6     | {{ loadtest_k6_version }}     | `k6`             |
+
+Put test plans in `jmeter/`, k6 scripts in `k6/`, and output in `results/`.
+
+## JMeter (always run non-GUI on this server)
+
+    jmeter -n -t jmeter/plan.jmx -l results/plan.jtl -e -o results/plan-report
+
+## k6
+
+    k6 run -e TARGET=https://example.princeton.edu k6/smoke.js
+
+Load tests generate real traffic. Coordinate with the owners of the target
+service before pointing anything at production.
