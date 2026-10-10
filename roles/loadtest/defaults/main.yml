@@ -1,0 +1,26 @@
+---
+# defaults file for roles/loadtest
+# the user that runs load tests and owns the workspace
+loadtest_user: "{{ deploy_user | default('deploy') }}"
+
+# Apache JMeter
+loadtest_jmeter_version: "5.6.3"
+# archive.apache.org keeps every release; dlcdn only carries the latest one
+loadtest_jmeter_url: "https://archive.apache.org/dist/jmeter/binaries/apache-jmeter-{{ loadtest_jmeter_version }}.tgz"
+loadtest_jmeter_sha512: "5978a1a35edb5a7d428e270564ff49d2b1b257a65e17a759d259a9283fc17093e522fe46f474a043864aea6910683486340706d745fcdf3db1505fd71e689083"
+loadtest_jmeter_install_dir: /opt
+loadtest_jmeter_home: "{{ loadtest_jmeter_install_dir }}/apache-jmeter-{{ loadtest_jmeter_version }}"
+# JVM heap for non-GUI test runs; written to bin/setenv.sh
+loadtest_jmeter_heap: "-Xms1g -Xmx2g -XX:MaxMetaspaceSize=256m"
+# lines appended to bin/user.properties
+loadtest_jmeter_user_properties:
+  - "resultcollector.action_if_file_exists=DELETE"
+
+# Grafana k6
+loadtest_k6_version: "2.3.0"
+loadtest_k6_checksums:
+  amd64: "sha256:39c3117b6af817592dcd0ce4242105c0a7af10948c2a425306f0be8f7a8a8ab1"
+  arm64: "sha256:5ca3433e8201da72a284aaa241a1bb5fb47f4abb4e384d39410ddd8062f49b90"
+
+# where the deploy user keeps test plans, scripts and results
+loadtest_workspace: "/home/{{ loadtest_user }}/loadtests"
