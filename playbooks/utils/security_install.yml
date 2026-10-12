@@ -133,48 +133,6 @@
           changed_when: cytool_result.rc == 0
           failed_when: false
 
-        - name: Tag Cortex XDR endpoint
-          block:
-            - name: Check for cytool
-              ansible.builtin.stat:
-                path: /opt/traps/bin/cytool
-              register: cytool_stat
-
-            - name: List Cortex XDR endpoint tags
-              ansible.builtin.command:
-                cmd: /opt/traps/bin/cytool endpoint_tags list
-              register: xdr_endpoint_tags
-              changed_when: false
-              failed_when: false
-              when:
-                - cytool_stat.stat.exists
-
-            - name: Add Cortex XDR endpoint tag
-              ansible.builtin.command:
-                argv:
-                  - /opt/traps/bin/cytool
-                  - endpoint_tags
-                  - add
-                  - "{{ xdr_endpoint_tag }}"
-              register: xdr_tag_add
-              changed_when: xdr_tag_add.rc == 0
-              failed_when: false
-              when:
-                - cytool_stat.stat.exists
-                - xdr_endpoint_tags.rc is defined
-                - xdr_endpoint_tags.rc == 0
-                - xdr_endpoint_tag not in xdr_endpoint_tags.stdout
-
-            - name: Run cytool checkin after endpoint tag update
-              ansible.builtin.command:
-                cmd: /opt/traps/bin/cytool checkin
-              register: cytool_tag_checkin
-              changed_when: cytool_tag_checkin.rc == 0
-              failed_when: false
-              when:
-                - cytool_stat.stat.exists
-                - xdr_tag_add is changed
-
         - name: Remove XDR package files
           ansible.builtin.file:
             path: "{{ item }}"
@@ -183,6 +141,49 @@
             - "/opt/{{ cortex_install }}.deb"
             - "/opt/{{ cortex_install }}.rpm"
 
+    - name: Tag Cortex XDR endpoint
+      block:
+        - name: Check for cytool
+          ansible.builtin.stat:
+            path: /opt/traps/bin/cytool
+          register: cytool_stat
+
+        - name: List Cortex XDR endpoint tags
+          ansible.builtin.command:
+            cmd: /opt/traps/bin/cytool endpoint_tags list
+          register: xdr_endpoint_tags
+          changed_when: false
+          failed_when: false
+          when:
+            - cytool_stat.stat.exists
+
+        - name: Add Cortex XDR endpoint tag
+          ansible.builtin.command:
+            argv:
+              - /opt/traps/bin/cytool
+              - endpoint_tags
+              - add
+              - "{{ xdr_endpoint_tag }}"
+          register: xdr_tag_add
+          changed_when: xdr_tag_add.rc == 0
+          failed_when: false
+          when:
+            - cytool_stat.stat.exists
+            - xdr_endpoint_tags.rc is defined
+            - xdr_endpoint_tags.rc == 0
+            - xdr_endpoint_tag not in xdr_endpoint_tags.stdout
+
+        - name: Run cytool checkin after endpoint tag update
+          ansible.builtin.command:
+            cmd: /opt/traps/bin/cytool checkin
+          register: cytool_tag_checkin
+          changed_when: cytool_tag_checkin.rc == 0
+          failed_when: false
+          when:
+            - cytool_stat.stat.exists
+            - xdr_tag_add is changed
+
+    # Rapid7 install tasks
     # Happy path: repository certificate must exist
     - name: Happy path | Check repository Scan Assistant certificate
       ansible.builtin.stat:
