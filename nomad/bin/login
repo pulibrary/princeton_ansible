@@ -5,15 +5,15 @@ ENV="${1:-sandbox}"
 case "${ENV}" in
   "production")
     NOMAD_HOST="nomad-host-prod1.lib.princeton.edu"
-    NOMAD_UI_URL="https://nomad.lib.princeton.edu"
+    NOMAD_ADDR="https://nomad.lib.princeton.edu"
     ;;
   "staging")
     NOMAD_HOST="nomad-host-staging1.lib.princeton.edu"
-    NOMAD_UI_URL="https://nomad-staging.lib.princeton.edu"
+    NOMAD_ADDR="https://nomad-staging.lib.princeton.edu"
     ;;
   "sandbox")
     NOMAD_HOST="nomad-host-sandbox1.lib.princeton.edu"
-    NOMAD_UI_URL="https://nomad-sandbox.lib.princeton.edu"
+    NOMAD_ADDR="https://nomad-sandbox.lib.princeton.edu"
     ;;
   *)
     echo "Unknown environment: ${ENV}"
@@ -23,18 +23,13 @@ case "${ENV}" in
     ;;
 esac
 
+export NOMAD_ADDR
+
 # Make sure we're on VPN
 if ! nslookup ${NOMAD_HOST} 2>&1 > /dev/null; then
   echo "Unable to connect to ${NOMAD_HOST}. Ensure you're on VPN."
   exit 1
 fi
 
-echo "Getting authentication token for ${ENV} environment..."
-
-result=$(ssh deploy@${NOMAD_HOST} << 'EOF'
-  nomad ui -authenticate -show-url
-EOF
-)
-result=$(echo $result | tail -1 | sed 's/.*web UI: .*?\(.*\)/\1/')
-echo "Opening Nomad ${ENV} UI..."
-open "${NOMAD_UI_URL}?${result}"
+export NOMAD_TOKEN=$(echo `nomad login -method=entra -json` | jq -r '.SecretID')
+nomad ui -authenticate
