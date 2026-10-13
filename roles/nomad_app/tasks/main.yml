@@ -1,4 +1,8 @@
 ---
+- name: Nomad App | authenticate to Nomad
+  ansible.builtin.include_tasks: auth.yml
+  when:
+    - running_on_server
 - name: Nomad App | configure postgres
   ansible.builtin.include_tasks: database_setup.yml
   loop: "{{ database_connections }}"
@@ -16,14 +20,16 @@
     - running_on_server
   loop: "{{ nomad_vars | dict2items }}"
   no_log: true
+  delegate_to: "localhost"
+  become: false
   ansible.builtin.shell:
     cmd: >
-      /usr/local/bin/nomad var put -force
+      nomad var put -force
       nomad/jobs/{{ item.key }}
       {{ item.value.items() | map("join", "=") | map("quote") | join(" ") }}
   environment:
-    NOMAD_TOKEN: '{{ pul_nomad_management_token }}'
-    run_once: true
+    NOMAD_ADDR: "{{ nomad_http_address }}"
+    NOMAD_TOKEN: "{{ nomad_app_token }}"
 - name: 'Nomad App | Deploy'
   when:
     - running_on_server
@@ -47,8 +53,8 @@
       ansible.builtin.command:
         cmd: "nomad job plan -var branch_or_sha={{ nomad_branch_ref.stdout[:7] }} {{ nomad_hcl }}"
       environment:
-        NOMAD_ADDR: "https://nomad.lib.princeton.edu"
-        NOMAD_TOKEN: "{{ pul_nomad_management_token }}"
+        NOMAD_ADDR: "{{ nomad_http_address }}"
+        NOMAD_TOKEN: "{{ nomad_app_token }}"
       register: nomad_plan
       changed_when: false
       failed_when: nomad_plan.rc not in [0, 1]
@@ -67,8 +73,8 @@
           -var branch_or_sha={{ nomad_branch_ref.stdout[:7] }}
           {{ nomad_hcl }}
       environment:
-        NOMAD_ADDR: "https://nomad.lib.princeton.edu"
-        NOMAD_TOKEN: "{{ pul_nomad_management_token }}"
+        NOMAD_ADDR: "{{ nomad_http_address }}"
+        NOMAD_TOKEN: "{{ nomad_app_token }}"
       # Make sure there's a change in Job for the plan diff, if there's not then
       # what's up there is what we have, so no point.
       when: nomad_plan.stdout is search('^[+-][^ ]* Job:', multiline=True)

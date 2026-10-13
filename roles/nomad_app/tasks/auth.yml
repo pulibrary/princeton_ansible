@@ -1,0 +1,38 @@
+---
+- name: 'Nomad App | Auth | Check existing NOMAD_TOKEN'
+  delegate_to: "localhost"
+  become: false
+  ansible.builtin.command:
+    cmd: nomad acl token self
+  environment:
+    NOMAD_ADDR: "{{ nomad_http_address }}"
+  register: nomad_app_token_check
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  # If NOMAD_TOKEN is already set don't bother, in case we wanna run this in
+  # tower or something.
+  when: lookup('ansible.builtin.env', 'NOMAD_TOKEN') | length > 0
+
+- name: 'Nomad App | Auth | Log in via Entra'
+  when: nomad_app_token_check.rc | default(1) != 0
+  delegate_to: "localhost"
+  become: false
+  no_log: true
+  ansible.builtin.shell:
+    cmd: set -o pipefail && nomad login -method=entra -json | jq -r '.SecretID'
+    executable: /bin/bash
+  environment:
+    NOMAD_ADDR: "{{ nomad_http_address }}"
+    NOMAD_TOKEN: ""
+  register: nomad_app_login
+  changed_when: false
+  check_mode: false
+
+- name: 'Nomad App | Auth | Set token'
+  no_log: true
+  ansible.builtin.set_fact:
+    nomad_app_token: >-
+      {{ nomad_app_login.stdout
+         if nomad_app_login is not skipped
+         else lookup('ansible.builtin.env', 'NOMAD_TOKEN') }}
