@@ -1,0 +1,52 @@
+---
+- name: pul_nomad | nomad | entra | Check for Entra auth method
+  ansible.builtin.command:
+    cmd: /usr/local/bin/nomad acl auth-method info entra
+  environment:
+    NOMAD_TOKEN: '{{ pul_nomad_management_token }}'
+  register: nomad_entra_auth_method
+  changed_when: false
+  failed_when: false
+
+- name: pul_nomad | nomad | entra | Create Entra auth method
+  ansible.builtin.command:
+    cmd: >-
+      /usr/local/bin/nomad acl auth-method create -name=entra
+      -type=OIDC -default=true -max-token-ttl=8h -token-locality=global
+      -token-name-format='${value.username}' -config=-
+    stdin: "{{ lookup('ansible.builtin.template', 'nomad/entra-auth-method.json.j2') }}"
+  environment:
+    NOMAD_TOKEN: '{{ pul_nomad_management_token }}'
+  when: nomad_entra_auth_method.rc != 0
+
+- name: pul_nomad | nomad | entra | Update Entra auth method
+  ansible.builtin.command:
+    cmd: >-
+      /usr/local/bin/nomad acl auth-method update
+      -type=OIDC -default=true -max-token-ttl=8h -token-locality=global
+      -token-name-format='${value.username}' -config=- entra
+    stdin: "{{ lookup('ansible.builtin.template', 'nomad/entra-auth-method.json.j2') }}"
+  environment:
+    NOMAD_TOKEN: '{{ pul_nomad_management_token }}'
+  changed_when: false
+  when: nomad_entra_auth_method.rc == 0
+
+- name: pul_nomad | nomad | entra | List binding rules
+  ansible.builtin.command:
+    cmd: /usr/local/bin/nomad acl binding-rule list -json
+  environment:
+    NOMAD_TOKEN: '{{ pul_nomad_management_token }}'
+  register: nomad_entra_binding_rules
+  changed_when: false
+
+- name: pul_nomad | nomad | entra | Create admin binding rule
+  ansible.builtin.command:
+    cmd: >-
+      /usr/local/bin/nomad acl binding-rule create -auth-method=entra
+      -bind-type=management -selector='"nomad.admin" in list.roles'
+      -description='Entra Nomad Admins'
+  environment:
+    NOMAD_TOKEN: '{{ pul_nomad_management_token }}'
+  vars:
+    binding_rule_descriptions: "{{ nomad_entra_binding_rules.stdout | from_json | default([], true) | map(attribute='Description') | list }}"
+  when: "'Entra Nomad Admins' not in binding_rule_descriptions"
