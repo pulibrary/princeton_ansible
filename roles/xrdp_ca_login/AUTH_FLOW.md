@@ -1,5 +1,4 @@
-Connecting to a remote desktop
-==============================
+# Connecting to a remote desktop
 
 For people who sign in to a desktop configured by this role and have no reason
 to touch Ansible. It covers what happens when you connect, how to install the
@@ -8,8 +7,7 @@ to touch Ansible. It covers what happens when you connect, how to install the
 Everything here runs on **your own computer**. Nothing is installed on the
 server, and you never need this repository.
 
-What you are doing, and why
----------------------------
+## What you are doing, and why
 
 The desktop's login window is not on the network. It listens only on the
 server's own loopback address, so the one way to reach it is through an SSH
@@ -57,8 +55,7 @@ Two consequences worth knowing up front:
 - **The tunnel lives only as long as the SSH window.** Close that terminal and
   the desktop disconnects.
 
-Install the step command
-------------------------
+## Install the step command
 
 `step` is Smallstep's command-line tool. You need it once per computer.
 
@@ -109,8 +106,7 @@ Use the built-in Remote Desktop Connection app (`mstsc`) for the desktop.
 > Bash. Git Bash brings its own `ssh` that cannot see the Windows agent, so it
 > will not find your certificate and will ask for a password instead.
 
-One-time setup
---------------
+## One-time setup
 
 ### 1. Trust the Library certificate authority
 
@@ -145,8 +141,7 @@ exit
 `sandbox-bitcur2.princeton.edu`. If the server is rebuilt, this password
 is lost and you set it again the same way.
 
-Each time you want the desktop
-------------------------------
+## Each time you want the desktop
 
 ### macOS
 
@@ -183,8 +178,7 @@ what you currently hold, and when it expires, with:
 step ssh list
 ```
 
-Troubleshooting
----------------
+## Troubleshooting
 
 | Symptom | Cause and fix |
 | --- | --- |
@@ -201,8 +195,7 @@ Troubleshooting
 `ssh-add -D` removes every key from your agent, including any you use for
 GitHub. They come back the next time you add them or restart your computer.
 
-How the server decides
-----------------------
+## How the server decides
 
 For the server-side detail (how sshd checks the certificate offline, how the
 principal in it maps to your local account, and why `AllowUsers` can still
