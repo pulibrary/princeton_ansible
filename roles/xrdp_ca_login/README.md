@@ -115,6 +115,10 @@ tunnel.
 
 ## What a person does
 
+[AUTH_FLOW.md](AUTH_FLOW.md) is the version to hand to the people using the
+desktop: it walks through the sign-in flow and installing `step` on macOS and
+Windows, without assuming any Ansible.
+
 **Every command below runs on the person's own computer, not on the server.**
 This is the step people get wrong: running the tunnel command on the server
 reports `bind [127.0.0.1]:3389: Address already in use`, because the desktop is
@@ -154,15 +158,20 @@ in, because none of it is discoverable from the host itself.
 | Sign-in refused at the login window | Desktop password wrong or never set; rerun the self-service command |
 | Session opens then closes immediately | Session startup, not authentication: see `/var/log/xrdp-sesman.log` |
 
-`Too many authentication failures` is worth a `~/.ssh/config` entry. `step ssh
-login` puts the certificate in your agent, but sshd counts every other key your
-agent offers first and disconnects before reaching it:
+`Too many authentication failures` means sshd gave up before reaching the
+certificate. `step ssh login` puts the certificate in your agent, but sshd counts
+every other key the agent offers first and disconnects at `MaxAuthTries`. Empty
+the agent and fetch the certificate again, so it is the only thing offered:
 
-```ssh-config
-Host *.princeton.edu
-    IdentitiesOnly yes
-    IdentityAgent SSH_AUTH_SOCK
+```sh
+ssh-add -D
+step ssh login netid@princeton.edu
 ```
+
+Do not reach for `IdentitiesOnly yes`. It restricts ssh to keys named by
+`IdentityFile`, and `step ssh login` writes nothing to disk: the certificate
+lives only in the agent, so that setting stops it being offered at all and the
+login falls back to a password prompt.
 
 ## Example play
 
