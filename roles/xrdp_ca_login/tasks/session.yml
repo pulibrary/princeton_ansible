@@ -1,0 +1,43 @@
+---
+# Give each certificate-backed account what a desktop session needs, and nothing
+# more.
+
+- name: Desktop CA login (session) | ensure the desktop groups exist
+  ansible.builtin.group:
+    name: "{{ item }}"
+    state: present
+  loop: "{{ xrdp_ca_login_session_groups + [xrdp_ca_login_group] }}"
+
+- name: Desktop CA login (session) | read the local accounts
+  ansible.builtin.getent:
+    database: passwd
+
+# Passing an unknown name to the user module would quietly create a half-built
+# account, which then fails to open a session for reasons that look unrelated to
+# the missing account.
+- name: Desktop CA login (session) | require the desktop accounts to exist
+  ansible.builtin.assert:
+    that:
+      - item in ansible_facts.getent_passwd
+    fail_msg: >-
+      No local account named {{ item }} on {{ inventory_hostname }}. Desktop
+      accounts are created by the role that grants certificate access
+      (roles/ssh_ca_trust), so apply that role before this one.
+    quiet: true
+  loop: "{{ xrdp_ca_login_users }}"
+
+- name: Desktop CA login (session) | add the accounts to the desktop groups
+  ansible.builtin.user:
+    name: "{{ item }}"
+    groups: "{{ xrdp_ca_login_session_groups + [xrdp_ca_login_group] }}"
+    append: true
+  loop: "{{ xrdp_ca_login_users }}"
+
+# XRDP starts the session as the signed-in user, so systemd-logind has to hand
+# out an XDG_RUNTIME_DIR before the XFCE session bus can come up. Without it the
+# session opens and closes again immediately.
+- name: Desktop CA login (session) | ensure logind is running
+  ansible.builtin.systemd:
+    name: systemd-logind
+    enabled: true
+    state: started
