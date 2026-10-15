@@ -1,0 +1,61 @@
+---
+# sandbox-sftp1 is Ubuntu, so it cannot use ad_join: that role performs a realm
+# join with authselect-compat and krb5-workstation, neither of which Ubuntu
+# packages. It reaches the same Active Directory over LDAPS with sssd_ldap
+# instead, so almasftp and lib-aspacesftp stay directory accounts. No local
+# accounts and no stored password.
+#
+# Entra ID is deliberately not used here: Himmelblau forces MFA on every remote
+# session, so a service account that cannot complete MFA is refused over SSH.
+host_ad_name: sandbox-sftp1.princeton.edu
+deploy_user_local_keys:
+  - name: 'bibdata-worker-staging1'
+    key: "{{ lookup('file', '../roles/lib_sftp/files/id_ed25519.pub') }}"
+
+# The transfer accounts authenticate with a key here rather than a password,
+# unlike staging and production. sshd checks a key itself, so a login no longer
+# depends on the directory answering in time, there is no password to rotate,
+# and the account phase stalls that were failing transfers stop mattering.
+#
+# Add each partner's public key as they supply it. An account may hold several
+# keys: they all go into one file, which is how a key is replaced without an
+# outage. Add the new one, wait for the partner to switch, then remove the old.
+lib_sftp_transfer_keys:
+  - account: "{{ almasftp_user }}"
+    comment: 01PRI_INST
+    key: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIzK1ULaqNf5CjhXng5sZaR/b354EJkOoj1GDJNc8O4K"
+  - account: "{{ almasftp_user }}"
+    comment: Mark_Z Key
+    key: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIM7wMd/uwYZwNDGHUq6LLipblWTtHto8CJ/EDKgZHBgj"
+# Waiting on the ArchivesSpace vendor to supply a public key. Add it here and
+# remove the account from lib_sftp_accounts_awaiting_keys below at the same time.
+#  - account: "{{ aspaceftp_user }}"
+#    comment: archivesspace-sandbox
+#    key: "ssh-ed25519 AAAA..."
+
+# Recorded as a known wait rather than an oversight, so the run completes and
+# reports that this account cannot log in yet. Its drop directories are still
+# created and owned correctly in the meantime.
+lib_sftp_accounts_awaiting_keys:
+  - "{{ aspaceftp_user }}"
+
+# Overrides group_vars/sftp/common.yml, where staging and production still need
+# a password. Empty here so the sandbox accepts keys only.
+lib_sftp_password_auth_users: []
+
+# The directory is used to resolve these accounts, not to authorise them: sshd
+# decides that from the key and its AllowUsers list. Leaving sssd's own access
+# check out of the login path removes the last place a slow directory could
+# refuse a login that should have succeeded.
+sssd_ldap_access_provider: permit
+
+# Still verified at the end of the run, because the accounts must resolve for
+# sshd to find their uid and for the drop directories to be chowned to them.
+sssd_ldap_allow_users:
+  - "{{ almasftp_user }}"
+  #   - "{{ aspaceftp_user }}"
+
+# Directory accounts are not in /etc/passwd, so usermod cannot add them to a
+# local group. pusvc-g comes from Active Directory with gid 20204 and is already
+# their primary group, so no local membership is needed.
+lib_sftp_group_members: []

@@ -4,6 +4,13 @@ Configure headless Microsoft Entra ID login on Ubuntu and Rocky Linux using Himm
 
 This role is intended for SSH/PAM/NSS login without a GUI.
 
+> **Not usable for password-only service accounts.** Himmelblau forces MFA on
+> every remote session (`AuthOption::ForceMFA`), and its manual states that SSH
+> "always require[s] MFA". An account that can only present a password gets
+> `AADSTS50072 UserStrongAuthEnrollmentRequiredInterrupt` even when the password
+> is correct, and no configuration option changes this. Use the `sssd_ldap` role
+> against Active Directory for those accounts.
+
 ## Supported platforms
 
 - Ubuntu 22.04 by default

@@ -3,7 +3,57 @@
   hosts: all
   vars:
     running_on_server: false
+    almasftp_user: almasftp
+    aspaceftp_user: lib-aspacesftp
+    lib_sftp_group_members: []
+    # Keys rather than a password, matching the sandbox. Two entries name one
+    # account so the rotation case is covered: both keys must land in one file.
+    lib_sftp_transfer_keys:
+      - account: almasftp
+        comment: alma-molecule
+        key: >-
+          ssh-ed25519
+          AAAAC3NzaC1lZDI1NTE5AAAAIK7xQ8mDq3sJZr0Yb1nQwVZ2pT4fLm9aHcX0sN6eUwQk
+      - account: almasftp
+        comment: alma-molecule-rotation
+        key: >-
+          ssh-ed25519
+          AAAAC3NzaC1lZDI1NTE5AAAAIL8yR9nErs4tKa1Zc2oRxWa3qU5gMn0bIdY1tO7fVxRl
+      - account: lib-aspacesftp
+        comment: archivesspace-molecule
+        key: >-
+          ssh-ed25519
+          AAAAC3NzaC1lZDI1NTE5AAAAIM9zS0oFst5uLb2Ad3pSyXb4rV6hNo1cJeZ2uP8gWySm
+    lib_sftp_password_auth_users: []
   become: true
+  pre_tasks:
+    # Molecule has no directory attached, so stand in for the accounts and the
+    # group that Active Directory would otherwise supply over NSS. lib_sftp
+    # asserts these resolve before it chowns anything.
+    - name: Stand in for the directory-provided group
+      ansible.builtin.group:
+        name: pusvc-g
+        gid: 20204
+        state: present
+
+    - name: Stand in for the directory-provided transfer accounts
+      ansible.builtin.user:
+        name: "{{ item }}"
+        group: pusvc-g
+        shell: /bin/bash
+        create_home: true
+      loop:
+        - "{{ almasftp_user }}"
+        - "{{ aspaceftp_user }}"
+
+    # A container image has no host key, and the role's handler validates the
+    # whole sshd configuration before restarting.
+    - name: Ensure sshd has a host key to validate against
+      ansible.builtin.command:
+        argv:
+          - ssh-keygen
+          - -A
+      changed_when: false
   tasks:
     - name: "Include lib_sftp"
       ansible.builtin.include_role:

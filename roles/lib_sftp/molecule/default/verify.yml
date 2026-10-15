@@ -1,20 +1,158 @@
 ---
 - name: Verify
   hosts: all
-  gather_facts: false
+  become: true
+  vars:
+    almasftp_user: almasftp
+    aspaceftp_user: lib-aspacesftp
+    lib_sftp_dropin: /etc/ssh/sshd_config.d/70-sftp-transfer-accounts.conf
   tasks:
-    - name: Check ruby package status
-      ansible.builtin.package:
-        name: "{{ item }}"
-        state: present
-      check_mode: true
-      register: pkg_status
+    - name: Read the alma drop directories
+      ansible.builtin.stat:
+        path: "{{ item }}"
       loop:
-        - ruby-switch
-        - ruby2.6-dev
-        - ruby2.6
+        - /alma/bursar
+        - /alma/publishing
+        - /alma/recap
+      register: lib_sftp_alma_dirs
 
-    - name: Test for ruby packages
+    - name: Assert the alma drop directories belong to the transfer account
       ansible.builtin.assert:
         that:
-          - not pkg_status.changed
+          - item.stat.exists
+          - item.stat.isdir
+          - item.stat.pw_name == almasftp_user
+          - item.stat.gr_name == 'pusvc-g'
+        fail_msg: "{{ item.item }} is not owned by {{ almasftp_user }}:pusvc-g"
+      loop: "{{ lib_sftp_alma_dirs.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Read the aspace drop directory
+      ansible.builtin.stat:
+        path: /alma/aspace
+      register: lib_sftp_aspace_dir
+
+    # 0775 so both the owner and the shared group can write.
+    - name: Assert the aspace drop directory is group writable
+      ansible.builtin.assert:
+        that:
+          - lib_sftp_aspace_dir.stat.exists
+          - lib_sftp_aspace_dir.stat.pw_name == aspaceftp_user
+          - lib_sftp_aspace_dir.stat.gr_name == 'pusvc-g'
+          - lib_sftp_aspace_dir.stat.mode == '0775'
+
+    - name: Read the managed sshd drop-in
+      ansible.builtin.slurp:
+        src: "{{ lib_sftp_dropin }}"
+      register: lib_sftp_conf
+
+    # Keys, not a password: sshd checks a key itself, so the login does not
+    # depend on the directory answering.
+    - name: Assert sshd is told to accept keys from the central location
+      ansible.builtin.assert:
+        that:
+          - "'PubkeyAuthentication yes'
+             in (lib_sftp_conf.content | b64decode)"
+          - "'/etc/ssh/authorized_keys.d/%u'
+             in (lib_sftp_conf.content | b64decode)"
+
+    # Replacing the default location instead of adding to it would lock out
+    # every account whose key lives in its own home, including pulsys.
+    - name: Assert the default authorized keys location is still honoured
+      ansible.builtin.assert:
+        that:
+          - "'.ssh/authorized_keys /etc/ssh/authorized_keys.d/%u'
+             in (lib_sftp_conf.content | b64decode)"
+        fail_msg: >-
+          The drop-in replaced the default AuthorizedKeysFile rather than adding
+          to it, which locks out accounts that keep a key in their own home.
+
+    - name: Assert no password exemption was written
+      ansible.builtin.assert:
+        that:
+          - "'PasswordAuthentication yes'
+             not in (lib_sftp_conf.content | b64decode)"
+        fail_msg: >-
+          A password exemption was written even though this host is configured
+          for keys only.
+
+    # A key is useless if AllowUsers excludes the account.
+    - name: Assert the transfer accounts are permitted by AllowUsers
+      ansible.builtin.assert:
+        that:
+          - "'AllowUsers' in (lib_sftp_conf.content | b64decode)"
+          - "almasftp_user in (lib_sftp_conf.content | b64decode)"
+          - "aspaceftp_user in (lib_sftp_conf.content | b64decode)"
+          - "'pulsys' in (lib_sftp_conf.content | b64decode)"
+
+    - name: Read the installed key files
+      ansible.builtin.slurp:
+        src: "/etc/ssh/authorized_keys.d/{{ item }}"
+      loop:
+        - "{{ almasftp_user }}"
+        - "{{ aspaceftp_user }}"
+      register: lib_sftp_key_files
+
+    # Two keys for one account is the rotation case: add the new one, wait for
+    # the partner to switch, then remove the old one.
+    - name: Assert both of the alma keys were installed together
+      ansible.builtin.assert:
+        that:
+          - "(lib_sftp_key_files.results[0].content | b64decode).split('\n')
+             | select('match', '^ssh-') | list | length == 2"
+        fail_msg: >-
+          Expected two keys for {{ almasftp_user }}, so a key can be rotated
+          without an outage.
+
+    - name: Read the key file permissions
+      ansible.builtin.stat:
+        path: "/etc/ssh/authorized_keys.d/{{ almasftp_user }}"
+      register: lib_sftp_key_stat
+
+    # sshd ignores a key file that anyone other than root can write to.
+    - name: Assert the key file is root owned and not group writable
+      ansible.builtin.assert:
+        that:
+          - lib_sftp_key_stat.stat.pw_name == 'root'
+          - lib_sftp_key_stat.stat.mode == '0644'
+
+    - name: Read the effective sshd policy for a transfer account
+      ansible.builtin.command:
+        argv:
+          - /usr/sbin/sshd
+          - -T
+          - -C
+          - "user={{ almasftp_user }},host=alma.exlibrisgroup.com,addr=1.2.3.4"
+      register: lib_sftp_sshd_transfer
+      changed_when: false
+
+    - name: Assert sshd offers keys and not a password
+      ansible.builtin.assert:
+        that:
+          - "'pubkeyauthentication yes' in lib_sftp_sshd_transfer.stdout"
+          - "'passwordauthentication no' in lib_sftp_sshd_transfer.stdout"
+          - "almasftp_user in (lib_sftp_sshd_transfer.stdout_lines
+             | select('match', '^allowusers ') | join(' '))"
+
+    # Administrative access must survive the AuthorizedKeysFile change.
+    - name: Read the effective sshd policy for an administrative account
+      ansible.builtin.command:
+        argv:
+          - /usr/sbin/sshd
+          - -T
+          - -C
+          - "user=pulsys,host=somewhere.princeton.edu,addr=5.6.7.8"
+      register: lib_sftp_sshd_other
+      changed_when: false
+
+    - name: Assert administrative accounts keep their own key location
+      ansible.builtin.assert:
+        that:
+          - "'.ssh/authorized_keys' in (lib_sftp_sshd_other.stdout_lines
+             | select('match', '^authorizedkeysfile ') | join(' '))"
+          - "'pulsys' in (lib_sftp_sshd_other.stdout_lines
+             | select('match', '^allowusers ') | join(' '))"
+        fail_msg: >-
+          pulsys can no longer use a key from its own home directory, so this
+          change would lock out administrative access.

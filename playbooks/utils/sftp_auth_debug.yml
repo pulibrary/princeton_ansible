@@ -1,0 +1,561 @@
+---
+# Read-only diagnostic for SFTP transfer-account authentication.
+#
+# Alma reports "Auth cancel" when sshd offers it no acceptable authentication
+# method. That is method negotiation, not a wrong password, and not a firewall
+# problem: the TCP connection already reached the auth stage. This playbook
+# collects the four things that decide the outcome, in the order they are
+# consulted at login:
+#
+#   1. Does the account resolve at all (NSS through sssd)?
+#   2. Is sssd running, joined, and online?
+#   3. Is the machine account and keytab still valid?
+#   4. Does sshd actually offer password auth to that user?
+#
+# Nothing is changed. Every task is read-only and cannot fail the run, so the
+# full picture is always collected even when part of the stack is broken.
+#
+#   ansible-playbook playbooks/utils/sftp_auth_debug.yml -e probe_hosts=libsftp_staging
+#
+- name: Diagnose SFTP transfer-account authentication
+  hosts: "{{ probe_hosts | default('libsftp_staging') }}"
+  remote_user: pulsys
+  become: true
+  gather_facts: true
+
+  vars_files:
+    - ../../group_vars/sftp/vault.yml
+    - ../../group_vars/sftp/common.yml
+
+  vars:
+    debug_accounts:
+      - "{{ almasftp_user }}"
+      - "{{ aspaceftp_user }}"
+    # Stand-in values so sshd evaluates its Match rules as if Alma were
+    # connecting. The address only has to be non-local to look remote.
+    debug_client_host: alma.exlibrisgroup.com
+    debug_client_addr: 1.2.3.4
+    # Private credential cache so this check never disturbs a real ticket.
+    debug_ccache: FILE:/tmp/krb5cc_sftp_auth_debug
+    # Domain controller to query directly. sssd discovers its own; this only
+    # needs to be one that answers.
+    debug_dc: pdom21tlkp.pu.win.princeton.edu
+
+  tasks:
+    - name: Identify the host
+      ansible.builtin.debug:
+        msg: >-
+          {{ inventory_hostname }}:
+          {{ ansible_facts['distribution'] }}
+          {{ ansible_facts['distribution_version'] }}
+
+    # 1. NSS resolution. If this fails nothing else can succeed, because sshd
+    #    cannot authenticate a user it cannot look up.
+    - name: Resolve each transfer account through NSS
+      ansible.builtin.command:
+        argv:
+          - getent
+          - passwd
+          - "{{ item }}"
+      loop: "{{ debug_accounts }}"
+      register: debug_getent
+      changed_when: false
+      failed_when: false
+
+    - name: Report NSS resolution
+      ansible.builtin.debug:
+        msg: >-
+          {{ item.item }}:
+          {{ item.stdout if item.rc == 0
+             else 'DOES NOT RESOLVE -- the directory is not returning this
+             account, so no password login can succeed' }}
+      loop: "{{ debug_getent.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Check whether the accounts exist locally instead
+      ansible.builtin.command:
+        argv:
+          - grep
+          - "-c"
+          - "^{{ item }}:"
+          - /etc/passwd
+      loop: "{{ debug_accounts }}"
+      register: debug_local
+      changed_when: false
+      failed_when: false
+
+    - name: Report local account presence
+      ansible.builtin.debug:
+        msg: >-
+          {{ item.item }}:
+          {{ 'present in /etc/passwd (local account, not directory-backed)'
+             if item.stdout | trim != '0'
+             else 'not local, as expected' }}
+      loop: "{{ debug_local.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    # 2. Is the directory client healthy?
+    - name: Check the sssd service state
+      ansible.builtin.command:
+        argv:
+          - systemctl
+          - is-active
+          - sssd
+      register: debug_sssd_active
+      changed_when: false
+      failed_when: false
+
+    - name: Ask sssd for its domain status
+      ansible.builtin.command:
+        argv:
+          - sssctl
+          - domain-status
+          - "{{ ad_join_ad_domain | default('pu.win.princeton.edu') }}"
+      register: debug_domain_status
+      changed_when: false
+      failed_when: false
+
+    - name: Report directory client health
+      ansible.builtin.debug:
+        msg:
+          - "sssd service: {{ debug_sssd_active.stdout | default('unknown') }}"
+          - "domain status: {{ debug_domain_status.stdout_lines
+               | default([debug_domain_status.stderr | default('no output')]) }}"
+
+    # 3. Machine account and keytab. A realm join silently stops working when
+    #    the computer object is deleted or the machine password is no longer in
+    #    step with the directory, which looks exactly like this failure.
+    - name: List joined realms
+      ansible.builtin.command:
+        argv:
+          - realm
+          - list
+      register: debug_realm
+      changed_when: false
+      failed_when: false
+
+    - name: Test whether the existing join still works
+      ansible.builtin.command:
+        argv:
+          - adcli
+          - testjoin
+          - --domain
+          - "{{ ad_join_ad_domain | default('pu.win.princeton.edu') }}"
+      register: debug_testjoin
+      changed_when: false
+      failed_when: false
+
+    - name: Report join state
+      ansible.builtin.debug:
+        msg:
+          - "realm list: {{ debug_realm.stdout_lines | default(['not joined']) }}"
+          - "adcli testjoin: {{ 'PASSED' if debug_testjoin.rc == 0
+               else 'FAILED -- ' + (debug_testjoin.stderr | default('') | trim) }}"
+          - "{{ 'A failed testjoin means the computer account or keytab is no
+             longer valid. sssd cannot authenticate anyone, and every password
+             login fails with no usable method, which is what Alma reports as
+             Auth cancel.' if debug_testjoin.rc != 0 else '' }}"
+
+    # 4. What sshd actually offers this user, Match blocks included.
+    - name: Ask sshd what it would do for each account
+      ansible.builtin.command:
+        argv:
+          - sshd
+          - -T
+          - -C
+          - "user={{ item }},host={{ debug_client_host }},addr={{ debug_client_addr }}"
+      loop: "{{ debug_accounts }}"
+      register: debug_sshd
+      changed_when: false
+      failed_when: false
+
+    - name: Report the effective sshd policy per account
+      ansible.builtin.debug:
+        msg: >-
+          {{ item.item }}:
+          {{ item.stdout_lines
+             | select('match', '^(passwordauthentication|kbdinteractiveauthentication|usepam|allowusers|allowgroups|denyusers)')
+             | list
+             if item.rc == 0
+             else 'sshd -T failed: ' + (item.stderr | default('') | trim) }}
+      loop: "{{ debug_sshd.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    # Which file set each directive. OpenSSH honours the first value it parses,
+    # and sshd_config.d drop-ins are included before the rest of the main file,
+    # so a drop-in can silently outrank the intended setting.
+    - name: Find every Allow/Deny and password directive on the host
+      ansible.builtin.command:
+        argv:
+          - grep
+          - -rniE
+          - "^[[:space:]]*(AllowUsers|AllowGroups|DenyUsers|DenyGroups|PasswordAuthentication|KbdInteractiveAuthentication|ChallengeResponseAuthentication|UsePAM|Match)"
+          - /etc/ssh/sshd_config
+          - /etc/ssh/sshd_config.d/
+      register: debug_ssh_directives
+      changed_when: false
+      failed_when: false
+
+    - name: Report where those directives are set
+      ansible.builtin.debug:
+        msg: "{{ debug_ssh_directives.stdout_lines | default(['none found']) }}"
+
+    - name: Recent authentication failures
+      ansible.builtin.command:
+        argv:
+          - journalctl
+          - -u
+          - sssd
+          - --since
+          - "2 days ago"
+          - --no-pager
+          - -n
+          - "25"
+      register: debug_sssd_log
+      changed_when: false
+      failed_when: false
+
+    - name: Report recent sssd log lines
+      ansible.builtin.debug:
+        msg: "{{ debug_sssd_log.stdout_lines | default(['no log output']) }}"
+
+    # Two specific failure signatures are easy to miss in the log noise but
+    # explain most "worked yesterday, fails today" reports.
+    - name: Count Kerberos pre-authentication failures
+      ansible.builtin.shell:
+        cmd: >-
+          set -o pipefail;
+          journalctl -u sssd --since '14 days ago' --no-pager
+          | grep -c 'Preauthentication failed' || true
+      args:
+        executable: /bin/bash
+      register: debug_preauth
+      changed_when: false
+      failed_when: false
+
+    - name: Count sssd watchdog restarts of the AD back end
+      ansible.builtin.shell:
+        cmd: >-
+          set -o pipefail;
+          journalctl -u sssd --since '14 days ago' --no-pager
+          | grep -c 'terminated by own WATCHDOG' || true
+      args:
+        executable: /bin/bash
+      register: debug_watchdog
+      changed_when: false
+      failed_when: false
+
+    # "System error" is the signature of a stall rather than a refusal. sssd
+    # returns it to both PAM phases while its back end is wedged or restarting,
+    # which reads like an access denial but is not one.
+    - name: Count PAM System error results
+      ansible.builtin.shell:
+        cmd: >-
+          set -o pipefail;
+          journalctl -u sssd -u ssh -u sshd --since '14 days ago' --no-pager
+          | grep -cE 'pam_sss.*(4 \(System error\)|System error)' || true
+      args:
+        executable: /bin/bash
+      register: debug_syserr
+      changed_when: false
+      failed_when: false
+
+    - name: Count times the directory went offline
+      ansible.builtin.shell:
+        cmd: >-
+          set -o pipefail;
+          journalctl -u sssd --since '14 days ago' --no-pager
+          | grep -c 'Backend is offline' || true
+      args:
+        executable: /bin/bash
+      register: debug_offline
+      changed_when: false
+      failed_when: false
+
+    - name: Report the signatures that matter most
+      ansible.builtin.debug:
+        msg:
+          - "Kerberos 'Preauthentication failed' in 14 days: {{ debug_preauth.stdout | trim }}"
+          - "  Non-zero means a password was presented and the directory"
+          - "  rejected it. That is a wrong, changed, or expired password,"
+          - "  not a broken join."
+          - "sssd back end killed by watchdog in 14 days: {{ debug_watchdog.stdout | trim }}"
+          - "  Non-zero means the back end hung and was restarted. While it is"
+          - "  hung, PAM cannot authenticate anyone, so logins fail with no"
+          - "  usable method. Intermittent by nature, which matches a transfer"
+          - "  that sometimes works and sometimes reports Auth cancel."
+          - "PAM 'System error' results in 14 days: {{ debug_syserr.stdout | trim }}"
+          - "  This is a stall, NOT an access denial. sssd returns it to both"
+          - "  the auth and the account phase while its back end is wedged."
+          - "  A genuine policy refusal is 'Permission denied' (6) instead."
+          - "  Tune the ldap_*_timeout and offline_timeout settings in the"
+          - "  sssd_ldap role so a slow controller fails over rather than"
+          - "  blocking past the watchdog."
+          - "Directory went offline in 14 days: {{ debug_offline.stdout | trim }}"
+          - "  Each retry doubles the wait up to offline_timeout_max, so an"
+          - "  uncapped default can keep transfers failing long after the"
+          - "  directory itself recovered."
+
+    # sshd reports an account-phase failure in its own words, which can name a
+    # cause that is not real. Count those so they are recognised as a symptom.
+    - name: Count account-phase messages from sshd
+      ansible.builtin.shell:
+        cmd: >-
+          set -o pipefail;
+          journalctl -u ssh -u sshd --since '14 days ago' --no-pager
+          | grep -cE 'PAM: User account has expired|by PAM account configuration' || true
+      args:
+        executable: /bin/bash
+      register: debug_sshd_pam_msg
+      changed_when: false
+      failed_when: false
+
+    - name: Report messages that can name the wrong cause
+      ansible.builtin.debug:
+        msg:
+          - "sshd account-phase messages in 14 days: {{ debug_sshd_pam_msg.stdout | trim }}"
+          - "  sshd prints whatever the PAM stack returned, which after a"
+          - "  pam_sss failure can be specific but untrue, such as"
+          - "  'User account has expired'. Trust the pam_sss line instead:"
+          - "  4 is a stall, 6 is a real refusal. Confirm the account itself"
+          - "  with playbooks/utils/ad_account_lookup.yml, where"
+          - "  userAccountControl 66048 means enabled and never expiring."
+          - "  'monitor_read: unpermitted request' alongside these is sshd's"
+          - "  privilege separation reacting to a conversation that already"
+          - "  broke, not a separate fault."
+
+    # Directory-side account state. An expired password or a disabled account
+    # resolves through NSS perfectly well but can never authenticate, which is
+    # easy to misread as an sshd or sssd fault.
+    #
+    # The host is already joined, so it has a machine keytab. Use it to get a
+    # ticket rather than asking the operator to kinit by hand.
+    - name: Query the directory for account state
+      block:
+        - name: Find the machine principal in the host keytab
+          ansible.builtin.shell:
+            cmd: >-
+              set -o pipefail;
+              klist -k /etc/krb5.keytab
+              | awk '/\$@|host\//{print $2; exit}'
+          args:
+            executable: /bin/bash
+          register: debug_principal
+          changed_when: false
+          failed_when: false
+
+        - name: Get a Kerberos ticket from the host keytab
+          ansible.builtin.command:
+            argv:
+              - kinit
+              - -k
+              - -t
+              - /etc/krb5.keytab
+              - "{{ debug_principal.stdout | trim }}"
+          register: debug_kinit
+          changed_when: false
+          failed_when: false
+          when: debug_principal.stdout | trim | length > 0
+          environment:
+            KRB5CCNAME: "{{ debug_ccache }}"
+
+        - name: Read the account control flags from the directory
+          ansible.builtin.command:
+            argv:
+              - ldapsearch
+              - -Y
+              - GSSAPI
+              - -LLL
+              # Without an explicit URI ldapsearch tries localhost, which is
+              # not a domain controller.
+              - -H
+              - "ldap://{{ debug_dc }}"
+              - -b
+              - "{{ sssd_ldap_search_base | default('dc=pu,dc=win,dc=princeton,dc=edu') }}"
+              - "(sAMAccountName={{ item }})"
+              - userAccountControl
+              - pwdLastSet
+              - accountExpires
+              - badPwdCount
+              - lockoutTime
+              - whenChanged
+          loop: "{{ debug_accounts }}"
+          register: debug_uac
+          changed_when: false
+          failed_when: false
+          when: debug_kinit.rc | default(1) == 0
+          environment:
+            KRB5CCNAME: "{{ debug_ccache }}"
+
+        - name: Report directory account state
+          ansible.builtin.debug:
+            msg: >-
+              {{ item.item }}:
+              {{ item.stdout_lines if item.rc | default(1) == 0
+                 else 'query failed -- ' + (item.stderr | default('skipped') | trim) }}
+          loop: "{{ debug_uac.results | default([]) }}"
+          loop_control:
+            label: "{{ item.item | default('n/a') }}"
+          when: debug_uac is not skipped
+
+        - name: Explain if no ticket could be obtained
+          ansible.builtin.debug:
+            msg:
+              - "Could not get a Kerberos ticket from /etc/krb5.keytab, so the"
+              - "directory account state was not read. Check by hand with:"
+              - "  sudo kinit -k && sudo ldapsearch -Y GSSAPI -LLL \\"
+              - "    -b {{ sssd_ldap_search_base | default('dc=pu,dc=win,dc=princeton,dc=edu') }} \\"
+              - "    '(sAMAccountName={{ debug_accounts | first }})' userAccountControl pwdLastSet"
+              - "Decode userAccountControl: 512 is a normal enabled account,"
+              - "514 is disabled, 8388608 means the password has expired, and"
+              - "65536 means the password never expires."
+          when: debug_kinit.rc | default(1) != 0
+
+      always:
+        - name: Destroy the ticket obtained for this check
+          ansible.builtin.command:
+            argv:
+              - kdestroy
+              - -c
+              - "{{ debug_ccache }}"
+          changed_when: false
+          failed_when: false
+
+    # The PAM account phase, which is separate from authentication and is where
+    # access_provider = ad enforces Active Directory Group Policy. A correct
+    # password that is then denied here fails with no usable method, which is
+    # what a JSch client reports as "Auth cancel". This check needs no password,
+    # so unlike the auth phase it can run unattended.
+    - name: Run the PAM account phase for each transfer account
+      ansible.builtin.command:
+        argv:
+          - sssctl
+          - user-checks
+          - "{{ item }}"
+          - -s
+          - sshd
+          - -a
+          - acct
+      loop: "{{ debug_accounts }}"
+      register: debug_acct
+      changed_when: false
+      failed_when: false
+
+    - name: Report the PAM account phase result
+      ansible.builtin.debug:
+        msg: >-
+          {{ item.item }}:
+          {{ (item.stdout_lines | default([]) + item.stderr_lines | default([]))
+             | select('search', 'pam_acct_mgmt')
+             | list
+             | default(['no pam_acct_mgmt line in output'], true) }}
+      loop: "{{ debug_acct.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    # Restrict this to the units that actually authenticate, otherwise the
+    # search matches Ansible's own logging of this very command.
+    - name: Look for Group Policy access denials
+      ansible.builtin.shell:
+        cmd: >-
+          set -o pipefail;
+          journalctl -u sssd -u sshd --since '14 days ago' --no-pager
+          | grep -iE 'ad_gpo|gpo_access|access denied|pam_acct_mgmt|Access denied for user'
+          | tail -20 || true
+      args:
+        executable: /bin/bash
+      register: debug_gpo
+      changed_when: false
+      failed_when: false
+
+    - name: Report Group Policy denials
+      ansible.builtin.debug:
+        msg: "{{ debug_gpo.stdout_lines | default(['nothing logged']) }}"
+
+    # Login history. This is usually the fastest way to tell "the partner never
+    # connected" from "the partner connected and was rejected", and the source
+    # address identifies which partner it was.
+    - name: Read the last successful login for each account
+      ansible.builtin.command:
+        argv:
+          - lastlog
+          - -u
+          - "{{ item }}"
+      loop: "{{ debug_accounts }}"
+      register: debug_lastlog
+      changed_when: false
+      failed_when: false
+
+    - name: Report the last successful login
+      ansible.builtin.debug:
+        msg: >-
+          {{ item.item }}:
+          {{ item.stdout_lines | default(['no data']) | last }}
+      loop: "{{ debug_lastlog.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Read recent failed login attempts with source addresses
+      ansible.builtin.shell:
+        cmd: >-
+          set -o pipefail;
+          lastb -a -n 40 2>/dev/null
+          | grep -E '{{ debug_accounts | join("|") }}'
+          | head -20 || true
+      args:
+        executable: /bin/bash
+      register: debug_lastb
+      changed_when: false
+      failed_when: false
+
+    - name: Report failed login attempts
+      ansible.builtin.debug:
+        msg: "{{ debug_lastb.stdout_lines | default(['none recorded']) }}"
+
+    - name: Read sshd authentication failures with source addresses
+      ansible.builtin.shell:
+        cmd: >-
+          set -o pipefail;
+          journalctl -u sshd --since '14 days ago' --no-pager
+          | grep -iE 'Failed (password|keyboard-interactive)|Connection closed by authenticating user'
+          | grep -E '{{ debug_accounts | join("|") }}'
+          | tail -20 || true
+      args:
+        executable: /bin/bash
+      register: debug_sshd_fail
+      changed_when: false
+      failed_when: false
+
+    - name: Report sshd authentication failures
+      ansible.builtin.debug:
+        msg: "{{ debug_sshd_fail.stdout_lines | default(['none recorded']) }}"
+
+    - name: What the results mean
+      ansible.builtin.debug:
+        msg:
+          - "Read these in order; the first one that matches is the cause."
+          - ""
+          - "Account does not resolve, or testjoin FAILED:"
+          - "  the join is broken or the AD account is gone."
+          - ""
+          - "pam_acct_mgmt: Permission denied:"
+          - "  the password is accepted but Active Directory Group Policy"
+          - "  denies the login. sssd.conf sets access_provider = ad, so logon"
+          - "  rights come from a GPO and this can change with no local edit."
+          - ""
+          - "passwordauthentication no for the account:"
+          - "  an sshd drop-in is overriding it. Note that password and"
+          - "  keyboard-interactive are separate methods: an automated client"
+          - "  configured for only one of them fails while interactive ssh"
+          - "  still works."
+          - ""
+          - "Everything server side passes, and 'Preauthentication failed'"
+          - "appears in the sssd log at the same moment as a failed login from"
+          - "the partner's address:"
+          - "  the partner is presenting the wrong password. Compare the last"
+          - "  successful login date with when the password was last changed."
+          - "  Reset it in the directory, then update the vault entry and the"
+          - "  partner's stored credential together."

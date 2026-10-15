@@ -1,13 +1,143 @@
 ---
 # tasks file for roles/lib_sftp
 
+- name: Load OS-specific variables
+  ansible.builtin.include_vars: >-
+    {{ lookup('ansible.builtin.first_found', params) }}
+  vars:
+    params:
+      files:
+        - "{{ ansible_facts['os_family'] }}.yml"
+        - default.yml
+      paths:
+        - "vars"
+
+# The transfer accounts and the group that owns the drop directories come from
+# the directory, so assert they resolve before anything tries to chown to them.
+# Without this the file tasks fail with a confusing "chown failed" instead of
+# saying that the identity provider is not working.
+- name: Lib_sftp | Confirm the transfer accounts resolve
+  ansible.builtin.command:
+    argv:
+      - id
+      - "{{ item }}"
+  loop:
+    - "{{ almasftp_user }}"
+    - "{{ aspaceftp_user }}"
+  register: lib_sftp_account_check
+  changed_when: false
+  failed_when: false
+
+- name: Lib_sftp | Fail with a clear reason if an account is missing
+  ansible.builtin.assert:
+    that:
+      - item.rc == 0
+    fail_msg: >-
+      {{ item.item }} does not resolve on this host. These are directory
+      accounts, so an identity role has to run before lib_sftp: ad_join on
+      Rocky, or sssd_ldap on Ubuntu. Check with `getent passwd {{ item.item }}`.
+  loop: "{{ lib_sftp_account_check.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+
+# An account with neither a key nor a password exemption cannot log in at all,
+# and nothing later in the run would reveal that: the drop directories would be
+# created correctly and the transfers would simply fail. Catch it here.
+- name: Lib_sftp | Confirm each transfer account has a way to authenticate
+  ansible.builtin.assert:
+    that:
+      - item in (lib_sftp_transfer_keys | map(attribute='account') | list)
+        or item in lib_sftp_password_auth_users
+        or item in lib_sftp_accounts_awaiting_keys
+    fail_msg: >-
+      {{ item }} has neither a key in lib_sftp_transfer_keys nor an entry in
+      lib_sftp_password_auth_users, so it cannot log in. Add the partner's
+      public key, which is preferred, or list the account in
+      lib_sftp_password_auth_users where the partner cannot manage a key. If a
+      key has been requested but not yet supplied, add the account to
+      lib_sftp_accounts_awaiting_keys so the wait is recorded rather than
+      looking like an oversight.
+    success_msg: >-
+      {{ item }}
+      {{ 'can authenticate with a key'
+         if item in (lib_sftp_transfer_keys | map(attribute='account') | list)
+         else ('can authenticate with a password'
+               if item in lib_sftp_password_auth_users
+               else 'is awaiting a key and cannot log in yet') }}
+  loop:
+    - "{{ almasftp_user }}"
+    - "{{ aspaceftp_user }}"
+  when: lib_sftp_manage_sshd | bool
+
+# Deliberately loud. The drop directories for a waiting account are still
+# created and chowned, so the host looks finished while the account cannot
+# actually log in. Without this the wait is only noticed when a transfer fails.
+- name: Lib_sftp | Report accounts that cannot log in yet
+  ansible.builtin.debug:
+    msg: >-
+      {{ item }} has no key and no password, so it CANNOT log in. It is listed in
+      lib_sftp_accounts_awaiting_keys, so this run treats that as expected. Its
+      drop directories are still created and owned correctly, and transfers will
+      work as soon as the partner's public key is added to
+      lib_sftp_transfer_keys. Remove it from lib_sftp_accounts_awaiting_keys at
+      the same time.
+  loop: "{{ lib_sftp_accounts_awaiting_keys }}"
+  when:
+    - lib_sftp_manage_sshd | bool
+    - item not in (lib_sftp_transfer_keys | map(attribute='account') | list)
+    - item not in lib_sftp_password_auth_users
+
+# Catches the opposite mistake: the key arrives and is configured, but the
+# account is left on the waiting list, so nobody notices the wait is over.
+- name: Lib_sftp | Note accounts that no longer need to be on the waiting list
+  ansible.builtin.debug:
+    msg: >-
+      {{ item }} now has a credential configured, so it can be removed from
+      lib_sftp_accounts_awaiting_keys.
+  loop: "{{ lib_sftp_accounts_awaiting_keys }}"
+  when:
+    - lib_sftp_manage_sshd | bool
+    - item in (lib_sftp_transfer_keys | map(attribute='account') | list)
+      or item in lib_sftp_password_auth_users
+
+# A malformed key is accepted by the template and then silently ignored by sshd,
+# which looks exactly like the partner using the wrong key.
+- name: Lib_sftp | Check the configured keys look like SSH public keys
+  ansible.builtin.assert:
+    that:
+      - item.key is defined
+      - item.account is defined
+      - item.key is search('^(ssh-rsa|ssh-ed25519|ecdsa-sha2-nistp[0-9]+|sk-ssh-ed25519@openssh.com|sk-ecdsa-sha2-nistp256@openssh.com) AAAA')
+    fail_msg: >-
+      An entry in lib_sftp_transfer_keys is not a usable SSH public key. Each
+      entry needs an `account` and a `key`, and the key must be the single-line
+      public key the partner supplied, starting with its type, for example
+      "ssh-ed25519 AAAA...". A private key or a PuTTY-format key will not work;
+      convert those with `ssh-keygen -i` first.
+    success_msg: "key for {{ item.account | default('?') }} looks well formed"
+  loop: "{{ lib_sftp_transfer_keys }}"
+  loop_control:
+    label: "{{ item.account | default('?') }}: {{ item.comment | default('no comment') }}"
+
+- name: Lib_sftp | Ensure the drop directory group exists
+  ansible.builtin.group:
+    name: "{{ lib_sftp_owner_group }}"
+    state: present
+
+- name: Lib_sftp | Add local transfer accounts to the drop directory group
+  ansible.builtin.user:
+    name: "{{ item }}"
+    groups: "{{ lib_sftp_owner_group }}"
+    append: true
+  loop: "{{ lib_sftp_group_members }}"
+
 - name: Lib_sftp | create alma directory drop
   ansible.builtin.file:
     path: "{{ item }}"
     state: directory
     recurse: true
     owner: "{{ almasftp_user }}"
-    group: "pusvc-g"
+    group: "{{ lib_sftp_owner_group }}"
     mode: "0755"
   loop:
     - "/alma/bursar"
@@ -27,25 +157,156 @@
     state: directory
     recurse: true
     owner: "{{ aspaceftp_user }}"
-    group: "pusvc-g"
+    group: "{{ lib_sftp_owner_group }}"
     mode: "0775"
 
-- name: Lib_sftp | Set up Perl modules
-  ansible.builtin.apt:
-    name: "{{ item }}"
-    state: present
+# Keys are preferred over a password: sshd checks a key itself, so the login
+# does not depend on the directory answering, and there is no credential to
+# rotate. The keys live outside the accounts' homes because a directory account
+# has no home until its first login.
+- name: Lib_sftp | Create the authorized keys directory
+  ansible.builtin.file:
+    path: "{{ lib_sftp_authorized_keys_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when:
+    - lib_sftp_manage_sshd | bool
+    - lib_sftp_transfer_keys | length > 0
+
+- name: Lib_sftp | Install the transfer account keys
+  ansible.builtin.template:
+    src: authorized_keys.j2
+    dest: "{{ lib_sftp_authorized_keys_dir }}/{{ item }}"
+    owner: root
+    group: root
+    # Readable by sshd, writable only by root. sshd refuses a key file that
+    # anyone else can write to.
+    mode: "0644"
+  loop: "{{ lib_sftp_transfer_keys | map(attribute='account') | unique | list }}"
+  when:
+    - lib_sftp_manage_sshd | bool
+    - lib_sftp_transfer_keys | length > 0
+  notify:
+    - Validate sshd configuration
+    - Restart sshd
+
+# The pattern check earlier only proves a key starts like one. A key that is
+# truncated, or has had a line break introduced while being copied, still
+# matches the pattern, and sshd then ignores it silently, which looks exactly
+# like the partner presenting the wrong key. ssh-keygen parses it properly.
+- name: Lib_sftp | Verify the installed keys parse as real public keys
+  ansible.builtin.command:
+    argv:
+      - ssh-keygen
+      - -l
+      - -f
+      - "{{ lib_sftp_authorized_keys_dir }}/{{ item }}"
+  loop: "{{ lib_sftp_transfer_keys | map(attribute='account') | unique | list }}"
+  register: lib_sftp_key_parse
+  changed_when: false
+  failed_when: false
+  when:
+    - lib_sftp_manage_sshd | bool
+    - lib_sftp_transfer_keys | length > 0
+
+- name: Lib_sftp | Report the fingerprint of every usable key
+  ansible.builtin.debug:
+    msg: >-
+      {{ item.item }}:
+      {{ item.stdout_lines | default(['no usable key found']) }}
+  loop: "{{ lib_sftp_key_parse.results | default([]) }}"
+  loop_control:
+    label: "{{ item.item | default('n/a') }}"
+  when: lib_sftp_key_parse is not skipped
+
+- name: Lib_sftp | Fail if an installed key cannot be parsed
+  ansible.builtin.assert:
+    that:
+      - item.rc == 0
+      - item.stdout_lines | default([]) | length
+        == (lib_sftp_transfer_keys
+            | selectattr('account', 'equalto', item.item) | list | length)
+    fail_msg: >-
+      One of the keys for {{ item.item }} is not usable, so sshd will ignore it
+      and the partner's login will fail as though it presented the wrong key.
+      ssh-keygen reported:
+      "{{ (item.stderr | default('') | trim) or (item.stdout | default('') | trim) }}".
+      The usual cause is a line break introduced while copying, since each key
+      has to be on one line. Expected
+      {{ lib_sftp_transfer_keys | selectattr('account', 'equalto', item.item) | list | length }}
+      key(s) for this account; ssh-keygen could read
+      {{ item.stdout_lines | default([]) | length }}.
+  loop: "{{ lib_sftp_key_parse.results | default([]) }}"
+  loop_control:
+    label: "{{ item.item | default('n/a') }}"
+  when: lib_sftp_key_parse is not skipped
+
+# Remove a key file once an account no longer has keys configured, so revoking
+# access is a matter of editing the variable rather than remembering to clean up
+# by hand.
+- name: Lib_sftp | Remove keys for accounts that no longer have any
+  ansible.builtin.file:
+    path: "{{ lib_sftp_authorized_keys_dir }}/{{ item }}"
+    state: absent
   loop:
-    - cpanminus
-    - libssh2-1-dev
+    - "{{ almasftp_user }}"
+    - "{{ aspaceftp_user }}"
+  when:
+    - lib_sftp_manage_sshd | bool
+    - item not in (lib_sftp_transfer_keys | map(attribute='account') | list)
+  notify:
+    - Validate sshd configuration
+    - Restart sshd
+
+# Which methods sshd offers these accounts: keys where they are configured, and
+# a password only where the remote partner cannot manage a key.
+- name: Lib_sftp | Configure sshd for the transfer accounts
+  ansible.builtin.template:
+    src: sshd_transfer_accounts.conf.j2
+    dest: "{{ lib_sftp_sshd_dropin_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+  # Deliberately no validate: here. `sshd -t -f` on a drop-in alone fails
+  # because the fragment has no host key, so it would reject every correct
+  # file. The handlers validate the whole configuration instead, and are
+  # ordered so a bad one never reaches a restart.
+  when: lib_sftp_manage_sshd | bool
+  notify:
+    - Validate sshd configuration
+    - Restart sshd
+
+# ansible.builtin.package rather than apt: the package names differ per OS and
+# staging and production are Rocky while the sandbox is Ubuntu.
+- name: Lib_sftp | Set up Perl modules
+  ansible.builtin.package:
+    name: "{{ lib_sftp_perl_packages }}"
+    state: present
   when: running_on_server
 
 - name: Lib_sftp | Install perl modules
-  ansible.builtin.command: cpanm {{ item }}
+  ansible.builtin.command: cpanm --notest {{ item }}
   loop:
     - Net::SFTP::Foreign::Backend::Net_SSH2
     - Net::SFTP::Foreign
+  register: lib_sftp_cpanm
+  changed_when: "'is up to date' not in lib_sftp_cpanm.stdout"
   when: running_on_server
 
+- name: Lib_sftp | Ensure the Checkmk local check directory exists
+  ansible.builtin.file:
+    path: /usr/lib/check_mk_agent/local
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: running_on_server
+
+# This check logs in over SFTP with a password, which is exactly the failure
+# mode that is hardest to notice: the accounts keep resolving while the
+# transfers silently stop working.
 - name: Lib_sftp | create local checkmk check
   ansible.builtin.copy:
     src: sftp_with_pass_check.sh
