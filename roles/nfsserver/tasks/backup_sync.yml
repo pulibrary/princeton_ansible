@@ -1,0 +1,240 @@
+---
+# Scheduled copy of the exported NFS trees into the GCS backup mount, plus the
+# Checkmk check that tells us whether it is still happening.
+
+- name: Nfsserver | Install backup dependencies
+  ansible.builtin.apt:
+    name:
+      - rsync
+    state: present
+  when: running_on_server
+
+- name: Nfsserver | Install the NFS backup sync script
+  ansible.builtin.template:
+    src: nfs-backup-sync.sh.j2
+    dest: "{{ nfsserver_backup_script }}"
+    owner: root
+    group: root
+    mode: "0755"
+  when: running_on_server
+
+- name: Nfsserver | Create NFS backup sync service
+  ansible.builtin.copy:
+    content: |
+      [Unit]
+      Description=Copy exported NFS trees to the GCS backup mount
+      # Wants= rather than Requires=, and this matters more than it looks.
+      #
+      # With Requires=, stopping the mount service puts a running backup
+      # straight into "failed": the stop propagates and rsync is killed
+      # mid-copy. This role's own stale-mount recovery stops that service, so a
+      # recovery during a long backup would kill the backup it was protecting.
+      #
+      # Wants= keeps the useful half (the mount is pulled in and ordered first)
+      # without the stop propagation. Nothing is lost by dropping Requires=,
+      # because the script verifies the mount itself and refuses to run without
+      # it, with a message that names the problem.
+      Wants={{ nfsserver_backup_mount_service }}
+      After={{ nfsserver_backup_mount_service }}
+
+      [Service]
+      Type=oneshot
+      ExecStart={{ nfsserver_backup_script }}
+      # A tree this size can take a long while; the default would kill it.
+      TimeoutStartSec=0
+      Nice=10
+      IOSchedulingClass=idle
+    dest: "/etc/systemd/system/{{ nfsserver_backup_sync_service }}"
+    owner: root
+    group: root
+    mode: "0644"
+  register: nfsserver_backup_sync_unit
+  when: running_on_server
+
+- name: Nfsserver | Create NFS backup sync timer
+  ansible.builtin.copy:
+    content: |
+      [Unit]
+      Description=Scheduled backup of exported NFS trees to GCS
+
+      [Timer]
+      OnCalendar={{ nfsserver_backup_sync_calendar }}
+      # Spreads load when several NFS servers share a bucket.
+      RandomizedDelaySec={{ nfsserver_backup_sync_randomized_delay }}
+      # Runs after a reboot if the host was down when the timer was due, so a
+      # missed window does not silently become a missing backup.
+      Persistent=true
+
+      [Install]
+      WantedBy=timers.target
+    dest: "/etc/systemd/system/{{ nfsserver_backup_sync_timer }}"
+    owner: root
+    group: root
+    mode: "0644"
+  register: nfsserver_backup_timer_unit
+  when: running_on_server
+
+- name: Nfsserver | Enable and start the NFS backup sync timer
+  ansible.builtin.systemd:
+    name: "{{ nfsserver_backup_sync_timer }}"
+    enabled: true
+    state: >-
+      {{
+        'restarted'
+        if (
+          nfsserver_backup_sync_unit.changed
+          or nfsserver_backup_timer_unit.changed
+        )
+        else 'started'
+      }}
+    daemon_reload: true
+  when: running_on_server
+
+# The systemd module reports the unit state it saw before acting, so its output
+# can show a timer as "disabled / dead" on the same run that enabled it. Ask
+# systemd directly instead: a timer that is not both enabled and active means no
+# backup will ever run, and the only symptom would be the monitoring check going
+# critical a day later.
+- name: Nfsserver | Read the backup timer state
+  ansible.builtin.command:
+    argv:
+      - systemctl
+      - show
+      - "{{ nfsserver_backup_sync_timer }}"
+      - --property=ActiveState
+      - --property=UnitFileState
+      - --property=NextElapseUSecRealtime
+  register: nfsserver_timer_state
+  changed_when: false
+  when: running_on_server
+
+- name: Nfsserver | Assert the backup timer is scheduled to run
+  ansible.builtin.assert:
+    that:
+      - "'ActiveState=active' in nfsserver_timer_state.stdout"
+      - "'UnitFileState=enabled' in nfsserver_timer_state.stdout"
+    fail_msg: >-
+      {{ nfsserver_backup_sync_timer }} is not both enabled and active on
+      {{ inventory_hostname }}, so the backup will never run:
+      {{ nfsserver_timer_state.stdout_lines | join(' ') }}
+    success_msg: >-
+      Backup timer is enabled and active.
+      {{ nfsserver_timer_state.stdout_lines
+         | select('search', 'NextElapse') | join(' ') }}
+    quiet: true
+  when: running_on_server
+
+# Without this, the first backup waits for the timer, so a freshly configured
+# host has an empty bucket and a monitoring check that reports no backup has
+# ever completed.
+#
+# Only when no backup has ever completed. Starting a oneshot service that has
+# already run would report a change on every play, and re-copying on each run is
+# the timer's job rather than the playbook's.
+- name: Nfsserver | Look for a completed backup
+  ansible.builtin.stat:
+    path: "{{ marker_path }}"
+  register: nfsserver_backup_marker
+  vars:
+    marker_path: >-
+      {{ nfsserver_backup_mountpoint }}/{{ nfsserver_backup_prefix
+      }}/.last_backup
+  when:
+    - running_on_server
+    - nfsserver_backup_run_now | bool
+
+# A first copy of a large tree runs for hours, and re-running the playbook
+# during it must not queue a second one. The script's lock would refuse the
+# duplicate anyway, but checking here keeps the play output honest.
+- name: Nfsserver | Check whether a backup is already running
+  ansible.builtin.command:
+    argv:
+      - systemctl
+      - is-active
+      - "{{ nfsserver_backup_sync_service }}"
+  register: nfsserver_backup_active
+  changed_when: false
+  failed_when: false
+  when:
+    - running_on_server
+    - nfsserver_backup_run_now | bool
+
+# Runs in the background: a first copy of a large tree takes a while and should
+# not hold the play open.
+- name: Nfsserver | Start the first backup now
+  ansible.builtin.systemd:
+    name: "{{ nfsserver_backup_sync_service }}"
+    state: started
+    no_block: true
+  when:
+    - running_on_server
+    - nfsserver_backup_run_now | bool
+    - not nfsserver_backup_marker.stat.exists
+    - nfsserver_backup_active.stdout | default('') | trim != 'activating'
+    - nfsserver_backup_active.stdout | default('') | trim != 'active'
+
+- name: Nfsserver | Report a backup already in progress
+  ansible.builtin.debug:
+    msg: >-
+      {{ nfsserver_backup_sync_service }} is already running, so no new backup
+      was started. Watch the existing one with:
+      journalctl -u {{ nfsserver_backup_sync_service }} -f
+  when:
+    - running_on_server
+    - nfsserver_backup_run_now | bool
+    - nfsserver_backup_active.stdout | default('') | trim
+      in ['active', 'activating']
+
+- name: Nfsserver | Explain how to watch the first backup
+  ansible.builtin.debug:
+    msg: >-
+      Started {{ nfsserver_backup_sync_service }} in the background, because no
+      backup had completed yet. Watch it with:
+      journalctl -u {{ nfsserver_backup_sync_service }} -f
+      or tail -f {{ nfsserver_backup_log }}
+  when:
+    - running_on_server
+    - nfsserver_backup_run_now | bool
+    - not nfsserver_backup_marker.stat.exists
+
+- name: Nfsserver | Ensure Checkmk local directory exists
+  ansible.builtin.file:
+    path: /usr/lib/check_mk_agent/local
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when:
+    - running_on_server
+    - nfsserver_backup_checkmk | bool
+
+- name: Nfsserver | Install NFS backup local check
+  ansible.builtin.template:
+    src: check_nfs_backup.sh.j2
+    dest: /usr/lib/check_mk_agent/local/check_nfs_backup.sh
+    owner: root
+    group: root
+    mode: "0755"
+  when:
+    - running_on_server
+    - nfsserver_backup_checkmk | bool
+
+- name: Nfsserver | Verify NFS backup local check
+  ansible.builtin.command:
+    argv:
+      - /usr/lib/check_mk_agent/local/check_nfs_backup.sh
+  register: nfsserver_backup_check_output
+  changed_when: false
+  failed_when: false
+  when:
+    - running_on_server
+    - nfsserver_backup_checkmk | bool
+    - checkmk_verify_local | default(false) | bool
+
+- name: Nfsserver | Show local check output
+  ansible.builtin.debug:
+    var: nfsserver_backup_check_output.stdout_lines
+  when:
+    - running_on_server
+    - nfsserver_backup_checkmk | bool
+    - checkmk_verify_local | default(false) | bool
