@@ -23,6 +23,18 @@ This role is tightly coupled with the [lego](../lego) role to ensure a smooth AC
 | `openresty_ssl_cert_dir` | `/var/db/lego/certificates` | Where to find `.crt` files.     |
 | `openresty_ssl_key_dir`  | `/var/db/lego/certificates` | Where to find `.key` files.     |
 
+### Log Rotation
+
+Every `*.log` in `openresty_log_dir` is rotated by `newsyslog` via
+`/usr/local/etc/newsyslog.conf.d/nginx.conf`. Rotated files are bzip2-compressed
+and nginx is sent `SIGUSR1` to reopen its logs.
+
+| Variable                      | Default   | Description                                   |
+| ----------------------------- | --------- | --------------------------------------------- |
+| `openresty_newsyslog_count`   | `14`      | Number of rotated files to keep.              |
+| `openresty_newsyslog_size_kb` | `2097152` | Rotate early once a file exceeds this (2 GB). |
+| `openresty_newsyslog_when`    | `@T00`    | Scheduled rotation (daily at midnight).       |
+
 ### Access Control
 
 | **Variable**                  | **Default**    | **Description**                                                                     |
