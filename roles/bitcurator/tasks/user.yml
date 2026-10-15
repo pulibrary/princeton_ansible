@@ -1,12 +1,27 @@
 ---
+- name: Bitcurator | create admin group
+  ansible.builtin.group:
+    name: "{{ admin_user }}"
+    gid: "{{ bitcurator_admin_gid }}"
+    state: present
+
 - name: Bitcurator | create admin user
   ansible.builtin.user:
     name: "{{ admin_user }}"
+    uid: "{{ bitcurator_admin_uid }}"
+    group: "{{ admin_user }}"
     state: present
     create_home: true
     shell: /bin/bash
     groups: sudo
     append: true
+
+- name: Bitcurator | add members to the admin group
+  ansible.builtin.user:
+    name: "{{ item }}"
+    groups: "{{ admin_user }}"
+    append: true
+  loop: "{{ bitcurator_admin_group_members }}"
 
 - name: Bitcurator | set admin password when provided
   ansible.builtin.user:
@@ -15,6 +30,9 @@
   when: admin_user_password is defined
   no_log: true
 
+# The working directories are shared with the admin group. setgid keeps new
+# files in that group; members' sessions get umask 002 from pam_umask
+# (USERGROUPS_ENAB), so those files are group-writable too.
 - name: Bitcurator | create base directories
   ansible.builtin.file:
     path: "{{ item.path }}"
@@ -24,10 +42,10 @@
     mode: "{{ item.mode | default('0755') }}"
   loop:
     - { path: "{{ admin_home }}" }
-    - { path: "{{ admin_home }}/Desktop" }
-    - { path: "{{ apps_dir }}" }
+    - { path: "{{ admin_home }}/Desktop", mode: "{{ bitcurator_shared_dir_mode }}" }
+    - { path: "{{ apps_dir }}", mode: "{{ bitcurator_shared_dir_mode }}" }
     - { path: "{{ download_dir }}", owner: "root", group: "root" }
-    - { path: "{{ scripts_dir }}" }
+    - { path: "{{ scripts_dir }}", mode: "{{ bitcurator_shared_dir_mode }}" }
 
 - name: Bitcurator | ensure xfconf directory exists
   ansible.builtin.file:

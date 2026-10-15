@@ -1,6 +1,17 @@
 ---
 # defaults file for roles/bitcurator
+# Upstream bitcurator-salt names the primary group after the user. On the clean
+# Ubuntu install the Quick Start Guide assumes, bcadmin is the first account
+# created and so holds UID and GID 1000; pinning them reproduces that layout.
 admin_user: bcadmin
+bitcurator_admin_uid: 1000
+bitcurator_admin_gid: 1000
+# Local accounts added to the admin user's group, so they can work with files
+# owned by bcadmin.
+bitcurator_admin_group_members: []
+# Desktop, apps and scripts directories: group-writable, setgid so new files
+# stay in the admin group.
+bitcurator_shared_dir_mode: "2775"
 admin_home: "/home/{{ admin_user }}"
 apps_dir: "{{ admin_home }}/apps"
 download_dir: /tmp/bitcurator
@@ -8,12 +19,21 @@ scripts_dir: "{{ admin_home }}/Desktop/scripts/code"
 
 bitcurator_version: v3.0.0
 bagger_version: 2.8.1
-droid_version: 6.8
+# The National Archives no longer serves DROID from its CDN; releases are
+# published on GitHub. Update the checksum with the version.
+droid_version: "6.9.14"
+bitcurator_droid_url: "https://github.com/digital-preservation/droid/releases/download/{{ droid_version }}/droid-binary-{{ droid_version }}-bin.zip"
+bitcurator_droid_checksum: "sha256:82eae61a216a1b33cd27f8ee673d871be805c7e60dec3b18c7d9bed47a913b0a"
 siegfried_version: "1.11.4"
 siegfried_deb_arch: "amd64"
 siegfried_deb_url: "https://github.com/richardlehane/siegfried/releases/download/v{{ siegfried_version }}/siegfried_{{ siegfried_version }}-1_{{ siegfried_deb_arch }}.deb"
 
+# Upstream "dedicated" mode is "addon" plus the BitCurator theme. The theme
+# runs "xhost +" and "dconf load", which need a logged-in X display, so they fail
+# from Ansible on a headless host; "xhost +" would also switch off X access
+# control on a shared desktop host. Leave the theme off for xrdp hosts.
 bitcurator_install_theme: false
+bitcurator_install_mode: "{{ 'dedicated' if bitcurator_install_theme | bool else 'addon' }}"
 
 bitcurator_dependencies:
   - unzip
