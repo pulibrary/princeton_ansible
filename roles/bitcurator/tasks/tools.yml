@@ -35,8 +35,13 @@
     group: root
     mode: "0755"
 
+# Without --user the CLI configures $SUDO_USER, which under become is the
+# connecting account (pulsys) rather than the BitCurator user.
 - name: Bitcurator | run installer once
-  ansible.builtin.command: /usr/local/bin/bitcurator install
+  ansible.builtin.command: >-
+    /usr/local/bin/bitcurator install
+    --mode={{ bitcurator_install_mode }}
+    --user={{ admin_user }}
   register: bitcurator_install
   changed_when: bitcurator_install.rc == 0
   when: not bitcurator_install_marker.stat.exists
@@ -47,7 +52,7 @@
   loop:
     - /usr/local/bin/bc_mounter.py
     - /usr/local/bin/bc_policyapp.py
-    - /usr/local/bin/sf
+    - /usr/bin/sf
     - /usr/local/bin/bagit.py
   register: bitcurator_artifacts
   when: not bitcurator_install_marker.stat.exists
@@ -92,18 +97,28 @@
 
 - name: Bitcurator | download DROID
   ansible.builtin.get_url:
-    url: "https://cdn.nationalarchives.gov.uk/documents/droid-binary-{{ droid_version }}-bin.zip"
+    url: "{{ bitcurator_droid_url }}"
     dest: "{{ download_dir }}/droid-binary-{{ droid_version }}-bin.zip"
+    checksum: "{{ bitcurator_droid_checksum }}"
     mode: "0644"
+
+# The DROID zip has no top-level directory, so it gets one of its own.
+- name: Bitcurator | create DROID directory
+  ansible.builtin.file:
+    path: "{{ apps_dir }}/droid-{{ droid_version }}"
+    state: directory
+    owner: "{{ admin_user }}"
+    group: "{{ admin_user }}"
+    mode: "{{ bitcurator_shared_dir_mode }}"
 
 - name: Bitcurator | unarchive DROID
   ansible.builtin.unarchive:
     src: "{{ download_dir }}/droid-binary-{{ droid_version }}-bin.zip"
-    dest: "{{ apps_dir }}"
+    dest: "{{ apps_dir }}/droid-{{ droid_version }}"
     remote_src: true
     owner: "{{ admin_user }}"
     group: "{{ admin_user }}"
-    creates: "{{ apps_dir }}/droid"
+    creates: "{{ apps_dir }}/droid-{{ droid_version }}/droid.sh"
 
 - name: Bitcurator | download Siegfried package
   ansible.builtin.get_url:
