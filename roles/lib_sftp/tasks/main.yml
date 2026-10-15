@@ -16,6 +16,9 @@
 # the directory, so assert they resolve before anything tries to chown to them.
 # Without this the file tasks fail with a confusing "chown failed" instead of
 # saying that the identity provider is not working.
+#
+# Retry, because the identity role may have just restarted sssd or expired its
+# cache, and the first lookup of an account sssd has not seen yet can miss.
 - name: Lib_sftp | Confirm the transfer accounts resolve
   ansible.builtin.command:
     argv:
@@ -27,6 +30,9 @@
   register: lib_sftp_account_check
   changed_when: false
   failed_when: false
+  until: lib_sftp_account_check.rc == 0
+  retries: 5
+  delay: 6
 
 - name: Lib_sftp | Fail with a clear reason if an account is missing
   ansible.builtin.assert:
