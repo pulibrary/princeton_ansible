@@ -36,7 +36,7 @@ This role performs the following actions:
 
 *   `ad_join_ad_domain`: The Active Directory domain to join (e.g., `pu.win.princeton.edu`).
 *   `ad_join_ad_realm`: The Kerberos realm, usually the uppercase version of the AD domain (e.g., `PU.WIN.PRINCETON.EDU`).
-*   `ad_join_admin_user`: An AD user with privileges to join computers to the domain (defaults to doas-libsftp).
+*   `ad_join_admin_user`: An AD user with privileges to join computers to the domain (defaults to libops).
 *   `ad_join_admin_password`: The password for the `admin_user`. **It is highly recommended to use Ansible Vault to encrypt this variable.**
 *   `ad_join_computer_ou`: The organizational unit (OU) in AD where the computer object will be created.
 *   `ad_join_create_home_dir`: Whether to enable automatic home directory creation for AD users (true/false).
