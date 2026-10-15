@@ -10,7 +10,6 @@
 # certificate whose principal is their own email address rather than a shared
 # account name. sshd then maps that principal to their own local account.
 
-# --- Consumed by the step_ca role, on the CA host ---
 
 step_ca_oidc_enabled: true
 step_ca_oidc_listen_address: "localhost:10000"
@@ -31,7 +30,6 @@ step_ca_oidc_admins:
   - ld9624@princeton.edu
   - vkarasic@princeton.edu
 
-# --- Consumed by the ssh_ca_trust role, on the sandbox itself ---
 
 # Local group holding the rdp accounts, and the sudo group members inherit
 ssh_ca_operator_group: rdpusers
@@ -83,7 +81,6 @@ ssh_ca_users:
     principals:
       - vkarasic@princeton.edu
 
-# --- Consumed by the firewall role, on the sandbox itself ---
 
 # No remote desktop port is opened. The login window listens on loopback and is
 # reached by forwarding the port over a certificate-authenticated SSH session,
@@ -92,7 +89,6 @@ ssh_ca_users:
 # source list is what turns that request into no rules.
 firewall_rdp_cidrs: []
 
-# --- Consumed by the xrdp role, on the sandbox itself ---
 
 # Bind the desktop login window to loopback. xrdp takes the bind address as part
 # of its port value, so this renders port=tcp://127.0.0.1:3389; there is no
@@ -105,7 +101,6 @@ firewall_rdp_cidrs: []
 # than any firewall rule is what keeps RDP off the network.
 xrdp_listen_address: 127.0.0.1
 
-# --- Consumed by the xrdp_ca_login role, on the sandbox itself ---
 
 # Everyone with certificate access to this host also gets a desktop session.
 # This is the role default, repeated here to make it visible that desktop access
@@ -115,3 +110,8 @@ xrdp_ca_login_users: "{{ ssh_ca_users | map(attribute='name') | list }}"
 # Fail the run if anything is listening on the RDP port outside loopback, rather
 # than trusting the setting above to have had its intended effect.
 xrdp_ca_login_assert_not_exposed: true
+
+
+# Everyone in rdpusers also joins bcadmin (GID 1000), so desktop users can work
+# with the files BitCurator's tools leave owned by bcadmin.
+bitcurator_admin_group_members: "{{ xrdp_ca_login_users }}"
