@@ -69,6 +69,17 @@
             - ../group_vars/proxmox/vault.yml
           skip: true
 
+    # ssh_ca_trust lets root in from every Proxmox server in the inventory, so
+    # resolve the address of each one (not just the ones in this run, so
+    # --limit and runtime_env still list them all). rc 2 means a name did not
+    # resolve; the rest are still used.
+    - name: Resolve the cluster peer addresses
+      ansible.builtin.command:
+        argv: "{{ ['getent', 'ahostsv4'] + groups[proxmox_cluster_group] | default([]) }}"
+      register: proxmox_cluster_peers
+      changed_when: false
+      failed_when: proxmox_cluster_peers.rc not in [0, 2]
+
     # Nodes without a subscription get 401 from enterprise.proxmox.com, which
     # fails every apt cache update. Switch those nodes to the no-subscription
     # repositories; subscribed nodes keep the enterprise ones.

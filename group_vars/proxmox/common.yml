@@ -47,3 +47,13 @@ ssh_ca_password_auth_users:
 # password it already has.
 veeam_proxmox_user: veeam-service
 veeam_proxmox_user_password: "{{ vault_veeam_service_password | default('') }}"
+
+# Proxmox nodes ssh to each other as root (pvecm, corosync, migrations), so
+# root may log in with a key from any server in
+# inventory/all_projects/proxmox.ini (the proxmox_servers group), and from
+# nowhere else. The playbook resolves every server in that group first.
+proxmox_cluster_group: proxmox_servers
+ssh_ca_permit_root_login: "no"
+ssh_ca_root_login_addresses: >-
+  {{ proxmox_cluster_peers.stdout_lines | default([])
+     | map('split') | map('first') | unique | list }}

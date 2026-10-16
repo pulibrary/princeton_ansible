@@ -79,6 +79,28 @@ on every remote session, so the login fails even with the correct password.
 On the Proxmox nodes sshd is only the first layer Veeam has to get through; the
 [veeam_proxmox](../veeam_proxmox) role covers sudo and the Proxmox API.
 
+## Root logins from cluster peers
+
+Some clusters need root to ssh between nodes; Proxmox uses it for `pvecm`,
+corosync setup and migrations. List the peers in `ssh_ca_root_login_addresses`
+and the role emits:
+
+```
+Match Address <peer1>,<peer2>,<peer3>
+    PermitRootLogin prohibit-password
+Match all
+```
+
+Root may then log in with a key (not a password) from those addresses only.
+Set `ssh_ca_permit_root_login: "no"` as well, otherwise the host's own global
+setting still applies everywhere else. `Match Address` compares the client IP,
+so list IPs or CIDRs, not hostnames. When `AllowUsers` is in use, each address
+is added as `root@<address>`.
+
+The Proxmox play resolves every server in the `proxmox_servers` group
+(`inventory/all_projects/proxmox.ini`) with
+`getent` and passes the result in, so a `--limit` run still lists all peers.
+
 ## Password and keyboard-interactive are different methods
 
 `PasswordAuthentication` and `KbdInteractiveAuthentication` are separate SSH

@@ -2,7 +2,9 @@
 # {{ ansible_managed }}
 # SSH certificate authority access, managed by the ssh_ca_trust role.
 {% set password_users = ssh_ca_password_auth_users | reject('none') | reject('equalto', '') | unique | list %}
-{% set allowed_users = (ssh_ca_allowed_users + password_users) | unique | list %}
+{% set root_addresses = ssh_ca_root_login_addresses | reject('none') | reject('equalto', '') | unique | list %}
+{% set root_users = root_addresses | map('regex_replace', '^', 'root@') | list %}
+{% set allowed_users = (ssh_ca_allowed_users + password_users + root_users) | unique | list %}
 
 TrustedUserCAKeys {{ ssh_ca_trusted_keys_path }}
 AuthorizedPrincipalsFile {{ ssh_ca_auth_principals_dir }}/%u
@@ -12,6 +14,9 @@ AllowUsers {{ allowed_users | join(' ') }}
 {% endif %}
 {% if ssh_ca_disable_password_auth %}
 PasswordAuthentication no
+{% endif %}
+{% if ssh_ca_permit_root_login | length > 0 %}
+PermitRootLogin {{ ssh_ca_permit_root_login }}
 {% endif %}
 {% if ssh_ca_disable_kbdinteractive %}
 KbdInteractiveAuthentication no
@@ -24,5 +29,13 @@ KbdInteractiveAuthentication no
 Match User {{ password_users | join(',') }}
     PasswordAuthentication yes
     KbdInteractiveAuthentication yes
+Match all
+{% endif %}
+{% if root_addresses | length > 0 %}
+
+# Root key logins from the listed peers only (cluster tooling such as pvecm and
+# corosync setup). Key-based only; root still cannot use a password.
+Match Address {{ root_addresses | join(',') }}
+    PermitRootLogin prohibit-password
 Match all
 {% endif %}
