@@ -57,6 +57,33 @@
           - "'passwordauthentication yes' in sshd_svcbackup.stdout"
           - "'kbdinteractiveauthentication yes' in sshd_svcbackup.stdout"
 
+    - name: Read the effective sshd configuration for root from a peer
+      ansible.builtin.command:
+        argv:
+          - /usr/sbin/sshd
+          - -T
+          - -C
+          - user=root,host=peer,addr=192.0.2.10
+      register: sshd_root_peer
+      changed_when: false
+
+    - name: Read the effective sshd configuration for root from elsewhere
+      ansible.builtin.command:
+        argv:
+          - /usr/sbin/sshd
+          - -T
+          - -C
+          - user=root,host=other,addr=198.51.100.1
+      register: sshd_root_other
+      changed_when: false
+
+    - name: Assert root may use a key only from the listed peer
+      ansible.builtin.assert:
+        that:
+          - "'permitrootlogin without-password' in sshd_root_peer.stdout or 'permitrootlogin prohibit-password' in sshd_root_peer.stdout"
+          - "'permitrootlogin no' in sshd_root_other.stdout"
+          - "'root@192.0.2.10' in (ssh_ca_dropin.content | b64decode)"
+
     - name: Read principals file
       ansible.builtin.slurp:
         src: /etc/ssh/auth_principals/pulsys
