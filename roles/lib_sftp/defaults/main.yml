@@ -75,3 +75,11 @@ lib_sftp_allow_users:
   - "{{ deploy_user | default('deploy') }}"
   - "{{ almasftp_user }}"
   - "{{ aspaceftp_user }}"
+
+# The Checkmk check logs in over SFTP with a password, as the first account that
+# keeps password logins. It is removed where no account uses a password, since a
+# key login would need a partner's private key on the host.
+lib_sftp_check_user: "{{ lib_sftp_password_auth_users | first | default('') }}"
+lib_sftp_check_password: >-
+  {{ almasftp_user_password if lib_sftp_check_user == almasftp_user
+     else aspaceftp_user_password }}

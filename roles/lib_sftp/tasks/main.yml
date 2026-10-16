@@ -312,12 +312,23 @@
 
 # This check logs in over SFTP with a password, which is exactly the failure
 # mode that is hardest to notice: the accounts keep resolving while the
-# transfers silently stop working.
+# transfers silently stop working. Root-only, because it holds the password.
 - name: Lib_sftp | create local checkmk check
-  ansible.builtin.copy:
-    src: sftp_with_pass_check.sh
+  ansible.builtin.template:
+    src: sftp_with_pass_check.sh.j2
     dest: "/usr/lib/check_mk_agent/local/sftp_with_pass_check.sh"
-    mode: "0755"
+    mode: "0700"
     owner: root
     group: root
-  when: running_on_server
+  no_log: true
+  when:
+    - running_on_server
+    - lib_sftp_check_user | length > 0
+
+- name: Lib_sftp | Remove the checkmk check where no account uses a password
+  ansible.builtin.file:
+    path: "/usr/lib/check_mk_agent/local/sftp_with_pass_check.sh"
+    state: absent
+  when:
+    - running_on_server
+    - lib_sftp_check_user | length == 0
