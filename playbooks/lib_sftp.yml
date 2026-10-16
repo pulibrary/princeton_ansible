@@ -1,41 +1,108 @@
 ---
-# by default this playbook runs in the staging environment
-# to run in production, pass '-e runtime_env=production'
-# To allow a new user to log in run
+# Build the staging or production SFTP host. Runs against staging by default;
+# pass '-e runtime_env=production' for production.
 #
-# `ansible-playbook -v playbooks/lib_sftp.yml -e ad_user=netid@pu.win.princeton.edu -t add_sftp_user`
+# It reaches Active Directory over LDAPS with sssd_ldap, so almasftp and
+# lib-aspacesftp remain directory accounts (uid 351149 and 354336, primary group
+# pusvc-g). Whether they authenticate with a key or a password is set per
+# environment in group_vars/sftp: lib_sftp_transfer_keys and
+# lib_sftp_password_auth_users.
 #
-- name: build the AD sftp
+# sssd_ldap runs before lib_sftp so the directory is answering by the time the
+# drop directories are chowned to accounts that only exist in the directory.
+#
+#   ansible-playbook playbooks/lib_sftp.yml
+#
+# Afterwards, prove the transfer login works the way Alma does it, with
+# PreferredAuthentications=publickey (and -i the key) or =password to match:
+#
+#   ssh -o PreferredAuthentications=publickey -i /path/to/key almasftp@<host>
+#
+- name: Build the SFTP host
   hosts: libsftp_{{ runtime_env | default('staging') }}
   remote_user: pulsys
   become: true
+
   vars:
-    force_settings: true
     post_install: |
-      Look the README for additional steps to allow mkhome directory
+      Key accounts: {{ lib_sftp_transfer_keys | default([]) | map(attribute='account') | unique | join(', ') or 'none' }}
+      Password accounts: {{ lib_sftp_password_auth_users | default([]) | join(', ') or 'none' }}
+      Awaiting a key: {{ lib_sftp_accounts_awaiting_keys | default([]) | join(', ') or 'none' }}
+
+      Verify the way the partner logs in, from a host holding the private key:
+        ssh -i /path/to/key -o PreferredAuthentications=publickey \
+          almasftp@{{ inventory_hostname }}
+      or, for a password account:
+        ssh -o PreferredAuthentications=password almasftp@{{ inventory_hostname }}
 
   pre_tasks:
-    - set_fact:
+    - name: Load the deploy user private key
+      ansible.builtin.set_fact:
         deploy_id_rsa_private_key: "{{ lookup('file', '../roles/lib_sftp/files/id_ed25519') }}\n"
 
   vars_files:
+    - ../group_vars/all/vars.yml
     - ../group_vars/sftp/vault.yml
     - ../group_vars/sftp/common.yml
     - ../group_vars/sftp/{{ runtime_env | default('staging') }}.yml
+
   roles:
-    - role: ../roles/deploy_user
-    # Staging and production keep their Active Directory join: the transfer
-    # accounts are AD service accounts and sssd answers PAM for them. The
-    # sandbox uses Entra ID instead, see playbooks/sandbox_sftp.yml.
-    - role: ../roles/ad_join
+    - role: ../roles/sssd_ldap
     - role: ../roles/lib_sftp
 
   post_tasks:
-    - name: tell everyone on slack you ran an ansible playbook
-      community.general.slack:
-        token: "{{ vault_pul_slack_token }}"
-        msg: "Ansible ran `{{ ansible_play_name }}` on {{ inventory_hostname }}"
-        channel: "{{ slack_alerts_channel }}"
-    - name: post role reminders
-      debug:
+    # This is the check that matters. sshd -T resolves every drop-in and Match
+    # block, so it reports what a real login would get rather than what any one
+    # file says.
+    - name: Ask sshd what a transfer account login would actually get
+      ansible.builtin.command:
+        argv:
+          - sshd
+          - -T
+          - -C
+          - "user={{ item }},host=alma.exlibrisgroup.com,addr=1.2.3.4"
+      loop:
+        - "{{ almasftp_user }}"
+        - "{{ aspaceftp_user }}"
+      register: lib_sftp_effective
+      changed_when: false
+
+    # A credential is useless if AllowUsers excludes the account: sshd refuses
+    # the login with the credential still correct, which a client reports as a
+    # method failure rather than a rejected key or password.
+    # Check the method each account is configured for. Password and
+    # keyboard-interactive are separate SSH methods, and an automated client may
+    # offer only one, so both must be on for a password account.
+    - name: Assert the transfer accounts can really authenticate
+      ansible.builtin.assert:
+        that:
+          - >-
+            item.item not in lib_sftp_password_auth_users
+            or ('passwordauthentication yes' in item.stdout
+                and 'kbdinteractiveauthentication yes' in item.stdout)
+          - >-
+            item.item not in (lib_sftp_transfer_keys | default([])
+                              | map(attribute='account') | list)
+            or 'pubkeyauthentication yes' in item.stdout
+          - >-
+            item.stdout_lines | select('match', '^allowusers ') | list | length == 0
+            or item.item in (item.stdout_lines
+              | select('match', '^allowusers ')
+              | map('regex_replace', '^allowusers ', '')
+              | join(' ')).split()
+        fail_msg: >-
+          {{ item.item }} cannot log in on this host. Effective settings:
+          {{ item.stdout_lines
+             | select('match', '^(pubkeyauthentication|passwordauthentication|kbdinteractiveauthentication|authorizedkeysfile|allowusers)')
+             | list }}.
+          The account's configured method (password or key) must be enabled,
+          and if any AllowUsers is present the account has to appear in it.
+        success_msg: >-
+          {{ item.item }} can authenticate and is permitted by AllowUsers
+      loop: "{{ lib_sftp_effective.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Post role reminders
+      ansible.builtin.debug:
         msg: "{{ post_install.split('\n') }}"
