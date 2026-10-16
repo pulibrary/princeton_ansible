@@ -13,6 +13,26 @@
     group: "{{ openresty_group }}"
     mode: "0755"
 
+- name: Openresty | ensure newsyslog.conf.d directory exists
+  ansible.builtin.file:
+    path: /usr/local/etc/newsyslog.conf.d
+    state: directory
+    owner: root
+    group: wheel
+    mode: "0755"
+
+- name: Openresty | configure newsyslog rotation for nginx logs
+  ansible.builtin.copy:
+    dest: /usr/local/etc/newsyslog.conf.d/nginx.conf
+    owner: root
+    group: wheel
+    mode: "0644"
+    content: |
+      # logfilename [owner:group] mode count size when flags [/pid_file] [sig_num]
+      # sig 30 = SIGUSR1, tells nginx to reopen its log files
+      {{ openresty_log_dir }}/*.log {{ openresty_user }}:{{ openresty_group }} 644 {{ openresty_newsyslog_count }}
+      {{- ' ' }}{{ openresty_newsyslog_size_kb }} {{ openresty_newsyslog_when }} GJ {{ openresty_pid_path }} 30
+
 - name: Openresty | ensure conf.d directory exists
   ansible.builtin.file:
     path: "{{ openresty_etc_dir }}/conf.d"
