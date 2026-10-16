@@ -1,14 +1,12 @@
 ---
-# you MUST run this playbook on a single host with '--limit'
-# example:
-# ansible-playbook -v -e domain_name=datacommons --limit adc-prod2.princeton.edu playbooks/utils/certinext_incommon_certbot.yml -e runtime_env=production
+# You MUST run this playbook on a single host with --limit.
 #
-# This playbook will need to be run on both load balancers sequentially.
-# The domain_name will also be the certbot cert-name and live directory:
-# /etc/letsencrypt/live/{{ domain_name }}/fullchain.pem
-#
-# If a valid certificate already exists, the existing certificate may need to be revoked
-# or deleted before this playbook will change the system.
+# Example:
+# ansible-playbook \
+#   -e domain_name=lib-pve-sandbox.lib \
+#   -e runtime_env=staging \
+#   --limit adc-dev2.lib.princeton.edu \
+#   playbooks/utils/certinext_incommon_certbot.yml
 
 - name: add incommon certinext acme for {{ domain_name }}
   hosts: nginxplus_{{ runtime_env | default('staging') }}
@@ -18,6 +16,10 @@
   vars_files:
     - ../../group_vars/all/vault.yml
     - ../../group_vars/all/vars.yml
+
+  vars:
+    certinext_acme_directory: https://acme-us.certinext.io/v1/directory
+    certinext_accounts_path: /etc/letsencrypt/accounts/acme-us.certinext.io
 
   pre_tasks:
     - name: stop playbook if you didn't use --limit
@@ -35,6 +37,53 @@
         state: present
         update_cache: true
 
+    - name: Find existing Certinext ACME account metadata
+      ansible.builtin.find:
+        paths: "{{ certinext_accounts_path }}"
+        patterns: meta.json
+        recurse: true
+        file_type: file
+      register: certinext_account_metadata
+
+    - name: Read ACME account metadata
+      ansible.builtin.slurp:
+        src: "{{ item.path }}"
+      loop: "{{ certinext_account_metadata.files }}"
+      loop_control:
+        label: "{{ item.path }}"
+      register: certinext_account_details
+      no_log: true
+
+    - name: Initialize matching account list
+      ansible.builtin.set_fact:
+        certinext_matching_accounts: []
+
+    - name: Identify ACME account registered by this host
+      ansible.builtin.set_fact:
+        certinext_matching_accounts: >-
+          {{
+            certinext_matching_accounts
+            + [item.source | dirname | basename]
+          }}
+      loop: "{{ certinext_account_details.results }}"
+      loop_control:
+        label: "{{ item.source }}"
+      when:
+        - item.source is search('/v1/directory/')
+        - (item.content | b64decode | from_json).creation_host
+          | default('') == inventory_hostname
+      no_log: true
+
+    - name: Ensure exactly one matching ACME account exists
+      ansible.builtin.assert:
+        that:
+          - certinext_matching_accounts | length == 1
+        fail_msg: >-
+          Expected exactly one Certinext ACME account created
+          on {{ inventory_hostname }}, but found
+          {{ certinext_matching_accounts | length }}.
+          Check /etc/letsencrypt/accounts before proceeding.
+
     - name: update acme certificates for {{ domain_name }}
       ansible.builtin.command:
         argv:
@@ -46,7 +95,9 @@
           - --email
           - lsupport@princeton.edu
           - --server
-          - https://acme-us.certinext.io/v1/directory
+          - "{{ certinext_acme_directory }}"
+          - --account
+          - "{{ certinext_matching_accounts[0] }}"
           - --eab-kid
           - "{{ vault_certinext_acme_eab_kid }}"
           - --eab-hmac-key
@@ -56,13 +107,20 @@
           - --cert-name
           - "{{ domain_name }}"
       register: certbot_result
-      changed_when: "'Successfully received certificate' in certbot_result.stdout"
+      changed_when: >-
+        'Successfully received certificate' in certbot_result.stdout
+      no_log: true
 
     - name: tell everyone on slack you ran an ansible playbook
       community.general.slack:
         token: "{{ vault_pul_slack_token }}"
         msg: "Ansible ran `{{ ansible_play_name }}` on {{ inventory_hostname }}"
         channel: "{{ item }}"
-      loop: "{{ [slack_alerts_channel] if slack_alerts_channel is string else slack_alerts_channel }}"
+      loop: >-
+        {{
+          [slack_alerts_channel]
+          if slack_alerts_channel is string
+          else slack_alerts_channel
+        }}
       tags: always
       become: false

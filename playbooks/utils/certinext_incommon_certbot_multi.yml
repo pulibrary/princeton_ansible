@@ -1,38 +1,201 @@
+
 ---
-# you MUST run this playbook on a single host with '--limit' for example `ansible-playbook -v -e domain_name=findingaids-staging -e add_san_name="pulfalight-staging" --limit adc-prod2.princeton.edu playbooks/certinext_incommon_certbot_multi.yml`
-# This playbook will need to be run on both load balancers sequentially
-# The domain_name will also be the location that will be utilized in the load balancer config `/etc/letsencrypt/live/datacommons/fullchain.pem;`
-# if a valid certificate already exists the existing certificate must be revoked prior to running this playbook for the playbook to change the system
+# Issue or renew a Certinext/InCommon certificate with multiple SANs.
+#
+# You MUST run this playbook on a single host with --limit.
+#
+# Example:
+# ansible-playbook \
+#   -e domain_name=findingaids-staging \
+#   -e add_san_name=pulfalight-staging \
+#   --limit adc-prod2.lib.princeton.edu \
+#   playbooks/utils/certinext_incommon_certbot_multi.yml
+#
+# Run sequentially on both load balancers.
+#
+# Certificate location:
+# /etc/letsencrypt/live/{{ domain_name }}/fullchain.pem
+#
+# Existing certificates are managed by Certbot. Do not revoke a valid
+# certificate merely to obtain an updated certificate.
+#
+# ACME accounts are selected automatically using the creation_host
+# field in local Certbot account metadata.
+#
+# If no matching account or multiple matching accounts exist,
+# the playbook fails rather than making an arbitrary selection.
+
 - name: add incommon certinext acme for {{ domain_name }}
-  hosts: nginxplus_production # default to staging when we get a staging environment going
+  hosts: nginxplus_production
   remote_user: pulsys
   become: true
+
   vars_files:
     - ../../group_vars/all/vault.yml
     - ../../group_vars/all/vars.yml
 
+  vars:
+    certinext_acme_directory: https://acme-us.certinext.io/v1/directory
+    certinext_account_directory: /etc/letsencrypt/accounts/acme-us.certinext.io/v1/directory
+
   pre_tasks:
-  - name: stop playbook if you didn't use --limit
-    ansible.builtin.fail:
-      msg: "you must use -l or --limit"
-    when: ansible_limit is not defined
-    run_once: true
-  vars_files:
-    - ../group_vars/all/vault.yml
+    - name: Require --limit
+      ansible.builtin.assert:
+        that:
+          - ansible_limit is defined
+        fail_msg: "You must use -l or --limit."
+      run_once: true
+
+    - name: Require exactly one target host
+      ansible.builtin.assert:
+        that:
+          - ansible_play_hosts_all | length == 1
+        fail_msg: "Run this playbook on exactly one ADC at a time."
+      run_once: true
+
+    - name: Validate certificate parameters
+      ansible.builtin.assert:
+        that:
+          - domain_name is defined
+          - add_san_name is defined
+          - domain_name | length > 0
+          - add_san_name | length > 0
+          - domain_name != add_san_name
+        fail_msg: >-
+          Provide distinct domain_name and add_san_name values.
 
   tasks:
-    - name: install certbot software
+    - name: Install Certbot and NGINX plugin
       ansible.builtin.apt:
-        name: "{{ item }}"
+        name:
+          - certbot
+          - python3-certbot-nginx
         state: present
-      loop:
-        - certbot
+        update_cache: true
 
-    - name: update acme certificates for {{ domain_name }}
-      ansible.builtin.command: /usr/bin/certbot certonly --nginx --non-interactive --agree-tos --email lsupport@princeton.edu --server https://acme-us.certinext.io/v1/directory --eab-kid {{ vault_certinext_acme_eab_kid }} --eab-hmac-key {{ vault_certinext_acme_eab_hmac_key }} --domain {{ domain_name }}.princeton.edu --domain {{ add_san_name }}.princeton.edu --cert-name {{ domain_name }}
+    - name: Check Certinext account directory
+      ansible.builtin.stat:
+        path: "{{ certinext_account_directory }}"
+      register: certinext_account_dir_stat
 
-    - name: tell everyone on slack you ran an ansible playbook
+    - name: Require Certinext account registration
+      ansible.builtin.assert:
+        that:
+          - certinext_account_dir_stat.stat.isdir | default(false)
+        fail_msg: >-
+          No Certinext ACME account directory exists on
+          {{ inventory_hostname }}.
+          Register an ACME account before requesting certificates.
+
+    - name: Find registered Certinext ACME accounts
+      ansible.builtin.find:
+        paths: "{{ certinext_account_directory }}"
+        patterns: meta.json
+        recurse: true
+        file_type: file
+      register: certinext_account_files
+
+    - name: Read ACME account metadata
+      ansible.builtin.slurp:
+        src: "{{ item.path }}"
+      loop: "{{ certinext_account_files.files }}"
+      loop_control:
+        label: "{{ item.path }}"
+      register: certinext_account_metadata
+      no_log: true
+
+    - name: Initialize matching ACME accounts
+      ansible.builtin.set_fact:
+        certinext_matching_accounts: []
+
+    - name: Identify ACME account registered on this ADC
+      ansible.builtin.set_fact:
+        certinext_matching_accounts: >-
+          {{
+            certinext_matching_accounts
+            + [item.source | dirname | basename]
+          }}
+      loop: "{{ certinext_account_metadata.results }}"
+      loop_control:
+        label: "{{ item.source }}"
+      vars:
+        account_metadata: "{{ item.content | b64decode | from_json }}"
+        account_creation_host: >-
+          {{ account_metadata.creation_host | default('') }}
+      when:
+        - account_creation_host in
+          [inventory_hostname, inventory_hostname_short, ansible_hostname]
+      no_log: true
+
+    - name: Require exactly one matching ACME account
+      ansible.builtin.assert:
+        that:
+          - certinext_matching_accounts | length == 1
+        fail_msg: >-
+          Expected exactly one Certinext ACME account registered
+          on {{ inventory_hostname }}.
+          Found {{ certinext_matching_accounts | length }}.
+          Inspect /etc/letsencrypt/accounts before proceeding.
+        success_msg: >-
+          Found exactly one host-specific Certinext ACME account.
+
+    - name: Update ACME certificates for {{ domain_name }}
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/certbot
+          - certonly
+          - --nginx
+          - --non-interactive
+          - --agree-tos
+          - --email
+          - lsupport@princeton.edu
+          - --server
+          - "{{ certinext_acme_directory }}"
+          - --account
+          - "{{ certinext_matching_accounts[0] }}"
+          - --eab-kid
+          - "{{ vault_certinext_acme_eab_kid }}"
+          - --eab-hmac-key
+          - "{{ vault_certinext_acme_eab_hmac_key }}"
+          - --domain
+          - "{{ domain_name }}.princeton.edu"
+          - --domain
+          - "{{ add_san_name }}.princeton.edu"
+          - --cert-name
+          - "{{ domain_name }}"
+      register: certbot_result
+      changed_when: >-
+        'Successfully received certificate' in certbot_result.stdout
+      no_log: true
+
+    - name: Verify certificate fullchain exists
+      ansible.builtin.stat:
+        path: "/etc/letsencrypt/live/{{ domain_name }}/fullchain.pem"
+        follow: true
+      register: certinext_certificate_stat
+
+    - name: Assert certificate is present
+      ansible.builtin.assert:
+        that:
+          - certinext_certificate_stat.stat.exists
+          - certinext_certificate_stat.stat.isreg
+        fail_msg: >-
+          Certificate fullchain was not found at
+          /etc/letsencrypt/live/{{ domain_name }}/fullchain.pem.
+
+    - name: Notify Slack
       community.general.slack:
         token: "{{ vault_pul_slack_token }}"
-        msg: "Ansible ran `{{ ansible_play_name }}` on {{ inventory_hostname }}"
-        channel: "{{ slack_alerts_channel }}"
+        msg: >-
+          Ansible ran `{{ ansible_play_name }}`
+          on {{ inventory_hostname }}
+        channel: "{{ item }}"
+      loop: >-
+        {{
+          [slack_alerts_channel]
+          if slack_alerts_channel is string
+          else slack_alerts_channel
+        }}
+      become: false
+      no_log: true
+
