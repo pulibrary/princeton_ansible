@@ -1,0 +1,61 @@
+---
+# roles/gateway_nat
+- name: Gateway_nat | Assert required variables are set
+  ansible.builtin.assert:
+    that:
+      - gateway_nat_internal_interface | length > 0
+      - gateway_nat_external_interface | length > 0
+      - gateway_nat_internal_cidr | length > 0
+    fail_msg: >-
+      You must define gateway_nat_internal_interface, gateway_nat_external_interface,
+      and gateway_nat_internal_cidr.
+
+- name: Gateway_nat | Ensure iptables package is installed
+  ansible.builtin.package:
+    name: iptables
+    state: present
+  when: gateway_nat_install_iptables | bool
+
+- name: Gateway_nat | Enable IPv4 forwarding
+  ansible.posix.sysctl:
+    name: net.ipv4.ip_forward
+    value: "1"
+    sysctl_set: true
+    state: present
+    reload: true
+  when: gateway_nat_enable_ipv4_forwarding | bool
+
+- name: Gateway_nat | Install managed gateway NAT rules script
+  ansible.builtin.template:
+    src: gateway-nat-rules.sh.j2
+    dest: "{{ gateway_nat_rules_script_path }}"
+    owner: root
+    group: root
+    mode: "0755"
+  notify: Restart gateway nat service
+
+- name: Gateway_nat | Install systemd unit for gateway NAT rules
+  ansible.builtin.template:
+    src: gateway-nat-rules.service.j2
+    dest: "/etc/systemd/system/{{ gateway_nat_service_name }}"
+    owner: root
+    group: root
+    mode: "0644"
+  when: gateway_nat_manage_service | bool
+  notify: Restart gateway nat service
+
+- name: Gateway_nat | Reload systemd
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+  when: gateway_nat_manage_service | bool
+
+- name: Gateway_nat | Apply gateway NAT rules immediately
+  ansible.builtin.command: "{{ gateway_nat_rules_script_path }}"
+  changed_when: false
+
+- name: Gateway_nat | Enable and start gateway NAT service
+  ansible.builtin.systemd_service:
+    name: "{{ gateway_nat_service_name }}"
+    enabled: true
+    state: started
+  when: gateway_nat_manage_service | bool
