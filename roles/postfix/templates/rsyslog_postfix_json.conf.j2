@@ -1,0 +1,31 @@
+# {{ ansible_managed }}
+#
+# Write the mail facility to {{ postfix_json_log_path }} as one JSON object per
+# line so the OpenTelemetry Collector can ship it to SigNoz without having to
+# guess at the syslog text format. This file sorts before 50-default.conf and
+# ends with "stop", so the stock plain-text mail.* rules never see these
+# messages and the two formats are never mixed in the same file.
+
+template(name="pul_postfix_json" type="list" option.jsonf="on") {
+  property(outname="timestamp" name="timereported" dateFormat="rfc3339" format="jsonf")
+  property(outname="hostname" name="hostname" format="jsonf")
+  property(outname="appname" name="programname" format="jsonf")
+  property(outname="proc_id" name="procid" format="jsonf")
+  property(outname="facility" name="syslogfacility-text" format="jsonf")
+  property(outname="severity" name="syslogseverity-text" format="jsonf")
+  property(outname="message" name="$.msg" format="jsonf")
+}
+
+if $syslogfacility-text == "mail" then {
+  # rsyslog keeps the space that follows "tag:" at the front of msg.
+  set $.msg = ltrim($msg);
+  action(type="omfile" file="{{ postfix_json_log_path }}"
+         template="pul_postfix_json"
+         fileOwner="syslog" fileGroup="adm" fileCreateMode="0640")
+  # Keep the plain-text error log that 50-default.conf would have written.
+  if $syslogseverity <= 3 then {
+    action(type="omfile" file="/var/log/mail.err"
+           fileOwner="syslog" fileGroup="adm" fileCreateMode="0640")
+  }
+  stop
+}

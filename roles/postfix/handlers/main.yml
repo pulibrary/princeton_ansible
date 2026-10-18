@@ -4,3 +4,16 @@
   ansible.builtin.service:
     name: postfix
     state: restarted
+
+# Handlers run in the order they are written, so a bad rsyslog config fails
+# here and the running daemon is left alone.
+- name: Check rsyslog config
+  ansible.builtin.command: rsyslogd -N1
+  changed_when: false
+  listen: restart rsyslog
+
+- name: Restart rsyslog service
+  ansible.builtin.service:
+    name: rsyslog
+    state: restarted
+  listen: restart rsyslog
