@@ -1,0 +1,35 @@
+---
+- name: Verify
+  hosts: instance
+  become: true
+  gather_facts: false
+  vars_files:
+    - ../../../psql-client/defaults/main.yml
+  tasks:
+    - name: Verify rustc works for login shells
+      ansible.builtin.command: "bash -lc 'rustc --version'"
+      register: catalog_cluster_rustc_version
+      changed_when: false
+      failed_when: "'rustc' not in catalog_cluster_rustc_version.stdout"
+
+    - name: Verify cargo works for login shells
+      ansible.builtin.command: "bash -lc 'cargo --version'"
+      register: catalog_cluster_cargo_version
+      changed_when: false
+      failed_when: "'cargo' not in catalog_cluster_cargo_version.stdout"
+
+    - name: Verify the postgres client version
+      ansible.builtin.command: psql --version
+      register: catalog_cluster_psql_version
+      changed_when: false
+      failed_when: "(' ' ~ (postgres_version | string) ~ '.') not in catalog_cluster_psql_version.stdout"
+
+    - name: Verify the app user can connect to the app database
+      ansible.builtin.command: >-
+        psql -h {{ postgres_host }} -U {{ application_dbuser_name }}
+        -d {{ application_db_name }} -tAc 'SELECT 1'
+      environment:
+        PGPASSWORD: "{{ application_dbuser_password }}"
+      register: catalog_cluster_db_connect
+      changed_when: false
+      failed_when: catalog_cluster_db_connect.stdout | trim != '1'
