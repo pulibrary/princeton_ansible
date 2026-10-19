@@ -2,8 +2,20 @@
 # tasks file for roles/postfix
 - name: Postfix | Install postfix
   ansible.builtin.apt:
-    name: postfix
+    name:
+      - postfix
+      # writes /var/log/mail.log, see rsyslog_postfix_json.conf.j2
+      - rsyslog
     state: present
+
+- name: Postfix | Write mail.log as JSON for SigNoz
+  ansible.builtin.template:
+    src: rsyslog_postfix_json.conf.j2
+    dest: /etc/rsyslog.d/49-postfix-json.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: restart rsyslog
 
 - name: Postfix | add mailname
   ansible.builtin.copy:
@@ -14,12 +26,6 @@
     owner: root
     group: root
     mode: "0644"
-
-- name: Postfix | Remove snakeoil certificate references from main.cf
-  ansible.builtin.lineinfile:
-    path: "{{ postfix_main_cf }}"
-    regexp: "^(smtpd_tls_cert_file|smtpd_tls_key_file) = /etc/ssl/certs/ssl-cert-snakeoil.(pem|key)$"
-    state: absent
 
 - name: Postfix | create networks file
   ansible.builtin.template:
@@ -37,6 +43,7 @@
     owner: root
     group: root
     mode: "0644"
+  notify: restart postfix
 
 - name: Postfix | Add Proofpoint authentication credentials
   ansible.builtin.copy:

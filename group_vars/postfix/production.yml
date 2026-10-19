@@ -7,6 +7,7 @@ postfix_smtp_relay_port: "{{ proofpoint_port }}"
 proofpoint_username: "{{ vault_proofpoint_prod_username }}"
 proofpoint_password: "{{ vault_proofpoint_prod_password }}"
 proofpoint_host: "{{ vault_proofpoint_host }}"
+proofpoint_port: "587"
 
 # signoz / otel collector for ponyexpr postfix logs
 otel_default_resource_attributes:
@@ -35,9 +36,32 @@ otel_receivers:
     include_file_path: true
     include_file_name: true
     operators:
-      - type: syslog_parser
-        id: parse_syslog_rfc3164
-        protocol: rfc3164
+      # rsyslog writes mail.log as one JSON object per line (see
+      # roles/postfix/templates/rsyslog_postfix_json.conf.j2). Lines written
+      # before the switch are still plain text, so they are passed on unparsed.
+      - type: json_parser
+        id: parse_postfix_json
+        parse_from: body
+        parse_to: attributes
+        on_error: send_quiet
+        timestamp:
+          parse_from: attributes.timestamp
+          layout_type: gotime
+          layout: "2006-01-02T15:04:05.999999999Z07:00"
+        severity:
+          parse_from: attributes.severity
+          mapping:
+            fatal: [emerg, alert, crit]
+            error: err
+            warn: warning
+            info: [notice, info]
+            debug: debug
+
+      - type: move
+        id: postfix_message_to_body
+        if: 'attributes.message != nil'
+        from: attributes.message
+        to: body
 
       - type: regex_parser
         id: parse_postfix_client
@@ -96,11 +120,6 @@ otel_processors:
         value: production
         action: upsert
 
-  filter/warn_and_above:
-    error_mode: ignore
-    log_conditions:
-      - log.severity_number < SEVERITY_NUMBER_WARN
-
   batch:
     timeout: 10s
     send_batch_size: 8192
@@ -136,7 +155,6 @@ otel_service_pipelines:
     processors:
       - memory_limiter
       - resource
-      - filter/warn_and_above
       - batch
     exporters:
       - loadbalancing
@@ -161,4 +179,4 @@ otel_service_pipelines:
     exporters:
       - loadbalancing
 
-otel_extensions: []
+otel_extensions: {}
