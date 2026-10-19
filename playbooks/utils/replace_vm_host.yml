@@ -222,7 +222,8 @@
         folder: "{{ old_vm_info.virtual_machines[0].folder }}"
         name: "{{ replacement_vm }}"
         template: "{{ vm_template_name }}"
-        state: powered-on
+        # Powered off so the cloned NIC can take the old MAC before first boot
+        state: poweredoff
         disk: "{{ vm_disk_config_safe }}"
         hardware:
           memory_mb: "{{ old_vm_info.virtual_machines[0].allocated.memory | int | default(16384) }}"
@@ -233,14 +234,13 @@
           boot_firmware: efi
         networks:
           - name: "{{ old_vm_net_info.network_info[0].network_name }}"
-            mac: "{{ old_vm_net_info.network_info[0].mac_address }}"
             connected: true
             start_connected: true
             device_type: vmxnet3
-        wait_for_ip_address: true
-        wait_for_ip_address_timeout: 120
 
-    - name: Ensure NIC is connected now and at boot
+    # vmware_guest ignores a MAC on a NIC the clone already has, and matching
+    # by MAC alone would add a second adapter; select the cloned NIC by label
+    - name: Give the cloned NIC the old VM's MAC address
       community.vmware.vmware_guest_network:
         hostname: "{{ vcenter_hostname }}"
         username: "{{ vcenter_username }}"
@@ -248,11 +248,32 @@
         validate_certs: false
         datacenter: "{{ vcenter_datacenter }}"
         name: "{{ replacement_vm }}"
+        label: Network adapter 1
         mac_address: "{{ old_vm_net_info.network_info[0].mac_address }}"
         network_name: "{{ old_vm_net_info.network_info[0].network_name }}"
         connected: true
         start_connected: true
         state: present
+
+    - name: Power on replacement VM
+      community.vmware.vmware_guest_powerstate:
+        hostname: "{{ vcenter_hostname }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        validate_certs: false
+        datacenter: "{{ vcenter_datacenter }}"
+        name: "{{ replacement_vm }}"
+        state: powered-on
+
+    - name: Wait for VMware Tools on replacement VM
+      community.vmware.vmware_guest_tools_wait:
+        hostname: "{{ vcenter_hostname }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        validate_certs: false
+        datacenter: "{{ vcenter_datacenter }}"
+        name: "{{ replacement_vm }}"
+        timeout: 300
 
     - name: Verify NIC connection status
       community.vmware.vmware_guest_network:
