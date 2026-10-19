@@ -162,7 +162,7 @@ password and nothing else does. It is **not** your Princeton password, and
 nobody else knows it.
 
 ```sh
-step ssh login <netid>@princeton.edu --provisioner "Princeton Entra OIDC"
+STEP_OPEN_BROWSER=0 step ssh login <netid>@princeton.edu --provisioner "Princeton Entra OIDC"
 ssh <netid>@<server>
 sudo /usr/local/sbin/set-desktop-password
 exit
@@ -251,12 +251,32 @@ step ssh list
 | `Too many authentication failures` | Your agent offers other keys first, and the server stops before it reaches the certificate. Run `ssh-add -D`, then `step ssh login` again |
 | `step ssh login` asks which provisioner to use | Choose **Princeton Entra OIDC**, or add `--provisioner` as shown above |
 | The browser never opens for sign-in | Add `--console` to `step ssh login`, and open the link it prints yourself |
+| The browser opens already signed in as someone else | Your browser remembers another Microsoft account. Stop `step` opening the browser, and open the link it prints in a private window (see below) |
 | The login window rejects your password | Your desktop password is wrong or was never set. Repeat [step 3](#3-set-your-desktop-password) of the one-time setup |
 | `ssh` cannot reach the server at all | You are off campus without the VPN, or the server name is wrong |
 | The desktop opens and then closes immediately | This is a server problem, not a sign-in problem. Tell the operations team |
 
 `ssh-add -D` removes every key from your agent, including any you use for
 GitHub. They come back the next time you add them or restart your computer.
+
+If the browser signs you in with someone else's account, set
+`STEP_OPEN_BROWSER=0` so `step` prints the sign-in link instead of opening it.
+Copy the link into a private or incognito window and sign in as yourself.
+
+On macOS:
+
+```sh
+STEP_OPEN_BROWSER=0 step ssh login <netid>@princeton.edu --provisioner "Princeton Entra OIDC"
+```
+
+On Windows, in PowerShell:
+
+```powershell
+$env:STEP_OPEN_BROWSER = "0"
+step ssh login <netid>@princeton.edu --provisioner "Princeton Entra OIDC"
+```
+
+On Windows the setting lasts until you close that PowerShell window.
 
 ## How the server checks you
 
