@@ -94,6 +94,22 @@
           - config.hardware.device
       register: template_hardware_info
 
+    # The clone keeps the template's controller on bus 0, so the disks must
+    # target that controller type; asking for a different one on bus 0 fails
+    - name: Find the template's SCSI controller type
+      set_fact:
+        template_scsi_type: >-
+          {%- set types = {
+            'vim.vm.device.ParaVirtualSCSIController': 'paravirtual',
+            'vim.vm.device.VirtualLsiLogicSASController': 'lsilogicsas',
+            'vim.vm.device.VirtualLsiLogicController': 'lsilogic',
+            'vim.vm.device.VirtualBusLogicController': 'buslogic'
+          } -%}
+          {%- set ctrls = template_hardware_info.instance.config.hardware.device | default([])
+                | selectattr('_vimtype', 'in', types)
+                | selectattr('busNumber', 'equalto', 0) | list -%}
+          {{ types[ctrls[0]._vimtype] if ctrls else 'paravirtual' }}
+
     - name: Build disk config from current VM
       set_fact:
         vm_disk_config: >-
@@ -103,7 +119,7 @@
               {%- set _ = disks.append({
                 'size_gb': (device.capacityInKB / 1024 / 1024) | round(0, 'ceil') | int,
                 'unit_number': device.unitNumber | default(loop.index0),
-                'controller_type': 'paravirtual',
+                'controller_type': template_scsi_type,
                 'controller_number': 0,
                 'datastore': vm_datastore_name
               }) -%}
@@ -147,7 +163,7 @@
             {%- set _ = disks.append({
               'size_gb': [disk.size_gb, template_size] | max,
               'unit_number': disk.unit_number,
-              'controller_type': 'paravirtual',
+              'controller_type': template_scsi_type,
               'controller_number': 0,
               'datastore': vm_datastore_name
             }) -%}
@@ -163,7 +179,7 @@
         msg:
           - Ansible will now move and power off the current {{ old_vm_info.virtual_machines[0].guest_name }} VM.
           - Then create a replacement in the {{ old_vm_net_info.network_info[0].network_name }} network.
-          - The new VM will have {{ vm_disk_config_safe | length }} disk(s) using a template-safe configuration on datastore {{ vm_datastore_name }}.
+          - The new VM will have {{ vm_disk_config_safe | length }} disk(s) using a template-safe configuration on datastore {{ vm_datastore_name }} with a {{ template_scsi_type }} SCSI controller.
 
     - name: Move old VM to a different folder (ToBeDeleted, Forensics)
       community.vmware.vmware_guest_move:
@@ -212,7 +228,7 @@
           memory_mb: "{{ old_vm_info.virtual_machines[0].allocated.memory | int | default(16384) }}"
           num_cpus: "{{ old_vm_info.virtual_machines[0].allocated.cpu | int | default(2) }}"
           num_cpu_cores_per_socket: "{{ vm_cpu_cores | default(1) }}"
-          scsi: paravirtual
+          scsi: "{{ template_scsi_type }}"
           version: latest
           boot_firmware: efi
         networks:
