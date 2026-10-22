@@ -1,0 +1,88 @@
+#!/bin/bash
+# {{ ansible_managed }}
+#
+# Checkmk local check for the filesystem holding ClickHouse data. A level
+# is reported only after usage has stayed at or above it for
+# SUSTAIN_SECONDS; until then the service stays OK and says it is pending.
+
+set -u
+
+MOUNT_PATH="${CLICKHOUSE_DISK_MOUNT:-{{ signoz_clickhouse_local_mount_path }}}"
+WARN_PERCENT={{ signoz_checkmk_clickhouse_disk_warn_percent | int }}
+CRIT_PERCENT={{ signoz_checkmk_clickhouse_disk_crit_percent | int }}
+SUSTAIN_SECONDS={{ signoz_checkmk_clickhouse_disk_sustain_seconds | int }}
+STATE_FILE="${MK_VARDIR:-/var/lib/check_mk_agent}/signoz_clickhouse_disk.state"
+NOW="${CLICKHOUSE_DISK_NOW:-$(date +%s)}"
+
+SERVICE="ClickHouse data filesystem"
+
+# Without its own mount, df would report the parent filesystem instead.
+if ! mountpoint="$(timeout 10 findmnt -n -o TARGET --target "${MOUNT_PATH}" 2>/dev/null)"; then
+  echo "3 \"${SERVICE}\" - Check failed: cannot inspect ${MOUNT_PATH}"
+  exit 0
+fi
+if [[ "${mountpoint}" != "${MOUNT_PATH}" ]]; then
+  echo "2 \"${SERVICE}\" - ${MOUNT_PATH} is not mounted (found ${mountpoint:-nothing})"
+  exit 0
+fi
+
+if ! read -r size used avail < <(timeout 10 df -P -B1 -- "${MOUNT_PATH}" 2>/dev/null | awk 'NR == 2 { print $2, $3, $4 }') \
+    || [[ ! "${used}" =~ ^[0-9]+$ || ! "${avail}" =~ ^[0-9]+$ ]] || (( used + avail == 0 )); then
+  echo "3 \"${SERVICE}\" - Check failed: df returned no usable data for ${MOUNT_PATH}"
+  exit 0
+fi
+
+# Same rounding-up percentage df prints, so the two agree.
+percent=$(( (used * 100 + used + avail - 1) / (used + avail) ))
+
+if (( percent >= CRIT_PERCENT )); then
+  level=2
+elif (( percent >= WARN_PERCENT )); then
+  level=1
+else
+  level=0
+fi
+
+# State file: "<since when at or above warn> <since when at or above crit>",
+# 0 meaning not currently at that level.
+warn_since=0
+crit_since=0
+if [[ -r "${STATE_FILE}" ]]; then
+  read -r warn_since crit_since < "${STATE_FILE}" || true
+  [[ "${warn_since}" =~ ^[0-9]+$ ]] || warn_since=0
+  [[ "${crit_since}" =~ ^[0-9]+$ ]] || crit_since=0
+fi
+if (( level >= 1 )); then
+  (( warn_since > 0 )) || warn_since="${NOW}"
+else
+  warn_since=0
+fi
+if (( level >= 2 )); then
+  (( crit_since > 0 )) || crit_since="${NOW}"
+else
+  crit_since=0
+fi
+printf '%s %s\n' "${warn_since}" "${crit_since}" > "${STATE_FILE}.tmp" && mv "${STATE_FILE}.tmp" "${STATE_FILE}"
+
+status=0
+if (( crit_since > 0 && NOW - crit_since >= SUSTAIN_SECONDS )); then
+  status=2
+elif (( warn_since > 0 && NOW - warn_since >= SUSTAIN_SECONDS )); then
+  status=1
+fi
+
+free_gib=$(( avail / 1073741824 ))
+size_gib=$(( size / 1073741824 ))
+metrics="used_percent=${percent};${WARN_PERCENT};${CRIT_PERCENT};0;100"
+text="${MOUNT_PATH} ${percent}% used, ${free_gib} GiB free of ${size_gib} GiB"
+if (( level > status )); then
+  if (( level == 2 )); then
+    threshold="${CRIT_PERCENT}"
+    since="${crit_since}"
+  else
+    threshold="${WARN_PERCENT}"
+    since="${warn_since}"
+  fi
+  text="${text}; at or above ${threshold}% for $(( NOW - since ))s, state changes after ${SUSTAIN_SECONDS}s"
+fi
+echo "${status} \"${SERVICE}\" ${metrics} ${text}"

@@ -1,0 +1,119 @@
+---
+- name: SigNoz | Assert alert rule settings
+  ansible.builtin.assert:
+    that:
+      - signoz_api_key | length > 0
+      - signoz_alert_channels | length > 0
+    fail_msg: >-
+      signoz_alert_rules_enabled needs signoz_api_key (from the vault) and
+      signoz_alert_channels naming existing SigNoz notification channels.
+
+- name: SigNoz | List notification channels
+  ansible.builtin.uri:
+    url: "{{ signoz_api_url }}/api/v1/channels"
+    headers:
+      SigNoz-Api-Key: "{{ signoz_api_key }}"
+    validate_certs: "{{ signoz_api_validate_certs }}"
+    timeout: 30
+    return_content: true
+  register: signoz_channels_response
+  check_mode: false
+  no_log: true
+
+- name: SigNoz | Assert alert channels already exist
+  ansible.builtin.assert:
+    that:
+      - signoz_missing_channels | length == 0
+    fail_msg: "SigNoz notification channels not found: {{ signoz_missing_channels | join(', ') }}"
+  vars:
+    signoz_missing_channels: >-
+      {{ signoz_alert_channels | difference(signoz_channels_response.json.data | map(attribute='name') | list) }}
+
+- name: SigNoz | List alert rules
+  ansible.builtin.uri:
+    url: "{{ signoz_api_url }}/api/v2/rules"
+    headers:
+      SigNoz-Api-Key: "{{ signoz_api_key }}"
+    validate_certs: "{{ signoz_api_validate_certs }}"
+    timeout: 30
+    return_content: true
+  register: signoz_rules_response
+  check_mode: false
+  no_log: true
+
+- name: SigNoz | Reset desired alert rules
+  ansible.builtin.set_fact:
+    signoz_alert_rule_payloads: []
+
+- name: SigNoz | Build desired alert rules
+  ansible.builtin.set_fact:
+    signoz_alert_rule_payloads: "{{ signoz_alert_rule_payloads | default([]) + [signoz_alert_rule_payload] }}"
+  vars:
+    signoz_alert_rule_payload:
+      alert: "{{ item.alert }}"
+      alertType: METRIC_BASED_ALERT
+      ruleType: promql_rule
+      version: v5
+      description: "{{ item.description }}"
+      evalWindow: "{{ item.evalWindow }}"
+      frequency: "{{ item.frequency }}"
+      disabled: false
+      labels: "{{ item.labels }}"
+      annotations:
+        summary: "{{ item.alert }}"
+        description: "{{ item.description }}"
+      preferredChannels: "{{ signoz_alert_channels | sort }}"
+      condition:
+        compositeQuery:
+          queryType: promql
+          panelType: graph
+          queries:
+            - type: promql
+              spec:
+                name: A
+                query: "{{ item.condition.query }}"
+                disabled: false
+        selectedQueryName: A
+        op: "{{ item.condition.op }}"
+        target: "{{ item.condition.target | float }}"
+        matchType: "{{ item.condition.matchType }}"
+        alertOnAbsent: "{{ item.condition.alertOnAbsent }}"
+        absentFor: "{{ signoz_alert_absent_minutes | int if item.condition.alertOnAbsent else 0 }}"
+  loop: "{{ signoz_alert_rules }}"
+  loop_control:
+    label: "{{ item.alert }}"
+
+- name: SigNoz | Plan alert rule changes
+  ansible.builtin.include_tasks: alerts_plan.yml
+
+- name: SigNoz | Create missing alert rules
+  ansible.builtin.uri:
+    url: "{{ signoz_api_url }}/api/v2/rules"
+    method: POST
+    headers:
+      SigNoz-Api-Key: "{{ signoz_api_key }}"
+    body_format: json
+    body: "{{ item }}"
+    validate_certs: "{{ signoz_api_validate_certs }}"
+    timeout: 30
+    status_code: [200, 201]
+  changed_when: true
+  loop: "{{ signoz_alert_rules_to_create }}"
+  loop_control:
+    label: "{{ item.alert }}"
+
+- name: SigNoz | Update drifted alert rules
+  ansible.builtin.uri:
+    url: "{{ signoz_api_url }}/api/v2/rules/{{ item.id }}"
+    method: PUT
+    headers:
+      SigNoz-Api-Key: "{{ signoz_api_key }}"
+    body_format: json
+    body: "{{ item.rule }}"
+    validate_certs: "{{ signoz_api_validate_certs }}"
+    timeout: 30
+    status_code: [200, 204]
+  changed_when: true
+  loop: "{{ signoz_alert_rules_to_update }}"
+  loop_control:
+    label: "{{ item.rule.alert }}"

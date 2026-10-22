@@ -168,13 +168,14 @@
       expected '{{ signoz_clickhouse_expected_pvc_spec }}'.
   when: signoz_clickhouse_local_storage_enabled | default(false) | bool
 
+# Runs before Helm so a ClickHouse restart during the upgrade finds tables
+# that already match the new retention configuration.
+- name: SigNoz | Align retention of existing ClickHouse system log tables
+  ansible.builtin.include_tasks: system_log_retention.yml
+  when: signoz_clickhouse_system_log_migration_enabled | bool
+
 - name: Write SigNoz Helm values
-  ansible.builtin.template:
-    src: signoz-values.yaml.j2
-    dest: /etc/signoz/values.yaml
-    owner: root
-    group: root
-    mode: "0644"
+  ansible.builtin.include_tasks: values.yml
 
 - name: Add SigNoz Helm repo
   ansible.builtin.command: "microk8s helm3 repo add {{ signoz_chart_repo_name }} {{ signoz_chart_repo_url }}"
@@ -268,7 +269,7 @@
 - name: SigNoz | Wait for ClickHouse pod on local storage node
   ansible.builtin.command: >
     microk8s kubectl -n {{ signoz_namespace }}
-    get pod chi-signoz-clickhouse-cluster-0-0-0
+    get pod {{ signoz_clickhouse_pod }}
     -o jsonpath={.spec.nodeName}
   register: signoz_clickhouse_pod_node
   changed_when: false
@@ -299,7 +300,7 @@
       - "{{ signoz_namespace }}"
       - get
       - pod
-      - chi-signoz-clickhouse-cluster-0-0-0
+      - "{{ signoz_clickhouse_pod }}"
       - -o
       - 'jsonpath={.status.conditions[?(@.type=="Ready")].status}'
   register: signoz_clickhouse_pod_ready
@@ -339,6 +340,10 @@
 - name: Show SigNoz pods and PVCs
   ansible.builtin.debug:
     var: signoz_pods.stdout_lines
+
+- name: SigNoz | Manage collector alert rules
+  ansible.builtin.include_tasks: alerts.yml
+  when: signoz_alert_rules_enabled | bool
 
 - name: Add checkmk monitor
   ansible.builtin.import_tasks: checkmk.yml

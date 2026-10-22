@@ -39,3 +39,45 @@
     - signoz_checkmk_ingestion_enabled | default(false) | bool
     - inventory_hostname == signoz_checkmk_monitor_host
     - checkmk_verify_local | default(false) | bool
+
+- name: SigNoz | Ensure Checkmk local check directory exists on ClickHouse storage node
+  ansible.builtin.file:
+    path: /usr/lib/check_mk_agent/local
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  delegate_to: "{{ signoz_clickhouse_local_storage_node }}"
+  run_once: true
+  when: signoz_checkmk_clickhouse_disk_enabled | default(false) | bool
+
+- name: SigNoz | Install Checkmk ClickHouse disk local check
+  ansible.builtin.template:
+    src: check_clickhouse_disk.sh.j2
+    dest: /usr/lib/check_mk_agent/local/check_signoz_clickhouse_disk.sh
+    owner: root
+    group: root
+    mode: "0755"
+  delegate_to: "{{ signoz_clickhouse_local_storage_node }}"
+  run_once: true
+  when: signoz_checkmk_clickhouse_disk_enabled | default(false) | bool
+
+- name: SigNoz | Verify Checkmk ClickHouse disk local check
+  ansible.builtin.command:
+    cmd: /usr/lib/check_mk_agent/local/check_signoz_clickhouse_disk.sh
+  register: signoz_checkmk_disk_result
+  changed_when: false
+  failed_when: false
+  delegate_to: "{{ signoz_clickhouse_local_storage_node }}"
+  run_once: true
+  when:
+    - signoz_checkmk_clickhouse_disk_enabled | default(false) | bool
+    - checkmk_verify_local | default(false) | bool
+
+- name: SigNoz | Show Checkmk ClickHouse disk local check result
+  ansible.builtin.debug:
+    var: signoz_checkmk_disk_result.stdout
+  run_once: true
+  when:
+    - signoz_checkmk_clickhouse_disk_enabled | default(false) | bool
+    - checkmk_verify_local | default(false) | bool

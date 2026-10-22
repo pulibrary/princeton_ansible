@@ -1,0 +1,161 @@
+---
+# ClickHouse applies a system log's configured TTL only when it creates the
+# table. On restart it compares the existing table's definition with the
+# configured one and, if they differ, renames the table to <name>_N (keeping
+# the old TTL and data) and creates an empty one. Changing the TTL of the
+# live tables first makes their definition match the new configuration, so
+# the next restart keeps them in place.
+#
+# The running server also compares definitions, at each flush, until it has
+# read a table's definition once since it started or since it created the
+# table; after that it keeps the definition it read. Altering a table that
+# has not been flushed yet would make that first read see the new TTL,
+# which does not match the configuration the server started with, and it
+# would rename the table. So only tables with a row written after both the
+# server start and their last metadata change are altered; the rest are
+# reported as deferred and picked up by a later run.
+#
+# materialize_ttl_after_modify = 0 makes the ALTER a metadata change only.
+# Parts already on disk keep the expiry computed when they were written;
+# new parts and merges use the new TTL. See README for when space returns.
+
+- name: SigNoz | Assert system log retention values
+  ansible.builtin.assert:
+    that:
+      - item.value | int >= 1
+      - item.value | string is match('^[0-9]+$')
+      - item.key is match('^[a-z_]+$')
+    fail_msg: "Retention for system.{{ item.key }} must be a whole number of days (got {{ item.value }})."
+    quiet: true
+  loop: "{{ signoz_clickhouse_system_log_ttl_days | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+
+- name: SigNoz | Read TTL of ClickHouse system log tables
+  ansible.builtin.command:
+    argv: "{{ signoz_clickhouse_client_argv + ['--query', signoz_system_log_query] }}"
+  vars:
+    signoz_system_log_query: >-
+      SELECT name, engine_full FROM system.tables
+      WHERE database = 'system'
+      AND name IN ({{ signoz_clickhouse_system_log_ttl_days.keys() | map('regex_replace', '^(.*)$', "'\1'") | join(', ') }})
+      ORDER BY name FORMAT TSVRaw
+  register: signoz_system_log_tables
+  changed_when: false
+  check_mode: false
+  # A missing pod means ClickHouse has not been installed yet; the tables
+  # will be created from the new configuration.
+  failed_when:
+    - signoz_system_log_tables.rc != 0
+    - "'NotFound' not in signoz_system_log_tables.stderr"
+
+- name: SigNoz | Plan system log TTL changes
+  ansible.builtin.set_fact:
+    signoz_system_log_ttl_plan: "{{ signoz_system_log_ttl_plan_json | from_json }}"
+  vars:
+    signoz_system_log_ttl_plan_json: >-
+      {%- set plan = {'alter': [], 'unexpected': [], 'absent': []} -%}
+      {%- set found = {} -%}
+      {%- for line in signoz_system_log_tables.stdout_lines if signoz_system_log_tables.rc == 0 and '\t' in line -%}
+      {%-   set name = line.split('\t', 1)[0] -%}
+      {%-   set engine = line.split('\t', 1)[1] -%}
+      {%-   set _ = found.update({name: true}) -%}
+      {%-   set desired = signoz_clickhouse_system_log_ttl_days[name] | int -%}
+      {%-   set ttl = engine | regex_search(' TTL (.+?)(?= SETTINGS |$)', '\\1') | default([''], true) | first -%}
+      {%-   if ttl == 'event_date + toIntervalDay(' ~ desired ~ ')' -%}
+      {%-   elif ttl == '' or ttl is match('^event_date \\+ toIntervalDay\\([0-9]+\\)$') -%}
+      {%-     set _ = plan.alter.append({'table': name, 'current': ttl if ttl else 'none', 'days': desired}) -%}
+      {%-   else -%}
+      {%-     set _ = plan.unexpected.append({'table': name, 'current': ttl}) -%}
+      {%-   endif -%}
+      {%- endfor -%}
+      {%- for name in signoz_clickhouse_system_log_ttl_days if name not in found -%}
+      {%-   set _ = plan.absent.append(name) -%}
+      {%- endfor -%}
+      {{ plan | to_json }}
+
+- name: SigNoz | Check which system log tables the server has already read
+  ansible.builtin.command:
+    argv: "{{ signoz_clickhouse_client_argv + ['--query', signoz_system_log_flushed_query] }}"
+  vars:
+    signoz_system_log_flushed_query: >-
+      {% for item in signoz_system_log_ttl_plan.alter %}
+      {% set since = "greatest((SELECT metadata_modification_time FROM system.tables"
+         ~ " WHERE database = 'system' AND name = '" ~ item.table ~ "'), now() - uptime())" %}
+      SELECT '{{ item.table }}', count() FROM (
+        SELECT 1 FROM system.{{ item.table }}
+        WHERE event_date >= toDate({{ since }}) AND event_time > {{ since }}
+        LIMIT 1)
+      {{ 'UNION ALL' if not loop.last }}
+      {% endfor %}
+      FORMAT TSVRaw
+  register: signoz_system_log_flushed
+  changed_when: false
+  check_mode: false
+  when: signoz_system_log_ttl_plan.alter | length > 0
+
+- name: SigNoz | Defer tables the server has not read since it started
+  ansible.builtin.set_fact:
+    signoz_system_log_ttl_plan: >-
+      {{
+        signoz_system_log_ttl_plan
+        | combine({
+            'alter': signoz_system_log_ttl_plan.alter | selectattr('table', 'in', signoz_system_log_ready) | list,
+            'deferred': signoz_system_log_ttl_plan.alter | rejectattr('table', 'in', signoz_system_log_ready) | map(attribute='table') | list,
+          })
+      }}
+  vars:
+    signoz_system_log_ready: >-
+      {{
+        signoz_system_log_flushed.stdout_lines | default([])
+        | select('match', '^[a-z_]+\t1$')
+        | map('regex_replace', '\t1$', '')
+        | list
+      }}
+  when: signoz_system_log_ttl_plan.alter | length > 0
+
+- name: SigNoz | Show system log tables left for a later run
+  ansible.builtin.debug:
+    msg: >-
+      Not altered yet because ClickHouse has written nothing to them since it
+      started: {{ signoz_system_log_ttl_plan.deferred | join(', ') }}.
+      A later run will change them once they receive data; if ClickHouse
+      restarts first, it renames them to <name>_N and creates new tables with
+      the configured TTL.
+  when: signoz_system_log_ttl_plan.deferred | default([]) | length > 0
+
+- name: SigNoz | Refuse to replace an unrecognised system log TTL
+  ansible.builtin.assert:
+    that:
+      - signoz_system_log_ttl_plan.unexpected | length == 0
+    fail_msg: >-
+      These tables have a TTL this role did not set and would overwrite:
+      {{ signoz_system_log_ttl_plan.unexpected | to_json }}.
+      Review them by hand before rerunning.
+
+- name: SigNoz | Show system log tables not present yet
+  ansible.builtin.debug:
+    msg: "Not created yet, will use the configured TTL when created: {{ signoz_system_log_ttl_plan.absent | join(', ') }}"
+  when: signoz_system_log_ttl_plan.absent | length > 0
+
+- name: SigNoz | Report system log TTL changes check mode would make
+  ansible.builtin.debug:
+    msg: "Would change system.{{ item.table }} TTL from {{ item.current }} to event_date + {{ item.days }} days"
+  changed_when: true
+  loop: "{{ signoz_system_log_ttl_plan.alter }}"
+  loop_control:
+    label: "{{ item.table }}"
+  when: ansible_check_mode
+
+- name: SigNoz | Change TTL of existing system log tables
+  ansible.builtin.command:
+    argv: "{{ signoz_clickhouse_client_argv + ['--query', signoz_system_log_alter] }}"
+  vars:
+    signoz_system_log_alter: >-
+      ALTER TABLE system.{{ item.table }}
+      MODIFY TTL event_date + INTERVAL {{ item.days | int }} DAY
+      SETTINGS materialize_ttl_after_modify = 0
+  changed_when: true
+  loop: "{{ signoz_system_log_ttl_plan.alter }}"
+  loop_control:
+    label: "{{ item.table }}: {{ item.current }} -> {{ item.days }} days"

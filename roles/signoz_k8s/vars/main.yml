@@ -1,3 +1,74 @@
 #SPDX-License-Identifier: MIT-0
 ---
-# vars file for roles/signoz_k8s
+# Retention in days for every managed system log table, after overrides.
+signoz_clickhouse_system_log_ttl_days: >-
+  {{
+    dict(
+      (signoz_clickhouse_operator_system_logs.values() | list + signoz_clickhouse_stock_system_logs)
+      | product([signoz_clickhouse_system_log_retention_days | int])
+    )
+    | combine(signoz_clickhouse_system_log_retention_overrides)
+  }}
+
+# Metric names are the OTLP names the collector pushes (no "_total"
+# suffix). Queue size and capacity carry the same labels, including the
+# collector's service.instance.id, so the division matches one collector
+# to itself and never averages across collectors.
+signoz_alert_exporter_selector: '{exporter="{{ signoz_alert_logs_exporter }}"}'
+
+signoz_alert_rules:
+  - alert: "SigNoz collector: logs exporter send failures"
+    description: >-
+      The {{ signoz_alert_logs_exporter }} exporter has failed to write log
+      records to ClickHouse continuously for five minutes. Logs are being
+      retried or dropped.
+    evalWindow: 5m
+    frequency: 1m
+    labels:
+      severity: critical
+    condition:
+      query: >-
+        rate(otelcol_exporter_send_failed_log_records{{ signoz_alert_exporter_selector }}[2m])
+      op: "1"
+      target: 0
+      matchType: "2"
+      alertOnAbsent: false
+  - alert: "SigNoz collector: logs exporter enqueue failures"
+    description: >-
+      The {{ signoz_alert_logs_exporter }} sending queue rejected log records
+      in the last five minutes. Those records were dropped.
+    evalWindow: 1m
+    frequency: 1m
+    labels:
+      severity: critical
+    condition:
+      # The failure counter only exists after its first increment, so
+      # increase() alone would miss the first event. The second clause
+      # catches a series that did not exist five minutes ago.
+      query: >-
+        increase(otelcol_exporter_enqueue_failed_log_records{{ signoz_alert_exporter_selector }}[5m]) > 0
+        or
+        (otelcol_exporter_enqueue_failed_log_records{{ signoz_alert_exporter_selector }}
+        unless otelcol_exporter_enqueue_failed_log_records{{ signoz_alert_exporter_selector }} offset 5m)
+      op: "1"
+      target: 0
+      matchType: "1"
+      alertOnAbsent: false
+  - alert: "SigNoz collector: logs exporter queue nearly full"
+    description: >-
+      A collector's {{ signoz_alert_logs_exporter }} sending queue has been at
+      least {{ (signoz_alert_queue_utilization_ratio * 100) | int }}% full for
+      five minutes. No data means the collector's own telemetry is missing,
+      which must be treated as unknown ingestion health.
+    evalWindow: 5m
+    frequency: 1m
+    labels:
+      severity: warning
+    condition:
+      query: >-
+        otelcol_exporter_queue_size{{ signoz_alert_exporter_selector }}
+        / otelcol_exporter_queue_capacity{{ signoz_alert_exporter_selector }}
+      op: "5"
+      target: "{{ signoz_alert_queue_utilization_ratio }}"
+      matchType: "2"
+      alertOnAbsent: true

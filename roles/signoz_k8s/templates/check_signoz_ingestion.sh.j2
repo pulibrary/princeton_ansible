@@ -1,73 +1,155 @@
 #!/bin/bash
+# {{ ansible_managed }}
+#
+# Checkmk local check for SigNoz log ingestion. It talks to ClickHouse and
+# the collector through kubectl, so it keeps working when SigNoz itself or
+# its alerting is down.
+#
+# Services:
+#   "SigNoz log ingestion"  age of the newest stored log record
+#   "SigNoz log exporter"   exporter failures in the collector's own log
+#
+# A ClickHouse error is CRIT (ingestion cannot be confirmed); a problem with
+# the check itself (kubectl, pod lookup, timeout) is UNKNOWN.
 
 set -u
 
-MICROK8S="/snap/bin/microk8s"
+MICROK8S="${SIGNOZ_MICROK8S:-{{ signoz_microk8s_bin }}}"
 NAMESPACE="{{ signoz_namespace }}"
-CLICKHOUSE_POD="chi-signoz-clickhouse-cluster-0-0-0"
-WARN_SECONDS={{ signoz_checkmk_ingestion_warn_seconds }}
-CRIT_SECONDS={{ signoz_checkmk_ingestion_crit_seconds }}
+CLICKHOUSE_POD="{{ signoz_clickhouse_pod }}"
+CLICKHOUSE_USER="{{ signoz_clickhouse_checkmk_user }}"
+WARN_SECONDS={{ signoz_checkmk_ingestion_warn_seconds | int }}
+CRIT_SECONDS={{ signoz_checkmk_ingestion_crit_seconds | int }}
+LOOKBACK_SECONDS={{ signoz_checkmk_ingestion_lookback_seconds | int }}
+COMMAND_TIMEOUT={{ signoz_checkmk_command_timeout_seconds | int }}
 COLLECTOR_LOG_WINDOW="{{ signoz_checkmk_collector_log_window }}"
 
-SERVICE_NAME="SigNoz log ingestion"
+INGESTION_SERVICE="SigNoz log ingestion"
+EXPORTER_SERVICE="SigNoz log exporter"
 
-clickhouse_lag="$(
-  "${MICROK8S}" kubectl -n "${NAMESPACE}" exec \
-    "${CLICKHOUSE_POD}" \
-    -c clickhouse -- \
+# Runs kubectl with both a client-side request timeout and a hard limit.
+kube() {
+  timeout --kill-after=5 "$((COMMAND_TIMEOUT + 5))" \
+    "${MICROK8S}" kubectl --request-timeout="${COMMAND_TIMEOUT}s" "$@"
+}
+
+clickhouse_query() {
+  kube -n "${NAMESPACE}" exec "${CLICKHOUSE_POD}" -c clickhouse -- \
     clickhouse-client \
+      --user "${CLICKHOUSE_USER}" \
+      --connect_timeout=5 \
+      --receive_timeout="${COMMAND_TIMEOUT}" \
+      --max_execution_time="${COMMAND_TIMEOUT}" \
       --format TSVRaw \
-      -q "
-        SELECT dateDiff(
-          'second',
-          toDateTime(intDiv(max(timestamp), 1000000000)),
-          now()
-        )
-        FROM signoz_logs.logs_v2
-      " 2>/dev/null
-)"
+      --query "$1"
+}
 
-if [[ $? -ne 0 || ! "${clickhouse_lag}" =~ ^[0-9]+$ ]]; then
-  echo "2 \"${SERVICE_NAME}\" - Unable to query newest log timestamp from ClickHouse"
-  exit 0
-fi
+first_line() {
+  printf '%s' "$1" | head -n 1 | tr -d '"' | cut -c1-200
+}
 
-collector_pod="$(
-  "${MICROK8S}" kubectl -n "${NAMESPACE}" get pods \
+# Prints the Checkmk status for a failed query from its exit code and stderr.
+report_query_failure() {
+  local rc="$1" err="$2"
+  if (( rc == 124 || rc == 137 )); then
+    echo "3 \"${INGESTION_SERVICE}\" - Check failed: timed out after ${COMMAND_TIMEOUT}s"
+  elif [[ "${err}" == *"Code: "* ]]; then
+    echo "2 \"${INGESTION_SERVICE}\" - ClickHouse query failed: $(first_line "${err}")"
+  else
+    echo "3 \"${INGESTION_SERVICE}\" - Check failed: $(first_line "${err:-kubectl exited ${rc}}")"
+  fi
+}
+
+check_ingestion() {
+  local out err rc lag total errfile
+  errfile="$(mktemp)"
+  # Bounded by the primary key (ts_bucket_start) and the partition key
+  # (timestamp), so only the lookback window is read.
+  out="$(clickhouse_query "
+    SELECT if(count() = 0, -1,
+              dateDiff('second', toDateTime(intDiv(max(timestamp), 1000000000)), now()))
+    FROM signoz_logs.logs_v2
+    WHERE ts_bucket_start >= toUInt64(toUnixTimestamp(now()) - ${LOOKBACK_SECONDS} - 1800)
+      AND timestamp >= toUInt64(toUnixTimestamp(now()) - ${LOOKBACK_SECONDS}) * 1000000000
+  " 2>"${errfile}")"
+  rc=$?
+  err="$(cat "${errfile}")"
+  if (( rc != 0 )); then
+    rm -f "${errfile}"
+    report_query_failure "${rc}" "${err}"
+    return
+  fi
+  if [[ ! "${out}" =~ ^-?[0-9]+$ ]]; then
+    rm -f "${errfile}"
+    echo "3 \"${INGESTION_SERVICE}\" - Check failed: unexpected query output '$(first_line "${out}")'"
+    return
+  fi
+  lag="${out}"
+
+  if (( lag == -1 )); then
+    # Nothing in the window: tell an empty table apart from stale data.
+    # count() without a filter is answered from part metadata.
+    total="$(clickhouse_query "SELECT count() FROM signoz_logs.logs_v2" 2>"${errfile}")"
+    rc=$?
+    err="$(cat "${errfile}")"
+    rm -f "${errfile}"
+    if (( rc != 0 )); then
+      report_query_failure "${rc}" "${err}"
+    elif [[ "${total}" == "0" ]]; then
+      echo "2 \"${INGESTION_SERVICE}\" - signoz_logs.logs_v2 is empty"
+    else
+      echo "2 \"${INGESTION_SERVICE}\" - Stale: no logs in the last ${LOOKBACK_SECONDS}s (table has ${total} rows)"
+    fi
+    return
+  fi
+  rm -f "${errfile}"
+
+  local note=""
+  if (( lag < 0 )); then
+    note=" (newest record is $(( -lag ))s in the future)"
+    lag=0
+  fi
+  local metric="lag_seconds=${lag};${WARN_SECONDS};${CRIT_SECONDS}"
+  if (( lag >= CRIT_SECONDS )); then
+    echo "2 \"${INGESTION_SERVICE}\" ${metric} Stale: newest log is ${lag}s old${note}"
+  elif (( lag >= WARN_SECONDS )); then
+    echo "1 \"${INGESTION_SERVICE}\" ${metric} Newest log is ${lag}s old${note}"
+  else
+    echo "0 \"${INGESTION_SERVICE}\" ${metric} Newest log is ${lag}s old${note}"
+  fi
+}
+
+check_exporter() {
+  local pods pod logs rc count total=0 checked=0
+  pods="$(kube -n "${NAMESPACE}" get pods \
     -l app.kubernetes.io/component=otel-collector \
-    -o jsonpath='{.items[0].metadata.name}' \
-    2>/dev/null
-)"
+    -o jsonpath='{.items[*].metadata.name}' 2>/dev/null)"
+  rc=$?
+  if (( rc != 0 )); then
+    echo "3 \"${EXPORTER_SERVICE}\" - Check failed: could not list collector pods"
+    return
+  fi
+  if [[ -z "${pods}" ]]; then
+    echo "2 \"${EXPORTER_SERVICE}\" - No SigNoz OTel collector pod found"
+    return
+  fi
+  for pod in ${pods}; do
+    if ! logs="$(kube -n "${NAMESPACE}" logs "${pod}" -c collector \
+        --since="${COLLECTOR_LOG_WINDOW}" 2>/dev/null)"; then
+      echo "3 \"${EXPORTER_SERVICE}\" - Check failed: could not read logs of ${pod}"
+      return
+    fi
+    count="$(printf '%s\n' "${logs}" | grep -Eic \
+      'sending queue is full|PrepareBatch.*context deadline exceeded|Exporting failed\. Dropping data|Rejecting data')"
+    total=$(( total + count ))
+    checked=$(( checked + 1 ))
+  done
+  if (( total > 0 )); then
+    echo "2 \"${EXPORTER_SERVICE}\" collector_errors=${total} ${total} exporter failures in the last ${COLLECTOR_LOG_WINDOW} across ${checked} collector pod(s)"
+  else
+    echo "0 \"${EXPORTER_SERVICE}\" collector_errors=0 No exporter failures in the last ${COLLECTOR_LOG_WINDOW} across ${checked} collector pod(s)"
+  fi
+}
 
-if [[ -z "${collector_pod}" ]]; then
-  echo "2 \"${SERVICE_NAME}\" lag_seconds=${clickhouse_lag};${WARN_SECONDS};${CRIT_SECONDS} No SigNoz OTel collector pod found"
-  exit 0
-fi
-
-collector_errors="$(
-  "${MICROK8S}" kubectl -n "${NAMESPACE}" logs \
-    "${collector_pod}" \
-    -c collector \
-    --since="${COLLECTOR_LOG_WINDOW}" \
-    2>/dev/null |
-  grep -Eic \
-    'sending queue is full|PrepareBatch.*context deadline exceeded|Rejecting data' \
-  || true
-)"
-
-if (( collector_errors > 0 )); then
-  echo "2 \"${SERVICE_NAME}\" lag_seconds=${clickhouse_lag};${WARN_SECONDS};${CRIT_SECONDS}|collector_errors=${collector_errors} Collector exporter failure detected: ${collector_errors} matching errors in last ${COLLECTOR_LOG_WINDOW}"
-  exit 0
-fi
-
-if (( clickhouse_lag >= CRIT_SECONDS )); then
-  echo "2 \"${SERVICE_NAME}\" lag_seconds=${clickhouse_lag};${WARN_SECONDS};${CRIT_SECONDS}|collector_errors=${collector_errors} Log ingestion is ${clickhouse_lag}s behind"
-  exit 0
-fi
-
-if (( clickhouse_lag >= WARN_SECONDS )); then
-  echo "1 \"${SERVICE_NAME}\" lag_seconds=${clickhouse_lag};${WARN_SECONDS};${CRIT_SECONDS}|collector_errors=${collector_errors} Log ingestion is ${clickhouse_lag}s behind"
-  exit 0
-fi
-
-echo "0 \"${SERVICE_NAME}\" lag_seconds=${clickhouse_lag};${WARN_SECONDS};${CRIT_SECONDS}|collector_errors=${collector_errors} Log ingestion healthy: ${clickhouse_lag}s behind"
+check_ingestion
+check_exporter

@@ -1,0 +1,117 @@
+---
+- name: Prepare
+  hosts: all
+  gather_facts: false
+  vars:
+    epoch_now: "{{ lookup('pipe', 'date +%s') | int }}"
+    day: 86400
+  tasks:
+    - name: Install stand-ins for clickhouse-client, kubectl and the SigNoz API
+      ansible.builtin.copy:
+        src: "{{ item }}"
+        dest: "/usr/local/bin/{{ item }}"
+        mode: "0755"
+      loop:
+        - fake-clickhouse-client
+        - fake-microk8s
+        - fake-signoz-api
+
+    - name: Create stand-in state directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: "0755"
+      loop:
+        - /var/lib/fake-clickhouse
+        - /var/lib/fake-signoz
+
+    # Mirrors production: operator-managed tables partitioned by day with a
+    # 30-day TTL, a stock table with a monthly partition and no TTL that has
+    # not been written since the server started, and absent tables.
+    - name: Seed ClickHouse system tables
+      ansible.builtin.copy:
+        dest: /var/lib/fake-clickhouse/state.json
+        mode: "0644"
+        content: "{{ fake_clickhouse_state | to_json }}"
+      vars:
+        operator_engine: "MergeTree PARTITION BY event_date ORDER BY event_time TTL event_date + toIntervalDay({days}) SETTINGS index_granularity = 8192"
+        stock_engine: "MergeTree PARTITION BY toYYYYMM(event_date) ORDER BY (event_date, event_time){ttl} SETTINGS index_granularity = 8192"
+        fake_clickhouse_state:
+          server_start: "{{ epoch_now | int - day }}"
+          fail: ""
+          logs: {lag: 1, total: 1000}
+          tables:
+            query_log:
+              engine: "{{ operator_engine | replace('{days}', '30') }}"
+              mtime: "{{ epoch_now | int - 40 * day }}"
+              last_event: "{{ epoch_now | int }}"
+            zookeeper_log:
+              engine: "{{ operator_engine | replace('{days}', '30') }}"
+              mtime: "{{ epoch_now | int - 40 * day }}"
+              last_event: "{{ epoch_now | int }}"
+            part_log:
+              engine: "{{ operator_engine | replace('{days}', '7') }}"
+              mtime: "{{ epoch_now | int - 40 * day }}"
+              last_event: "{{ epoch_now | int }}"
+            aggregated_zookeeper_log:
+              engine: "{{ stock_engine | replace('{ttl}', ' TTL event_date + toIntervalDay(30)') }}"
+              mtime: "{{ epoch_now | int - 40 * day }}"
+              last_event: "{{ epoch_now | int }}"
+            background_schedule_pool_log:
+              engine: "{{ stock_engine | replace('{ttl}', '') }}"
+              mtime: "{{ epoch_now | int - 40 * day }}"
+              last_event: "{{ epoch_now | int - 2 * day }}"
+
+    - name: Seed SigNoz rules (one drifted managed rule, one unrelated rule)
+      ansible.builtin.copy:
+        dest: /var/lib/fake-signoz/rules.json
+        mode: "0644"
+        content: "{{ fake_signoz_rules | to_json }}"
+      vars:
+        fake_signoz_rules:
+          - id: existing-queue-rule
+            state: inactive
+            alert: "SigNoz collector: logs exporter queue nearly full"
+            alertType: METRIC_BASED_ALERT
+            ruleType: promql_rule
+            version: v5
+            evalWindow: 5m
+            frequency: 1m
+            disabled: false
+            condition:
+              compositeQuery:
+                queryType: promql
+                panelType: graph
+                queries:
+                  - type: promql
+                    spec: {name: A, query: "otelcol_exporter_queue_size", disabled: false, step: 0, stats: false, legend: ""}
+              op: "5"
+              target: 0.5
+              matchType: "2"
+          - id: unrelated-rule
+            state: inactive
+            alert: "Someone else's rule"
+            alertType: METRIC_BASED_ALERT
+            ruleType: promql_rule
+            version: v5
+            condition:
+              compositeQuery:
+                queryType: promql
+                panelType: graph
+                queries:
+                  - type: promql
+                    spec: {name: A, query: "up", disabled: false}
+              op: "1"
+              target: 1
+              matchType: "1"
+
+    - name: Start the SigNoz API stand-in
+      ansible.builtin.shell: >-
+        nohup /usr/local/bin/fake-signoz-api > /var/log/fake-signoz-api.log 2>&1 &
+      changed_when: true
+
+    - name: Wait for the SigNoz API stand-in
+      ansible.builtin.wait_for:
+        port: 18080
+        host: 127.0.0.1
+        timeout: 30

@@ -1,0 +1,468 @@
+---
+- name: Verify
+  hosts: all
+  gather_facts: false
+  vars:
+    signoz_tokenizer_jwt_secret: molecule-jwt-secret
+    state_file: /var/lib/fake-clickhouse/state.json
+    query_log_file: /var/lib/fake-clickhouse/queries.log
+    daily_table: MergeTree PARTITION BY event_date ORDER BY event_time
+    monthly_table: MergeTree PARTITION BY toYYYYMM(event_date) ORDER BY (event_date, event_time)
+    ttl_7: " TTL event_date + toIntervalDay(7) SETTINGS index_granularity = 8192"
+    managed_alerts:
+      - "SigNoz collector: logs exporter send failures"
+      - "SigNoz collector: logs exporter enqueue failures"
+      - "SigNoz collector: logs exporter queue nearly full"
+  tasks:
+    # ---- System log retention: result of converge + idempotence ----------
+
+    - name: Read ClickHouse stand-in state
+      ansible.builtin.slurp:
+        src: "{{ state_file }}"
+      register: ch_state_raw
+
+    - name: Read queries sent to ClickHouse
+      ansible.builtin.slurp:
+        src: "{{ query_log_file }}"
+      register: ch_queries_raw
+
+    - name: Assert TTLs were changed only where needed
+      vars:
+        tables: "{{ (ch_state_raw.content | b64decode | from_json).tables }}"
+        queries: "{{ (ch_queries_raw.content | b64decode).splitlines() }}"
+        alters: "{{ queries | select('match', '^ALTER ') | list }}"
+      ansible.builtin.assert:
+        that:
+          # Daily-partitioned operator tables keep partitioning and ordering.
+          - tables.query_log.engine == daily_table ~ ttl_7
+          - tables.zookeeper_log.engine == daily_table ~ ttl_7
+          # Stock table keeps its monthly partition and ordering.
+          - tables.aggregated_zookeeper_log.engine == monthly_table ~ ttl_7
+          # Not written since the server started: deferred, not altered.
+          - "'TTL' not in tables.background_schedule_pool_log.engine"
+          # One ALTER per changed table across both converge runs.
+          - alters | length == 3
+          - alters | select('search', 'system\\.(part_log|background_schedule_pool_log) ') | list | length == 0
+          - alters | reject('search', 'SETTINGS materialize_ttl_after_modify = 0$') | list | length == 0
+          - queries | select('search', '(?i)\\b(OPTIMIZE|TRUNCATE|DROP|MATERIALIZE TTL)\\b') | list | length == 0
+        fail_msg: "Unexpected retention result: {{ tables | to_nice_json }} / {{ alters }}"
+
+    - name: Put query_log back to a 30-day TTL
+      ansible.builtin.shell: |
+        python3 - <<'EOF'
+        import json, time
+        p = "{{ state_file }}"
+        s = json.load(open(p))
+        s["tables"]["query_log"]["engine"] = s["tables"]["query_log"]["engine"].replace("toIntervalDay(7)", "toIntervalDay(30)")
+        # The server has written to the table since its definition changed.
+        s["tables"]["query_log"]["mtime"] = int(time.time()) - 60
+        s["tables"]["query_log"]["last_event"] = int(time.time())
+        json.dump(s, open(p, "w"))
+        EOF
+        : > {{ query_log_file }}
+      changed_when: true
+
+    - name: Run the migration in check mode
+      ansible.builtin.include_role:
+        name: signoz_k8s
+        tasks_from: system_log_retention
+        apply:
+          check_mode: true
+
+    - name: Read queries sent in check mode
+      ansible.builtin.slurp:
+        src: "{{ query_log_file }}"
+      register: ch_check_queries
+
+    - name: Assert check mode only read
+      ansible.builtin.assert:
+        that:
+          - (ch_check_queries.content | b64decode).splitlines() | select('match', '^ALTER ') | list | length == 0
+          - (ch_check_queries.content | b64decode).splitlines() | select('match', '^SELECT name, engine_full') | list | length == 1
+
+    - name: Run the migration with a per-table override
+      ansible.builtin.include_role:
+        name: signoz_k8s
+        tasks_from: system_log_retention
+      vars:
+        signoz_clickhouse_system_log_retention_overrides:
+          query_log: 14
+
+    - name: Read state after override
+      ansible.builtin.slurp:
+        src: "{{ state_file }}"
+      register: ch_override_state
+
+    - name: Assert override applied to that table only
+      vars:
+        tables: "{{ (ch_override_state.content | b64decode | from_json).tables }}"
+      ansible.builtin.assert:
+        that:
+          - "'TTL event_date + toIntervalDay(14) SETTINGS' in tables.query_log.engine"
+          - "'TTL event_date + toIntervalDay(7) SETTINGS' in tables.zookeeper_log.engine"
+
+    - name: Give query_log a TTL the role did not write
+      ansible.builtin.shell: |
+        python3 - <<'EOF'
+        import json
+        p = "{{ state_file }}"
+        s = json.load(open(p))
+        s["tables"]["query_log"]["engine"] = (
+            "{{ daily_table }} TTL event_date + toIntervalDay(30) TO VOLUME 'cold'"
+            " SETTINGS index_granularity = 8192")
+        json.dump(s, open(p, "w"))
+        EOF
+        : > {{ query_log_file }}
+      changed_when: true
+
+    - name: Migration must refuse to overwrite an unrecognised TTL
+      block:
+        - name: Run the migration against an unrecognised TTL
+          ansible.builtin.include_role:
+            name: signoz_k8s
+            tasks_from: system_log_retention
+        - name: Unrecognised TTL was not refused
+          ansible.builtin.fail:
+            msg: The migration replaced a TTL it did not set.
+      rescue:
+        - name: Assert the refusal came from the TTL guard
+          ansible.builtin.assert:
+            that:
+              - "'did not set' in ansible_failed_result.msg | default('')"
+
+    - name: Read queries after the refused run
+      ansible.builtin.slurp:
+        src: "{{ query_log_file }}"
+      register: ch_refused_queries
+
+    - name: Assert nothing was altered by the refused run
+      ansible.builtin.assert:
+        that:
+          - (ch_refused_queries.content | b64decode).splitlines() | select('match', '^ALTER ') | list | length == 0
+
+    - name: Restore query_log to the role's TTL
+      ansible.builtin.shell: |
+        python3 - <<'EOF'
+        import json
+        p = "{{ state_file }}"
+        s = json.load(open(p))
+        s["tables"]["query_log"]["engine"] = "{{ daily_table }}{{ ttl_7 }}"
+        json.dump(s, open(p, "w"))
+        EOF
+      changed_when: true
+
+    - name: Run the migration before ClickHouse exists
+      ansible.builtin.include_role:
+        name: signoz_k8s
+        tasks_from: system_log_retention
+      vars:
+        signoz_clickhouse_client_argv:
+          - /bin/sh
+          - -c
+          - >-
+            echo 'Error from server (NotFound): pods "chi-signoz-clickhouse-cluster-0-0-0" not found' >&2; exit 1
+          - sh
+
+    - name: Assert every table was reported as not created yet
+      ansible.builtin.assert:
+        that:
+          - signoz_system_log_ttl_plan.alter | length == 0
+          # 14 operator-managed tables plus 3 stock tables
+          - signoz_system_log_ttl_plan.absent | length == 17
+
+    - name: Migration must fail when ClickHouse is down
+      block:
+        - name: Mark ClickHouse as down
+          ansible.builtin.shell: |
+            python3 -c 'import json; p="{{ state_file }}"; s=json.load(open(p)); s["fail"]="down"; json.dump(s, open(p, "w"))'
+          changed_when: true
+        - name: Run the migration against a down ClickHouse
+          ansible.builtin.include_role:
+            name: signoz_k8s
+            tasks_from: system_log_retention
+        - name: A down ClickHouse was not reported
+          ansible.builtin.fail:
+            msg: The migration skipped silently while ClickHouse was down.
+      rescue:
+        - name: Assert the migration stopped on the query error
+          ansible.builtin.assert:
+            that:
+              - "'Connection refused' in ansible_failed_result.stderr | default('')"
+      always:
+        - name: Mark ClickHouse as up
+          ansible.builtin.shell: |
+            python3 -c 'import json; p="{{ state_file }}"; s=json.load(open(p)); s["fail"]=""; json.dump(s, open(p, "w"))'
+          changed_when: true
+
+    # ---- Helm values -----------------------------------------------------
+
+    - name: Read rendered Helm values
+      ansible.builtin.slurp:
+        src: /etc/signoz/values.yaml
+      register: values_raw
+
+    - name: Assert retention, checker user and collector telemetry are rendered
+      vars:
+        values: "{{ values_raw.content | b64decode | from_yaml }}"
+        operator: "{{ values.clickhouse.clickhouseOperator }}"
+        confd: "{{ operator.configs.confdFiles['signoz-system-log-retention.xml'] }}"
+        users: "{{ values.clickhouse.files['users.d/signoz_checkmk.xml'] }}"
+        readers: "{{ values.otelCollector.config.service.telemetry.metrics.readers }}"
+      ansible.builtin.assert:
+        that:
+          - operator | dict2items | rejectattr('key', 'equalto', 'configs') | map(attribute='value.ttl') | unique | list == [7]
+          - operator | dict2items | rejectattr('key', 'equalto', 'configs') | list | length == 14
+          - "'<aggregated_zookeeper_log>' in confd"
+          - "'<ttl>event_date + INTERVAL 7 DAY</ttl>' in confd"
+          # The chart's own config.d/system_log.xml manages these.
+          - "'text_log' not in confd and 'error_log' not in confd and 'query_metric_log' not in confd"
+          - "'GRANT SELECT(timestamp, ts_bucket_start) ON signoz_logs.logs_v2' in users"
+          - "'<readonly>2</readonly>' in users"
+          - readers | length == 2
+          - readers[0].pull.exporter.prometheus.host == 'localhost'
+          - readers[0].pull.exporter.prometheus.port == 8888
+          - readers[1].periodic.exporter.otlp.endpoint == 'http://localhost:4317'
+          - readers[1].periodic.interval == 30000
+          # No queue or timeout tuning for the logs exporter.
+          - "'clickhouselogsexporter' not in values.otelCollector.config.exporters"
+          - values.otelCollector.config.exporters.clickhousetraces.timeout == '10s'
+
+    - name: Render Helm values with overrides
+      ansible.builtin.include_role:
+        name: signoz_k8s
+        tasks_from: values
+      vars:
+        signoz_clickhouse_system_log_retention_days: 14
+        signoz_clickhouse_system_log_retention_overrides:
+          crash_log: 30
+          aggregated_zookeeper_log: 3
+        signoz_otel_internal_metrics_enabled: false
+
+    - name: Read Helm values rendered with overrides
+      ansible.builtin.slurp:
+        src: /etc/signoz/values.yaml
+      register: values_override_raw
+
+    - name: Assert overrides are rendered
+      vars:
+        values: "{{ values_override_raw.content | b64decode | from_yaml }}"
+        operator: "{{ values.clickhouse.clickhouseOperator }}"
+        confd: "{{ operator.configs.confdFiles['signoz-system-log-retention.xml'] }}"
+      ansible.builtin.assert:
+        that:
+          - operator.queryLog.ttl == 14
+          - operator.zookeeperLog.ttl == 14
+          - operator.crashLog.ttl == 30
+          - "'<ttl>event_date + INTERVAL 3 DAY</ttl>' in confd"
+          - "'<ttl>event_date + INTERVAL 14 DAY</ttl>' in confd"
+          - "'service' not in values.otelCollector.config"
+
+    - name: Restore default Helm values
+      ansible.builtin.include_role:
+        name: signoz_k8s
+        tasks_from: values
+
+    # ---- SigNoz alert rules ----------------------------------------------
+
+    - name: Read SigNoz rules
+      ansible.builtin.slurp:
+        src: /var/lib/fake-signoz/rules.json
+      register: rules_raw
+
+    - name: Read SigNoz write requests
+      ansible.builtin.slurp:
+        src: /var/lib/fake-signoz/requests.log
+      register: requests_raw
+
+    - name: Assert alert rules were created, updated in place and left alone after
+      vars:
+        rules: "{{ rules_raw.content | b64decode | from_json }}"
+        requests: "{{ (requests_raw.content | b64decode).splitlines() }}"
+        queue: "{{ rules | selectattr('alert', 'equalto', managed_alerts[2]) | first }}"
+        enqueue: "{{ rules | selectattr('alert', 'equalto', managed_alerts[1]) | first }}"
+        send: "{{ rules | selectattr('alert', 'equalto', managed_alerts[0]) | first }}"
+        queries: >-
+          {{ rules | selectattr('alert', 'in', managed_alerts)
+             | map(attribute='condition.compositeQuery.queries') | flatten
+             | map(attribute='spec.query') | list }}
+        queue_query: >-
+          otelcol_exporter_queue_size{exporter="clickhouselogsexporter"}
+          / otelcol_exporter_queue_capacity{exporter="clickhouselogsexporter"}
+      ansible.builtin.assert:
+        that:
+          # Two created, the drifted one updated; the idempotence run sent nothing.
+          - requests | select('match', '^POST /api/v2/rules$') | list | length == 2
+          - requests == requests | select('match', '^(POST /api/v2/rules|PUT /api/v2/rules/existing-queue-rule)$') | list
+          - requests | length == 3
+          - rules | map(attribute='alert') | select('in', managed_alerts) | list | length == 3
+          - (rules | selectattr('alert', 'equalto', "Someone else's rule") | first).condition.target == 1
+          - queue.id == 'existing-queue-rule'
+          - queue.condition.target == 0.8
+          - queue.condition.op == '5'
+          - queue.condition.matchType == '2'
+          - queue.condition.alertOnAbsent
+          - queue.condition.absentFor == 10
+          - queue.evalWindow == '5m'
+          - queue.condition.compositeQuery.queries[0].spec.query == queue_query
+          - send.evalWindow == '5m'
+          - send.frequency == '1m'
+          - send.condition.matchType == '2'
+          - send.condition.target == 0.0
+          - enqueue.evalWindow == '1m'
+          - enqueue.frequency == '1m'
+          - enqueue.condition.matchType == '1'
+          - "'offset 5m' in enqueue.condition.compositeQuery.queries[0].spec.query"
+          - "'unless' in enqueue.condition.compositeQuery.queries[0].spec.query"
+          - queries | reject('search', 'exporter="clickhouselogsexporter"') | list | length == 0
+          - queries | select('search', '_total') | list | length == 0
+          - rules | selectattr('alert', 'in', managed_alerts) | map(attribute='preferredChannels') | unique | list == [['ops-email']]
+          - rules | selectattr('alert', 'in', managed_alerts) | map(attribute='ruleType') | unique | list == ['promql_rule']
+          - rules | selectattr('alert', 'in', managed_alerts) | map(attribute='version') | unique | list == ['v5']
+
+    - name: Alert rules must not reference channels that do not exist
+      block:
+        - name: Run alert management with an unknown channel
+          ansible.builtin.include_role:
+            name: signoz_k8s
+            tasks_from: alerts
+          vars:
+            signoz_alert_channels:
+              - slack-that-does-not-exist
+        - name: Unknown channel was accepted
+          ansible.builtin.fail:
+            msg: Alert management accepted a channel SigNoz does not have.
+      rescue:
+        - name: Assert the unknown channel was named
+          ansible.builtin.assert:
+            that:
+              - "'slack-that-does-not-exist' in ansible_failed_result.msg | default('')"
+
+    - name: Drift the send-failure rule
+      ansible.builtin.shell: |
+        python3 - <<'EOF'
+        import json
+        p = "/var/lib/fake-signoz/rules.json"
+        rules = json.load(open(p))
+        for rule in rules:
+            if rule["alert"] == "{{ managed_alerts[0] }}":
+                rule["condition"]["target"] = 5
+        json.dump(rules, open(p, "w"))
+        EOF
+      changed_when: true
+
+    - name: Run alert management in check mode
+      ansible.builtin.include_role:
+        name: signoz_k8s
+        tasks_from: alerts
+        apply:
+          check_mode: true
+
+    - name: Read SigNoz write requests after check mode
+      ansible.builtin.slurp:
+        src: /var/lib/fake-signoz/requests.log
+      register: requests_check_raw
+
+    - name: Assert check mode found the drift and sent nothing
+      ansible.builtin.assert:
+        that:
+          - signoz_alert_rules_to_update | map(attribute='rule.alert') | list == [managed_alerts[0]]
+          - (requests_check_raw.content | b64decode).splitlines() | length == 3
+
+    # ---- Checkmk local checks --------------------------------------------
+
+    - name: Stat installed Checkmk local checks
+      ansible.builtin.stat:
+        path: "/usr/lib/check_mk_agent/local/{{ item }}"
+      register: local_checks
+      loop:
+        - check_signoz_ingestion.sh
+        - check_signoz_clickhouse_disk.sh
+
+    - name: Assert Checkmk local checks are installed and executable
+      ansible.builtin.assert:
+        that:
+          - item.stat.exists
+          - item.stat.mode == '0755'
+      loop: "{{ local_checks.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Run the ingestion check in each state
+      ansible.builtin.shell: |
+        python3 - <<'EOF'
+        import json
+        p = "{{ state_file }}"
+        s = json.load(open(p))
+        s["logs"] = {"lag": {{ item.lag }}, "total": {{ item.total }}}
+        s["fail"] = "{{ item.fail | default('') }}"
+        json.dump(s, open(p, "w"))
+        EOF
+        echo "{{ item.collector | default('ok') }}" > /var/lib/fake-clickhouse/collector
+        {{ item.env | default('') }} /usr/lib/check_mk_agent/local/check_signoz_ingestion.sh
+      register: ingestion_runs
+      changed_when: false
+      loop:
+        - {name: fresh, lag: 2, total: 1000}
+        - {name: slow, lag: 120, total: 1000}
+        - {name: stale, lag: 400, total: 1000}
+        - {name: future, lag: -30, total: 1000}
+        - {name: outside_window, lag: -1, total: 1000}
+        - {name: empty, lag: -1, total: 0}
+        - {name: clickhouse_down, lag: 2, total: 1000, fail: down}
+        - {name: exporter_errors, lag: 2, total: 1000, collector: errors}
+        - {name: no_collector, lag: 2, total: 1000, collector: none}
+        - {name: kubectl_broken, lag: 2, total: 1000, env: SIGNOZ_MICROK8S=/bin/false}
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Assert each ingestion state is reported distinctly
+      vars:
+        result: "{{ dict(ingestion_runs.results | map(attribute='item.name') | zip(ingestion_runs.results | map(attribute='stdout_lines'))) }}"
+      ansible.builtin.assert:
+        that:
+          - result.fresh[0] is match('^0 "SigNoz log ingestion" lag_seconds=2;60;300 ')
+          - result.fresh[1] is match('^0 "SigNoz log exporter" collector_errors=0 ')
+          - result.slow[0] is match('^1 "SigNoz log ingestion" lag_seconds=120;60;300 ')
+          - result.stale[0] is match('^2 "SigNoz log ingestion" lag_seconds=400;60;300 Stale')
+          - result.future[0] is match('^0 "SigNoz log ingestion" lag_seconds=0;60;300 .*30s in the future')
+          - result.outside_window[0] is match('^2 "SigNoz log ingestion" - Stale:\sno logs in the last 3600s')
+          - result.empty[0] is match('^2 "SigNoz log ingestion" - signoz_logs.logs_v2 is empty')
+          - result.clickhouse_down[0] is match('^2 "SigNoz log ingestion" - ClickHouse query failed:\sCode:\s210')
+          - result.exporter_errors[0] is match('^0 "SigNoz log ingestion"')
+          - result.exporter_errors[1] is match('^2 "SigNoz log exporter" collector_errors=1 ')
+          - result.no_collector[1] is match('^2 "SigNoz log exporter" - No SigNoz OTel collector pod found')
+          - result.kubectl_broken[0] is match('^3 "SigNoz log ingestion" - Check failed')
+          - result.kubectl_broken[1] is match('^3 "SigNoz log exporter" - Check failed')
+        fail_msg: "{{ result | to_nice_json }}"
+
+    - name: Render a disk check with thresholds every filesystem exceeds
+      ansible.builtin.template:
+        src: "{{ lookup('env', 'MOLECULE_PROJECT_DIRECTORY') }}/templates/check_clickhouse_disk.sh.j2"
+        dest: /tmp/check_disk_low.sh
+        mode: "0755"
+      vars:
+        signoz_clickhouse_local_mount_path: /
+        signoz_checkmk_clickhouse_disk_warn_percent: 0
+        signoz_checkmk_clickhouse_disk_crit_percent: 0
+        signoz_checkmk_clickhouse_disk_sustain_seconds: 300
+
+    - name: Run the disk check over time
+      ansible.builtin.shell: |
+        export MK_VARDIR=/tmp/mk-disk
+        rm -rf "$MK_VARDIR"; mkdir -p "$MK_VARDIR"
+        for t in 1000 1299 1300; do CLICKHOUSE_DISK_NOW=$t /tmp/check_disk_low.sh; done
+        CLICKHOUSE_DISK_MOUNT=/usr /tmp/check_disk_low.sh
+        rm -rf "$MK_VARDIR"; mkdir -p "$MK_VARDIR"
+        /usr/lib/check_mk_agent/local/check_signoz_clickhouse_disk.sh
+      register: disk_runs
+      changed_when: false
+
+    - name: Assert the disk check waits for the sustain period
+      ansible.builtin.assert:
+        that:
+          - disk_runs.stdout_lines[0] is match('^0 "ClickHouse data filesystem" used_percent=\d+;0;0;0;100 .*for 0s, state changes after 300s$')
+          - disk_runs.stdout_lines[1] is match('^0 .*for 299s, state changes after 300s$')
+          - disk_runs.stdout_lines[2] is match('^2 "ClickHouse data filesystem" used_percent=')
+          - disk_runs.stdout_lines[3] is match('^2 "ClickHouse data filesystem" - /usr is not mounted \(found /\)$')
+          - disk_runs.stdout_lines[4] is match('^[0-2] "ClickHouse data filesystem" used_percent=\d+;75;85;0;100 / ')
+        fail_msg: "{{ disk_runs.stdout_lines }}"

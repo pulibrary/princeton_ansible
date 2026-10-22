@@ -5,7 +5,7 @@ signoz_release_name: signoz
 signoz_chart_repo_name: signoz
 signoz_chart_repo_url: https://charts.signoz.io
 signoz_chart_ref: signoz/signoz
-signoz_chart_version: "0.146.0"
+signoz_chart_version: "0.147.0"
 signoz_clickhousetraces_timeout: "10s"
 signoz_clickhouse_cpu_request: "100m"
 signoz_clickhouse_memory_request: "200Mi"
@@ -15,6 +15,94 @@ signoz_checkmk_monitor_host: ""
 signoz_checkmk_ingestion_warn_seconds: 60
 signoz_checkmk_ingestion_crit_seconds: 300
 signoz_checkmk_collector_log_window: "5m"
+# Only logs newer than this are read, so the check never scans the whole
+# table. Lag beyond it is reported as "no logs in window", not a number.
+signoz_checkmk_ingestion_lookback_seconds: 3600
+# Upper bound for each kubectl/clickhouse-client call made by a check.
+signoz_checkmk_command_timeout_seconds: 20
+signoz_microk8s_bin: /snap/bin/microk8s
+# Read-only ClickHouse user for the Checkmk freshness query. It has no
+# password but only accepts connections from inside the ClickHouse pod,
+# which the check reaches through kubectl exec.
+signoz_clickhouse_checkmk_user: signoz_checkmk
+
+# Checkmk disk check for the ClickHouse filesystem on the storage node.
+# Usage must stay at or above a level for the sustain period before the
+# service changes state.
+signoz_checkmk_clickhouse_disk_enabled: false
+signoz_checkmk_clickhouse_disk_warn_percent: 75
+signoz_checkmk_clickhouse_disk_crit_percent: 85
+signoz_checkmk_clickhouse_disk_sustain_seconds: 300
+
+# Retention for ClickHouse's own diagnostic tables (system.*_log). SigNoz
+# logs, traces and metrics are separate databases and are not affected.
+signoz_clickhouse_system_log_retention_days: 7
+# Per-table exceptions, for example { crash_log: 30 }.
+signoz_clickhouse_system_log_retention_overrides: {}
+# Tables the chart's ClickHouse operator config defines, keyed by the
+# clickhouse.clickhouseOperator.<key>.ttl value that controls them.
+signoz_clickhouse_operator_system_logs:
+  queryLog: query_log
+  partLog: part_log
+  traceLog: trace_log
+  asynchronousInsertLog: asynchronous_insert_log
+  asynchronousMetricLog: asynchronous_metric_log
+  backupLog: backup_log
+  blobStorageLog: blob_storage_log
+  crashLog: crash_log
+  metricLog: metric_log
+  queryThreadLog: query_thread_log
+  queryViewsLog: query_views_log
+  sessionLog: session_log
+  zookeeperLog: zookeeper_log
+  processorsProfileLog: processors_profile_log
+# Tables enabled by the ClickHouse image's own config.xml. Only their TTL
+# is overridden; partitioning and ordering stay as the image defines them.
+# text_log, error_log and query_metric_log are left out on purpose: the
+# chart's config.d/system_log.xml already sets them to 3, 7 and 3 days, and
+# config.d is read after the operator's conf.d, so an entry here would be
+# silently ignored.
+signoz_clickhouse_stock_system_logs:
+  - aggregated_zookeeper_log
+  - zookeeper_connection_log
+  - background_schedule_pool_log
+# Align TTLs of existing tables before the Helm upgrade (see README).
+signoz_clickhouse_system_log_migration_enabled: true
+signoz_clickhouse_pod: chi-signoz-clickhouse-cluster-0-0-0
+signoz_clickhouse_client_argv:
+  - "{{ signoz_microk8s_bin }}"
+  - kubectl
+  - --request-timeout=60s
+  - -n
+  - "{{ signoz_namespace }}"
+  - exec
+  - "{{ signoz_clickhouse_pod }}"
+  - -c
+  - clickhouse
+  - --
+  - clickhouse-client
+  - --connect_timeout=10
+  - --receive_timeout=60
+  - --max_execution_time=60
+
+# Push the collector's own metrics into SigNoz every interval. The chart
+# default only serves them on localhost:8888 inside the pod, where nothing
+# scrapes them.
+signoz_otel_internal_metrics_enabled: true
+signoz_otel_internal_metrics_interval_ms: 30000
+
+# SigNoz alert rules for the collector's logs exporter, managed through the
+# SigNoz API. Needs an API key (Settings > API Keys) and the names of
+# existing notification channels; the role never creates channels.
+signoz_alert_rules_enabled: false
+signoz_api_url: "https://{{ signoz_ingress_host | default('localhost') }}"
+signoz_api_key: ""
+signoz_api_validate_certs: true
+signoz_alert_channels: []
+signoz_alert_logs_exporter: clickhouselogsexporter
+signoz_alert_queue_utilization_ratio: 0.8
+# Minutes without collector telemetry before the queue rule reports no data.
+signoz_alert_absent_minutes: 10
 
 signoz_ingress_enabled: false
 signoz_ingress_name: signoz
@@ -33,6 +121,9 @@ signoz_otel_http_node_port: 32318
 signoz_clickhouse_local_storage_enabled: false
 signoz_clickhouse_local_storage_class: clickhouse-local
 signoz_clickhouse_local_pv_name: clickhouse-signoz-local-pv
+# Kubernetes does not enforce or resize local PV capacity, and the PVC
+# request cannot grow because the StorageClass disallows expansion. This is
+# a scheduling label only; the filesystem size is what limits ClickHouse.
 signoz_clickhouse_local_pv_size: 450Gi
 signoz_clickhouse_local_mount_path: /var/lib/clickhouse
 signoz_clickhouse_local_pv_path: /var/lib/clickhouse/pv-signoz

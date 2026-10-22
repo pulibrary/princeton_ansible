@@ -1,0 +1,64 @@
+---
+# Compares desired rules with signoz_rules_response.json.data by alert name.
+# Only fields this role sets are compared; SigNoz adds others (ids, state,
+# query step/legend) that must not count as drift.
+- name: SigNoz | Compare alert rules with SigNoz
+  ansible.builtin.set_fact:
+    signoz_alert_rule_plan: "{{ signoz_alert_rule_plan_json | from_json }}"
+  vars:
+    signoz_alert_rule_plan_json: >-
+      {%- macro managed(rule) -%}
+      {{- {
+            'alert': rule.alert,
+            'description': rule.description | default(''),
+            'evalWindow': rule.evalWindow | default(''),
+            'frequency': rule.frequency | default(''),
+            'disabled': rule.disabled | default(false) | bool,
+            'labels': rule.labels | default({}),
+            'annotations': rule.annotations | default({}),
+            'preferredChannels': rule.preferredChannels | default([]) | sort,
+            'op': rule.condition.op | default('') | string,
+            'target': rule.condition.target | default(0) | float,
+            'matchType': rule.condition.matchType | default('') | string,
+            'alertOnAbsent': rule.condition.alertOnAbsent | default(false) | bool,
+            'absentFor': rule.condition.absentFor | default(0) | int,
+            'queries': rule.condition.compositeQuery.queries | default([])
+                       | map(attribute='spec') | map('dict2items')
+                       | map('selectattr', 'key', 'in', ['name', 'query'])
+                       | map('items2dict') | list,
+          } | to_json(sort_keys=true) -}}
+      {%- endmacro -%}
+      {%- set existing = signoz_rules_response.json.data | default([], true) -%}
+      {%- set plan = {'missing': [], 'drifted': [], 'duplicates': []} -%}
+      {%- for desired in signoz_alert_rule_payloads -%}
+      {%-   set matches = existing | selectattr('alert', 'equalto', desired.alert) | list -%}
+      {%-   if matches | length == 0 -%}
+      {%-     set _ = plan.missing.append(desired) -%}
+      {%-   elif matches | length > 1 -%}
+      {%-     set _ = plan.duplicates.append(desired.alert) -%}
+      {%-   elif managed(matches[0]) != managed(desired) -%}
+      {%-     set _ = plan.drifted.append({'id': matches[0].id, 'rule': desired}) -%}
+      {%-   endif -%}
+      {%- endfor -%}
+      {{ plan | to_json }}
+
+- name: SigNoz | Refuse to pick between duplicate alert rules
+  ansible.builtin.assert:
+    that:
+      - signoz_alert_rule_plan.duplicates | length == 0
+    fail_msg: >-
+      More than one SigNoz rule has the name(s) {{ signoz_alert_rule_plan.duplicates | join(', ') }}.
+      Delete the extra copies in the SigNoz UI, then rerun.
+
+- name: SigNoz | Set alert rule actions
+  ansible.builtin.set_fact:
+    signoz_alert_rules_to_create: "{{ signoz_alert_rule_plan.missing }}"
+    signoz_alert_rules_to_update: "{{ signoz_alert_rule_plan.drifted }}"
+
+- name: SigNoz | Report alert rule changes check mode would make
+  ansible.builtin.debug:
+    msg: >-
+      Would create {{ signoz_alert_rules_to_create | map(attribute='alert') | list }}
+      and update {{ signoz_alert_rules_to_update | map(attribute='rule.alert') | list }}
+  changed_when: (signoz_alert_rules_to_create + signoz_alert_rules_to_update) | length > 0
+  when: ansible_check_mode
