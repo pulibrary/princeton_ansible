@@ -16,6 +16,58 @@ clickhouse:
       cpu: "{{ signoz_clickhouse_cpu_request }}"
       memory: "{{ signoz_clickhouse_memory_request }}"
 
+  # Diagnostic system log retention. The operator applies these files to
+  # ClickHouse without restarting it; they take effect when ClickHouse next
+  # starts. tasks/system_log_retention.yml aligns the existing tables.
+  clickhouseOperator:
+{% for key, table in signoz_clickhouse_operator_system_logs.items() %}
+    {{ key }}:
+      ttl: {{ signoz_clickhouse_system_log_ttl_days[table] | int }}
+{% endfor %}
+    configs:
+      confdFiles:
+        signoz-system-log-retention.xml: |
+          <clickhouse>
+{% for table in signoz_clickhouse_stock_system_logs %}
+              <{{ table }}>
+                  <ttl>event_date + INTERVAL {{ signoz_clickhouse_system_log_ttl_days[table] | int }} DAY</ttl>
+              </{{ table }}>
+{% endfor %}
+          </clickhouse>
+
+  files:
+    # Read-only user for the Checkmk log freshness check.
+    users.d/{{ signoz_clickhouse_checkmk_user }}.xml: |
+      <clickhouse>
+          <profiles>
+              <{{ signoz_clickhouse_checkmk_user }}>
+                  <!-- 2 = read-only, but the client may still set its timeouts -->
+                  <readonly>2</readonly>
+                  <max_execution_time>{{ signoz_checkmk_command_timeout_seconds }}</max_execution_time>
+                  <max_threads>2</max_threads>
+                  <constraints>
+                      <max_execution_time>
+                          <max>{{ signoz_checkmk_command_timeout_seconds }}</max>
+                      </max_execution_time>
+                  </constraints>
+              </{{ signoz_clickhouse_checkmk_user }}>
+          </profiles>
+          <users>
+              <{{ signoz_clickhouse_checkmk_user }}>
+                  <no_password/>
+                  <networks>
+                      <ip>::1</ip>
+                      <ip>127.0.0.1</ip>
+                  </networks>
+                  <profile>{{ signoz_clickhouse_checkmk_user }}</profile>
+                  <quota>default</quota>
+                  <grants>
+                      <query>GRANT SELECT(timestamp, ts_bucket_start) ON signoz_logs.logs_v2</query>
+                  </grants>
+              </{{ signoz_clickhouse_checkmk_user }}>
+          </users>
+      </clickhouse>
+
 signoz:
   service:
     type: {{ signoz_service_type }}
@@ -41,6 +93,33 @@ otelCollector:
     exporters:
       clickhousetraces:
         timeout: "{{ signoz_clickhousetraces_timeout }}"
+{% if signoz_otel_internal_metrics_enabled | bool %}
+    service:
+      telemetry:
+        metrics:
+          level: normal
+          readers:
+            # Same reader the collector uses when none are configured.
+            - pull:
+                exporter:
+                  prometheus:
+                    host: localhost
+                    port: 8888
+                    without_scope_info: true
+                    without_units: true
+                    without_type_suffix: true
+                    with_resource_constant_labels:
+                      included: []
+            # Send the collector's own metrics through its OTLP receiver so
+            # they are stored in SigNoz and can be alerted on.
+            - periodic:
+                interval: {{ signoz_otel_internal_metrics_interval_ms | int }}
+                exporter:
+                  otlp:
+                    protocol: grpc
+                    endpoint: http://localhost:4317
+                    insecure: true
+{% endif %}
 
   service:
     type: NodePort

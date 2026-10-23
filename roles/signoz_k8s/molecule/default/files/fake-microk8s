@@ -1,0 +1,28 @@
+#!/bin/bash
+# Test stand-in for "microk8s kubectl" used by the Checkmk check.
+# "exec ... -- clickhouse-client ARGS" runs the fake client; the collector
+# pod list and logs come from /var/lib/fake-clickhouse/collector
+# (none | ok | errors).
+shift
+args=("$@")
+collector="$(cat /var/lib/fake-clickhouse/collector 2>/dev/null || echo ok)"
+for i in "${!args[@]}"; do
+  case "${args[$i]}" in
+    exec)
+      for j in "${!args[@]}"; do
+        [[ "${args[$j]}" == "--" ]] && start=$((j + 2))
+      done
+      exec /usr/local/bin/fake-clickhouse-client "${args[@]:$start}"
+      ;;
+    get)
+      [[ "${collector}" == none ]] || printf 'signoz-otel-collector-a'
+      exit 0
+      ;;
+    logs)
+      [[ "${collector}" == errors ]] && echo '{"level":"error","msg":"Exporting failed. Dropping data.","error":"sending queue is full"}'
+      echo '{"level":"info","msg":"ok"}'
+      exit 0
+      ;;
+  esac
+done
+exit 1

@@ -1,0 +1,34 @@
+---
+# Runs the parts of the role that do not need a Kubernetes cluster, against
+# the stand-ins from prepare.yml. The idempotence step runs this twice.
+- name: Converge
+  hosts: all
+  gather_facts: false
+  vars:
+    signoz_tokenizer_jwt_secret: molecule-jwt-secret
+  tasks:
+    - name: Ensure SigNoz values directory exists
+      ansible.builtin.file:
+        path: /etc/signoz
+        state: directory
+        mode: "0755"
+
+    - name: Align ClickHouse system log retention
+      ansible.builtin.include_role:
+        name: signoz_k8s
+        tasks_from: system_log_retention
+
+    - name: Render SigNoz Helm values
+      ansible.builtin.include_role:
+        name: signoz_k8s
+        tasks_from: values
+
+    - name: Manage SigNoz alert rules
+      ansible.builtin.include_role:
+        name: signoz_k8s
+        tasks_from: alerts
+
+    - name: Install Checkmk local checks
+      ansible.builtin.include_role:
+        name: signoz_k8s
+        tasks_from: checkmk

@@ -1,0 +1,80 @@
+#!/usr/bin/env python3
+"""Test stand-in for clickhouse-client.
+
+Answers the queries the role and the Checkmk check send, from a JSON state
+file, and applies ALTER ... MODIFY TTL to that state. Every query is logged
+so tests can assert what was (or was not) sent.
+
+State file layout:
+  server_start: epoch seconds the "server" started
+  tables: {name: {engine, mtime, last_event}}
+  logs: {lag: seconds or -1, total: row count}
+  fail: "" | "down"
+"""
+import json
+import re
+import sys
+import time
+
+STATE = "/var/lib/fake-clickhouse/state.json"
+LOG = "/var/lib/fake-clickhouse/queries.log"
+
+
+def main():
+    args = sys.argv[1:]
+    query = args[args.index("--query") + 1] if "--query" in args else sys.stdin.read()
+    query = " ".join(query.split())
+    with open(LOG, "a") as log:
+        log.write(query + "\n")
+    with open(STATE) as f:
+        state = json.load(f)
+
+    if state.get("fail") == "down":
+        sys.stderr.write("Code: 210. DB::NetException: Connection refused (localhost:9000). (NETWORK_ERROR)\n")
+        return 210
+
+    tables = state["tables"]
+
+    match = re.match(r"SELECT name, engine_full FROM system\.tables .*name IN \((.*?)\)", query)
+    if match:
+        wanted = re.findall(r"'([a-z_]+)'", match.group(1))
+        for name in sorted(n for n in wanted if n in tables):
+            print(f"{name}\t{tables[name]['engine']}")
+        return 0
+
+    probes = re.findall(r"SELECT '([a-z_]+)', count\(\) FROM \(", query)
+    if probes:
+        for name in probes:
+            table = tables[name]
+            since = max(table["mtime"], state["server_start"])
+            print(f"{name}\t{1 if table['last_event'] > since else 0}")
+        return 0
+
+    match = re.match(r"ALTER TABLE system\.([a-z_]+) MODIFY TTL event_date \+ INTERVAL (\d+) DAY (.*)$", query)
+    if match:
+        name, days, rest = match.groups()
+        if "materialize_ttl_after_modify = 0" not in rest:
+            sys.stderr.write("Code: 999. test: ALTER would materialize TTL\n")
+            return 1
+        engine = re.sub(r" TTL .*?(?= SETTINGS |$)", "", tables[name]["engine"])
+        head, sep, tail = engine.partition(" SETTINGS ")
+        tables[name]["engine"] = f"{head} TTL event_date + toIntervalDay({days}){sep}{tail}"
+        tables[name]["mtime"] = int(time.time())
+        with open(STATE, "w") as f:
+            json.dump(state, f)
+        return 0
+
+    if query.startswith("SELECT if(count() = 0, -1,"):
+        print(state["logs"]["lag"])
+        return 0
+
+    if query == "SELECT count() FROM signoz_logs.logs_v2":
+        print(state["logs"]["total"])
+        return 0
+
+    sys.stderr.write(f"Code: 62. test: unexpected query: {query}\n")
+    return 62
+
+
+if __name__ == "__main__":
+    sys.exit(main())
