@@ -48,9 +48,7 @@ sequenceDiagram
 
 ## Deployment
 
-From `nomad` directory: `BRANCH=main ./bin/deploy traefik-wall staging`
-
-You can track progress and status of nomad apps by looking at the Nomad UI, accessible from `./bin/login`
+To deploy, run the playbook.
 
 ## Tracking Challenges
 

@@ -59,9 +59,19 @@ http:
         - protected-sites
 
     # PDFs all go to the "download" boxes.
-    figgy-staging-downloads:
+    figgy-staging-pdfs:
       service: figgy-staging-downloads
       rule: "Header(`X-Forwarded-Host`, `figgy-staging.princeton.edu`) && PathRegexp(`/pdf$`)"
+      middlewares:
+        - append-catalog-regex
+      parentRefs:
+        - apply-bot-wall
+        - skip-bot-wall
+
+    # downloads all go to the "download" boxes.
+    figgy-staging-downloads:
+      service: figgy-staging-downloads
+      rule: "Header(`X-Forwarded-Host`, `figgy-staging.princeton.edu`) && PathRegexp(`^/downloads/.*/file/.*`)"
       middlewares:
         - append-catalog-regex
       parentRefs:
