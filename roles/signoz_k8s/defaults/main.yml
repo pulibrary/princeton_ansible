@@ -34,6 +34,46 @@ signoz_checkmk_clickhouse_disk_warn_percent: 75
 signoz_checkmk_clickhouse_disk_crit_percent: 85
 signoz_checkmk_clickhouse_disk_sustain_seconds: 300
 
+# Temporary collector recovery watchdog (see README). A systemd timer on one
+# host checks log freshness every minute and restarts only the collector
+# Deployment after consecutive stale checks. Off unless enabled per
+# environment; it assumes logs normally arrive continuously.
+signoz_collector_watchdog_enabled: false
+# The one host that runs it. Must be a host in the play that can run
+# microk8s kubectl; the role fails if it is enabled without one.
+signoz_collector_watchdog_host: ""
+# false = detect and report only, never restart.
+signoz_collector_watchdog_restart_enabled: true
+signoz_collector_watchdog_deployment: signoz-otel-collector
+signoz_collector_watchdog_container: collector
+signoz_collector_watchdog_stale_seconds: 300
+signoz_collector_watchdog_stale_checks: 2
+signoz_collector_watchdog_cooldown_seconds: 1800
+signoz_collector_watchdog_max_restarts: 2
+signoz_collector_watchdog_restart_window_seconds: 3600
+# Rows whose event time is older than this are not read; an empty window is
+# reported as stale with "age >= lookback" instead of scanning the table.
+signoz_collector_watchdog_lookback_seconds: 3600
+# A newest record further in the future than this is an error, not "fresh".
+signoz_collector_watchdog_future_tolerance_seconds: 120
+# The signoz_checkmk ClickHouse profile caps queries at this value anyway.
+signoz_collector_watchdog_query_timeout_seconds: "{{ signoz_checkmk_command_timeout_seconds }}"
+signoz_collector_watchdog_kubectl_timeout_seconds: 30
+signoz_collector_watchdog_rollout_timeout_seconds: 300
+signoz_collector_watchdog_verify_timeout_seconds: 300
+signoz_collector_watchdog_verify_interval_seconds: 15
+signoz_collector_watchdog_state_dir: /var/lib/signoz-collector-watchdog
+signoz_collector_watchdog_evidence_timeout_seconds: 60
+signoz_collector_watchdog_evidence_log_since: 15m
+signoz_collector_watchdog_evidence_log_max_bytes: 5242880
+signoz_collector_watchdog_incident_keep: 20
+signoz_collector_watchdog_incident_max_age_days: 30
+signoz_collector_watchdog_inhibit_max_seconds: 604800
+# Checkmk: CRIT when the last check is older than this.
+signoz_collector_watchdog_checkmk_stale_seconds: 300
+# Checkmk: WARN for this long after an automatic restart.
+signoz_collector_watchdog_checkmk_recent_restart_seconds: 3600
+
 # Retention for ClickHouse's own diagnostic tables (system.*_log). SigNoz
 # logs, traces and metrics are separate databases and are not affected.
 signoz_clickhouse_system_log_retention_days: 7

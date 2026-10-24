@@ -1,0 +1,173 @@
+---
+# Temporary collector recovery watchdog. Installed only on
+# signoz_collector_watchdog_host; removed from every other host in the play
+# and everywhere when disabled. State and incident evidence are kept on
+# removal.
+- name: SigNoz watchdog | Assert the watchdog host is in this play
+  ansible.builtin.assert:
+    that:
+      - signoz_collector_watchdog_host | length > 0
+      - signoz_collector_watchdog_host in ansible_play_hosts_all
+    fail_msg: >-
+      signoz_collector_watchdog_host ('{{ signoz_collector_watchdog_host }}')
+      must name one host in this play when the watchdog is enabled.
+  run_once: true
+  when: signoz_collector_watchdog_enabled | bool
+
+- name: SigNoz watchdog | Install on the designated host
+  when:
+    - signoz_collector_watchdog_enabled | bool
+    - inventory_hostname == signoz_collector_watchdog_host
+  block:
+    - name: SigNoz watchdog | Install the watchdog
+      ansible.builtin.copy:
+        src: signoz-collector-watchdog
+        dest: /usr/local/sbin/signoz-collector-watchdog
+        owner: root
+        group: root
+        mode: "0755"
+      register: signoz_watchdog_script
+
+    - name: SigNoz watchdog | Ensure the configuration directory exists
+      ansible.builtin.file:
+        path: /etc/signoz
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: SigNoz watchdog | Write the configuration
+      ansible.builtin.copy:
+        dest: /etc/signoz/collector-watchdog.json
+        content: "{{ signoz_collector_watchdog_config | to_nice_json }}\n"
+        owner: root
+        group: root
+        mode: "0644"
+      vars:
+        signoz_collector_watchdog_config:
+          microk8s: "{{ signoz_microk8s_bin }}"
+          namespace: "{{ signoz_namespace }}"
+          deployment: "{{ signoz_collector_watchdog_deployment }}"
+          container: "{{ signoz_collector_watchdog_container }}"
+          clickhouse_pod: "{{ signoz_clickhouse_pod }}"
+          clickhouse_user: "{{ signoz_clickhouse_checkmk_user }}"
+          state_dir: "{{ signoz_collector_watchdog_state_dir }}"
+          restart_enabled: "{{ signoz_collector_watchdog_restart_enabled | bool }}"
+          stale_seconds: "{{ signoz_collector_watchdog_stale_seconds | int }}"
+          stale_checks: "{{ signoz_collector_watchdog_stale_checks | int }}"
+          cooldown_seconds: "{{ signoz_collector_watchdog_cooldown_seconds | int }}"
+          max_restarts: "{{ signoz_collector_watchdog_max_restarts | int }}"
+          restart_window_seconds: "{{ signoz_collector_watchdog_restart_window_seconds | int }}"
+          lookback_seconds: "{{ signoz_collector_watchdog_lookback_seconds | int }}"
+          future_tolerance_seconds: "{{ signoz_collector_watchdog_future_tolerance_seconds | int }}"
+          query_timeout_seconds: "{{ signoz_collector_watchdog_query_timeout_seconds | int }}"
+          kubectl_timeout_seconds: "{{ signoz_collector_watchdog_kubectl_timeout_seconds | int }}"
+          rollout_timeout_seconds: "{{ signoz_collector_watchdog_rollout_timeout_seconds | int }}"
+          verify_timeout_seconds: "{{ signoz_collector_watchdog_verify_timeout_seconds | int }}"
+          verify_interval_seconds: "{{ signoz_collector_watchdog_verify_interval_seconds | int }}"
+          evidence_timeout_seconds: "{{ signoz_collector_watchdog_evidence_timeout_seconds | int }}"
+          evidence_log_since: "{{ signoz_collector_watchdog_evidence_log_since }}"
+          evidence_log_max_bytes: "{{ signoz_collector_watchdog_evidence_log_max_bytes | int }}"
+          incident_keep: "{{ signoz_collector_watchdog_incident_keep | int }}"
+          incident_max_age_days: "{{ signoz_collector_watchdog_incident_max_age_days | int }}"
+          inhibit_max_seconds: "{{ signoz_collector_watchdog_inhibit_max_seconds | int }}"
+          checkmk_stale_seconds: "{{ signoz_collector_watchdog_checkmk_stale_seconds | int }}"
+          checkmk_recent_restart_seconds: "{{ signoz_collector_watchdog_checkmk_recent_restart_seconds | int }}"
+
+    - name: SigNoz watchdog | Ensure the state directory exists
+      ansible.builtin.file:
+        path: "{{ signoz_collector_watchdog_state_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0700"
+
+    - name: SigNoz watchdog | Install systemd units
+      ansible.builtin.template:
+        src: "{{ item }}.j2"
+        dest: "/etc/systemd/system/{{ item }}"
+        owner: root
+        group: root
+        mode: "0644"
+      loop:
+        - signoz-collector-watchdog.service
+        - signoz-collector-watchdog.timer
+      vars:
+        signoz_collector_watchdog_timeout_start_seconds: >-
+          {{ signoz_collector_watchdog_evidence_timeout_seconds | int
+             + signoz_collector_watchdog_rollout_timeout_seconds | int
+             + signoz_collector_watchdog_verify_timeout_seconds | int
+             + 4 * (signoz_collector_watchdog_query_timeout_seconds | int
+                    + signoz_collector_watchdog_kubectl_timeout_seconds | int)
+             + 300 }}
+      register: signoz_watchdog_units
+
+    - name: SigNoz watchdog | Reload systemd
+      ansible.builtin.systemd_service:
+        daemon_reload: true
+      when: signoz_watchdog_units.changed
+
+    - name: SigNoz watchdog | Enable and start the timer
+      ansible.builtin.systemd_service:
+        name: signoz-collector-watchdog.timer
+        enabled: true
+        state: started
+
+    - name: SigNoz watchdog | Ensure Checkmk local check directory exists
+      ansible.builtin.file:
+        path: /usr/lib/check_mk_agent/local
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: SigNoz watchdog | Install Checkmk local check
+      ansible.builtin.template:
+        src: check_signoz_collector_watchdog.sh.j2
+        dest: /usr/lib/check_mk_agent/local/check_signoz_collector_watchdog.sh
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: SigNoz watchdog | Report how to operate the watchdog
+      ansible.builtin.debug:
+        msg:
+          - "Status: signoz-collector-watchdog status"
+          - "Log: journalctl -u signoz-collector-watchdog.service"
+          - "Maintenance: signoz-collector-watchdog inhibit --duration 2h --reason '...'"
+          - "Checkmk: /usr/lib/check_mk_agent/local/check_signoz_collector_watchdog.sh"
+      when: signoz_watchdog_script.changed
+
+- name: SigNoz watchdog | Remove from hosts that should not run it
+  when: >-
+    not (signoz_collector_watchdog_enabled | bool)
+    or inventory_hostname != signoz_collector_watchdog_host
+  block:
+    - name: SigNoz watchdog | Look for an installed timer
+      ansible.builtin.stat:
+        path: /etc/systemd/system/signoz-collector-watchdog.timer
+      register: signoz_watchdog_timer_file
+
+    - name: SigNoz watchdog | Stop and disable the timer
+      ansible.builtin.systemd_service:
+        name: signoz-collector-watchdog.timer
+        enabled: false
+        state: stopped
+      when: signoz_watchdog_timer_file.stat.exists
+
+    - name: SigNoz watchdog | Remove units, program, configuration and Checkmk check
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /etc/systemd/system/signoz-collector-watchdog.timer
+        - /etc/systemd/system/signoz-collector-watchdog.service
+        - /usr/lib/check_mk_agent/local/check_signoz_collector_watchdog.sh
+        - /usr/local/sbin/signoz-collector-watchdog
+        - /etc/signoz/collector-watchdog.json
+      register: signoz_watchdog_removed
+
+    - name: SigNoz watchdog | Reload systemd after removal
+      ansible.builtin.systemd_service:
+        daemon_reload: true
+      when: signoz_watchdog_removed.changed

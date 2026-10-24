@@ -1,0 +1,16 @@
+# {{ ansible_managed }}
+[Unit]
+Description=SigNoz collector recovery watchdog (one check)
+Documentation=file:///usr/local/sbin/signoz-collector-watchdog
+After=network-online.target snap.microk8s.daemon-kubelite.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/signoz-collector-watchdog --config /etc/signoz/collector-watchdog.json check
+# 75: another run holds the lock and this one skipped.
+SuccessExitStatus=75
+# Long enough for evidence capture, rollout and verification, so a recovery
+# is never cut off half-way.
+TimeoutStartSec={{ signoz_collector_watchdog_timeout_start_seconds }}
+UMask=0077
+Nice=10

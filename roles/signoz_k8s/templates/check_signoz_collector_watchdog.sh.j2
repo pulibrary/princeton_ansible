@@ -1,0 +1,14 @@
+#!/bin/bash
+# {{ ansible_managed }}
+#
+# Checkmk local check for the SigNoz collector recovery watchdog. It only
+# reads the watchdog's saved state, so it reports a watchdog that has
+# stopped running as well as what the watchdog last did.
+out="$(timeout 30 /usr/local/sbin/signoz-collector-watchdog \
+  --config /etc/signoz/collector-watchdog.json checkmk 2>/dev/null)"
+rc=$?
+if (( rc != 0 )) || [[ -z "${out}" ]]; then
+  echo "3 \"SigNoz collector watchdog\" - Check failed: watchdog checkmk command exited ${rc}"
+else
+  echo "${out}"
+fi

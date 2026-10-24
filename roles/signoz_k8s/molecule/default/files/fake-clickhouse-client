@@ -68,6 +68,19 @@ def main():
         print(state["logs"]["lag"])
         return 0
 
+    # Collector watchdog freshness query and its empty-window follow-up.
+    if "window_rows" in query and "FORMAT JSONEachRow" in query:
+        now = int(time.time())
+        lag = state["logs"]["lag"]
+        rows = 0 if lag == -1 else 100
+        newest = 0 if lag == -1 else (now - lag) * 1000000000
+        print(json.dumps({"now_s": now, "current_utc": "", "window_rows": str(rows),
+                          "newest_ns": str(newest), "newest_observed_utc": ""}))
+        return 0
+    if "total_rows" in query and "FORMAT JSONEachRow" in query:
+        print(json.dumps({"now_s": int(time.time()), "total_rows": str(state["logs"]["total"])}))
+        return 0
+
     if query == "SELECT count() FROM signoz_logs.logs_v2":
         print(state["logs"]["total"])
         return 0

@@ -220,14 +220,300 @@ The freshness query only reads the last hour (it filters on the `logs_v2`
 primary key `ts_bucket_start` and the partition key). It runs as
 `signoz_checkmk`, a ClickHouse user created through the chart's `users.d`
 files. That user has no password but only accepts connections from inside the
-ClickHouse pod. It can `SELECT` only `timestamp` and `ts_bucket_start` from
-`signoz_logs.logs_v2`, cannot write, and cannot raise its 20 s limit. Adding
-the user does not restart ClickHouse.
+ClickHouse pod. It can `SELECT` only `timestamp`, `ts_bucket_start` and
+`observed_timestamp` from `signoz_logs.logs_v2` (the last one is read by the
+collector watchdog below), cannot write, and cannot raise its 20 s limit.
+Adding the user or changing its grant does not restart ClickHouse.
 
 `check_signoz_clickhouse_disk.sh` on `signoz_clickhouse_local_storage_node`
 watches `/var/lib/clickhouse`: WARN at 75%, CRIT at 85%, each only after
 usage has stayed at that level for 300 s. It reports CRIT if the path is not
 its own mount, rather than checking the parent filesystem.
+
+## Collector recovery watchdog (temporary)
+
+Production SigNoz has repeatedly stopped storing logs while the collector pod
+stayed `1/1 Running` with no container restarts. The collector logged
+`couldn't PrepareBatch for inserting resource fingerprints :context deadline
+exceeded`, then `sending queue is full`, retry exhaustion and dropped batches.
+ClickHouse recorded an incomplete log INSERT (`ATTEMPT_TO_READ_AFTER_EOF`) as
+the latest outage began, with 309 GB free. The HTTP liveness and readiness
+probes did not notice. Each time, restarting only the collector restored
+ingestion.
+
+**The cause is not known. The watchdog automates that restart under strict
+limits. It does not fix the defect.** Remove it once the cause is fixed.
+
+### What it does
+
+A systemd timer on one host, `signoz_collector_watchdog_host`, runs
+`signoz-collector-watchdog check` once a minute. Production uses
+`k8s-prod1.lib.princeton.edu`, the primary control-plane node that already
+runs the ingestion check. Only that host gets it; the role removes it from
+every other host in the play.
+
+Each check:
+
+1. Takes a lock (`/var/lib/signoz-collector-watchdog/watchdog.lock`); if
+   another run holds it, the check exits with status 75 and changes nothing.
+2. Measures ingestion age with ClickHouse's clock, as the `signoz_checkmk`
+   user:
+
+   ```sql
+   SELECT toUnixTimestamp(now('UTC')) AS now_s, count() AS window_rows,
+          max(observed_timestamp) AS newest_ns, ...
+   FROM signoz_logs.logs_v2
+   WHERE ts_bucket_start >= toUInt64(toUnixTimestamp(now()) - 3600 - 1800)
+     AND timestamp >= toUInt64(toUnixTimestamp(now()) - 3600) * 1000000000
+   FORMAT JSONEachRow
+   ```
+
+   The filters use the primary key and the partition key, as the Checkmk
+   ingestion check does. On ClickHouse 25.12.5.44 with 52 M synthetic rows
+   over 30 days, this read 14 of 6,331 granules (108 K rows, 2.5 MiB). The
+   same `max(observed_timestamp)` without a filter read all 52 M rows
+   (396 MiB).
+
+   The filter cannot hide a long outage. If the last hour has no rows, the
+   watchdog runs `SELECT count() FROM signoz_logs.logs_v2`, which ClickHouse
+   answers from part metadata without reading data. A non-empty table is
+   then reported as stale, "no logs observed in the last 3600 s" (a lower
+   bound on the age). An empty table is reported as an error.
+3. Treats these as failures that never trigger a restart: a query error,
+   a timeout, an empty table, output that is not exactly one JSON row with
+   numeric fields, and a newest record more than 120 s in the future (it
+   would keep `max()` ahead of the clock and hide a stall). A failure also
+   resets the stale streak, so the stale checks that trigger a restart must
+   be consecutive successful queries.
+4. Counts a check as stale when the newest record is at least
+   `signoz_collector_watchdog_stale_seconds` (300) old. Only after
+   `signoz_collector_watchdog_stale_checks` (2) consecutive stale checks does
+   it consider a restart, and only if all of these hold:
+   - no maintenance inhibit is active;
+   - the circuit breaker is closed;
+   - the last attempt was at least `cooldown_seconds` (1800) ago;
+   - fewer than `max_restarts` (2) attempts were made in the last
+     `restart_window_seconds` (3600);
+   - `deployment/signoz-otel-collector` exists, wants more than 0 replicas,
+     is not paused, and has no rollout in progress. This is the same test
+     `kubectl rollout status` uses: `observedGeneration` has caught up with
+     `generation`, every replica is updated and available, no old replicas
+     remain, and the deadline has not been exceeded. The pod's `Running`
+     phase is not used.
+5. Records the attempt in the state file **before** acting, so it counts
+   against cooldown and budget even if the run dies part-way.
+6. Saves evidence (below), then runs `kubectl rollout restart
+   deployment/signoz-otel-collector`. It never deletes pods and never touches
+   ClickHouse, ZooKeeper, MicroK8s or the host.
+7. Waits up to `rollout_timeout_seconds` (300) for `kubectl rollout status`.
+   A finished rollout is not counted as recovery. For up to
+   `verify_timeout_seconds` (300) it polls every 15 s until the newest
+   `observed_timestamp` is **later than before the restart** and also
+   **younger than the stale threshold**.
+8. If the restart command, the rollout or the verification fails, it opens
+   the **circuit breaker**. There are no more automatic restarts until an
+   operator resets it, even if ingestion recovers by itself.
+
+The timer only schedules checks. A restart happens only after confirmed
+staleness; there are no scheduled restarts.
+
+### Assumptions and risks
+
+- **Production normally receives logs every few seconds.** A real lull of
+  five minutes or more would look like a stall and cause one restart (and,
+  if logs do not arrive within the verification time, an open circuit
+  breaker). Staging can be quiet, which is why it stays disabled there.
+- The window filters on event time (`timestamp`) and measures receive time
+  (`observed_timestamp`). If all records arriving carried event times more
+  than an hour old, ingestion would look stale.
+- The collector's sending queue is in memory. **Batches queued at the moment
+  of the restart are lost**. Logs dropped before the restart are also not
+  recovered; this only shortens the outage.
+- A restart can hide the conditions an investigation needs. That is why
+  evidence is captured first and why repeated failures stop at the circuit
+  breaker.
+- The collector's liveness probe is unchanged. It is not tied to ClickHouse
+  availability.
+
+### Variables
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `signoz_collector_watchdog_enabled` | `false` | Install and run it (production: `true`). |
+| `signoz_collector_watchdog_host` | `""` | The one host that runs it (production: `k8s-prod1.lib.princeton.edu`). Must be in the play. |
+| `signoz_collector_watchdog_restart_enabled` | `true` | `false` = detect and report only. |
+| `signoz_collector_watchdog_stale_seconds` | `300` | Age at which a check is stale. |
+| `signoz_collector_watchdog_stale_checks` | `2` | Consecutive stale checks before a restart. |
+| `signoz_collector_watchdog_cooldown_seconds` | `1800` | Minimum time between attempts. |
+| `signoz_collector_watchdog_max_restarts` | `2` | Attempts allowed per window. |
+| `signoz_collector_watchdog_restart_window_seconds` | `3600` | Rolling window for the budget. |
+| `signoz_collector_watchdog_lookback_seconds` | `3600` | Query window (see above). |
+| `signoz_collector_watchdog_future_tolerance_seconds` | `120` | Clock skew accepted before a future timestamp is an error. |
+| `signoz_collector_watchdog_query_timeout_seconds` | `signoz_checkmk_command_timeout_seconds` (20) | ClickHouse query limit; the user's profile caps it there anyway. |
+| `signoz_collector_watchdog_kubectl_timeout_seconds` | `30` | Limit for each other kubectl call. |
+| `signoz_collector_watchdog_rollout_timeout_seconds` | `300` | Wait for the rollout. |
+| `signoz_collector_watchdog_verify_timeout_seconds` | `300` | Wait for fresh, advancing logs. |
+| `signoz_collector_watchdog_verify_interval_seconds` | `15` | Poll interval while verifying. |
+| `signoz_collector_watchdog_state_dir` | `/var/lib/signoz-collector-watchdog` | State, lock, inhibit and incidents. |
+| `signoz_collector_watchdog_evidence_timeout_seconds` | `60` | Total time allowed for evidence capture. |
+| `signoz_collector_watchdog_evidence_log_since` | `15m` | Collector log window captured. |
+| `signoz_collector_watchdog_evidence_log_max_bytes` | `5242880` | Log bytes kept per collector pod. |
+| `signoz_collector_watchdog_incident_keep` | `20` | Incident directories kept. |
+| `signoz_collector_watchdog_incident_max_age_days` | `30` | Incident directories older than this are deleted. |
+| `signoz_collector_watchdog_inhibit_max_seconds` | `604800` | Longest maintenance inhibit. |
+| `signoz_collector_watchdog_checkmk_stale_seconds` | `300` | Checkmk CRIT when the last check is older. |
+| `signoz_collector_watchdog_checkmk_recent_restart_seconds` | `3600` | Checkmk WARN this long after a restart. |
+
+Installed files: `/usr/local/sbin/signoz-collector-watchdog`,
+`/etc/signoz/collector-watchdog.json`,
+`/etc/systemd/system/signoz-collector-watchdog.{service,timer}` and
+`/usr/lib/check_mk_agent/local/check_signoz_collector_watchdog.sh`.
+
+### Files and evidence
+
+All under `/var/lib/signoz-collector-watchdog` (mode `0700`, files `0600`,
+outside SigNoz and outside `/tmp`):
+
+| Path | Contents |
+| --- | --- |
+| `state.json` | Last check time and status, stale streak, last observation, restart attempts and their results, circuit breaker. Written atomically (temporary file, `fsync`, rename). |
+| `inhibit.json` | Active maintenance inhibit, if any. |
+| `watchdog.lock` | `flock` lock against overlapping runs. |
+| `incidents/<UTC time>/` | Evidence from one restart attempt. |
+
+Each incident directory holds `watchdog.json` (the observation and the
+Deployment status that led to the restart), `deployment.json`, `pods.txt`
+(`get pods -o wide` for the namespace), `collector-pods.json`, `events.json`,
+and `collector-<pod>.log` (the last 15 minutes, at most 5 MiB per pod). If any
+step failed, it also has `capture-errors.txt`.
+
+- The Deployment and pod JSON are reduced to names, images, resources,
+  probes, placement and status. Environment variables are never written,
+  because the pod template carries the ClickHouse password. Logs and other
+  text pass through a filter that masks `user:password@` URLs and
+  `password=`, `token=`, `api_key=` style values.
+- Each kubectl call has a time limit, and capture as a whole stops after
+  60 s. A capture failure is recorded in `capture-errors.txt` and in the
+  attempt's `evidence_errors`, and the restart still goes ahead.
+- After each run only the newest 20 incident directories are kept, and none
+  older than 30 days.
+
+### Checkmk
+
+`check_signoz_collector_watchdog.sh` reports one service, **SigNoz collector
+watchdog**. It reads only the state file, the inhibit file and the timer
+state. It does not depend on SigNoz, so it still alerts when SigNoz cannot
+store its own alerts.
+
+| State | Meaning |
+| --- | --- |
+| OK | `healthy`: ingestion is fresh |
+| WARN | `stale_pending` (first stale check), `inhibited` (maintenance), `recovering` (restart in progress), `recovered`, or healthy within an hour after an automatic restart; also any time the circuit breaker is open while ingestion is healthy |
+| CRIT | `restart_blocked` (stale, but cooldown, budget, circuit breaker, rollout in progress, scaled to zero, missing Deployment or detect-only mode prevents a restart); `recovery_failed` (restart, rollout or verification failed); empty table or future timestamps; **last check more than 300 s ago or timer not active (watchdog not running)** |
+| UNKNOWN | the ingestion query failed or timed out, the state or config cannot be read, or no check has run yet |
+
+Metrics: `ingestion_age`, `consecutive_stale`, `restarts` (attempts in the
+current window). The service text names the status, the reason and the
+newest log time. The existing **SigNoz log ingestion** service stays the
+independent signal that ingestion is stale.
+
+After the first run with the watchdog enabled, **rediscover services on
+k8s-prod1 in Checkmk and activate changes** so the new service is
+monitored.
+
+### Operating it
+
+On the watchdog host, as root:
+
+```bash
+signoz-collector-watchdog status                 # state + inhibit as JSON
+journalctl -u signoz-collector-watchdog.service  # one line per check
+systemctl list-timers signoz-collector-watchdog.timer
+/usr/lib/check_mk_agent/local/check_signoz_collector_watchdog.sh
+```
+
+**Maintenance** (ClickHouse upgrades, planned SigNoz downtime, chart
+upgrades that may pause ingestion):
+
+```bash
+signoz-collector-watchdog inhibit --duration 2h --reason "ClickHouse upgrade CHG-123"
+signoz-collector-watchdog uninhibit
+```
+
+While inhibited, checks still run and report, but restarts are suspended and
+the stale streak is not counted. When the inhibit ends, two new stale checks
+are needed. An inhibit expires by itself (at most 7 days). If the inhibit
+file cannot be read, restarts stay suspended.
+
+**Circuit breaker reset**, after investigating why a recovery failed:
+
+```bash
+signoz-collector-watchdog status       # failure_reason, restart_attempts, incident path
+signoz-collector-watchdog reset        # close the breaker; cooldown and budget still apply
+signoz-collector-watchdog reset --clear-history  # also forget past attempts
+```
+
+`reset` also replaces an unreadable state file, keeping it as
+`state.json.corrupt.<time>`. While the state file is unreadable the
+watchdog does nothing.
+
+**Manual recovery** (what the watchdog would do):
+
+```bash
+signoz-collector-watchdog inhibit --duration 1h --reason "manual recovery"
+microk8s kubectl -n platform rollout restart deployment/signoz-otel-collector
+microk8s kubectl -n platform rollout status deployment/signoz-otel-collector --timeout=5m
+# then confirm the ingestion check age falls and keeps falling
+/usr/lib/check_mk_agent/local/check_signoz_ingestion.sh
+signoz-collector-watchdog uninhibit
+```
+
+**Detect-only mode**: set `signoz_collector_watchdog_restart_enabled: false`.
+Stale ingestion then shows as `restart_blocked: restart_disabled` (CRIT).
+
+### Staging validation
+
+Staging is disabled by default because it can be legitimately quiet. To
+validate there without touching production:
+
+1. Run the playbook for staging with the watchdog in detect-only mode:
+   `ansible-playbook playbooks/signoz.yml -e runtime_env=staging
+   -e signoz_collector_watchdog_enabled=true
+   -e signoz_collector_watchdog_restart_enabled=false`.
+   The same run applies the `observed_timestamp` grant. Check that it did
+   not restart ClickHouse (`RESTARTS` and `AGE` of
+   `chi-signoz-clickhouse-cluster-0-0-0`).
+2. On k8s-staging1, check the query and its cost:
+   `signoz-collector-watchdog check`, then `EXPLAIN indexes = 1` of the
+   window query (in `/usr/local/sbin/signoz-collector-watchdog`), which
+   should select a small fraction of the parts and granules.
+3. Simulate stale ingestion **without stopping anything** by making the
+   threshold smaller than the normal lag. Edit
+   `/etc/signoz/collector-watchdog.json` to `"stale_seconds": 1`; two checks
+   later the state is `restart_blocked: restart_disabled` and Checkmk is
+   CRIT. Put the file back (or re-run the playbook).
+4. To exercise a real restart once, set `"restart_enabled": true` in the
+   same file with `"stale_seconds": 1`. The watchdog captures evidence,
+   restarts the collector, and then fails verification because the age
+   never goes below 1 s. That opens the circuit breaker, which is also worth
+   seeing. Inspect the incident directory (no credentials, sizes bounded),
+   then run `signoz-collector-watchdog reset --clear-history` and re-run the
+   playbook.
+5. Test `inhibit`/`uninhibit` and stop the timer
+   (`systemctl stop signoz-collector-watchdog.timer`) to see the Checkmk
+   "not active" and, five minutes later, "not running" states.
+
+### Disabling and rollback
+
+- Set `signoz_collector_watchdog_enabled: false` and run the playbook. The
+  timer is stopped and the program, configuration, units and Checkmk check
+  are removed. `/var/lib/signoz-collector-watchdog` (state and evidence) is
+  left for review; delete it by hand when no longer needed. Remove the
+  Checkmk service by rediscovering the host.
+- To stop it immediately without Ansible: `systemctl disable --now
+  signoz-collector-watchdog.timer` (Checkmk then reports it CRIT as not
+  running, which is intended).
+- The `observed_timestamp` grant can stay; it is read-only.
 
 ## Storage
 
@@ -255,7 +541,8 @@ Checkmk disk check measures the real filesystem.
    - the ClickHouse operator pod to restart, and ClickHouse not to restart.
 3. Rediscover services on k8s-prod1 and k8s-prod4 in Checkmk: there is a new
    **SigNoz log exporter** service and a new **ClickHouse data filesystem**
-   service.
+   service. With the collector watchdog enabled, k8s-prod1 also has a new
+   **SigNoz collector watchdog** service.
 4. After storing an API key in the vault and naming the existing channels,
    set `signoz_alert_rules_enabled: true` and run again.
 5. At the next planned ClickHouse restart, check for `_N` tables (query above).
@@ -312,7 +599,23 @@ minute of the collector restart, and its `exporter` label should include
 alert management and the Checkmk checks against stand-ins for
 `clickhouse-client`, `kubectl` and the SigNoz API. It covers check mode,
 idempotence, per-table overrides, refusal of unrecognised TTLs, a missing
-pod, ClickHouse being down, and every Checkmk state.
+pod, ClickHouse being down, and every Checkmk state. It also installs the
+collector watchdog, runs one check through systemd, runs the watchdog unit
+tests on the instance's Python, and disables it again.
+
+The watchdog's unit tests need no cluster and run on a workstation:
+
+```bash
+python3 -m unittest discover -s roles/signoz_k8s/tests/collector_watchdog -v
+```
+
+They use `tests/collector_watchdog/fake_microk8s.py` for kubectl and
+ClickHouse and cover healthy and stale ingestion, the consecutive-check
+rule, query failures and timeouts, empty, malformed and future results,
+rollouts in progress, scale-to-zero, a missing Deployment, maintenance
+inhibit, lock contention, cooldown and the rolling budget, failed restarts,
+rollouts and verification, persistent and corrupt state, evidence redaction,
+size and time limits, incident retention, and every Checkmk state.
 
 ## Dependencies
 
