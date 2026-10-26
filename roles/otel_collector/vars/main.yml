@@ -1,2 +1,9 @@
 ---
 # vars file for roles/otel_collector
+
+# Whether the collector runs on this host. Defined here, above group_vars in
+# precedence, so that settings inherited from a parent group's group_vars
+# cannot turn the collector back on for an excluded group such as qa.
+otel_active: >-
+  {{ otel_enabled | bool
+     and (group_names | intersect(otel_excluded_groups)) | length == 0 }}

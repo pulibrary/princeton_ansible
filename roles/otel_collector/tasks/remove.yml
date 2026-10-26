@@ -1,0 +1,26 @@
+---
+# Stop the collector so the host sends nothing to SigNoz. The binary and the
+# cached release archive are kept so that enabling it again needs no download.
+
+- name: Otel_collector | Look for an installed systemd unit
+  ansible.builtin.stat:
+    path: "/etc/systemd/system/{{ otel_service_name }}.service"
+  register: otel_unit
+
+- name: Otel_collector | Stop and disable the service
+  ansible.builtin.systemd:
+    name: "{{ otel_service_name }}"
+    state: stopped
+    enabled: false
+  when:
+    - running_on_server | default(true) | bool
+    - otel_unit.stat.exists
+
+- name: Otel_collector | Remove the systemd unit and config
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "/etc/systemd/system/{{ otel_service_name }}.service"
+    - "{{ otel_config_path }}"
+  notify: Systemd daemon-reload
