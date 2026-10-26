@@ -1,0 +1,248 @@
+#!/usr/bin/bash
+{{ ansible_managed | comment }}
+#
+# Copies the exported NFS trees to the GCS backup mount.
+#
+# The Solr role needs nothing like this: Solr writes its own backups into the
+# mount through its backup API. An NFS export has nobody doing that for it, so a
+# mounted bucket on its own backs up nothing at all. This is what makes the
+# mount a backup rather than just an empty destination.
+set -uo pipefail
+
+SOURCE={{ nfsserver_backup_source | quote }}
+MOUNTPOINT={{ nfsserver_backup_mountpoint | quote }}
+DEST="${MOUNTPOINT}/{{ nfsserver_backup_prefix }}"
+MARKER="${DEST}/.last_backup"
+MANIFEST="${DEST}/.ownership_manifest"
+LOG={{ nfsserver_backup_log | quote }}
+LOCK={{ nfsserver_backup_lock | quote }}
+
+log() {
+    printf '%s %s\n' "$(date --iso-8601=seconds)" "$*" >>"$LOG"
+}
+
+# rsync's own message for a kill is "received SIGINT, SIGTERM, or SIGHUP", which
+# says nothing about who sent it or that the backup is now incomplete. Say so
+# plainly, since a killed run leaves the marker untouched and the backup partial.
+#
+# rsync runs in the foreground, so it and its two helper processes all inherit
+# this script's process group. That is what makes cleanup simple: they can be
+# found and signalled by group regardless of how deep in the tree they sit, with
+# no risk of killing a parent's group or of orphaning a grandchild by killing its
+# parent first.
+progress_pid=""
+
+our_rsync_pids() {
+    local pgid
+    pgid=$(ps -o pgid= -p $$ 2>/dev/null | tr -d ' ')
+    [ -n "$pgid" ] || return 1
+    pgrep -g "$pgid" -x rsync 2>/dev/null
+}
+
+on_signal() {
+    trap - TERM INT HUP
+    local pid
+    # The reporter traps TERM and takes its own sleep child with it.
+    [ -n "$progress_pid" ] && kill "$progress_pid" 2>/dev/null
+    for pid in $(our_rsync_pids); do
+        kill -TERM "$pid" 2>/dev/null
+    done
+    # rsync can be mid-write to the mount, so allow a moment to finish the
+    # syscall and exit cleanly before insisting.
+    sleep 2
+    for pid in $(our_rsync_pids); do
+        kill -KILL "$pid" 2>/dev/null
+    done
+    log "TERMINATED by signal: backup is incomplete, marker not updated"
+    exit 143
+}
+trap on_signal TERM INT HUP
+
+# Only one backup at a time. A first copy can outrun the daily timer, and a
+# playbook run can start one by hand, so two rsyncs writing the same destination
+# is reachable. With --inplace that means two writers in the same file, which
+# corrupts the copy rather than merely wasting effort.
+exec 9>"$LOCK" || {
+    log "FATAL could not open lock file ${LOCK}"
+    exit 1
+}
+
+if ! flock -n 9; then
+    log "another backup is already running; leaving it alone"
+    exit 0
+fi
+
+log "starting backup of ${SOURCE}"
+
+if [ ! -d "$SOURCE" ]; then
+    log "FATAL source ${SOURCE} does not exist"
+    exit 1
+fi
+
+# Confirm the destination is really the FUSE mount and not the empty directory
+# underneath it. Without this check, a backup taken while the mount was down
+# would write to the root filesystem, silently report success, and fill the disk.
+if ! findmnt --noheadings --mountpoint "$MOUNTPOINT" >/dev/null 2>&1; then
+    log "FATAL ${MOUNTPOINT} is not mounted; refusing to write to local disk"
+    exit 1
+fi
+
+# The mount table can list a mount whose FUSE process has died.
+if ! stat --dereference --format=%F "$MOUNTPOINT" >/dev/null 2>&1; then
+    log "FATAL ${MOUNTPOINT} is mounted but not accessible (stale FUSE mount)"
+    exit 1
+fi
+
+mkdir -p "$DEST" || {
+    log "FATAL could not create ${DEST}"
+    exit 1
+}
+
+# Write a file into a directory created moments ago, and read it back.
+#
+# This is the failure that wasted an hour on the first production run: gcsfuse
+# caches directory metadata, so a directory rsync has just created can still be
+# invisible when rsync opens a file inside it, and every write fails with
+# ENOENT. rsync keeps going for the whole tree, so the run takes as long as a
+# real backup and copies nothing.
+#
+# Two seconds here turns that into an immediate, named failure.
+probe_dir="${DEST}/.write_probe/nested"
+rm -rf "${DEST}/.write_probe" 2>/dev/null
+
+if ! mkdir -p "$probe_dir" 2>>"$LOG"; then
+    log "FATAL cannot create directories under ${DEST}"
+    exit 1
+fi
+
+if ! echo probe >"${probe_dir}/probe" 2>>"$LOG"; then
+    log "FATAL cannot write into a directory just created under ${DEST}."
+    log "FATAL This is normally gcsfuse metadata caching: check that the mount"
+    log "FATAL uses --metadata-cache-ttl-secs=0. A non-zero TTL hides new"
+    log "FATAL directories and every file copy fails with No such file."
+    rm -rf "${DEST}/.write_probe" 2>/dev/null
+    exit 1
+fi
+
+if [ "$(cat "${probe_dir}/probe" 2>/dev/null)" != "probe" ]; then
+    log "FATAL wrote a probe file under ${DEST} but could not read it back"
+    rm -rf "${DEST}/.write_probe" 2>/dev/null
+    exit 1
+fi
+
+rm -rf "${DEST}/.write_probe" 2>/dev/null
+log "write probe succeeded"
+
+# rsync flags are chosen for a FUSE-backed object store rather than a disk:
+#
+#   --inplace    a rename on GCS is a copy followed by a delete, so the default
+#                write-to-temp-then-rename doubles the transfer for every file
+#   --no-perms, --no-owner, --no-group
+#                object storage has no POSIX ownership; gcsfuse reports whatever
+#                the mount options say. Asking rsync to set them produces errors
+#                on every file and no benefit. Ownership is captured separately
+#                in the manifest below.
+#
+# Note there is deliberately no --size-only. It looks like a good fit for object
+# storage, since it avoids an mtime round trip per file, but it corrupts a backup
+# of files that are edited in place: rsync skips the copy and then *updates the
+# destination mtime anyway*, so the destination claims to be current while
+# holding stale content, and no later run will ever copy it again. Solr backup
+# segments are immutable so the flag is safe there; files on a shared NFS export
+# are not.
+rsync_args=(
+    --archive
+    --no-perms
+    --no-owner
+    --no-group
+    --inplace
+    --human-readable
+    --stats
+    # The marker and the manifest live in the destination and have no
+    # counterpart in the source, so --delete would remove them on every run and
+    # the monitoring check would then report that no backup had ever completed.
+    # Excluding them also protects them from deletion.
+    --exclude=/.last_backup
+    --exclude=/.ownership_manifest
+    --exclude=/.write_probe
+{% if nfsserver_backup_delete | bool %}
+    --delete
+{% endif %}
+{% for pattern in nfsserver_backup_excludes %}
+    --exclude={{ pattern | quote }}
+{% endfor %}
+)
+
+# The reporter starts first so it is already watching when rsync begins.
+#
+# rsync's --stats only prints when it finishes, so without this the log is silent
+# for hours and there is no way to tell a working backup from a hung one. The
+# obvious fix, --info=progress2, writes carriage returns and turns the log into
+# one unreadable line.
+#
+# So report bytes written from /proc instead. That is counted by the kernel, costs
+# nothing on the FUSE mount, and increases only when data is genuinely moving.
+progress_bytes() {
+    local total=0 pid written
+    for pid in $(our_rsync_pids); do
+        written=$(awk '/^write_bytes:/ {print $2}' "/proc/${pid}/io" 2>/dev/null)
+        [ -n "$written" ] && total=$((total + written))
+    done
+    printf '%s' "$total"
+}
+
+(
+    # sleep is a child process, so a signal to this subshell would leave it
+    # running. Under a Type=oneshot unit a lingering child keeps the service in
+    # "activating" after the backup has finished, which is exactly the confusion
+    # this reporting exists to remove.
+    sleep_pid=""
+    trap 'kill "${sleep_pid:-}" 2>/dev/null; exit 0' TERM
+
+    started=$(date +%s)
+    last_bytes=0
+    while :; do
+        sleep {{ nfsserver_backup_progress_interval }} &
+        sleep_pid=$!
+        wait "$sleep_pid" 2>/dev/null
+
+        # No rsync left in our process group means the copy is over, one way or
+        # another. Exit rather than relying on being signalled.
+        bytes=$(progress_bytes)
+        [ -n "$bytes" ] && [ "$bytes" != "0" ] || break
+
+        elapsed=$(( $(date +%s) - started ))
+        delta=$(( bytes - last_bytes ))
+        last_bytes=$bytes
+        # A delta of zero across an interval is the signal worth seeing: the
+        # backup is running but no longer moving data.
+        log "progress: $(( bytes / 1048576 )) MiB written total, $(( delta / 1048576 )) MiB in the last {{ nfsserver_backup_progress_interval }}s, ${elapsed}s elapsed"
+    done
+) &
+progress_pid=$!
+
+# Foreground, so there is no orphan to chase if this script is killed.
+rsync "${rsync_args[@]}" "${SOURCE}/" "${DEST}/" >>"$LOG" 2>&1
+rsync_rc=$?
+
+kill "$progress_pid" 2>/dev/null
+wait "$progress_pid" 2>/dev/null
+
+# 24 means "some files vanished while we copied", which is expected on a live
+# NFS export and is not a backup failure.
+if [ "$rsync_rc" -ne 0 ] && [ "$rsync_rc" -ne 24 ]; then
+    log "FATAL rsync exited ${rsync_rc}"
+    exit "$rsync_rc"
+fi
+
+# Ownership and permissions are the one thing object storage cannot hold, and
+# these trees are owned by several accounts. Without this, a restore would put
+# every file back as root and the applications reading the shares would break.
+# One text file is far cheaper than per-file metadata.
+if ! find "$SOURCE" -printf '%m %u %g %p\n' >"$MANIFEST" 2>>"$LOG"; then
+    log "WARNING could not write ownership manifest"
+fi
+
+date --iso-8601=seconds >"$MARKER"
+log "completed backup of ${SOURCE} (rsync rc=${rsync_rc})"
+exit 0
