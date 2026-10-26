@@ -1,3 +1,10 @@
 #SPDX-License-Identifier: MIT-0
 ---
 # vars file for roles/beyla
+
+# Whether Beyla runs on this host. Defined here, above group_vars in
+# precedence, so that settings inherited from a parent group's group_vars
+# cannot turn Beyla back on for an excluded group such as qa.
+beyla_active: >-
+  {{ beyla_enabled | bool
+     and (group_names | intersect(beyla_excluded_groups)) | length == 0 }}

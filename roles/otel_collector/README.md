@@ -40,6 +40,18 @@ This role is the "app-host" collector on the left: it tails logs (`filelog`), sc
 - Renders `config.yaml` from your vars (no hardcoding).
 - Optionally:
   - Validates the config with `--dry-run`.
+- Stops the collector and removes its systemd unit and config on hosts where
+  it is turned off (see below). The binary and cached archive are kept.
+
+### QA hosts send nothing
+
+Hosts in the inventory `qa` group (`inventory/by_environment/extra-env-qa.ini`)
+must not send logs, traces or metrics to SigNoz. The role checks group
+membership itself rather than relying on each `qa.yml`, because the
+`group_vars/<project>/` directory of a parent group such as `bibdata` is loaded
+for its QA hosts too and used to give them the staging or production collector
+config. Running a project playbook with `-e runtime_env=qa` therefore stops and
+removes the collector on those hosts.
 
 ## Requirements
 
@@ -50,6 +62,8 @@ This role is the "app-host" collector on the left: it tails logs (`filelog`), sc
 
 See `defaults/main.yml` for the full list. Key ones:
 
+- `otel_enabled`: Set to `false` to stop the collector and remove its unit and config (default: `true`)
+- `otel_excluded_groups`: Inventory groups that never run the collector, whatever `otel_enabled` says (default: `[qa]`)
 - `otel_version`: Collector version
 - `otel_platform`: Release platform suffix (default: `linux_amd64`)
 - `otel_install_dir`, `otel_binary_path`, `otel_config_path`: Install locations

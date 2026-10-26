@@ -19,6 +19,7 @@ The following variables are defined in `defaults/main.yml` and can be overridden
 | **Variable**          | **Default** | **Description**                                                                   |
 | --------------------- | ----------- | --------------------------------------------------------------------------------- |
 | **`beyla_enabled`**   | `false`     | Main toggle for the role. Must be set to `true` to install and configure Beyla. |
+| **`beyla_excluded_groups`** | `[qa]` | Inventory groups that never run Beyla, whatever `beyla_enabled` says. On those hosts, and wherever Beyla is disabled, the role stops the service and removes its unit, config and environment file. QA hosts must not send telemetry to SigNoz. |
 | **`beyla_version`**   | `"3.35.0"`  | The version of Grafana Beyla to download and install.                             |
 | **`beyla_platform`**  | `linux-amd64` | Release platform suffix used to build the download URL.                         |
 | **`beyla_user`**      | `root`      | System user to run the Beyla systemd service. (Requires eBPF/proc access).        |

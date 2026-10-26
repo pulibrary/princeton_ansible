@@ -11,14 +11,14 @@
   loop: >-
     {{ [beyla_install_dir, beyla_config_dir, beyla_releases_dir,
         beyla_release_dir, beyla_download_dir] | unique }}
-  when: beyla_enabled | bool
+  when: beyla_active | bool
 
 - name: Beyla | Look for an already downloaded release archive
   ansible.builtin.stat:
     path: "{{ beyla_archive_path }}"
     get_checksum: false
   register: beyla_archive
-  when: beyla_enabled | bool
+  when: beyla_active | bool
 
 - name: Beyla | Download amd64 release archive
   ansible.builtin.get_url:
@@ -27,7 +27,7 @@
     mode: "0644"
     force: false
   when:
-    - beyla_enabled | bool
+    - beyla_active | bool
     - not beyla_archive.stat.exists
 
 - name: Beyla | Unarchive release
@@ -36,7 +36,7 @@
     dest: "{{ beyla_release_dir }}"
     remote_src: true
     creates: "{{ beyla_release_binary }}"
-  when: beyla_enabled | bool
+  when: beyla_active | bool
 
 - name: Beyla | Install binary
   ansible.builtin.copy:
@@ -47,7 +47,7 @@
     mode: "0755"
     remote_src: true
   notify: Restart beyla
-  when: beyla_enabled | bool
+  when: beyla_active | bool
 
 - name: Beyla | Template config
   ansible.builtin.template:
@@ -57,7 +57,7 @@
     group: root
     mode: "0644"
   notify: Restart beyla
-  when: beyla_enabled | bool
+  when: beyla_active | bool
 
 - name: Beyla | Template environment file
   ansible.builtin.template:
@@ -67,7 +67,7 @@
     group: root
     mode: "0644"
   notify: Restart beyla
-  when: beyla_enabled | bool
+  when: beyla_active | bool
 
 - name: Beyla | Install systemd unit
   ansible.builtin.template:
@@ -79,7 +79,7 @@
   notify:
     - Reload systemd
     - Restart beyla
-  when: beyla_enabled | bool
+  when: beyla_active | bool
 
 - name: Beyla | Enable and start service
   ansible.builtin.systemd:
@@ -87,4 +87,32 @@
     enabled: true
     state: started
     daemon_reload: true
-  when: beyla_enabled | bool
+  when: beyla_active | bool
+
+# A host that is not running Beyla, including one that ran it before and is
+# now in an excluded group, must not keep sending telemetry.
+- name: Beyla | Look for an installed systemd unit
+  ansible.builtin.stat:
+    path: /etc/systemd/system/beyla.service
+  register: beyla_unit
+  when: not beyla_active | bool
+
+- name: Beyla | Stop and disable service
+  ansible.builtin.systemd:
+    name: beyla
+    state: stopped
+    enabled: false
+  when:
+    - not beyla_active | bool
+    - beyla_unit.stat.exists
+
+- name: Beyla | Remove systemd unit, config and environment file
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /etc/systemd/system/beyla.service
+    - "{{ beyla_config_path }}"
+    - "{{ beyla_env_path }}"
+  notify: Reload systemd
+  when: not beyla_active | bool
