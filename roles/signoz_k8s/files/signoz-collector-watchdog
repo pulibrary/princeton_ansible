@@ -1,0 +1,1041 @@
+#!/usr/bin/env python3
+"""Temporary SigNoz collector recovery watchdog.
+
+Restarts the SigNoz OTel collector Deployment when log ingestion into
+ClickHouse has been stale for several consecutive checks, and records why.
+This is an operational mitigation for an unexplained collector stall, not a
+fix for it. See roles/signoz_k8s/README.md.
+
+Commands:
+  check       one watchdog cycle (run by the systemd timer)
+  checkmk     print the Checkmk local check line from the saved state
+  status      print the saved state and maintenance inhibit as JSON
+  inhibit     suspend restarts for a period (--duration, --reason)
+  uninhibit   end a maintenance inhibit
+  reset       close the circuit breaker (--clear-history also forgets
+              restart attempts, so cooldown and budget start over)
+
+Only the Python standard library is used. Settings come from a JSON file
+written by Ansible (--config).
+"""
+
+import argparse
+import calendar
+import errno
+import fcntl
+import json
+import os
+import re
+import shutil
+import signal
+import subprocess
+import sys
+import time
+
+DEFAULT_CONFIG = "/etc/signoz/collector-watchdog.json"
+SERVICE = "SigNoz collector watchdog"
+INCIDENT_RE = re.compile(r"^\d{8}T\d{6}Z(-\d+)?$")
+EXIT_LOCKED = 75
+
+DEFAULTS = {
+    "microk8s": "/snap/bin/microk8s",
+    "namespace": "platform",
+    "deployment": "signoz-otel-collector",
+    "container": "collector",
+    "clickhouse_pod": "chi-signoz-clickhouse-cluster-0-0-0",
+    "clickhouse_container": "clickhouse",
+    "clickhouse_user": "signoz_checkmk",
+    "state_dir": "/var/lib/signoz-collector-watchdog",
+    "restart_enabled": True,
+    "stale_seconds": 300,
+    "stale_checks": 2,
+    "cooldown_seconds": 1800,
+    "max_restarts": 2,
+    "restart_window_seconds": 3600,
+    "lookback_seconds": 3600,
+    "future_tolerance_seconds": 120,
+    "query_timeout_seconds": 20,
+    "kubectl_timeout_seconds": 30,
+    "rollout_timeout_seconds": 300,
+    "verify_timeout_seconds": 300,
+    "verify_interval_seconds": 15,
+    "evidence_timeout_seconds": 60,
+    "evidence_log_since": "15m",
+    "evidence_log_max_bytes": 5 * 1024 * 1024,
+    "evidence_file_max_bytes": 1024 * 1024,
+    "incident_keep": 20,
+    "incident_max_age_days": 30,
+    "inhibit_max_seconds": 7 * 86400,
+    "checkmk_stale_seconds": 300,
+    "checkmk_recent_restart_seconds": 3600,
+    "timer_unit": "signoz-collector-watchdog.timer",
+}
+
+
+class QueryError(Exception):
+    """The ingestion query failed or returned something unusable."""
+
+    def __init__(self, kind, message):
+        super().__init__(message)
+        self.kind = kind
+        self.message = message
+
+
+class StateError(Exception):
+    """The saved state cannot be read."""
+
+
+def now():
+    # Local clock: cooldown, budget, inhibit and Checkmk staleness. The
+    # ingestion age itself always comes from ClickHouse's clock.
+    override = os.environ.get("SIGNOZ_WATCHDOG_NOW")
+    return float(override) if override else time.time()
+
+
+def log(message):
+    print(message, flush=True)
+
+
+def load_config(path):
+    with open(path) as f:
+        config = dict(DEFAULTS)
+        config.update(json.load(f))
+    # Numbers and flags must have the right type: "300" < 400 would raise,
+    # and the string "false" is true.
+    for key, default in DEFAULTS.items():
+        value = config[key]
+        if isinstance(default, bool):
+            if not isinstance(value, bool):
+                raise ValueError("%s must be true or false, not %r" % (key, value))
+        elif isinstance(default, (int, float)):
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                raise ValueError("%s must be a number, not %r" % (key, value))
+            if value < 0:
+                raise ValueError("%s must not be negative" % key)
+    return config
+
+
+# ---- files -------------------------------------------------------------
+
+
+def paths(config):
+    base = config["state_dir"]
+    return {
+        "state": os.path.join(base, "state.json"),
+        "inhibit": os.path.join(base, "inhibit.json"),
+        "lock": os.path.join(base, "watchdog.lock"),
+        "incidents": os.path.join(base, "incidents"),
+    }
+
+
+def write_json_atomic(path, data):
+    tmp = "%s.tmp.%d" % (path, os.getpid())
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    try:
+        with os.fdopen(fd, "w") as f:
+            json.dump(data, f, indent=2, sort_keys=True)
+            f.write("\n")
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+    dir_fd = os.open(os.path.dirname(path) or ".", os.O_RDONLY)
+    try:
+        os.fsync(dir_fd)
+    finally:
+        os.close(dir_fd)
+
+
+def new_state():
+    return {
+        "version": 1,
+        "status": "starting",
+        "detail": "",
+        "consecutive_stale": 0,
+        "circuit_open": False,
+        "circuit_reason": "",
+        "restart_attempts": [],
+        "last_check": 0,
+    }
+
+
+def load_state(path):
+    try:
+        with open(path) as f:
+            state = json.load(f)
+    except FileNotFoundError:
+        return new_state()
+    except (OSError, ValueError) as exc:
+        raise StateError("cannot read %s: %s" % (path, exc))
+    if not isinstance(state, dict) or state.get("version") != 1:
+        raise StateError("unrecognised state in %s" % path)
+    merged = new_state()
+    merged.update(state)
+    if not isinstance(merged["restart_attempts"], list):
+        raise StateError("restart_attempts in %s is not a list" % path)
+    return merged
+
+
+def load_inhibit(path, at):
+    """Returns the active inhibit, or None. An expired one is ignored."""
+    try:
+        with open(path) as f:
+            inhibit = json.load(f)
+        until = float(inhibit["until"])
+    except FileNotFoundError:
+        return None
+    except (OSError, ValueError, KeyError, TypeError):
+        # An unreadable inhibit file still inhibits: someone meant to stop
+        # restarts, and guessing otherwise is the riskier mistake.
+        return {"until": None, "reason": "unreadable inhibit file %s" % path}
+    if until <= at:
+        return None
+    return inhibit
+
+
+# ---- commands ------------------------------------------------------------
+
+
+def run(argv, timeout):
+    """Runs argv with a hard time limit. Returns (rc, stdout, stderr).
+
+    microk8s is a wrapper that starts kubectl as a child, so on timeout the
+    whole process group is killed. rc is 124 on timeout, 127 if argv[0]
+    cannot be started.
+    """
+    try:
+        proc = subprocess.Popen(
+            argv,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            start_new_session=True,
+        )
+    except OSError as exc:
+        return 127, b"", str(exc).encode()
+    try:
+        out, err = proc.communicate(timeout=timeout)
+        return proc.returncode, out, err
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except OSError:
+            pass
+        out, err = proc.communicate()
+        return 124, out, err + b"\ntimed out after %ds" % int(timeout)
+
+
+def first_line(data, limit=300):
+    text = data.decode("utf-8", "replace") if isinstance(data, bytes) else str(data)
+    lines = [line.strip() for line in text.strip().splitlines() if line.strip()]
+    return (lines[-1] if lines else "")[:limit]
+
+
+def kubectl(config, *args, timeout=None, request_timeout=True):
+    """Runs microk8s kubectl in the namespace. timeout is the hard limit for
+    the whole command; it defaults to the request timeout plus 5s."""
+    argv = [config["microk8s"], "kubectl"]
+    if request_timeout:
+        argv.append("--request-timeout=%ds" % config["kubectl_timeout_seconds"])
+    argv += ["-n", config["namespace"]] + list(args)
+    return run(argv, timeout or config["kubectl_timeout_seconds"] + 5)
+
+
+# ---- ingestion query -----------------------------------------------------
+
+# Same bounds as the Checkmk ingestion check: ts_bucket_start is the first
+# primary key column and timestamp drives the partition key, so only the
+# lookback window is read. The window filters on event time while the age is
+# measured on observed_timestamp (when the collector received the record).
+WINDOW_QUERY = """
+SELECT
+    toUnixTimestamp(now('UTC')) AS now_s,
+    toString(now('UTC')) AS current_utc,
+    count() AS window_rows,
+    toString(max(observed_timestamp)) AS newest_ns,
+    toString(toDateTime(intDiv(max(observed_timestamp), 1000000000), 'UTC'))
+        AS newest_observed_utc
+FROM signoz_logs.logs_v2
+WHERE ts_bucket_start >= toUInt64(toUnixTimestamp(now()) - {lookback} - 1800)
+  AND timestamp >= toUInt64(toUnixTimestamp(now()) - {lookback}) * 1000000000
+FORMAT JSONEachRow
+"""
+
+# Only when the window is empty. Without a filter, count() is answered from
+# part metadata, so this tells an empty table from a long outage without
+# scanning the table.
+TOTAL_QUERY = """
+SELECT toUnixTimestamp(now('UTC')) AS now_s, count() AS total_rows
+FROM signoz_logs.logs_v2
+FORMAT JSONEachRow
+"""
+
+
+def clickhouse(config, query):
+    timeout = config["query_timeout_seconds"]
+    rc, out, err = kubectl(
+        config,
+        "exec", config["clickhouse_pod"], "-c", config["clickhouse_container"], "--",
+        "clickhouse-client",
+        "--user", config["clickhouse_user"],
+        "--connect_timeout=5",
+        "--receive_timeout=%d" % timeout,
+        "--max_execution_time=%d" % timeout,
+        "--query", query,
+        timeout=timeout + 5,
+    )
+    if rc in (124, 137):
+        raise QueryError("timeout", "query timed out after %ds" % timeout)
+    if rc != 0:
+        message = first_line(err) or "exit status %d" % rc
+        kind = "clickhouse" if "Code: " in message else "kubectl"
+        raise QueryError(kind, message)
+    rows = [line for line in out.decode("utf-8", "replace").splitlines() if line.strip()]
+    if len(rows) != 1:
+        raise QueryError("malformed", "expected one row, got %d: %r" % (len(rows), out[:200]))
+    try:
+        row = json.loads(rows[0])
+    except ValueError:
+        raise QueryError("malformed", "not JSON: %r" % rows[0][:200])
+    if not isinstance(row, dict):
+        raise QueryError("malformed", "not a JSON object: %r" % rows[0][:200])
+    return row
+
+
+def as_int(row, key):
+    value = row.get(key)
+    if isinstance(value, bool) or not isinstance(value, (int, str)):
+        raise QueryError("malformed", "%s is %r" % (key, value))
+    try:
+        return int(value)
+    except ValueError:
+        raise QueryError("malformed", "%s is %r" % (key, value))
+
+
+def observe(config):
+    """Measures ingestion freshness.
+
+    Returns a dict with the ClickHouse clock (now_s), the newest
+    observed_timestamp in nanoseconds (None when the window is empty) and
+    the age in seconds. When the window is empty the age is the lookback, a
+    lower bound, and age_lower_bound is set. Raises QueryError for anything
+    that does not prove a specific age, including an empty table and a
+    newest record in the future.
+    """
+    lookback = int(config["lookback_seconds"])
+    row = clickhouse(config, WINDOW_QUERY.format(lookback=lookback))
+    now_s = as_int(row, "now_s")
+    rows = as_int(row, "window_rows")
+    if now_s <= 0 or rows < 0:
+        raise QueryError("malformed", "impossible values: %r" % row)
+
+    if rows == 0:
+        total = clickhouse(config, TOTAL_QUERY)
+        total_rows = as_int(total, "total_rows")
+        if total_rows == 0:
+            raise QueryError("empty_table", "signoz_logs.logs_v2 is empty")
+        if total_rows < 0:
+            raise QueryError("malformed", "impossible values: %r" % total)
+        return {
+            "now_s": now_s,
+            "current_utc": row.get("current_utc"),
+            "newest_ns": None,
+            "newest_observed_utc": None,
+            "age_seconds": lookback,
+            "age_lower_bound": True,
+        }
+
+    newest_ns = as_int(row, "newest_ns")
+    if newest_ns <= 0:
+        raise QueryError("malformed", "newest observed_timestamp is %r" % newest_ns)
+    age = now_s - newest_ns // 1000000000
+    if age < -int(config["future_tolerance_seconds"]):
+        # A record stamped in the future keeps max() ahead of the clock and
+        # would hide a stall, so it is an error rather than "fresh".
+        raise QueryError(
+            "future_timestamp",
+            "newest observed_timestamp %s is %ds ahead of ClickHouse's clock"
+            % (row.get("newest_observed_utc"), -age),
+        )
+    return {
+        "now_s": now_s,
+        "current_utc": row.get("current_utc"),
+        "newest_ns": newest_ns,
+        "newest_observed_utc": row.get("newest_observed_utc"),
+        "age_seconds": max(age, 0),
+        "age_lower_bound": False,
+    }
+
+
+def describe_age(obs):
+    if obs["age_lower_bound"]:
+        return "no logs observed in the last %ds" % obs["age_seconds"]
+    return "newest log observed %ds ago (%s UTC)" % (obs["age_seconds"], obs["newest_observed_utc"])
+
+
+# ---- Deployment ----------------------------------------------------------
+
+
+def deployment_status(config):
+    """Returns (ok, reason, summary). ok means a restart may proceed."""
+    rc, out, err = kubectl(config, "get", "deployment", config["deployment"], "-o", "json")
+    if rc != 0:
+        message = first_line(err) or "exit status %d" % rc
+        if "NotFound" in message:
+            return False, "deployment_missing", {"error": message}
+        return False, "deployment_error", {"error": message}
+    try:
+        dep = json.loads(out)
+        spec, status, meta = dep.get("spec", {}), dep.get("status", {}), dep["metadata"]
+    except (ValueError, KeyError, AttributeError):
+        return False, "deployment_error", {"error": "unreadable deployment JSON"}
+    desired = spec.get("replicas", 1)
+    summary = {
+        "replicas": desired,
+        "generation": meta.get("generation"),
+        "observed_generation": status.get("observedGeneration"),
+        "updated_replicas": status.get("updatedReplicas", 0),
+        "status_replicas": status.get("replicas", 0),
+        "available_replicas": status.get("availableReplicas", 0),
+        "paused": bool(spec.get("paused")),
+    }
+    if not desired:
+        return False, "scaled_to_zero", summary
+    if summary["paused"]:
+        return False, "rollout_paused", summary
+    # Same tests as "kubectl rollout status": the controller has seen the
+    # latest spec, every replica is updated, no old ones remain, and all
+    # updated ones are available.
+    if (
+        summary["observed_generation"] is None
+        or summary["generation"] is None
+        or summary["observed_generation"] < summary["generation"]
+        or summary["updated_replicas"] < desired
+        or summary["status_replicas"] > summary["updated_replicas"]
+        or summary["available_replicas"] < summary["updated_replicas"]
+    ):
+        return False, "rollout_in_progress", summary
+    for cond in status.get("conditions", []):
+        if cond.get("type") == "Progressing" and cond.get("reason") == "ProgressDeadlineExceeded":
+            return False, "rollout_in_progress", summary
+    return True, "", summary
+
+
+# ---- evidence ------------------------------------------------------------
+
+SECRET_PATTERNS = [
+    # scheme://user:password@host
+    (re.compile(r"(?i)([a-z][a-z0-9+.-]*://[^\s:/@]+:)[^\s@/]+@"), r"\1[REDACTED]@"),
+    # password=..., "token": "...", api_key: ...
+    (
+        re.compile(
+            r"(?i)((?:password|passwd|secret|token|api[_-]?key|authorization)[\"']?\s*[:=]\s*[\"']?)"
+            r"[^\s\"',;}]+"
+        ),
+        r"\1[REDACTED]",
+    ),
+]
+
+
+def redact(text):
+    for pattern, replacement in SECRET_PATTERNS:
+        text = pattern.sub(replacement, text)
+    return text
+
+
+def pick(obj, *keys):
+    return {k: obj[k] for k in keys if isinstance(obj, dict) and k in obj}
+
+
+def safe_deployment(dep):
+    # Only fields without credentials: the pod template's env carries the
+    # ClickHouse password, so containers are reduced to name, image,
+    # resources and probes.
+    spec = dep.get("spec", {})
+    template = spec.get("template", {})
+    meta = dep.get("metadata", {})
+    annotations = {
+        k: v for k, v in meta.get("annotations", {}).items()
+        if k != "kubectl.kubernetes.io/last-applied-configuration"
+    }
+    return {
+        "metadata": dict(pick(meta, "name", "namespace", "generation", "labels"), annotations=annotations),
+        "spec": {
+            "replicas": spec.get("replicas"),
+            "paused": spec.get("paused", False),
+            "strategy": spec.get("strategy"),
+            "selector": spec.get("selector"),
+            "template_annotations": template.get("metadata", {}).get("annotations", {}),
+            "containers": [
+                pick(c, "name", "image", "resources", "livenessProbe", "readinessProbe")
+                for c in template.get("spec", {}).get("containers", [])
+            ],
+        },
+        "status": dep.get("status", {}),
+    }
+
+
+def safe_pods(pods):
+    return [
+        {
+            "name": p.get("metadata", {}).get("name"),
+            "node": p.get("spec", {}).get("nodeName"),
+            "phase": p.get("status", {}).get("phase"),
+            "start_time": p.get("status", {}).get("startTime"),
+            "conditions": p.get("status", {}).get("conditions", []),
+            "container_statuses": p.get("status", {}).get("containerStatuses", []),
+        }
+        for p in pods.get("items", [])
+    ]
+
+
+def write_evidence_file(directory, name, data, limit):
+    if isinstance(data, (dict, list)):
+        data = json.dumps(data, indent=2, sort_keys=True)
+    if isinstance(data, bytes):
+        data = data.decode("utf-8", "replace")
+    data = redact(data)
+    encoded = data.encode()
+    if len(encoded) > limit:
+        encoded = encoded[:limit] + b"\n[truncated at %d bytes]\n" % limit
+    fd = os.open(os.path.join(directory, name), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, "wb") as f:
+        f.write(encoded)
+
+
+def new_incident_dir(config, at):
+    base = paths(config)["incidents"]
+    os.makedirs(base, mode=0o700, exist_ok=True)
+    stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime(at))
+    for n in range(100):
+        name = stamp if n == 0 else "%s-%d" % (stamp, n)
+        try:
+            path = os.path.join(base, name)
+            os.mkdir(path, 0o700)
+            return path
+        except FileExistsError:
+            continue
+    raise OSError(errno.EEXIST, "no free incident directory name for %s" % stamp)
+
+
+def capture_evidence(config, directory, context):
+    """Saves collector state before a restart. Returns a list of errors.
+
+    Every step is bounded; once evidence_timeout_seconds has passed the
+    remaining steps are skipped so recovery is not held up.
+    """
+    deadline = time.monotonic() + config["evidence_timeout_seconds"]
+    file_limit = config["evidence_file_max_bytes"]
+    errors = []
+
+    def step(name, fn):
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            errors.append("%s: skipped, evidence time limit reached" % name)
+            return
+        try:
+            fn(remaining)
+        except Exception as exc:  # report and move on to the restart
+            errors.append("%s: %s" % (name, exc))
+
+    def kube_out(args, remaining):
+        rc, out, err = kubectl(config, *args, timeout=min(config["kubectl_timeout_seconds"], remaining))
+        if rc != 0:
+            raise RuntimeError(first_line(err) or "exit status %d" % rc)
+        return out
+
+    write_evidence_file(directory, "watchdog.json", context, file_limit)
+    selector = {}
+
+    def deployment(remaining):
+        dep = json.loads(kube_out(["get", "deployment", config["deployment"], "-o", "json"], remaining))
+        selector.update(dep.get("spec", {}).get("selector", {}).get("matchLabels", {}))
+        write_evidence_file(directory, "deployment.json", safe_deployment(dep), file_limit)
+
+    def pods_wide(remaining):
+        write_evidence_file(directory, "pods.txt", kube_out(["get", "pods", "-o", "wide"], remaining), file_limit)
+
+    collector_pods = []
+
+    def pods(remaining):
+        if not selector:
+            raise RuntimeError("no Deployment selector")
+        label = ",".join("%s=%s" % kv for kv in sorted(selector.items()))
+        data = safe_pods(json.loads(kube_out(["get", "pods", "-l", label, "-o", "json"], remaining)))
+        collector_pods.extend(p["name"] for p in data if p["name"])
+        write_evidence_file(directory, "collector-pods.json", data, file_limit)
+
+    def events(remaining):
+        data = json.loads(kube_out(["get", "events", "-o", "json"], remaining))
+        prefixes = (config["deployment"], config["clickhouse_pod"])
+        items = [
+            pick(e, "type", "reason", "message", "count", "firstTimestamp", "lastTimestamp")
+            for e in data.get("items", [])
+            if str(e.get("involvedObject", {}).get("name", "")).startswith(prefixes)
+        ]
+        write_evidence_file(directory, "events.json", items[-200:], file_limit)
+
+    step("deployment", deployment)
+    step("pods", pods_wide)
+    step("collector pods", pods)
+    step("events", events)
+    for pod in collector_pods[:3]:
+        step(
+            "logs %s" % pod,
+            lambda remaining, pod=pod: write_evidence_file(
+                directory,
+                "collector-%s.log" % pod,
+                kube_out(
+                    [
+                        "logs", pod, "-c", config["container"], "--timestamps",
+                        "--since=%s" % config["evidence_log_since"],
+                        "--limit-bytes=%d" % config["evidence_log_max_bytes"],
+                    ],
+                    remaining,
+                ),
+                config["evidence_log_max_bytes"],
+            ),
+        )
+    if errors:
+        write_evidence_file(directory, "capture-errors.txt", "\n".join(errors) + "\n", file_limit)
+    return errors
+
+
+def prune_incidents(config, at):
+    base = paths(config)["incidents"]
+    try:
+        names = sorted(n for n in os.listdir(base) if INCIDENT_RE.match(n))
+    except FileNotFoundError:
+        return []
+    keep = max(int(config["incident_keep"]), 0)
+    max_age = float(config["incident_max_age_days"]) * 86400
+    remove = names[: max(len(names) - keep, 0)]
+    for name in names[len(remove):]:
+        try:
+            stamp = calendar.timegm(time.strptime(name[:16], "%Y%m%dT%H%M%SZ"))
+        except ValueError:
+            continue
+        if at - stamp > max_age:
+            remove.append(name)
+    for name in remove:
+        shutil.rmtree(os.path.join(base, name), ignore_errors=True)
+    return remove
+
+
+# ---- watchdog cycle ------------------------------------------------------
+
+
+def attempts_in_window(state, at, window):
+    return [a for a in state["restart_attempts"] if at - a.get("at", 0) < window]
+
+
+def restart_block(config, state, at):
+    """Reason the watchdog's own rules forbid a restart now, or ''."""
+    if not config["restart_enabled"]:
+        return "restart_disabled"
+    if state["circuit_open"]:
+        return "circuit_open"
+    if state["restart_attempts"]:
+        last = max(a.get("at", 0) for a in state["restart_attempts"])
+        if at - last < config["cooldown_seconds"]:
+            return "cooldown"
+    if len(attempts_in_window(state, at, config["restart_window_seconds"])) >= config["max_restarts"]:
+        return "restart_budget"
+    return ""
+
+
+def verify_recovery(config, state_path, state, before_ns):
+    """Polls until ingestion is fresh and newer than before_ns, or gives up."""
+    deadline = time.monotonic() + config["verify_timeout_seconds"]
+    last = "no successful query"
+    while True:
+        try:
+            obs = observe(config)
+            state["last_observation"] = obs
+            advanced = obs["newest_ns"] is not None and (before_ns is None or obs["newest_ns"] > before_ns)
+            if advanced and obs["age_seconds"] < config["stale_seconds"]:
+                return True, describe_age(obs)
+            last = describe_age(obs) + ("" if advanced else ", not newer than before the restart")
+        except QueryError as exc:
+            last = "query failed (%s): %s" % (exc.kind, exc.message)
+        state["last_check"] = now()
+        state["detail"] = "verifying recovery: %s" % last
+        write_json_atomic(state_path, state)
+        if time.monotonic() + config["verify_interval_seconds"] > deadline:
+            return False, last
+        time.sleep(config["verify_interval_seconds"])
+
+
+def recover(config, state_path, state, obs, deployment):
+    at = now()
+    attempt = {
+        "at": at,
+        "before_ns": obs["newest_ns"],
+        "age_seconds": obs["age_seconds"],
+        "result": "started",
+    }
+    # Recorded before anything else so the attempt counts against cooldown
+    # and budget even if this process dies part-way through.
+    state["restart_attempts"].append(attempt)
+    state["restart_attempts"] = attempts_in_window(state, at, max(86400, config["restart_window_seconds"]))[-50:]
+    state["status"] = "recovering"
+    state["recovery_deadline"] = at + config["evidence_timeout_seconds"] + config["rollout_timeout_seconds"] + config["verify_timeout_seconds"] + 120
+    state["detail"] = "stale: %s; capturing evidence" % describe_age(obs)
+    state["consecutive_stale"] = 0
+    write_json_atomic(state_path, state)
+
+    try:
+        incident = new_incident_dir(config, at)
+        attempt["incident"] = incident
+        errors = capture_evidence(config, incident, {"observation": obs, "deployment": deployment, "at": at})
+    except Exception as exc:
+        errors = ["incident directory: %s" % exc]
+    attempt["evidence_errors"] = errors
+    for error in errors:
+        log("evidence capture: %s" % error)
+    prune_incidents(config, at)
+
+    def fail(reason, message):
+        attempt["result"] = reason
+        state.update(
+            status="recovery_failed",
+            failure_reason=reason,
+            circuit_open=True,
+            circuit_reason="%s: %s" % (reason, message),
+            detail="%s: %s" % (reason, message),
+            last_check=now(),
+        )
+        state.pop("recovery_deadline", None)
+        write_json_atomic(state_path, state)
+        log("recovery failed (%s): %s; circuit breaker open" % (reason, message))
+        return 1
+
+    log("restarting deployment/%s: %s" % (config["deployment"], describe_age(obs)))
+    rc, _, err = kubectl(config, "rollout", "restart", "deployment/%s" % config["deployment"])
+    if rc != 0:
+        return fail("restart_failed", first_line(err) or "exit status %d" % rc)
+
+    state["detail"] = "waiting for rollout"
+    write_json_atomic(state_path, state)
+    timeout = config["rollout_timeout_seconds"]
+    rc, _, err = kubectl(
+        config, "rollout", "status", "deployment/%s" % config["deployment"], "--timeout=%ds" % timeout,
+        timeout=timeout + 15, request_timeout=False,
+    )
+    if rc != 0:
+        return fail("rollout_failed", first_line(err) or "exit status %d" % rc)
+
+    ok, message = verify_recovery(config, state_path, state, obs["newest_ns"])
+    if not ok:
+        return fail("verification_failed", message)
+    attempt["result"] = "recovered"
+    state.update(status="recovered", detail="recovered: %s" % message, last_check=now())
+    state.pop("recovery_deadline", None)
+    state.pop("failure_reason", None)
+    write_json_atomic(state_path, state)
+    log("recovered: %s" % message)
+    return 0
+
+
+def cycle(config, state_path, state, inhibit_path):
+    at = now()
+    state.pop("recovery_deadline", None)
+    state.pop("failure_reason", None)
+    state.pop("block_reason", None)
+    inhibit = load_inhibit(inhibit_path, at)
+    state["inhibit"] = inhibit
+
+    try:
+        obs = observe(config)
+    except QueryError as exc:
+        # A failed query proves nothing: no restart, and the stale streak
+        # starts over so two stale results must be consecutive successes.
+        state.update(
+            status="query_error",
+            error_kind=exc.kind,
+            detail="ingestion query failed (%s): %s" % (exc.kind, exc.message),
+            consecutive_stale=0,
+            last_check=at,
+        )
+        write_json_atomic(state_path, state)
+        log(state["detail"])
+        return 1
+    state.pop("error_kind", None)
+    state["last_observation"] = obs
+    state["last_check"] = at
+
+    if obs["age_seconds"] < config["stale_seconds"]:
+        state.update(status="healthy", detail=describe_age(obs), consecutive_stale=0)
+        write_json_atomic(state_path, state)
+        log(state["detail"])
+        return 0
+
+    if inhibit:
+        state.update(
+            status="inhibited",
+            detail="stale (%s) but maintenance inhibit is active: %s" % (describe_age(obs), inhibit.get("reason", "")),
+            consecutive_stale=0,
+        )
+        write_json_atomic(state_path, state)
+        log(state["detail"])
+        return 0
+
+    state["consecutive_stale"] += 1
+    if state["consecutive_stale"] < config["stale_checks"]:
+        state.update(
+            status="stale_pending",
+            detail="stale check %d of %d: %s" % (state["consecutive_stale"], config["stale_checks"], describe_age(obs)),
+        )
+        write_json_atomic(state_path, state)
+        log(state["detail"])
+        return 0
+
+    reason = restart_block(config, state, at)
+    deployment = {}
+    if not reason:
+        allowed, reason, deployment = deployment_status(config)
+    if reason:
+        state.update(
+            status="restart_blocked",
+            block_reason=reason,
+            detail="stale (%s); restart blocked: %s%s" % (
+                describe_age(obs), reason,
+                (" (%s)" % state["circuit_reason"]) if reason == "circuit_open" else "",
+            ),
+        )
+        write_json_atomic(state_path, state)
+        log(state["detail"])
+        return 0
+    return recover(config, state_path, state, obs, deployment)
+
+
+def cmd_check(config, args):
+    p = paths(config)
+    os.makedirs(config["state_dir"], mode=0o700, exist_ok=True)
+    lock_fd = os.open(p["lock"], os.O_RDWR | os.O_CREAT, 0o600)
+    try:
+        fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        log("another watchdog run holds %s; skipping" % p["lock"])
+        return EXIT_LOCKED
+    try:
+        try:
+            state = load_state(p["state"])
+        except StateError as exc:
+            # Do not guess at restart history: refuse to act until an
+            # operator runs "reset". Checkmk reports the unreadable state.
+            log("%s; run '%s reset' after checking it" % (exc, sys.argv[0]))
+            return 1
+        prune_incidents(config, now())
+        return cycle(config, p["state"], state, p["inhibit"])
+    finally:
+        os.close(lock_fd)
+
+
+# ---- Checkmk ---------------------------------------------------------------
+
+
+def timer_active(config):
+    if os.environ.get("SIGNOZ_WATCHDOG_SKIP_TIMER_CHECK"):
+        return True
+    rc, out, _ = run(["systemctl", "is-active", config["timer_unit"]], 10)
+    return rc == 0 and out.strip() == b"active"
+
+
+def checkmk_line(config):
+    p = paths(config)
+    at = now()
+    try:
+        with open(p["state"]) as f:
+            state = json.load(f)
+        if not isinstance(state, dict):
+            raise ValueError("not an object")
+    except FileNotFoundError:
+        return 3, "-", "no watchdog state yet (%s); the timer has not run" % p["state"]
+    except (OSError, ValueError) as exc:
+        return 3, "-", "watchdog state unreadable, restarts suspended: %s" % exc
+
+    status = state.get("status", "unknown")
+    detail = state.get("detail", "")
+    obs = state.get("last_observation") or {}
+    window = config["restart_window_seconds"]
+    recent = [a for a in state.get("restart_attempts", []) if at - a.get("at", 0) < window]
+    metrics = "consecutive_stale=%d|restarts=%d;;%d" % (
+        state.get("consecutive_stale", 0), len(recent), config["max_restarts"],
+    )
+    if "age_seconds" in obs:
+        metrics = "ingestion_age=%d;;%d|%s" % (obs["age_seconds"], config["stale_seconds"], metrics)
+
+    last_check = state.get("last_check", 0) or 0
+    allowed_gap = config["checkmk_stale_seconds"]
+    if status == "recovering" and state.get("recovery_deadline"):
+        allowed_gap = max(allowed_gap, state["recovery_deadline"] - last_check)
+    if not timer_active(config):
+        return 2, metrics, "watchdog timer %s is not active; last status %s" % (config["timer_unit"], status)
+    if at - last_check > allowed_gap:
+        return 2, metrics, "watchdog not running: last check %ds ago (status %s)" % (at - last_check, status)
+
+    level = {
+        "healthy": 0,
+        "stale_pending": 1,
+        "inhibited": 1,
+        "recovering": 1,
+        "recovered": 1,
+        "query_error": 3,
+        "restart_blocked": 2,
+        "recovery_failed": 2,
+    }.get(status, 3)
+    if status == "query_error" and state.get("error_kind") in ("empty_table", "future_timestamp"):
+        level = 2
+    text = "%s: %s" % (status, detail)
+
+    attempts = state.get("restart_attempts", [])
+    if status == "healthy" and attempts:
+        last = max(attempts, key=lambda a: a.get("at", 0))
+        ago = at - last.get("at", 0)
+        if ago < config["checkmk_recent_restart_seconds"]:
+            level = max(level, 1)
+            text += "; collector restarted %dm ago (%s)" % (ago // 60, last.get("result"))
+    if state.get("circuit_open"):
+        level = max(level, 1)
+        text += "; circuit breaker open (%s), reset with signoz-collector-watchdog reset" % state.get("circuit_reason", "")
+    inhibit = load_inhibit(p["inhibit"], at)
+    if inhibit and status != "inhibited":
+        level = max(level, 1)
+        text += "; maintenance inhibit active: %s" % inhibit.get("reason", "")
+    return level, metrics, text
+
+
+def cmd_checkmk(config, args):
+    level, metrics, text = checkmk_line(config)
+    text = " ".join(str(text).split()).replace('"', "'")[:900]
+    print('%d "%s" %s %s' % (level, SERVICE, metrics, text))
+    return 0
+
+
+# ---- operator commands ---------------------------------------------------
+
+
+def parse_duration(text):
+    match = re.match(r"^(\d+)([smhd]?)$", text.strip())
+    if not match:
+        raise argparse.ArgumentTypeError("use a number with an optional s, m, h or d suffix")
+    return int(match.group(1)) * {"": 1, "s": 1, "m": 60, "h": 3600, "d": 86400}[match.group(2)]
+
+
+def cmd_inhibit(config, args):
+    if args.duration <= 0 or args.duration > config["inhibit_max_seconds"]:
+        log("duration must be between 1s and %ds" % config["inhibit_max_seconds"])
+        return 2
+    os.makedirs(config["state_dir"], mode=0o700, exist_ok=True)
+    at = now()
+    data = {
+        "until": at + args.duration,
+        "until_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(at + args.duration)),
+        "reason": args.reason,
+        "set_by": os.environ.get("SUDO_USER") or os.environ.get("USER", ""),
+        "set_at": at,
+    }
+    write_json_atomic(paths(config)["inhibit"], data)
+    log("restarts inhibited until %s: %s" % (data["until_utc"], args.reason))
+    return 0
+
+
+def cmd_uninhibit(config, args):
+    try:
+        os.unlink(paths(config)["inhibit"])
+        log("maintenance inhibit removed")
+    except FileNotFoundError:
+        log("no maintenance inhibit was set")
+    return 0
+
+
+def cmd_reset(config, args):
+    p = paths(config)
+    os.makedirs(config["state_dir"], mode=0o700, exist_ok=True)
+    lock_fd = os.open(p["lock"], os.O_RDWR | os.O_CREAT, 0o600)
+    try:
+        fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        log("a watchdog run is in progress; try again when it finishes")
+        return EXIT_LOCKED
+    try:
+        try:
+            state = load_state(p["state"])
+        except StateError as exc:
+            backup = "%s.corrupt.%d" % (p["state"], int(now()))
+            os.replace(p["state"], backup)
+            log("%s; moved to %s" % (exc, backup))
+            state = new_state()
+            state["restart_attempts"] = []
+        state.update(circuit_open=False, circuit_reason="", consecutive_stale=0)
+        if args.clear_history:
+            state["restart_attempts"] = []
+        state["detail"] = "reset by operator; waiting for the next check"
+        state["status"] = "starting"
+        state["last_check"] = now()
+        write_json_atomic(p["state"], state)
+        log("circuit breaker closed%s" % (", restart history cleared" if args.clear_history else ""))
+        return 0
+    finally:
+        os.close(lock_fd)
+
+
+def cmd_status(config, args):
+    p = paths(config)
+    out = {}
+    for key in ("state", "inhibit"):
+        try:
+            with open(p[key]) as f:
+                out[key] = json.load(f)
+        except FileNotFoundError:
+            out[key] = None
+        except (OSError, ValueError) as exc:
+            out[key] = "unreadable: %s" % exc
+    print(json.dumps(out, indent=2, sort_keys=True))
+    return 0
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    parser.add_argument("--config", default=DEFAULT_CONFIG)
+    sub = parser.add_subparsers(dest="command")
+    sub.add_parser("check")
+    sub.add_parser("checkmk")
+    sub.add_parser("status")
+    inhibit = sub.add_parser("inhibit")
+    inhibit.add_argument("--duration", type=parse_duration, required=True, help="e.g. 90m, 4h")
+    inhibit.add_argument("--reason", required=True)
+    sub.add_parser("uninhibit")
+    reset = sub.add_parser("reset")
+    reset.add_argument("--clear-history", action="store_true")
+    args = parser.parse_args(argv)
+    if not args.command:
+        parser.error("a command is required")
+
+    try:
+        config = load_config(args.config)
+    except (OSError, ValueError) as exc:
+        if args.command == "checkmk":
+            print('3 "%s" - cannot read %s: %s' % (SERVICE, args.config, " ".join(str(exc).split())))
+            return 0
+        log("cannot read %s: %s" % (args.config, exc))
+        return 1
+    os.umask(0o077)
+    return {
+        "check": cmd_check,
+        "checkmk": cmd_checkmk,
+        "status": cmd_status,
+        "inhibit": cmd_inhibit,
+        "uninhibit": cmd_uninhibit,
+        "reset": cmd_reset,
+    }[args.command](config, args)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -216,7 +216,7 @@
           - "'<ttl>event_date + INTERVAL 7 DAY</ttl>' in confd"
           # The chart's own config.d/system_log.xml manages these.
           - "'text_log' not in confd and 'error_log' not in confd and 'query_metric_log' not in confd"
-          - "'GRANT SELECT(timestamp, ts_bucket_start) ON signoz_logs.logs_v2' in users"
+          - "'GRANT SELECT(timestamp, ts_bucket_start, observed_timestamp) ON signoz_logs.logs_v2' in users"
           - "'<readonly>2</readonly>' in users"
           - readers | length == 2
           - readers[0].pull.exporter.prometheus.host == 'localhost'
@@ -466,3 +466,113 @@
           - disk_runs.stdout_lines[3] is match('^2 "ClickHouse data filesystem" - /usr is not mounted \(found /\)$')
           - disk_runs.stdout_lines[4] is match('^[0-2] "ClickHouse data filesystem" used_percent=\d+;75;85;0;100 / ')
         fail_msg: "{{ disk_runs.stdout_lines }}"
+
+    # ---- Collector recovery watchdog -------------------------------------
+
+    - name: Stat watchdog files
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      register: watchdog_files
+      loop:
+        - /usr/local/sbin/signoz-collector-watchdog
+        - /etc/signoz/collector-watchdog.json
+        - /etc/systemd/system/signoz-collector-watchdog.service
+        - /etc/systemd/system/signoz-collector-watchdog.timer
+        - /usr/lib/check_mk_agent/local/check_signoz_collector_watchdog.sh
+        - /var/lib/signoz-collector-watchdog
+
+    - name: Assert watchdog files are installed
+      ansible.builtin.assert:
+        that:
+          - watchdog_files.results | rejectattr('stat.exists') | list | length == 0
+          - watchdog_files.results[0].stat.mode == '0755'
+          - watchdog_files.results[4].stat.mode == '0755'
+          - watchdog_files.results[5].stat.mode == '0700'
+
+    - name: Read the watchdog configuration
+      ansible.builtin.slurp:
+        src: /etc/signoz/collector-watchdog.json
+      register: watchdog_config_raw
+
+    - name: Assert the configuration has the intended defaults and types
+      vars:
+        config: "{{ watchdog_config_raw.content | b64decode | from_json }}"
+      ansible.builtin.assert:
+        that:
+          - config.stale_seconds == 300
+          - config.stale_checks == 2
+          - config.cooldown_seconds == 1800
+          - config.max_restarts == 2
+          - config.restart_window_seconds == 3600
+          - config.restart_enabled is sameas true
+          - config.microk8s == '/usr/local/bin/fake-microk8s'
+          - config.deployment == 'signoz-otel-collector'
+
+    - name: Read the watchdog timer state
+      ansible.builtin.systemd_service:
+        name: signoz-collector-watchdog.timer
+      register: watchdog_timer
+
+    - name: Run one watchdog check against healthy ingestion
+      ansible.builtin.shell: |
+        python3 -c 'import json; p="{{ state_file }}"; s=json.load(open(p)); s["logs"]={"lag": 3, "total": 1000}; s["fail"]=""; json.dump(s, open(p, "w"))'
+        systemctl start signoz-collector-watchdog.service
+        /usr/lib/check_mk_agent/local/check_signoz_collector_watchdog.sh
+      register: watchdog_healthy
+      changed_when: false
+
+    - name: Assert the watchdog reports healthy ingestion
+      ansible.builtin.assert:
+        that:
+          - watchdog_timer.status.UnitFileState == 'enabled'
+          - watchdog_timer.status.ActiveState == 'active'
+          - watchdog_healthy.stdout is match('^0 "SigNoz collector watchdog" ingestion_age=\\d+;;300\\|')
+        fail_msg: "{{ watchdog_healthy.stdout }}"
+
+    - name: Create directories for the watchdog tests
+      ansible.builtin.file:
+        path: "/tmp/watchdog-tests/{{ item }}"
+        state: directory
+        mode: "0755"
+      loop:
+        - files
+        - tests/collector_watchdog
+
+    - name: Copy the watchdog tests into the instance
+      ansible.builtin.copy:
+        src: "{{ lookup('env', 'MOLECULE_PROJECT_DIRECTORY') }}/{{ item }}"
+        dest: "/tmp/watchdog-tests/{{ item }}"
+        mode: preserve
+      loop:
+        - files/signoz-collector-watchdog
+        - tests/collector_watchdog/fake_microk8s.py
+        - tests/collector_watchdog/test_watchdog.py
+
+    # Same tests as on a workstation, on the target's Python version.
+    - name: Run the watchdog unit tests
+      ansible.builtin.command:
+        cmd: python3 -m unittest discover -s /tmp/watchdog-tests/tests/collector_watchdog
+      changed_when: false
+
+    - name: Disable the watchdog
+      ansible.builtin.include_role:
+        name: signoz_k8s
+        tasks_from: collector_watchdog
+      vars:
+        signoz_collector_watchdog_enabled: false
+
+    - name: Stat watchdog files after disabling
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      register: watchdog_files_after
+      loop:
+        - /usr/local/sbin/signoz-collector-watchdog
+        - /etc/systemd/system/signoz-collector-watchdog.timer
+        - /usr/lib/check_mk_agent/local/check_signoz_collector_watchdog.sh
+        - /var/lib/signoz-collector-watchdog/state.json
+
+    - name: Assert disabling removes the watchdog but keeps its state
+      ansible.builtin.assert:
+        that:
+          - watchdog_files_after.results[:3] | selectattr('stat.exists') | list | length == 0
+          - watchdog_files_after.results[3].stat.exists
