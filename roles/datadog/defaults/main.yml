@@ -20,7 +20,9 @@ datadog_additional_groups: {}
 # default apt repo
 datadog_apt_repo_uri: "https://apt.datadoghq.com/"
 datadog_apt_repo_suite: stable
-datadog_apt_repo_components: ["6"]
+# Agent 7. The "6" component stops at 6.53.x, which lacks the Agent 7.84.5+
+# rejection of the compromised eMudhra intermediate CA keys.
+datadog_apt_repo_components: ["7"]
 datadog_apt_cache_valid_time: 3600
 datadog_apt_key_retries: 5
 use_apt_backup_keyserver: false
@@ -28,14 +30,23 @@ datadog_apt_keyserver: hkp://keyserver.ubuntu.com:80
 datadog_apt_backup_keyserver: hkp://pool.sks-keyservers.net:80
 
 # Pin agent to a version. Highly recommended.
-datadog_agent_version: ""
+# The role never downgrades a host already running a newer agent unless
+# datadog_agent_allow_downgrade is set.
+datadog_agent_version: "1:7.84.6-1"
+
+# Fail the play if the installed agent is older than this. 7.84.5 rejects the
+# compromised eMudhra intermediate CA keys on Linux; 7.84.6 adds the Windows
+# and embedded Python fixes.
+datadog_agent_minimum_version: "7.84.6"
 
 # Avoid checking if the agent is running or not. This can be useful if you're
 # using sysvinit and providing your own init script.
 datadog_skip_running_check: false
 
 # Set this to `yes` to allow agent downgrades on apt-based platforms.
-# Internally, this uses `apt-get`'s `--force-yes` option. Use with caution.
+# Internally, this uses `apt-get`'s `--allow-downgrades` option.
+# Use with caution.
+# The minimum version check above still applies.
 datadog_agent_allow_downgrade: false
 
 ########################################################################

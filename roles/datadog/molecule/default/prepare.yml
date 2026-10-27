@@ -1,0 +1,54 @@
+---
+# Start from an agent that is vulnerable to the eMudhra advisory, the same way
+# our existing hosts were built (Agent 6 component, key from the keyserver), so
+# converge exercises the upgrade path and not just a fresh install.
+- name: Prepare
+  hosts: all
+  become: true
+  tasks:
+    - name: Install apt dependencies
+      ansible.builtin.apt:
+        name: [apt-transport-https, gpg, python3-debian]
+        state: present
+        update_cache: true
+
+    - name: Add the Datadog repository signing key
+      ansible.builtin.apt_key:
+        keyserver: keyserver.ubuntu.com
+        id: E6266D4AC0962C7D
+
+    - name: Add the Agent 6 repository
+      ansible.builtin.deb822_repository:
+        name: datadog
+        types: [deb]
+        uris: https://apt.datadoghq.com/
+        suites: [stable]
+        components: ["6"]
+
+    - name: Install a vulnerable Agent 6
+      ansible.builtin.apt:
+        name: datadog-agent=1:6.53.1-1
+        state: present
+        update_cache: true
+
+    # The image masks debugfs, which datadog-agent-sysprobe requires, and a
+    # masked dependency makes every datadog-agent restart fail.
+    - name: Unmask the debugfs mount
+      ansible.builtin.systemd:
+        name: sys-kernel-debug.mount
+        masked: false
+
+    - name: Configure a placeholder API key so the agent starts
+      ansible.builtin.copy:
+        dest: /etc/datadog-agent/datadog.yaml
+        content: |
+          api_key: youshouldsetthis
+          hostname: {{ datadog_config.hostname }}
+        owner: dd-agent
+        group: root
+        mode: "0644"
+
+    - name: Start the vulnerable agent
+      ansible.builtin.service:
+        name: datadog-agent
+        state: started

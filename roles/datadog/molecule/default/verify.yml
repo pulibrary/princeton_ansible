@@ -2,15 +2,69 @@
 - name: Verify
   hosts: all
   gather_facts: false
+  become: true
   tasks:
-  - name: test datadog manifest
-    stat:
-      path: "{{ item }}"
-    loop:
-      - "/opt/datadog-agent/version-manifest.txt"
-    register: dd_file
-    failed_when:
-      - not dd_file.stat.exists
-      - not dd_file.stat.isreg
-      - not dd_file.stat.gr_name == dd-agent
-      - not dd_file.stat.pw_name == dd-agent
+    - name: test datadog manifest
+      stat:
+        path: "{{ item }}"
+      loop:
+        - "/opt/datadog-agent/version-manifest.txt"
+      register: dd_file
+      failed_when:
+        - not dd_file.stat.exists
+        - not dd_file.stat.isreg
+        - not dd_file.stat.gr_name == dd-agent
+        - not dd_file.stat.pw_name == dd-agent
+
+    - name: Read the Datadog repository definition
+      ansible.builtin.slurp:
+        src: /etc/apt/sources.list.d/datadog.sources
+      register: datadog_sources
+
+    - name: Datadog repository uses the Agent 7 component
+      ansible.builtin.assert:
+        that:
+          - "'Components: 7' in (datadog_sources.content | b64decode)"
+
+    - name: Gather installed packages
+      ansible.builtin.package_facts:
+        manager: apt
+
+    - name: Prepared Agent 6 was upgraded to a patched Agent 7
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.packages['datadog-agent'][0].version
+            is version('1:7.84.6-1', '>=')
+
+    - name: Ask the running agent for its version
+      ansible.builtin.command: datadog-agent status --json
+      register: datadog_status
+      changed_when: false
+
+    - name: Running agent was restarted onto the upgraded package
+      ansible.builtin.assert:
+        that:
+          - (datadog_status.stdout | from_json).version
+            is version('7.84.6', '>=')
+
+- name: Verify an older pin does not downgrade a newer agent
+  hosts: all
+  gather_facts: true
+  become: true
+  tasks:
+    - name: Run the role pinned to an older patched version
+      ansible.builtin.include_role:
+        name: datadog
+      vars:
+        datadog_agent_version: "1:7.84.5-1"
+        datadog_agent_minimum_version: "7.84.5"
+
+    - name: Gather installed packages
+      ansible.builtin.package_facts:
+        manager: apt
+
+    - name: Agent was not downgraded
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.packages['datadog-agent'][0].version
+            is version('1:7.84.6-1', '>=')
