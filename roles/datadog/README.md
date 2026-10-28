@@ -1,5 +1,6 @@
 Ansible Datadog Role
 ========
+
 [![Ansible Galaxy](http://img.shields.io/badge/galaxy-Datadog.datadog-660198.svg)](https://galaxy.ansible.com/Datadog/datadog/)
 
 Install and configure Datadog base agent & checks. Starting with version `2` of
@@ -11,7 +12,7 @@ Supports most Debian and RHEL-based Linux distributions.
 Installation
 ------------
 
-```
+```text
 ansible-galaxy install Datadog.datadog
 ```
 
@@ -20,15 +21,19 @@ Role Variables
 
 - `datadog_api_key` - Your Datadog API key.
 - `datadog_agent_version` - The pinned version of the Agent to install (optional, but highly recommended)
-  Examples: `1:6.0.0-1` on apt-based platforms, `6.0.0-1` on yum-based platforms
+  Examples: `1:6.0.0-1` on apt-based platforms, `6.0.0-1` on yum-based platforms.
+  Defaults to `1:7.84.6-1`. A host already running a newer agent is left alone
+  unless `datadog_agent_allow_downgrade` is set.
+- `datadog_agent_minimum_version` - Fail the play if the installed agent is older than this
+  (default `7.84.6`, the fix for the compromised eMudhra intermediate CA advisory).
 - `datadog_checks` - YAML configuration for agent checks to drop into `/etc/dd-agent/conf.d`.
 - `datadog_typed_checks` - YAML configuration that go in their own
-subdirectory within `/etc/dd-agent/conf.d`.  For example, a
+subdirectory within `/etc/dd-agent/conf.d`. For example, a
 `datadog_typed_checks` with a type of `nginx` will be placed
 into a file called `/etc/dd-agent/conf.d/nginx.d/conf.yaml`.
 - `datadog_config` - Settings to place in the `/etc/dd-agent/datadog.conf` INI file that go under the `[Main]` section.
 - `datadog_config_ex` - Extra INI sections to go in `/etc/dd-agent/datadog.conf` (optional).
-- `datadog_apt_repo_uri`, `datadog_apt_repo_suite`, `datadog_apt_repo_components` - Override default Datadog `apt` repository
+- `datadog_apt_repo_uri`, `datadog_apt_repo_suite`, `datadog_apt_repo_components` - Override default Datadog `apt` repository (default component `7`, Agent 7)
 - `datadog_apt_cache_valid_time` - Override the default apt cache expiration time (default 1 hour)
 - `datadog_apt_key_url` - Override default url to Datadog `apt` key
 - `datadog_apt_key_url_new` - Override default url to the new Datadog `apt` key (in the near future the `apt` repo will have to be checked against this new key instead of the current key)
@@ -58,10 +63,12 @@ Variables:
 
 Dependencies
 ------------
+
 None
 
 Example Playbooks
 -------------------------
+
 ```yml
 - hosts: servers
   roles:
@@ -160,8 +167,8 @@ Apache2
 Author Information
 ------------------
 
-brian@akins.org
+<brian@akins.org>
 
-dustinjamesbrown@gmail.com --Forked from brian@akins.org
+<dustinjamesbrown@gmail.com> --Forked from <brian@akins.org>
 
-Datadog <info@datadoghq.com> --Forked from dustinjamesbrown@gmail.com
+Datadog <info@datadoghq.com> --Forked from <dustinjamesbrown@gmail.com>

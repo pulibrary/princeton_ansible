@@ -78,14 +78,37 @@
     update_cache: true
   when: datadog_apt_repo_result is changed or datadog_agent5_apt_repo_result is changed
 
+- name: Datadog | Gather installed package versions
+  ansible.builtin.package_facts:
+    manager: apt
+
+# Compare upstream versions only: "1:7.84.6-1" -> "7.84.6"
+- name: Datadog | Record installed and pinned agent versions
+  ansible.builtin.set_fact:
+    datadog_agent_installed_version: >-
+      {{ (ansible_facts.packages['datadog-agent']
+          | default([{'version': ''}]))[0].version
+         | regex_replace('^[0-9]+:', '') | regex_replace('-[^-]*$', '') }}
+    datadog_agent_pinned_version: >-
+      {{ datadog_agent_version
+         | regex_replace('^[0-9]+:', '') | regex_replace('-[^-]*$', '') }}
+
+# Skipped when a newer agent is already installed, so we never downgrade.
 - name: Ensure pinned version of Datadog agent is installed
   ansible.builtin.apt:
     name: "datadog-agent={{ datadog_agent_version }}"
     state: present
-    force: "{{ datadog_agent_allow_downgrade }}"
+    allow_downgrade: "{{ datadog_agent_allow_downgrade }}"
     update_cache: true
     cache_valid_time: "{{ datadog_apt_cache_valid_time }}"
-  when: (datadog_agent_version | length != 0) and (not ansible_check_mode)
+  when:
+    - datadog_agent_version | length != 0
+    - not ansible_check_mode
+    - datadog_agent_allow_downgrade
+      or datadog_agent_installed_version | length == 0
+      or datadog_agent_installed_version
+         is version(datadog_agent_pinned_version, '<')
+  notify: restart datadog-agent
 
 - name: Ensure Datadog agent is installed
   ansible.builtin.apt:
@@ -94,3 +117,23 @@
     update_cache: true
     cache_valid_time: "{{ datadog_apt_cache_valid_time }}"
   when: (datadog_agent_version | length == 0) and (not ansible_check_mode)
+  notify: restart datadog-agent
+
+- name: Datadog | Gather installed package versions after install
+  ansible.builtin.package_facts:
+    manager: apt
+  when: not ansible_check_mode
+
+- name: Datadog | Fail if the installed agent is older than the minimum version
+  ansible.builtin.assert:
+    that:
+      - "'datadog-agent' in ansible_facts.packages"
+      - ansible_facts.packages['datadog-agent'][0].version
+        | regex_replace('^[0-9]+:', '') | regex_replace('-[^-]*$', '')
+        is version(datadog_agent_minimum_version, '>=')
+    fail_msg: >-
+      datadog-agent is older than {{ datadog_agent_minimum_version }}.
+      Older agents accept certificate chains containing the compromised
+      eMudhra intermediate CA keys.
+    quiet: true
+  when: not ansible_check_mode
