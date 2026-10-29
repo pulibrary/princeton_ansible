@@ -140,6 +140,31 @@
     enabled: true
     state: started
 
+# A cold cache makes the first login wait on Active Directory for the account
+# and all of its groups. Look the permitted accounts up on a schedule, and at
+# boot, so the cache is already warm when someone logs in.
+- name: Sssd_ldap | Keep the permitted accounts warm in the cache
+  ansible.builtin.cron:
+    name: "{{ item.name }}"
+    cron_file: sssd-ldap-cache-warm
+    user: root
+    minute: "{{ item.minute | default(omit) }}"
+    special_time: "{{ item.special_time | default(omit) }}"
+    job: >-
+      {{ item.prefix | default('') }}for u in
+      {{ sssd_ldap_allow_users | map('quote') | join(' ') }};
+      do id "$u" >/dev/null 2>&1; done
+    state: >-
+      {{ 'present' if (sssd_ldap_cache_warm | bool
+         and sssd_ldap_allow_users | length > 0) else 'absent' }}
+  loop:
+    - name: sssd ldap cache warm
+      minute: "{{ sssd_ldap_cache_warm_minute }}"
+    # sssd takes a moment to start answering after boot.
+    - name: sssd ldap cache warm at boot
+      special_time: reboot
+      prefix: "sleep 60; "
+
 # Apply the configuration now, so the directory is answering before any later
 # role tries to chown files to a directory-provided account.
 - name: Sssd_ldap | Apply the configuration before continuing

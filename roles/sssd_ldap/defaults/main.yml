@@ -130,3 +130,14 @@ sssd_ldap_preflight_host: >-
 # Verify at the end of the run that each permitted account resolves. This turns
 # a silent misconfiguration into a failed play.
 sssd_ldap_verify_accounts: true
+
+# Keep the permitted accounts warm in the sssd cache. A login on a cold cache
+# waits for the user and every group they belong to to be fetched from Active
+# Directory, which is slow enough that people give up. A cron job looks each
+# account up on a schedule and at boot, so that cost is paid by cron instead of
+# by whoever logs in first. It only covers identity lookups; the password bind
+# still goes to the directory on every login.
+sssd_ldap_cache_warm: true
+# Every 15 minutes is well inside sssd's default 90 minute entry_cache_timeout,
+# so an entry is refreshed by cron before a login can find it expired.
+sssd_ldap_cache_warm_minute: "*/15"
