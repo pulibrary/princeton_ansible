@@ -111,6 +111,13 @@ sssd_ldap_offline_timeout: 15
 # sssd advises a cap of at least four times offline_timeout.
 sssd_ldap_offline_timeout_max: 120
 
+# Refresh cached entries in the background before they expire, so a login
+# rarely finds an expired entry and waits on the directory. This covers every
+# account that has been looked up, not only sssd_ldap_allow_users, but it cannot
+# fill an empty cache; sssd_ldap_cache_warm does that. sssd advises three
+# quarters of entry_cache_timeout, whose default is 5400 seconds.
+sssd_ldap_refresh_expired_interval: 4050
+
 # Manage the PAM stack so directory accounts can authenticate. Set to false if
 # another role owns PAM on the host.
 sssd_ldap_configure_pam: true
@@ -130,3 +137,14 @@ sssd_ldap_preflight_host: >-
 # Verify at the end of the run that each permitted account resolves. This turns
 # a silent misconfiguration into a failed play.
 sssd_ldap_verify_accounts: true
+
+# Keep the permitted accounts warm in the sssd cache. A login on a cold cache
+# waits for the user and every group they belong to to be fetched from Active
+# Directory, which is slow enough that people give up. A cron job looks each
+# account up on a schedule and at boot, so that cost is paid by cron instead of
+# by whoever logs in first. It only covers identity lookups; the password bind
+# still goes to the directory on every login.
+sssd_ldap_cache_warm: true
+# Every 15 minutes is well inside sssd's default 90 minute entry_cache_timeout,
+# so an entry is refreshed by cron before a login can find it expired.
+sssd_ldap_cache_warm_minute: "*/15"
