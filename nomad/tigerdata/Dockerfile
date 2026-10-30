@@ -1,5 +1,5 @@
 FROM circleci/runner-agent:machine-3
-ARG RUBY_VERSION=3.4.3
+ARG RUBY_VERSION=4.0.9
 # 1. Install dependencies - pulled from build-pack-deps:
 # https://github.com/docker-library/buildpack-deps/blob/d0ecd4b7313e9bc6b00d9a4fe62ad5787bc197ae/debian/bookworm/Dockerfile
 RUN set -ex; \
