@@ -58,24 +58,6 @@
     - running_on_server
   tags: 'mounts'
 
-- name: Figgy | Create repository directories in mount
-  ansible.builtin.file:
-    path: '{{item}}'
-    state: 'directory'
-    owner: '{{ deploy_user }}'
-    group: '{{ deploy_user }}'
-  tags: 'mounts'
-  become: true
-  become_user: '{{deploy_user}}'
-  when:
-    - running_on_server
-  with_items:
-    - '{{figgy_repository_mount}}'
-    - '{{figgy_stream_derivatives_mount}}'
-    - '{{figgy_derivatives_mount}}'
-    - '{{figgy_fallback_repository_mount}}'
-    - '{{figgy_fallback_stream_derivatives_mount}}'
-
 - name: Figgy | Copy smb credentials
   ansible.builtin.copy:
     src: "files/{{ item }}"
@@ -95,6 +77,23 @@
     - mendel.smb.credentials
     - mudd.smb.credentials
     - microforms.smb.credentials
+
+- name: Figgy | Create repository directories in mount
+  ansible.builtin.file:
+    path: '{{item}}'
+    state: 'directory'
+    owner: '{{ deploy_user }}'
+    group: '{{ deploy_user }}'
+  tags: 'mounts'
+  become: true
+  when:
+    - running_on_server
+  with_items:
+    - '{{figgy_repository_mount}}'
+    - '{{figgy_stream_derivatives_mount}}'
+    - '{{figgy_derivatives_mount}}'
+    - '{{figgy_fallback_repository_mount}}'
+    - '{{figgy_fallback_stream_derivatives_mount}}'
 
 - name: Figgy | Create mount to plum binaries
   ansible.posix.mount:
@@ -390,7 +389,7 @@
 
 - name: Figgy | Install build prerequisites for rasterio
   pip:
-    name: 
+    name:
       - "numpy>=1.20.0"
       - "setuptools<81"
       - "wheel"
