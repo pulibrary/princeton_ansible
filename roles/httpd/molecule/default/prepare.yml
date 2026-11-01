@@ -1,0 +1,19 @@
+---
+# No public DNS in CI, so stand in a self-signed cert for certbot
+- name: Prepare
+  hosts: all
+  become: true
+  tasks:
+    - name: Install openssl
+      ansible.builtin.dnf:
+        name: openssl
+        state: present
+
+    - name: Generate self-signed certificate
+      ansible.builtin.command:
+        cmd: >-
+          openssl req -x509 -nodes -newkey rsa:2048 -days 7
+          -subj /CN=localhost
+          -keyout /etc/pki/tls/private/molecule.key
+          -out /etc/pki/tls/certs/molecule.crt
+        creates: /etc/pki/tls/certs/molecule.crt

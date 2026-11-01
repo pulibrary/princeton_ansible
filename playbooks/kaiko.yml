@@ -1,0 +1,18 @@
+---
+# Apache on AlmaLinux serving restricted datasets behind Entra ID
+- name: Build the kaiko data server
+  hosts: kaiko
+  remote_user: pulsys
+  become: true
+  vars_files:
+    - ../group_vars/kaiko/main.yml
+    - ../group_vars/kaiko/vault.yml
+  roles:
+    - role: httpd
+
+  post_tasks:
+    - name: Tell everyone on slack you ran an ansible playbook
+      community.general.slack:
+        token: "{{ vault_pul_slack_token }}"
+        msg: "Ansible ran `{{ ansible_play_name }}` on {{ inventory_hostname }}"
+        channel: "{{ slack_alerts_channel }}"

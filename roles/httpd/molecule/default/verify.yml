@@ -1,0 +1,47 @@
+---
+- name: Verify
+  hosts: all
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Check config syntax
+      ansible.builtin.command: httpd -t
+      changed_when: false
+
+    - name: Check mod_auth_openidc is loaded
+      ansible.builtin.command: httpd -M
+      register: httpd_modules
+      changed_when: false
+      failed_when: "'auth_openidc_module' not in httpd_modules.stdout"
+
+    - name: Check private_key_jwt key pair exists
+      ansible.builtin.stat:
+        path: /etc/httpd/oidc/client.key
+      register: httpd_oidc_key
+      failed_when: not httpd_oidc_key.stat.exists or httpd_oidc_key.stat.mode != '0600'
+
+    - name: Open directory is served
+      ansible.builtin.uri:
+        url: https://localhost/open/
+        validate_certs: false
+        status_code: 200
+
+    # 500 is expected when the container cannot reach login.microsoftonline.com
+    - name: Protected directory redirects to Entra ID
+      ansible.builtin.uri:
+        url: https://localhost/sso/
+        validate_certs: false
+        follow_redirects: none
+        status_code: [302, 500]
+
+    - name: Denied directory is forbidden
+      ansible.builtin.uri:
+        url: https://localhost/closed/
+        validate_certs: false
+        status_code: 403
+
+    - name: Plain http redirects to https
+      ansible.builtin.uri:
+        url: http://localhost/open/
+        follow_redirects: none
+        status_code: 301

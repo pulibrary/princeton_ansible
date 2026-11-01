@@ -1,0 +1,86 @@
+---
+# Entra requires an "x5t" header on the client assertion. mod_auth_openidc
+# added it in 2.4.11 and it was broken from 2.4.13 until 2.4.16.4, so EL8
+# (2.4.9.x) cannot use private_key_jwt against Entra.
+- name: Httpd | gather package facts
+  ansible.builtin.package_facts:
+
+- name: Httpd | assert mod_auth_openidc supports private_key_jwt with Entra
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['packages']['mod_auth_openidc'][0]['version'] is version('2.4.16.4', '>=')
+    fail_msg: >-
+      mod_auth_openidc {{ ansible_facts['packages']['mod_auth_openidc'][0]['version'] }}
+      cannot do private_key_jwt with Entra ID (needs >= 2.4.16.4, EL9+).
+      Use httpd_oidc_client_auth: client_secret on this host.
+
+- name: Httpd | create OIDC key directory
+  ansible.builtin.file:
+    path: "{{ httpd_oidc_key_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Httpd | install OIDC private key from vault
+  ansible.builtin.copy:
+    content: "{{ httpd_oidc_private_key }}"
+    dest: "{{ httpd_oidc_key_dir }}/client.key"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+  when: httpd_oidc_private_key | length > 0
+  notify: restart httpd
+
+- name: Httpd | install OIDC certificate from vault
+  ansible.builtin.copy:
+    content: "{{ httpd_oidc_certificate }}"
+    dest: "{{ httpd_oidc_key_dir }}/client.crt"
+    owner: root
+    group: root
+    mode: "0644"
+  when: httpd_oidc_certificate | length > 0
+  notify: restart httpd
+
+- name: Httpd | generate OIDC key pair
+  ansible.builtin.command:
+    argv:
+      - openssl
+      - req
+      - -x509
+      - -nodes
+      - -newkey
+      - rsa:2048
+      - -sha256
+      - -days
+      - "{{ httpd_oidc_certificate_days }}"
+      - -subj
+      - "/CN={{ httpd_server_name }} mod_auth_openidc"
+      - -keyout
+      - "{{ httpd_oidc_key_dir }}/client.key"
+      - -out
+      - "{{ httpd_oidc_key_dir }}/client.crt"
+    creates: "{{ httpd_oidc_key_dir }}/client.crt"
+  when: httpd_oidc_private_key | length == 0
+  notify: restart httpd
+
+- name: Httpd | read OIDC certificate thumbprint
+  ansible.builtin.command:
+    argv:
+      - openssl
+      - x509
+      - -noout
+      - -fingerprint
+      - -sha1
+      - -in
+      - "{{ httpd_oidc_key_dir }}/client.crt"
+  register: httpd_oidc_thumbprint
+  changed_when: false
+
+- name: Httpd | Entra certificate instructions
+  ansible.builtin.debug:
+    msg: >-
+      Upload {{ httpd_oidc_key_dir }}/client.crt under Certificates & secrets
+      on the app registration. Entra should show thumbprint
+      {{ httpd_oidc_thumbprint.stdout.split('=')[-1] | replace(':', '') }}.

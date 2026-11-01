@@ -1,0 +1,20 @@
+# {{ ansible_managed }}
+<VirtualHost *:80>
+    ServerName {{ httpd_server_name }}
+{% for alias in httpd_server_aliases %}
+    ServerAlias {{ alias }}
+{% endfor %}
+
+    Alias /.well-known/acme-challenge/ "{{ httpd_certbot_webroot }}/.well-known/acme-challenge/"
+    <Directory "{{ httpd_certbot_webroot }}/.well-known/acme-challenge">
+        Options None
+        AllowOverride None
+        Require all granted
+    </Directory>
+{% if httpd_redirect_http_to_https %}
+
+    RewriteEngine On
+    RewriteCond %{REQUEST_URI} !^/\.well-known/acme-challenge/
+    RewriteRule ^(.*)$ https://{{ httpd_server_name }}$1 [R=301,L]
+{% endif %}
+</VirtualHost>
