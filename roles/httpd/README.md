@@ -44,20 +44,21 @@ secret. This needs mod_auth_openidc >= 2.4.16.4, so EL9 or later. EL8's
 2.4.9 can't send the `x5t` header Entra requires.
 
 * The key pair comes from `roles/httpd/files/`, picked by `runtime_env`:
-  `sandbox_oidc_private_key` / `sandbox_oidc_cert` and
-  `production_oidc_private_key` / `production_oidc_cert`. Override with
+  `sandbox_oidc_private.key` / `sandbox_oidc_cert.crt` and
+  `production_oidc_private.key` / `production_oidc_cert.crt`. Override with
   `httpd_oidc_private_key_src` and `httpd_oidc_certificate_src`.
-  Create a pair and encrypt the key:
+  Create a pair and encrypt both files:
 
   ```bash
   cd roles/httpd/files
   openssl req -x509 -nodes -newkey rsa:2048 -sha256 -days 730 \
     -subj "/CN=sandbox-dss1.lib.princeton.edu mod_auth_openidc" \
-    -keyout sandbox_oidc_private_key -out sandbox_oidc_cert
-  devbox run -- ansible-vault encrypt sandbox_oidc_private_key
+    -keyout sandbox_oidc_private.key -out sandbox_oidc_cert.crt
+  devbox run -- ansible-vault encrypt --encrypt-vault-id pul \
+    sandbox_oidc_private.key sandbox_oidc_cert.crt
   ```
 
-* Upload the `<env>_oidc_cert` file under **Certificates & secrets** on the app
+* Upload the decrypted `<env>_oidc_cert.crt` under **Certificates & secrets** on the app
   registration. The play prints the thumbprint Entra should show.
 * `vault_httpd_oidc_client_secret` is not needed. Delete the old secret
   from the app registration.
