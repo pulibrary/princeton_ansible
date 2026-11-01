@@ -1,0 +1,57 @@
+---
+# tasks file for roles/dss_processing
+- name: DSS processing | install EPEL
+  ansible.builtin.dnf:
+    name: epel-release
+    state: present
+
+- name: DSS processing | install s3fs
+  ansible.builtin.dnf:
+    name: s3fs-fuse
+    state: present
+
+- name: DSS processing | write s3fs credentials
+  ansible.builtin.copy:
+    content: "{{ dss_processing_s3_access_key_id }}:{{ dss_processing_s3_secret_access_key }}\n"
+    dest: "{{ dss_processing_s3_passwd_file }}"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+
+- name: DSS processing | create mount points
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop: "{{ dss_processing_s3_mounts }}"
+  loop_control:
+    label: "{{ item.path }}"
+
+- name: DSS processing | mount S3 buckets
+  ansible.posix.mount:
+    src: "{{ item.bucket }}"
+    path: "{{ item.path }}"
+    fstype: fuse.s3fs
+    opts: "{{ (dss_processing_s3_base_opts + (['ro'] if dss_processing_s3_read_only else []) + (item.options | default([]))) | join(',') }}"
+    state: mounted
+  loop: "{{ dss_processing_s3_mounts }}"
+  loop_control:
+    label: "{{ item.bucket }} -> {{ item.path }}"
+  vars:
+    dss_processing_s3_base_opts:
+      - _netdev
+      - allow_other
+      - nofail
+      - "passwd_file={{ dss_processing_s3_passwd_file }}"
+      - "url={{ dss_processing_s3_url }}"
+      - "endpoint={{ dss_processing_s3_endpoint }}"
+
+- name: DSS processing | let httpd read FUSE mounts
+  ansible.posix.seboolean:
+    name: httpd_use_fusefs
+    state: true
+    persistent: true
+  when: ansible_facts['selinux']['status'] | default('disabled') == 'enabled'

@@ -5,11 +5,16 @@
 httpd_server_admin: "lsupport@princeton.edu"
 httpd_certbot_email: "lsupport@princeton.edu"
 
-# Signs token requests with /etc/httpd/oidc/client.{key,crt}; upload
-# client.crt to the Entra app registration instead of using a secret
+# Signs token requests with roles/httpd/files/<env>_oidc_{private_key,cert};
+# upload the cert to the Entra app registration instead of using a secret
 httpd_oidc_client_auth: private_key_jwt
 httpd_oidc_client_id: "{{ vault_httpd_oidc_client_id }}"
 httpd_oidc_crypto_passphrase: "{{ vault_httpd_oidc_crypto_passphrase }}"
+
+# Same buckets as dss2; the sandbox mounts them read-only
+dss_processing_s3_access_key_id: "{{ vault_dss_processing_s3_access_key_id }}"
+dss_processing_s3_secret_access_key: "{{ vault_dss_processing_s3_secret_access_key }}"
+dss_processing_s3_read_only: "{{ runtime_env | default('sandbox') == 'sandbox' }}"
 
 dss_processing_campus_ips:
   - 128.112.0.0/16

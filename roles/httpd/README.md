@@ -43,16 +43,26 @@ requests with a key pair (OIDC `private_key_jwt`) instead of sending a
 secret. This needs mod_auth_openidc >= 2.4.16.4, so EL9 or later. EL8's
 2.4.9 can't send the `x5t` header Entra requires.
 
-* Either put the PEMs in the vault (`httpd_oidc_private_key`,
-  `httpd_oidc_certificate`), or leave them empty and the role generates
-  `/etc/httpd/oidc/client.{key,crt}` on the host. A generated key is lost
-  if the host is rebuilt, so the certificate must then be uploaded again.
-* Upload `client.crt` under **Certificates & secrets** on the app
+* The key pair comes from `roles/httpd/files/`, picked by `runtime_env`:
+  `sandbox_oidc_private_key` / `sandbox_oidc_cert` and
+  `production_oidc_private_key` / `production_oidc_cert`. Override with
+  `httpd_oidc_private_key_src` and `httpd_oidc_certificate_src`.
+  Create a pair and encrypt the key:
+
+  ```bash
+  cd roles/httpd/files
+  openssl req -x509 -nodes -newkey rsa:2048 -sha256 -days 730 \
+    -subj "/CN=sandbox-dss1.lib.princeton.edu mod_auth_openidc" \
+    -keyout sandbox_oidc_private_key -out sandbox_oidc_cert
+  devbox run -- ansible-vault encrypt sandbox_oidc_private_key
+  ```
+
+* Upload the `<env>_oidc_cert` file under **Certificates & secrets** on the app
   registration. The play prints the thumbprint Entra should show.
 * `vault_httpd_oidc_client_secret` is not needed. Delete the old secret
   from the app registration.
-* Certificates expire after `httpd_oidc_certificate_days`. Upload a new
-  one before then.
+* The certificate expires (730 days above). Generate a new pair and upload
+  the new certificate before then.
 
 Log out with `https://<host>/oidc/redirect_uri?logout=https://<host>/`.
 

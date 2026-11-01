@@ -22,47 +22,23 @@
     group: root
     mode: "0700"
 
-- name: Httpd | install OIDC private key from vault
+- name: Httpd | install OIDC private key
   ansible.builtin.copy:
-    content: "{{ httpd_oidc_private_key }}"
+    src: "{{ httpd_oidc_private_key_src }}"
     dest: "{{ httpd_oidc_key_dir }}/client.key"
     owner: root
     group: root
     mode: "0600"
   no_log: true
-  when: httpd_oidc_private_key | length > 0
   notify: restart httpd
 
-- name: Httpd | install OIDC certificate from vault
+- name: Httpd | install OIDC certificate
   ansible.builtin.copy:
-    content: "{{ httpd_oidc_certificate }}"
+    src: "{{ httpd_oidc_certificate_src }}"
     dest: "{{ httpd_oidc_key_dir }}/client.crt"
     owner: root
     group: root
     mode: "0644"
-  when: httpd_oidc_certificate | length > 0
-  notify: restart httpd
-
-- name: Httpd | generate OIDC key pair
-  ansible.builtin.command:
-    argv:
-      - openssl
-      - req
-      - -x509
-      - -nodes
-      - -newkey
-      - rsa:2048
-      - -sha256
-      - -days
-      - "{{ httpd_oidc_certificate_days }}"
-      - -subj
-      - "/CN={{ httpd_server_name }} mod_auth_openidc"
-      - -keyout
-      - "{{ httpd_oidc_key_dir }}/client.key"
-      - -out
-      - "{{ httpd_oidc_key_dir }}/client.crt"
-    creates: "{{ httpd_oidc_key_dir }}/client.crt"
-  when: httpd_oidc_private_key | length == 0
   notify: restart httpd
 
 - name: Httpd | read OIDC certificate thumbprint
@@ -81,6 +57,6 @@
 - name: Httpd | Entra certificate instructions
   ansible.builtin.debug:
     msg: >-
-      Upload {{ httpd_oidc_key_dir }}/client.crt under Certificates & secrets
-      on the app registration. Entra should show thumbprint
+      The certificate under Certificates & secrets on the app registration
+      must have thumbprint
       {{ httpd_oidc_thumbprint.stdout.split('=')[-1] | replace(':', '') }}.

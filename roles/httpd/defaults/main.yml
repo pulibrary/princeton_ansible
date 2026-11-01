@@ -28,11 +28,10 @@ httpd_oidc_scope: "openid email profile"
 #                     certificate to the app registration instead of a secret
 httpd_oidc_client_auth: client_secret
 httpd_oidc_key_dir: /etc/httpd/oidc
-# PEM contents from the vault. Leave empty to generate a key pair on the host
-# (it is kept across runs but lost if the host is rebuilt).
-httpd_oidc_private_key: ""
-httpd_oidc_certificate: ""
-httpd_oidc_certificate_days: 730
+# Key pair for private_key_jwt, looked up in roles/httpd/files/ (or an
+# absolute path). Encrypt the private key with ansible-vault.
+httpd_oidc_private_key_src: "{{ runtime_env | default('sandbox') }}_oidc_private_key"
+httpd_oidc_certificate_src: "{{ runtime_env | default('sandbox') }}_oidc_cert"
 # PKCE on the authorization code flow; "" to turn it off
 httpd_oidc_pkce_method: S256
 # Entra UPNs are netid@princeton.edu; strip the domain so
