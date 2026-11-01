@@ -42,6 +42,14 @@ LogLevel {{ httpd_log_level }}
       LogFormat "%h %l %u %t \"%r\" %>s %b \"%{Referer}i\" \"%{User-Agent}i\" %I %O" combinedio
     </IfModule>
     CustomLog "logs/access_log" combined
+{% if httpd_json_access_log %}
+    # One JSON object per request, so the log shipper can send SigNoz real
+    # fields. Apache escapes quotes and control characters in these values.
+    # Status, size and duration are unquoted numbers so they stay sortable.
+{% raw %}
+    LogFormat "{\"timestamp\":\"%{%Y-%m-%dT%H:%M:%S%z}t\",\"vhost\":\"%v\",\"client_ip\":\"%a\",\"user\":\"%u\",\"method\":\"%m\",\"target\":\"%U%q\",\"protocol\":\"%H\",\"status\":%>s,\"bytes_sent\":%B,\"duration_us\":%D,\"referrer\":\"%{Referer}i\",\"user_agent\":\"%{User-Agent}i\"}" pul_json
+{% endraw %}
+{% endif %}
 </IfModule>
 
 <IfModule alias_module>

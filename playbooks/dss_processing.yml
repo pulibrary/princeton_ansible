@@ -7,10 +7,13 @@
   become: true
   vars_files:
     - ../group_vars/dss_processing/main.yml
+    - ../group_vars/dss_processing/{{ runtime_env | default('sandbox') }}.yml
     - ../group_vars/dss_processing/vault.yml
   roles:
     - role: dss_processing
     - role: httpd
+    - role: otel_collector
+      tags: otel
 
   post_tasks:
     - name: Tell everyone on slack you ran an ansible playbook

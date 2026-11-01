@@ -4,6 +4,12 @@
 {% for alias in httpd_server_aliases %}
     ServerAlias {{ alias }}
 {% endfor %}
+{% if httpd_json_access_log %}
+
+    # A vhost with its own CustomLog stops inheriting the main one
+    CustomLog "logs/access_log" combined
+    CustomLog "{{ httpd_json_access_log_path }}" pul_json
+{% endif %}
 
     Alias /.well-known/acme-challenge/ "{{ httpd_certbot_webroot }}/.well-known/acme-challenge/"
     <Directory "{{ httpd_certbot_webroot }}/.well-known/acme-challenge">

@@ -106,6 +106,15 @@ certificate set `httpd_certbot_enabled: false` and point
 `httpd_ssl_certificate_file`, `httpd_ssl_certificate_key_file` and
 `httpd_ssl_ca_certificate_file` at it.
 
+## Logs
+
+Set `httpd_json_access_log: true` to also write
+`/var/log/httpd/access_json.log`, one JSON object per request in the same
+`pul_json` format as the `apache2` role. Ship it with the `otel_collector` role.
+The error logs (`error_log`, `ssl_error_log`) stay as text: Apache doesn't
+escape quotes in error messages, so a JSON error log would break on lines
+such as mod_auth_openidc's. The collector parses them instead.
+
 ## Testing
 
 ```bash
