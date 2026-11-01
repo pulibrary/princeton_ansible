@@ -5,9 +5,12 @@
     name: epel-release
     state: present
 
+# fuse3 provides mount.fuse3, which runs s3fs for "s3fs#bucket" entries
 - name: DSS processing | install s3fs
   ansible.builtin.dnf:
-    name: s3fs-fuse
+    name:
+      - s3fs-fuse
+      - fuse3
     state: present
 
 - name: DSS processing | write s3fs credentials
@@ -30,11 +33,13 @@
   loop_control:
     label: "{{ item.path }}"
 
+# Same fstab form as dss2. With fstype fuse.s3fs, mount hands the s3fs
+# options straight to the kernel, which rejects passwd_file.
 - name: DSS processing | mount S3 buckets
   ansible.posix.mount:
-    src: "{{ item.bucket }}"
+    src: "s3fs#{{ item.bucket }}"
     path: "{{ item.path }}"
-    fstype: fuse.s3fs
+    fstype: fuse3
     opts: "{{ (dss_processing_s3_base_opts + (['ro'] if dss_processing_s3_read_only else []) + (item.options | default([]))) | join(',') }}"
     state: mounted
   loop: "{{ dss_processing_s3_mounts }}"
