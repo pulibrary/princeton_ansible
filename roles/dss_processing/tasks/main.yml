@@ -22,37 +22,97 @@
     mode: "0600"
   no_log: true
 
-- name: DSS processing | create mount points
-  ansible.builtin.file:
-    path: "{{ item.path }}"
-    state: directory
-    owner: root
-    group: root
-    mode: "0755"
+- name: DSS processing | check which S3 buckets are mounted
+  ansible.builtin.command: findmnt --noheadings {{ item.path }}
+  register: dss_processing_findmnt
+  changed_when: false
+  failed_when: false
   loop: "{{ dss_processing_s3_mounts }}"
   loop_control:
     label: "{{ item.path }}"
 
-# Same fstab form as dss2. With fstype fuse.s3fs, mount hands the s3fs
-# options straight to the kernel, which rejects passwd_file.
+# A mounted path is the bucket itself (read-only on the sandbox), so only
+# create and set permissions on mount points that aren't mounted
+- name: DSS processing | create mount points
+  ansible.builtin.file:
+    path: "{{ item.item.path }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: item.rc != 0
+  loop: "{{ dss_processing_findmnt.results }}"
+  loop_control:
+    label: "{{ item.item.path }}"
+
+# Same fstab form as dss2 (s3fs#<bucket>, fuse3). With fstype fuse.s3fs,
+# mount hands the s3fs options straight to the kernel, which rejects
+# passwd_file. ansible.posix.mount can't manage these lines because it
+# treats everything after "#" as a comment, so fstab is rewritten here:
+# any non-comment line for one of our mount points is replaced.
+- name: DSS processing | read fstab
+  ansible.builtin.slurp:
+    src: /etc/fstab
+  register: dss_processing_fstab
+
+- name: DSS processing | write S3 entries to fstab
+  ansible.builtin.copy:
+    content: "{{ (dss_processing_fstab_kept + dss_processing_fstab_s3) | join('\n') }}\n"
+    dest: /etc/fstab
+    owner: root
+    group: root
+    mode: "0644"
+    backup: true
+  register: dss_processing_fstab_write
+  vars:
+    dss_processing_s3_paths: "{{ dss_processing_s3_mounts | map(attribute='path') | list }}"
+    dss_processing_fstab_kept: >-
+      {{ (dss_processing_fstab.content | b64decode | trim).splitlines()
+         | reject('match', '^\s*[^#\s]\S*\s+(' ~ (dss_processing_s3_paths | map('regex_escape') | join('|')) ~ ')\s')
+         | list }}
+    dss_processing_fstab_s3: >-
+      {{ dss_processing_s3_mounts
+         | map(attribute='bucket') | map('regex_replace', '^', 's3fs#')
+         | zip(dss_processing_s3_paths)
+         | map('join', ' ')
+         | map('regex_replace', '$', ' fuse3 ' ~ dss_processing_s3_opts_line ~ ' 0 0')
+         | list }}
+    dss_processing_s3_opts_line: >-
+      {{ (['_netdev', 'allow_other', 'nofail',
+           'passwd_file=' ~ dss_processing_s3_passwd_file,
+           'url=' ~ dss_processing_s3_url,
+           'endpoint=' ~ dss_processing_s3_endpoint]
+          + dss_processing_s3_opts
+          + (['ro'] if dss_processing_s3_read_only else [])) | join(',') }}
+
+# s3fs reads its options only at mount time, so a changed fstab line
+# needs an unmount; -l because a stuck s3fs can hang a plain umount
+- name: DSS processing | unmount S3 buckets with old options
+  ansible.builtin.command: umount -l {{ item.item.path }}  # noqa: command-instead-of-module
+  changed_when: true
+  when:
+    - dss_processing_fstab_write is changed
+    - item.rc == 0
+  loop: "{{ dss_processing_findmnt.results }}"
+  loop_control:
+    label: "{{ item.item.path }}"
+
 - name: DSS processing | mount S3 buckets
-  ansible.posix.mount:
-    src: "s3fs#{{ item.bucket }}"
-    path: "{{ item.path }}"
-    fstype: fuse3
-    opts: "{{ (dss_processing_s3_base_opts + (['ro'] if dss_processing_s3_read_only else []) + (item.options | default([]))) | join(',') }}"
-    state: mounted
+  ansible.builtin.command: mount {{ item.item.path }}  # noqa: command-instead-of-module
+  changed_when: true
+  when: dss_processing_fstab_write is changed or item.rc != 0
+  loop: "{{ dss_processing_findmnt.results }}"
+  loop_control:
+    label: "{{ item.item.path }}"
+
+# s3fs retries forever on S3 errors (bad keys, IP-restricted policy) and
+# hangs anything that touches the mount, Apache included; fail here instead
+- name: DSS processing | check S3 buckets can be listed
+  ansible.builtin.command: timeout 30 ls {{ item.path }}
+  changed_when: false
   loop: "{{ dss_processing_s3_mounts }}"
   loop_control:
-    label: "{{ item.bucket }} -> {{ item.path }}"
-  vars:
-    dss_processing_s3_base_opts:
-      - _netdev
-      - allow_other
-      - nofail
-      - "passwd_file={{ dss_processing_s3_passwd_file }}"
-      - "url={{ dss_processing_s3_url }}"
-      - "endpoint={{ dss_processing_s3_endpoint }}"
+    label: "{{ item.path }}"
 
 - name: DSS processing | let httpd read FUSE mounts
   ansible.posix.seboolean:

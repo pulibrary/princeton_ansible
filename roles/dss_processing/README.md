@@ -22,4 +22,9 @@ vault_dss_processing_s3_secret_access_key: "<AWS secret access key>"
 
 Set `dss_processing_s3_read_only: true` to mount every bucket read-only.
 
+Every mount gets `umask=0022` and `compat_dir` (`dss_processing_s3_opts`).
+Without them, objects uploaded by other tools show as mode `000` and Apache
+refuses to serve them, and folders that exist only as key prefixes (such
+as `kaiko-trades/`) can't be opened.
+
 `/data` and `/data2` are local LVM volumes on dss2 and are not managed here.

@@ -5,6 +5,12 @@ dss_processing_s3_secret_access_key: "{{ vault_dss_processing_s3_secret_access_k
 dss_processing_s3_passwd_file: /etc/passwd-s3fs
 dss_processing_s3_url: "https://s3.us-east-2.amazonaws.com"
 dss_processing_s3_endpoint: us-east-2
+# Objects uploaded outside s3fs carry no mode metadata and show up as
+# mode 000; umask gives everything a usable mode. compat_dir shows
+# "directories" that exist only as key prefixes.
+dss_processing_s3_opts:
+  - umask=0022
+  - compat_dir
 # Mount every bucket read-only, e.g. when a sandbox points at the
 # production buckets
 dss_processing_s3_read_only: false
@@ -12,7 +18,6 @@ dss_processing_s3_read_only: false
 # S3 buckets to mount with s3fs. Each entry:
 #   bucket:  S3 bucket name
 #   path:    mount point
-#   options: extra mount options (optional)
 dss_processing_s3_mounts:
   - bucket: dss-server-data3
     path: /data3_AWS_S3
