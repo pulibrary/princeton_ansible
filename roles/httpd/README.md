@@ -87,6 +87,18 @@ All conditions on an entry are ANDed. See `defaults/main.yml` for every key.
 
 ## Certificates
 
+Let's Encrypt is the default. For InCommon certificates through Certinext,
+set the ACME server and the external account binding (EAB) credentials:
+
+```yaml
+httpd_certbot_acme_server: "https://acme-us.certinext.io/v1/directory"
+httpd_certbot_eab_kid: "{{ vault_..._certinext_acme_eab_kid }}"
+httpd_certbot_eab_hmac_key: "{{ vault_..._certinext_acme_eab_hmac_key }}"
+```
+
+The EAB credentials are only used the first time certbot registers its
+account on the host. Renewals reuse that account.
+
 The first run serves `:80` only, runs certbot, then adds the `:443` vhost.
 DNS for every name in `httpd_certbot_domains` must point at the host and
 port 80 must be reachable from the internet. To keep using an existing

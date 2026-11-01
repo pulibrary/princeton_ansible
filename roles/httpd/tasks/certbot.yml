@@ -20,9 +20,15 @@
 
 - name: Httpd | request certificate
   ansible.builtin.command:
-    argv: "{{ httpd_certbot_argv + (httpd_certbot_domains | map('regex_replace', '^', '-d=') | list) }}"
+    argv: "{{ httpd_certbot_argv + httpd_certbot_eab_argv + (httpd_certbot_domains | map('regex_replace', '^', '-d=') | list) }}"
     creates: "/etc/letsencrypt/live/{{ httpd_certbot_cert_name }}/fullchain.pem"
+  # the EAB HMAC key is on the command line
+  no_log: "{{ httpd_certbot_eab_kid | length > 0 }}"
   vars:
+    httpd_certbot_eab_argv: >-
+      {{ ['--eab-kid=' ~ httpd_certbot_eab_kid,
+          '--eab-hmac-key=' ~ httpd_certbot_eab_hmac_key]
+         if httpd_certbot_eab_kid | length > 0 else [] }}
     httpd_certbot_argv:
       - certbot
       - certonly
