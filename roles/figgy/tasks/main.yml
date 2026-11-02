@@ -359,56 +359,35 @@
     - "libgdal-dev"
     - "gdal-bin"
 
+# Noble (PEP 668) refuses system-wide pip installs, so cogeo-mosaic lives in
+# its own venv and its CLI is linked onto the PATH for figgy's MosaicGenerator
 - name: Figgy | Install cogeo-mosaic apt prerequisites
   ansible.builtin.apt:
-    name: "{{ item }}"
-    state: present
-  loop:
-    - "python3-setuptools"
-    - "cython3"
-
-- name: Figgy | update pip3 for cogeo-mosaic
-  ansible.builtin.pip:
-    name: pip>21,!=21.2
-    executable: pip3
+    name: python3-venv
     state: present
 
-- name: Figgy | remove cogeo-mosaic requests dependency to ensure the correct version
+- name: Figgy | Create cogeo-mosaic virtualenv with current pip
   ansible.builtin.pip:
-    name: requests
-    executable: pip3
-    state: absent
-  changed_when: "'molecule-idempotence-notest' not in ansible_skip_tags"
-
-- name: Figgy | remove cogeo-mosaic urllib3 dependency to ensure the correct version
-  ansible.builtin.pip:
-    name: urllib3
-    executable: pip3
-    state: absent
-  changed_when: "'molecule-idempotence-notest' not in ansible_skip_tags"
-
-- name: Figgy | Install build prerequisites for rasterio
-  pip:
     name:
-      - "numpy>=1.20.0"
-      - "setuptools<81"
+      - "pip>21,!=21.2"
+      - "setuptools"
       - "wheel"
-    executable: pip3
+    virtualenv: "{{ figgy_cogeo_mosaic_venv }}"
+    virtualenv_command: "python3 -m venv"
     state: present
 
-- name: Figgy | Pre‑install rasterio compatible with GDAL 3.4
-  ansible.builtin.pip:
-    name: "rasterio<1.4.0"
-    executable: pip3
-    state: present
-    extra_args: "--no-build-isolation"
-
-- name: Figgy | Install cogeo‑mosaic (no deps, since we already have rasterio)
+- name: Figgy | Install cogeo-mosaic
   ansible.builtin.pip:
     name: cogeo-mosaic
-    executable: pip3
-    extra_args: "--pre --no-deps"
-  changed_when: "'molecule-idempotence-notest' not in ansible_skip_tags"
+    virtualenv: "{{ figgy_cogeo_mosaic_venv }}"
+    state: present
+
+- name: Figgy | Link cogeo-mosaic onto the PATH
+  ansible.builtin.file:
+    src: "{{ figgy_cogeo_mosaic_venv }}/bin/cogeo-mosaic"
+    dest: /usr/local/bin/cogeo-mosaic
+    state: link
+    force: true
 
 - name: Figgy | Create cloud_config directory
   ansible.builtin.file:
