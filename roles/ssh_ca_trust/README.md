@@ -64,9 +64,8 @@ This is the supported alternative to flipping `ssh_ca_disable_password_auth` to
 `false`, which re-opens password logins for the whole host.
 
 The role never stores or sets a password. The account's password must be checked
-locally or by a directory that answers PAM, so pair it with `ad_join`
-(realm-joined Active Directory) or `sssd_ldap` (Active Directory over LDAPS, no
-join) when the account is not local. Keyboard-interactive is enabled alongside
+locally or by a directory that answers PAM, so pair it with `sssd_ldap`
+(Active Directory over LDAPS) when the account is not local. Keyboard-interactive is enabled alongside
 password because sssd prompts through PAM.
 
 When the identity source uses UPN-style logins (`svc@princeton.edu`), list every

@@ -91,17 +91,11 @@ Dependencies
 
 `deploy_user`.
 
-This role deliberately does **not** pull in an identity provider, because it
-differs per operating system. Add one in the playbook:
+This role deliberately does **not** pull in an identity provider. Add
+`sssd_ldap` in the playbook, which binds to Active Directory over LDAPS with no
+join; see `playbooks/lib_sftp.yml` and `playbooks/sandbox_sftp.yml`.
 
-- Staging and production (Rocky) use `ad_join`, a full realm join with Kerberos
-  and a machine account. See `playbooks/lib_sftp.yml`.
-- The sandbox (Ubuntu) uses `sssd_ldap`, which binds to the same Active
-  Directory over LDAPS with no join. `ad_join` cannot run there: it needs
-  `authselect-compat` and `krb5-workstation`, which Ubuntu does not package.
-  See `playbooks/sandbox_sftp.yml`.
-
-Either way the accounts live in the directory, never in `/etc/passwd`.
+The accounts live in the directory, never in `/etc/passwd`.
 
 This role writes its own sshd drop-in so the transfer accounts can authenticate
 with a password, listing them in `lib_sftp_password_auth_users` and

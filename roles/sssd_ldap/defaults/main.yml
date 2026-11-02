@@ -2,9 +2,8 @@
 # defaults file for roles/sssd_ldap
 #
 # Resolve and authenticate Active Directory accounts over LDAPS without joining
-# the domain. There is no computer object, no keytab and no Kerberos, so this
-# works on Ubuntu, where the realm join in ad_join cannot run: that role needs
-# authselect-compat and krb5-workstation, which Ubuntu does not package.
+# the domain. There is no computer object, no keytab and no Kerberos, so the
+# same configuration works on Ubuntu and on RedHat.
 
 # Active Directory DNS domain and the base to search for accounts.
 sssd_ldap_domain: pu.win.princeton.edu
@@ -22,8 +21,7 @@ sssd_ldap_uri:
 # bind as that user, so this account only needs read access.
 #
 # An LDAP simple bind needs a full distinguished name or a userPrincipalName. A
-# bare account name works for Kerberos, and so for the realm join in ad_join,
-# but Active Directory rejects it here. If the value is a bare name it is turned
+# bare account name works for Kerberos, but Active Directory rejects it here. If the value is a bare name it is turned
 # into a userPrincipalName using sssd_ldap_upn_suffix.
 sssd_ldap_bind_dn: >-
   {{ sssd_bind_dn if (',' in sssd_bind_dn or '@' in sssd_bind_dn)
@@ -65,14 +63,12 @@ sssd_ldap_id_mapping: false
 
 sssd_ldap_default_shell: /bin/bash
 
-# Home directory path, matching the realm-joined hosts so an account has the
-# same home everywhere.
+# Home directory path. Existing homes, and jobs with the path built in, use the
+# uppercase realm name, as a realm join would have produced.
 #
 # The obvious value, /home/%u@%d, is not enough: sssd expands %d to the domain
-# section's name, and ad_join labels that section with the uppercase Kerberos
-# realm while this role uses the lowercase DNS domain. The same template would
-# therefore produce a different path here, and any job with the staging path
-# built in would miss. Uppercase it explicitly instead of relying on %d.
+# section's name, which here is the lowercase DNS domain. Uppercase it
+# explicitly instead of relying on %d.
 sssd_ldap_fallback_homedir: "/home/%u@{{ sssd_ldap_domain | upper }}"
 
 # Create home directories on first login. Directory accounts have no home until

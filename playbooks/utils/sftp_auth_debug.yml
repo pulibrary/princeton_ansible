@@ -4,13 +4,12 @@
 # Alma reports "Auth cancel" when sshd offers it no acceptable authentication
 # method. That is method negotiation, not a wrong password, and not a firewall
 # problem: the TCP connection already reached the auth stage. This playbook
-# collects the four things that decide the outcome, in the order they are
+# collects the three things that decide the outcome, in the order they are
 # consulted at login:
 #
 #   1. Does the account resolve at all (NSS through sssd)?
-#   2. Is sssd running, joined, and online?
-#   3. Is the machine account and keytab still valid?
-#   4. Does sshd actually offer password auth to that user?
+#   2. Is sssd running and online?
+#   3. Does sshd actually offer password auth to that user?
 #
 # Nothing is changed. Every task is read-only and cannot fail the run, so the
 # full picture is always collected even when part of the stack is broken.
@@ -112,7 +111,7 @@
         argv:
           - sssctl
           - domain-status
-          - "{{ ad_join_ad_domain | default('pu.win.princeton.edu') }}"
+          - "{{ sssd_ldap_domain | default('pu.win.princeton.edu') }}"
       register: debug_domain_status
       changed_when: false
       failed_when: false
@@ -124,41 +123,7 @@
           - "domain status: {{ debug_domain_status.stdout_lines
                | default([debug_domain_status.stderr | default('no output')]) }}"
 
-    # 3. Machine account and keytab. A realm join silently stops working when
-    #    the computer object is deleted or the machine password is no longer in
-    #    step with the directory, which looks exactly like this failure.
-    - name: List joined realms
-      ansible.builtin.command:
-        argv:
-          - realm
-          - list
-      register: debug_realm
-      changed_when: false
-      failed_when: false
-
-    - name: Test whether the existing join still works
-      ansible.builtin.command:
-        argv:
-          - adcli
-          - testjoin
-          - --domain
-          - "{{ ad_join_ad_domain | default('pu.win.princeton.edu') }}"
-      register: debug_testjoin
-      changed_when: false
-      failed_when: false
-
-    - name: Report join state
-      ansible.builtin.debug:
-        msg:
-          - "realm list: {{ debug_realm.stdout_lines | default(['not joined']) }}"
-          - "adcli testjoin: {{ 'PASSED' if debug_testjoin.rc == 0
-               else 'FAILED -- ' + (debug_testjoin.stderr | default('') | trim) }}"
-          - "{{ 'A failed testjoin means the computer account or keytab is no
-             longer valid. sssd cannot authenticate anyone, and every password
-             login fails with no usable method, which is what Alma reports as
-             Auth cancel.' if debug_testjoin.rc != 0 else '' }}"
-
-    # 4. What sshd actually offers this user, Match blocks included.
+    # 3. What sshd actually offers this user, Match blocks included.
     - name: Ask sshd what it would do for each account
       ansible.builtin.command:
         argv:

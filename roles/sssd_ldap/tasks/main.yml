@@ -92,8 +92,8 @@
       environment:
         DEBIAN_FRONTEND: noninteractive
 
-    # ad_join installs a custom authselect profile. Refuse to overwrite it
-    # rather than silently replacing another role's PAM configuration.
+    # A custom authselect profile belongs to whoever installed it. Refuse to
+    # overwrite it rather than silently replacing that PAM configuration.
     #
     # --raw prints the profile and its features on one line, for example
     # "sssd with-mkhomedir", and nothing when no profile has been selected.
@@ -129,9 +129,9 @@
         msg: >-
           authselect is using
           {{ sssd_ldap_authselect_current.stdout_lines | default([]) | first | default('') }},
-          which another role owns (ad_join installs custom/pul-sssd). Leaving it
-          untouched. If this host should authenticate over LDAP instead, remove
-          the realm join first.
+          which is a custom profile this role does not own. Leaving it
+          untouched. If this host should authenticate over LDAP, select a stock
+          profile or remove the custom one first.
       when:
         - ansible_facts['os_family'] == "RedHat"
         - "'custom/' in sssd_ldap_authselect_current.stdout | default('')"

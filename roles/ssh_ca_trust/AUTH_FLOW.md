@@ -149,7 +149,7 @@ flowchart TD
   Q -->|"yes: staff"| CA["ssh_ca_trust<br/>step-ca and Entra ID"]
   Q -->|"no: service account"| S{"Where is the<br/>password checked?"}
   S -->|on the host| LOC["ssh_ca_password_auth_users<br/>local account, e.g. Veeam backup"]
-  S -->|Active Directory| DIR["ssh_ca_password_auth_users<br/>plus ad_join or sssd_ldap"]
+  S -->|Active Directory| DIR["ssh_ca_password_auth_users<br/>plus sssd_ldap"]
   EN["entraid_join<br/>Entra ID"] -.->|"cannot: forces MFA<br/>on every remote session"| X(("unusable for<br/>service accounts"))
 ```
 
