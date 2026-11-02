@@ -30,7 +30,8 @@ which rules Entra out for password-only service accounts entirely.
 1. Installs sssd and the LDAP back end.
 2. Writes `/etc/sssd/sssd.conf` with `id_provider = ldap` and
    `ldap_schema = ad`, mode `0600` because it carries the lookup password.
-3. Adds `sss` to `passwd`, `group` and `shadow` in `nsswitch.conf`.
+3. Adds `sss` to `passwd`, `group` and `shadow` in `nsswitch.conf` on Debian.
+   On RedHat authselect owns that file and the profile in step 4 writes it.
 4. Enables the `sss` and `mkhomedir` PAM profiles (`pam-auth-update` on Debian,
    `authselect` on RedHat), refusing to overwrite a custom profile another role
    owns.

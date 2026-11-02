@@ -1,0 +1,36 @@
+---
+- name: Verify
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Check the sssd configuration is valid
+      ansible.builtin.command: sssctl config-check
+      changed_when: false
+
+    - name: Check the sssd authselect profile is selected with mkhomedir
+      ansible.builtin.command: authselect current --raw
+      register: sssd_ldap_authselect
+      changed_when: false
+      failed_when: sssd_ldap_authselect.stdout.split() | sort != ['sssd', 'with-mkhomedir']
+
+    # Fails if anything other than authselect has edited the files it owns.
+    - name: Check authselect still owns its files
+      ansible.builtin.command: authselect check
+      changed_when: false
+
+    - name: Check nsswitch consults sssd
+      ansible.builtin.command: grep -E '^passwd:.*\bsss\b' /etc/nsswitch.conf
+      changed_when: false
+
+    - name: Gather service state
+      ansible.builtin.service_facts:
+
+    - name: Check sssd, oddjobd and crond are running
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.services[item ~ '.service'].state == 'running'
+      loop: [sssd, oddjobd, crond]
+
+    - name: Check the cache-warm job is installed
+      ansible.builtin.command: grep -q almasftp /etc/cron.d/sssd-ldap-cache-warm
+      changed_when: false
