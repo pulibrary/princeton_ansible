@@ -1,0 +1,20 @@
+---
+# Runs once, before converge, so the idempotence pass does not recreate these.
+- name: Prepare
+  hosts: all
+  become: true
+  tasks:
+    # What earlier versions of the role left behind, plus the cloud-init file
+    # that used to beat it. The role must remove the first and win over the
+    # second.
+    - name: Plant the drop-in under its old name
+      ansible.builtin.copy:
+        content: "PasswordAuthentication yes\n"
+        dest: /etc/ssh/sshd_config.d/60-ssh-ca-access.conf
+        mode: "0644"
+
+    - name: Plant a cloud-init drop-in that enables passwords
+      ansible.builtin.copy:
+        content: "PasswordAuthentication yes\n"
+        dest: /etc/ssh/sshd_config.d/50-cloud-init.conf
+        mode: "0644"

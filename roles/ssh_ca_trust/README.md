@@ -16,7 +16,9 @@ to a single `Match User` block.
 2. Writes the User CA public key to `/etc/ssh/trusted_user_ca_keys.pem`
    (optionally asserting `ssh_ca_user_ca_fingerprint`).
 3. Creates local users and their `/etc/ssh/auth_principals/%u` files.
-4. Drops `60-ssh-ca-access.conf` into `sshd_config.d`.
+4. Drops `10-ssh-ca-access.conf` into `sshd_config.d`, ahead of the image's
+   `50-cloud-init.conf`, and removes the `60-ssh-ca-access.conf` earlier
+   versions wrote.
 5. Optionally re-enables password authentication for named service accounts
    inside a `Match User` block, leaving the host password-less for everyone
    else.

@@ -129,7 +129,8 @@ a service account cannot be undone by an `AllowUsers` line that predates it.
 `KbdInteractiveAuthentication` and friends take the **first** value parsed, and
 `Include /etc/ssh/sshd_config.d/*.conf` sits at the top of the file on Debian
 and RHEL alike. A drop-in that sorts earlier wins outright, which is why
-`60-ssh-ca-access.conf` beats anything set later in `sshd_config`, and why the
+`10-ssh-ca-access.conf` beats the image's `50-cloud-init.conf` and anything set
+later in `sshd_config`, and why the
 `Match` block is the only correct way to make an exception. Flipping
 `ssh_ca_disable_password_auth` to `false` would reopen passwords for everyone.
 
