@@ -12,9 +12,8 @@ in the HCL file. Because Docker runs with `userns-remap`, the volume is owned
 by the in-container user id plus the 1000000 remap offset.
 
 1. Deploy Zookeeper (see `nomad/zookeeper/README.md`)
-2. Provision the volumes:
+2. Provision the volumes and deploy the application:
    `ansible-playbook playbooks/nomad_solr.yml` (defaults to sandbox)
-3. Run the job: `cd nomad && ./bin/deploy solr sandbox`
 
 ## How It Finds Zookeeper
 

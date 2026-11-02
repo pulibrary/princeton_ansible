@@ -11,9 +11,8 @@ match `zookeeper_count` in the HCL file. Because Docker runs with
 `userns-remap`, the volume is owned by the in-container user id plus the
 1000000 remap offset.
 
-1. Provision the volumes:
+1. Provision the volumes and deploy the application:
    `ansible-playbook playbooks/nomad_zookeeper.yml` (defaults to sandbox)
-2. Run the job: `cd nomad && ./bin/deploy zookeeper sandbox`
 
 ## How Membership Works
 

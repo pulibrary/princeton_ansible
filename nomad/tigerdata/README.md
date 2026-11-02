@@ -28,17 +28,8 @@ jobs:
 
 ## Deployment
 
-First seed the runner registration token into Nomad. This only needs to be
-re-run when the token changes:
-
 ```bash
 ansible-playbook playbooks/tigerdata_ci_deployer.yml
-```
-
-Then deploy the job, from the `nomad` directory:
-
-```bash
-BRANCH=main ./bin/deploy tigerdata production
 ```
 
 You can track progress and status of nomad apps by looking at the Nomad UI,
