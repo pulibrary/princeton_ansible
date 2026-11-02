@@ -1,4 +1,15 @@
 ---
+# Staff shell access with step-ca certificates through ssh_ca_trust. Each person
+# gets a local account; without a groups list they join wheel and pulsys, which
+# on this image means the same passwordless sudo as pulsys.
+ssh_ca_users:
+  - name: jkazmier
+    principals:
+      - jkazmier@princeton.edu
+
+# The image restricts SSH to pulsys in 99-allowusers-pulsys.conf.
+ssh_ca_allowed_users: "{{ ['pulsys'] + ssh_ca_users | map(attribute='name') | list }}"
+
 # SigNoz / OpenTelemetry collector for the DSS processing sandbox. Logs and
 # host metrics go to the staging SigNoz collectors.
 otel_default_resource_attributes:
