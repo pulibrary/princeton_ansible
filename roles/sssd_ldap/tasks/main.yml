@@ -49,10 +49,10 @@
     src: sssd.conf.j2
     dest: /etc/sssd/sssd.conf
     owner: root
-    group: root
-    # sssd refuses to start if this is group or world readable, and it holds the
-    # lookup account password.
-    mode: "0600"
+    # It holds the lookup account password, so never world readable. Where
+    # sssd runs unprivileged it needs group read, and resets this itself.
+    group: "{{ sssd_ldap_conf_group }}"
+    mode: "{{ sssd_ldap_conf_mode }}"
   no_log: true
   notify:
     - Validate sssd configuration

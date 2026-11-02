@@ -10,6 +10,11 @@ sssd_ldap_packages:
   - authselect
   - cronie
 sssd_ldap_service: sssd
+# From EL10 sssd runs as the sssd user, and its unit chowns /etc/sssd to
+# root:sssd on every start. Matching that keeps the role idempotent.
+sssd_ldap_el10: "{{ ansible_facts['distribution_major_version'] | int >= 10 }}"
+sssd_ldap_conf_group: "{{ 'sssd' if sssd_ldap_el10 | bool else 'root' }}"
+sssd_ldap_conf_mode: "{{ '0640' if sssd_ldap_el10 | bool else '0600' }}"
 sssd_ldap_cron_service: crond
 sssd_ldap_default_cacert: /etc/pki/tls/certs/ca-bundle.crt
 # RedHat drives PAM with authselect rather than pam-auth-update.
