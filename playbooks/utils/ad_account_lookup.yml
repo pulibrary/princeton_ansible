@@ -1,35 +1,51 @@
 ---
 # Find the authoritative name of an Active Directory account.
 #
-# Run this on a host that is already joined to the domain (staging or
-# production). It uses that host's machine credentials, so no password is
-# needed, and it searches the Global Catalog rather than a single domain, so it
-# finds the account whichever domain of the forest holds it. That is the
-# question to answer before setting a lookup identity for sssd_ldap.
+# It binds over LDAPS as the sssd_ldap lookup account from group_vars/sftp, so
+# it runs on any SFTP host with the LDAP client tools installed. It searches the
+# Global Catalog rather than a single domain, so it finds the account whichever
+# domain of the forest holds it.
+#
+# Because it binds as the lookup account, it cannot diagnose a lookup account
+# that is itself wrong; the sssd_ldap pre-flight checks cover that case.
 #
 #   ansible-playbook playbooks/utils/ad_account_lookup.yml -e 'lookup_names=libops'
 #   ansible-playbook playbooks/utils/ad_account_lookup.yml \
 #     -e 'lookup_names=libops,almasftp,lib-aspacesftp'
 #
-# Nothing is changed. The Kerberos ticket it obtains is discarded afterwards.
-#
-# Do not run this against the Ubuntu sandbox: it is deliberately not joined, so
-# it has no machine credentials and no Kerberos tools. That is the whole reason
-# it authenticates over LDAPS instead.
-- name: Look up Active Directory accounts from a joined host
+# Nothing is changed. The staged lookup password is removed afterwards.
+- name: Look up Active Directory accounts
   hosts: "{{ lookup_hosts | default('libsftp_staging') }}"
   remote_user: pulsys
   become: true
-  gather_facts: false
+  gather_facts: true
+  gather_subset:
+    - min
+
+  vars_files:
+    - ../../group_vars/sftp/vault.yml
+    - ../../group_vars/sftp/common.yml
 
   vars:
     lookup_names: ""
     # A Global Catalog server. Unlike an ordinary domain controller port, this
     # answers for every domain in the forest, so an account in another domain is
-    # still found. The joined host reports its own in `sssctl domain-status`.
+    # still found. 3269 is the Global Catalog over LDAPS.
     lookup_gc_host: pdom21tlkp.pu.win.princeton.edu
-    lookup_gc_port: 3268
-    lookup_ccache: FILE:/tmp/krb5cc_ad_account_lookup
+    lookup_gc_port: 3269
+    # Bind as the sssd_ldap lookup account. A bare name is turned into a
+    # userPrincipalName the same way sssd_ldap does it.
+    lookup_bind_dn: >-
+      {{ sssd_bind_dn if (',' in sssd_bind_dn or '@' in sssd_bind_dn)
+         else sssd_bind_dn ~ '@' ~ (sssd_ldap_upn_suffix | default('princeton.edu')) }}
+    lookup_bind_password_file: /root/.ad_account_lookup_bind
+    # Trust the same CA bundle sssd_ldap configures, and verify the server.
+    lookup_ldap_env:
+      LDAPTLS_CACERT: >-
+        {{ '/etc/pki/tls/certs/ca-bundle.crt'
+           if ansible_facts['os_family'] == 'RedHat'
+           else '/etc/ssl/certs/ca-certificates.crt' }}
+      LDAPTLS_REQCERT: demand
 
   tasks:
     - name: Require at least one account name
@@ -48,54 +64,30 @@
 
     - name: Look the accounts up
       block:
-        # kinit with no principal guesses host/<fqdn>@REALM. On these hosts the
-        # DNS name and the Active Directory domain differ, so that guess does
-        # not exist in the directory. Read the real principal from the keytab
-        # instead.
-        - name: Read the machine principal from the host keytab
-          ansible.builtin.shell:
-            cmd: >-
-              set -o pipefail;
-              klist -k /etc/krb5.keytab
-              | awk '/\$@|host\//{print $2; exit}'
-          args:
-            executable: /bin/bash
-          register: lookup_principal
+        - name: Stage the lookup password out of the process list
+          ansible.builtin.copy:
+            content: "{{ sssd_bind_dn_password }}"
+            dest: "{{ lookup_bind_password_file }}"
+            owner: root
+            group: root
+            mode: "0600"
+          no_log: true
           changed_when: false
-
-        - name: Fail if the host has no usable machine principal
-          ansible.builtin.assert:
-            that:
-              - lookup_principal.stdout | trim | length > 0
-            fail_msg: >-
-              No machine principal found in /etc/krb5.keytab, so this host
-              cannot query the directory with its own credentials. Run this
-              against a domain-joined host instead.
-
-        - name: Get a Kerberos ticket as the machine account
-          ansible.builtin.command:
-            argv:
-              - kinit
-              - -k
-              - -t
-              - /etc/krb5.keytab
-              - "{{ lookup_principal.stdout | trim }}"
-          register: lookup_kinit
-          changed_when: false
-          environment:
-            KRB5CCNAME: "{{ lookup_ccache }}"
 
         - name: Find each account anywhere in the forest
           ansible.builtin.command:
             argv:
               - ldapsearch
-              - -Y
-              - GSSAPI
+              - -x
               - -LLL
               - -o
               - ldif-wrap=no
               - -H
-              - "ldap://{{ lookup_gc_host }}:{{ lookup_gc_port }}"
+              - "ldaps://{{ lookup_gc_host }}:{{ lookup_gc_port }}"
+              - -D
+              - "{{ lookup_bind_dn }}"
+              - -y
+              - "{{ lookup_bind_password_file }}"
               # An empty base against the Global Catalog searches every domain
               # in the forest, so this does not assume which one holds the
               # account.
@@ -112,17 +104,18 @@
           register: lookup_results
           changed_when: false
           failed_when: false
-          environment:
-            KRB5CCNAME: "{{ lookup_ccache }}"
+          environment: "{{ lookup_ldap_env }}"
 
         - name: Report what the forest holds for each account
           ansible.builtin.debug:
             msg: >-
               {{ item.item }}:
-              {{ item.stdout_lines | default([]) | reject('match', '^$') | list
-                 if (item.stdout | default('') | trim | length) > 0
-                 else 'NOT FOUND anywhere in the forest. Check the spelling of
-                 sAMAccountName; the name may differ from the display name.' }}
+              {{ ('query failed -- ' ~ (item.stderr | default('') | trim))
+                 if item.rc != 0
+                 else (item.stdout_lines | default([]) | reject('match', '^$') | list
+                       if (item.stdout | default('') | trim | length) > 0
+                       else 'NOT FOUND anywhere in the forest. Check the spelling of
+                       sAMAccountName; the name may differ from the display name.') }}
           loop: "{{ lookup_results.results }}"
           loop_control:
             label: "{{ item.item }}"
@@ -170,11 +163,8 @@
               - "while sssd_ldap_id_mapping is false."
 
       always:
-        - name: Discard the Kerberos ticket
-          ansible.builtin.command:
-            argv:
-              - kdestroy
-              - -c
-              - "{{ lookup_ccache }}"
+        - name: Remove the staged lookup password
+          ansible.builtin.file:
+            path: "{{ lookup_bind_password_file }}"
+            state: absent
           changed_when: false
-          failed_when: false
