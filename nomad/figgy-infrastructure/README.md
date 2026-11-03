@@ -14,3 +14,7 @@ The admin interfaces are available here:
 
 **Staging**: https://figgy-rabbitmq-staging.lib.princeton.edu
 **Production**: https://figgy-rabbitmq-production.lib.princeton.edu
+
+### Memcached
+
+This deploys a single memcached instance
