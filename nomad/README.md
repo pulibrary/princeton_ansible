@@ -47,3 +47,9 @@ If you encounter connection issues:
    - Production: `nomad-host-prod1.lib.princeton.edu`
    - Sandbox: `nomad-host-sandbox1.lib.princeton.edu`
 3. Check that the deploy user exists and has proper permissions on the target environment
+
+## Consul UI
+
+How to get to the consul UI:
+`ssh -L 8500:localhost:8500 pulsys@nomad-host-prod2.lib.princeton.edu`
+go to localhost:8500
