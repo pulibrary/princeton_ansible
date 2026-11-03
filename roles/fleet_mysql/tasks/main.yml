@@ -27,9 +27,9 @@
 - name: Fleet MySQL | Assert the host architecture is supported
   ansible.builtin.assert:
     that:
-      - ansible_architecture in mysql_supported_architectures
+      - ansible_facts['architecture'] in mysql_supported_architectures
     fail_msg: >-
-      {{ inventory_hostname }} is {{ ansible_architecture }}. Oracle publishes
+      {{ inventory_hostname }} is {{ ansible_facts['architecture'] }}. Oracle publishes
       MySQL for Ubuntu on amd64 only, so this role cannot install a server
       here.
 
@@ -97,7 +97,7 @@
       # An empty expiry field means the key never expires.
       - >-
         mysql_apt_key_expiry | length == 0
-        or mysql_apt_key_expiry | int > ansible_date_time.epoch | int
+        or mysql_apt_key_expiry | int > ansible_facts['date_time']['epoch'] | int
     fail_msg: >-
       The key at {{ mysql_apt_key_url }} is not
       {{ mysql_apt_key_fingerprint }} or has expired. Oracle publishes a
@@ -130,7 +130,7 @@
     name: mysql
     types: [deb]
     uris: "{{ mysql_apt_repo_url }}"
-    suites: ["{{ ansible_distribution_release }}"]
+    suites: ["{{ ansible_facts['distribution_release'] }}"]
     components:
       - "{{ mysql_apt_repo_component }}"
       - "{{ mysql_apt_tools_component }}"
@@ -396,7 +396,7 @@
     login_password: "{{ mysql_root_password }}"
   with_items:
     - localhost
-    - "{{ ansible_hostname }}"
+    - "{{ ansible_facts['hostname'] }}"
     - 127.0.0.1
   no_log: true
   when:
@@ -517,7 +517,7 @@
     - mysql_gcs_backup_enabled | bool
     - runtime_env | default('staging') == mysql_gcs_backup_environment
     - mysql_server | default(false) | bool
-    - ansible_os_family == "Debian"
+    - ansible_facts['os_family'] == "Debian"
   tags: [google_cloud]
 
 # Any pending MySQL restart has to happen before a dump starts, otherwise
@@ -535,5 +535,5 @@
     - mysql_backup_schedule_enabled | bool
     - runtime_env | default('staging') == mysql_gcs_backup_environment
     - mysql_server | default(false) | bool
-    - ansible_os_family == "Debian"
+    - ansible_facts['os_family'] == "Debian"
   tags: [google_cloud]
