@@ -4,13 +4,12 @@
 # Alma reports "Auth cancel" when sshd offers it no acceptable authentication
 # method. That is method negotiation, not a wrong password, and not a firewall
 # problem: the TCP connection already reached the auth stage. This playbook
-# collects the four things that decide the outcome, in the order they are
+# collects the three things that decide the outcome, in the order they are
 # consulted at login:
 #
 #   1. Does the account resolve at all (NSS through sssd)?
-#   2. Is sssd running, joined, and online?
-#   3. Is the machine account and keytab still valid?
-#   4. Does sshd actually offer password auth to that user?
+#   2. Is sssd running and online?
+#   3. Does sshd actually offer password auth to that user?
 #
 # Nothing is changed. Every task is read-only and cannot fail the run, so the
 # full picture is always collected even when part of the stack is broken.
@@ -35,11 +34,22 @@
     # connecting. The address only has to be non-local to look remote.
     debug_client_host: alma.exlibrisgroup.com
     debug_client_addr: 1.2.3.4
-    # Private credential cache so this check never disturbs a real ticket.
-    debug_ccache: FILE:/tmp/krb5cc_sftp_auth_debug
     # Domain controller to query directly. sssd discovers its own; this only
     # needs to be one that answers.
     debug_dc: pdom21tlkp.pu.win.princeton.edu
+    # Bind as the sssd_ldap lookup account. A bare name is turned into a
+    # userPrincipalName the same way sssd_ldap does it.
+    debug_bind_dn: >-
+      {{ sssd_bind_dn if (',' in sssd_bind_dn or '@' in sssd_bind_dn)
+         else sssd_bind_dn ~ '@' ~ (sssd_ldap_upn_suffix | default('princeton.edu')) }}
+    debug_bind_password_file: /root/.sftp_auth_debug_bind
+    # Trust the same CA bundle sssd_ldap configures, and verify the server.
+    debug_ldap_env:
+      LDAPTLS_CACERT: >-
+        {{ '/etc/pki/tls/certs/ca-bundle.crt'
+           if ansible_facts['os_family'] == 'RedHat'
+           else '/etc/ssl/certs/ca-certificates.crt' }}
+      LDAPTLS_REQCERT: demand
 
   tasks:
     - name: Identify the host
@@ -112,7 +122,7 @@
         argv:
           - sssctl
           - domain-status
-          - "{{ ad_join_ad_domain | default('pu.win.princeton.edu') }}"
+          - "{{ sssd_ldap_domain | default('pu.win.princeton.edu') }}"
       register: debug_domain_status
       changed_when: false
       failed_when: false
@@ -124,41 +134,7 @@
           - "domain status: {{ debug_domain_status.stdout_lines
                | default([debug_domain_status.stderr | default('no output')]) }}"
 
-    # 3. Machine account and keytab. A realm join silently stops working when
-    #    the computer object is deleted or the machine password is no longer in
-    #    step with the directory, which looks exactly like this failure.
-    - name: List joined realms
-      ansible.builtin.command:
-        argv:
-          - realm
-          - list
-      register: debug_realm
-      changed_when: false
-      failed_when: false
-
-    - name: Test whether the existing join still works
-      ansible.builtin.command:
-        argv:
-          - adcli
-          - testjoin
-          - --domain
-          - "{{ ad_join_ad_domain | default('pu.win.princeton.edu') }}"
-      register: debug_testjoin
-      changed_when: false
-      failed_when: false
-
-    - name: Report join state
-      ansible.builtin.debug:
-        msg:
-          - "realm list: {{ debug_realm.stdout_lines | default(['not joined']) }}"
-          - "adcli testjoin: {{ 'PASSED' if debug_testjoin.rc == 0
-               else 'FAILED -- ' + (debug_testjoin.stderr | default('') | trim) }}"
-          - "{{ 'A failed testjoin means the computer account or keytab is no
-             longer valid. sssd cannot authenticate anyone, and every password
-             login fails with no usable method, which is what Alma reports as
-             Auth cancel.' if debug_testjoin.rc != 0 else '' }}"
-
-    # 4. What sshd actually offers this user, Match blocks included.
+    # 3. What sshd actually offers this user, Match blocks included.
     - name: Ask sshd what it would do for each account
       ansible.builtin.command:
         argv:
@@ -224,15 +200,17 @@
 
     # Two specific failure signatures are easy to miss in the log noise but
     # explain most "worked yesterday, fails today" reports.
-    - name: Count Kerberos pre-authentication failures
+    # sssd_ldap checks the password with an LDAP bind as the user, so a
+    # rejected password reaches PAM as code 7 rather than as a Kerberos error.
+    - name: Count rejected passwords
       ansible.builtin.shell:
         cmd: >-
           set -o pipefail;
-          journalctl -u sssd --since '14 days ago' --no-pager
-          | grep -c 'Preauthentication failed' || true
+          journalctl -u sssd -u ssh -u sshd --since '14 days ago' --no-pager
+          | grep -cE 'pam_sss.*7 \(Authentication failure\)' || true
       args:
         executable: /bin/bash
-      register: debug_preauth
+      register: debug_badpw
       changed_when: false
       failed_when: false
 
@@ -278,10 +256,10 @@
     - name: Report the signatures that matter most
       ansible.builtin.debug:
         msg:
-          - "Kerberos 'Preauthentication failed' in 14 days: {{ debug_preauth.stdout | trim }}"
+          - "PAM 'Authentication failure' results in 14 days: {{ debug_badpw.stdout | trim }}"
           - "  Non-zero means a password was presented and the directory"
-          - "  rejected it. That is a wrong, changed, or expired password,"
-          - "  not a broken join."
+          - "  rejected the bind. That is a wrong, changed, or expired"
+          - "  password, not a broken sssd configuration."
           - "sssd back end killed by watchdog in 14 days: {{ debug_watchdog.stdout | trim }}"
           - "  Non-zero means the back end hung and was restarted. While it is"
           - "  hung, PAM cannot authenticate anyone, so logins fail with no"
@@ -331,48 +309,34 @@
     # resolves through NSS perfectly well but can never authenticate, which is
     # easy to misread as an sshd or sssd fault.
     #
-    # The host is already joined, so it has a machine keytab. Use it to get a
-    # ticket rather than asking the operator to kinit by hand.
+    # Bind over LDAPS as the sssd_ldap lookup account, the same identity sssd
+    # uses, so this needs neither a domain join nor an operator password.
     - name: Query the directory for account state
       block:
-        - name: Find the machine principal in the host keytab
-          ansible.builtin.shell:
-            cmd: >-
-              set -o pipefail;
-              klist -k /etc/krb5.keytab
-              | awk '/\$@|host\//{print $2; exit}'
-          args:
-            executable: /bin/bash
-          register: debug_principal
+        - name: Stage the lookup password out of the process list
+          ansible.builtin.copy:
+            content: "{{ sssd_bind_dn_password }}"
+            dest: "{{ debug_bind_password_file }}"
+            owner: root
+            group: root
+            mode: "0600"
+          no_log: true
           changed_when: false
-          failed_when: false
-
-        - name: Get a Kerberos ticket from the host keytab
-          ansible.builtin.command:
-            argv:
-              - kinit
-              - -k
-              - -t
-              - /etc/krb5.keytab
-              - "{{ debug_principal.stdout | trim }}"
-          register: debug_kinit
-          changed_when: false
-          failed_when: false
-          when: debug_principal.stdout | trim | length > 0
-          environment:
-            KRB5CCNAME: "{{ debug_ccache }}"
 
         - name: Read the account control flags from the directory
           ansible.builtin.command:
             argv:
               - ldapsearch
-              - -Y
-              - GSSAPI
+              - -x
               - -LLL
               # Without an explicit URI ldapsearch tries localhost, which is
               # not a domain controller.
               - -H
-              - "ldap://{{ debug_dc }}"
+              - "ldaps://{{ debug_dc }}"
+              - -D
+              - "{{ debug_bind_dn }}"
+              - -y
+              - "{{ debug_bind_password_file }}"
               - -b
               - "{{ sssd_ldap_search_base | default('dc=pu,dc=win,dc=princeton,dc=edu') }}"
               - "(sAMAccountName={{ item }})"
@@ -386,43 +350,33 @@
           register: debug_uac
           changed_when: false
           failed_when: false
-          when: debug_kinit.rc | default(1) == 0
-          environment:
-            KRB5CCNAME: "{{ debug_ccache }}"
+          environment: "{{ debug_ldap_env }}"
 
         - name: Report directory account state
           ansible.builtin.debug:
             msg: >-
               {{ item.item }}:
-              {{ item.stdout_lines if item.rc | default(1) == 0
-                 else 'query failed -- ' + (item.stderr | default('skipped') | trim) }}
-          loop: "{{ debug_uac.results | default([]) }}"
+              {{ item.stdout_lines if item.rc == 0
+                 else 'query failed -- ' + (item.stderr | default('') | trim) }}
+          loop: "{{ debug_uac.results }}"
           loop_control:
-            label: "{{ item.item | default('n/a') }}"
-          when: debug_uac is not skipped
+            label: "{{ item.item }}"
 
-        - name: Explain if no ticket could be obtained
+        - name: Explain how to read the account state
           ansible.builtin.debug:
             msg:
-              - "Could not get a Kerberos ticket from /etc/krb5.keytab, so the"
-              - "directory account state was not read. Check by hand with:"
-              - "  sudo kinit -k && sudo ldapsearch -Y GSSAPI -LLL \\"
-              - "    -b {{ sssd_ldap_search_base | default('dc=pu,dc=win,dc=princeton,dc=edu') }} \\"
-              - "    '(sAMAccountName={{ debug_accounts | first }})' userAccountControl pwdLastSet"
               - "Decode userAccountControl: 512 is a normal enabled account,"
               - "514 is disabled, 8388608 means the password has expired, and"
               - "65536 means the password never expires."
-          when: debug_kinit.rc | default(1) != 0
+              - "If every query failed, the lookup bind itself is the problem;"
+              - "the sssd_ldap pre-flight checks say why."
 
       always:
-        - name: Destroy the ticket obtained for this check
-          ansible.builtin.command:
-            argv:
-              - kdestroy
-              - -c
-              - "{{ debug_ccache }}"
+        - name: Remove the staged lookup password
+          ansible.builtin.file:
+            path: "{{ debug_bind_password_file }}"
+            state: absent
           changed_when: false
-          failed_when: false
 
     # The PAM account phase, which is separate from authentication and is where
     # access_provider = ad enforces Active Directory Group Policy. A correct

@@ -1,0 +1,29 @@
+# {{ ansible_managed }}
+# Entra ID login via mod_auth_openidc
+OIDCProviderMetadataURL {{ httpd_oidc_provider_metadata_url }}
+OIDCClientID {{ httpd_oidc_client_id }}
+{% if httpd_oidc_client_auth == 'private_key_jwt' %}
+# Key files must be set before OIDCProviderTokenEndpointAuth
+OIDCPublicKeyFiles {{ httpd_oidc_key_dir }}/client.crt
+OIDCPrivateKeyFiles {{ httpd_oidc_key_dir }}/client.key
+OIDCProviderTokenEndpointAuth private_key_jwt
+{% else %}
+OIDCClientSecret {{ httpd_oidc_client_secret }}
+{% endif %}
+OIDCRedirectURI https://{{ httpd_server_name }}{{ httpd_oidc_redirect_path }}
+OIDCCryptoPassphrase {{ httpd_oidc_crypto_passphrase }}
+OIDCScope "{{ httpd_oidc_scope }}"
+{% if httpd_oidc_pkce_method %}
+OIDCPKCEMethod {{ httpd_oidc_pkce_method }}
+{% endif %}
+OIDCRemoteUserClaim {{ httpd_oidc_remote_user_claim }}
+OIDCSessionInactivityTimeout {{ httpd_oidc_session_inactivity_timeout }}
+OIDCSessionMaxDuration {{ httpd_oidc_session_max_duration }}
+OIDCCookieSameSite On
+
+# The redirect URI must sit under a path mod_auth_openidc protects.
+# Log out with {{ httpd_oidc_redirect_path }}?logout=https://{{ httpd_server_name }}/
+<Location "{{ httpd_oidc_redirect_path | dirname }}">
+    AuthType openid-connect
+    Require valid-user
+</Location>

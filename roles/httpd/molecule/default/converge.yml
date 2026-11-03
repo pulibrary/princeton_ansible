@@ -1,0 +1,36 @@
+---
+- name: Converge
+  hosts: all
+  become: true
+  vars:
+    httpd_server_name: localhost
+    httpd_certbot_enabled: false
+    httpd_manage_firewalld: false
+    httpd_oidc_client_auth: private_key_jwt
+    httpd_oidc_private_key_src: "{{ molecule_ephemeral_directory }}/oidc_private_key"
+    httpd_oidc_certificate_src: "{{ molecule_ephemeral_directory }}/oidc_cert"
+    httpd_ssl_certificate_file: /etc/pki/tls/certs/molecule.crt
+    httpd_ssl_certificate_key_file: /etc/pki/tls/private/molecule.key
+    httpd_directories:
+      - path: /srv/open
+        alias: /open
+      - path: /srv/sso
+        alias: /sso
+        oidc: true
+        # localhost resolves to ::1 first on EL10
+        require_ip: [127.0.0.1, '::1']
+      - path: /srv/named
+        alias: /named
+        require_users: [netid1, netid2]
+      - path: /srv/closed
+        alias: /closed
+        deny: true
+  pre_tasks:
+    - name: Create test directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: "0755"
+      loop: [/srv/open, /srv/sso, /srv/named, /srv/closed]
+  roles:
+    - role: httpd

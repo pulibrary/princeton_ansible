@@ -131,18 +131,13 @@ title: "Choosing how a host reaches its directory"
 flowchart TD
   Q{"Does the account<br/>log in with a password<br/>and no MFA?"}
   Q -->|no, staff with a certificate| CA["ssh_ca_trust<br/>step-ca and Entra ID"]
-  Q -->|yes| OS{"Which operating<br/>system?"}
-  OS -->|Rocky| AJ["ad_join<br/>realm join, Kerberos,<br/>machine account"]
-  OS -->|Ubuntu| SL["sssd_ldap<br/>LDAPS bind, no join"]
-  AJ --> AD[("Active Directory")]
-  SL --> AD
+  Q -->|yes| SL["sssd_ldap<br/>LDAPS bind, no join"]
+  SL --> AD[("Active Directory")]
   EN["entraid_join<br/>Entra ID"] -.->|"cannot: forces MFA<br/>on every remote session"| X(("unusable for<br/>service accounts"))
 ```
 
-`ad_join` needs `authselect-compat` and `krb5-workstation`, which Ubuntu does
-not package, so it cannot run on the sandbox. This role reaches the same
-directory with no machine account, no keytab and no Kerberos, so a single
-configuration works on both operating systems.
+This role reaches the directory with no machine account, no keytab and no
+Kerberos, so a single configuration works on Ubuntu and on RedHat.
 
 Entra ID is not an option for these two accounts. Himmelblau forces MFA for
 every remote session, so a password-only service account is refused with

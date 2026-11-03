@@ -1,0 +1,247 @@
+---
+# Staff shell access with step-ca certificates through ssh_ca_trust. Each person
+# gets a local account; without a groups list they join wheel and pulsys, which
+# on this image means the same passwordless sudo as pulsys.
+ssh_ca_users:
+  - name: jkazmier
+    principals:
+      - jkazmier@princeton.edu
+
+# The image restricts SSH to pulsys in 99-allowusers-pulsys.conf.
+ssh_ca_allowed_users: "{{ ['pulsys'] + ssh_ca_users | map(attribute='name') | list }}"
+
+# SigNoz / OpenTelemetry collector for the DSS processing sandbox. Logs and
+# host metrics go to the staging SigNoz collectors.
+otel_default_resource_attributes:
+  host.name: "{{ inventory_hostname }}"
+  service.name: dss_processing
+  service.version: sandbox
+  environment: sandbox
+  deployment.environment: sandbox
+
+# Check the rendered config on the host before the collector restarts
+otel_validate_config: true
+otel_validate_cmd: >-
+  {{ otel_binary_path }} validate
+  --config {{ otel_config_path }}
+
+otel_receivers:
+  # Apache writes these records as JSON (httpd_json_access_log in main.yml),
+  # so there is no line format to pick apart and a quote in a user agent
+  # cannot break a record. "user" is the netid of the Entra login.
+  filelog/httpd-access:
+    include:
+      - /var/log/httpd/access_json.log
+    start_at: end
+    include_file_path: true
+    include_file_name: true
+    operators:
+      - type: json_parser
+        id: parse_httpd_access_json
+        parse_from: body
+        on_error: send
+
+      - type: time_parser
+        id: parse_httpd_access_timestamp
+        parse_from: attributes.timestamp
+        layout_type: gotime
+        layout: "2006-01-02T15:04:05-0700"
+        on_error: send
+
+      # Apache writes the status as a number, so the response class becomes a
+      # severity without any string handling.
+      - type: severity_parser
+        id: parse_httpd_access_severity
+        parse_from: attributes.status
+        preset: none
+        # Without this the severity would read as the status code itself.
+        overwrite_text: true
+        mapping:
+          info:
+            - min: 100
+              max: 399
+          warn:
+            - min: 400
+              max: 499
+          error:
+            - min: 500
+              max: 599
+        on_error: send
+
+      - type: move
+        from: attributes.client_ip
+        to: attributes.http.client_ip
+
+      - type: move
+        from: attributes.method
+        to: attributes.http.request.method
+
+      - type: move
+        from: attributes.target
+        to: attributes.url.path
+
+      - type: move
+        from: attributes.status
+        to: attributes.http.response.status_code
+
+      - type: move
+        from: attributes.user_agent
+        to: attributes.user_agent.original
+
+      - type: move
+        from: attributes.referrer
+        to: attributes.http.request.header.referer
+
+      - type: add
+        field: attributes.log_type
+        value: apache_access
+
+  # Apache can't escape quotes in error messages (mod_auth_openidc logs
+  # values like ""invalid_client""), so these stay text on disk and the
+  # shipper turns each entry into fields. error_log is the :80 vhost and
+  # server; ssl_error_log is the :443 vhost, where the Entra errors land.
+  # Rotated copies are named *-YYYYMMDD and are not matched.
+  filelog/httpd-error:
+    include:
+      - /var/log/httpd/error_log
+      - /var/log/httpd/ssl_error_log
+    start_at: end
+    include_file_path: true
+    include_file_name: true
+    # Continuation lines and stack traces belong with the entry above them.
+    multiline:
+      line_start_pattern: '^\[[A-Z][a-z]{2} [A-Z][a-z]{2} [ \d]\d '
+    operators:
+      - type: regex_parser
+        id: parse_httpd_error
+        regex: '^\[(?P<timestamp>[^\]]+)\] \[(?P<module>[^:\]]+)(?::(?P<level>[^\]]+))?\] \[pid (?P<pid>\d+)(?::tid (?P<tid>\d+))?\](?: \[client (?P<client_ip>[^\]]+)\])? (?P<message>[\s\S]*)$'  # noqa: yaml[line-length]
+        parse_from: body
+        on_error: send
+
+      - type: time_parser
+        id: parse_httpd_error_timestamp
+        parse_from: attributes.timestamp
+        layout_type: strptime
+        layout: '%a %b %d %H:%M:%S.%f %Y'
+        on_error: send
+
+      - type: severity_parser
+        id: parse_httpd_error_severity
+        parse_from: attributes.level
+        mapping:
+          debug:
+            - debug
+            - trace1
+            - trace2
+            - trace3
+            - trace4
+            - trace5
+            - trace6
+            - trace7
+            - trace8
+          info:
+            - info
+            - notice
+          warn:
+            - warn
+          error:
+            - error
+          fatal:
+            - crit
+            - alert
+            - emerg
+        on_error: send
+
+      - type: move
+        id: move_httpd_error_message_to_body
+        from: attributes.message
+        to: body
+        on_error: send
+
+      - type: add
+        field: attributes.log_type
+        value: apache_error
+
+  hostmetrics:
+    collection_interval: 30s
+    scrapers:
+      cpu: {}
+      disk: {}
+      # Skip the s3fs mounts: asking a stuck s3fs for its size can hang
+      filesystem:
+        exclude_fs_types:
+          fs_types:
+            - fuse.s3fs
+            - fusectl
+          match_type: strict
+      load: {}
+      memory: {}
+      network: {}
+
+otel_processors:
+  # The optional parts of a log line come through as empty attributes when
+  # they are absent, which clutters every record in SigNoz.
+  transform/drop_empty_fields:
+    error_mode: ignore
+    log_statements:
+      - context: log
+        statements:
+          - delete_key(attributes, "tid") where attributes["tid"] == ""
+          - delete_key(attributes, "client_ip") where attributes["client_ip"] == ""
+          - delete_key(attributes, "user") where attributes["user"] == "-"
+          - delete_key(attributes, "referrer") where attributes["referrer"] == "-"
+
+  batch:
+    send_batch_max_size: 1024
+    send_batch_size: 512
+    timeout: 30s
+
+otel_exporters:
+  loadbalancing:
+    routing_key: service
+    protocol:
+      otlp:
+        timeout: 10s
+        tls:
+          insecure: true
+        sending_queue:
+          enabled: true
+          num_consumers: 10
+          queue_size: 5000
+        retry_on_failure:
+          enabled: true
+          initial_interval: 5s
+          max_interval: 30s
+          max_elapsed_time: 300s
+    resolver:
+      static:
+        hostnames:
+          - k8s-staging1.lib.princeton.edu:32317
+          - k8s-staging2.lib.princeton.edu:32317
+          - k8s-staging3.lib.princeton.edu:32317
+
+  debug:
+    verbosity: basic
+
+otel_service_pipelines:
+  logs:
+    receivers:
+      - filelog/httpd-access
+      - filelog/httpd-error
+    processors:
+      - resource
+      - transform/drop_empty_fields
+      - batch
+    exporters:
+      - loadbalancing
+      - debug
+
+  metrics:
+    receivers:
+      - hostmetrics
+    processors:
+      - resource
+      - batch
+    exporters:
+      - loadbalancing
+      - debug

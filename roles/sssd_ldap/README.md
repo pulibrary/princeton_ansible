@@ -9,17 +9,10 @@ a failure.
 
 ## Why this exists
 
-`ad_join` performs a full realm join and only works on Rocky: it installs
-`authselect-compat` and `krb5-workstation`, neither of which exists in the Ubuntu
-archive, and it drives `realm join` through `expect`. This role reaches the same
-directory with far less machinery.
-
-| | `ad_join` | `sssd_ldap` |
-| --- | --- | --- |
-| Computer object and keytab | yes | none |
-| Kerberos, DNS SRV, clock skew | required | not used |
-| `authselect` custom profile | yes, RHEL only | none |
-| Runs on Ubuntu | no | yes |
+A realm join needs a computer object, a keytab, Kerberos and working DNS SRV
+records, and on Ubuntu it needs packages the archive does not carry. This role
+reaches the same directory as an ordinary LDAP client, with none of that, and
+the same configuration works on Ubuntu and on RedHat.
 
 It is **not** an Entra ID client. Entra ID exposes no LDAP interface, so it
 cannot be a target for this role, and Himmelblau forces MFA on remote sessions
@@ -29,8 +22,10 @@ which rules Entra out for password-only service accounts entirely.
 
 1. Installs sssd and the LDAP back end.
 2. Writes `/etc/sssd/sssd.conf` with `id_provider = ldap` and
-   `ldap_schema = ad`, mode `0600` because it carries the lookup password.
-3. Adds `sss` to `passwd`, `group` and `shadow` in `nsswitch.conf`.
+   `ldap_schema = ad`, never world readable because it carries the lookup
+   password (`0600`, or `root:sssd 0640` on EL10 where sssd runs unprivileged).
+3. Adds `sss` to `passwd`, `group` and `shadow` in `nsswitch.conf` on Debian.
+   On RedHat authselect owns that file and the profile in step 4 writes it.
 4. Enables the `sss` and `mkhomedir` PAM profiles (`pam-auth-update` on Debian,
    `authselect` on RedHat), refusing to overwrite a custom profile another role
    owns.
@@ -85,7 +80,7 @@ bundle.
 
 | Login type | Use |
 | --- | --- |
-| Service account, password, no MFA | this role, or `ad_join` on Rocky |
+| Service account, password, no MFA | this role |
 | Staff shell access | `ssh_ca_trust`, certificates via step-ca |
 | Interactive Entra login with MFA | `entraid_join` |
 

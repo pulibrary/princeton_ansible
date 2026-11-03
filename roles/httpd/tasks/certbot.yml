@@ -1,0 +1,66 @@
+---
+- name: Httpd | install EPEL
+  ansible.builtin.dnf:
+    name: epel-release
+    state: present
+
+# EPEL packages may depend on CodeReady Builder content
+- name: Httpd | enable CRB repository
+  community.general.dnf_config_manager:
+    name: crb
+    state: enabled
+  when:
+    - httpd_enable_crb
+    - ansible_facts['distribution_major_version'] | int >= 9
+
+- name: Httpd | install certbot
+  ansible.builtin.dnf:
+    name: certbot
+    state: present
+
+- name: Httpd | request certificate
+  ansible.builtin.command:
+    argv: "{{ httpd_certbot_argv + httpd_certbot_eab_argv + (httpd_certbot_domains | map('regex_replace', '^', '-d=') | list) }}"
+    creates: "/etc/letsencrypt/live/{{ httpd_certbot_cert_name }}/fullchain.pem"
+  # the EAB HMAC key is on the command line
+  no_log: "{{ httpd_certbot_eab_kid | length > 0 }}"
+  vars:
+    httpd_certbot_eab_argv: >-
+      {{ ['--eab-kid=' ~ httpd_certbot_eab_kid,
+          '--eab-hmac-key=' ~ httpd_certbot_eab_hmac_key]
+         if httpd_certbot_eab_kid | length > 0 else [] }}
+    httpd_certbot_argv:
+      - certbot
+      - certonly
+      - --non-interactive
+      - --agree-tos
+      - --webroot
+      - "--webroot-path={{ httpd_certbot_webroot }}"
+      - "--cert-name={{ httpd_certbot_cert_name }}"
+      - "--email={{ httpd_certbot_email }}"
+      - "--server={{ httpd_certbot_acme_server }}"
+
+- name: Httpd | create certbot deploy hook directory
+  ansible.builtin.file:
+    path: /etc/letsencrypt/renewal-hooks/deploy
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Httpd | reload httpd after renewal
+  ansible.builtin.copy:
+    dest: /etc/letsencrypt/renewal-hooks/deploy/reload-httpd.sh
+    content: |
+      #!/bin/sh
+      # Managed by Ansible
+      /usr/bin/systemctl reload httpd
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Httpd | enable certbot renewal timer
+  ansible.builtin.systemd:
+    name: certbot-renew.timer
+    enabled: true
+    state: started

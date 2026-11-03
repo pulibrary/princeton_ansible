@@ -1,0 +1,33 @@
+---
+- name: Prepare private_key_jwt key pair
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Generate OIDC key pair on the controller
+      ansible.builtin.command:
+        cmd: >-
+          openssl req -x509 -nodes -newkey rsa:2048 -days 7
+          -subj /CN=molecule
+          -keyout {{ molecule_ephemeral_directory }}/oidc_private_key
+          -out {{ molecule_ephemeral_directory }}/oidc_cert
+        creates: "{{ molecule_ephemeral_directory }}/oidc_cert"
+
+# No public DNS in CI, so stand in a self-signed cert for certbot
+- name: Prepare
+  hosts: all
+  become: true
+  tasks:
+    - name: Install openssl
+      ansible.builtin.dnf:
+        name: openssl
+        state: present
+
+    - name: Generate self-signed certificate
+      ansible.builtin.command:
+        cmd: >-
+          openssl req -x509 -nodes -newkey rsa:2048 -days 7
+          -subj /CN=localhost
+          -keyout /etc/pki/tls/private/molecule.key
+          -out /etc/pki/tls/certs/molecule.crt
+        creates: /etc/pki/tls/certs/molecule.crt

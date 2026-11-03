@@ -25,7 +25,7 @@
 
     - name: Read the managed sshd drop-in
       ansible.builtin.slurp:
-        src: /etc/ssh/sshd_config.d/60-ssh-ca-access.conf
+        src: /etc/ssh/sshd_config.d/10-ssh-ca-access.conf
       register: ssh_ca_dropin
 
     - name: Assert all required local accounts are allowed by sshd
@@ -124,3 +124,9 @@
       ansible.builtin.assert:
         that:
           - "'alice@princeton.edu' in (alice_principals.content | b64decode)"
+
+    - name: Check the drop-in under its old name is gone
+      ansible.builtin.stat:
+        path: /etc/ssh/sshd_config.d/60-ssh-ca-access.conf
+      register: ssh_ca_legacy_dropin
+      failed_when: ssh_ca_legacy_dropin.stat.exists

@@ -97,6 +97,15 @@
     - Validate sshd configuration
     - Restart sshd
 
+- name: Remove the drop-in from its earlier locations
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop: "{{ ssh_ca_sshd_legacy_dropin_paths | difference([ssh_ca_sshd_dropin_path]) }}"
+  notify:
+    - Validate sshd configuration
+    - Restart sshd
+
 - name: Detect Allow/Deny directives that could block certificate users
   ansible.builtin.command:
     argv:

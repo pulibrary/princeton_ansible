@@ -1,0 +1,77 @@
+# {{ ansible_managed }}
+<VirtualHost *:443>
+    ServerName {{ httpd_server_name }}
+{% for alias in httpd_server_aliases %}
+    ServerAlias {{ alias }}
+{% endfor %}
+
+    ErrorLog logs/ssl_error_log
+    TransferLog logs/ssl_access_log
+    LogLevel {{ httpd_log_level }}
+    CustomLog logs/ssl_request_log "%t %h %{SSL_PROTOCOL}x %{SSL_CIPHER}x \"%r\" %b"
+{% if httpd_json_access_log %}
+    CustomLog "{{ httpd_json_access_log_path }}" pul_json
+{% endif %}
+
+    SSLEngine on
+    SSLHonorCipherOrder on
+    SSLCipherSuite PROFILE=SYSTEM
+    SSLProxyCipherSuite PROFILE=SYSTEM
+    SSLCertificateFile {{ httpd_ssl_certificate_file }}
+    SSLCertificateKeyFile {{ httpd_ssl_certificate_key_file }}
+{% if httpd_ssl_ca_certificate_file %}
+    SSLCACertificateFile {{ httpd_ssl_ca_certificate_file }}
+{% endif %}
+
+    <FilesMatch "\.(cgi|shtml|phtml|php)$">
+        SSLOptions +StdEnvVars
+    </FilesMatch>
+    <Directory "/var/www/cgi-bin">
+        SSLOptions +StdEnvVars
+    </Directory>
+
+{% for d in httpd_directories if d.alias is defined %}
+    Alias {{ d.alias }} "{{ d.path }}"
+{% endfor %}
+</VirtualHost>
+{% for d in httpd_directories %}
+{%   set requires = [] %}
+{%   if d.deny | default(false) %}
+{%     set _ = requires.append('all denied') %}
+{%   else %}
+{%     if d.require_ip | default([]) %}
+{%       set _ = requires.append('ip ' ~ (d.require_ip | join(' '))) %}
+{%     endif %}
+{%     if d.require_users | default([]) %}
+{%       set _ = requires.append('user ' ~ (d.require_users | join(' '))) %}
+{%     elif d.oidc | default(false) %}
+{%       set _ = requires.append('valid-user') %}
+{%     endif %}
+{%   endif %}
+
+<Directory "{{ d.path }}">
+    Options {{ d.options | default('+Indexes') }}
+{%   if d.directory_index is defined %}
+    DirectoryIndex {{ d.directory_index }}
+{%   endif %}
+{%   if d.index_options | default('FancyIndexing') %}
+    IndexOptions {{ d.index_options | default('FancyIndexing') }}
+{%   endif %}
+    AddDefaultCharset UTF-8
+    AllowOverride None
+{%   if (d.oidc | default(false) or d.require_users | default([])) and not d.deny | default(false) %}
+    AuthType openid-connect
+{%   endif %}
+{%   if requires | length == 0 %}
+    Require all granted
+{%   elif requires | length == 1 %}
+    Require {{ requires[0] }}
+{%   else %}
+    <RequireAll>
+{%     for r in requires %}
+        Require {{ r }}
+{%     endfor %}
+    </RequireAll>
+{%   endif %}
+</Directory>
+{% endfor %}

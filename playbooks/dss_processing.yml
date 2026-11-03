@@ -1,0 +1,27 @@
+---
+# Apache on AlmaLinux serving restricted datasets behind Entra ID
+# by default this playbook runs against the sandbox
+- name: Build the DSS processing data server
+  hosts: dss_processing_{{ runtime_env | default('sandbox') }}
+  remote_user: pulsys
+  become: true
+  vars_files:
+    - ../group_vars/dss_processing/main.yml
+    - ../group_vars/dss_processing/{{ runtime_env | default('sandbox') }}.yml
+    - ../group_vars/dss_processing/vault.yml
+  roles:
+    # Staff shell access, sandbox only until it is proven.
+    - role: ssh_ca_trust
+      when: runtime_env | default('sandbox') == 'sandbox'
+      tags: access
+    - role: dss_processing
+    - role: httpd
+    - role: otel_collector
+      tags: otel
+
+  post_tasks:
+    - name: Tell everyone on slack you ran an ansible playbook
+      community.general.slack:
+        token: "{{ vault_pul_slack_token }}"
+        msg: "Ansible ran `{{ ansible_play_name }}` on {{ inventory_hostname }}"
+        channel: "{{ slack_alerts_channel }}"

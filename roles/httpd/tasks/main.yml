@@ -1,0 +1,126 @@
+---
+# tasks file for roles/httpd
+- name: Httpd | assert RHEL family
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['os_family'] == 'RedHat'
+    fail_msg: "This role supports AlmaLinux/Rocky Linux only"
+
+- name: Httpd | install packages
+  ansible.builtin.dnf:
+    name: "{{ ['httpd', 'mod_ssl'] + (['mod_auth_openidc'] if httpd_oidc_enabled else []) }}"
+    state: present
+
+- name: Httpd | remove mod_auth_cas
+  ansible.builtin.dnf:
+    name: mod_auth_cas
+    state: absent
+  when: httpd_remove_mod_auth_cas
+  notify: restart httpd
+
+- name: Httpd | write main configuration
+  ansible.builtin.template:
+    src: httpd.conf.j2
+    dest: /etc/httpd/conf/httpd.conf
+    owner: root
+    group: root
+    mode: "0644"
+    backup: true
+  notify: restart httpd
+
+# The packaged ssl.conf ships a _default_:443 vhost with a localhost cert;
+# keep only the global mod_ssl settings and define our own vhost
+- name: Httpd | write global ssl configuration
+  ansible.builtin.template:
+    src: ssl.conf.j2
+    dest: /etc/httpd/conf.d/ssl.conf
+    owner: root
+    group: root
+    mode: "0644"
+    backup: true
+  notify: restart httpd
+
+- name: Httpd | private_key_jwt key pair
+  ansible.builtin.include_tasks: oidc_keys.yml
+  when:
+    - httpd_oidc_enabled
+    - httpd_oidc_client_auth == 'private_key_jwt'
+
+- name: Httpd | write mod_auth_openidc configuration
+  ansible.builtin.template:
+    src: auth_openidc.conf.j2
+    dest: /etc/httpd/conf.d/auth_openidc.conf
+    owner: root
+    group: apache
+    mode: "0640"
+  when: httpd_oidc_enabled
+  notify: restart httpd
+
+- name: Httpd | create ACME webroot
+  ansible.builtin.file:
+    path: "{{ httpd_certbot_webroot }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Httpd | write http vhost
+  ansible.builtin.template:
+    src: site-http.conf.j2
+    dest: /etc/httpd/conf.d/{{ httpd_server_name }}-http.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: restart httpd
+
+- name: Httpd | SELinux booleans
+  ansible.posix.seboolean:
+    name: "{{ item }}"
+    state: true
+    persistent: true
+  loop: "{{ httpd_selinux_booleans }}"
+  when: ansible_facts['selinux']['status'] | default('disabled') == 'enabled'
+
+- name: Httpd | gather service facts
+  ansible.builtin.service_facts:
+  when: httpd_manage_firewalld
+
+- name: Httpd | open http/https in firewalld
+  ansible.posix.firewalld:
+    service: "{{ item }}"
+    permanent: true
+    immediate: true
+    state: enabled
+  loop:
+    - http
+    - https
+  when:
+    - httpd_manage_firewalld
+    - ansible_facts['services']['firewalld.service']['state'] | default('') == 'running'
+
+- name: Httpd | validate configuration
+  ansible.builtin.command: httpd -t
+  changed_when: false
+
+- name: Httpd | enable and start service
+  ansible.builtin.systemd:
+    name: httpd
+    enabled: true
+    state: started
+
+# certbot needs the :80 vhost live before it can answer the challenge
+- name: Httpd | apply pending restarts
+  ansible.builtin.meta: flush_handlers
+
+- name: Httpd | certbot
+  ansible.builtin.include_tasks: certbot.yml
+  when: httpd_certbot_enabled
+
+- name: Httpd | write https vhost and directories
+  ansible.builtin.template:
+    src: site-https.conf.j2
+    dest: /etc/httpd/conf.d/{{ httpd_server_name }}-https.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: restart httpd

@@ -1,0 +1,81 @@
+---
+# defaults file for roles/httpd
+httpd_server_name: "{{ inventory_hostname }}"
+httpd_server_aliases: []
+httpd_server_admin: "root@localhost"
+httpd_document_root: /var/www/html
+httpd_log_level: warn
+# Also write one JSON object per request, for shipping to SigNoz. Same
+# pul_json format as the apache2 role.
+httpd_json_access_log: false
+httpd_json_access_log_path: /var/log/httpd/access_json.log
+
+# Send everything on :80 (except ACME challenges) to https
+httpd_redirect_http_to_https: true
+
+# Remove the legacy CAS module and its config
+httpd_remove_mod_auth_cas: true
+
+# Entra ID (mod_auth_openidc)
+httpd_oidc_enabled: true
+httpd_oidc_tenant_id: "2ff60116-7431-425d-b5af-077d7791bda4"
+httpd_oidc_provider_metadata_url: "https://login.microsoftonline.com/{{ httpd_oidc_tenant_id }}/v2.0/.well-known/openid-configuration"
+httpd_oidc_client_id: "{{ vault_httpd_oidc_client_id | default('change_me') }}"
+httpd_oidc_client_secret: "{{ vault_httpd_oidc_client_secret | default('change_me') }}"
+httpd_oidc_crypto_passphrase: "{{ vault_httpd_oidc_crypto_passphrase | default('change_me') }}"
+# Register this as a "Web" redirect URI on the Entra app registration
+httpd_oidc_redirect_path: /oidc/redirect_uri
+httpd_oidc_scope: "openid email profile"
+# How httpd authenticates to the Entra token endpoint:
+#   client_secret   - httpd_oidc_client_secret
+#   private_key_jwt - signed assertion from a key pair; upload the
+#                     certificate to the app registration instead of a secret
+httpd_oidc_client_auth: client_secret
+httpd_oidc_key_dir: /etc/httpd/oidc
+# Key pair for private_key_jwt, looked up in roles/httpd/files/ (or an
+# absolute path). Encrypt them with ansible-vault.
+httpd_oidc_private_key_src: "{{ runtime_env | default('sandbox') }}_oidc_private.key"
+httpd_oidc_certificate_src: "{{ runtime_env | default('sandbox') }}_oidc_cert.crt"
+# PKCE on the authorization code flow; "" to turn it off
+httpd_oidc_pkce_method: S256
+# Entra UPNs are netid@princeton.edu; strip the domain so
+# "Require user <netid>" keeps working as it did under CAS
+httpd_oidc_remote_user_claim: 'preferred_username ^([^@]+)@princeton\.edu$'
+httpd_oidc_session_inactivity_timeout: 3600
+httpd_oidc_session_max_duration: 28800
+
+# TLS
+httpd_certbot_enabled: true
+httpd_certbot_email: "{{ httpd_server_admin }}"
+httpd_certbot_cert_name: "{{ httpd_server_name }}"
+httpd_certbot_domains: "{{ [httpd_server_name] + httpd_server_aliases }}"
+httpd_certbot_webroot: /var/www/letsencrypt
+httpd_certbot_acme_server: "https://acme-v02.api.letsencrypt.org/directory"
+# External account binding, required by InCommon/Certinext
+# (https://acme-us.certinext.io/v1/directory); leave empty for Let's Encrypt
+httpd_certbot_eab_kid: ""
+httpd_certbot_eab_hmac_key: ""
+httpd_enable_crb: true
+# Used as-is when certbot is disabled; otherwise point at the certbot lineage
+httpd_ssl_certificate_file: "/etc/letsencrypt/live/{{ httpd_certbot_cert_name }}/fullchain.pem"
+httpd_ssl_certificate_key_file: "/etc/letsencrypt/live/{{ httpd_certbot_cert_name }}/privkey.pem"
+httpd_ssl_ca_certificate_file: ""
+
+# Host hardening
+httpd_manage_firewalld: true
+# httpd_can_network_connect lets mod_auth_openidc reach login.microsoftonline.com
+httpd_selinux_booleans:
+  - httpd_can_network_connect
+
+# Directories to publish. Each entry:
+#   path:              filesystem path (required)
+#   alias:             URL prefix to map onto path (optional)
+#   options:           Options line (default "+Indexes")
+#   index_options:     IndexOptions line (default "FancyIndexing"; "" to omit)
+#   directory_index:   DirectoryIndex value, e.g. "disabled" (optional)
+#   oidc:              require an Entra ID login (default false)
+#   require_users:     netids allowed; implies oidc (default: any valid user)
+#   require_ip:        list of addresses/CIDRs that must also match
+#   deny:              true for "Require all denied"
+# Conditions are ANDed, matching the old <RequireAll> blocks.
+httpd_directories: []

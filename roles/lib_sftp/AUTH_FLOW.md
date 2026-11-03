@@ -82,16 +82,15 @@ flowchart TD
     C1["sssd_ldap<br/>Active Directory over LDAPS"] --> D1["lib_sftp<br/>drop directories, sshd methods"]
     C3["deploy_user"] --> D1
   end
-  subgraph prod["Staging and production, Rocky"]
-    A1["ad_join<br/>realm join, Kerberos"] --> B1["lib_sftp<br/>drop directories, sshd methods"]
+  subgraph prod["Staging and production"]
+    A1["sssd_ldap<br/>Active Directory over LDAPS"] --> B1["lib_sftp<br/>drop directories, sshd methods"]
     A3["deploy_user"] --> B1
   end
 ```
 
-`lib_sftp` depends only on `deploy_user`. The identity provider is chosen in the
-playbook, because it is the one piece that differs by operating system:
-`playbooks/lib_sftp.yml` adds `ad_join`, and `playbooks/sandbox_sftp.yml` adds
-`sssd_ldap`. Both reach the same Active Directory.
+`lib_sftp` depends only on `deploy_user`. The identity provider is added in the
+playbook: `playbooks/lib_sftp.yml` and `playbooks/sandbox_sftp.yml` both add
+`sssd_ldap`.
 
 Ordering matters. The identity role has to run first, or NSS cannot resolve the
 transfer accounts and the drop directories cannot be chowned to them. The role

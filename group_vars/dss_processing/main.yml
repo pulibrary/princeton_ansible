@@ -1,0 +1,146 @@
+---
+# Translated from the AlmaLinux httpd.conf that used mod_auth_cas.
+# "AuthType CAS" + "Require valid-user" became oidc: true; "Require user"
+# lists carry over as netids via OIDCRemoteUserClaim.
+httpd_server_admin: "lsupport@princeton.edu"
+httpd_certbot_email: "lsupport@princeton.edu"
+# JSON access log for SigNoz; the collector config is in <runtime_env>.yml
+httpd_json_access_log: true
+# InCommon certificates through Certinext ACME, as in
+# playbooks/utils/certinext_incommon_certbot.yml
+httpd_certbot_acme_server: "https://acme-us.certinext.io/v1/directory"
+httpd_certbot_eab_kid: "{{ vault_dss_processing_certinext_acme_eab_kid }}"
+httpd_certbot_eab_hmac_key: "{{ vault_dss_processing_certinext_acme_eab_hmac_key }}"
+
+# Signs token requests with roles/httpd/files/<env>_oidc_{private.key,cert.crt};
+# upload the cert to the Entra app registration instead of using a secret
+httpd_oidc_client_auth: private_key_jwt
+httpd_oidc_client_id: "{{ vault_httpd_oidc_client_id }}"
+httpd_oidc_crypto_passphrase: "{{ vault_httpd_oidc_crypto_passphrase }}"
+
+# Same buckets as dss2; the sandbox mounts them read-only
+dss_processing_s3_access_key_id: "{{ vault_dss_processing_s3_access_key_id }}"
+dss_processing_s3_secret_access_key: "{{ vault_dss_processing_s3_secret_access_key }}"
+dss_processing_s3_read_only: "{{ runtime_env | default('sandbox') == 'sandbox' }}"
+
+dss_processing_campus_ips:
+  - 128.112.0.0/16
+  - 172.20.95.0/24
+  - 172.20.192.0/19
+
+dss_processing_campus_vpn_ips:
+  - 10.8.0.0/15
+  - 10.16.0.0/15
+  - 10.48.0.0/15
+  - 10.50.0.0/15
+  - 10.249.64.0/18
+  - 10.249.0.0/18
+  - 128.112.0.0/16
+  - 140.180.0.0/16
+  - 172.20.95.0/24
+  - 172.20.192.0/19
+
+httpd_directories:
+  - path: /var/www/html/online_help/stats_packages/sas/sas_tutorial
+    oidc: true
+    require_ip:
+      - 128.112.203.196
+      - 128.112.203.210
+      - 128.112.203.214
+      - 128.112.203.215
+      - 128.112.203.216
+      - 128.112.203.217
+      - 128.112.203.218
+      - 128.112.203.219
+      - 128.112.203.220
+      - 128.112.203.221
+      - 128.112.201.157
+
+  - path: /var/www/html/data
+    oidc: true
+
+  - path: /data2/Newspapers
+    alias: /Newspapers
+    oidc: true
+    require_ip: "{{ dss_processing_campus_ips }}"
+
+  - path: /data2/IntuneNetCheck
+    alias: /IntuneNetCheck
+    require_ip:
+      - 128.112.0.0/16
+      - 10.249.64.0/18
+      - 10.249.0.0/18
+      - 172.20.80.0/22
+      - 140.180.0.0/16
+      - 10.8.0.0/15
+      - 172.20.95.0/24
+      - 172.20.192.0/19
+      - 172.24.0.0/19
+
+  - path: /data3_AWS_S3/dandb
+    alias: /dandb
+    oidc: true
+    require_ip: "{{ dss_processing_campus_ips }}"
+
+  - path: /data/Kaiko
+    alias: /Kaiko
+    directory_index: disabled
+    oidc: true
+    require_ip: "{{ dss_processing_campus_ips }}"
+
+  - path: /data2/KaikoTmp
+    alias: /KaikoTmp
+    directory_index: disabled
+    oidc: true
+    require_ip: "{{ dss_processing_campus_ips }}"
+
+  - path: /data/China_TAQ_Data
+    alias: /China_TAQ_Data
+    require_ip: "{{ dss_processing_campus_ips }}"
+
+  - path: /data3_AWS_S3/BVD
+    alias: /BVD
+    oidc: true
+    require_ip: "{{ dss_processing_campus_ips }}"
+
+  - path: /data2/restricted/982
+    alias: /AltosRentalIntel
+    require_users: [jkazmier, bordelon, vb5691, aa7032, at1012, tb4987, cn7429, em9803, gh8021]
+    require_ip: "{{ dss_processing_campus_vpn_ips }}"
+
+  - path: /data3_AWS_S3/GovPx/govpx
+    alias: /govpx
+    oidc: true
+    require_ip: "{{ dss_processing_campus_vpn_ips }}"
+
+  - path: /data3_AWS_S3/NewMovers
+    alias: /NewMovers
+    require_users: [jkazmier, bordelon, cj0577, eb2441, lbougher, ericmm, al49, abw2, em9803, tb4987, js0153, jrfenton]
+    require_ip: "{{ dss_processing_campus_vpn_ips }}"
+
+  - path: /data3_AWS_S3/Integrum
+    alias: /Integrum
+    oidc: true
+    require_ip: "{{ dss_processing_campus_ips }}"
+
+  - path: /data3_AWS_S3/pqda-gis-archives
+    alias: /pqda-gis-archives
+    oidc: true
+    require_ip: "{{ dss_processing_campus_ips }}"
+
+  - path: /var/www/html/MicroRate
+    options: "Includes FollowSymLinks MultiViews"
+    index_options: ""
+    require_ip:
+      - 128.112.0.0/16
+      - 140.180.0.0/16
+      - 172.20.95.0/24
+      - 172.20.192.0/19
+
+  - path: /var/www/html/MicroRate/RatingReports
+    deny: true
+
+  - path: /data2/restricted/145
+    alias: /AcademicTrace
+    require_users: [jkazmier, bordelon, zc6350, yz3311, bs33]
+    require_ip: "{{ dss_processing_campus_vpn_ips }}"

@@ -1,0 +1,16 @@
+---
+# No Active Directory is reachable from the container, so skip the checks that
+# bind to it. This exercises installation, the sssd configuration, authselect
+# and the cache-warm cron job, and the idempotence step proves a second run
+# changes nothing.
+- name: Converge
+  hosts: all
+  vars:
+    sssd_ldap_bind_dn: libops@princeton.edu
+    sssd_ldap_bind_password: molecule
+    sssd_ldap_allow_users:
+      - almasftp
+    sssd_ldap_preflight: false
+    sssd_ldap_verify_accounts: false
+  roles:
+    - role: sssd_ldap
