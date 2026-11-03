@@ -4,8 +4,7 @@
 
 ## Deployment
 
-`BRANCH=main ansible-playbook playbooks/nomad_figgy_infrastructure.yml -e runtime_env=[staging/production]`
-`BRANCH=main bin/deploy figgy-infrastructure [staging/production]`
+`ansible-playbook playbooks/nomad_figgy_infrastructure.yml -e runtime_env=[staging/production]`
 
 ### RabbitMQ
 

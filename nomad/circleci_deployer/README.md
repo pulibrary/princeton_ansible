@@ -20,6 +20,6 @@ jobs:
 
 ## Deployment
 
-From `nomad` directory: `BRANCH=main ./bin/deploy circleci_deployer all`
+`ansible-playbook playbooks/circlei_deployer.yml`
 
 You can track progress and status of nomad apps by looking at the Nomad UI, accessible from `./bin/login`

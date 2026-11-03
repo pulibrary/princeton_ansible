@@ -29,6 +29,6 @@ We're using Promtail to ship logs from containers to Loki. Now that Podman has s
 
 ## Deployment
 
-From `nomad` directory: `BRANCH=main ./bin/deploy grafana staging
+`ansible-playbook playbooks/grafana.yml -e runtime_env=[staging/production]`
 
 You can track progress and status of nomad apps by looking at the Nomad UI, accessible from `./bin/login`
