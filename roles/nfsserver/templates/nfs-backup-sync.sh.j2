@@ -1,0 +1,193 @@
+#!/usr/bin/bash
+{{ ansible_managed | comment }}
+#
+# Copies the exported NFS trees to the GCS backup bucket.
+#
+# The Solr role needs nothing like this: Solr writes its own backups into the
+# mount through its backup API. An NFS export has nobody doing that for it, so
+# this script is what makes the bucket a backup.
+#
+# It talks to the bucket with gcloud storage rsync, not rsync over the gcsfuse
+# mount. rsync over FUSE checks every file with its own round trip to GCS, and
+# with ~650,000 files that took close to a week per run on lib-fs-prod, so a
+# daily timer could never keep up. gcloud lists the bucket in bulk and only
+# touches the files that changed. The mount stays for browsing and for the
+# Checkmk check, but nothing here depends on it.
+set -uo pipefail
+
+SOURCE={{ nfsserver_backup_source | quote }}
+DEST={{ nfsserver_backup_url | quote }}
+LOG={{ nfsserver_backup_log | quote }}
+LOCK={{ nfsserver_backup_lock | quote }}
+
+# Use the backup key without logging gcloud in, and keep gcloud's state out of
+# root's home so nothing else on the host picks up these credentials.
+export CLOUDSDK_AUTH_CREDENTIAL_FILE_OVERRIDE={{ nfsserver_backup_key_dest | quote }}
+export CLOUDSDK_CONFIG={{ nfsserver_backup_gcloud_config | quote }}
+export CLOUDSDK_CORE_DISABLE_PROMPTS=1
+
+log() {
+    printf '%s %s\n' "$(date --iso-8601=seconds)" "$*" >>"$LOG"
+}
+
+# gcloud runs in its own process group (see setsid below), so it and all of its
+# worker processes can be signalled together, without having to find each one.
+gcloud_pid=""
+progress_pid=""
+
+on_signal() {
+    trap - TERM INT HUP
+    # The reporter traps TERM and takes its own sleep child with it.
+    [ -n "$progress_pid" ] && kill "$progress_pid" 2>/dev/null
+    if [ -n "$gcloud_pid" ]; then
+        kill -TERM -- "-${gcloud_pid}" 2>/dev/null
+        # Give an upload in progress a moment to stop cleanly before insisting.
+        sleep 2
+        kill -KILL -- "-${gcloud_pid}" 2>/dev/null
+    fi
+    log "TERMINATED by signal: backup is incomplete, marker not updated"
+    exit 143
+}
+trap on_signal TERM INT HUP
+
+# Only one backup at a time. A slow run can outrun the daily timer, and a
+# playbook run can start one by hand. Two runs at once would upload the same
+# files twice and race on the marker.
+exec 9>"$LOCK" || {
+    log "FATAL could not open lock file ${LOCK}"
+    exit 1
+}
+
+if ! flock -n 9; then
+    log "another backup is already running; leaving it alone"
+    exit 0
+fi
+
+log "starting backup of ${SOURCE} to ${DEST}"
+
+if [ ! -d "$SOURCE" ]; then
+    log "FATAL source ${SOURCE} does not exist"
+    exit 1
+fi
+
+# Python regular expressions matched against the path relative to the source,
+# joined because gcloud takes a single --exclude. The marker and the manifest
+# live in the destination and have no counterpart in the source, so they are
+# excluded too: with deletion on, they would otherwise be removed on every run.
+excludes='^\.last_backup$|^\.ownership_manifest$'
+{% for pattern in nfsserver_backup_excludes %}
+excludes+='|'{{ pattern | quote }}
+{% endfor %}
+
+# gcloud skips a file when its mtime and size match the object's. Symlinks are
+# skipped, which is gcloud's default; the manifest below records them.
+gcloud_args=(
+    storage rsync
+    --recursive
+    --exclude="$excludes"
+{% if nfsserver_backup_delete | bool %}
+    --delete-unmatched-destination-objects
+{% endif %}
+)
+
+# Run once with --checksums-only on a host whose bucket was filled through
+# gcsfuse. Those objects carry gcsfuse's own mtime key, not gcloud's, so gcloud
+# falls back to their creation time, sees every file as changed, and uploads the
+# whole tree again. With --checksums-only it compares hashes instead, and where
+# they match it only writes its mtime onto the object. Every later run can then
+# skip unchanged files on mtime alone, which is why this is not the default:
+# hashing reads every byte of the source on every run.
+if [ "${1:-}" = --checksums-only ]; then
+    gcloud_args+=(--checksums-only)
+    log "comparing by checksum only"
+elif [ $# -gt 0 ]; then
+    log "FATAL unknown argument: $*"
+    exit 2
+fi
+
+# rsync used to report only at the end, which left the log silent for hours.
+# gcloud is no better when it is not writing to a terminal. So log the bytes the
+# process group has read, which counts both hashing and uploading, straight from
+# the kernel's per-process counters. It costs nothing, and it only goes up when
+# work is really being done. rchar rather than read_bytes, because read_bytes
+# misses anything served from the page cache.
+progress_bytes() {
+    local total=0 pid read
+    for pid in $(pgrep -g "$gcloud_pid" 2>/dev/null); do
+        read=$(awk '/^rchar:/ {print $2}' "/proc/${pid}/io" 2>/dev/null)
+        [ -n "$read" ] && total=$((total + read))
+    done
+    printf '%s' "$total"
+}
+
+# setsid gives gcloud its own process group, with gcloud as the leader, so its
+# pid is also the group id that on_signal and progress_bytes use.
+setsid gcloud "${gcloud_args[@]}" "${SOURCE}" "${DEST}" >>"$LOG" 2>&1 &
+gcloud_pid=$!
+
+(
+    # sleep is a child process, so a signal to this subshell would leave it
+    # running. Under a Type=oneshot unit a lingering child keeps the service in
+    # "activating" after the backup has finished.
+    sleep_pid=""
+    trap 'kill "${sleep_pid:-}" 2>/dev/null; exit 0' TERM
+
+    started=$(date +%s)
+    last_bytes=0
+    while kill -0 "$gcloud_pid" 2>/dev/null; do
+        sleep {{ nfsserver_backup_progress_interval }} &
+        sleep_pid=$!
+        wait "$sleep_pid" 2>/dev/null
+
+        kill -0 "$gcloud_pid" 2>/dev/null || break
+        bytes=$(progress_bytes)
+        elapsed=$(( $(date +%s) - started ))
+        delta=$(( bytes - last_bytes ))
+        last_bytes=$bytes
+        # A delta of zero across an interval is the signal worth seeing: the
+        # backup is running but no longer moving data.
+        log "progress: $(( bytes / 1048576 )) MiB read total, $(( delta / 1048576 )) MiB in the last {{ nfsserver_backup_progress_interval }}s, ${elapsed}s elapsed"
+    done
+) &
+progress_pid=$!
+
+wait "$gcloud_pid"
+gcloud_rc=$?
+gcloud_pid=""
+
+kill "$progress_pid" 2>/dev/null
+wait "$progress_pid" 2>/dev/null
+progress_pid=""
+
+if [ "$gcloud_rc" -ne 0 ]; then
+    log "FATAL gcloud storage rsync exited ${gcloud_rc}"
+    exit "$gcloud_rc"
+fi
+
+# Ownership and permissions are the one thing object storage cannot hold, and
+# these trees are owned by several accounts. Without this, a restore would put
+# every file back as root and the applications reading the shares would break.
+# One text file is far cheaper than per-file metadata. %l records where each
+# symlink points, since gcloud does not copy symlinks.
+manifest=$(mktemp) || {
+    log "FATAL could not create a temporary file for the manifest"
+    exit 1
+}
+
+if find "$SOURCE" -printf '%m %u %g %y %p\t%l\n' >"$manifest" 2>>"$LOG"; then
+    if ! gcloud storage cp "$manifest" "${DEST}/.ownership_manifest" >>"$LOG" 2>&1; then
+        log "WARNING could not upload ownership manifest"
+    fi
+else
+    log "WARNING could not write ownership manifest"
+fi
+rm -f "$manifest"
+
+# Written last, and only after a clean run: the Checkmk check reads its age.
+if ! date --iso-8601=seconds | gcloud storage cp - "${DEST}/.last_backup" >>"$LOG" 2>&1; then
+    log "FATAL backup copied but the marker could not be written"
+    exit 1
+fi
+
+log "completed backup of ${SOURCE}"
+exit 0

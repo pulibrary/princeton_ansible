@@ -58,3 +58,229 @@
         state: present
       changed_when: false
       when: nfsserver_is_local
+
+    # --- GCS backup of the exported trees ---
+    #
+    # gcloud and a real bucket are out of reach here. converge.yml points the
+    # script at a local directory, and a stub gcloud below copies into it, so
+    # what is tested is the script's own logic: the arguments it passes, that a
+    # failed upload never writes the marker, and that the manifest and marker
+    # follow a clean run. A bind mount then stands in for the gcsfuse mount so
+    # the Checkmk check can read the marker the way it does in production.
+    - name: Nfsserver | Verify the backup sync script is installed
+      ansible.builtin.stat:
+        path: /usr/local/sbin/nfs-backup-sync
+      register: backup_script
+
+    - name: Nfsserver | Assert the backup script is executable
+      ansible.builtin.assert:
+        that:
+          - backup_script.stat.exists
+          - backup_script.stat.mode == '0755'
+
+    - name: Nfsserver | Assert the backup script is valid shell
+      ansible.builtin.command:
+        argv:
+          - bash
+          - -n
+          - /usr/local/sbin/nfs-backup-sync
+      changed_when: false
+
+    - name: Nfsserver | Verify the Checkmk local check is installed
+      ansible.builtin.stat:
+        path: /usr/lib/check_mk_agent/local/check_nfs_backup.sh
+      register: backup_check
+
+    - name: Nfsserver | Assert the local check is executable
+      ansible.builtin.assert:
+        that:
+          - backup_check.stat.exists
+          - backup_check.stat.mode == '0755'
+
+    - name: Nfsserver | Create backup fixture content
+      ansible.builtin.copy:
+        content: "catalog records\n"
+        dest: "{{ bibdata_fileshare_mount }}/records.mrc"
+        mode: "0644"
+
+    - name: Nfsserver | Assert the local check reports the missing mount
+      ansible.builtin.command:
+        argv:
+          - /usr/lib/check_mk_agent/local/check_nfs_backup.sh
+      register: check_unmounted
+      changed_when: false
+      failed_when: "not check_unmounted.stdout.startswith('2 ')"
+
+    # Implements only the two calls the script makes: storage rsync SRC DST and
+    # storage cp SRC DST, where SRC may be - for stdin. Every call and the
+    # credential it was given are logged, and the presence of a flag file makes
+    # every call fail.
+    - name: Nfsserver | Install a stub gcloud
+      ansible.builtin.copy:
+        dest: /usr/local/bin/gcloud
+        mode: "0755"
+        content: |
+          #!/usr/bin/bash
+          cred=${CLOUDSDK_AUTH_CREDENTIAL_FILE_OVERRIDE:-}
+          printf '%s cred=%s\n' "$*" "$cred" >>/tmp/gcloud_calls
+          [ -e /tmp/gcloud_fail ] && exit 1
+          [ "$1" = storage ] || exit 2
+          cmd=$2
+          shift 2
+          paths=()
+          for arg in "$@"; do
+              case $arg in --*) ;; *) paths+=("$arg") ;; esac
+          done
+          src=${paths[0]}
+          dst=${paths[1]}
+          case $cmd in
+              rsync) mkdir -p "$dst" && cp -a "${src}/." "${dst}/" ;;
+              cp)
+                  mkdir -p "$(dirname "$dst")"
+                  if [ "$src" = - ]; then cat >"$dst"; else cp "$src" "$dst"; fi
+                  ;;
+              *) exit 2 ;;
+          esac
+
+    # So a second verify starts from an empty bucket rather than finding the
+    # first run's marker.
+    - name: Nfsserver | Clear the stand-in bucket and the call log
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /srv/fake_backup_bucket
+        - /tmp/gcloud_calls
+
+    - name: Nfsserver | Make every gcloud call fail
+      ansible.builtin.file:
+        path: /tmp/gcloud_fail
+        state: touch
+        mode: "0644"
+
+    - name: Nfsserver | Run the backup with uploads failing
+      ansible.builtin.command:
+        argv:
+          - /usr/local/sbin/nfs-backup-sync
+      register: backup_failing
+      changed_when: false
+      failed_when: false
+
+    - name: Nfsserver | Look for a marker after the failed run
+      ansible.builtin.stat:
+        path: /srv/fake_backup_bucket/nfs/staging/.last_backup
+      register: marker_after_failure
+
+    # The important assertion in this file. A marker written after a failed
+    # upload would keep the Checkmk check green while nothing was being backed
+    # up.
+    - name: Nfsserver | Assert a failed upload leaves no marker
+      ansible.builtin.assert:
+        that:
+          - backup_failing.rc != 0
+          - not marker_after_failure.stat.exists
+        fail_msg: >-
+          The backup reported success, or wrote its marker, when the upload
+          failed. Monitoring would then report a backup that never happened.
+
+    - name: Nfsserver | Let gcloud calls succeed
+      ansible.builtin.file:
+        path: /tmp/gcloud_fail
+        state: absent
+
+    - name: Nfsserver | Run the backup
+      ansible.builtin.command:
+        argv:
+          - /usr/local/sbin/nfs-backup-sync
+      register: backup_run
+      changed_when: true
+
+    - name: Nfsserver | Look for the copied fixture, manifest and marker
+      ansible.builtin.stat:
+        path: "/srv/fake_backup_bucket/nfs/staging/{{ item }}"
+      register: backup_outputs
+      loop:
+        - bibdata/records.mrc
+        # Object storage cannot hold POSIX ownership, so without this a
+        # restore would put every file back owned by root.
+        - .ownership_manifest
+        - .last_backup
+
+    - name: Nfsserver | Read the gcloud calls
+      ansible.builtin.slurp:
+        src: /tmp/gcloud_calls
+      register: gcloud_calls
+
+    - name: Nfsserver | Assert the backup copied the tree with the expected call
+      ansible.builtin.assert:
+        that:
+          - backup_run.rc == 0
+          - backup_outputs.results | map(attribute='stat.exists') is all
+          - "'storage rsync --recursive --exclude=' in calls"
+          # The default excludes must reach gcloud as regular expressions.
+          - "'lost\\\\+found' in calls"
+          # Deletion is off by default and must stay off unless asked for.
+          - "'--delete-unmatched-destination-objects' not in calls"
+          - "'cred=/etc/nfs-backup-account-key.json' in calls"
+      vars:
+        calls: "{{ gcloud_calls.content | b64decode }}"
+
+    - name: Nfsserver | Run the backup comparing checksums only
+      ansible.builtin.command:
+        argv:
+          - /usr/local/sbin/nfs-backup-sync
+          - --checksums-only
+      changed_when: true
+
+    - name: Nfsserver | Run the backup with an unknown argument
+      ansible.builtin.command:
+        argv:
+          - /usr/local/sbin/nfs-backup-sync
+          - --bogus
+      register: backup_bogus
+      changed_when: false
+      failed_when: backup_bogus.rc != 2
+
+    - name: Nfsserver | Read the gcloud calls again
+      ansible.builtin.slurp:
+        src: /tmp/gcloud_calls
+      register: gcloud_calls_after
+
+    # Needed once after a bucket was filled through gcsfuse, or every file is
+    # uploaded again. See the README.
+    - name: Nfsserver | Assert --checksums-only reaches gcloud, and only once
+      ansible.builtin.assert:
+        that:
+          - calls | regex_findall('--checksums-only') | length == 1
+      vars:
+        calls: "{{ gcloud_calls_after.content | b64decode }}"
+
+    - name: Nfsserver | Stand in for the mounted bucket
+      ansible.builtin.file:
+        path: /var/backups/nfs_cloud_backup
+        state: directory
+        mode: "0755"
+
+    - name: Nfsserver | Mount the stand-in bucket
+      ansible.builtin.command:
+        argv:
+          - mount
+          - --bind
+          - /srv/fake_backup_bucket
+          - /var/backups/nfs_cloud_backup
+      changed_when: true
+
+    - name: Nfsserver | Assert the local check now reports OK
+      ansible.builtin.command:
+        argv:
+          - /usr/lib/check_mk_agent/local/check_nfs_backup.sh
+      register: check_mounted
+      changed_when: false
+      failed_when: "not check_mounted.stdout.startswith('0 ')"
+
+    - name: Nfsserver | Remove the stand-in mount
+      ansible.builtin.command:
+        argv:
+          - umount
+          - /var/backups/nfs_cloud_backup
+      changed_when: true
