@@ -47,28 +47,47 @@
     mode: "0644"
   when: running_on_server
 
-- name: Nfsserver | Add gcsfuse apt repository
-  ansible.builtin.apt_repository:
-    repo: >-
-      deb [signed-by=/etc/apt/keyrings/cloud.google.asc]
-      https://packages.cloud.google.com/apt
-      gcsfuse-{{ ansible_distribution_release }} main
+# Written by apt_repository before the move to deb822_repository. Left in place
+# they would duplicate the .sources files below, and apt warns on every update.
+- name: Nfsserver | Remove legacy Google apt source lists
+  ansible.builtin.file:
+    path: "/etc/apt/sources.list.d/{{ item }}.list"
+    state: absent
+  loop:
+    - gcsfuse
+    - google-cloud-sdk
+  when: running_on_server
+
+- name: Nfsserver | Ensure python3-debian is installed for deb822_repository
+  ansible.builtin.apt:
+    name: python3-debian
     state: present
-    filename: gcsfuse
-    update_cache: false
+    update_cache: true
+    cache_valid_time: 3600
+  when: running_on_server
+
+- name: Nfsserver | Add gcsfuse apt repository
+  ansible.builtin.deb822_repository:
+    name: gcsfuse
+    types: [deb]
+    uris: https://packages.cloud.google.com/apt
+    suites: ["gcsfuse-{{ ansible_facts['distribution_release'] }}"]
+    components: [main]
+    signed_by: /etc/apt/keyrings/cloud.google.asc
+    state: present
   when: running_on_server
 
 # The sync script uploads with gcloud storage rsync rather than through the
 # mount; see nfs-backup-sync.sh.j2 for why. Same key, different repository.
 - name: Nfsserver | Add Google Cloud CLI apt repository
-  ansible.builtin.apt_repository:
-    repo: >-
-      deb [signed-by=/etc/apt/keyrings/cloud.google.asc]
-      https://packages.cloud.google.com/apt
-      cloud-sdk main
+  ansible.builtin.deb822_repository:
+    name: google-cloud-sdk
+    types: [deb]
+    uris: https://packages.cloud.google.com/apt
+    suites: [cloud-sdk]
+    components: [main]
+    signed_by: /etc/apt/keyrings/cloud.google.asc
     state: present
-    filename: google-cloud-sdk
-    update_cache: false
   when: running_on_server
 
 - name: Nfsserver | Install gcsfuse and the Google Cloud CLI
