@@ -79,10 +79,8 @@ excludes='^\.last_backup$|^\.ownership_manifest$'
 excludes+='|'{{ pattern | quote }}
 {% endfor %}
 
-# Mtimes are compared first; a file whose object has no mtime (anything
-# originally written through gcsfuse) is compared by hash instead, so it is not
-# uploaded again. Symlinks are skipped, which is gcloud's default; the manifest
-# below records them.
+# gcloud skips a file when its mtime and size match the object's. Symlinks are
+# skipped, which is gcloud's default; the manifest below records them.
 gcloud_args=(
     storage rsync
     --recursive
@@ -91,6 +89,21 @@ gcloud_args=(
     --delete-unmatched-destination-objects
 {% endif %}
 )
+
+# Run once with --checksums-only on a host whose bucket was filled through
+# gcsfuse. Those objects carry gcsfuse's own mtime key, not gcloud's, so gcloud
+# falls back to their creation time, sees every file as changed, and uploads the
+# whole tree again. With --checksums-only it compares hashes instead, and where
+# they match it only writes its mtime onto the object. Every later run can then
+# skip unchanged files on mtime alone, which is why this is not the default:
+# hashing reads every byte of the source on every run.
+if [ "${1:-}" = --checksums-only ]; then
+    gcloud_args+=(--checksums-only)
+    log "comparing by checksum only"
+elif [ $# -gt 0 ]; then
+    log "FATAL unknown argument: $*"
+    exit 2
+fi
 
 # rsync used to report only at the end, which left the log silent for hours.
 # gcloud is no better when it is not writing to a terminal. So log the bytes the

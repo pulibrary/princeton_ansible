@@ -225,6 +225,36 @@
       vars:
         calls: "{{ gcloud_calls.content | b64decode }}"
 
+    - name: Nfsserver | Run the backup comparing checksums only
+      ansible.builtin.command:
+        argv:
+          - /usr/local/sbin/nfs-backup-sync
+          - --checksums-only
+      changed_when: true
+
+    - name: Nfsserver | Run the backup with an unknown argument
+      ansible.builtin.command:
+        argv:
+          - /usr/local/sbin/nfs-backup-sync
+          - --bogus
+      register: backup_bogus
+      changed_when: false
+      failed_when: backup_bogus.rc != 2
+
+    - name: Nfsserver | Read the gcloud calls again
+      ansible.builtin.slurp:
+        src: /tmp/gcloud_calls
+      register: gcloud_calls_after
+
+    # Needed once after a bucket was filled through gcsfuse, or every file is
+    # uploaded again. See the README.
+    - name: Nfsserver | Assert --checksums-only reaches gcloud, and only once
+      ansible.builtin.assert:
+        that:
+          - calls | regex_findall('--checksums-only') | length == 1
+      vars:
+        calls: "{{ gcloud_calls_after.content | b64decode }}"
+
     - name: Nfsserver | Stand in for the mounted bucket
       ansible.builtin.file:
         path: /var/backups/nfs_cloud_backup

@@ -53,9 +53,24 @@ over gcsfuse, and on lib-fs-prod (~650,000 files, 388G) every run took close to 
 week, because rsync checks each file with its own round trip to GCS. gcloud lists
 the bucket in bulk and only uploads what changed.
 
-The first gcloud run after switching over compares the objects gcsfuse wrote by
-hash, because they carry no mtime gcloud recognises. It reads the whole tree once
-but does not upload it again.
+#### Switching a bucket that gcsfuse filled
+
+Objects written through gcsfuse store their mtime under gcsfuse's own key, which
+gcloud ignores. gcloud then uses the object's creation time instead, so on a
+normal run every file looks changed and the whole tree is uploaded again (and,
+with soft delete on the bucket, the overwritten copies are billed for a week).
+
+Run the first backup by hand with `--checksums-only` instead. It compares hashes,
+and where they match it only writes gcloud's mtime onto the object:
+
+```sh
+systemd-run --unit=nfs-backup-sync-checksums -p Nice=10 -p IOSchedulingClass=idle \
+  /usr/local/sbin/nfs-backup-sync --checksums-only
+tail -f /var/log/nfs-backup-sync.log
+```
+
+If the timer fires meanwhile, the lock makes that run step aside. Every run after
+this one skips unchanged files on mtime and size alone.
 
 ### What it needs first
 
