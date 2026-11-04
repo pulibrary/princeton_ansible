@@ -24,10 +24,10 @@
     # above skips them. Include the sync half on its own with that flag set, so
     # the script and its units are actually exercised.
     #
-    # Only the sync half: the mount half installs gcsfuse from Google's apt
-    # repository and needs a service account key, neither of which belongs in a
-    # test. verify.yml stands in for the mount with a bind mount, which is
-    # enough to prove the guards that stop a backup writing to the local disk.
+    # Only the sync half: the mount half installs gcsfuse and gcloud from
+    # Google's apt repository and needs a service account key, neither of which
+    # belongs in a test. verify.yml stands in for gcloud with a stub and for
+    # the mount with a bind mount.
     - name: Include the NFS backup sync tasks
       ansible.builtin.include_role:
         name: nfsserver
@@ -35,6 +35,9 @@
       vars:
         running_on_server: true
         nfsserver_backup_enabled: true
+        # A local directory for verify.yml's stub gcloud to copy into, laid
+        # out the way the bucket is so the bind-mounted check finds the marker.
+        nfsserver_backup_url: /srv/fake_backup_bucket/nfs/staging
         # Far future, so Persistent=true cannot fire a catch-up run in a fresh
         # container and make the test non-deterministic.
         nfsserver_backup_sync_calendar: "2099-01-01 00:00:00"

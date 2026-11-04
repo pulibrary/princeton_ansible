@@ -14,9 +14,10 @@
 #   * There is therefore no /etc/fuse.conf change and no ACL on the key: those
 #     exist in the Solr role so that a non-root gcsfuse process can expose the
 #     mount to root. Here the same process owns both ends.
-#   * Solr writes its own backups into the mount through its backup API. Nothing
-#     writes to an NFS export on our behalf, so this mount is only the
-#     destination; backup_sync.yml is what actually copies the data.
+#   * Solr writes its own backups into the mount through its backup API. Here
+#     the backup does not go through the mount at all: backup_sync.yml uploads
+#     straight to the bucket with gcloud. The mount is for browsing, and it
+#     is where the Checkmk check reads the backup marker.
 
 - name: Nfsserver | Install gcsfuse dependencies
   ansible.builtin.apt:
@@ -57,9 +58,24 @@
     update_cache: false
   when: running_on_server
 
-- name: Nfsserver | Install gcsfuse
+# The sync script uploads with gcloud storage rsync rather than through the
+# mount; see nfs-backup-sync.sh.j2 for why. Same key, different repository.
+- name: Nfsserver | Add Google Cloud CLI apt repository
+  ansible.builtin.apt_repository:
+    repo: >-
+      deb [signed-by=/etc/apt/keyrings/cloud.google.asc]
+      https://packages.cloud.google.com/apt
+      cloud-sdk main
+    state: present
+    filename: google-cloud-sdk
+    update_cache: false
+  when: running_on_server
+
+- name: Nfsserver | Install gcsfuse and the Google Cloud CLI
   ansible.builtin.apt:
-    name: gcsfuse
+    name:
+      - gcsfuse
+      - google-cloud-cli
     state: present
     update_cache: true
   when: running_on_server

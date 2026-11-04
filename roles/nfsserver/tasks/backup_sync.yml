@@ -1,12 +1,16 @@
 ---
-# Scheduled copy of the exported NFS trees into the GCS backup mount, plus the
+# Scheduled copy of the exported NFS trees into the GCS backup bucket, plus the
 # Checkmk check that tells us whether it is still happening.
 
-- name: Nfsserver | Install backup dependencies
-  ansible.builtin.apt:
-    name:
-      - rsync
-    state: present
+# google-cloud-cli comes from Google's apt repository, so it is installed with
+# gcsfuse in backup_gcs_mount.yml rather than here.
+- name: Nfsserver | Create the backup's gcloud config directory
+  ansible.builtin.file:
+    path: "{{ nfsserver_backup_gcloud_config }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
   when: running_on_server
 
 - name: Nfsserver | Install the NFS backup sync script
@@ -22,25 +26,18 @@
   ansible.builtin.copy:
     content: |
       [Unit]
-      Description=Copy exported NFS trees to the GCS backup mount
-      # Wants= rather than Requires=, and this matters more than it looks.
-      #
-      # With Requires=, stopping the mount service puts a running backup
-      # straight into "failed": the stop propagates and rsync is killed
-      # mid-copy. This role's own stale-mount recovery stops that service, so a
-      # recovery during a long backup would kill the backup it was protecting.
-      #
-      # Wants= keeps the useful half (the mount is pulled in and ordered first)
-      # without the stop propagation. Nothing is lost by dropping Requires=,
-      # because the script verifies the mount itself and refuses to run without
-      # it, with a message that names the problem.
-      Wants={{ nfsserver_backup_mount_service }}
-      After={{ nfsserver_backup_mount_service }}
+      Description=Copy exported NFS trees to the GCS backup bucket
+      # No dependency on the mount service. The script uploads to the bucket
+      # with gcloud, not through the mount, so a mount that is down or being
+      # recovered has no bearing on the backup.
+      Wants=network-online.target
+      After=network-online.target
 
       [Service]
       Type=oneshot
       ExecStart={{ nfsserver_backup_script }}
-      # A tree this size can take a long while; the default would kill it.
+      # A first run hashes the whole tree, which takes a while; the default
+      # would kill it.
       TimeoutStartSec=0
       Nice=10
       IOSchedulingClass=idle

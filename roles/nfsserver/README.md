@@ -42,17 +42,20 @@ nfsserver_backup_enabled: true
 nfsserver_backup_bucket: pul-nfs-backup
 ```
 
-This mounts a GCS bucket with gcsfuse and copies `/var/nfs` into it on a systemd
-timer. The mount logic is taken from
-[`solr9cloud`](../solr9cloud/tasks/backup_gcs_mount.yml), including its
-stale-mount recovery, because a dead FUSE endpoint fails the same way wherever it
-happens: the mount stays listed in the kernel mount table while every write to it
-fails.
+This copies `/var/nfs` to `gs://<bucket>/nfs/<env>` with `gcloud storage rsync`
+on a daily systemd timer (`backup_sync.yml`), and mounts the bucket
+with gcsfuse for browsing and monitoring (`backup_gcs_mount.yml`). The mount
+logic is taken from [`solr9cloud`](../solr9cloud/tasks/backup_gcs_mount.yml),
+including its stale-mount recovery.
 
-The Solr role stops at the mount because Solr writes its own backups into it
-through its backup API. Nothing does that for an NFS export, so a mounted bucket
-on its own would back up nothing at all. `backup_sync.yml` is the part that
-copies.
+The copy deliberately does not go through the mount. The first version ran rsync
+over gcsfuse, and on lib-fs-prod (~650,000 files, 388G) every run took close to a
+week, because rsync checks each file with its own round trip to GCS. gcloud lists
+the bucket in bulk and only uploads what changed.
+
+The first gcloud run after switching over compares the objects gcsfuse wrote by
+hash, because they carry no mtime gcloud recognises. It reads the whole tree once
+but does not upload it again.
 
 ### What it needs first
 
@@ -75,22 +78,24 @@ policy on the bucket is the right place to bound that, not `--delete`.
 
 Object storage cannot hold POSIX ownership, and these trees are owned by several
 accounts (`deploy`, `conan`, others). Every object in the bucket reads back as
-root, so each run also writes `.ownership_manifest`: mode, owner, group and path
-for everything under the source. **A restore has to replay it**, or the
-applications reading the shares will fail on permissions.
+root, so each run also writes `.ownership_manifest`: one line per path under the
+source, `mode owner group type path<TAB>symlink-target`. **A restore has to
+replay it**, or the applications reading the shares will fail on permissions.
+gcloud does not copy symlinks, so they are recreated from the manifest too.
 
 ### What is monitored
 
-A Checkmk local check reports the age of the last completed run, not merely that
-the mount exists, because a mounted bucket with nothing being copied into it looks
-perfectly healthy. It warns after `nfsserver_backup_max_age_hours` (26 by default,
-just over a daily timer) and goes critical at twice that, or immediately if the
-mount is missing or stale.
+A Checkmk local check reports the age of the last completed run, read from the
+`.last_backup` marker through the mount, because a bucket with nothing being
+copied into it looks perfectly healthy. It warns after
+`nfsserver_backup_max_age_hours` (26 by default, just over a daily timer) and goes
+critical at twice that, immediately if the last run failed, or if the mount is
+missing or stale.
 
-The sync script also refuses to run unless its destination is genuinely a mount
-point, so a backup attempted while the mount was down cannot quietly write to the
-root filesystem and fill the disk. That refusal is asserted in the molecule
-scenario.
+The sync script writes the marker only after gcloud exits cleanly, so a failed
+upload can never refresh it. That is asserted in the molecule scenario, against a
+stub `gcloud`. Progress is logged to `/var/log/nfs-backup-sync.log` every
+`nfsserver_backup_progress_interval` seconds.
 
 ### Restoring
 
@@ -98,12 +103,20 @@ scenario.
 # stop exports so nothing writes while files are going back
 systemctl stop nfs-kernel-server
 
-rsync -a /var/backups/nfs_cloud_backup/nfs/production/ /var/nfs/
+export CLOUDSDK_AUTH_CREDENTIAL_FILE_OVERRIDE=/etc/nfs-backup-account-key.json
+export CLOUDSDK_CONFIG=/var/lib/nfs-backup/gcloud
+gcloud storage rsync --recursive gs://pul-nfs-backup/nfs/production /var/nfs
+gcloud storage cp gs://pul-nfs-backup/nfs/production/.ownership_manifest /root/
 
-# replay ownership and permissions, which the bucket could not hold
-awk '{ mode=$1; user=$2; group=$3; $1=$2=$3=""; sub(/^ +/, ""); \
-  printf "chown %s:%s \"%s\"; chmod %s \"%s\"\n", user, group, $0, mode, $0 }' \
-  /var/backups/nfs_cloud_backup/nfs/production/.ownership_manifest | bash
+# recreate symlinks, then replay ownership and permissions, which the bucket
+# could not hold
+while IFS=' ' read -r mode user group type rest; do
+  path=${rest%%$'\t'*}
+  target=${rest#*$'\t'}
+  [ "$type" = l ] && ln -sfn "$target" "$path"
+  chown -h "$user:$group" "$path"
+  [ "$type" = l ] || chmod "$mode" "$path"
+done </root/.ownership_manifest
 
 systemctl start nfs-kernel-server
 ```
