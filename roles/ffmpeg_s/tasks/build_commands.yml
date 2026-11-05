@@ -251,7 +251,7 @@
         tar xjvf ffmpeg-{{ ffmpeg_s_version }}.tar.bz2
         mv ffmpeg-{{ ffmpeg_s_version }} ffmpeg
       args:
-        creates: "{{ ffmpeg_s_sources_dir }}/ffmpeg"
+        creates: "{{ ffmpeg_s_sources_dir }}/ffmpeg-{{ ffmpeg_s_version }}.tar.bz2"
 
     - name: Ensure ffmpeg tmp directory exists
       ansible.builtin.file:
@@ -305,8 +305,9 @@
         make -j"{{ ansible_facts.processor_vcpus | default(4) }}"
         make install
         hash -r || true
+        touch "{{ ffmpeg_s_built_marker }}"
       args:
-        creates: "/opt/ffmpeg/bin/ffmpeg"
+        creates: "{{ ffmpeg_s_built_marker }}"
       environment:
         PATH: "/opt/ffmpeg/bin:{{ ansible_facts['env'].PATH | default('/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin') }}"
         TMPDIR: "/opt/ffmpeg/tmp"
