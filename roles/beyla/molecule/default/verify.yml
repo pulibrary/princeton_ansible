@@ -1,0 +1,111 @@
+---
+- name: Verify excluded hosts do not run Beyla
+  hosts: qa
+  gather_facts: false
+  vars_files:
+    - ../../defaults/main.yml
+  tasks:
+    - name: Look for Beyla files
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - /etc/systemd/system/beyla.service
+        - "{{ beyla_config_path }}"
+        - "{{ beyla_env_path }}"
+        - "{{ beyla_binary_path }}"
+      register: beyla_files
+
+    - name: Assert nothing was installed
+      ansible.builtin.assert:
+        that:
+          - beyla_files.results | selectattr('stat.exists') | list | length == 0
+        fail_msg: >-
+          Found {{ beyla_files.results | selectattr('stat.exists') | map(attribute='item') | join(', ') }}
+          on a host in an excluded group.
+
+- name: Verify Beyla is installed and running
+  hosts: all:!qa
+  gather_facts: false
+  vars_files:
+    - ../../defaults/main.yml
+  tasks:
+    - name: Check the installed binary
+      ansible.builtin.stat:
+        path: "{{ beyla_binary_path }}"
+      register: beyla_binary_file
+
+    - name: Assert the binary is installed and executable
+      ansible.builtin.assert:
+        that:
+          - beyla_binary_file.stat.exists
+          - beyla_binary_file.stat.isreg
+          - beyla_binary_file.stat.mode == '0755'
+        fail_msg: "{{ beyla_binary_path }} is missing, not a file, or not mode 0755."
+
+    - name: Find the downloaded archive
+      ansible.builtin.find:
+        paths: "{{ beyla_download_dir }}"
+        patterns: "beyla-linux-*-v{{ beyla_version }}.tar.gz"
+      register: beyla_archive_files
+
+    - name: Assert the archive is kept for reuse
+      ansible.builtin.assert:
+        that:
+          - beyla_archive_files.matched == 1
+        fail_msg: "The v{{ beyla_version }} archive is missing from {{ beyla_download_dir }}, so every run would download it again."
+
+    - name: Read the config file
+      ansible.builtin.slurp:
+        src: "{{ beyla_config_path }}"
+      register: beyla_config_file
+
+    - name: Assert the config carries the test settings
+      vars:
+        config: "{{ beyla_config_file.content | b64decode | from_yaml }}"
+      ansible.builtin.assert:
+        that:
+          - "config.discovery.services == [{'open_ports': 80}]"
+          - config.ebpf.context_propagation == 'all'
+          - config.otel_traces_export.endpoint == beyla_otlp_endpoint
+          - config.resource_attributes['service.name'] == 'molecule-app'
+          - config.resource_attributes['deployment.environment'] == 'molecule'
+        fail_msg: "{{ beyla_config_path }} does not match the scenario's settings: {{ config }}"
+
+    - name: Read the environment file
+      ansible.builtin.slurp:
+        src: "{{ beyla_env_path }}"
+      register: beyla_env_file
+
+    - name: Assert the environment file points at the local collector
+      ansible.builtin.assert:
+        that:
+          - "'OTEL_EXPORTER_OTLP_ENDPOINT=' ~ beyla_otlp_endpoint in beyla_env_file.content | b64decode"
+        fail_msg: "{{ beyla_env_path }} does not set OTEL_EXPORTER_OTLP_ENDPOINT to {{ beyla_otlp_endpoint }}."
+
+    # Beyla must raise its locked memory limit to load eBPF programs. Root in
+    # a privileged Docker container can; root in a rootless Podman container
+    # cannot, so Beyla only gets as far as starting there.
+    - name: Check whether the container allows raising the memory lock limit
+      ansible.builtin.command:
+        cmd: sh -c 'ulimit -l unlimited'
+      register: beyla_memlock_check
+      changed_when: false
+      failed_when: false
+
+    - name: Read the service state
+      ansible.builtin.systemd:
+        name: beyla
+      register: beyla_service
+
+    - name: Assert the service is enabled
+      ansible.builtin.assert:
+        that:
+          - beyla_service.status.UnitFileState == 'enabled'
+        fail_msg: "beyla is {{ beyla_service.status.UnitFileState }}; expected enabled."
+
+    - name: Assert the service is running
+      ansible.builtin.assert:
+        that:
+          - beyla_service.status.ActiveState == 'active'
+        fail_msg: "beyla is {{ beyla_service.status.ActiveState }}; expected active."
+      when: beyla_memlock_check.rc == 0
