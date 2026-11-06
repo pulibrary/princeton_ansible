@@ -42,7 +42,7 @@ Beyla needs to know which processes or ports to instrument. You can provide thes
 | **Variable**                 | **Default** | **Description**                                                                                            |
 | ---------------------------- | ----------- | ---------------------------------------------------------------------------------------------------------- |
 | **`beyla_open_ports`**       | `[]`        | List of target local listener ports to instrument (e.g., `[80, 5432, 8983, 8080]`).                               |
-| **`beyla_executable_names`** | `[]`        | List of explicit executable paths to monitor if port discovery is too broad (e.g., `['/usr/sbin/nginx']`). |
+| **`beyla_executable_names`** | `[]`        | Executable path globs to monitor if port discovery is too broad (e.g., `['/usr/sbin/nginx']`).            |
 
 ### Paths and Directories
 
