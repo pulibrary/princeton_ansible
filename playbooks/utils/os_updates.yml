@@ -15,12 +15,21 @@
     - ../group_vars/all/vault.yml
 
   tasks:
+    # apt-key was removed in apt 3.0 (Ubuntu 25.04 and later, e.g. resolute)
+    - name: Ubuntu | check for apt-key
+      ansible.builtin.stat:
+        path: /usr/bin/apt-key
+      register: apt_key_binary
+      when: ansible_facts['os_family'] == "Debian"
+
     # output is discarded because some keyrings contain non-UTF8 uids,
     # which ansible-core refuses to deserialize
     - name: Ubuntu | refresh keys
       ansible.builtin.shell: /usr/bin/apt-key adv --refresh-keys --keyserver keyserver.ubuntu.com > /dev/null 2>&1
       become: true
-      when: ansible_facts['os_family'] == "Debian"
+      when:
+        - ansible_facts['os_family'] == "Debian"
+        - apt_key_binary.stat.exists
 
     - name: Ubuntu | Upgrade all packages
       ansible.builtin.apt:
