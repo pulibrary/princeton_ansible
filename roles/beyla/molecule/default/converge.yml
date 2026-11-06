@@ -1,0 +1,14 @@
+---
+- name: Converge
+  hosts: all
+  become: true
+  tasks:
+    # PUL hosts are amd64; use the build that matches the test container so
+    # the binary also runs on arm64 workstations.
+    - name: Match the Beyla build to the container
+      ansible.builtin.set_fact:
+        beyla_platform: "linux-{{ 'arm64' if ansible_facts.architecture == 'aarch64' else 'amd64' }}"
+
+    - name: "Include beyla"
+      ansible.builtin.include_role:
+        name: beyla

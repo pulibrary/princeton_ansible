@@ -108,7 +108,7 @@ node-01
 
 1. **NFS Setup:** If a host is in the NFS group, it configures `/etc/exports` and starts the service.
 
-2. **Installation:** Installs MicroK8s on all nodes and adds the admin user to the `microk8s` group.
+2. **Installation:** Sets the hostname to the inventory name if MicroK8s is not installed yet, then installs MicroK8s on all nodes and adds the admin user to the `microk8s` group. A node that already runs MicroK8s under a different hostname fails here instead of being renamed (see [Renaming a node](#renaming-a-node)).
 
 3. **Firewall:** Configures UFW to allow traffic between nodes for API and Pod networking.
 
@@ -123,6 +123,19 @@ node-01
    - The secondary joins using the primary's IP/Token.
 
 6. **Kubeconfig:** Fetches the internal config and places it in the admin user's `~/.kube/config`.
+
+---
+
+## Renaming a node
+
+MicroK8s takes the node name, the kubelet's certificate (`system:node:<hostname>`) and Calico's VXLAN tunnel MAC address from the hostname at install time. If a node was installed under the wrong hostname (for example a rebuilt VM that booted as `localhost`), changing the hostname afterwards is not enough. On that node:
+
+1. Set the hostname: `sudo hostnamectl set-hostname <inventory name>`.
+2. Back up `/var/snap/microk8s/current/certs/kubelet.{crt,key}` and `/var/snap/microk8s/current/credentials/kubelet.config`.
+3. Sign a new kubelet certificate for the existing key with the cluster CA (`certs/ca.crt`, `certs/ca.key`), subject `/CN=system:node:<name>/O=system:nodes`, with the hostname and node IPs as subject alternative names. Put it in `certs/kubelet.crt` and in `kubelet.config` as `client-certificate-data`, and replace `system:node:<old name>` in `kubelet.config` with the new name.
+4. `sudo microk8s stop && sudo microk8s start`, wait for the new node to be `Ready`, then `microk8s kubectl delete node <old name>`.
+5. Recreate the VXLAN interface so its MAC matches what the other nodes compute from the new name: `sudo ip link delete vxlan.calico`, then delete this node's `calico-node` pod. Check that `/sys/class/net/vxlan.calico/address` matches `ip neigh show dev vxlan.calico` on another node.
+6. Delete any pods still using addresses from the old node's IP block so they get new ones.
 
 ---
 

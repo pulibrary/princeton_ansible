@@ -1,6 +1,13 @@
 #SPDX-License-Identifier: MIT-0
 ---
 # tasks file for roles/k8s_nfs
+- name: Require an NFS server for this environment
+  ansible.builtin.assert:
+    that:
+      - k8s_nfs_server | length > 0
+    fail_msg: "Set k8s_nfs_server for this environment (e.g. in group_vars/microk8s/<env>.yml)."
+    quiet: true
+
 - name: Add NFS external provisioner Helm repo
   ansible.builtin.command: >-
     microk8s helm3 repo add
