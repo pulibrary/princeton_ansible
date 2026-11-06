@@ -26,7 +26,7 @@ All variables can be overridden in `defaults/main.yml` or passed directly in a
 | `k8s_nfs_chart_repo_url`    | `https://kubernetes-sigs.github.io/nfs-subdir-external-provisioner/` | Helm repository URL.                                          |
 | `k8s_nfs_chart_ref`         | `nfs-subdir-external-provisioner/nfs-subdir-external-provisioner`    | Fully qualified chart reference (repo name / chart name).     |
 | `k8s_nfs_release_name`      | `nfs-subdir-external-provisioner`                                    | Helm release name.                                            |
-| `k8s_nfs_server`            | `k8s-fs-staging.lib.princeton.edu`                                   | NFS server hostname or IP.                                    |
+| `k8s_nfs_server`            | `""` (required)                                                      | NFS server hostname or IP. Must be set per environment.       |
 | `k8s_nfs_path`              | `/var/nfs/k8s`                                                       | NFS exported path.                                            |
 | `k8s_nfs_storage_class`     | `k8s-fs-nfs`                                                         | Name of the StorageClass to create.                           |
 | `k8s_nfs_default_class`     | `false`                                                              | Set the StorageClass as the cluster default (`true`/`false`). |

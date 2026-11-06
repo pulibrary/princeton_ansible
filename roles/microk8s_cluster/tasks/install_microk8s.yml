@@ -13,6 +13,36 @@
   changed_when: false
   failed_when: false
 
+# MicroK8s names the node, and issues its kubelet certificate, after the
+# hostname it finds at install time. A freshly built VM can boot as
+# "localhost", which then becomes the node name.
+- name: Read the current hostname
+  ansible.builtin.command: hostname
+  register: microk8s_current_hostname
+  changed_when: false
+  check_mode: false
+
+- name: Set the hostname before installing MicroK8s
+  ansible.builtin.hostname:
+    name: "{{ inventory_hostname }}"
+  when:
+    - microk8s_snap_installed.rc != 0
+    - microk8s_current_hostname.stdout | lower != inventory_hostname | lower
+
+# Renaming a node that already runs MicroK8s leaves its kubelet certificate,
+# node object and Calico VXLAN address on the old name, so do not do it here.
+- name: Refuse to rename a node that already runs MicroK8s
+  ansible.builtin.assert:
+    that:
+      - microk8s_current_hostname.stdout | lower == inventory_hostname | lower
+    fail_msg: >-
+      {{ inventory_hostname }} already runs MicroK8s with hostname
+      '{{ microk8s_current_hostname.stdout }}', so its node is not named
+      {{ inventory_hostname }}. See "Renaming a node" in the
+      microk8s_cluster README.
+    quiet: true
+  when: microk8s_snap_installed.rc == 0
+
 - name: Install MicroK8s from default snap channel
   ansible.builtin.command: snap install microk8s --classic
   register: microk8s_snap_install_default
