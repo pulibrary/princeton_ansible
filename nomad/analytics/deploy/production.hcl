@@ -46,7 +46,7 @@ job "analytics-production" {
       user = "1001:1001"
 
       config {
-        image        = "ghcr.io/umami-software/umami:3.2.0"
+        image        = "ghcr.io/umami-software/umami:3.4.1"
         ports = ["http"]
         # Don't allow writing anything to the file system.
         readonly_rootfs = true
