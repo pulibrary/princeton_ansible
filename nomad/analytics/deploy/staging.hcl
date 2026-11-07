@@ -75,7 +75,7 @@ job "analytics-staging" {
         OAUTH2_PROXY_UPSTREAMS = "static://202"
         OAUTH2_PROXY_SET_XAUTHREQUEST = "true"
         OAUTH2_PROXY_PROVIDER = "entra-id"
-        OAUTH2_PROXY_CLIENT_ID = "REPLACE-WITH-ENTRA-APP-CLIENT-ID"
+        OAUTH2_PROXY_CLIENT_ID = "8a100d7f-f364-4790-ba41-1a01afaa42f7"
         OAUTH2_PROXY_OIDC_ISSUER_URL = "https://login.microsoftonline.com/2ff60116-7431-425d-b5af-077d7791bda4/v2.0"
         OAUTH2_PROXY_SCOPE = "openid email profile offline_access"
         OAUTH2_PROXY_COOKIE_REFRESH = "1h"
@@ -173,11 +173,17 @@ http {
     server 127.0.0.1:8081;
   }
 
-  {{- with nomadVar "nomad/jobs/analytics-staging" }}
+  {{- if nomadVarExists "nomad/jobs/analytics-staging/web/nginx" }}
+  {{- with nomadVar "nomad/jobs/analytics-staging/web/nginx" }}
   map $auth_groups $umami_token {
     default "";
     "~(^|,)AnalyticsAdmin(,|$)" "{{ .UMAMI_ADMIN_TOKEN }}";
     "~(^|,)AnalyticsViewer(,|$)" "{{ .UMAMI_VIEWER_TOKEN }}";
+  }
+  {{- end }}
+  {{- else }}
+  map $auth_groups $umami_token {
+    default "";
   }
   {{- end }}
 

@@ -1,0 +1,139 @@
+---
+- name: Umami Tokens | List allocations
+  delegate_to: localhost
+  become: false
+  ansible.builtin.command:
+    cmd: "nomad operator api /v1/job/{{ umami_job }}/allocations"
+  environment:
+    NOMAD_ADDR: "{{ nomad_http_address }}"
+    NOMAD_TOKEN: "{{ nomad_app_token }}"
+  register: umami_allocs
+  changed_when: false
+  check_mode: false
+
+- name: Umami Tokens | Get running allocation
+  delegate_to: localhost
+  become: false
+  ansible.builtin.command:
+    cmd: "nomad operator api /v1/allocation/{{ (umami_running_allocs | first).ID }}"
+  vars:
+    umami_running_allocs: >-
+      {{ umami_allocs.stdout | from_json
+         | selectattr('ClientStatus', 'equalto', 'running')
+         | selectattr('DesiredStatus', 'equalto', 'run')
+         | list }}
+  environment:
+    NOMAD_ADDR: "{{ nomad_http_address }}"
+    NOMAD_TOKEN: "{{ nomad_app_token }}"
+  register: umami_alloc
+  changed_when: false
+  check_mode: false
+
+- name: Umami Tokens | Set Umami API address
+  ansible.builtin.set_fact:
+    umami_api: "http://{{ umami_port.HostIP }}:{{ umami_port.Value }}/api"
+  vars:
+    umami_port: >-
+      {{ (umami_alloc.stdout | from_json).AllocatedResources.Shared.Ports
+         | selectattr('Label', 'equalto', 'http')
+         | first }}
+
+- name: Umami Tokens | Read stored tokens
+  delegate_to: localhost
+  become: false
+  no_log: true
+  ansible.builtin.command:
+    cmd: "nomad var get -out json {{ umami_tokens_var }}"
+  environment:
+    NOMAD_ADDR: "{{ nomad_http_address }}"
+    NOMAD_TOKEN: "{{ nomad_app_token }}"
+  register: umami_tokens_current
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Umami Tokens | Initialize token facts
+  no_log: true
+  ansible.builtin.set_fact:
+    umami_tokens_stored: >-
+      {{ (umami_tokens_current.stdout | from_json).Items
+         if umami_tokens_current.rc == 0 else {} }}
+    umami_tokens_new: {}
+    umami_admin_token: ""
+
+- name: Umami Tokens | Ensure account
+  ansible.builtin.include_tasks:
+    file: umami_token_account.yml
+  loop: "{{ umami_token_accounts }}"
+  loop_control:
+    loop_var: umami_account
+    label: "{{ umami_account.username }}"
+
+- name: Umami Tokens | Ensure team membership
+  when: umami_team_name is defined
+  become: false
+  vars:
+    umami_team_token: "{{ umami_tokens_new[(umami_token_accounts | selectattr('role', 'equalto', 'admin') | first).token_key] }}"
+  block:
+    - name: Umami Tokens | Find team
+      no_log: true
+      ansible.builtin.uri:
+        url: "{{ umami_api }}/admin/teams?pageSize=100&search={{ umami_team_name | urlencode }}"
+        headers:
+          Authorization: "Bearer {{ umami_team_token }}"
+      register: umami_teams
+      check_mode: false
+
+    - name: Umami Tokens | Select team
+      ansible.builtin.set_fact:
+        umami_team: "{{ umami_teams.json.data | selectattr('name', 'equalto', umami_team_name) | first }}"
+
+    - name: Umami Tokens | Add accounts to team
+      when: umami_account.id not in (umami_team.members | map(attribute='userId') | list)
+      no_log: true
+      ansible.builtin.uri:
+        url: "{{ umami_api }}/teams/{{ umami_team.id }}/users"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ umami_team_token }}"
+        body_format: json
+        body:
+          userId: "{{ umami_account.id }}"
+          role: "{{ umami_account.team_role }}"
+      changed_when: true
+      loop: "{{ umami_token_accounts }}"
+      loop_control:
+        loop_var: umami_account
+        label: "{{ umami_account.username }}"
+
+    - name: Umami Tokens | Set team roles
+      when: >-
+        umami_team.members
+        | selectattr('userId', 'equalto', umami_account.id)
+        | rejectattr('role', 'equalto', umami_account.team_role)
+        | list | length > 0
+      no_log: true
+      ansible.builtin.uri:
+        url: "{{ umami_api }}/teams/{{ umami_team.id }}/users/{{ umami_account.id }}"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ umami_team_token }}"
+        body_format: json
+        body:
+          role: "{{ umami_account.team_role }}"
+      changed_when: true
+      loop: "{{ umami_token_accounts }}"
+      loop_control:
+        loop_var: umami_account
+        label: "{{ umami_account.username }}"
+
+- name: Umami Tokens | Store tokens
+  when: umami_tokens_new != umami_tokens_stored
+  delegate_to: localhost
+  become: false
+  no_log: true
+  ansible.builtin.command:
+    argv: "{{ ['nomad', 'var', 'put', '-force', umami_tokens_var] + (umami_tokens_new.items() | map('join', '=') | list) }}"
+  environment:
+    NOMAD_ADDR: "{{ nomad_http_address }}"
+    NOMAD_TOKEN: "{{ nomad_app_token }}"
