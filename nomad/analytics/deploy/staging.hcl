@@ -24,7 +24,7 @@ job "analytics-staging" {
       port "web" { to = 8080 }
 
       dns {
-        servers = ["10.88.0.1", "128.112.129.209", "8.8.8.8", "8.8.4.4"]
+        servers = ["172.17.0.1", "128.112.129.209", "8.8.8.8", "8.8.4.4"]
       }
     }
 
@@ -87,6 +87,7 @@ job "analytics-staging" {
         OAUTH2_PROXY_OIDC_GROUPS_CLAIM = "roles"
         OAUTH2_PROXY_ALLOWED_GROUPS = "AnalyticsAdmin,AnalyticsViewer"
         OAUTH2_PROXY_REVERSE_PROXY = "true"
+        OAUTH2_PROXY_TRUSTED_PROXY_IPS = "172.16.0.0/12"
         OAUTH2_PROXY_SKIP_PROVIDER_BUTTON = "true"
         OAUTH2_PROXY_COOKIE_SECURE = "true"
       }
@@ -162,6 +163,9 @@ http {
   server_tokens off;
   absolute_redirect off;
   large_client_header_buffers 4 32k;
+  proxy_buffer_size 32k;
+  proxy_buffers 8 32k;
+  proxy_busy_buffers_size 64k;
 
   upstream umami {
     server {{ env "NOMAD_ADDR_http" }};

@@ -3,7 +3,7 @@
   delegate_to: localhost
   become: false
   ansible.builtin.command:
-    cmd: "nomad operator api /v1/job/{{ umami_job }}/allocations"
+    cmd: "nomad job allocs -json {{ umami_job }}"
   environment:
     NOMAD_ADDR: "{{ nomad_http_address }}"
     NOMAD_TOKEN: "{{ nomad_app_token }}"
@@ -15,7 +15,7 @@
   delegate_to: localhost
   become: false
   ansible.builtin.command:
-    cmd: "nomad operator api /v1/allocation/{{ (umami_running_allocs | first).ID }}"
+    cmd: "nomad alloc status -json {{ (umami_running_allocs | first).ID }}"
   vars:
     umami_running_allocs: >-
       {{ umami_allocs.stdout | from_json
