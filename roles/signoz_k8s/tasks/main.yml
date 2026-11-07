@@ -309,6 +309,12 @@
   delay: 10
   until: signoz_clickhouse_pod_ready.stdout == "True"
 
+# A rebuilt cluster gives ZooKeeper an empty volume while ClickHouse keeps
+# its local data, which leaves every Replicated table read-only.
+- name: SigNoz | Restore missing ClickHouse replica metadata
+  ansible.builtin.include_tasks: replica_restore.yml
+  when: signoz_clickhouse_replica_restore_enabled | bool
+
 - name: Wait for SigNoz service
   ansible.builtin.command: "microk8s kubectl -n {{ signoz_namespace }} get svc {{ signoz_release_name }}"
   register: signoz_service_lookup
