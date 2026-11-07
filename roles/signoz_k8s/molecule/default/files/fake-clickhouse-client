@@ -9,6 +9,7 @@ State file layout:
   server_start: epoch seconds the "server" started
   tables: {name: {engine, mtime, last_event}}
   logs: {lag: seconds or -1, total: row count}
+  replicas: [{database, table, readonly, zk_metadata, stuck}] (optional)
   fail: "" | "down"
 """
 import json
@@ -79,6 +80,36 @@ def main():
         return 0
     if "total_rows" in query and "FORMAT JSONEachRow" in query:
         print(json.dumps({"now_s": int(time.time()), "total_rows": str(state["logs"]["total"])}))
+        return 0
+
+    replicas = state.get("replicas", [])
+
+    if query.startswith("SELECT database || '.' || table FROM system.replicas WHERE is_readonly AND zookeeper_path"):
+        for r in replicas:
+            if r["readonly"] and not r["zk_metadata"]:
+                print(f"{r['database']}.{r['table']}")
+        return 0
+
+    match = re.match(r"SYSTEM RESTORE REPLICA `([a-z_0-9]+)`\.`([a-z_0-9]+)`$", query)
+    if match:
+        for r in replicas:
+            if (r["database"], r["table"]) == match.groups():
+                if r["zk_metadata"]:
+                    sys.stderr.write("Code: 36. test: replica has metadata in ZooKeeper\n")
+                    return 36
+                # "stuck" models a restore that returns but leaves the
+                # table read-only.
+                r.update(readonly=r.get("stuck", False), zk_metadata=True)
+        with open(STATE, "w") as f:
+            json.dump(state, f)
+        return 0
+
+    match = re.match(r"SELECT database \|\| '\.' \|\| table FROM system\.replicas WHERE is_readonly AND database \|\| '\.' \|\| table IN \((.*)\) ORDER BY", query)
+    if match:
+        wanted = re.findall(r"'([a-z_0-9]+)\.([a-z_0-9]+)'", match.group(1))
+        for r in replicas:
+            if r["readonly"] and (r["database"], r["table"]) in wanted:
+                print(f"{r['database']}.{r['table']}")
         return 0
 
     if query == "SELECT count() FROM signoz_logs.logs_v2":

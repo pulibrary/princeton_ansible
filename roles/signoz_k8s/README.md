@@ -150,6 +150,31 @@ SELECT name, total_bytes FROM system.tables
 WHERE database = 'system' AND match(name, '_log_[0-9]+$');
 ```
 
+## ClickHouse replica metadata after a cluster rebuild
+
+ClickHouse keeps its data on the storage node's local disk, but ZooKeeper
+keeps the replication metadata on a dynamically provisioned NFS volume.
+Rebuilding the cluster gives ZooKeeper an empty volume while ClickHouse
+returns with its data. Every Replicated table then goes read-only (`Table is
+in readonly mode since table metadata was not found in zookeeper`), and the
+collector can store no logs, metrics or traces. The pods all look healthy.
+This happened on staging in November 2026 after k8s-staging1 was replaced.
+
+With `signoz_clickhouse_replica_restore_enabled` (default `true`), once the
+ClickHouse pod is Ready the role finds tables that are read-only **and**
+whose replica path is missing from ZooKeeper, and runs `SYSTEM RESTORE
+REPLICA` on each. That rebuilds the metadata from the parts on disk and
+deletes nothing. A table that is read-only with its metadata present is left
+alone, and the run fails if ZooKeeper cannot be queried or a restored table
+is still read-only. Check mode lists the tables without restoring them. On a
+healthy cluster it sends one read-only query.
+
+To check by hand:
+
+```sql
+SELECT database, table, zookeeper_path FROM system.replicas WHERE is_readonly;
+```
+
 ## Collector telemetry and SigNoz alerts
 
 The chart's default collector serves its own metrics only on `localhost:8888`
@@ -596,10 +621,12 @@ minute of the collector restart, and its `exporter` label should include
 ## Testing
 
 `molecule test` in this role runs the migration, the values template, the
-alert management and the Checkmk checks against stand-ins for
-`clickhouse-client`, `kubectl` and the SigNoz API. It covers check mode,
-idempotence, per-table overrides, refusal of unrecognised TTLs, a missing
-pod, ClickHouse being down, and every Checkmk state. It also installs the
+replica restore, the alert management and the Checkmk checks against
+stand-ins for `clickhouse-client`, `kubectl` and the SigNoz API. It covers
+check mode, idempotence, per-table overrides, refusal of unrecognised TTLs,
+a missing pod, ClickHouse being down, restoring only replicas missing their
+ZooKeeper metadata, a restore that leaves a table read-only, and every
+Checkmk state. It also installs the
 collector watchdog, runs one check through systemd, runs the watchdog unit
 tests on the instance's Python, and disables it again.
 
