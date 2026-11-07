@@ -84,10 +84,10 @@ def main():
 
     replicas = state.get("replicas", [])
 
-    if query.startswith("SELECT database, table FROM system.replicas WHERE is_readonly AND zookeeper_path"):
+    if query.startswith("SELECT database || '.' || table FROM system.replicas WHERE is_readonly AND zookeeper_path"):
         for r in replicas:
             if r["readonly"] and not r["zk_metadata"]:
-                print(f"{r['database']}\t{r['table']}")
+                print(f"{r['database']}.{r['table']}")
         return 0
 
     match = re.match(r"SYSTEM RESTORE REPLICA `([a-z_0-9]+)`\.`([a-z_0-9]+)`$", query)
@@ -104,12 +104,12 @@ def main():
             json.dump(state, f)
         return 0
 
-    match = re.match(r"SELECT database, table FROM system\.replicas WHERE is_readonly AND \(database, table\) IN \((.*)\) ORDER BY", query)
+    match = re.match(r"SELECT database \|\| '\.' \|\| table FROM system\.replicas WHERE is_readonly AND database \|\| '\.' \|\| table IN \((.*)\) ORDER BY", query)
     if match:
-        wanted = re.findall(r"\('([a-z_0-9]+)', '([a-z_0-9]+)'\)", match.group(1))
+        wanted = re.findall(r"'([a-z_0-9]+)\.([a-z_0-9]+)'", match.group(1))
         for r in replicas:
             if r["readonly"] and (r["database"], r["table"]) in wanted:
-                print(f"{r['database']}\t{r['table']}")
+                print(f"{r['database']}.{r['table']}")
         return 0
 
     if query == "SELECT count() FROM signoz_logs.logs_v2":
