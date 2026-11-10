@@ -20,6 +20,8 @@ jobs:
 
 ## Deployment
 
-`ansible-playbook playbooks/circlei_deployer.yml`
+Make sure you push the branch that has any changes to the container, and wait for it to generate. Then specify the branch you want to deploy.
+
+`BRANCH=[my-branch] ansible-playbook playbooks/circlei_deployer.yml`
 
 You can track progress and status of nomad apps by looking at the Nomad UI, accessible from `./bin/login`
