@@ -28,8 +28,10 @@ jobs:
 
 ## Deployment
 
+Make sure you push the branch that has any changes to the container, and wait for it to generate. Then specify the branch you want to deploy.
+
 ```bash
-ansible-playbook playbooks/tigerdata_ci_deployer.yml
+BRANCH=[my-branch] ansible-playbook playbooks/tigerdata_ci_deployer.yml
 ```
 
 You can track progress and status of nomad apps by looking at the Nomad UI,
