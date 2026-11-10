@@ -3,9 +3,57 @@
   ansible.builtin.command: psql --version
   changed_when: false
 
-- name: Catalog cluster | verify cargo is installed
-  ansible.builtin.command: /usr/local/cargo/bin/cargo --version
+- name: Catalog cluster | install systemd unit
+  ansible.builtin.template:
+    src: catalog-cluster.service.j2
+    dest: /etc/systemd/system/catalog-cluster.service
+    owner: root
+    group: root
+    mode: '0644'
+  become: true
+  tags: systemd
+  notify: Reload systemd
+
+- name: Catalog cluster | add deploy user to the rustup group
+  ansible.builtin.user:
+    name: "{{ deploy_user }}"
+    groups: rustup
+    append: true
+  tags: compile
+
+- name: Catalog cluster | create directory for repo
+  ansible.builtin.file:
+    path: "{{ application_repo_path }}"
+    state: directory
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+  tags: compile
+
+- name: Catalog cluster | clone repo
+  ansible.builtin.git:
+    repo: "https://github.com/pulibrary/catalog-cluster.git"
+    dest: "{{ application_repo_path }}"
+    force: true
+    version: "{{ branch | default('main') }}"
+  tags: compile
+  become_user: "{{ deploy_user }}"
+
+- name: Catalog cluster | compile
+  ansible.builtin.command: /usr/local/cargo/bin/cargo build --release
+  args:
+    chdir: "{{ application_repo_path }}"
   environment:
     CARGO_HOME: /usr/local/cargo
     RUSTUP_HOME: /usr/local/rustup
-  changed_when: false
+  tags: compile
+  become_user: "{{ deploy_user }}"
+
+- name: Catalog cluster | install
+  ansible.builtin.copy:
+    src: "{{ application_repo_path }}/target/release/catalog-cluster"
+    dest: "{{ application_binary_path }}"
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+    remote_src: true
+  tags: compile
+  notify: Restart catalog cluster

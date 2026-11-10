@@ -1,6 +1,8 @@
 ---
 # by default this playbook runs in the staging environment
 # to run in production, pass '-e runtime_env=production'
+# If you want to just recompile the application, use `-t compile`
+# To compile from a specific branch in the application's repo, pass `-e branch=my-feature-branch`
 - name: Build the catalog cluster
   hosts: catalog_cluster_{{ runtime_env | default('staging') }}
   remote_user: pulsys
@@ -8,9 +10,11 @@
   vars_files:
     - ../group_vars/all/vars.yml
     - ../group_vars/catalog_cluster/{{ runtime_env | default('staging') }}.yml
+    - ../group_vars/catalog_cluster/common.yml
     - ../group_vars/catalog_cluster/vault.yml
 
   roles:
+    - role: deploy_user
     - role: catalog_cluster
 
   post_tasks:
