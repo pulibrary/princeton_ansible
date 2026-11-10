@@ -9,6 +9,64 @@ job "analytics-staging" {
   type        = "service"
   node_pool = "staging"
 
+  group "sessions" {
+    count = 1
+
+    network {
+      port "redis" {
+        static = 6380
+        to     = 6379
+      }
+    }
+
+    service {
+      name = "analytics-staging-sessions"
+      port = "redis"
+
+      check {
+        type     = "tcp"
+        port     = "redis"
+        interval = "10s"
+        timeout  = "2s"
+      }
+    }
+
+    task "redis" {
+      driver = "docker"
+      user   = "999:999"
+
+      config {
+        image = "redis:8.10-alpine"
+        ports = ["redis"]
+        args  = ["/secrets/redis.conf"]
+        readonly_rootfs = true
+        cap_drop = ["ALL"]
+        security_opt = [
+          "no-new-privileges"
+        ]
+      }
+
+      template {
+        destination = "${NOMAD_SECRETS_DIR}/redis.conf"
+        change_mode = "restart"
+        data = <<EOF
+save ""
+appendonly no
+maxmemory 64mb
+maxmemory-policy volatile-lru
+{{- with nomadVar "nomad/jobs/analytics-staging" }}
+requirepass {{ .OAUTH2_REDIS_PASSWORD }}
+{{- end }}
+EOF
+      }
+
+      resources {
+        cpu    = 100
+        memory = 96
+      }
+    }
+  }
+
   group "web" {
     count = 2
 
@@ -90,6 +148,8 @@ job "analytics-staging" {
         OAUTH2_PROXY_TRUSTED_PROXY_IPS = "172.16.0.0/12"
         OAUTH2_PROXY_SKIP_PROVIDER_BUTTON = "true"
         OAUTH2_PROXY_COOKIE_SECURE = "true"
+        OAUTH2_PROXY_SESSION_STORE_TYPE = "redis"
+        OAUTH2_PROXY_REDIS_CONNECTION_URL = "redis://analytics-staging-sessions.service.consul:6380"
       }
 
       template {
@@ -99,6 +159,7 @@ job "analytics-staging" {
         data = <<EOF
         {{- with nomadVar "nomad/jobs/analytics-staging" -}}
         OAUTH2_PROXY_COOKIE_SECRET = '{{ .OAUTH2_COOKIE_SECRET }}'
+        OAUTH2_PROXY_REDIS_PASSWORD = '{{ .OAUTH2_REDIS_PASSWORD }}'
         {{- end -}}
         EOF
       }
@@ -162,10 +223,6 @@ http {
   error_log /dev/stderr warn;
   server_tokens off;
   absolute_redirect off;
-  large_client_header_buffers 4 32k;
-  proxy_buffer_size 32k;
-  proxy_buffers 8 32k;
-  proxy_busy_buffers_size 64k;
 
   upstream umami {
     server {{ env "NOMAD_ADDR_http" }};
@@ -222,9 +279,10 @@ http {
     location /oauth2/ {
       proxy_pass http://oauth2;
       include proxy_headers.conf;
+      proxy_set_header X-Auth-Request-Redirect $request_uri;
     }
 
-    location @signin {
+    location @oauth2_signin {
       rewrite ^ /oauth2/start? break;
       proxy_pass http://oauth2;
       include proxy_headers.conf;
@@ -242,7 +300,11 @@ http {
     location / {
       auth_request /oauth2/auth;
       auth_request_set $auth_groups $upstream_http_x_auth_request_groups;
-      error_page 401 = @signin;
+      error_page 401 = @oauth2_signin;
+
+      auth_request_set $auth_cookie $upstream_http_set_cookie;
+      add_header Set-Cookie $auth_cookie;
+
       proxy_pass $umami_backend;
       include proxy_headers.conf;
       proxy_set_header Authorization "Bearer $umami_token";
