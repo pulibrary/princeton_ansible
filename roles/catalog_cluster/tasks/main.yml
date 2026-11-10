@@ -35,7 +35,11 @@
     dest: "{{ application_repo_path }}"
     force: true
     version: "{{ branch | default('main') }}"
-  tags: compile
+  tags:
+    - compile
+    # Theoretically, we could merge a new commit into the main branch between `molecule converge` and `molecule idempotence`,
+    # causing the idempotence check to fail.  Therefore, we exclude it from idempotence check
+    - molecule-idempotence-notest
   become_user: "{{ deploy_user }}"
 
 - name: Catalog cluster | compile
@@ -47,6 +51,10 @@
     RUSTUP_HOME: /usr/local/rustup
   tags: compile
   become_user: "{{ deploy_user }}"
+  register: my_output
+  # When cargo compiles something new, it will print "Compiling" then "Finished" to stderr
+  # When it notices that there is nothing new to compile, it only prints "Finished" to stderr
+  changed_when: "'Compiling' in my_output.stderr"
 
 - name: Catalog cluster | install
   ansible.builtin.copy:
