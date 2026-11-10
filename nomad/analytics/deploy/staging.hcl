@@ -293,7 +293,6 @@ http {
     location /oauth2/ {
       proxy_pass http://oauth2;
       include proxy_headers.conf;
-      proxy_set_header X-Auth-Request-Redirect $request_uri;
     }
 
     location @oauth2_signin {
