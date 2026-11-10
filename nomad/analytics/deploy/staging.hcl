@@ -9,11 +9,14 @@ job "analytics-staging" {
   type        = "service"
   node_pool = "staging"
 
+  # Need a tiny redis store to keep the Entra Oauth cookies in.
+  # Don't gotta persist it - when we redeploy, folks will just have to log in again.
   group "sessions" {
     count = 1
 
     network {
       port "redis" {
+        # Static port so we can reference it in the oauth env config.
         static = 6380
         to     = 6379
       }
@@ -33,7 +36,6 @@ job "analytics-staging" {
 
     task "redis" {
       driver = "docker"
-      user   = "999:999"
 
       config {
         image = "redis:8.10-alpine"
@@ -108,6 +110,7 @@ EOF
       }
     }
 
+    # oauth2-proxy handles Entra auth and passes it to nginx to decide which Umami token to log in with.
     task "oauth2-proxy" {
       driver = "docker"
 
@@ -130,23 +133,28 @@ EOF
 
       env {
         OAUTH2_PROXY_HTTP_ADDRESS = "0.0.0.0:4180"
-        OAUTH2_PROXY_UPSTREAMS = "static://202"
+        # Forward Entra properties to nginx, so it can set the right token.
         OAUTH2_PROXY_SET_XAUTHREQUEST = "true"
         OAUTH2_PROXY_PROVIDER = "entra-id"
         OAUTH2_PROXY_CLIENT_ID = "8a100d7f-f364-4790-ba41-1a01afaa42f7"
         OAUTH2_PROXY_OIDC_ISSUER_URL = "https://login.microsoftonline.com/2ff60116-7431-425d-b5af-077d7791bda4/v2.0"
+        # Get offline_access so it refreshes the token every hour, so if we remove someone from a group it propagates in an hour.
         OAUTH2_PROXY_SCOPE = "openid email profile offline_access"
         OAUTH2_PROXY_COOKIE_REFRESH = "1h"
         OAUTH2_PROXY_CODE_CHALLENGE_METHOD = "S256"
         OAUTH2_PROXY_ENTRA_ID_FEDERATED_TOKEN_AUTH = "true"
+        # Use nomad workload identities to auth to Entra.
         AZURE_FEDERATED_TOKEN_FILE = "/secrets/nomad_entra.jwt"
         OAUTH2_PROXY_REDIRECT_URL = "https://analytics-staging.lib.princeton.edu/oauth2/callback"
         OAUTH2_PROXY_EMAIL_DOMAINS = "*"
         OAUTH2_PROXY_OIDC_GROUPS_CLAIM = "roles"
+        # Gotta be in a group or you can't get in. These are managed in Entra.
         OAUTH2_PROXY_ALLOWED_GROUPS = "AnalyticsAdmin,AnalyticsViewer"
         OAUTH2_PROXY_REVERSE_PROXY = "true"
         OAUTH2_PROXY_TRUSTED_PROXY_IPS = "172.16.0.0/12"
         OAUTH2_PROXY_SKIP_PROVIDER_BUTTON = "true"
+        # Store sessions in redis, otherwise the cookie gets too big and nginx errors.
+        # Docs: https://oauth2-proxy.github.io/oauth2-proxy/configuration/integrations/nginx#configuring-for-use-with-the-nginx-auth_request-directive
         OAUTH2_PROXY_COOKIE_SECURE = "true"
         OAUTH2_PROXY_SESSION_STORE_TYPE = "redis"
         OAUTH2_PROXY_REDIS_CONNECTION_URL = "redis://analytics-staging-sessions.service.consul:6380"
@@ -170,11 +178,15 @@ EOF
       }
     }
 
+    # Nginx proxy to handle auth flow.
+    # If not logged in, forward to oauth2-proxy
+    # If logged in by oauth2-proxy (headers set), check groups, if group is correct then set the Bearer token to the admin or viewer Umami user appropriately.
+    # NOTE: This only works because Umami's bearer tokens for accounts never expire.
     task "nginx" {
       driver = "docker"
 
       config {
-        image = "docker.io/nginxinc/nginx-unprivileged:1.30.6-alpine"
+        image = "docker.io/nginxinc/nginx-unprivileged:stable"
         ports = ["web"]
         readonly_rootfs = true
         cap_drop = ["ALL"]
@@ -188,6 +200,13 @@ EOF
         mount {
           type   = "tmpfs"
           target = "/tmp"
+        }
+        mount {
+          type   = "tmpfs"
+          target = "/var/cache/nginx"
+          tmpfs_options {
+            mode = 1023
+          }
         }
       }
 
@@ -214,11 +233,6 @@ events {
   worker_connections 1024;
 }
 http {
-  client_body_temp_path /tmp/client_temp;
-  proxy_temp_path /tmp/proxy_temp;
-  fastcgi_temp_path /tmp/fastcgi_temp;
-  uwsgi_temp_path /tmp/uwsgi_temp;
-  scgi_temp_path /tmp/scgi_temp;
   access_log off;
   error_log /dev/stderr warn;
   server_tokens off;
