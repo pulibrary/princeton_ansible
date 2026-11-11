@@ -16,6 +16,16 @@ clickhouse:
       cpu: "{{ signoz_clickhouse_cpu_request }}"
       memory: "{{ signoz_clickhouse_memory_request }}"
 
+  # The chart default is a single ZooKeeper, so losing its volume loses the
+  # replication metadata of every Replicated table. Hard anti-affinity puts
+  # each member on its own node; the PDB keeps a drain from taking two.
+  zookeeper:
+    replicaCount: {{ signoz_zookeeper_replica_count | int }}
+    podAntiAffinityPreset: hard
+    pdb:
+      create: true
+      maxUnavailable: 1
+
   # Diagnostic system log retention. The operator applies these files to
   # ClickHouse without restarting it; they take effect when ClickHouse next
   # starts. tasks/system_log_retention.yml aligns the existing tables.

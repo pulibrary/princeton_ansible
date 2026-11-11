@@ -515,6 +515,38 @@ validate there without touching production:
   running, which is intended).
 - The `observed_timestamp` grant can stay; it is read-only.
 
+## ZooKeeper
+
+ClickHouse stores the replication metadata for every Replicated table in
+ZooKeeper. The chart defaults to one ZooKeeper node, so if its volume is
+lost, every SigNoz table goes read-only. The role runs
+`signoz_zookeeper_replica_count` members (default 3), each on a different
+node (hard anti-affinity), with a PodDisruptionBudget that lets a drain take
+only one at a time. With three members, one node can be lost or rebuilt: the
+other two keep a quorum and the rebuilt member resyncs from them. The
+cluster must have at least as many schedulable nodes as members, or the
+extra pods stay Pending.
+
+This does not make ClickHouse itself redundant. It is still one replica on
+the storage node's local disk. If every ZooKeeper volume is lost at once,
+for example when the whole cluster is rebuilt, the metadata is gone however
+many members there are.
+
+**Going from one member to three.** The chart starts ZooKeeper pods in
+parallel. The two new, empty members can form a quorum before the existing
+member restarts with the three-node config. If they do, the existing member
+joins as a follower and its metadata is discarded. The tables then go
+read-only, as after a rebuild. The replica restore that runs after Helm
+rebuilds the metadata from ClickHouse's local data, so the first run after
+this change may restore all the tables. Ingestion fails until it finishes.
+Check afterwards:
+
+```sh
+microk8s kubectl -n platform exec signoz-zookeeper-0 -- zkServer.sh status
+```
+
+One member should report `Mode: leader` and two `Mode: follower`.
+
 ## Storage
 
 The production PV and PVC declare `450Gi` (there is no 750 GiB value in this
