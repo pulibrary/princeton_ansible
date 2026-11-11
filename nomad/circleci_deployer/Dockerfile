@@ -1,4 +1,3 @@
-FROM quay.io/podman/stable:v6 AS podman
 FROM circleci/runner-agent:machine-3
 ARG RUBY_VERSION=3.4.3
 # Install dependencies - pulled from build-pack-deps:
@@ -70,6 +69,7 @@ ENV PATH="/usr/local/ruby/bin:${PATH}"
 
 RUN echo "$(ruby --version)"
 
-# Copy podman's podman-in-podman compatible configuration files
-# Pulled from https://quay.io/repository/podman/stable/manifest/sha256:b83bf5b82d8d02a49dfa7f8b5c35e6ffc826e6dfb1592b7ec2e17100dd47c810
-COPY --from=podman --chown=circleci /etc/containers/storage.conf /etc/containers/storage.conf
+# Podman-in-podman compatible storage configuration, taken from quay.io/podman/stable:v5.
+# Vendored because podman 6 images replaced storage.conf with drop-in directories,
+# which the podman 3.x installed from Ubuntu 22.04 apt does not read.
+COPY --chown=circleci storage.conf /etc/containers/storage.conf
