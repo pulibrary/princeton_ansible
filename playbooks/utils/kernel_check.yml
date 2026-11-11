@@ -1,0 +1,45 @@
+---
+- name: Check the status of the Ubuntu kernel
+  hosts: all
+  remote_user: pulsys
+  become: true
+  gather_facts: true
+
+  pre_tasks:
+    - name: Stop playbook if you didn't pass --limit
+      fail:
+        msg: "you must use -l or --limit"
+      when: ansible_limit is not defined
+      run_once: true
+
+  tasks:
+    - name: Check kernel on Debian-flavored VMs
+      ansible.builtin.shell: dpkg-query -W -f='${binary:Package}\t${source:Package}\t${Version}\n' "linux-image-$(uname -r)"
+      when: ansible_facts['os_family'] == "Debian"
+      register: kernel_details
+
+    - name: Show kernel var
+      ansible.builtin.debug:
+        var: kernel_details.stdout
+
+    - name: Show distro version
+      ansible.builtin.debug:
+        var: ansible_facts['distribution_version']
+
+    - name: Display Jammy results
+      ansible.builtin.debug:
+        msg:
+          - "Kernel output: {{ kernel_details.stdout }}"
+          - "{% if '5.15.0-203.213' in kernel_details.stdout %} The kernel on '{{ inventory_hostname }}' is patched!{% else %} The kernel on '{{inventory_hostname}}' is still not patched!{% endif %}"
+      when: ansible_facts['distribution_version'] == "22.04"
+
+    - name: Display Noble results
+      ansible.builtin.debug:
+        msg:
+          - "Kernel output: {{ kernel_details.stdout }}"
+          - "{% if '6.8.0-149.149' in kernel_details.stdout %} The kernel on '{{ inventory_hostname }}' is patched!{% else %} The kernel on '{{inventory_hostname}}' is still not patched!{% endif %}"
+      when: ansible_facts['distribution_version'] == "24.04"
+
+# "Kernel is patched: {{ 'YES' if '"6.8.0-149.149" in kernel_details.stdout, else 'NO' }}
+#
+# Kernel output: {{ kernel_details.stdout }}
