@@ -1,4 +1,4 @@
-FROM quay.io/podman/stable:v5 AS podman
+FROM quay.io/podman/stable:v6 AS podman
 FROM circleci/runner-agent:machine-3
 ARG RUBY_VERSION=3.4.3
 # Install dependencies - pulled from build-pack-deps:
