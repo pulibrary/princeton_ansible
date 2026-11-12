@@ -16,6 +16,18 @@ clickhouse:
       cpu: "{{ signoz_clickhouse_cpu_request }}"
       memory: "{{ signoz_clickhouse_memory_request }}"
 
+  # Run three ZooKeeper nodes in a cluster, so we can rebuild any k8s node
+  # without losing ZooKeeper data.
+  zookeeper:
+    replicaCount: 3
+    # Every ZooKeeper container should run on a unique node.
+    podAntiAffinityPreset: hard
+    # Never let more than one ZooKeeper node go down at a time.
+    # https://kubernetes.io/docs/tasks/run-application/configure-pdb/#specifying-a-poddisruptionbudget
+    pdb:
+      create: true
+      maxUnavailable: 1
+
   # Diagnostic system log retention. The operator applies these files to
   # ClickHouse without restarting it; they take effect when ClickHouse next
   # starts. tasks/system_log_retention.yml aligns the existing tables.
