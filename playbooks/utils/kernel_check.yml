@@ -1,9 +1,12 @@
 ---
-- name: Check the status of the Ubuntu kernel
+# you MUST pass --limit with this playbook
+#
+- name: Check the Ubuntu kernel, update and reboot if needed
   hosts: all
   remote_user: pulsys
   become: true
-  gather_facts: true
+  serial: 1
+  max_fail_percentage: 0
 
   pre_tasks:
     - name: Stop playbook if you didn't pass --limit
@@ -18,20 +21,13 @@
       when: ansible_facts['os_family'] == "Debian"
       register: kernel_details
 
-    - name: Show kernel var
-      ansible.builtin.debug:
-        var: kernel_details.stdout
-
-    - name: Show distro version
-      ansible.builtin.debug:
-        var: ansible_facts['distribution_version']
-
     - name: Display Jammy results
       ansible.builtin.debug:
         msg:
           - "Kernel output: {{ kernel_details.stdout }}"
           - "{% if '5.15.0-203.213' in kernel_details.stdout %} The kernel on '{{ inventory_hostname }}' is patched!{% else %} The kernel on '{{inventory_hostname}}' is still not patched!{% endif %}"
       when: ansible_facts['distribution_version'] == "22.04"
+      # failed_when: "'5.15.0-203.213' not in kernel_details.stdout"
 
     - name: Display Noble results
       ansible.builtin.debug:
@@ -39,7 +35,34 @@
           - "Kernel output: {{ kernel_details.stdout }}"
           - "{% if '6.8.0-149.149' in kernel_details.stdout %} The kernel on '{{ inventory_hostname }}' is patched!{% else %} The kernel on '{{inventory_hostname}}' is still not patched!{% endif %}"
       when: ansible_facts['distribution_version'] == "24.04"
+      # failed_when: "'6.8.0-149.149' not in kernel_details.stdout"
 
-# "Kernel is patched: {{ 'YES' if '"6.8.0-149.149" in kernel_details.stdout, else 'NO' }}
-#
-# Kernel output: {{ kernel_details.stdout }}
+    - name: Upgrade the Jammy kernel
+      ansible.builtin.apt:
+        name: [linux-generic, linux-image-generic, linux-headers-generic, linux-virtual, linux-image-virtual, linux-headers-virtual]
+        state: latest # noqa package-latest
+        only_upgrade: true
+        update_cache: true
+      when:
+        - ansible_facts['distribution_version'] == "24.04"
+        - "'5.15.0-203.213' not in kernel_details.stdout"
+
+    - name: Upgrade the Noble kernel
+      ansible.builtin.apt:
+        name: [linux-generic, linux-image-generic, linux-headers-generic, linux-virtual, linux-image-virtual, linux-headers-virtual]
+        state: latest # noqa package-latest
+        only_upgrade: true
+        update_cache: true
+      when:
+        - ansible_facts['distribution_version'] == "24.04"
+        - "'6.8.0-149.149' not in kernel_details.stdout"
+
+    - name: Check if a reboot is required
+      ansible.builtin.stat:
+        path: /var/run/reboot-required
+      register: reboot_required
+
+    - name: Reboot
+      ansible.builtin.reboot:
+      when: reboot_required.stat.exists
+      # this module reboots and waits until the machine responds before ending
