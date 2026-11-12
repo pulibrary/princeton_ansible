@@ -519,10 +519,9 @@ validate there without touching production:
 
 ClickHouse stores the replication metadata for every Replicated table in
 ZooKeeper. The chart defaults to one ZooKeeper node, so if its volume is
-lost, every SigNoz table goes read-only. The role runs
-`signoz_zookeeper_replica_count` members (default 3), each on a different
-node (hard anti-affinity), with a PodDisruptionBudget that lets a drain take
-only one at a time. With three members, one node can be lost or rebuilt: the
+lost, every SigNoz table goes read-only. The role runs three members, each
+on a different node (hard anti-affinity), with a PodDisruptionBudget that
+lets a drain take only one at a time. With three members, one node can be lost or rebuilt: the
 other two keep a quorum and the rebuilt member resyncs from them. The
 cluster must have at least as many schedulable nodes as members, or the
 extra pods stay Pending.
