@@ -245,13 +245,19 @@
       ansible.builtin.shell: |
         set -euo pipefail
         cd "/opt/ffmpeg/sources"
-        wget -O ffmpeg-{{ ffmpeg_s_version }}.tar.bz2 \
-          https://ffmpeg.org/releases/ffmpeg-{{ ffmpeg_s_version }}.tar.bz2
-        rm -rf ffmpeg ffmpeg-{{ ffmpeg_s_version }}
-        tar xjvf ffmpeg-{{ ffmpeg_s_version }}.tar.bz2
-        mv ffmpeg-{{ ffmpeg_s_version }} ffmpeg
+        # Download to a .part file so a failed fetch never satisfies 'creates'
+        wget -O ffmpeg-{{ ffmpeg_s_version }}.tar.gz.part \
+          https://github.com/FFmpeg/FFmpeg/archive/refs/tags/n{{ ffmpeg_s_version }}.tar.gz
+        rm -rf ffmpeg FFmpeg-n{{ ffmpeg_s_version }}
+        tar xzvf ffmpeg-{{ ffmpeg_s_version }}.tar.gz.part
+        mv FFmpeg-n{{ ffmpeg_s_version }} ffmpeg
+        mv ffmpeg-{{ ffmpeg_s_version }}.tar.gz.part ffmpeg-{{ ffmpeg_s_version }}.tar.gz
       args:
-        creates: "{{ ffmpeg_s_sources_dir }}/ffmpeg"
+        creates: "{{ ffmpeg_s_sources_dir }}/ffmpeg-{{ ffmpeg_s_version }}.tar.gz"
+      register: ffmpeg_download
+      retries: 3
+      delay: 30
+      until: ffmpeg_download.rc == 0
 
     - name: Ensure ffmpeg tmp directory exists
       ansible.builtin.file:
@@ -305,8 +311,9 @@
         make -j"{{ ansible_facts.processor_vcpus | default(4) }}"
         make install
         hash -r || true
+        touch "{{ ffmpeg_s_built_marker }}"
       args:
-        creates: "/opt/ffmpeg/bin/ffmpeg"
+        creates: "{{ ffmpeg_s_built_marker }}"
       environment:
         PATH: "/opt/ffmpeg/bin:{{ ansible_facts['env'].PATH | default('/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin') }}"
         TMPDIR: "/opt/ffmpeg/tmp"
