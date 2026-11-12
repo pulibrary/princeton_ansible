@@ -1,0 +1,66 @@
+---
+# ClickHouse keeps its data on the storage node's local disk, but ZooKeeper
+# keeps the replication metadata on a dynamically provisioned NFS volume.
+# Rebuilding the cluster gives ZooKeeper an empty volume while ClickHouse
+# comes back with its data, and every Replicated table then goes read-only
+# ("table metadata was not found in zookeeper"). The collector cannot write
+# logs, metrics or traces until the metadata is recreated.
+#
+# SYSTEM RESTORE REPLICA rebuilds that metadata from the parts on disk and
+# deletes nothing. It is only sent for a table that is read-only AND whose
+# replica path is absent from ZooKeeper. A table that is read-only because
+# ZooKeeper is unreachable is left alone: the lookup fails and so does the
+# run.
+#
+# Tables are handled as "database.table"; SigNoz names contain no dots.
+
+- name: SigNoz | Find read-only ClickHouse replicas with no ZooKeeper metadata
+  ansible.builtin.command:
+    argv: "{{ signoz_clickhouse_client_argv + ['--query', signoz_replica_missing_query] }}"
+  vars:
+    signoz_replica_missing_query: >-
+      SELECT database || '.' || table FROM system.replicas
+      WHERE is_readonly
+      AND zookeeper_path || '/replicas/' || replica_name NOT IN (
+      SELECT path || '/' || name FROM system.zookeeper
+      WHERE path IN (SELECT zookeeper_path || '/replicas' FROM system.replicas WHERE is_readonly))
+      ORDER BY database, table FORMAT TSVRaw
+  register: signoz_replica_missing
+  changed_when: false
+  check_mode: false
+  # A pod that has just become Ready may not have its ZooKeeper session yet.
+  retries: 6
+  delay: 10
+  until: signoz_replica_missing.rc == 0
+
+- name: SigNoz | Report ClickHouse replicas to restore
+  ansible.builtin.debug:
+    msg: >-
+      {{ signoz_replica_missing.stdout_lines | length }} table(s) are read-only
+      with no ZooKeeper metadata: {{ signoz_replica_missing.stdout_lines | join(', ') }}
+  when: signoz_replica_missing.stdout_lines | length > 0
+
+- name: SigNoz | Restore ZooKeeper metadata for ClickHouse replicas
+  ansible.builtin.command:
+    argv: "{{ signoz_clickhouse_client_argv + ['--query', 'SYSTEM RESTORE REPLICA `' ~ item.split('.') | join('`.`') ~ '`'] }}"
+  loop: "{{ signoz_replica_missing.stdout_lines }}"
+  register: signoz_replica_restore
+  changed_when: true
+
+# Skipped in check mode, where the restore above did not run.
+- name: SigNoz | Check no restored ClickHouse replica is still read-only
+  ansible.builtin.command:
+    argv: "{{ signoz_clickhouse_client_argv + ['--query', signoz_replica_readonly_query] }}"
+  vars:
+    signoz_replica_readonly_query: >-
+      SELECT database || '.' || table FROM system.replicas
+      WHERE is_readonly AND database || '.' || table IN ('{{ signoz_replica_missing.stdout_lines | join("', '") }}')
+      ORDER BY database, table FORMAT TSVRaw
+  register: signoz_replica_still_readonly
+  changed_when: false
+  failed_when: >-
+    signoz_replica_still_readonly.rc != 0
+    or signoz_replica_still_readonly.stdout_lines | length > 0
+  when:
+    - signoz_replica_missing.stdout_lines | length > 0
+    - signoz_replica_restore is not skipped
