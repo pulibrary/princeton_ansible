@@ -1,0 +1,36 @@
+---
+# Network shares mounted on clients, to be exposed to jobs as host volumes.
+- name: 'pul_nomad | nomad | mounts | Install mount dependencies'
+  ansible.builtin.package:
+    name:
+      - cifs-utils
+      - "{{ 'nfs-common' if ansible_facts['os_family'] == 'Debian' else 'nfs-utils' }}"
+    state: present
+  when: nomad_client_mounts | length > 0
+
+- name: 'pul_nomad | nomad | mounts | Create credentials directory'
+  ansible.builtin.file:
+    path: /etc/nomad_mounts
+    state: directory
+    mode: "0700"
+  when: nomad_client_mounts | length > 0
+
+- name: 'pul_nomad | nomad | mounts | Copy credentials'
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "/etc/nomad_mounts/{{ item | basename }}"
+    mode: "0600"
+  loop: "{{ nomad_client_mounts | selectattr('credentials', 'defined') | map(attribute='credentials') | unique }}"
+  when: running_on_server
+
+- name: 'pul_nomad | nomad | mounts | Mount shares'
+  ansible.posix.mount:
+    path: "{{ item.path }}"
+    src: "{{ item.src }}"
+    fstype: "{{ item.fstype }}"
+    opts: "{{ item.opts ~ (',credentials=/etc/nomad_mounts/' ~ (item.credentials | basename) if item.credentials is defined else '') }}"
+    state: mounted
+  loop: "{{ nomad_client_mounts }}"
+  loop_control:
+    label: "{{ item.path }}"
+  when: running_on_server

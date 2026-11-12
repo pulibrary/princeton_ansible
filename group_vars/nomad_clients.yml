@@ -1,1 +1,118 @@
 pul_nomad_role: "client"
+
+# Figgy's network shares, exposed to its jobs as the figgy-repository and
+# figgy-mnt host volumes.
+figgy_mounts_dir: /container_mounts/figgy
+figgy_fallback_dir:
+  staging: figgy_staging
+  production: figgy_production
+figgy_fallback_stream_dir:
+  staging: figgy_staging_stream_derivatives
+  production: figgy_stream_derivatives
+nomad_shared_host_volumes:
+  - name: figgy-repository
+    path: "{{ figgy_mounts_dir }}/repository"
+    read_only: false
+  - name: figgy-mnt
+    path: "{{ figgy_mounts_dir }}/mnt"
+    read_only: false
+nomad_client_mounts:
+  - path: "{{ figgy_mounts_dir }}/repository/files"
+    src: "tigerdata-nfs.princeton.edu:/figgy/{{ nomad_node_pool }}/files"
+    fstype: nfs
+    opts: 'nfsvers=3,mountport=2049,port=2049,nolock,proto=tcp'
+  - path: "{{ figgy_mounts_dir }}/repository/derivatives"
+    src: "tigerdata-nfs.princeton.edu:/figgy/{{ nomad_node_pool }}/derivatives"
+    fstype: nfs
+    opts: 'nfsvers=3,mountport=2049,port=2049,nolock,proto=tcp'
+  - path: "{{ figgy_mounts_dir }}/repository/stream_derivatives"
+    src: "tigerdata-nfs.princeton.edu:/figgy/{{ nomad_node_pool }}/stream_derivatives"
+    fstype: nfs
+    opts: 'nfsvers=3,mountport=2049,port=2049,nolock,proto=tcp'
+  - path: "{{ figgy_mounts_dir }}/mnt/hydra_sources/archives"
+    src: "tigerdata-nfs.princeton.edu:/pul/archives"
+    fstype: nfs
+    opts: 'nfsvers=3,mountport=2049,port=2049,nolock,proto=tcp'
+  - path: "{{ figgy_mounts_dir }}/mnt/hydra_sources/archives_bd"
+    src: "tigerdata-nfs.princeton.edu:/pul/archives_bd"
+    fstype: nfs
+    opts: 'nfsvers=3,mountport=2049,port=2049,nolock,proto=tcp'
+  - path: "{{ figgy_mounts_dir }}/mnt/hydra_sources/bitcur-archives"
+    src: "tigerdata-nfs.princeton.edu:/pul/bitcur-archives"
+    fstype: nfs
+    opts: 'nfsvers=3,mountport=2049,port=2049,nolock,proto=tcp'
+  - path: "{{ figgy_mounts_dir }}/repository/fallback_files"
+    src: "//diglibdata1.princeton.edu/hydra/binaries/{{ figgy_fallback_dir[nomad_node_pool] }}"
+    fstype: cifs
+    opts: 'uid=1001,gid=33'
+    credentials: "{{ playbook_dir }}/../roles/figgy/files/plum_mount.smb.credentials"
+  - path: "{{ figgy_mounts_dir }}/repository/fallback_stream_derivatives"
+    src: "//diglibdata1.princeton.edu/hydra/binaries/{{ figgy_fallback_stream_dir[nomad_node_pool] }}"
+    fstype: cifs
+    opts: 'uid=1001,gid=33'
+    credentials: "{{ playbook_dir }}/../roles/figgy/files/plum_mount.smb.credentials"
+  - path: "{{ figgy_mounts_dir }}/mnt/diglibdata/hydra_binaries"
+    src: "//diglibdata1.princeton.edu/hydra/binaries"
+    fstype: cifs
+    opts: 'uid=1001,gid=33'
+    credentials: "{{ playbook_dir }}/../roles/figgy/files/plum_mount.smb.credentials"
+  - path: "{{ figgy_mounts_dir }}/mnt/diglibdata/pudl"
+    src: "//diglibdata1.princeton.edu/pudl"
+    fstype: cifs
+    opts: 'uid=1001,gid=33'
+    credentials: "{{ playbook_dir }}/../roles/figgy/files/pudl.smb.credentials"
+  - path: "{{ figgy_mounts_dir }}/mnt/hydra_sources/ingest_scratch"
+    src: "//diglibdata1.princeton.edu/hydra/binaries/ingest_scratch"
+    fstype: cifs
+    opts: 'uid=1001,gid=33'
+    credentials: "{{ playbook_dir }}/../roles/figgy/files/plum_mount.smb.credentials"
+  - path: "{{ figgy_mounts_dir }}/mnt/hydra_sources/pudl"
+    src: "//diglibdata1.princeton.edu/pudl"
+    fstype: cifs
+    opts: 'uid=1001,gid=33'
+    credentials: "{{ playbook_dir }}/../roles/figgy/files/pudl.smb.credentials"
+  - path: "{{ figgy_mounts_dir }}/mnt/hydra_sources/maplab"
+    src: "//diglibdata1.princeton.edu/maplab"
+    fstype: cifs
+    opts: 'uid=1001,gid=33'
+    credentials: "{{ playbook_dir }}/../roles/figgy/files/maplab.smb.credentials"
+  - path: "{{ figgy_mounts_dir }}/mnt/hydra_sources/music"
+    src: "//diglibdata1.princeton.edu/music"
+    fstype: cifs
+    opts: 'uid=1001,gid=33'
+    credentials: "{{ playbook_dir }}/../roles/figgy/files/plum_mount.smb.credentials"
+  - path: "{{ figgy_mounts_dir }}/mnt/hydra_sources/numismatics"
+    src: "//diglibdata1.princeton.edu/numismatics"
+    fstype: cifs
+    opts: 'uid=1001,gid=33'
+    credentials: "{{ playbook_dir }}/../roles/figgy/files/numis.smb.credentials"
+  - path: "{{ figgy_mounts_dir }}/mnt/hydra_sources/studio_new"
+    src: "//lib-dps-server.princeton.edu/studio"
+    fstype: cifs
+    opts: 'uid=1001,gid=33'
+    credentials: "{{ playbook_dir }}/../roles/figgy/files/studio.new.smb.credentials"
+  - path: "{{ figgy_mounts_dir }}/mnt/hydra_sources/marquand"
+    src: "//lib-dps-server.princeton.edu/marquand"
+    fstype: cifs
+    opts: 'uid=1001,gid=33'
+    credentials: "{{ playbook_dir }}/../roles/figgy/files/marquand.smb.credentials"
+  - path: "{{ figgy_mounts_dir }}/mnt/hydra_sources/mendel"
+    src: "//lib-dps-server.princeton.edu/mendel"
+    fstype: cifs
+    opts: 'uid=1001,gid=33'
+    credentials: "{{ playbook_dir }}/../roles/figgy/files/mendel.smb.credentials"
+  - path: "{{ figgy_mounts_dir }}/mnt/hydra_sources/mudd"
+    src: "//lib-dps-server.princeton.edu/mudd"
+    fstype: cifs
+    opts: 'uid=1001,gid=33'
+    credentials: "{{ playbook_dir }}/../roles/figgy/files/mudd.smb.credentials"
+  - path: "{{ figgy_mounts_dir }}/mnt/hydra_sources/microforms"
+    src: "//lib-dps-server.princeton.edu/microforms"
+    fstype: cifs
+    opts: 'uid=1001,gid=33'
+    credentials: "{{ playbook_dir }}/../roles/figgy/files/microforms.smb.credentials"
+  - path: "{{ figgy_mounts_dir }}/mnt/hosted_illiad/RequestScans"
+    src: "//lib-fileshare.princeton.edu/RequestScans"
+    fstype: cifs
+    opts: 'uid=1001,gid=33'
+    credentials: "{{ playbook_dir }}/../roles/figgy/files/illiad.smb.credentials"

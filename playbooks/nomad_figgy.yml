@@ -1,0 +1,17 @@
+---
+# by default this playbook runs in the staging environment
+# to run in production, pass '-e runtime_env=production'
+- name: Figgy | Provision Nomad Variables & Infrastructure
+  hosts: "nomad_production[0]"
+  remote_user: pulsys
+  become: true
+  vars:
+    figgy_files: "{{ playbook_dir }}/../roles/figgy/files"
+  vars_files:
+    - ../group_vars/nomad/vault.yml
+    - ../group_vars/figgy/vault.yml
+    - "../group_vars/nomad_figgy/{{ runtime_env | default('staging') }}.yml"
+    - ../group_vars/postgresql/vault.yml
+    - "../group_vars/postgresql/{{ runtime_env | default('staging') }}.yml"
+  roles:
+    - role: roles/nomad_app
