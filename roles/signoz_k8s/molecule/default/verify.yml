@@ -230,6 +230,10 @@
           - values.clickhouse.zookeeper.podAntiAffinityPreset == 'hard'
           - values.clickhouse.zookeeper.pdb.create
           - values.clickhouse.zookeeper.pdb.maxUnavailable == 1
+          # The chart reads otelCollector.ports; service.ports is ignored.
+          - values.otelCollector.ports.otlp.nodePort == 32317
+          - values.otelCollector.ports['otlp-http'].nodePort == 32318
+          - "'ports' not in values.otelCollector.service"
 
     - name: Render Helm values with overrides
       ansible.builtin.include_role:
@@ -265,6 +269,111 @@
       ansible.builtin.include_role:
         name: signoz_k8s
         tasks_from: values
+
+    # ---- ClickHouse replica metadata restore -----------------------------
+
+    # After a cluster rebuild: logs_v2 lost its ZooKeeper metadata, samples_v4
+    # is read-only for another reason (metadata still there), spans is fine.
+    - name: Seed ClickHouse replicas
+      ansible.builtin.shell: |
+        python3 - <<'EOF'
+        import json
+        p = "{{ state_file }}"
+        s = json.load(open(p))
+        s["replicas"] = [
+            {"database": "signoz_logs", "table": "logs_v2", "readonly": True, "zk_metadata": False},
+            {"database": "signoz_metrics", "table": "samples_v4", "readonly": True, "zk_metadata": True},
+            {"database": "signoz_traces", "table": "signoz_spans", "readonly": False, "zk_metadata": True},
+        ]
+        json.dump(s, open(p, "w"))
+        EOF
+        : > {{ query_log_file }}
+      changed_when: true
+
+    - name: Run the replica restore in check mode
+      ansible.builtin.include_role:
+        name: signoz_k8s
+        tasks_from: replica_restore
+        apply:
+          check_mode: true
+
+    - name: Read queries sent by the replica restore in check mode
+      ansible.builtin.slurp:
+        src: "{{ query_log_file }}"
+      register: replica_check_queries
+
+    - name: Assert check mode sent no restore
+      ansible.builtin.assert:
+        that:
+          - (replica_check_queries.content | b64decode).splitlines() | select('match', '^SYSTEM ') | list | length == 0
+
+    - name: Run the replica restore
+      ansible.builtin.include_role:
+        name: signoz_k8s
+        tasks_from: replica_restore
+
+    - name: Run the replica restore again
+      ansible.builtin.include_role:
+        name: signoz_k8s
+        tasks_from: replica_restore
+
+    - name: Read state and queries after the replica restore
+      ansible.builtin.slurp:
+        src: "{{ item }}"
+      register: replica_after
+      loop:
+        - "{{ state_file }}"
+        - "{{ query_log_file }}"
+
+    - name: Assert only the table missing its metadata was restored, once
+      vars:
+        replicas: "{{ (replica_after.results[0].content | b64decode | from_json).replicas }}"
+        systems: "{{ (replica_after.results[1].content | b64decode).splitlines() | select('match', '^SYSTEM ') | list }}"
+      ansible.builtin.assert:
+        that:
+          - systems == ['SYSTEM RESTORE REPLICA `signoz_logs`.`logs_v2`']
+          - not replicas[0].readonly
+          # Read-only with its metadata present: not ours to fix.
+          - replicas[1].readonly
+        fail_msg: "Unexpected restore result: {{ replicas }} / {{ systems }}"
+
+    - name: Make a restore that leaves the table read-only
+      ansible.builtin.shell: |
+        python3 - <<'EOF'
+        import json
+        p = "{{ state_file }}"
+        s = json.load(open(p))
+        s["replicas"][0].update(readonly=True, zk_metadata=False, stuck=True)
+        json.dump(s, open(p, "w"))
+        EOF
+      changed_when: true
+
+    - name: Replica restore must fail when a table stays read-only
+      block:
+        - name: Run the replica restore against a table that stays read-only
+          ansible.builtin.include_role:
+            name: signoz_k8s
+            tasks_from: replica_restore
+
+        - name: Replica restore should have failed
+          ansible.builtin.fail:
+            msg: The replica restore accepted a table that stayed read-only.
+      rescue:
+        - name: Assert the failure was the read-only check
+          ansible.builtin.assert:
+            that:
+              - ansible_failed_task.name == 'SigNoz | Check no restored ClickHouse replica is still read-only'
+
+    - name: Remove the seeded replicas
+      ansible.builtin.shell: |
+        python3 - <<'EOF'
+        import json
+        p = "{{ state_file }}"
+        s = json.load(open(p))
+        s.pop("replicas")
+        json.dump(s, open(p, "w"))
+        EOF
+      changed_when: true
 
     # ---- SigNoz alert rules ----------------------------------------------
 

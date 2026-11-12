@@ -135,17 +135,21 @@ otelCollector:
 
   service:
     type: NodePort
-    ports:
-      otlp:
-        enabled: true
-        servicePort: 4317
-        containerPort: 4317
-        nodePort: {{ signoz_otel_grpc_node_port }}
-        protocol: TCP
 
-      otlp-http:
-        enabled: true
-        servicePort: 4318
-        containerPort: 4318
-        nodePort: {{ signoz_otel_http_node_port }}
-        protocol: TCP
+  # The chart reads ports from otelCollector.ports; anything under
+  # otelCollector.service.ports is ignored and Kubernetes picks random
+  # NodePorts, which clients sending to the fixed ports never reach.
+  ports:
+    otlp:
+      enabled: true
+      servicePort: 4317
+      containerPort: 4317
+      nodePort: {{ signoz_otel_grpc_node_port }}
+      protocol: TCP
+
+    otlp-http:
+      enabled: true
+      servicePort: 4318
+      containerPort: 4318
+      nodePort: {{ signoz_otel_http_node_port }}
+      protocol: TCP

@@ -1,0 +1,192 @@
+---
+# Rolling kernel update for a Nomad cluster.
+# All of these only run one at a time.
+#
+# For hosts:
+#
+# 1. Make sure the cluster is healthy
+# 2. Patch the kernel
+# 3. Reboot if necessary.
+# 4. Wait for cluster health, move to next node
+#
+# For clients:
+#
+# 1. Make sure all the clients are healthy.
+# 1. Patch the kernel
+# 1. If reboot is necessary: Drain the node, wait for all jobs to move off.
+# 1. Reboot
+# 1. Wait for Nomad to be ready.
+# 1. Mark the node eligible again.
+#
+# If ANYTHING fails, then crash (max_fail_percentage does that). Worst case scenario this leaves one client marked ineligible - probably need to go fix it in the Nomad UI.
+#
+# Examples:
+#   ansible-playbook playbooks/utils/nomad_rolling_update.yml -e runtime_env=production
+#   # one server only (KEEP localhost, or you can't login to Nomad):
+#   ansible-playbook playbooks/utils/nomad_rolling_update.yml -e runtime_env=production -l localhost,nomad-client-prod1.lib.princeton.edu
+
+- name: Nomad rolling update | log in
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files:
+    - "../../group_vars/nomad_{{ runtime_env | default('sandbox') }}.yml"
+  tasks:
+    - name: Log in to Nomad with your own account
+      ansible.builtin.include_role:
+        name: roles/nomad_app
+        tasks_from: auth
+
+- name: Nomad rolling update | servers
+  hosts: "nomad_{{ runtime_env | default('sandbox') }}:&nomad_servers"
+  remote_user: pulsys
+  become: true
+  serial: 1
+  max_fail_percentage: 0
+  vars_files:
+    - "../../group_vars/nomad_{{ runtime_env | default('sandbox') }}.yml"
+  module_defaults:
+    ansible.builtin.uri:
+      headers:
+        X-Nomad-Token: "{{ hostvars['localhost'].nomad_app_token }}"
+  tasks:
+    - name: Check cluster health before touching this server
+      delegate_to: localhost
+      become: false
+      ansible.builtin.uri:
+        url: "{{ nomad_http_address }}/v1/operator/autopilot/health"
+      register: pre_health
+      until: pre_health.status == 200 and pre_health.json.Healthy and pre_health.json.FailureTolerance >= 1
+      retries: 30
+      delay: 10
+
+    - name: Upgrade the kernel
+      ansible.builtin.apt:
+        name: [linux-generic, linux-image-generic, linux-headers-generic, linux-virtual, linux-image-virtual, linux-headers-virtual]
+        state: latest # noqa package-latest
+        only_upgrade: true
+        update_cache: true
+
+    - name: Check if a reboot is required
+      ansible.builtin.stat:
+        path: /var/run/reboot-required
+      register: reboot_required
+
+    - name: Reboot
+      ansible.builtin.reboot:
+      when: reboot_required.stat.exists
+
+    - name: Wait for every server to be healthy
+      delegate_to: localhost
+      become: false
+      ansible.builtin.uri:
+        url: "{{ nomad_http_address }}/v1/operator/autopilot/health"
+      register: post_health
+      until: post_health.status == 200 and post_health.json.Healthy
+      retries: 60
+      delay: 10
+
+- name: Nomad rolling update | clients
+  hosts: "nomad_{{ runtime_env | default('sandbox') }}:&nomad_clients"
+  remote_user: pulsys
+  become: true
+  serial: 1
+  max_fail_percentage: 0
+  vars_files:
+    - "../../group_vars/nomad_{{ runtime_env | default('sandbox') }}.yml"
+  module_defaults:
+    ansible.builtin.uri:
+      headers:
+        X-Nomad-Token: "{{ hostvars['localhost'].nomad_app_token }}"
+  tasks:
+    - name: Check that every other client is ready before we start
+      delegate_to: localhost
+      become: false
+      ansible.builtin.uri:
+        url: "{{ nomad_http_address }}/v1/nodes"
+      register: nodes_before
+      until: >-
+        nodes_before.status == 200
+        and (nodes_before.json | rejectattr('Status', 'in', ['ready', 'down']) | list | length) == 0
+      retries: 30
+      delay: 10
+
+    - name: Get the node ID
+      ansible.builtin.set_fact:
+        nomad_node_id: "{{ (nodes_before.json | selectattr('Name', 'equalto', inventory_hostname_short) | first).ID }}"
+
+    - name: Upgrade the kernel
+      ansible.builtin.apt:
+        name: [linux-generic, linux-image-generic, linux-headers-generic, linux-virtual, linux-image-virtual, linux-headers-virtual]
+        state: latest # noqa package-latest
+        only_upgrade: true
+        update_cache: true
+
+    - name: Check if a reboot is required
+      ansible.builtin.stat:
+        path: /var/run/reboot-required
+      register: reboot_required
+
+    - name: Drain, reboot, and bring the node back
+      when: reboot_required.stat.exists
+      block:
+        - name: Drain this node
+          delegate_to: localhost
+          become: false
+          ansible.builtin.uri:
+            url: "{{ nomad_http_address }}/v1/node/{{ nomad_node_id }}/drain"
+            method: POST
+            body_format: json
+            body:
+              DrainSpec:
+                Deadline: 900000000000 # 15 minutes, in nanoseconds
+                IgnoreSystemJobs: true
+              Meta:
+                message: "kernel update reboot"
+          changed_when: true
+
+        - name: Wait for the drain to finish
+          delegate_to: localhost
+          become: false
+          ansible.builtin.uri:
+            url: "{{ nomad_http_address }}/v1/node/{{ nomad_node_id }}"
+          register: node_draining
+          until: node_draining.status == 200 and node_draining.json.DrainStrategy is none
+          retries: 100
+          delay: 10
+
+        - name: Reboot
+          ansible.builtin.reboot:
+
+        - name: Wait for this node to be ready in Nomad
+          delegate_to: localhost
+          become: false
+          ansible.builtin.uri:
+            url: "{{ nomad_http_address }}/v1/node/{{ nomad_node_id }}"
+          register: node_after
+          until: node_after.status == 200 and node_after.json.Status == 'ready'
+          retries: 60
+          delay: 5
+
+        - name: Make the node eligible for scheduling again
+          delegate_to: localhost
+          become: false
+          ansible.builtin.uri:
+            url: "{{ nomad_http_address }}/v1/node/{{ nomad_node_id }}/eligibility"
+            method: POST
+            body_format: json
+            body:
+              Eligibility: eligible
+          changed_when: true
+
+    - name: Wait for no pending allocations
+      delegate_to: localhost
+      become: false
+      ansible.builtin.uri:
+        url: "{{ nomad_http_address }}/v1/allocations?namespace=*"
+      register: allocations
+      until: >-
+        allocations.status == 200
+        and (allocations.json | selectattr('ClientStatus', 'equalto', 'pending') | list | length) == 0
+      retries: 60
+      delay: 10
