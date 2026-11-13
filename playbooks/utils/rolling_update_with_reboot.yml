@@ -1,0 +1,31 @@
+- name: Rolling package update with reboot
+  hosts: all
+  remote_user: pulsys
+  become: true
+  serial: 1
+  max_fail_percentage: 0
+  pre_tasks:
+    - name: stop playbook if you didn't use --limit
+      fail:
+        msg: "you must use -l or --limit"
+      when: ansible_limit is not defined
+      run_once: true
+  tasks:
+    - name: Upgrade {{ package_to_upgrade }}
+      ansible.builtin.apt:
+        name: "{{ package_to_upgrade }}"
+        # for multiple packages:
+        # [linux-generic, linux-image-generic, linux-headers-generic, linux-virtual, linux-image-virtual, linux-headers-virtual]
+        state: latest
+        only_upgrade: true
+        update_cache: true
+
+    - name: Check if a reboot is required
+      ansible.builtin.stat:
+        path: /var/run/reboot-required
+      register: reboot_required
+
+    - name: Reboot
+      ansible.builtin.reboot:
+      when: reboot_required.stat.exists
+      # this module reboots and waits until the machine responds before ending
