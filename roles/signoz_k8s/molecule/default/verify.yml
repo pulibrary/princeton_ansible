@@ -272,8 +272,9 @@
 
     # ---- ClickHouse replica metadata restore -----------------------------
 
-    # After a cluster rebuild: logs_v2 lost its ZooKeeper metadata, samples_v4
-    # is read-only for another reason (metadata still there), spans is fine.
+    # After a cluster rebuild: logs_v2 lost its ZooKeeper metadata and still
+    # holds its old session, samples_v4 is read-only for another reason
+    # (metadata still there), spans is fine.
     - name: Seed ClickHouse replicas
       ansible.builtin.shell: |
         python3 - <<'EOF'
@@ -281,7 +282,7 @@
         p = "{{ state_file }}"
         s = json.load(open(p))
         s["replicas"] = [
-            {"database": "signoz_logs", "table": "logs_v2", "readonly": True, "zk_metadata": False},
+            {"database": "signoz_logs", "table": "logs_v2", "readonly": True, "zk_metadata": False, "session_expired": True},
             {"database": "signoz_metrics", "table": "samples_v4", "readonly": True, "zk_metadata": True},
             {"database": "signoz_traces", "table": "signoz_spans", "readonly": False, "zk_metadata": True},
         ]
@@ -325,13 +326,13 @@
         - "{{ state_file }}"
         - "{{ query_log_file }}"
 
-    - name: Assert only the table missing its metadata was restored, once
+    - name: Assert only the table missing its metadata was renewed and restored, once
       vars:
         replicas: "{{ (replica_after.results[0].content | b64decode | from_json).replicas }}"
         systems: "{{ (replica_after.results[1].content | b64decode).splitlines() | select('match', '^SYSTEM ') | list }}"
       ansible.builtin.assert:
         that:
-          - systems == ['SYSTEM RESTORE REPLICA `signoz_logs`.`logs_v2`']
+          - systems == ['SYSTEM RESTART REPLICA `signoz_logs`.`logs_v2`', 'SYSTEM RESTORE REPLICA `signoz_logs`.`logs_v2`']
           - not replicas[0].readonly
           # Read-only with its metadata present: not ours to fix.
           - replicas[1].readonly

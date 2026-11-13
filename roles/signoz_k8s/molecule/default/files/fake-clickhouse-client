@@ -9,7 +9,8 @@ State file layout:
   server_start: epoch seconds the "server" started
   tables: {name: {engine, mtime, last_event}}
   logs: {lag: seconds or -1, total: row count}
-  replicas: [{database, table, readonly, zk_metadata, stuck}] (optional)
+  replicas: [{database, table, readonly, zk_metadata, stuck, session_expired}]
+    (optional)
   fail: "" | "down"
 """
 import json
@@ -90,10 +91,24 @@ def main():
                 print(f"{r['database']}.{r['table']}")
         return 0
 
+    match = re.match(r"SYSTEM RESTART REPLICA `([a-z_0-9]+)`\.`([a-z_0-9]+)`$", query)
+    if match:
+        for r in replicas:
+            if (r["database"], r["table"]) == match.groups():
+                r["session_expired"] = False
+        with open(STATE, "w") as f:
+            json.dump(state, f)
+        return 0
+
     match = re.match(r"SYSTEM RESTORE REPLICA `([a-z_0-9]+)`\.`([a-z_0-9]+)`$", query)
     if match:
         for r in replicas:
             if (r["database"], r["table"]) == match.groups():
+                # A table still holding the session from before ZooKeeper
+                # was rebuilt, until SYSTEM RESTART REPLICA renews it.
+                if r.get("session_expired"):
+                    sys.stderr.write("Code: 999. Coordination::Exception: Session expired. (KEEPER_EXCEPTION)\n")
+                    return 231
                 if r["zk_metadata"]:
                     sys.stderr.write("Code: 36. test: replica has metadata in ZooKeeper\n")
                     return 36
