@@ -12,6 +12,11 @@
 # ZooKeeper is unreachable is left alone: the lookup fails and so does the
 # run.
 #
+# A table can still hold the ZooKeeper session it had before ZooKeeper was
+# rebuilt, and RESTORE REPLICA then fails with "Session expired".
+# SYSTEM RESTART REPLICA gives the table a new session first; it changes
+# no data.
+#
 # Tables are handled as "database.table"; SigNoz names contain no dots.
 
 - name: SigNoz | Find read-only ClickHouse replicas with no ZooKeeper metadata
@@ -39,6 +44,12 @@
       {{ signoz_replica_missing.stdout_lines | length }} table(s) are read-only
       with no ZooKeeper metadata: {{ signoz_replica_missing.stdout_lines | join(', ') }}
   when: signoz_replica_missing.stdout_lines | length > 0
+
+- name: SigNoz | Renew ZooKeeper session of ClickHouse replicas to restore
+  ansible.builtin.command:
+    argv: "{{ signoz_clickhouse_client_argv + ['--query', 'SYSTEM RESTART REPLICA `' ~ item.split('.') | join('`.`') ~ '`'] }}"
+  loop: "{{ signoz_replica_missing.stdout_lines }}"
+  changed_when: true
 
 - name: SigNoz | Restore ZooKeeper metadata for ClickHouse replicas
   ansible.builtin.command:

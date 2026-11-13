@@ -162,9 +162,12 @@ This happened on staging in November 2026 after k8s-staging1 was replaced.
 
 With `signoz_clickhouse_replica_restore_enabled` (default `true`), once the
 ClickHouse pod is Ready the role finds tables that are read-only **and**
-whose replica path is missing from ZooKeeper, and runs `SYSTEM RESTORE
-REPLICA` on each. That rebuilds the metadata from the parts on disk and
-deletes nothing. A table that is read-only with its metadata present is left
+whose replica path is missing from ZooKeeper, and runs `SYSTEM RESTART
+REPLICA` then `SYSTEM RESTORE REPLICA` on each. The restart gives the table a
+new ZooKeeper session; without it, a table still holding its session from
+before ZooKeeper was rebuilt fails the restore with "Session expired", as
+staging did after the move to three ZooKeeper members. The restore rebuilds
+the metadata from the parts on disk and deletes nothing. A table that is read-only with its metadata present is left
 alone, and the run fails if ZooKeeper cannot be queried or a restored table
 is still read-only. Check mode lists the tables without restoring them. On a
 healthy cluster it sends one read-only query.
