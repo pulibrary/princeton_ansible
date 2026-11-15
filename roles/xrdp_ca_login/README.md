@@ -115,34 +115,19 @@ tunnel.
 
 ## What a person does
 
-[AUTH_FLOW.md](AUTH_FLOW.md) is the version to hand to the people using the
-desktop: it walks through the sign-in flow and installing `step` on macOS and
-Windows, without assuming any Ansible.
+The guide for the people who use the desktop is
+[`roles/bitcurator/README.md`](../bitcurator/README.md). It covers what they
+need beforehand, installing `step` on macOS and Windows, the one-time setup, and
+the steps for each session, without assuming any Ansible.
 
-**Every command below runs on the person's own computer, not on the server.**
-This is the step people get wrong: running the tunnel command on the server
-reports `bind [127.0.0.1]:3389: Address already in use`, because the desktop is
-already listening there.
-
-```sh
-# once per computer; fingerprint is in group_vars/step_ca/vault.yml
-step ca bootstrap --ca-url https://step-ca.lib.princeton.edu:8443 \
-  --fingerprint <fingerprint>
-
-# once per person: set the desktop password (a local one, not Entra ID)
-step ssh login netid@princeton.edu
-ssh netid@desktop.princeton.edu
-sudo /usr/local/sbin/set-desktop-password
-exit
-
-# each time the desktop is needed; certificates are short lived
-step ssh login netid@princeton.edu
-ssh -L 3389:localhost:3389 netid@desktop.princeton.edu
-```
-
-Leave that SSH session open and point the RDP client at **`localhost:3389`**, not
-at the server's name. A client aimed at the server cannot connect, because
-nothing outside the host answers on the desktop port. That is the point.
+In short, every command runs on the person's own computer, not on the server.
+Running the tunnel command on the server reports
+`bind [127.0.0.1]:3389: Address already in use`, because the desktop is already
+listening there. They bootstrap the CA once per computer (the fingerprint is in
+`group_vars/step_ca/vault.yml`) and set a desktop password with
+`sudo /usr/local/sbin/set-desktop-password` once per person. After that, each
+session is `step ssh login` and then `ssh -L 3389:localhost:3389`, with the RDP
+client pointed at `localhost:3389`.
 
 The role prints these steps at the end of a run, with the host's real name filled
 in, because none of it is discoverable from the host itself.
