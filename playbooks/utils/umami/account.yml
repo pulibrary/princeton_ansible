@@ -1,0 +1,103 @@
+---
+# Some tasks for using the Umami API to create Admin/Viewer users that the Entra
+# workflow can use.
+- name: "Umami Tokens | {{ umami_account.username }} | Log in"
+  become: false
+  no_log: true
+  ansible.builtin.uri:
+    url: "{{ umami_api }}/auth/login"
+    method: POST
+    body_format: json
+    body:
+      username: "{{ umami_account.username }}"
+      password: "{{ umami_account.password }}"
+    status_code: [200, 401]
+  register: umami_account_login
+  check_mode: false
+
+- name: "Umami Tokens | {{ umami_account.username }} | Create or reset account"
+  when: umami_account_login.status != 200
+  become: false
+  no_log: true
+  block:
+    - name: "Umami Tokens | {{ umami_account.username }} | Log in as admin"
+      when: umami_admin_token | length == 0
+      ansible.builtin.uri:
+        url: "{{ umami_api }}/auth/login"
+        method: POST
+        body_format: json
+        body:
+          username: "{{ umami_admin_username }}"
+          password: "{{ umami_admin_password }}"
+      register: umami_admin_login
+
+    - name: "Umami Tokens | {{ umami_account.username }} | Save admin token"
+      when: umami_admin_token | length == 0
+      ansible.builtin.set_fact:
+        umami_admin_token: "{{ umami_admin_login.json.token }}"
+
+    - name: "Umami Tokens | {{ umami_account.username }} | Create account"
+      ansible.builtin.uri:
+        url: "{{ umami_api }}/users"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ umami_admin_token }}"
+        body_format: json
+        body:
+          id: "{{ umami_account.id }}"
+          username: "{{ umami_account.username }}"
+          password: "{{ umami_account.password }}"
+          role: "{{ umami_account.role }}"
+        status_code: [200, 400]
+      register: umami_account_create
+      changed_when: umami_account_create.status == 200
+
+    - name: "Umami Tokens | {{ umami_account.username }} | Reset password and role"
+      when: umami_account_create.status == 400
+      ansible.builtin.uri:
+        url: "{{ umami_api }}/users/{{ umami_account.id }}"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ umami_admin_token }}"
+        body_format: json
+        body:
+          password: "{{ umami_account.password }}"
+          role: "{{ umami_account.role }}"
+      changed_when: true
+
+    - name: "Umami Tokens | {{ umami_account.username }} | Log in with new password"
+      ansible.builtin.uri:
+        url: "{{ umami_api }}/auth/login"
+        method: POST
+        body_format: json
+        body:
+          username: "{{ umami_account.username }}"
+          password: "{{ umami_account.password }}"
+      register: umami_account_relogin
+
+- name: "Umami Tokens | {{ umami_account.username }} | Verify stored token"
+  when:
+    - umami_account_login.status == 200
+    - umami_account.token_key in umami_tokens_stored
+  become: false
+  no_log: true
+  ansible.builtin.uri:
+    url: "{{ umami_api }}/auth/verify"
+    method: POST
+    headers:
+      Authorization: "Bearer {{ umami_tokens_stored[umami_account.token_key] }}"
+    status_code: [200, 401]
+  register: umami_account_verify
+  check_mode: false
+
+- name: "Umami Tokens | {{ umami_account.username }} | Choose token"
+  no_log: true
+  ansible.builtin.set_fact:
+    umami_tokens_new: "{{ umami_tokens_new | combine({umami_account.token_key: umami_account_token}) }}"
+  vars:
+    umami_account_token: >-
+      {{ umami_tokens_stored[umami_account.token_key]
+         if (umami_account_verify.status | default(0)) == 200
+         else (umami_account_login.json.token
+               if umami_account_login.status == 200
+               else umami_account_relogin.json.token) }}

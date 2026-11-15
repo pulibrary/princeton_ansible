@@ -22,3 +22,10 @@
     nomad_hcl: "{{ playbook_dir }}/../nomad/analytics/deploy/{{ runtime_env | default('staging') }}.hcl"
   roles:
     - role: roles/nomad_app
+  post_tasks:
+    - name: Analytics | Provision Umami tokens
+      when:
+        - running_on_server
+        - umami_token_accounts is defined
+      ansible.builtin.include_tasks:
+        file: utils/umami/tokens.yml
