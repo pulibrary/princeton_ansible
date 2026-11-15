@@ -12,7 +12,7 @@ Request path
 
 GitLab today:
 
-```
+```text
 client -> gitlab-staging.lib.princeton.edu (staging LB VIP, adc-dev1/adc-dev2)
        -> NGINX Plus :443, public cert /etc/letsencrypt/live/gitlab-staging.lib/
           (roles/nginxplus/files/conf/http/dev/gitlab_staging.conf)
@@ -22,7 +22,7 @@ client -> gitlab-staging.lib.princeton.edu (staging LB VIP, adc-dev1/adc-dev2)
 
 Pages, once enabled:
 
-```
+```text
 client -> <Pages host> (staging LB VIP)
        -> NGINX Plus :443, public cert for the Pages host
           (roles/nginxplus/files/conf/http/dev/gitlab_pages_staging.conf)
@@ -36,7 +36,7 @@ Configuration decisions
 -----------------------
 
 * **Single-domain sites** (`gitlab_pages['namespace_in_path'] = true`):
-  sites are `https://<Pages host>/<namespace>/<project>`. One DNS record and
+  sites are `https://pages-staging.lib.princeton.edu/<namespace>/<project>`. One DNS record and
   one ordinary certificate, no wildcard. GA in GitLab 17.4; the role
   asserts the installed `gitlab-ce` is at least `gitlab_pages_min_version`.
   With this on, wildcard URLs stop working; GitLab supports one scheme at a
@@ -62,10 +62,7 @@ Configuration decisions
 Security caveat for single-domain sites: every project's site shares one
 origin. Script published by any project runs with the same origin as every
 other project's site, including access-controlled ones the viewer can open.
-That is acceptable for internal docs written by staff. It is not acceptable
-for untrusted publishers; those need wildcard domains with unique domains.
-A hostname under `lib.princeton.edu` or `princeton.edu` can also set cookies
-for that parent domain. A separate registrable domain avoids this.
+That is acceptable for internal docs written by staff.
 
 Remaining decisions and values
 ------------------------------
@@ -77,14 +74,6 @@ Remaining decisions and values
 | DNS record: `pages-staging.lib.princeton.edu` -> staging LB VIP | networkregistration / OIT (see `roles/nginxplus/ADDHOSTS.md`) | done (CNAME to `adc-dev.lib.princeton.edu`) |
 | Certificate `/etc/letsencrypt/live/pages-staging.lib/` on both staging LBs | LB file | done |
 | Network path LB -> `gitlab-staging-vm:8443/tcp` | campus/VM firewall (not managed in this repo) | done for staging |
-| Installed GitLab version >= 17.4 | checked by the role at run time | passes on staging (`gitlab-ce` is not pinned in this repo) |
-
-Certificate: `playbooks/utils/certinext_incommon_certbot.yml` (InCommon via
-Certinext, `certbot --nginx`). It appends `.princeton.edu`, so for
-`pages-staging.lib.princeton.edu` pass `-e domain_name=pages-staging.lib`;
-the cert lands in `/etc/letsencrypt/live/pages-staging.lib/`. Run it on the
-backup LB first, then the active one; each LB issues with its own Certinext
-ACME account. Renewal is the existing certbot timer on each LB.
 
 No change is needed to the VM certificate: the LB connects to the VM by its
 own hostname.
@@ -112,8 +101,6 @@ The role sets `gitlab_pages['access_control'] = true` and
     **Everyone With Access** (any signed-in user).
   * Restricted docs: **Private** or **Internal** project, Pages
     **Only Project Members**.
-  * Avoid **Everyone** (public). It is unavailable once the instance setting
-    above is on.
 * Groups can also use **Settings > General > Permissions and group features >
   Pages public access > Remove public access** (GitLab 17.9+).
 
@@ -147,39 +134,8 @@ pages:
 ```
 
 After the pipeline passes, **Deploy > Pages** shows the URL. Single-domain
-sites are `https://<Pages host>/<namespace>/<project>/`. If **Use unique
+sites are `https://pages-staging.lib.princeton.edu/<namespace>/<project>/`. If **Use unique
 domain** is selected, use the URL shown there.
-
-Deployment (staging)
---------------------
-
-1. Register DNS for `pages-staging.lib.princeton.edu` and confirm
-   `dig +short pages-staging.lib.princeton.edu` returns the staging VIP.
-2. Issue the certificate on each staging LB, backup first, then active
-   (each LB uses its own Certinext ACME account):
-
-   ```bash
-   ansible-playbook -e domain_name=pages-staging.lib \
-     --limit <backup adc-devN>.lib.princeton.edu playbooks/utils/certinext_incommon_certbot.yml
-   ansible-playbook -e domain_name=pages-staging.lib \
-     --limit <active adc-devN>.lib.princeton.edu playbooks/utils/certinext_incommon_certbot.yml
-   ```
-
-3. Apply GitLab (the role asserts the settings and version first):
-
-   ```bash
-   ansible-playbook playbooks/Gitlab.yml --check --diff   # review gitlab.rb diff
-   ansible-playbook playbooks/Gitlab.yml
-   ```
-
-   The handler runs `gitlab-ctl reconfigure`.
-4. Push `roles/nginxplus/files/conf/http/dev/gitlab_pages_staging.conf` to
-   each staging LB, one at a time, backup first:
-
-   ```bash
-   ansible-playbook -v --limit <backup adc-devN>.lib.princeton.edu playbooks/nginxplus.yml -t update_conf
-   ansible-playbook -v --limit <active adc-devN>.lib.princeton.edu playbooks/nginxplus.yml -t update_conf
-   ```
 
 Verification
 ------------
