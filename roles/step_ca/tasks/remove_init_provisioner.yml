@@ -1,0 +1,51 @@
+---
+#
+# Remove every provisioner that carries an encrypted private key.
+#
+# step ca init insists on creating a JWK provisioner and stores its private key
+# in ca.json as encryptedKey, which step-ca serves to anyone from
+# /provisioners. Whoever can decrypt it can mint a certificate for any
+# principal, with no Entra and no MFA. CAs initialised before the throwaway
+# init password encrypted it with the CA password, which lives in Vault. So on
+# every run any provisioner with an encryptedKey is dropped, and Entra OIDC is
+# the only way to get a certificate. Emergency access without Entra is not
+# implemented yet; until it is, the way in is the host console.
+# All other provisioners are left untouched, and ca.json is only rewritten when
+# the result differs.
+
+- name: Read the current CA configuration
+  ansible.builtin.slurp:
+    src: "{{ step_ca_path }}/config/ca.json"
+  register: step_ca_init_config_raw
+  become: true
+  become_user: "{{ step_ca_user }}"
+
+- name: Build the CA configuration without private-key provisioners
+  ansible.builtin.set_fact:
+    step_ca_init_config_desired: >-
+      {{
+        step_ca_init_config
+        | combine({
+            'authority': {
+              'provisioners':
+                step_ca_init_config.authority.provisioners
+                | rejectattr('encryptedKey', 'defined')
+                | list
+            }
+          }, recursive=True)
+      }}
+  vars:
+    step_ca_init_config: "{{ step_ca_init_config_raw.content | b64decode | from_json }}"
+  no_log: true
+
+# No backup: it would keep the encryptedKey on disk.
+- name: Write ca.json when a private-key provisioner was removed
+  ansible.builtin.copy:
+    content: "{{ step_ca_init_config_desired | to_nice_json(indent=3) }}\n"
+    dest: "{{ step_ca_path }}/config/ca.json"
+    owner: "{{ step_ca_user }}"
+    group: "{{ step_ca_group }}"
+    mode: "0644"
+  when: step_ca_init_config_desired != (step_ca_init_config_raw.content | b64decode | from_json)
+  no_log: true
+  notify: Restart step-ca

@@ -24,15 +24,24 @@
       loop_control:
         label: "{{ item.item }}"
 
+    - name: List the STEPPATH directory
+      ansible.builtin.find:
+        paths: "{{ step_ca_path }}"
+        file_type: file
+      register: ca_files
+
     - name: Read ca.json
       ansible.builtin.slurp:
         src: "{{ step_ca_path }}/config/ca.json"
       register: ca_json_raw
 
-    - name: Assert break-glass provisioner exists
+    # An encryptedKey is served by /provisioners and would let whoever knows
+    # its password mint certificates; init's JWK provisioner must be gone.
+    - name: Assert no provisioner carries an encrypted private key
       ansible.builtin.assert:
         that:
-          - "'break-glass' in ((ca_json_raw.content | b64decode | from_json).authority.provisioners | map(attribute='name') | list)"
+          - (ca_json_raw.content | b64decode | from_json).authority.provisioners | selectattr('encryptedKey', 'defined') | list | length == 0
+          - "'init-provisioner-password.txt' not in (ca_files.files | map(attribute='path') | map('basename') | list)"
 
     - name: Confirm the service is active
       ansible.builtin.systemd_service:
