@@ -17,9 +17,10 @@ step_ca_listen_address: ":8443"
 step_ca_listen_port: 8443
 step_ca_deployment_type: standalone
 
-# Break-glass JWK provisioner created during init. Lets an operator issue
-# certs directly (with the CA password) when Entra/OIDC is unavailable.
-step_ca_break_glass_provisioner: break-glass
+# Name of the JWK provisioner step ca init insists on creating. Its key is
+# encrypted with a throwaway password and the role removes it straight after
+# init, so Entra OIDC is the only way to get a certificate.
+step_ca_init_provisioner: init
 
 # CA key password -- MUST come from Vault. The role refuses to init without it.
 step_ca_password: ""
@@ -61,10 +62,16 @@ step_ca_oidc_listen_address: "127.0.0.1:10000"
 step_ca_oidc_email_domain: princeton.edu
 step_ca_oidc_configuration_endpoint: >-
   https://login.microsoftonline.com/{{ step_ca_oidc_tenant_id }}/v2.0/.well-known/openid-configuration
-# Initially Optional: need restrict to Entra security group object IDs (emitted as the
-# groups claim from grouper(?)). Empty list = no group restriction.
+# Entra security group object IDs (emitted as the groups claim). A token
+# without one of them is refused. Empty list = no group restriction, so who may
+# get a certificate is decided by the Entra app's user assignment.
 step_ca_oidc_groups: []
-# Optional: emails permitted to use the admin/sshpop flows.
+# OIDC admins are NOT an allowlist: everyone else in the tenant still gets a
+# certificate. An admin email or group gains privileges: X.509 certificates for
+# any name, SSH host certificates and any SSH principal when no template is
+# set, revoking anyone's certificate, and skipping the domain check. Restrict
+# issuance with Entra app assignment or step_ca_oidc_groups, and authorise
+# local accounts with ssh_ca_trust's principal files. Keep this empty.
 step_ca_oidc_admins: []
 
 step_ca_disable_issued_at_check: true

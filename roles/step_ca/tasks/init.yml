@@ -2,23 +2,51 @@
 # Guarded by ca.json: once the CA is initialised this never runs again, so the
 # root/intermediate and SSH host/user CA keys are created and then immutable.
 # --deployment-type keeps init non-interactive on current step-cli
+#
+# init insists on creating a JWK provisioner with an encrypted private key.
+# Encrypt it with a throwaway random password that is never stored, not the CA
+# password, and remove_init_provisioner.yml then deletes the provisioner, so the
+# vault password never unlocks a provisioner.
+
+- name: Check whether the CA is already initialised
+  ansible.builtin.stat:
+    path: "{{ step_ca_path }}/config/ca.json"
+  register: step_ca_config_stat
 
 - name: Initialise the CA with SSH support
-  ansible.builtin.command:
-    argv:
-      - step
-      - ca
-      - init
-      - --ssh
-      - --deployment-type={{ step_ca_deployment_type }}
-      - --name={{ step_ca_pki_name }}
-      - --dns={{ step_ca_dns_name }}
-      - --address={{ step_ca_listen_address }}
-      - --provisioner={{ step_ca_break_glass_provisioner }}
-      - --password-file={{ step_ca_password_file }}
-      - --provisioner-password-file={{ step_ca_password_file }}
-    creates: "{{ step_ca_path }}/config/ca.json"
-  environment:
-    STEPPATH: "{{ step_ca_path }}"
-  become: true
-  become_user: "{{ step_ca_user }}"
+  when: not step_ca_config_stat.stat.exists
+  block:
+    - name: Write a throwaway provisioner password
+      ansible.builtin.copy:
+        content: "{{ lookup('ansible.builtin.password', '/dev/null', length=64) }}\n"
+        dest: "{{ step_ca_path }}/init-provisioner-password.txt"
+        owner: "{{ step_ca_user }}"
+        group: "{{ step_ca_group }}"
+        mode: "0600"
+      no_log: true
+
+    - name: Run step ca init
+      ansible.builtin.command:
+        argv:
+          - step
+          - ca
+          - init
+          - --ssh
+          - --deployment-type={{ step_ca_deployment_type }}
+          - --name={{ step_ca_pki_name }}
+          - --dns={{ step_ca_dns_name }}
+          - --address={{ step_ca_listen_address }}
+          - --provisioner={{ step_ca_init_provisioner }}
+          - --password-file={{ step_ca_password_file }}
+          - --provisioner-password-file={{ step_ca_path }}/init-provisioner-password.txt
+        creates: "{{ step_ca_path }}/config/ca.json"
+      environment:
+        STEPPATH: "{{ step_ca_path }}"
+      become: true
+      become_user: "{{ step_ca_user }}"
+
+  always:
+    - name: Remove the throwaway provisioner password
+      ansible.builtin.file:
+        path: "{{ step_ca_path }}/init-provisioner-password.txt"
+        state: absent

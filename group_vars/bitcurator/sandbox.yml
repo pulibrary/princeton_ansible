@@ -1,10 +1,11 @@
 ---
 # Remote desktop for the BitCurator sandbox, signed in to by certificate.
 #
-# One file serves both ends of the arrangement: it tells the certificate
-# authority which identities may be issued certificates for this host, and tells
-# the host which local account each of those identities maps onto. Keeping them
-# together is what stops the two lists drifting apart.
+# The certificate authority does not decide who may log in here: it is shared
+# by every host, and who may get a certificate at all is set by the Entra app's
+# user assignment. This host decides, through ssh_ca_users below, which
+# identities map onto which local account; an identity not listed gets in
+# nowhere.
 #
 # Certificate principals come from the Entra token, so each person receives a
 # certificate whose principal is their own email address rather than a shared
@@ -19,17 +20,6 @@ step_ca_password: "{{ vault_step_ca_password }}"
 step_ca_oidc_tenant_id: "2ff60116-7431-425d-b5af-077d7791bda4"
 step_ca_oidc_client_id: "{{ vault_step_ca_oidc_client_id }}"
 step_ca_oidc_client_secret: "{{ vault_step_ca_oidc_client_secret }}"
-
-# Identities permitted to request certificates for this host.
-step_ca_oidc_admins:
-  - aberdini@princeton.edu
-  - acozine@princeton.edu
-  - ar1789@princeton.edu
-  - gpmenos@princeton.edu
-  - jkazmier@princeton.edu
-  - kayiwa@princeton.edu
-  - ld9624@princeton.edu
-  - vkarasic@princeton.edu
 
 # --- Consumed by the ssh_ca_trust role, on the sandbox itself ---
 

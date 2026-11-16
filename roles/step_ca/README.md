@@ -18,12 +18,13 @@ the servers people log into so sshd trusts certificates issued by that CA.
 1. Adds the Smallstep apt repo and installs `step-cli` + `step-ca`.
 2. Creates the `step` system user and the `$STEPPATH` tree at `/etc/step-ca`.
 3. Runs `step ca init --ssh` **once** — creating the root + intermediate CAs,
-   the SSH host and user CA keys, and a break-glass JWK provisioner.
+   the SSH host and user CA keys (init's JWK provisioner is removed, see below).
 4. Installs an SSH user-certificate template: principals are fixed to
    `step_ca_ssh_principals` (default `pulsys`) and the cert `KeyID` carries the
    authenticating Entra user's email for audit.
 5. Installs the upstream **hardened** systemd unit and enables the daemon.
 6. Merges an Entra OIDC provisioner into `ca.json` on every run — idempotently.
+7. Removes any provisioner holding an encrypted private key (see below).
 
 ## OIDC merge behaviour
 
@@ -32,17 +33,37 @@ The OIDC provisioner is merged into `authority.provisioners` directly, not via
 
 - replaces the entry named `step_ca_oidc_provisioner_name` **in place** (or
   appends it if absent), preserving any fields step-ca itself added;
-- leaves every other provisioner (notably the break-glass JWK) untouched;
+- leaves every other provisioner untouched;
 - rewrites `ca.json` **only when the merged result differs** (a clean converge
   reports `ok`), backing up the previous file, then reloads via `SIGHUP`.
 
 So changing the client secret or endpoint in Vault re-applies on the next run;
 a no-op run changes nothing.
 
+## No break-glass provisioner
+
+`step ca init` always creates a JWK provisioner and stores its private key in
+`ca.json` as `encryptedKey`, which step-ca hands to anyone who asks at
+`/provisioners`. If that key is encrypted with the CA password, the vault
+password alone mints a certificate for **any** principal, with no Entra and no
+MFA, and every host running `ssh_ca_trust` accepts it.
+
+So the role never lets the vault password unlock a provisioner:
+
+- `step ca init` encrypts the init-time provisioner key with a random
+  password that is thrown away.
+- On every run any provisioner carrying an `encryptedKey` is removed from
+  `ca.json`, including one left by an older init that used the CA password.
+
+Entra OIDC is therefore the only way to get a certificate. Emergency access
+when Entra is down is not implemented yet (see Smallstep's
+[SSH emergency access](https://smallstep.com/blog/ssh-emergency-access/));
+until it is, the way in is the host console.
+
 ## Required Vault variables
 
 ```yaml
-step_ca_password: "…"                 # encrypts the CA keys
+step_ca_password: "…"                 # encrypts the CA keys only; never a provisioner
 # when step_ca_oidc_enabled: true
 step_ca_oidc_tenant_id: "2ff60116-7431-425d-b5af-077d7791bda4"
 step_ca_oidc_client_id: "…"
@@ -61,6 +82,30 @@ the working configuration is:
 - Token configuration: `email` claim on the id_token; optional groups claim
   (Security groups, emitted as Group ID).
 - Admin consent granted.
+
+## Who can get a certificate, and where it works
+
+Two separate controls, neither of them in step-ca's `admins`:
+
+- **Who may get a certificate** is decided in Entra. Set *Assignment
+  required* on the app's enterprise application and assign only the security
+  groups that should have SSH access. `step_ca_oidc_groups` (below) can enforce
+  the same groups at the CA as well.
+- **Which local account a certificate opens** is decided on each host by
+  `ssh_ca_trust`: `ssh_ca_users` writes a principals file per account, and a
+  certificate whose principals are not listed there logs in nowhere.
+
+`step_ca_oidc_admins` is not an allowlist and must stay empty. Everyone the
+token check admits gets a certificate whether listed or not; a listed email or
+group gains privileges: X.509 certificates for any name, SSH host certificates
+and arbitrary principals when no SSH template is set, revoking anyone's
+certificate, and skipping the domain check. `groups` and `admins` are written
+on every run, so an empty list clears values left by an earlier run.
+
+With the SSH template, admins and non-admins get the same user certificate:
+principals are the token's identity, the sanitised and raw local part of the
+email plus the email itself (for `jdoe@princeton.edu`, `jdoe` and
+`jdoe@princeton.edu`), and the key ID is the email.
 
 To restrict access to specific Entra security groups, set their object IDs:
 

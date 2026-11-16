@@ -3,10 +3,12 @@
 # Merge a single OIDC provisioner into authority.provisioners in ca.json,
 # idempotently:
 #   * the provisioner with our name is replaced in place (or appended if new);
-#   * all other provisioners (e.g. the break-glass JWK and sshpop) are left untouched;
+#   * all other provisioners (e.g. sshpop) are left untouched;
 #   * ca.json is only rewritten when the merged result actually differs, so a
 #     no-op converge reports "ok"; changing any managed field re-applies.
 # The merge preserves any extra fields step-ca itself added to our entry.
+# groups and admins are always written, even when empty: the recursive merge
+# keeps any key we omit, so leaving them out would never clear an old value.
 #
 # Important:
 #   * authority.disableIssuedAtCheck works around Entra/OIDC tokens whose iat
@@ -43,10 +45,10 @@
             'ssh': {
               'templateFile': step_ca_ssh_template_relpath
             }
-          }
+          },
+          'groups': step_ca_oidc_groups,
+          'admins': step_ca_oidc_admins
         }
-        | combine({'groups': step_ca_oidc_groups} if (step_ca_oidc_groups | length > 0) else {})
-        | combine({'admins': step_ca_oidc_admins} if (step_ca_oidc_admins | length > 0) else {})
       }}
   no_log: true
 

@@ -22,6 +22,10 @@
 - name: Install the SSH user-certificate template
   ansible.builtin.include_tasks: ssh_template.yml
 
+# Before the OIDC merge, whose ca.json backup would otherwise keep the key.
+- name: Remove the init-time JWK provisioner from ca.json
+  ansible.builtin.include_tasks: remove_init_provisioner.yml
+
 - name: Merge the Entra OIDC provisioner into ca.json
   ansible.builtin.include_tasks: oidc_provisioner.yml
   when: step_ca_oidc_enabled | bool
