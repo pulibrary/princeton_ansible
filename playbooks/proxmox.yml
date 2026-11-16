@@ -127,6 +127,20 @@
           loop_control:
             label: "{{ item.name }}"
 
+        - name: Create persistent APT hook for automatic nag removal
+          ansible.builtin.copy:
+            dest: /etc/apt/apt.conf.d/99-pve-nag-remover
+            content: |
+              DPkg::Post-Invoke { "sed -i.bak 's/res.data.status.toLowerCase() !== '\''active'\''/false/g' /usr/share/javascript/proxmox-widget-toolkit/proxmoxlib.js || true"; };
+            mode: '0644'
+
+        - name: Run the nag-removal command immediately if unpatched
+          ansible.builtin.replace:
+            path: /usr/share/javascript/proxmox-widget-toolkit/proxmoxlib.js
+            regexp: "res\\.data\\.status\\.toLowerCase\\(\\) !== 'active'"
+            replace: "false"
+          notify: Restart pveproxy
+
     - name: Install sudo
       ansible.builtin.apt:
         name: sudo
@@ -147,6 +161,13 @@
         group: root
         mode: "0440"
         validate: /usr/sbin/visudo -cf %s
+
+  handlers:
+    - name: Restart pveproxy
+      ansible.builtin.systemd:
+        name: pveproxy
+        state: restarted
+
   roles:
     - role: ssh_ca_trust
     - role: veeam_proxmox
