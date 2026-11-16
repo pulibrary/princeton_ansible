@@ -22,7 +22,7 @@
   ansible.builtin.set_fact:
     ubuntu_codename: "{{ ansible_facts['distribution_release'] | default(ansible_facts['lsb'].codename) }}"
   when:
-    - ansible_facts['os_family'] == "Debian"
+    - ansible_facts['distribution'] == "Ubuntu"
 
 # remove math mirror repo - we should delete this eventually
 - name: Common | Remove Princeton math mirror repository files
@@ -90,7 +90,7 @@
     regexp: '^(deb(?:-src)?\s+(?:\[[^]]*\]\s+)?https?://(?:[a-z0-9.-]+\.)?(?:archive|security)\.ubuntu\.com/ubuntu/?)\s+'
     replace: '# \1 '
   when:
-    - ansible_facts['os_family'] == "Debian"
+    - ansible_facts['distribution'] == "Ubuntu"
     - sources_list.stat.exists
 
 - name: Common | Check whether deb822 Ubuntu sources are present
@@ -98,7 +98,7 @@
     path: /etc/apt/sources.list.d/ubuntu.sources
   register: ubuntu_deb822_sources
   when:
-    - ansible_facts['os_family'] == "Debian"
+    - ansible_facts['distribution'] == "Ubuntu"
 
 - name: Common | Check whether deb822 sources already provide the Ubuntu archives
   ansible.builtin.command:
@@ -109,7 +109,7 @@
   changed_when: false
   failed_when: false
   when:
-    - ansible_facts['os_family'] == "Debian"
+    - ansible_facts['distribution'] == "Ubuntu"
     - ubuntu_deb822_sources.stat.exists
 
 # Ubuntu 24.04 and later ship the archives in deb822 format. Adding our own
@@ -120,7 +120,7 @@
   ansible.builtin.set_fact:
     common_deb822_provides_archives: "{{ (ubuntu_deb822_sources.stat.exists | default(false)) and (deb822_archive_check.rc | default(1)) == 0 }}"
   when:
-    - ansible_facts['os_family'] == "Debian"
+    - ansible_facts['distribution'] == "Ubuntu"
 
 - name: Common | Configure Ubuntu archive repositories as primary source
   ansible.builtin.copy:
@@ -136,16 +136,17 @@
       deb http://archive.ubuntu.com/ubuntu {{ ubuntu_codename }}-backports main restricted universe multiverse
       deb http://security.ubuntu.com/ubuntu {{ ubuntu_codename }}-security main restricted universe multiverse
   when:
-    - ansible_facts['os_family'] == "Debian"
+    - ansible_facts['distribution'] == "Ubuntu"
     - not common_deb822_provides_archives
 
-- name: Common | Remove redundant archive list when deb822 sources provide them
+# Debian hosts (e.g. Proxmox on trixie) must never carry the Ubuntu archives;
+- name: Common | Remove Ubuntu archive list when it is redundant or wrong
   ansible.builtin.file:
     path: /etc/apt/sources.list.d/99-ubuntu-archive.list
     state: absent
   when:
     - ansible_facts['os_family'] == "Debian"
-    - common_deb822_provides_archives
+    - ansible_facts['distribution'] != "Ubuntu" or common_deb822_provides_archives
 
 # fix redis
 - name: Common | Force IPv4 for APT (fixes Launchpad PPA timeouts)
@@ -239,7 +240,7 @@
 
 - name: Common | Display apt cache update status
   ansible.builtin.debug:
-    msg: "APT cache updated successfully using Ubuntu archives"
+    msg: "APT cache updated successfully"
   when:
     - ansible_facts['os_family'] == "Debian"
     - apt_cache_update is success
