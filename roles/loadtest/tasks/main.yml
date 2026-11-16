@@ -17,6 +17,11 @@
     dest: "/tmp/apache-jmeter-{{ loadtest_jmeter_version }}.tgz"
     checksum: "sha512:{{ loadtest_jmeter_sha512 }}"
     mode: "0644"
+    timeout: 120
+  register: loadtest_jmeter_download
+  retries: 5
+  delay: 15
+  until: loadtest_jmeter_download is succeeded
 
 - name: Loadtest | unarchive JMeter
   ansible.builtin.unarchive:
@@ -65,6 +70,11 @@
     dest: "/tmp/{{ loadtest_k6_name }}.tar.gz"
     checksum: "{{ loadtest_k6_checksums[loadtest_k6_arch] }}"
     mode: "0644"
+    timeout: 120
+  register: loadtest_k6_download
+  retries: 5
+  delay: 15
+  until: loadtest_k6_download is succeeded
 
 - name: Loadtest | unarchive k6
   ansible.builtin.unarchive:
