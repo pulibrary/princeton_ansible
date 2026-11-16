@@ -83,6 +83,30 @@ the working configuration is:
   (Security groups, emitted as Group ID).
 - Admin consent granted.
 
+## Who can get a certificate, and where it works
+
+Two separate controls, neither of them in step-ca's `admins`:
+
+- **Who may get a certificate** is decided in Entra. Set *Assignment
+  required* on the app's enterprise application and assign only the security
+  groups that should have SSH access. `step_ca_oidc_groups` (below) can enforce
+  the same groups at the CA as well.
+- **Which local account a certificate opens** is decided on each host by
+  `ssh_ca_trust`: `ssh_ca_users` writes a principals file per account, and a
+  certificate whose principals are not listed there logs in nowhere.
+
+`step_ca_oidc_admins` is not an allowlist and must stay empty. Everyone the
+token check admits gets a certificate whether listed or not; a listed email or
+group gains privileges: X.509 certificates for any name, SSH host certificates
+and arbitrary principals when no SSH template is set, revoking anyone's
+certificate, and skipping the domain check. `groups` and `admins` are written
+on every run, so an empty list clears values left by an earlier run.
+
+With the SSH template, admins and non-admins get the same user certificate:
+principals are the token's identity, the sanitised and raw local part of the
+email plus the email itself (for `jdoe@princeton.edu`, `jdoe` and
+`jdoe@princeton.edu`), and the key ID is the email.
+
 To restrict access to specific Entra security groups, set their object IDs:
 
 ```yaml
