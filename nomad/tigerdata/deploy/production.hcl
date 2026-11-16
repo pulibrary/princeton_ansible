@@ -7,7 +7,7 @@ job "tigerdata" {
   region      = "global"
   datacenters = ["dc1"]
   type        = "service"
-  node_pool = "all"
+  node_pool = "production"
 
   group "deploy" {
     # Let's do two staging/two prod
