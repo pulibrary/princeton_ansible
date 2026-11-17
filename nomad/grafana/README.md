@@ -13,7 +13,7 @@ Prometheus -> Node Exporter: Basic Auth (vault_metrics_basic_password)
 
 ## [Loki](https://grafana.com/docs/loki/latest/)
 
-Loki is a logging endpoint. Ours is configured to have logs shipped to it from Promtail, configured in [log-shipping.hcl](deploy/log-shipping.hcl).
+Loki is a logging endpoint. Ours is configured to have logs shipped to it from Alloy.
 
 ## [Grafana](https://grafana.com/oss/)
 
@@ -23,9 +23,9 @@ Grafana logins have an EntraID application that federates auth through Nomad wor
 
 There's a GrafanaAdmin and Viewer role in the Entra app, and the devops:admins group is set to GrafanaAdmin, the devops:users group is set to Viewers. Ideally we shouldn't have to fuss with it, since Grafana pulls those memberships on login.
 
-## [Promtail](https://grafana.com/docs/loki/latest/send-data/promtail/)
+## [Alloy](https://grafana.com/docs/alloy/latest/)
 
-We're using Promtail to ship logs from containers to Loki. Now that Podman has support for [Vector](https://vector.dev/docs/), we should probably move to that eventually.
+We're using Alloy to ship logs from containers to Loki.
 
 ## Deployment
 
