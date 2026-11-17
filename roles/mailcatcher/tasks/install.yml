@@ -1,8 +1,23 @@
 ---
+- name: Mailcatcher | Check for requested gem version
+  ansible.builtin.command:
+    argv:
+      - /usr/local/bin/gem
+      - list
+      - mailcatcher
+      - --installed
+      - --exact
+      - --version
+      - "{{ mailcatcher_version }}"
+  register: mailcatcher_gem_check
+  changed_when: false
+  failed_when: mailcatcher_gem_check.rc not in [0, 1]
+
 - name: Mailcatcher | Remove old version of mailcatcher
   ansible.builtin.file:
     path: "{{ mailcatcher_install_location }}"
     state: absent
+  when: mailcatcher_gem_check.rc != 0
 
 - name: Mailcatcher | Install requested gem version
   ansible.builtin.command:
@@ -15,4 +30,5 @@
       - --no-document
       - --bindir
       - "{{ mailcatcher_install_location | dirname }}"
-    creates: "{{ mailcatcher_install_location }}"
+  changed_when: true
+  when: mailcatcher_gem_check.rc != 0
