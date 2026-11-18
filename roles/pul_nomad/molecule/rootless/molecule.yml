@@ -1,0 +1,73 @@
+---
+scenario:
+  name: rootless
+  test_sequence:
+    - dependency
+    - cleanup
+    - destroy
+    - syntax
+    - create
+    - prepare
+    - converge
+    - idempotence
+    - verify
+    - cleanup
+    - destroy
+dependency:
+  name: galaxy
+  options:
+    ignore-certs: True
+    ignore-errors: True
+    role-file: requirements.yml
+    requirements-file: collections.yml
+driver:
+  name: docker
+platforms:
+  - name: rootlessserver1
+    image: "ghcr.io/pulibrary/vm-builds/ubuntu-24.04"
+    command: ""
+    tmpfs:
+      - /run
+      - /run/lock
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    privileged: true
+    pre_build_image: true
+    groups:
+      - nomad_cluster
+      - nomad_servers
+    cgroupns_mode: host
+  - name: rootlessclient1
+    image: "ghcr.io/pulibrary/vm-builds/ubuntu-24.04"
+    command: ""
+    tmpfs:
+      - /run
+      - /run/lock
+    volumes:
+      - /home/nomad
+    privileged: true
+    pre_build_image: true
+    groups:
+      - nomad_cluster
+      - nomad_clients
+    cgroupns_mode: private
+provisioner:
+  name: ansible
+  log: true
+  env:
+    ANSIBLE_PIPELINING: "True"
+    ANSIBLE_CACHE_PLUGIN: "memory"
+    ANSIBLE_GATHERING: "implicit"
+    ANSIBLE_ROLES_PATH: ${MOLECULE_PROJECT_DIRECTORY}/..
+  connection_options:
+    ansible_user: root
+  inventory:
+    links:
+      group_vars: ../default/group_vars/
+      host_vars: host_vars/
+  playbooks:
+    create: ../default/create.yml
+    destroy: ../default/destroy.yml
+    converge: ../default/converge.yml
+verifier:
+  name: ansible

@@ -9,6 +9,9 @@ consul {
     # The address to the Consul agent.
     address = "127.0.0.1:8500"
     token = "{{ generated_nomad_consul_token.token.SecretID }}"
+{% if pul_nomad_rootless %}
+    checks_use_advertise = true
+{% endif %}
     # The service name to register the server and client with Consul.
     server_service_name = "nomad-servers"
     client_service_name = "nomad-clients"
@@ -30,7 +33,7 @@ consul {
     }
 }
 
-data_dir = "/var/nomad"
+data_dir = "{{ pul_nomad_rootless | ternary('/var/nomad/rootless', '/var/nomad') }}"
 
 log_level = "DEBUG"
 enable_syslog = true

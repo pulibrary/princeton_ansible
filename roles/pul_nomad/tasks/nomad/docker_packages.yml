@@ -1,0 +1,85 @@
+---
+# Pulled from https://dev.to/lovestaco/install-docker-with-ansible-on-ubuntu-official-repo-docker-compose-578b and adjusted according to https://docs.docker.com/engine/install/ubuntu/
+- name: 'pul_nomad | nomad | docker | remove conflicting packages'
+  ansible.builtin.apt:
+    name:
+      - docker.io
+      - docker-doc
+      - docker-compose
+      - docker-compose-v2
+      - podman-docker
+      - containerd
+      - runc
+    state: absent
+
+- name: 'pul_nomad | nomad | docker | ensure dependencies are installed'
+  ansible.builtin.apt:
+    name:
+      - bc
+      - curl
+      - expect
+      - git
+      - ca-certificates
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: 'pul_nomad | nomad | docker | get dpkg architecture'
+  ansible.builtin.command: dpkg --print-architecture
+  register: dpkg_architecture
+  changed_when: false
+  check_mode: false
+
+- name: 'pul_nomad | nomad | docker | create apt keyring directory'
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: "pul_nomad | nomad | docker | download Docker's official GPG key"
+  ansible.builtin.get_url:
+    url: https://download.docker.com/linux/ubuntu/gpg
+    dest: /etc/apt/keyrings/docker.asc
+    owner: root
+    group: root
+    mode: "0644"
+    force: false
+
+- name: 'pul_nomad | nomad | docker | remove legacy Docker apt source list'
+  ansible.builtin.file:
+    path: /etc/apt/sources.list.d/docker.list
+    state: absent
+
+- name: 'pul_nomad | nomad | docker | ensure python3-debian is installed for deb822_repository'
+  ansible.builtin.apt:
+    name: python3-debian
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: 'pul_nomad | nomad | docker | add Docker repository to apt sources'
+  ansible.builtin.deb822_repository:
+    name: docker
+    types: [deb]
+    uris: https://download.docker.com/linux/ubuntu
+    suites: ["{{ ansible_facts['distribution_release'] }}"]
+    components: [stable]
+    architectures: ["{{ dpkg_architecture.stdout }}"]
+    signed_by: /etc/apt/keyrings/docker.asc
+    state: present
+  register: pul_nomad_docker_apt_repo
+
+- name: 'pul_nomad | nomad | docker | update apt cache after adding Docker repository'
+  ansible.builtin.apt:
+    update_cache: true
+  when: pul_nomad_docker_apt_repo is changed
+
+- name: 'pul_nomad | nomad | docker | install Docker Engine and Compose plugin'
+  ansible.builtin.apt:
+    name:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+    state: present

@@ -13,18 +13,26 @@ client {
     cpu_total_compute = {{ pulibrary_nomad_cpu_total_compute }}
   {% endif %}
 
-  {% if nomad_meta -%}
   meta = {
-    {% for key, value in nomad_meta.items() %}
+    "host_address" = "{{ pul_nomad_host_address }}"
+    {% for key, value in (nomad_meta or {}).items() %}
     "{{ key }}" = "{{ value }}"
     {% endfor -%}
   }
-  {% endif %}
   host_volumes_dir = "/container_data"
+  {% if pul_nomad_rootless %}
+  network_interface = "tap0"
+  options = {
+    "driver.allowlist" = "docker"
+  }
+  {% endif %}
 }
 
 plugin "docker" {
   config {
+    {% if pul_nomad_rootless %}
+    endpoint = "unix:///run/user/{{ pul_nomad_rootless_uid }}/docker.sock"
+    {% endif %}
     allow_caps = [
       "chown", "dac_override", "fowner", "fsetid", "kill", "setgid",
       "setuid", "setpcap", "net_bind_service", "net_raw", "sys_chroot",

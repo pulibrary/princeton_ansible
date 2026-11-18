@@ -1,12 +1,32 @@
 ---
+- name: pul_nomad | consul | Create rootless nomad user
+  ansible.builtin.user:
+    name: nomad
+    shell: /bin/bash
+    create_home: true
+  register: pul_nomad_rootless_user
+  when: pul_nomad_rootless
+
+- name: pul_nomad | consul | Set rootless user facts
+  ansible.builtin.set_fact:
+    pul_nomad_rootless_uid: "{{ pul_nomad_rootless_user.uid }}"
+    pul_nomad_user_env:
+      XDG_RUNTIME_DIR: "/run/user/{{ pul_nomad_rootless_user.uid }}"
+  when: pul_nomad_rootless
+
 - name: pul_nomad | consul | Install Consul
   ansible.builtin.import_tasks: install.yml
 
 - name: pul_nomad | consul | Configure Consul
   ansible.builtin.import_tasks: configure.yml
 
+- name: pul_nomad | consul | Set up rootless Docker
+  ansible.builtin.include_tasks: "{{ role_path }}/tasks/rootless.yml"
+  when: pul_nomad_rootless
+
 - name: pul_nomad | consul | Start Consul service
   become: true
   ansible.builtin.service:
     name: consul
     state: started
+    enabled: true

@@ -3,6 +3,16 @@
 - name: reload systemd
   ansible.builtin.systemd_service:
     daemon_reload: true
+- name: restart docker
+  become: true
+  become_user: "{{ pul_nomad_rootless | ternary('nomad', 'root') }}"
+  environment: "{{ pul_nomad_user_env }}"
+  throttle: 1
+  ansible.builtin.systemd_service:
+    name: docker
+    scope: "{{ pul_nomad_rootless | ternary('user', 'system') }}"
+    state: restarted
+    daemon_reload: "{{ pul_nomad_rootless }}"
 # Throttle consul/nomad to 1 so they don't all restart at the same time.
 - name: restart consul
   become: true
@@ -18,10 +28,14 @@
     state: restarted
 - name: restart nomad
   become: true
+  become_user: "{{ pul_nomad_rootless | ternary('nomad', 'root') }}"
+  environment: "{{ pul_nomad_user_env }}"
   throttle: 1
-  ansible.builtin.service:
+  ansible.builtin.systemd_service:
     name: nomad
+    scope: "{{ pul_nomad_rootless | ternary('user', 'system') }}"
     state: restarted
+    daemon_reload: "{{ pul_nomad_rootless }}"
 - name: restart podman
   become: true
   throttle: 1
@@ -33,12 +47,6 @@
   throttle: 1
   # Sleep for 30 seconds to give nomad a bit to recover.
   ansible.builtin.shell: podman system migrate ; sleep 30
-- name: restart docker
-  become: true
-  throttle: 1
-  ansible.builtin.service:
-    name: docker
-    state: restarted
 - name: reload ufw
   become: true
   community.general.ufw:

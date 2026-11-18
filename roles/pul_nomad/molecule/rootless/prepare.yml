@@ -1,0 +1,21 @@
+---
+- name: Prepare
+  hosts: nomad_clients
+  tasks:
+    - name: Create the nomad user on the home volume
+      ansible.builtin.user:
+        name: nomad
+        shell: /bin/bash
+        create_home: true
+
+    - name: Give the nomad user its home volume
+      ansible.builtin.file:
+        path: /home/nomad
+        state: directory
+        owner: nomad
+        group: nomad
+        mode: "0750"
+
+    - name: Enable cgroup controllers like a booted client host
+      ansible.builtin.shell: echo '+cpuset +cpu +io +memory +pids' > /sys/fs/cgroup/cgroup.subtree_control
+      changed_when: true

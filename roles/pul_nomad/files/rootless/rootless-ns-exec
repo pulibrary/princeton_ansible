@@ -1,0 +1,7 @@
+#!/bin/sh
+STATE=${XDG_RUNTIME_DIR:?}/dockerd-rootless
+CP=$(cat "$STATE/child_pid") || exit 1
+export RNS_STATE="$STATE" RNS_CP="$CP"
+exec nsenter -U --preserve-credentials -m -t "$CP" sh -c '
+  if mountpoint -q "$RNS_STATE/netns"; then exec nsenter --net="$RNS_STATE/netns" "$@"
+  else exec nsenter -n -t "$RNS_CP" "$@"; fi' rootless-ns-exec "$@"

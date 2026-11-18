@@ -10,10 +10,14 @@
   ansible.builtin.import_tasks: configure.yml
 - name: pul_nomad | nomad | Start Nomad service
   become: true
-  ansible.builtin.service:
+  become_user: "{{ pul_nomad_rootless | ternary('nomad', 'root') }}"
+  environment: "{{ pul_nomad_user_env }}"
+  ansible.builtin.systemd_service:
     name: nomad
+    scope: "{{ pul_nomad_rootless | ternary('user', 'system') }}"
     state: started
     enabled: true
+    daemon_reload: "{{ pul_nomad_rootless }}"
 
 # Install Podman
 - name: pul_nomad | nomad | Install Podman
@@ -24,3 +28,4 @@
   ansible.builtin.import_tasks: docker.yml
   when:
     - "ansible_facts['os_family'] == 'Debian'"
+    - not pul_nomad_rootless

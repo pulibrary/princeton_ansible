@@ -1,0 +1,307 @@
+---
+- name: 'pul_nomad | rootless | Install packages'
+  ansible.builtin.apt:
+    name:
+      - uidmap
+      - dbus-user-session
+      - build-essential
+      - git
+      - iptables
+      - jq
+      - curl
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: 'pul_nomad | rootless | Install Docker packages'
+  ansible.builtin.import_tasks: nomad/docker_packages.yml
+
+- name: 'pul_nomad | rootless | Install rootless Docker extras'
+  ansible.builtin.apt:
+    name: docker-ce-rootless-extras
+    state: present
+
+- name: 'pul_nomad | rootless | Check rootlesskit permission override'
+  ansible.builtin.command: dpkg-statoverride --list /usr/bin/rootlesskit
+  register: pul_nomad_rootlesskit_override
+  changed_when: false
+  failed_when: false
+
+- name: 'pul_nomad | rootless | Restrict rootlesskit to the nomad group'
+  ansible.builtin.command: dpkg-statoverride --update --add root nomad 0750 /usr/bin/rootlesskit
+  when: pul_nomad_rootlesskit_override.rc != 0
+  changed_when: true
+
+- name: 'pul_nomad | rootless | Gather service facts'
+  ansible.builtin.service_facts:
+
+- name: 'pul_nomad | rootless | Stop rootful services'
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    state: stopped
+    enabled: false
+  loop:
+    - docker.socket
+    - docker.service
+    - containerd.service
+    - nomad.service
+  when: item in ansible_facts.services or item == 'docker.socket'
+
+- name: 'pul_nomad | rootless | Set subuid range'
+  ansible.builtin.lineinfile:
+    path: /etc/subuid
+    regexp: '^nomad:'
+    line: "nomad:{{ nomad_docker_userns_offset + 1 }}:65536"
+    create: true
+    mode: "0644"
+
+- name: 'pul_nomad | rootless | Set subgid range'
+  ansible.builtin.lineinfile:
+    path: /etc/subgid
+    regexp: '^nomad:'
+    line: "nomad:{{ nomad_docker_userns_offset + 1 }}:65536"
+    create: true
+    mode: "0644"
+
+- name: 'pul_nomad | rootless | Install AppArmor profile for rootlesskit'
+  ansible.builtin.copy:
+    src: rootless/rootlesskit.apparmor
+    dest: /etc/apparmor.d/home.nomad.rootlesskit
+    mode: "0644"
+  register: pul_nomad_rootless_apparmor
+
+- name: 'pul_nomad | rootless | Load AppArmor profile'
+  ansible.builtin.command: apparmor_parser -r /etc/apparmor.d/home.nomad.rootlesskit
+  when:
+    - pul_nomad_rootless_apparmor is changed
+    - ansible_facts['apparmor']['status'] == 'enabled'
+  changed_when: true
+
+- name: 'pul_nomad | rootless | Allow unprivileged ping'
+  ansible.posix.sysctl:
+    name: net.ipv4.ping_group_range
+    value: "0 2147483647"
+    sysctl_file: /etc/sysctl.d/90-rootless-ping.conf
+
+- name: 'pul_nomad | rootless | Create user manager drop-in directory'
+  ansible.builtin.file:
+    path: "/etc/systemd/system/user@{{ pul_nomad_rootless_uid }}.service.d"
+    state: directory
+    mode: "0755"
+
+- name: 'pul_nomad | rootless | Delegate cgroup controllers to user services'
+  ansible.builtin.copy:
+    src: rootless/user-delegate.conf
+    dest: "/etc/systemd/system/user@{{ pul_nomad_rootless_uid }}.service.d/delegate.conf"
+    mode: "0644"
+
+- name: 'pul_nomad | rootless | Install helper scripts'
+  ansible.builtin.copy:
+    src: "rootless/{{ item }}"
+    dest: "/usr/local/bin/{{ item }}"
+    mode: "0755"
+  loop:
+    - rootless-ns-exec
+    - nomad-cgroups.sh
+  register: pul_nomad_rootless_helpers
+
+- name: 'pul_nomad | rootless | Check checked-out passt version'
+  ansible.builtin.command: git -C /usr/local/src/passt rev-parse HEAD
+  register: pul_nomad_passt_head
+  changed_when: false
+  failed_when: false
+
+- name: 'pul_nomad | rootless | Fetch passt source'
+  ansible.builtin.git:
+    repo: "{{ pul_nomad_passt_repo }}"
+    dest: /usr/local/src/passt
+    version: "{{ pul_nomad_passt_version }}"
+  when: pul_nomad_passt_head.stdout != pul_nomad_passt_version
+
+- name: 'pul_nomad | rootless | Create pasta build directory'
+  ansible.builtin.file:
+    path: /usr/local/src/passt-build
+    state: directory
+    owner: nomad
+    group: nomad
+    mode: "0755"
+
+- name: 'pul_nomad | rootless | Fetch passt source for the build'
+  become: true
+  become_user: nomad
+  ansible.builtin.git:
+    repo: "{{ pul_nomad_passt_repo }}"
+    dest: /usr/local/src/passt-build
+    version: "{{ pul_nomad_passt_version }}"
+  when: pul_nomad_passt_head.stdout != pul_nomad_passt_version
+
+- name: 'pul_nomad | rootless | Build pasta'
+  become: true
+  become_user: nomad
+  community.general.make:
+    chdir: /usr/local/src/passt-build
+    target: passt
+
+- name: 'pul_nomad | rootless | Install pasta'
+  ansible.builtin.copy:
+    src: /usr/local/src/passt-build/passt
+    dest: /usr/local/bin/pasta
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0755"
+  notify: restart docker
+
+- name: 'pul_nomad | rootless | Install pasta AppArmor abstractions'
+  ansible.builtin.copy:
+    src: "/usr/local/src/passt/contrib/apparmor/abstractions/{{ item }}"
+    dest: "/etc/apparmor.d/abstractions/{{ item }}"
+    remote_src: true
+    mode: "0644"
+  loop:
+    - passt
+    - pasta
+  register: pul_nomad_pasta_abstractions
+
+- name: 'pul_nomad | rootless | Read upstream pasta AppArmor profile'
+  ansible.builtin.slurp:
+    src: /usr/local/src/passt/contrib/apparmor/usr.bin.pasta
+  register: pul_nomad_pasta_profile_source
+
+- name: 'pul_nomad | rootless | Install pasta AppArmor profile'
+  ansible.builtin.copy:
+    content: "{{ pul_nomad_pasta_profile_text | replace('/usr/bin/pasta{,.avx2}', '/usr/local/bin/pasta') }}"
+    dest: /etc/apparmor.d/usr.local.bin.pasta
+    mode: "0644"
+  vars:
+    pul_nomad_pasta_profile_text: "{{ pul_nomad_pasta_profile_source.content | b64decode }}"
+  register: pul_nomad_pasta_profile
+  notify: restart docker
+
+- name: 'pul_nomad | rootless | Load pasta AppArmor profile'
+  ansible.builtin.command: apparmor_parser -r /etc/apparmor.d/usr.local.bin.pasta
+  when:
+    - pul_nomad_pasta_abstractions is changed or pul_nomad_pasta_profile is changed
+    - ansible_facts['apparmor']['status'] == 'enabled'
+  changed_when: true
+
+- name: 'pul_nomad | rootless | Install pasta wrapper'
+  ansible.builtin.template:
+    src: rootless/pasta-nomad.j2
+    dest: /usr/local/bin/pasta-nomad
+    mode: "0755"
+  notify: restart docker
+
+- name: 'pul_nomad | rootless | Install Nomad cgroup service'
+  ansible.builtin.template:
+    src: rootless/nomad-cgroups.service.j2
+    dest: /etc/systemd/system/nomad-cgroups.service
+    mode: "0644"
+
+- name: 'pul_nomad | rootless | Start Nomad cgroup service'
+  ansible.builtin.systemd_service:
+    name: nomad-cgroups.service
+    state: "{{ (pul_nomad_rootless_helpers is changed) | ternary('restarted', 'started') }}"
+    enabled: true
+    daemon_reload: true
+
+- name: 'pul_nomad | rootless | Create directories'
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: nomad
+    group: nomad
+    mode: "0755"
+  loop:
+    - /var/lib/cni
+    - /var/nomad/rootless
+    - /container_data
+    - /home/nomad/.config
+    - /home/nomad/.config/systemd
+    - /home/nomad/.config/systemd/user
+    - /home/nomad/.config/docker
+
+- name: 'pul_nomad | rootless | Create root-owned directories'
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+  loop:
+    - /opt/cni/bin
+    - /etc/nomad.d
+
+- name: 'pul_nomad | rootless | Install CNI plugins'
+  ansible.builtin.unarchive:
+    src: "{{ pul_nomad_cni_url }}/v{{ pul_nomad_cni_version }}/cni-plugins-linux-{{ nomad_architecture }}-v{{ pul_nomad_cni_version }}.tgz"
+    dest: /opt/cni/bin
+    remote_src: true
+    creates: /opt/cni/bin/portmap
+
+- name: 'pul_nomad | rootless | Configure Docker daemon'
+  ansible.builtin.copy:
+    content: "{{ pul_nomad_rootless_docker_config | to_nice_json }}\n"
+    dest: /home/nomad/.config/docker/daemon.json
+    owner: nomad
+    group: nomad
+    mode: "0644"
+  vars:
+    pul_nomad_rootless_docker_config:
+      log-driver: json-file
+      log-opts:
+        max-size: 10m
+        max-file: "3"
+
+- name: 'pul_nomad | rootless | Install Docker user unit'
+  ansible.builtin.template:
+    src: rootless/docker.service.j2
+    dest: /home/nomad/.config/systemd/user/docker.service
+    owner: nomad
+    group: nomad
+    mode: "0644"
+  notify: restart docker
+
+- name: 'pul_nomad | rootless | Install Nomad user unit'
+  ansible.builtin.template:
+    src: rootless/nomad.service.j2
+    dest: /home/nomad/.config/systemd/user/nomad.service
+    owner: nomad
+    group: nomad
+    mode: "0644"
+  notify: restart nomad
+
+- name: 'pul_nomad | rootless | Enable lingering'
+  ansible.builtin.command: loginctl enable-linger nomad
+  args:
+    creates: /var/lib/systemd/linger/nomad
+
+- name: 'pul_nomad | rootless | Wait for user manager'
+  ansible.builtin.wait_for:
+    path: "/run/user/{{ pul_nomad_rootless_uid }}/bus"
+
+- name: 'pul_nomad | rootless | Start rootless Docker'
+  become: true
+  become_user: nomad
+  environment: "{{ pul_nomad_user_env }}"
+  ansible.builtin.systemd_service:
+    name: docker
+    scope: user
+    state: started
+    enabled: true
+    daemon_reload: true
+
+- name: 'pul_nomad | rootless | Remove rootful Docker UFW rules'
+  ansible.builtin.blockinfile:
+    path: /etc/ufw/after.rules
+    marker: "# {mark} UFW AND DOCKER"
+    state: absent
+  when: running_on_server
+  notify: reload ufw
+
+- name: 'pul_nomad | rootless | Allow RabbitMQ from campus'
+  community.general.ufw:
+    rule: allow
+    proto: tcp
+    from_ip: 128.112.0.0/16
+    to_port: '5672'
+    comment: rabbitmq for containers
+  when: running_on_server

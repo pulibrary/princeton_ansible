@@ -1,0 +1,23 @@
+#!/bin/sh
+if [ "$1" = "--version" ]; then
+  exec /usr/local/bin/pasta --version
+fi
+n=0
+for a in "$@"; do
+  shift
+  case "$a" in
+    --address=*) a=--address={{ consul_bind_addr }}; n=$((n+1)) ;;
+    --netmask=*) a=--netmask={{ pul_nomad_rootless_prefix }}; n=$((n+1)) ;;
+    --gateway=*) a=--gateway={{ pul_nomad_rootless_gateway }}; n=$((n+1)) ;;
+    --tcp-ports=auto) a=--tcp-ports={{ consul_bind_addr }}/~8300-8302,~8500-8503,~8600; n=$((n+1)) ;;
+    --udp-ports=auto) a=--udp-ports={{ consul_bind_addr }}/~8300-8302,~8500-8503,~8600; n=$((n+1)) ;;
+    --tcp-ns=none) a=--tcp-ns=8500,8502,8600; n=$((n+1)) ;;
+    --udp-ns=none) a=--udp-ns=8600; n=$((n+1)) ;;
+  esac
+  set -- "$@" "$a"
+done
+if [ "$n" -ne 7 ]; then
+  echo "pasta-nomad: unexpected rootlesskit pasta arguments: $*" >&2
+  exit 1
+fi
+exec /usr/local/bin/pasta "$@" --map-guest-addr {{ pul_nomad_host_address }}
