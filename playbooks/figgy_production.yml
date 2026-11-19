@@ -1,6 +1,8 @@
+# To update just ruby: ansible-playbook playbooks/figgy_production.yml -e rolling 1 --tags ruby
 ---
 - name: build or update figgy webservers
   hosts: figgy_production_webservers
+  serial: "{{ rolling | default('100%') }}"
   remote_user: pulsys
   become: true
   vars_files:
@@ -36,6 +38,7 @@
 
 - name: build or update figgy worker boxes
   hosts: figgy_production_workers
+  serial: "{{ rolling | default('100%') }}"
   remote_user: pulsys
   become: true
   vars_files:
