@@ -26,47 +26,27 @@ issue_or_renew() {
         domain_flags="${domain_flags} --domains ${d}"
     done
 
-    meta="${DATA}/certificates/${primary}.json"
-
-    if [ -f "${meta}" ]; then
-        log "renewing ${primary}"
-        ${LEGO} \
-            --path "${DATA}" \
-            --email "${EMAIL}" \
-            --key-type "${KEY_TYPE}" \
-            --http \
-            --http.webroot "${WEBROOT}" \
-            ${SERVER_FLAG} \
-            ${domain_flags} \
-            renew \
-            --days "${RENEW_DAYS}" \
-            --renew-hook "${RENEW_HOOK}"
-        rc=$?
-        if [ "${rc}" -ne 0 ]; then
-            log "renew of ${primary} failed (rc=${rc})"
-            return 1
-        fi
-        log "renewal of ${primary} succeeded"
-    else
-        log "issuing ${primary} (first run)"
-        ${LEGO} \
-            --path "${DATA}" \
-            --email "${EMAIL}" \
-            --key-type "${KEY_TYPE}" \
-            --http \
-            --http.webroot "${WEBROOT}" \
-            --accept-tos \
-            ${SERVER_FLAG} \
-            ${domain_flags} \
-            run
-        rc=$?
-        if [ "${rc}" -ne 0 ]; then
-            log "issue of ${primary} failed (rc=${rc})"
-            return 1
-        fi
-        log "issuance of ${primary} succeeded; reloading"
-        sh -c "${RENEW_HOOK}" || log "renew-hook after issue failed"
+    # lego v5: `run` issues a missing cert and renews an existing one;
+    # the deploy hook only fires when a cert was actually written.
+    log "issuing/renewing ${primary}"
+    ${LEGO} run \
+        --path "${DATA}" \
+        --cert.name "${primary}" \
+        --email "${EMAIL}" \
+        --key-type "${KEY_TYPE}" \
+        --accept-tos \
+        --http \
+        --http.webroot "${WEBROOT}" \
+        ${SERVER_FLAG} \
+        ${domain_flags} \
+        --renew-days "${RENEW_DAYS}" \
+        --deploy-hook "${RENEW_HOOK}"
+    rc=$?
+    if [ "${rc}" -ne 0 ]; then
+        log "issue/renew of ${primary} failed (rc=${rc})"
+        return 1
     fi
+    log "issue/renew of ${primary} succeeded"
     return 0
 }
 

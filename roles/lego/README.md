@@ -47,7 +47,9 @@ lego_certificates:
 
 2. **Bootstrapping**: If `lego_bootstrap_self_signed` is true, it creates a self-signed cert/key pair for every entry in `lego_certificates`. This prevents web servers from failing to start due to missing files.
 
-3. **Renewal Script**: Deploys a wrapper script to `/usr/local/sbin/lego-renew.sh`. This script checks for existing Lego metadata; if missing, it performs an initial `run` (issuance). If present, it performs a `renew`.
+3. **Renewal Script**: Deploys a wrapper script to `/usr/local/sbin/lego-renew.sh`. It calls `lego run` (lego v5) for each certificate, which issues a missing certificate or renews one within `lego_renew_days` of expiry. The renew hook runs only when a certificate was written.
+
+   If the data directory still has the lego v4 layout, the role runs `lego migrate` first; v5 refuses to use v4 storage until migrated.
 
 4. **Automation**: Sets up a cron job to run the renewal script daily.
 

@@ -27,6 +27,24 @@
     group: wheel
     mode: "0750"
 
+# lego v5 refuses to run against v4 storage until `lego migrate` has
+# moved account keys out of accounts/<server>/<account>/keys/.
+- name: Lego | find v4 account key directories
+  ansible.builtin.find:
+    paths: "{{ lego_data_dir }}/accounts"
+    file_type: directory
+    patterns: keys
+    recurse: true
+    depth: 3
+  register: lego_v4_key_dirs
+
+- name: Lego | migrate v4 storage to v5 layout
+  ansible.builtin.shell:
+    cmd: "echo y | /usr/local/bin/lego migrate --path {{ lego_data_dir }}"
+    chdir: /tmp
+  changed_when: true
+  when: lego_v4_key_dirs.matched > 0
+
 - name: Lego | ensure webroot exists
   ansible.builtin.file:
     path: "{{ lego_webroot }}"

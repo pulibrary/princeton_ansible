@@ -31,6 +31,24 @@
     group: wheel
     mode: "0700"
 
+# lego v5 refuses to run against v4 storage until `lego migrate` has
+# moved account keys out of accounts/<server>/<account>/keys/.
+- name: Pulmirror | find v4 lego account key directories
+  ansible.builtin.find:
+    paths: "{{ pulmirror_path }}/accounts"
+    file_type: directory
+    patterns: keys
+    recurse: true
+    depth: 3
+  register: pulmirror_lego_v4_key_dirs
+
+- name: Pulmirror | migrate lego v4 storage to v5 layout
+  ansible.builtin.shell:
+    cmd: "echo y | lego migrate --path {{ pulmirror_path }}"
+    chdir: /tmp
+  changed_when: true
+  when: pulmirror_lego_v4_key_dirs.matched > 0
+
 - name: Pulmirror | check whether certificate exists
   ansible.builtin.stat:
     path: "{{ pulmirror_ssl_certificate }}"
@@ -78,7 +96,7 @@
   ansible.builtin.command:
     argv: >-
       {{
-        ['lego',
+        ['lego', 'run',
          '--accept-tos',
          '--email', pulmirror_email,
          '--http',
@@ -86,7 +104,6 @@
          '--path', pulmirror_path,
          '--server', pulmirror_acme_server]
         + (pulmirror_domains | map('regex_replace', '^(.*)$', '--domains=\1') | list)
-        + ['run']
       }}
   args:
     creates: "{{ pulmirror_ssl_certificate }}"
