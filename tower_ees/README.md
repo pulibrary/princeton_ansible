@@ -4,7 +4,7 @@ Jobs in Tower run inside containers called execution environments, or EEs. In ou
 
 ## Which EE to use
 
-* ``core_221_environment.yml`` builds ansible-core 2.21 (Ansible 14), the same versions as ``pyproject.toml``. Use it for templates that run roles needing options added after 2.19, such as ``deb822_repository``'s ``install_python_debian``. ansible-core 2.20+ needs Python 3.12, so this EE starts from ``registry.access.redhat.com/ubi9/ubi-minimal``, which needs no registry.redhat.io login.
+* ``core_222_environment.yml`` builds ansible-core 2.22 (Ansible 15), the same versions as ``pyproject.toml``. Use it for templates that run roles needing options added after 2.19, such as ``deb822_repository``'s ``install_python_debian``. ansible-core 2.22 needs Python 3.13+, so this EE starts from ``registry.access.redhat.com/ubi9/ubi-minimal`` and installs python3.14 from AppStream; that image needs no registry.redhat.io login.
 * ``core_219_environment.yml`` builds ansible-core 2.19 (Ansible 12) on the AAP 2.4 supported image.
 
 ## Building a new EE
