@@ -1,0 +1,43 @@
+---
+- name: 'pul_nomad | nomad | cni | Create CNI plugin directory'
+  ansible.builtin.file:
+    path: /opt/cni/bin
+    state: directory
+    mode: "0755"
+
+- name: 'pul_nomad | nomad | cni | Install CNI plugins'
+  ansible.builtin.unarchive:
+    remote_src: true
+    src: "https://github.com/containernetworking/plugins/releases/download/v{{ nomad_cni_plugins_version }}/cni-plugins-linux-{{ nomad_architecture }}-v{{ nomad_cni_plugins_version }}.tgz"
+    dest: /opt/cni/bin
+  notify: restart nomad
+
+- name: 'pul_nomad | nomad | cni | Install Consul CNI plugin'
+  ansible.builtin.unarchive:
+    remote_src: true
+    src: "https://releases.hashicorp.com/consul-cni/{{ consul_cni_version }}/consul-cni_{{ consul_cni_version }}_linux_{{ nomad_architecture }}.zip"
+    dest: /opt/cni/bin
+    exclude:
+      - LICENSE.txt
+  notify: restart nomad
+
+- name: 'pul_nomad | nomad | cni | Load bridge kernel modules'
+  community.general.modprobe:
+    name: "{{ item }}"
+    state: present
+    persistent: present
+  loop:
+    - bridge
+    - br_netfilter
+  when: running_on_server
+
+- name: 'pul_nomad | nomad | cni | Enable bridge iptables settings'
+  ansible.posix.sysctl:
+    name: "{{ item }}"
+    value: "1"
+    sysctl_file: /etc/sysctl.d/bridge.conf
+  loop:
+    - net.bridge.bridge-nf-call-arptables
+    - net.bridge.bridge-nf-call-ip6tables
+    - net.bridge.bridge-nf-call-iptables
+  when: running_on_server

@@ -160,10 +160,13 @@
   community.general.ufw:
     rule: allow
     direction: in
-    interface: docker0
+    interface: "{{ item }}"
     to_port: '4646'
     proto: tcp
     comment: nomad api for containers
+  loop:
+    - docker0
+    - nomad
   when: running_on_server
   become: true
 
@@ -171,13 +174,11 @@
   community.general.ufw:
     rule: allow
     direction: in
-    interface: docker0
-    to_port: '53'
-    proto: "{{ item }}"
+    interface: "{{ item.0 }}"
+    to_port: "{{ item.1 }}"
+    proto: "{{ item.2 }}"
     comment: dns for containers
-  loop:
-    - udp
-    - tcp
+  loop: "{{ ['docker0', 'nomad'] | product(['53', '8600'], ['udp', 'tcp']) | list }}"
   when: running_on_server
   become: true
 
@@ -185,13 +186,11 @@
   community.general.ufw:
     rule: allow
     direction: in
-    interface: docker0
-    to_port: '{{ item }}'
+    interface: "{{ item.0 }}"
+    to_port: '{{ item.1 }}'
     proto: "tcp"
     comment: otel for containers
-  loop:
-    - 4317
-    - 4318
+  loop: "{{ ['docker0', 'nomad'] | product([4317, 4318]) | list }}"
   when: running_on_server
   become: true
 
@@ -199,13 +198,11 @@
   community.general.ufw:
     rule: allow
     direction: in
-    interface: docker0
+    interface: "{{ item.0 }}"
     to_port: '8500'
-    proto: "{{ item }}"
+    proto: "{{ item.1 }}"
     comment: dns for containers
-  loop:
-    - udp
-    - tcp
+  loop: "{{ ['docker0', 'nomad'] | product(['udp', 'tcp']) | list }}"
   when: running_on_server
   become: true
 
@@ -213,11 +210,14 @@
   community.general.ufw:
     rule: allow
     direction: in
-    interface: docker0
-    # These are the internal docker IPs.
-    from_ip: 172.17.0.0/16
+    interface: "{{ item.interface }}"
+    from_ip: "{{ item.from_ip }}"
     proto: "tcp"
     comment: Allow containers to talk to other containers by host IP
+  loop:
+    # These are the internal docker and nomad bridge IPs.
+    - { interface: docker0, from_ip: 172.17.0.0/16 }
+    - { interface: nomad, from_ip: 172.26.64.0/20 }
   when: running_on_server
   become: true
 
@@ -259,6 +259,21 @@
 
       -A ufw-docker-logging-deny -m limit --limit 3/min --limit-burst 10 -j LOG --log-prefix "[UFW DOCKER BLOCK] "
       -A ufw-docker-logging-deny -j DROP
+
+      # Bridge networking uses the "nomad" bridge, so do the same UFW check.
+      :NOMAD-ADMIN - [0:0]
+      -A NOMAD-ADMIN -o nomad -j ufw-user-forward
+      -A NOMAD-ADMIN -o nomad -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+      -A NOMAD-ADMIN -o nomad -m conntrack --ctstate INVALID -j DROP
+      -A NOMAD-ADMIN -i nomad -o nomad -j ACCEPT
+      -A NOMAD-ADMIN -i docker0 -o nomad -j ACCEPT
+      -A NOMAD-ADMIN -o nomad -s 172.20.80.0/22 -j ACCEPT
+      -A NOMAD-ADMIN -o nomad -s 128.112.203.146/32 -j ACCEPT
+      -A NOMAD-ADMIN -o nomad -s 128.112.200.245/32 -j ACCEPT
+      -A NOMAD-ADMIN -o nomad -s 128.112.201.34/32 -j ACCEPT
+      -A NOMAD-ADMIN -o nomad -p tcp -s 128.112.0.0/16 --dport 5672 -j ACCEPT
+      -A NOMAD-ADMIN -o nomad -j ufw-docker-logging-deny
+      -A NOMAD-ADMIN -o nomad -j DROP
 
       COMMIT
   when: running_on_server
