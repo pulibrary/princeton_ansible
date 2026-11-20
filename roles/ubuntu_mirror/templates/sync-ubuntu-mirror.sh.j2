@@ -1,6 +1,11 @@
 #!/bin/sh
 # {{ ansible_managed }}
 # Ubuntu mirror sync wrapper using ftpsync.
+#
+# ftpsync's stage2 lists the whole archive (~1M files, hours over the WAN),
+# so dists/ ends up a mix of upstream states from different moments and
+# InRelease can reference index files we never fetched. After ftpsync we
+# re-sync dists/ alone (minutes) and verify it against each InRelease.
 
 set -u
 
@@ -9,20 +14,94 @@ LOG_FILE="{{ ubuntu_mirror_log }}"
 LOCK_FILE="{{ ubuntu_mirror_lock }}"
 OWNER="{{ ubuntu_mirror_owner }}:{{ ubuntu_mirror_group }}"
 FTPSYNC="{{ ubuntu_mirror_ftpsync_bin }}"
+UPSTREAM="{{ ubuntu_mirror_upstream }}"
+DISTS_RETRIES={{ ubuntu_mirror_dists_retries }}
+DISTS_RETRY_SLEEP={{ ubuntu_mirror_dists_retry_sleep }}
 
-if pgrep -f "rsync.*${MIRROR_ROOT}" > /dev/null 2>&1; then
-    echo "$(date '+%Y-%m-%d %H:%M:%S') another rsync is already targeting ${MIRROR_ROOT}, exiting" >> "$LOG_FILE"
-    exit 0
+log() {
+    echo "$(date '+%Y-%m-%d %H:%M:%S') $*" >> "$LOG_FILE"
+}
+
+# Re-sync dists/ only. Arch filters mirror ftpsync's ARCH_INCLUDE filters so
+# this pass never adds files that ftpsync's --delete-excluded would remove.
+sync_dists() {
+    rsync -rltH --safe-links --chmod=D755,F644 --timeout 120 \
+        --bwlimit={{ ubuntu_mirror_bwlimit }} \
+        --delay-updates --delete --delete-delay \
+        --exclude=.~tmp~/ \
+{% for arch in ubuntu_mirror_architectures + ['all'] %}
+        --include=binary-{{ arch }}/ \
+        --include=installer-{{ arch }}/ \
+        --include=Contents-{{ arch }}.gz \
+        --include=Contents-udeb-{{ arch }}.gz \
+        --include=Contents-{{ arch }}.diff/ \
+{% endfor %}
+        --exclude=binary-*/ \
+        --exclude=installer-*/ \
+        --exclude=Contents-*.gz \
+        --exclude=Contents-udeb-*.gz \
+        --exclude=Contents-*.diff/ \
+        --exclude=source/ \
+        "${UPSTREAM}dists/" "${MIRROR_ROOT}/dists/" >> "$LOG_FILE" 2>&1
+}
+
+# Print every index file that exists locally but whose size differs from the
+# SHA256 entry in its suite's InRelease. Files we don't mirror (other arches,
+# uncompressed indexes Ubuntu lists but doesn't publish) are absent and skipped.
+verify_dists() {
+    for inrelease in "$MIRROR_ROOT"/dists/*/InRelease; do
+        [ -f "$inrelease" ] || continue
+        suite_dir=$(dirname "$inrelease")
+        awk '/^SHA256:/ { f = 1; next } /^[^ ]/ { f = 0 } f { print $2, $3 }' "$inrelease" |
+        while read -r size path; do
+            [ -f "$suite_dir/$path" ] || continue
+            actual=$(stat -f %z "$suite_dir/$path")
+            [ "$actual" = "$size" ] || echo "${suite_dir#"$MIRROR_ROOT"/}/$path: expected $size, have $actual"
+        done
+    done
+}
+
+if [ -z "${UBUNTU_MIRROR_LOCKED:-}" ]; then
+    if pgrep -f "rsync.*${MIRROR_ROOT}" > /dev/null 2>&1; then
+        log "another rsync is already targeting ${MIRROR_ROOT}, exiting"
+        exit 0
+    fi
+
+    # Hold the lock across ftpsync and the dists/ pass.
+    UBUNTU_MIRROR_LOCKED=1 lockf -t 0 "$LOCK_FILE" "$0"
+    rc=$?
+    [ $rc -eq 75 ] && exit 0
+    exit $rc
 fi
 
 if [ "${UBUNTU_MIRROR_INITIAL_SEED:-0}" = "1" ]; then
-    echo "$(date '+%Y-%m-%d %H:%M:%S') running INITIAL SEED" >> "$LOG_FILE"
+    log "running INITIAL SEED"
 fi
 
-lockf -t 0 "$LOCK_FILE" "$FTPSYNC"
+"$FTPSYNC"
 rc=$?
 
-[ $rc -eq 75 ] && exit 0
+if [ $rc -eq 0 ]; then
+    attempt=1
+    while :; do
+        log "dists pass ${attempt}/${DISTS_RETRIES}"
+        sync_dists || log "dists rsync returned $?"
+        mismatches=$(verify_dists)
+        if [ -z "$mismatches" ]; then
+            log "dists verified against InRelease"
+            break
+        fi
+        log "dists inconsistent with InRelease:"
+        echo "$mismatches" >> "$LOG_FILE"
+        if [ $attempt -ge "$DISTS_RETRIES" ]; then
+            log "dists still inconsistent after ${DISTS_RETRIES} passes"
+            rc=1
+            break
+        fi
+        attempt=$((attempt + 1))
+        sleep "$DISTS_RETRY_SLEEP"
+    done
+fi
 
 chown -R "$OWNER" "$MIRROR_ROOT" 2>/dev/null || true
 
