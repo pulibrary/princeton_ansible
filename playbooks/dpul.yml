@@ -3,8 +3,10 @@
 # to run in production, pass '-e runtime_env=production'
 # this playbook depends on `ansible-galaxy collection install prometheus.prometheus`
 # and will fail if you do not have it installed
+# To update just Ruby, serially: ansible-playbook playbooks/dpul.yml -e rolling=1 --tags ruby
 - name: build the dpul website
   hosts: dpul_{{ runtime_env | default('staging') }}
+  serial: "{{ rolling | default('100%') }}"
   remote_user: pulsys
   become: true
   vars_files:

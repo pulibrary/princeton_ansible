@@ -2,8 +2,10 @@
 # by default this playbook runs in the staging environment
 # to run in production, pass '-e runtime_env=production'
 # to run in qa, pass '-e runtime_env=qa'
+# To update just Ruby, serially: ansible-playbook playbooks/pulfalight.yml -e rolling=1 --tags ruby
 - name: build the pulfalight web application
   hosts: pulfalight_{{ runtime_env | default('staging') }}
+  serial: "{{ rolling | default('100%') }}"
   remote_user: pulsys
   become: true
   vars_files:
@@ -60,6 +62,7 @@
 
 - name: build the pulfalight workers
   hosts: pulfalight_{{ runtime_env | default('staging') }}_workers
+  serial: "{{ rolling | default('100%') }}"
   remote_user: pulsys
   become: true
   vars_files:
