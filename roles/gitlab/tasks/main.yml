@@ -110,7 +110,9 @@
   when: running_on_server
 
 - name: Gitlab | update acme certificates for {{ domain_name }}
-  ansible.builtin.command: /snap/bin/certbot certonly --standalone --non-interactive --agree-tos --email lsupport@princeton.edu --server https://acme-us.certinext.io/v1/directory --eab-kid {{ vault_gitlab_certinext_acme_kid }} --eab-hmac-key {{ vault_gitlab_certinext_acme_eab_hmac_key }} --domain {{ domain_name }}.princeton.edu --cert-name {{ domain_name }}
+  ansible.builtin.command: /snap/bin/certbot certonly --standalone --non-interactive --agree-tos --email lsupport@princeton.edu --server https://acme-us.certinext.io/v1/directory --eab-kid {{ vault_gitlab_certinext_acme_kid }} --eab-hmac-key {{ vault_gitlab_certinext_acme_eab_hmac_key }} --domain {{ domain_name }} --cert-name {{ domain_name }}
+  # The command line carries the Certinext EAB key.
+  no_log: true
   when: running_on_server
 
 - name: GitLab | Install CE package
@@ -121,6 +123,39 @@
     force_apt_get: true
   environment:
     DEBIAN_FRONTEND: noninteractive
+
+- name: GitLab | Check Pages settings
+  ansible.builtin.assert:
+    that:
+      - gitlab_pages_domain_name | length > 0
+      - gitlab_pages_domain_name != gitlab_loadbalancer_domain_name
+      - not gitlab_pages_domain_name.endswith(
+          '.' ~ gitlab_loadbalancer_domain_name)
+      - gitlab_pages_allowed_proxies | length > 0
+    fail_msg: >-
+      GitLab Pages needs gitlab_pages_domain_name (a hostname that is not
+      {{ gitlab_loadbalancer_domain_name }} or a subdomain of it) and
+      gitlab_pages_allowed_proxies (the load balancer addresses).
+  when: gitlab_pages_enabled | bool
+
+- name: GitLab | Gather package facts for the Pages version check
+  ansible.builtin.package_facts:
+  when: gitlab_pages_enabled | bool and gitlab_pages_namespace_in_path | bool
+
+- name: GitLab | Check the installed version supports single-domain Pages
+  ansible.builtin.assert:
+    that:
+      - gitlab_installed_version is version(gitlab_pages_min_version, '>=')
+    fail_msg: >-
+      gitlab_pages_namespace_in_path needs GitLab {{ gitlab_pages_min_version }}
+      or later; found {{ gitlab_installed_version }}.
+  when:
+    - gitlab_pages_enabled | bool
+    - gitlab_pages_namespace_in_path | bool
+    - "'gitlab-ce' in ansible_facts.packages | default({})"
+  vars:
+    gitlab_installed_version: >-
+      {{ ansible_facts.packages['gitlab-ce'][0].version.split('-')[0] }}
 
 - name: GitLab | Copy GitLab configuration file
   ansible.builtin.template:

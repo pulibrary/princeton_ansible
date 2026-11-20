@@ -62,6 +62,37 @@ registry_nginx['enable'] = true
 registry_nginx['listen_port'] = 5050
 registry_nginx['ssl_certificate'] = "/etc/letsencrypt/live/{{ inventory_hostname }}/fullchain.pem"
 registry_nginx['ssl_certificate_key'] = "/etc/letsencrypt/live/{{ inventory_hostname }}/privkey.pem"
+{% if gitlab_pages_enabled | bool %}
+################################################################################
+## GitLab Pages
+##! Docs: https://docs.gitlab.com/administration/pages/
+##! Public TLS terminates on the NGINX Plus load balancers, which proxy to the
+##! Pages vhost below over TLS (the host certificate, like the main vhost).
+################################################################################
+pages_external_url 'https://{{ gitlab_pages_domain_name }}'
+gitlab_pages['enable'] = true
+gitlab_pages['namespace_in_path'] = {{ gitlab_pages_namespace_in_path | bool | lower }}
+gitlab_pages['listen_proxy'] = '{{ gitlab_pages_listen_proxy }}'
+gitlab_pages['redirect_http'] = false
+gitlab_pages['access_control'] = {{ gitlab_pages_access_control | bool | lower }}
+{% if gitlab_pages_access_control | bool and gitlab_pages_namespace_in_path | bool %}
+gitlab_pages['auth_redirect_uri'] = 'https://{{ gitlab_pages_domain_name }}/projects/auth'
+{% endif %}
+pages_nginx['enable'] = true
+pages_nginx['listen_addresses'] = [{{ gitlab_pages_nginx_listen_addresses | map('to_json') | join(', ') }}]
+pages_nginx['listen_port'] = {{ gitlab_pages_nginx_listen_port }}
+pages_nginx['listen_https'] = true
+# The load balancers redirect HTTP and send HSTS.
+pages_nginx['redirect_http_to_https'] = false
+pages_nginx['hsts_max_age'] = 0
+pages_nginx['ssl_certificate'] = "/etc/letsencrypt/live/{{ inventory_hostname }}/fullchain.pem"
+pages_nginx['ssl_certificate_key'] = "/etc/letsencrypt/live/{{ inventory_hostname }}/privkey.pem"
+pages_nginx['ssl_protocols'] = "TLSv1.2 TLSv1.3"
+# No real_ip rewriting here: the allow list below must match the load
+# balancer address, not the client address taken from X-Forwarded-For.
+pages_nginx['real_ip_trusted_addresses'] = []
+pages_nginx['custom_gitlab_server_config'] = "{% for ip in gitlab_pages_allowed_proxies %}allow {{ ip }};\n{% endfor %}deny all;\n"
+{% endif %}
 gitlab_rails['backup_upload_connection'] = {
   'provider' => 'Google',
   'google_storage_access_key_id' => '{{ gitlab_google_key_id }}',

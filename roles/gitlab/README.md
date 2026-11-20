@@ -2,6 +2,8 @@ Role Name
 =========
 
 Installs and configures [Gitlab CE](https://about.gitlab.com/install/#ubuntu)
+
+GitLab Pages: see [PAGES.md](PAGES.md).
 Requirements
 ------------
 
