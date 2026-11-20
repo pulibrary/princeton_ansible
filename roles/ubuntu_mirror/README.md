@@ -54,6 +54,8 @@ Settable variables are defined in `defaults/main.yml`.
 | `ubuntu_mirror_bwlimit`   | `20000`                  | Bandwidth limit for rsync in KB/s.              |
 | `ubuntu_mirror_cron_hour` | `*/6`                    | How often to run the sync job.                  |
 | `ubuntu_mirror_email`     | `lsupport@princeton.edu` | Admin email included in the mirror trace files. |
+| `ubuntu_mirror_dists_retries` | `3`                  | Post-ftpsync `dists/` passes before giving up.  |
+| `ubuntu_mirror_dists_retry_sleep` | `300`            | Seconds between `dists/` passes.                |
 
 ## Example Playbook
 
@@ -76,7 +78,7 @@ Settable variables are defined in `defaults/main.yml`.
 
 2. **Tooling**: Clones the `archvsync` repository to get the latest `ftpsync` logic.
 
-3. **Sync Wrapper**: A shell script `sync-ubuntu-mirror.sh` uses FreeBSD's `lockf` to prevent overlapping sync runs.
+3. **Sync Wrapper**: A shell script `sync-ubuntu-mirror.sh` uses FreeBSD's `lockf` to prevent overlapping sync runs. Because ftpsync's stage2 takes hours to list the archive, `dists/` can end up mixing upstream states (an `InRelease` that references `dep11` files we never fetched). After ftpsync succeeds, the wrapper re-syncs `dists/` alone and checks every local index file's size against its suite's `InRelease`, retrying up to `ubuntu_mirror_dists_retries` times before exiting non-zero.
 
 4. **Web Access**: The Nginx drop-in creates an alias at `/mirror/ubuntu/` and a 301 redirect from `/ubuntu/` for user convenience.
 
