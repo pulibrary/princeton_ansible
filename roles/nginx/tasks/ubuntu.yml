@@ -37,6 +37,19 @@
     components: [nginx]
     state: present
 
+# The local mirror pin (Pin-Priority 600) would otherwise win over nginx.org,
+# installing Ubuntu's nginx, which runs as www-data and has no nginx user.
+- name: Nginx | Prefer nginx.org packages
+  ansible.builtin.copy:
+    dest: /etc/apt/preferences.d/99nginx
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      Package: *
+      Pin: origin nginx.org
+      Pin-Priority: 900
+
 - name: Nginx | Update apt cache after adding repository
   ansible.builtin.apt:
     update_cache: true
@@ -46,7 +59,12 @@
   delay: 5
   until: nginx_repo_cache_update is succeeded
 
+- name: Nginx | Populate package facts
+  ansible.builtin.package_facts:
+    manager: auto
+
+# Hosts that already have Ubuntu's nginx need an upgrade to switch to nginx.org
 - name: Nginx | Install nginx
   ansible.builtin.apt:
     name: "{{ nginx_package_name }}"
-    state: present
+    state: "{{ 'latest' if 'ubuntu' in ((ansible_facts.packages[nginx_package_name] | default([{}]))[0].version | default('')) else 'present' }}"
