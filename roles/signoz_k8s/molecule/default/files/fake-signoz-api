@@ -1,18 +1,24 @@
 #!/usr/bin/env python3
-"""Test stand-in for the SigNoz rules and channels API (v0.147 routes).
+"""Test stand-in for the SigNoz rules and channels API (v0.151 routes).
 
-Stored rules come back with the extra fields the real server adds (id,
-state, query step/stats/legend) so the role's drift comparison is tested
-against realistic responses. Writes are logged to REQUEST_LOG.
+Rules are listed as summaries from /api/v3/rules and read in full from
+/api/v2/rules/{id}; GET /api/v2/rules answers 405 as on the real server.
+Writes must use the v2alpha1 schema or they are rejected with 400, like
+SigNoz from v0.150 on. Stored rules come back with the extra fields the
+real server adds (id, state, audit fields, query step/stats/legend) so the
+role's drift comparison is tested against realistic responses. Writes are
+logged to REQUEST_LOG.
 """
 import json
 import uuid
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from urllib.parse import parse_qs, urlsplit
 
 API_KEY = "molecule-test-key"
 STATE = "/var/lib/fake-signoz/rules.json"
 REQUEST_LOG = "/var/lib/fake-signoz/requests.log"
 CHANNELS = [{"id": "1", "name": "ops-email", "type": "email"}]
+SUMMARY_FIELDS = ("id", "state", "alert", "description", "alertType", "ruleType", "disabled", "labels")
 
 
 def load():
@@ -30,14 +36,41 @@ def as_stored(rule, rule_id):
     stored["id"] = rule_id
     stored["state"] = "inactive"
     stored["createdAt"] = "2026-01-01T00:00:00Z"
+    stored["updatedAt"] = "2026-01-01T00:00:00Z"
     for query in stored["condition"]["compositeQuery"]["queries"]:
         query["spec"].update({"step": 0, "stats": False, "legend": ""})
+    for threshold in stored["condition"]["thresholds"]["spec"]:
+        threshold.setdefault("recoveryTarget", None)
     return stored
 
 
+def invalid(rule):
+    """Return the validation errors SigNoz v0.151 reports, or an empty list."""
+    errors = []
+    if rule.get("schemaVersion") != "v2alpha1":
+        errors.append(f'schemaVersion: unsupported value "{rule.get("schemaVersion", "")}"; must be "v2alpha1"')
+        return errors
+    condition = rule.get("condition") or {}
+    for field, value in (("condition.thresholds", condition.get("thresholds")),
+                         ("evaluation", rule.get("evaluation")),
+                         ("notificationSettings", rule.get("notificationSettings"))):
+        if not value:
+            errors.append(f'{field}: field is required for schemaVersion "v2alpha1"')
+    for threshold in (condition.get("thresholds") or {}).get("spec") or []:
+        if not threshold.get("name"):
+            errors.append("condition.thresholds.spec[].name: field is required")
+        if not threshold.get("channels") and not (rule.get("notificationSettings") or {}).get("usePolicy"):
+            errors.append("condition.thresholds.spec[].channels: at least one channel is required")
+    return errors
+
+
 class Handler(BaseHTTPRequestHandler):
-    def reply(self, code, data=None):
-        body = json.dumps({"status": "success", "data": data}).encode()
+    def reply(self, code, data=None, errors=None):
+        if errors:
+            payload = {"status": "error", "error": {"message": "alert rule is not valid", "errors": errors}}
+        else:
+            payload = {"status": "success", "data": data}
+        body = json.dumps(payload).encode()
         self.send_response(code)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
@@ -60,10 +93,19 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if not self.authorised():
             return
-        if self.path == "/api/v1/channels":
+        url = urlsplit(self.path)
+        if url.path == "/api/v1/channels":
             return self.reply(200, CHANNELS)
-        if self.path == "/api/v2/rules":
-            return self.reply(200, load())
+        if url.path == "/api/v2/rules":
+            return self.reply(405)
+        if url.path == "/api/v3/rules":
+            rules = load()
+            limit = min(int(parse_qs(url.query).get("limit", ["20"])[0]), 200)
+            page = [{k: r[k] for k in SUMMARY_FIELDS if k in r} for r in rules[:limit]]
+            return self.reply(200, {"rules": page, "total": len(rules), "labels": [], "reservedKeywords": []})
+        for rule in load():
+            if url.path == f"/api/v2/rules/{rule['id']}":
+                return self.reply(200, rule)
         self.reply(404)
 
     def do_POST(self):
@@ -72,11 +114,15 @@ class Handler(BaseHTTPRequestHandler):
         if self.path != "/api/v2/rules":
             return self.reply(404)
         self.log_write()
+        rule = self.body()
+        errors = invalid(rule)
+        if errors:
+            return self.reply(400, errors=errors)
         rules = load()
-        rule = as_stored(self.body(), str(uuid.uuid4()))
-        rules.append(rule)
+        stored = as_stored(rule, str(uuid.uuid4()))
+        rules.append(stored)
         save(rules)
-        self.reply(201, rule)
+        self.reply(201, stored)
 
     def do_PUT(self):
         if not self.authorised():
@@ -86,7 +132,11 @@ class Handler(BaseHTTPRequestHandler):
         for index, rule in enumerate(rules):
             if self.path == f"/api/v2/rules/{rule['id']}":
                 self.log_write()
-                rules[index] = as_stored(self.body(), rule_id)
+                body = self.body()
+                errors = invalid(body)
+                if errors:
+                    return self.reply(400, errors=errors)
+                rules[index] = as_stored(body, rule_id)
                 save(rules)
                 return self.reply(204)
         self.reply(404)

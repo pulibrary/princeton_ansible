@@ -392,46 +392,48 @@
       vars:
         rules: "{{ rules_raw.content | b64decode | from_json }}"
         requests: "{{ (requests_raw.content | b64decode).splitlines() }}"
+        managed: "{{ rules | selectattr('alert', 'in', managed_alerts) | list }}"
         queue: "{{ rules | selectattr('alert', 'equalto', managed_alerts[2]) | first }}"
         enqueue: "{{ rules | selectattr('alert', 'equalto', managed_alerts[1]) | first }}"
         send: "{{ rules | selectattr('alert', 'equalto', managed_alerts[0]) | first }}"
         queries: >-
-          {{ rules | selectattr('alert', 'in', managed_alerts)
-             | map(attribute='condition.compositeQuery.queries') | flatten
+          {{ managed | map(attribute='condition.compositeQuery.queries') | flatten
              | map(attribute='spec.query') | list }}
         queue_query: >-
           otelcol_exporter_queue_size{exporter="clickhouselogsexporter"}
           / otelcol_exporter_queue_capacity{exporter="clickhouselogsexporter"}
       ansible.builtin.assert:
         that:
-          # Two created, the drifted one updated; the idempotence run sent nothing.
-          - requests | select('match', '^POST /api/v2/rules$') | list | length == 2
-          - requests == requests | select('match', '^(POST /api/v2/rules|PUT /api/v2/rules/existing-queue-rule)$') | list
-          - requests | length == 3
-          - rules | map(attribute='alert') | select('in', managed_alerts) | list | length == 3
-          - (rules | selectattr('alert', 'equalto', "Someone else's rule") | first).condition.target == 1
+          # One created, the drifted one updated, the converted in-sync one
+          # left alone despite its legacy spelling; the idempotence run sent nothing.
+          - requests == ['POST /api/v2/rules', 'PUT /api/v2/rules/existing-queue-rule']
+          - managed | length == 3
+          - (rules | selectattr('alert', 'equalto', "Someone else's rule") | first).condition.thresholds.spec[0].target == 1
+          - send.id == 'existing-send-rule'
+          - send.condition.thresholds.spec[0].op == '1'
+          - send.evaluation.spec.evalWindow == '5m0s'
           - queue.id == 'existing-queue-rule'
-          - queue.condition.target == 0.8
-          - queue.condition.op == '5'
-          - queue.condition.matchType == '2'
+          - queue.schemaVersion == 'v2alpha1'
+          - queue.condition.thresholds.spec[0].name == 'warning'
+          - queue.condition.thresholds.spec[0].target == 0.8
+          - queue.condition.thresholds.spec[0].op == 'above_or_equal'
+          - queue.condition.thresholds.spec[0].matchType == 'all_the_times'
           - queue.condition.alertOnAbsent
           - queue.condition.absentFor == 10
-          - queue.evalWindow == '5m'
+          - "queue.evaluation == {'kind': 'rolling', 'spec': {'evalWindow': '5m', 'frequency': '1m'}}"
+          - queue.notificationSettings.renotify.alertStates == ['firing', 'nodata']
           - queue.condition.compositeQuery.queries[0].spec.query == queue_query
-          - send.evalWindow == '5m'
-          - send.frequency == '1m'
-          - send.condition.matchType == '2'
-          - send.condition.target == 0.0
-          - enqueue.evalWindow == '1m'
-          - enqueue.frequency == '1m'
-          - enqueue.condition.matchType == '1'
+          - enqueue.condition.thresholds.spec[0].name == 'critical'
+          - enqueue.condition.thresholds.spec[0].matchType == 'at_least_once'
+          - "enqueue.evaluation.spec == {'evalWindow': '1m', 'frequency': '1m'}"
+          - "enqueue.notificationSettings.renotify == {'enabled': true, 'interval': '4h', 'alertStates': ['firing']}"
           - "'offset 5m' in enqueue.condition.compositeQuery.queries[0].spec.query"
           - "'unless' in enqueue.condition.compositeQuery.queries[0].spec.query"
           - queries | reject('search', 'exporter="clickhouselogsexporter"') | list | length == 0
           - queries | select('search', '_total') | list | length == 0
-          - rules | selectattr('alert', 'in', managed_alerts) | map(attribute='preferredChannels') | unique | list == [['ops-email']]
-          - rules | selectattr('alert', 'in', managed_alerts) | map(attribute='ruleType') | unique | list == ['promql_rule']
-          - rules | selectattr('alert', 'in', managed_alerts) | map(attribute='version') | unique | list == ['v5']
+          - managed | map(attribute='condition.thresholds.spec') | flatten | map(attribute='channels') | unique | list == [['ops-email']]
+          - managed | map(attribute='ruleType') | unique | list == ['promql_rule']
+          - "[queue, enqueue] | map(attribute='labels') | unique | list == [{}]"
 
     - name: Alert rules must not reference channels that do not exist
       block:
@@ -459,7 +461,7 @@
         rules = json.load(open(p))
         for rule in rules:
             if rule["alert"] == "{{ managed_alerts[0] }}":
-                rule["condition"]["target"] = 5
+                rule["condition"]["thresholds"]["spec"][0]["target"] = 5
         json.dump(rules, open(p, "w"))
         EOF
       changed_when: true
@@ -480,7 +482,7 @@
       ansible.builtin.assert:
         that:
           - signoz_alert_rules_to_update | map(attribute='rule.alert') | list == [managed_alerts[0]]
-          - (requests_check_raw.content | b64decode).splitlines() | length == 3
+          - (requests_check_raw.content | b64decode).splitlines() | length == 2
 
     # ---- Checkmk local checks --------------------------------------------
 
