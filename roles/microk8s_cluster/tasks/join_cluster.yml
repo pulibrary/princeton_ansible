@@ -21,6 +21,41 @@
   changed_when: false
   failed_when: false
 
+# A Node object with this name only proves that some machine once joined
+# under it. When a VM is replaced under the same hostname, the old Node can
+# outlive the old VM; trusting the name alone would skip the join and leave
+# the new VM running a standalone MicroK8s. Compare machine identities.
+- name: Read this machine's system UUID
+  ansible.builtin.command: cat /sys/class/dmi/id/product_uuid
+  register: microk8s_local_uuid
+  changed_when: false
+  check_mode: false
+  when: microk8s_node_lookup.rc == 0
+
+- name: Read the system UUID recorded on the existing node object
+  ansible.builtin.command: >-
+    microk8s kubectl get node {{ inventory_hostname }}
+    -o jsonpath={.status.nodeInfo.systemUUID}
+  delegate_to: "{{ microk8s_primary_host }}"
+  register: microk8s_node_uuid
+  changed_when: false
+  check_mode: false
+  when: microk8s_node_lookup.rc == 0
+
+- name: Refuse to treat another machine's node object as membership
+  ansible.builtin.assert:
+    that:
+      - microk8s_node_uuid.stdout | trim | lower == microk8s_local_uuid.stdout | trim | lower
+    fail_msg: >-
+      A node named {{ inventory_hostname }} is registered on
+      {{ microk8s_primary_host }} with system UUID
+      '{{ microk8s_node_uuid.stdout | trim }}', but this machine's UUID is
+      '{{ microk8s_local_uuid.stdout | trim }}'. The node object belongs to a
+      machine this one replaced. See "Replacing a node" in the
+      microk8s_cluster README.
+    quiet: true
+  when: microk8s_node_lookup.rc == 0
+
 - name: Generate MicroK8s join command on primary
   ansible.builtin.command: microk8s add-node
   delegate_to: "{{ microk8s_primary_host }}"
