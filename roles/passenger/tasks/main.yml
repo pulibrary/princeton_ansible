@@ -229,6 +229,85 @@
       }}
   when: passenger_pin_nginx_version | default(false) | bool
 
+# Phusion rebuilds libnginx-mod-http-passenger against each Ubuntu nginx update.
+# Each rebuild adds a buildN suffix and depends on one exact nginx-common
+# version, so pick the build that matches the nginx this run will install.
+# Set passenger_module_version in inventory to bypass the lookup.
+- name: Phusion | Resolve Passenger module version
+  when: passenger_module_version is not defined
+  block:
+    - name: Phusion | Read nginx-common apt policy
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/apt-cache
+          - policy
+          - nginx-common
+      register: passenger_nginx_common_policy
+      changed_when: false
+      check_mode: false
+
+    - name: Phusion | Read available Passenger module packages
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/apt-cache
+          - show
+          - libnginx-mod-http-passenger
+      register: passenger_module_show
+      changed_when: false
+      check_mode: false
+
+    - name: Phusion | Determine target nginx-common version
+      ansible.builtin.set_fact:
+        passenger_target_nginx_version: >-
+          {{
+            nginx_version
+            if passenger_pin_nginx_version | default(false) | bool
+            else (
+              passenger_nginx_common_policy.stdout
+              | regex_search('Candidate: (\S+)', '\1')
+              | default(['(none)'], true)
+              | first
+            )
+          }}
+
+    # apt-cache show lists newest versions first. Prefer a build pinned to the
+    # target nginx; fall back to a build with no exact nginx pin.
+    - name: Phusion | Select Passenger module build for target nginx
+      ansible.builtin.set_fact:
+        passenger_resolved_module_version: >-
+          {%- set ns = namespace(version='', pinned='', unpinned='') -%}
+          {%- set build_pattern = '^' ~ (passenger_version | regex_escape) ~ '(build[0-9]+)?$' -%}
+          {%- for line in passenger_module_show.stdout_lines -%}
+            {%- if line.startswith('Version: ') -%}
+              {%- set ns.version = line[9:] | trim -%}
+            {%- elif line.startswith('Depends: ') and ns.version is match(build_pattern) -%}
+              {%- set pins = line | regex_findall('nginx-(?:common|core) \(= ([^)]+)\)') | unique -%}
+              {%- if not ns.pinned and pins == [passenger_target_nginx_version] -%}
+                {%- set ns.pinned = ns.version -%}
+              {%- elif not ns.unpinned and pins | length == 0 -%}
+                {%- set ns.unpinned = ns.version -%}
+              {%- endif -%}
+            {%- endif -%}
+          {%- endfor -%}
+          {{ ns.pinned or ns.unpinned }}
+
+    - name: Phusion | Validate resolved Passenger module version
+      ansible.builtin.assert:
+        that:
+          - passenger_target_nginx_version != '(none)'
+          - passenger_resolved_module_version | length > 0
+        fail_msg: >-
+          No libnginx-mod-http-passenger build for passenger {{ passenger_version }}
+          depends on nginx-common {{ passenger_target_nginx_version }}. Phusion may
+          not have rebuilt the module for this nginx update yet. Wait for a new
+          build, or set passenger_module_version explicitly.
+        quiet: true
+
+- name: Phusion | Define effective Passenger module version
+  ansible.builtin.set_fact:
+    passenger_effective_module_version: >-
+      {{ passenger_module_version | default(passenger_resolved_module_version) }}
+
 - name: Phusion | Build complete Nginx and Passenger package transaction
   ansible.builtin.set_fact:
     nginx_passenger_transaction_packages: >-
@@ -237,7 +316,7 @@
           nginx_package_specs
           + [
             'passenger=' ~ passenger_version,
-            'libnginx-mod-http-passenger=' ~ (passenger_module_version | default(passenger_version))
+            'libnginx-mod-http-passenger=' ~ passenger_effective_module_version
           ]
         )
         | unique
