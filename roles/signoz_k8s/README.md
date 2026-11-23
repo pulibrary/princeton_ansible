@@ -33,7 +33,7 @@ All variables are defined in `defaults/main.yml` and can be overridden in your p
 | `signoz_chart_repo_name` | `signoz`                   | Local name for the SigNoz Helm repository.                                     |
 | `signoz_chart_repo_url`  | `https://charts.signoz.io` | URL of the SigNoz Helm repository.                                             |
 | `signoz_chart_ref`       | `signoz/signoz`            | Helm chart reference (`<repo>/<chart>`).                                       |
-| `signoz_chart_version`   | `"0.149.0"`                | Specific chart version to install. If empty, the latest version is used.       |
+| `signoz_chart_version`   | `"0.151.0"`                | Specific chart version to install. If empty, the latest version is used.       |
 | `signoz_storage_class`   | `nfs`                      | Storage class to use for persistent volumes (passed to `global.storageClass`). |
 | `signoz_service_type`    | `NodePort`                 | Kubernetes service type for the SigNoz frontend.                               |
 | `signoz_http_node_port`  | `32080`                    | NodePort number when `signoz_service_type` is `NodePort`.                      |
@@ -202,7 +202,14 @@ appears only on a Prometheus endpoint with type suffixes enabled; the chart
 default disables them.
 
 With `signoz_alert_rules_enabled`, the role manages three PromQL rules through
-the SigNoz API (`/api/v2/rules`), matched by name:
+the SigNoz API, matched by name. Rules use the `v2alpha1` schema, the only one
+SigNoz accepts from v0.150: they are listed from `/api/v3/rules` (one page of
+up to 200; the run stops if there are more), read from `/api/v2/rules/{id}`,
+and written with `POST /api/v2/rules` and `PUT /api/v2/rules/{id}`. Each rule
+has one threshold named after its severity; SigNoz turns that name into the
+alert's `severity` label. Rules re-notify every
+`signoz_alert_renotify_interval` (4h) while firing, and also while without
+data for the rule that alerts on absent data.
 
 | Rule | Query | Fires when |
 | --- | --- | --- |
@@ -218,6 +225,10 @@ average. The enqueue counter exists only after its first failure, so
 Rules use only existing notification channels named in
 `signoz_alert_channels`; the run fails if any is missing. The API key goes in
 `signoz_api_key` (from the vault). Check mode reports drift without writing.
+Rules SigNoz converted from the v1 schema may spell operators and match types
+as legacy codes (`"5"`, `"2"`) and durations as `5m0s`; the comparison
+normalizes these, so a converted rule is only rewritten when a setting really
+differs.
 These alerts depend on SigNoz and ClickHouse being up; the Checkmk checks
 below do not.
 

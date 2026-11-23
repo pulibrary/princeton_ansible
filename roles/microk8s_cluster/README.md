@@ -116,7 +116,7 @@ node-01
 
 5. **Join Sequence:**
 
-   - Secondaries check if they are already members.
+   - Secondaries check if they are already members. A node object with the same name but a different system UUID fails the run instead of being taken as membership (see [Replacing a node](#replacing-a-node)).
 
    - If not, the primary generates a token via `add-node`.
 
@@ -136,6 +136,18 @@ MicroK8s takes the node name, the kubelet's certificate (`system:node:<hostname>
 4. `sudo microk8s stop && sudo microk8s start`, wait for the new node to be `Ready`, then `microk8s kubectl delete node <old name>`.
 5. Recreate the VXLAN interface so its MAC matches what the other nodes compute from the new name: `sudo ip link delete vxlan.calico`, then delete this node's `calico-node` pod. Check that `/sys/class/net/vxlan.calico/address` matches `ip neigh show dev vxlan.calico` on another node.
 6. Delete any pods still using addresses from the old node's IP block so they get new ones.
+
+---
+
+## Replacing a node
+
+To replace a secondary's VM under the same hostname (for example moving it to a different hypervisor), the old member has to leave the cluster before the new VM is provisioned. Otherwise the role finds the old node object, sees that its system UUID is not the new machine's, and stops.
+
+1. On the primary: `microk8s kubectl drain <name> --ignore-daemonsets`.
+2. On the old node: `sudo microk8s leave`. For a control-plane node, check on the primary that its address is gone from the dqlite `.cluster` output before continuing.
+3. On the primary: `microk8s remove-node <name>`, then confirm `microk8s kubectl get node <name>` returns `NotFound`.
+4. Power off the old VM and disconnect its NIC before the new VM takes its IP.
+5. Run the playbook with `--limit <name>`. The cluster-side tasks are delegated to the primary, so it does not need to be in the limit.
 
 ---
 

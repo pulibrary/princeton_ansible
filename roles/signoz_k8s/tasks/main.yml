@@ -22,6 +22,12 @@
     - signoz_namespace_create.rc != 0
     - "'AlreadyExists' not in signoz_namespace_create.stderr"
 
+# Read-only kubectl/findmnt checks set check_mode: false. Without it, check
+# mode skips the command but reports rc 0 with empty output, and the asserts
+# that follow compare against '' instead of the cluster: the existing-PVC
+# check then fails on a correct PVC. After Helm (which check mode skips) the
+# checks see the release as it is now, so check mode of a first install, with
+# nothing deployed yet, fails at the waits.
 - name: SigNoz | Check for nodes whose Ready condition is not true
   ansible.builtin.shell: >
     set -o pipefail &&
@@ -31,6 +37,7 @@
     executable: /bin/bash
   register: signoz_nonready_nodes
   changed_when: false
+  check_mode: false
 
 - name: SigNoz | Assert all cluster nodes have Ready condition true
   ansible.builtin.assert:
@@ -48,6 +55,7 @@
 - name: SigNoz | Assert ClickHouse local storage node exists
   ansible.builtin.command: "microk8s kubectl get node {{ signoz_clickhouse_local_storage_node }}"
   changed_when: false
+  check_mode: false
   when: signoz_clickhouse_local_storage_enabled | default(false) | bool
 
 - name: SigNoz | Check ClickHouse local storage node schedulability
@@ -56,6 +64,7 @@
     -o jsonpath={.spec.unschedulable}
   register: signoz_clickhouse_storage_node_unschedulable
   changed_when: false
+  check_mode: false
   when: signoz_clickhouse_local_storage_enabled | default(false) | bool
 
 - name: SigNoz | Assert ClickHouse local storage node is schedulable
@@ -70,6 +79,7 @@
   delegate_to: "{{ signoz_clickhouse_local_storage_node }}"
   register: signoz_clickhouse_mount_check
   changed_when: false
+  check_mode: false
   when: signoz_clickhouse_local_storage_enabled | default(false) | bool
 
 - name: SigNoz | Ensure ClickHouse local PV directory exists on storage node
@@ -119,6 +129,7 @@
     -o jsonpath={.spec.storageClassName},{.spec.resources.requests.storage},{.spec.volumeName}
   register: signoz_existing_clickhouse_pvc
   changed_when: false
+  check_mode: false
   failed_when: false
   when: signoz_clickhouse_local_storage_enabled | default(false) | bool
 
@@ -156,7 +167,12 @@
     -o jsonpath={.spec.storageClassName},{.spec.resources.requests.storage},{.spec.volumeName}
   register: signoz_clickhouse_pvc_prehelm_spec
   changed_when: false
-  when: signoz_clickhouse_local_storage_enabled | default(false) | bool
+  check_mode: false
+  # In check mode the apply above did not run, so a PVC that did not exist
+  # before is still absent; there is nothing to verify yet.
+  when:
+    - signoz_clickhouse_local_storage_enabled | default(false) | bool
+    - not ansible_check_mode or signoz_existing_clickhouse_pvc.rc == 0
 
 - name: SigNoz | Assert ClickHouse local PVC spec before Helm
   ansible.builtin.assert:
@@ -166,7 +182,9 @@
       ClickHouse PVC is not prepared correctly before Helm.
       Found '{{ signoz_clickhouse_pvc_prehelm_spec.stdout }}',
       expected '{{ signoz_clickhouse_expected_pvc_spec }}'.
-  when: signoz_clickhouse_local_storage_enabled | default(false) | bool
+  when:
+    - signoz_clickhouse_local_storage_enabled | default(false) | bool
+    - not ansible_check_mode or signoz_existing_clickhouse_pvc.rc == 0
 
 # Runs before Helm so a ClickHouse restart during the upgrade finds tables
 # that already match the new retention configuration.
@@ -242,6 +260,7 @@
   ansible.builtin.command: "microk8s kubectl -n {{ signoz_namespace }} get chi {{ signoz_clickhouse_chi_name }}"
   register: signoz_chi_lookup
   changed_when: false
+  check_mode: false
   retries: 30
   delay: 10
   until: signoz_chi_lookup.rc == 0
@@ -254,6 +273,7 @@
     -o jsonpath={.spec.storageClassName},{.spec.resources.requests.storage},{.spec.volumeName}
   register: signoz_clickhouse_pvc_posthelm_spec
   changed_when: false
+  check_mode: false
   when: signoz_clickhouse_local_storage_enabled | default(false) | bool
 
 - name: SigNoz | Assert ClickHouse PVC is using exact local PV after Helm
@@ -273,6 +293,7 @@
     -o jsonpath={.spec.nodeName}
   register: signoz_clickhouse_pod_node
   changed_when: false
+  check_mode: false
   retries: 60
   delay: 10
   until: signoz_clickhouse_pod_node.stdout == signoz_clickhouse_local_storage_node
@@ -285,6 +306,7 @@
     -o jsonpath={.status.phase},{.spec.volumeName}
   register: signoz_clickhouse_pvc_bound
   changed_when: false
+  check_mode: false
   retries: 60
   delay: 10
   until: signoz_clickhouse_pvc_bound.stdout == "Bound," ~ signoz_clickhouse_local_pv_name
@@ -305,6 +327,7 @@
       - 'jsonpath={.status.conditions[?(@.type=="Ready")].status}'
   register: signoz_clickhouse_pod_ready
   changed_when: false
+  check_mode: false
   retries: 60
   delay: 10
   until: signoz_clickhouse_pod_ready.stdout == "True"
@@ -319,6 +342,7 @@
   ansible.builtin.command: "microk8s kubectl -n {{ signoz_namespace }} get svc {{ signoz_release_name }}"
   register: signoz_service_lookup
   changed_when: false
+  check_mode: false
   retries: 30
   delay: 10
   until: signoz_service_lookup.rc == 0
@@ -341,6 +365,7 @@
 - name: Check SigNoz pods and PVCs
   ansible.builtin.command: "microk8s kubectl -n {{ signoz_namespace }} get pods,pvc -o wide"
   changed_when: false
+  check_mode: false
   register: signoz_pods
 
 - name: Show SigNoz pods and PVCs

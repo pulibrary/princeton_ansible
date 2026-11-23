@@ -31,6 +31,7 @@
           - "Capistrano environment: {{ runtime_env }}"
           - "Deployment server environment: {{ towerdeploy_env | default('staging') }}"
           - "Deployment server: {{ inventory_hostname }}"
+          - "Success Tag: {{ success_tag | default('UNSET') }}"
 
     - name: Tell GitHub you are planning to deploy
       ansible.builtin.uri:
@@ -82,6 +83,7 @@
         update: true
       become: true
       become_user: deploy
+      register: repo_checkout
 
     - name: Run Capistrano deploy
       ansible.builtin.command:
@@ -92,6 +94,43 @@
       become: true
       become_user: deploy
       changed_when: true
+
+    - name: Create a tag
+      when: success_tag is defined
+      block:
+        - name: Try updating tag
+          ansible.builtin.uri:
+            url: "https://api.github.com/repos/pulibrary/{{ repo_name }}/git/refs/tags/{{ success_tag }}"
+            method: PATCH
+            body:
+              sha: "{{ repo_checkout.after }}"
+              force: true
+            body_format: json
+            headers:
+              Authorization: "Bearer {{ vault_tower_github_token }}"
+              Accept: "application/vnd.github+json"
+            follow_redirects: safe
+            status_code:
+              - 200
+              - 422 # tag doesn't exist yet
+          register: tag_update
+
+        - name: Create tag if it doesn't exist
+          ansible.builtin.uri:
+            url: "https://api.github.com/repos/pulibrary/{{ repo_name }}/git/refs"
+            method: POST
+            body:
+              ref: "refs/tags/{{ success_tag }}"
+              sha: "{{ repo_checkout.after }}"
+            body_format: json
+            headers:
+              Authorization: "Bearer {{ vault_tower_github_token }}"
+              Accept: "application/vnd.github+json"
+            follow_redirects: safe
+            status_code:
+              - 201
+          when:
+            - tag_update.status == 422
 
   post_tasks:
     - name: Let folks on Slack know you deployed
