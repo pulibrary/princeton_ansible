@@ -1,4 +1,15 @@
 ---
+- name: pul_nomad | nomad | Check for pre-package install
+  ansible.builtin.stat:
+    path: /usr/local/bin/nomad
+  register: pul_nomad_legacy_binary
+
+- name: pul_nomad | nomad | Remove pre-package systemd unit
+  ansible.builtin.file:
+    path: /lib/systemd/system/nomad.service
+    state: absent
+  when: pul_nomad_legacy_binary.stat.exists
+
 - name: pul_nomad | nomad | Install Nomad
   ansible.builtin.apt:
     name: "nomad={{ nomad_version }}-1"
@@ -9,6 +20,18 @@
   ansible.builtin.dpkg_selections:
     name: nomad
     selection: hold
+
+- name: pul_nomad | nomad | Remove pre-package install files
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /usr/local/bin/nomad
+    - /var/nomad/plugins
+    - /var/nomad/.podman-plugin-version
+  notify:
+    - reload systemd
+    - restart nomad
 
 - name: pul_nomad | nomad | Remove packaged default config
   ansible.builtin.file:

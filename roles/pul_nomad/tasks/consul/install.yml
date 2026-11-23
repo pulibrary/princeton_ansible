@@ -17,3 +17,14 @@
   ansible.builtin.dpkg_selections:
     name: consul
     selection: hold
+
+- name: 'pul_nomad | consul | Remove pre-package install files'
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /etc/systemd/system/consul.service
+    - /usr/local/bin/consul
+  notify:
+    - reload systemd
+    - restart consul
