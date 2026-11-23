@@ -41,7 +41,6 @@ Variables have defaults in [`defaults/main.yml`](defaults/main.yml) and may be d
 * `pul_nomad_role` - Either `client` or `server`. This determines whether client or server software/configuration is run.
 * `consul_version` - version of consul to install - [releases](https://github.com/hashicorp/consul/releases)
 * `nomad_version` - version of nomad to install - [releases](https://github.com/hashicorp/nomad/releases)
-* `nomad_podman_version` - version of nomad's podman plugin to install - [releases](https://github.com/hashicorp/nomad-driver-podman/releases)
 * `nomad_node_pool` - pool to assign to a client VM. Right now we have `staging` and `production` - VMs in VMWare's staging infrastructure with the Nomad client software have this set to `staging` and VMs in VMWare's production infrastructure with the Nomad client software have this set to `production`.
 * `nomad_host_volumes` - map of host volumes to create and make available to containers. See [Host Volumes](#host-volumes) for more. Example:
 
@@ -135,7 +134,7 @@ Server installs manage orchestration, receive commands from clients and develope
 maintain state about the cluster as a whole. These are named
 `nomad-host-*.princeton.edu`
 
-Client installs run jobs. In our case, containers executed by Podman. These are named
+Client installs run jobs. In our case, containers executed by Docker. These are named
 `nomad-client-*.princeton.edu`
 
 At PUL every Nomad Server VM has a Nomad Server installation and a Consul server installation, and every Nomad Client VM has a Nomad Client installation and a Consul client installation.
@@ -221,4 +220,4 @@ Nomad and Consul are built to be largely backwards compatible. Nomad has good [d
 1. Test to make sure it's in the cluster by checking the Nomad UI ([documentation](../../nomad/README.md)).
 1. Do the rest of them.
 
-The same process is true for Consul or the Podman plugin. We don't have a staging cluster to try this out in yet.
+The same process is true for Consul. We don't have a staging cluster to try this out in yet.
