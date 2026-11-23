@@ -31,7 +31,7 @@
               nginx_package_names
               + [
                 'passenger=' ~ passenger_version,
-                'libnginx-mod-http-passenger=' ~ (passenger_module_version | default(passenger_version))
+                'libnginx-mod-http-passenger'
               ]
             )
             | unique
@@ -84,6 +84,42 @@
       loop: "{{ molecule_expected_package_specs }}"
       loop_control:
         label: "{{ package_name }}"
+
+    # The role resolves the module build at runtime, so check the invariant
+    # instead of a fixed version: a build of passenger_version whose exact
+    # nginx pin (if any) matches the installed nginx-common.
+    - name: Phusion | Read installed Passenger module metadata
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/dpkg-query
+          - --show
+          - --showformat=${Version}\n${Depends}\n
+          - libnginx-mod-http-passenger
+      register: passenger_module_metadata
+      changed_when: false
+
+    - name: Phusion | Verify Passenger module matches installed nginx
+      ansible.builtin.assert:
+        that:
+          - module_version is match('^' ~ (passenger_version | regex_escape) ~ '(build[0-9]+)?$')
+          - module_nginx_pins | length == 0 or module_nginx_pins == [nginx_common_version]
+        fail_msg: >-
+          libnginx-mod-http-passenger {{ module_version }} does not match
+          passenger {{ passenger_version }} with nginx-common {{ nginx_common_version }}.
+          Module nginx pins: {{ module_nginx_pins | join(', ') | default('none', true) }}.
+        success_msg: >-
+          libnginx-mod-http-passenger {{ module_version }} matches nginx-common
+          {{ nginx_common_version }}.
+      vars:
+        module_version: "{{ passenger_module_metadata.stdout_lines[0] }}"
+        module_nginx_pins: >-
+          {{
+            passenger_module_metadata.stdout_lines[1] | default('')
+            | regex_findall('nginx-(?:common|core) \(= ([^)]+)\)')
+            | unique
+          }}
+        nginx_common_version: >-
+          {{ ansible_facts.packages['nginx-common'] | map(attribute='version') | first }}
 
     - name: Phusion | Validate Nginx configuration
       ansible.builtin.command:
