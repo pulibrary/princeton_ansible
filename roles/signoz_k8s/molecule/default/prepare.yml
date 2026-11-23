@@ -62,21 +62,65 @@
               mtime: "{{ epoch_now | int - 40 * day }}"
               last_event: "{{ epoch_now | int - 2 * day }}"
 
-    - name: Seed SigNoz rules (one drifted managed rule, one unrelated rule)
+    # Seeded the way SigNoz v0.150+ returns rules it converted from the v1
+    # schema: legacy operator/match codes and Go duration strings.
+    - name: Seed SigNoz rules (one converted in-sync rule, one drifted, one unrelated)
       ansible.builtin.copy:
         dest: /var/lib/fake-signoz/rules.json
         mode: "0644"
         content: "{{ fake_signoz_rules | to_json }}"
       vars:
         fake_signoz_rules:
+          - id: existing-send-rule
+            state: inactive
+            schemaVersion: v2alpha1
+            alert: "SigNoz collector: logs exporter send failures"
+            alertType: METRIC_BASED_ALERT
+            ruleType: promql_rule
+            version: v5
+            description: >-
+              The clickhouselogsexporter exporter has failed to write log
+              records to ClickHouse continuously for five minutes. Logs are being
+              retried or dropped.
+            disabled: false
+            labels: {severity: critical}
+            annotations:
+              summary: "SigNoz collector: logs exporter send failures"
+              description: >-
+                The clickhouselogsexporter exporter has failed to write log
+                records to ClickHouse continuously for five minutes. Logs are being
+                retried or dropped.
+            condition:
+              compositeQuery:
+                queryType: promql
+                panelType: graph
+                queries:
+                  - type: promql
+                    spec:
+                      name: A
+                      query: 'rate(otelcol_exporter_send_failed_log_records{exporter="clickhouselogsexporter"}[2m])'
+                      disabled: false
+                      step: 0
+                      stats: false
+                      legend: ""
+              selectedQueryName: A
+              alertOnAbsent: false
+              absentFor: 0
+              thresholds:
+                kind: basic
+                spec:
+                  - {name: critical, target: 0, targetUnit: "", recoveryTarget: null, op: "1", matchType: "2", channels: [ops-email]}
+            evaluation: {kind: rolling, spec: {evalWindow: 5m0s, frequency: 1m0s}}
+            notificationSettings:
+              renotify: {enabled: true, interval: 4h0m0s, alertStates: [firing]}
+              usePolicy: false
           - id: existing-queue-rule
             state: inactive
+            schemaVersion: v2alpha1
             alert: "SigNoz collector: logs exporter queue nearly full"
             alertType: METRIC_BASED_ALERT
             ruleType: promql_rule
             version: v5
-            evalWindow: 5m
-            frequency: 1m
             disabled: false
             condition:
               compositeQuery:
@@ -85,11 +129,18 @@
                 queries:
                   - type: promql
                     spec: {name: A, query: "otelcol_exporter_queue_size", disabled: false, step: 0, stats: false, legend: ""}
-              op: "5"
-              target: 0.5
-              matchType: "2"
+              selectedQueryName: A
+              thresholds:
+                kind: basic
+                spec:
+                  - {name: warning, target: 0.5, targetUnit: "", op: "5", matchType: "2", channels: []}
+            evaluation: {kind: rolling, spec: {evalWindow: 5m0s, frequency: 1m0s}}
+            notificationSettings:
+              renotify: {enabled: true, interval: 4h0m0s, alertStates: [firing]}
+              usePolicy: false
           - id: unrelated-rule
             state: inactive
+            schemaVersion: v2alpha1
             alert: "Someone else's rule"
             alertType: METRIC_BASED_ALERT
             ruleType: promql_rule
@@ -101,9 +152,13 @@
                 queries:
                   - type: promql
                     spec: {name: A, query: "up", disabled: false}
-              op: "1"
-              target: 1
-              matchType: "1"
+              selectedQueryName: A
+              thresholds:
+                kind: basic
+                spec:
+                  - {name: info, target: 1, targetUnit: "", op: "1", matchType: "1", channels: [ops-email]}
+            evaluation: {kind: rolling, spec: {evalWindow: 5m0s, frequency: 1m0s}}
+            notificationSettings: {usePolicy: false}
 
     - name: Start the SigNoz API stand-in
       ansible.builtin.shell: >-

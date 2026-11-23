@@ -1,37 +1,91 @@
 ---
-# Compares desired rules with signoz_rules_response.json.data by alert name.
-# Only fields this role sets are compared; SigNoz adds others (ids, state,
+# Compares desired rules with signoz_existing_rules by alert name. Only fields
+# this role sets are compared; SigNoz adds others (ids, state, audit fields,
 # query step/legend) that must not count as drift.
+#
+# Rules SigNoz converted from the v1 schema can spell the same setting
+# differently: operator and match type as legacy codes ("5", "2") and
+# durations as Go strings ("5m0s"). Both sides are normalized before
+# comparing so that a converted rule is not rewritten just for its spelling.
 - name: SigNoz | Compare alert rules with SigNoz
   ansible.builtin.set_fact:
     signoz_alert_rule_plan: "{{ signoz_alert_rule_plan_json | from_json }}"
   vars:
+    signoz_alert_op_names:
+      "1": above
+      ">": above
+      "2": below
+      "<": below
+      "3": equal
+      eq: equal
+      "=": equal
+      "4": not_equal
+      not_eq: not_equal
+      "!=": not_equal
+      "5": above_or_equal
+      above_or_eq: above_or_equal
+      ">=": above_or_equal
+      "6": below_or_equal
+      below_or_eq: below_or_equal
+      "<=": below_or_equal
+      "7": outside_bounds
+    signoz_alert_match_names:
+      "1": at_least_once
+      "2": all_the_times
+      "3": on_average
+      avg: on_average
+      "4": in_total
+      sum: in_total
+      "5": last
+    # Labels SigNoz writes itself and ignores when set on a rule.
+    signoz_alert_engine_labels:
+      - severity
+      - threshold.name
     signoz_alert_rule_plan_json: >-
+      {%- macro seconds(text) -%}
+      {%-   set total = namespace(value=0) -%}
+      {%-   for amount, unit in (text | default('', true) | string | regex_findall('([0-9.]+)(h|m|s)')) -%}
+      {%-     set total.value = total.value + (amount | float) * {'h': 3600, 'm': 60, 's': 1}[unit] -%}
+      {%-   endfor -%}
+      {{- total.value -}}
+      {%- endmacro -%}
       {%- macro managed(rule) -%}
+      {%-   set thresholds = [] -%}
+      {%-   for threshold in (rule.condition.thresholds.spec | default([], true)) -%}
+      {%-     set _ = thresholds.append({
+                'name': threshold.name | default('') | lower,
+                'target': threshold.target | default(0, true) | float,
+                'op': signoz_alert_op_names.get(threshold.op | default('') | string, threshold.op | default('') | string),
+                'matchType': signoz_alert_match_names.get(threshold.matchType | default('') | string, threshold.matchType | default('') | string),
+                'channels': threshold.channels | default([], true) | sort,
+              }) -%}
+      {%-   endfor -%}
+      {%-   set renotify = (rule.notificationSettings | default({}, true)).renotify | default({}, true) -%}
       {{- {
             'alert': rule.alert,
             'description': rule.description | default(''),
-            'evalWindow': rule.evalWindow | default(''),
-            'frequency': rule.frequency | default(''),
             'disabled': rule.disabled | default(false) | bool,
-            'labels': rule.labels | default({}),
-            'annotations': rule.annotations | default({}),
-            'preferredChannels': rule.preferredChannels | default([]) | sort,
-            'op': rule.condition.op | default('') | string,
-            'target': rule.condition.target | default(0) | float,
-            'matchType': rule.condition.matchType | default('') | string,
+            'labels': rule.labels | default({}, true) | dict2items
+                      | rejectattr('key', 'in', signoz_alert_engine_labels) | items2dict,
+            'annotations': rule.annotations | default({}, true),
+            'evalWindow': seconds(rule.evaluation.spec.evalWindow | default('')) | float,
+            'frequency': seconds(rule.evaluation.spec.frequency | default('')) | float,
+            'thresholds': thresholds,
             'alertOnAbsent': rule.condition.alertOnAbsent | default(false) | bool,
             'absentFor': rule.condition.absentFor | default(0) | int,
             'queries': rule.condition.compositeQuery.queries | default([])
                        | map(attribute='spec') | map('dict2items')
                        | map('selectattr', 'key', 'in', ['name', 'query'])
                        | map('items2dict') | list,
+            'renotify': renotify.enabled | default(false) | bool,
+            'renotifyInterval': seconds(renotify.interval | default('')) | float,
+            'renotifyStates': renotify.alertStates | default([], true) | sort,
+            'usePolicy': (rule.notificationSettings | default({}, true)).usePolicy | default(false) | bool,
           } | to_json(sort_keys=true) -}}
       {%- endmacro -%}
-      {%- set existing = signoz_rules_response.json.data | default([], true) -%}
       {%- set plan = {'missing': [], 'drifted': [], 'duplicates': []} -%}
       {%- for desired in signoz_alert_rule_payloads -%}
-      {%-   set matches = existing | selectattr('alert', 'equalto', desired.alert) | list -%}
+      {%-   set matches = signoz_existing_rules | selectattr('alert', 'equalto', desired.alert) | list -%}
       {%-   if matches | length == 0 -%}
       {%-     set _ = plan.missing.append(desired) -%}
       {%-   elif matches | length > 1 -%}

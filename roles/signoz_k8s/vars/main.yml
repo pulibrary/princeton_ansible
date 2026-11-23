@@ -16,6 +16,8 @@ signoz_clickhouse_system_log_ttl_days: >-
 # to itself and never averages across collectors.
 signoz_alert_exporter_selector: '{exporter="{{ signoz_alert_logs_exporter }}"}'
 
+# severity names the rule's single threshold. SigNoz derives the alert's
+# severity label from it and ignores a severity label set on the rule.
 signoz_alert_rules:
   - alert: "SigNoz collector: logs exporter send failures"
     description: >-
@@ -24,14 +26,13 @@ signoz_alert_rules:
       retried or dropped.
     evalWindow: 5m
     frequency: 1m
-    labels:
-      severity: critical
+    severity: critical
     condition:
       query: >-
         rate(otelcol_exporter_send_failed_log_records{{ signoz_alert_exporter_selector }}[2m])
-      op: "1"
+      op: above
       target: 0
-      matchType: "2"
+      matchType: all_the_times
       alertOnAbsent: false
   - alert: "SigNoz collector: logs exporter enqueue failures"
     description: >-
@@ -39,8 +40,7 @@ signoz_alert_rules:
       in the last five minutes. Those records were dropped.
     evalWindow: 1m
     frequency: 1m
-    labels:
-      severity: critical
+    severity: critical
     condition:
       # The failure counter only exists after its first increment, so
       # increase() alone would miss the first event. The second clause
@@ -50,9 +50,9 @@ signoz_alert_rules:
         or
         (otelcol_exporter_enqueue_failed_log_records{{ signoz_alert_exporter_selector }}
         unless otelcol_exporter_enqueue_failed_log_records{{ signoz_alert_exporter_selector }} offset 5m)
-      op: "1"
+      op: above
       target: 0
-      matchType: "1"
+      matchType: at_least_once
       alertOnAbsent: false
   - alert: "SigNoz collector: logs exporter queue nearly full"
     description: >-
@@ -62,13 +62,12 @@ signoz_alert_rules:
       which must be treated as unknown ingestion health.
     evalWindow: 5m
     frequency: 1m
-    labels:
-      severity: warning
+    severity: warning
     condition:
       query: >-
         otelcol_exporter_queue_size{{ signoz_alert_exporter_selector }}
         / otelcol_exporter_queue_capacity{{ signoz_alert_exporter_selector }}
-      op: "5"
+      op: above_or_equal
       target: "{{ signoz_alert_queue_utilization_ratio }}"
-      matchType: "2"
+      matchType: all_the_times
       alertOnAbsent: true

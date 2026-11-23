@@ -1,4 +1,7 @@
 ---
+# Alert rules use the v2alpha1 rule schema, the only one SigNoz accepts from
+# v0.150 on. The full rule list (GET /api/v2/rules) is gone: rules are listed
+# as summaries from /api/v3/rules and read one by one from /api/v2/rules/{id}.
 - name: SigNoz | Assert alert rule settings
   ansible.builtin.assert:
     that:
@@ -31,7 +34,7 @@
 
 - name: SigNoz | List alert rules
   ansible.builtin.uri:
-    url: "{{ signoz_api_url }}/api/v2/rules"
+    url: "{{ signoz_api_url }}/api/v3/rules?limit=200"
     headers:
       SigNoz-Api-Key: "{{ signoz_api_key }}"
     validate_certs: "{{ signoz_api_validate_certs }}"
@@ -40,6 +43,40 @@
   register: signoz_rules_response
   check_mode: false
   no_log: true
+
+# 200 is the API's page limit. Paging is not implemented because a missed
+# page would make an existing rule look missing and get it created twice.
+- name: SigNoz | Refuse to work from a partial rule list
+  ansible.builtin.assert:
+    that:
+      - signoz_rule_summaries | length == signoz_rules_response.json.data.total | int
+    fail_msg: >-
+      SigNoz has {{ signoz_rules_response.json.data.total }} alert rules, more
+      than one page of the list API. Add paging to alerts.yml before managing
+      rules here.
+  vars:
+    signoz_rule_summaries: "{{ signoz_rules_response.json.data.rules | default([], true) }}"
+
+- name: SigNoz | Read the rules this role manages
+  ansible.builtin.uri:
+    url: "{{ signoz_api_url }}/api/v2/rules/{{ item.id }}"
+    headers:
+      SigNoz-Api-Key: "{{ signoz_api_key }}"
+    validate_certs: "{{ signoz_api_validate_certs }}"
+    timeout: 30
+    return_content: true
+  register: signoz_rule_details
+  check_mode: false
+  no_log: true
+  loop: >-
+    {{ signoz_rules_response.json.data.rules | default([], true)
+       | selectattr('alert', 'in', signoz_alert_rules | map(attribute='alert') | list) | list }}
+  loop_control:
+    label: "{{ item.alert }}"
+
+- name: SigNoz | Collect existing managed rules
+  ansible.builtin.set_fact:
+    signoz_existing_rules: "{{ signoz_rule_details.results | map(attribute='json') | map(attribute='data') | list }}"
 
 - name: SigNoz | Reset desired alert rules
   ansible.builtin.set_fact:
@@ -50,19 +87,16 @@
     signoz_alert_rule_payloads: "{{ signoz_alert_rule_payloads | default([]) + [signoz_alert_rule_payload] }}"
   vars:
     signoz_alert_rule_payload:
+      schemaVersion: v2alpha1
       alert: "{{ item.alert }}"
       alertType: METRIC_BASED_ALERT
       ruleType: promql_rule
-      version: v5
       description: "{{ item.description }}"
-      evalWindow: "{{ item.evalWindow }}"
-      frequency: "{{ item.frequency }}"
       disabled: false
-      labels: "{{ item.labels }}"
+      labels: "{{ item.labels | default({}) }}"
       annotations:
         summary: "{{ item.alert }}"
         description: "{{ item.description }}"
-      preferredChannels: "{{ signoz_alert_channels | sort }}"
       condition:
         compositeQuery:
           queryType: promql
@@ -74,11 +108,28 @@
                 query: "{{ item.condition.query }}"
                 disabled: false
         selectedQueryName: A
-        op: "{{ item.condition.op }}"
-        target: "{{ item.condition.target | float }}"
-        matchType: "{{ item.condition.matchType }}"
         alertOnAbsent: "{{ item.condition.alertOnAbsent }}"
         absentFor: "{{ signoz_alert_absent_minutes | int if item.condition.alertOnAbsent else 0 }}"
+        thresholds:
+          kind: basic
+          spec:
+            - name: "{{ item.severity }}"
+              target: "{{ item.condition.target | float }}"
+              targetUnit: ""
+              op: "{{ item.condition.op }}"
+              matchType: "{{ item.condition.matchType }}"
+              channels: "{{ signoz_alert_channels | sort }}"
+      evaluation:
+        kind: rolling
+        spec:
+          evalWindow: "{{ item.evalWindow }}"
+          frequency: "{{ item.frequency }}"
+      notificationSettings:
+        renotify:
+          enabled: true
+          interval: "{{ signoz_alert_renotify_interval }}"
+          alertStates: "{{ ['firing'] + (['nodata'] if item.condition.alertOnAbsent else []) }}"
+        usePolicy: false
   loop: "{{ signoz_alert_rules }}"
   loop_control:
     label: "{{ item.alert }}"
