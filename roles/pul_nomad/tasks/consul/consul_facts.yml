@@ -1,23 +1,6 @@
 ---
-- name: 'pul_nomad | consul | Get consul installed version'
+- name: 'pul_nomad | consul | Get consul server IPs'
   block:
-    - name: 'pul_nomad | consul | Check for existing Consul binary'
-      ansible.builtin.stat:
-        path: "/usr/local/bin/consul"
-      register: consul_binary_installed
-    - name: 'pul_nomad | consul | Get current Consul version'
-      ansible.builtin.command: "/usr/local/bin/consul version -format json"
-      check_mode: false
-      changed_when: false
-      register: consul_installed_version_json
-      when:
-        - consul_binary_installed.stat.exists
-    - name: 'pul_nomad | consul | Save consul version'
-      ansible.builtin.set_fact:
-        consul_installed_version: "{{ consul_installed_version_json.stdout | from_json | community.general.json_query('Version') }}"
-      when:
-        - consul_binary_installed.stat.exists
-
     - name: 'pul_nomad | consul | Gather network facts for nomad_servers'
       ansible.builtin.setup:
         gather_subset:

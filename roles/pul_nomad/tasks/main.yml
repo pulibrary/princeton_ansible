@@ -9,6 +9,28 @@
   ignore_errors: true
   ignore_unreachable: true
 
+- name: pul_nomad | Install python3-debian for deb822_repository
+  ansible.builtin.apt:
+    name: python3-debian
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: pul_nomad | Add HashiCorp apt repository
+  ansible.builtin.deb822_repository:
+    name: hashicorp
+    types: [deb]
+    uris: https://apt.releases.hashicorp.com
+    suites: ["{{ ansible_facts['distribution_release'] }}"]
+    components: [main]
+    signed_by: https://apt.releases.hashicorp.com/gpg
+  register: pul_nomad_hashicorp_repo
+
+- name: pul_nomad | Update apt cache after adding HashiCorp repository
+  ansible.builtin.apt:
+    update_cache: true
+  when: pul_nomad_hashicorp_repo is changed
+
 # This will install and configure Consul/BIND with ACLs.
 - name: pul_nomad | Install & Configure Consul
   ansible.builtin.import_tasks: consul/main.yml
