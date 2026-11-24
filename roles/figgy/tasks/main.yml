@@ -437,3 +437,34 @@
     - site_config
   when:
     - running_on_server
+
+# Allows Figgy boxes to resolve *.consul addresses
+- name: Figgy | Install bind9 consul config
+  tags:
+    - bind9
+  block:
+    - name: Figgy | consul | Inspect BIND configuration directory
+      ansible.builtin.stat:
+        path: /etc/bind
+      register: bind9_config_dir_stat
+
+    - name: Figgy | consul | Ensure BIND configuration directory exists
+      ansible.builtin.file:
+        path: /etc/bind
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+      become: true
+      when: not bind9_config_dir_stat.stat.exists
+
+    - name: Figgy | consul | Configure Consul forwarding
+      ansible.builtin.template:
+        src: consul.conf.j2
+        dest: /etc/bind/consul.conf
+        owner: root
+        group: root
+        mode: "0644"
+      become: true
+      notify:
+        - restart bind
