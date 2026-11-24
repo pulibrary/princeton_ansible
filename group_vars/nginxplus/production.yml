@@ -119,6 +119,15 @@ otel_receivers:
           parse_from: attributes.span_id
         on_error: send
 
+      # Every field is already an attribute, so storing the raw JSON line as
+      # the body as well doubles each record. Keep a one-line summary instead.
+      # A line missing one of these fields keeps its original body.
+      - type: add
+        id: summarize_nginxplus_access_body
+        field: body
+        value: 'EXPR(attributes.method + " " + attributes.host + attributes.uri + " " + attributes.status)'
+        on_error: send
+
       - type: add
         field: attributes.log_type
         value: nginxplus_access
