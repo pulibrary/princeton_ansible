@@ -1,0 +1,122 @@
+---
+- name: Bind9 | Inspect installed services for dnsmasq migration
+  ansible.builtin.service_facts:
+  when: bind9_remove_dnsmasq
+
+- name: Bind9 | Preserve upstream DNS during dnsmasq migration
+  ansible.builtin.import_tasks: resolver.yml
+  when:
+    - bind9_remove_dnsmasq
+    - running_on_server
+    - bind9_manage_resolv_conf
+
+- name: Bind9 | Stop legacy dnsmasq before claiming port 53
+  ansible.builtin.service:
+    name: dnsmasq
+    enabled: false
+    state: stopped
+  become: true
+  when:
+    - bind9_remove_dnsmasq
+    - "'dnsmasq.service' in (ansible_facts.services | default({}))"
+
+- name: Bind9 | Remove legacy dnsmasq package
+  ansible.builtin.package:
+    name: dnsmasq
+    state: absent
+  become: true
+  when: bind9_remove_dnsmasq
+
+- name: Bind9 | Remove legacy dnsmasq configuration
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  become: true
+  loop:
+    - /etc/dnsmasq.conf
+    - /etc/dnsmasq.d/10-consul
+  when: bind9_remove_dnsmasq
+
+- name: Bind9 | Install local nameserver
+  ansible.builtin.apt:
+    name: "{{ bind9_packages }}"
+    state: present
+  become: true
+
+- name: Bind9 | Ensure caller-provided config includes exist
+  # Callers like pul_nomad own zone files that named.conf.options includes
+  # (via bind9_config_includes) but that they don't write until after this
+  # role runs. Seed an empty placeholder so named-checkconf below succeeds
+  # on a first run; the caller overwrites it with real content afterward.
+  ansible.builtin.copy:
+    dest: "{{ item }}"
+    content: ""
+    force: false
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  loop: "{{ bind9_config_includes }}"
+
+- name: Bind9 | Configure named
+  ansible.builtin.template:
+    src: named.conf.options.j2
+    dest: "{{ bind9_options_file }}"
+    owner: root
+    group: bind
+    mode: "0644"
+  become: true
+  notify:
+    - Restart bind
+
+- name: Bind9 | Set named startup options
+  ansible.builtin.template:
+    src: named.default.j2
+    dest: "{{ bind9_defaults_file }}"
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  notify:
+    - Restart bind
+
+- name: Bind9 | Check for legacy startup options file
+  ansible.builtin.stat:
+    path: "{{ bind9_legacy_defaults_file }}"
+  register: bind9_legacy_defaults
+
+- name: Bind9 | Set named startup options on older releases
+  ansible.builtin.template:
+    src: named.default.j2
+    dest: "{{ bind9_legacy_defaults_file }}"
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  when: bind9_legacy_defaults.stat.exists
+  notify:
+    - Restart bind
+
+- name: Bind9 | Verify named configuration is valid
+  ansible.builtin.command: named-checkconf
+  become: true
+  changed_when: false
+
+- name: Bind9 | Start nameserver
+  ansible.builtin.service:
+    name: "{{ bind9_service_name }}"
+    enabled: true
+    state: started
+  become: true
+
+# Restart named with the config above before the host depends on it. Left
+# to the end of the play, a later failure would skip the restart and leave
+# resolv.conf pointing at a named still running the package defaults.
+- name: Bind9 | Apply named configuration before switching resolvers
+  ansible.builtin.meta: flush_handlers
+
+- name: Bind9 | Point the host at its local resolver
+  ansible.builtin.import_tasks: resolver.yml
+  when:
+    - running_on_server
+    - bind9_manage_resolv_conf
