@@ -1,0 +1,218 @@
+---
+# tasks/main.yml -- proxmox_openid
+#
+# Everything here lives in /etc/pve, which a cluster shares between its nodes.
+# The role still runs on every node, so it also works for nodes that are not
+# clustered: each step reads the current state first and only writes what is
+# missing, and the steps that can race between nodes accept "already exists".
+
+- name: Assert the Entra client ID is set
+  ansible.builtin.assert:
+    that:
+      - proxmox_openid_client_id | length > 0
+    fail_msg: >-
+      proxmox_openid_client_id is empty. Set it to the Application (client) ID
+      of this environment's Entra app registration in
+      group_vars/proxmox/<runtime_env>.yml.
+
+- name: Record the realm settings Proxmox should have
+  ansible.builtin.set_fact:
+    proxmox_openid_desired:
+      issuer-url: "{{ proxmox_openid_issuer_url }}"
+      client-id: "{{ proxmox_openid_client_id }}"
+      scopes: "{{ proxmox_openid_scopes }}"
+      autocreate: "{{ proxmox_openid_autocreate | bool | ternary(1, 0) }}"
+      default: "{{ proxmox_openid_default | bool | ternary(1, 0) }}"
+      groups-claim: "{{ proxmox_openid_groups_claim }}"
+      groups-overwrite: "{{ proxmox_openid_groups_overwrite | bool | ternary(1, 0) }}"
+    proxmox_openid_realm_changes: {}
+
+- name: Read the existing authentication realms
+  ansible.builtin.command:
+    argv: [pveum, realm, list, --output-format, json]
+  register: proxmox_openid_realms
+  changed_when: false
+
+- name: Create the OpenID realm
+  ansible.builtin.command:
+    argv: >-
+      {{ ['pveum', 'realm', 'add', proxmox_openid_realm,
+          '--type', 'openid',
+          '--username-claim', proxmox_openid_username_claim]
+         + (proxmox_openid_desired | dict2items
+            | map(attribute='key') | map('regex_replace', '^', '--')
+            | zip(proxmox_openid_desired.values() | map('string'))
+            | flatten) }}
+  register: proxmox_openid_realm_add
+  when: >-
+    proxmox_openid_realm not in
+    (proxmox_openid_realms.stdout | from_json | map(attribute='realm'))
+  changed_when: proxmox_openid_realm_add.rc == 0
+  failed_when: >-
+    proxmox_openid_realm_add.rc != 0
+    and 'already exists' not in proxmox_openid_realm_add.stderr
+
+- name: Read the OpenID realm settings
+  ansible.builtin.command:
+    argv:
+      - pvesh
+      - get
+      - "/access/domains/{{ proxmox_openid_realm }}"
+      - --output-format
+      - json
+  register: proxmox_openid_realm_get
+  changed_when: false
+
+- name: Record the current realm settings
+  ansible.builtin.set_fact:
+    proxmox_openid_current: "{{ proxmox_openid_realm_get.stdout | from_json }}"
+
+- name: Assert the realm is an OpenID realm with the expected username claim
+  ansible.builtin.assert:
+    that:
+      - proxmox_openid_current.type == 'openid'
+      - >-
+        proxmox_openid_current['username-claim'] | default('subject')
+        == proxmox_openid_username_claim
+    fail_msg: >-
+      Realm {{ proxmox_openid_realm }} is type
+      {{ proxmox_openid_current.type }} with username claim
+      {{ proxmox_openid_current['username-claim'] | default('subject') }}.
+      Proxmox cannot change the username claim of an existing realm, and
+      changing it would give every user a new user ID, so fix this by hand.
+
+# Proxmox leaves boolean options out of the realm config while they are off.
+- name: Work out which realm settings differ
+  ansible.builtin.set_fact:
+    proxmox_openid_realm_changes: >-
+      {{ proxmox_openid_realm_changes | combine({item.key: item.value | string}) }}
+  loop: "{{ proxmox_openid_desired | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  when: >-
+    (proxmox_openid_current[item.key]
+     | default('0' if item.key in ['autocreate', 'default', 'groups-overwrite'] else '')
+     | string) != (item.value | string)
+
+- name: Update the OpenID realm settings
+  ansible.builtin.command:
+    argv: >-
+      {{ ['pveum', 'realm', 'modify', proxmox_openid_realm]
+         + (proxmox_openid_realm_changes | dict2items
+            | map(attribute='key') | map('regex_replace', '^', '--')
+            | zip(proxmox_openid_realm_changes.values())
+            | flatten)
+         + (['--delete', 'client-key'] if remove_key | bool else []) }}
+  vars:
+    remove_key: >-
+      {{ proxmox_openid_remove_client_key | bool
+         and 'client-key' in proxmox_openid_current }}
+  when: proxmox_openid_realm_changes | length > 0 or remove_key | bool
+  changed_when: true
+
+- name: Read the existing Proxmox groups
+  ansible.builtin.command:
+    argv: [pveum, group, list, --output-format, json]
+  register: proxmox_openid_pve_groups
+  changed_when: false
+
+- name: Create the PVE groups the groups claim maps into
+  ansible.builtin.command:
+    argv:
+      - pveum
+      - group
+      - add
+      - "{{ item.id }}-{{ proxmox_openid_realm }}"
+      - --comment
+      - "{{ item.comment | default('Entra group ' ~ item.id) }}"
+  loop: "{{ proxmox_openid_groups }}"
+  loop_control:
+    label: "{{ item.id }}-{{ proxmox_openid_realm }}"
+  register: proxmox_openid_group_add
+  when: >-
+    (item.id ~ '-' ~ proxmox_openid_realm) not in
+    (proxmox_openid_pve_groups.stdout | from_json | map(attribute='groupid'))
+  changed_when: proxmox_openid_group_add.rc == 0
+  failed_when: >-
+    proxmox_openid_group_add.rc != 0
+    and 'already exists' not in proxmox_openid_group_add.stderr
+
+- name: Read the existing Proxmox permissions
+  ansible.builtin.command:
+    argv: [pveum, acl, list, --output-format, json]
+  register: proxmox_openid_acl
+  changed_when: false
+
+- name: Grant the mapped groups their roles
+  ansible.builtin.command:
+    argv:
+      - pveum
+      - acl
+      - modify
+      - "{{ item.0.path | default('/') }}"
+      - --groups
+      - "{{ item.0.id }}-{{ proxmox_openid_realm }}"
+      - --roles
+      - "{{ item.1 }}"
+      - --propagate
+      - "1"
+  loop: "{{ proxmox_openid_groups | subelements('roles') }}"
+  loop_control:
+    label: "{{ item.0.id }}-{{ proxmox_openid_realm }} {{ item.1 }}"
+  when: >-
+    (proxmox_openid_acl.stdout | from_json
+      | selectattr('path', 'equalto', item.0.path | default('/'))
+      | selectattr('type', 'equalto', 'group')
+      | selectattr('ugid', 'equalto', item.0.id ~ '-' ~ proxmox_openid_realm)
+      | selectattr('roleid', 'equalto', item.1)
+      | list | length) == 0
+  changed_when: true
+
+- name: Read the existing Proxmox users
+  ansible.builtin.command:
+    argv: [pveum, user, list, --output-format, json]
+  register: proxmox_openid_pve_users
+  changed_when: false
+
+- name: Record which administrators have logged in
+  ansible.builtin.set_fact:
+    proxmox_openid_existing_admins: >-
+      {{ proxmox_openid_admins
+         | map('regex_replace', '$', '@' ~ proxmox_openid_realm)
+         | select('in', proxmox_openid_pve_users.stdout | from_json
+                        | map(attribute='userid') | list)
+         | list }}
+
+- name: Report administrators who have not logged in yet
+  ansible.builtin.debug:
+    msg: >-
+      Not granted {{ proxmox_openid_admin_role }} yet because they have no
+      Proxmox user until their first login:
+      {{ proxmox_openid_admins
+         | map('regex_replace', '$', '@' ~ proxmox_openid_realm)
+         | reject('in', proxmox_openid_existing_admins)
+         | join(', ') }}
+  when: proxmox_openid_existing_admins | length < proxmox_openid_admins | length
+
+- name: Grant the administrators their role
+  ansible.builtin.command:
+    argv:
+      - pveum
+      - acl
+      - modify
+      - /
+      - --users
+      - "{{ item }}"
+      - --roles
+      - "{{ proxmox_openid_admin_role }}"
+      - --propagate
+      - "1"
+  loop: "{{ proxmox_openid_existing_admins }}"
+  when: >-
+    (proxmox_openid_acl.stdout | from_json
+      | selectattr('path', 'equalto', '/')
+      | selectattr('type', 'equalto', 'user')
+      | selectattr('ugid', 'equalto', item)
+      | selectattr('roleid', 'equalto', proxmox_openid_admin_role)
+      | list | length) == 0
+  changed_when: true

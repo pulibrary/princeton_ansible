@@ -48,3 +48,13 @@ ssh_ca_permit_root_login: "no"
 ssh_ca_root_login_addresses: >-
   {{ proxmox_cluster_peers.stdout_lines | default([])
      | map('split') | map('first') | unique | list }}
+
+# Entra groups mapped into Proxmox through the OpenID groups claim (see
+# roles/proxmox_openid). Members of PU:LIB:devops:admins who are not listed in
+# proxmox_openid_admins get read-only access. The client ID and administrators
+# differ per environment and live in group_vars/proxmox/<runtime_env>.yml.
+proxmox_openid_groups:
+  - id: 08b5fed6-19ce-4a1b-ba57-9c445e408a70
+    comment: "Entra PU:LIB:devops:admins (read-only)"
+    path: /
+    roles: [PVEAuditor]

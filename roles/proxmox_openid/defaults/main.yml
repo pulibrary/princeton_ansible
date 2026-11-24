@@ -1,0 +1,60 @@
+---
+# defaults/main.yml -- proxmox_openid
+#
+# Configures the Proxmox VE OpenID Connect realm that signs people in through
+# Entra ID, the PVE groups that the token's groups claim maps people into,
+# and the ACLs those groups and named administrators get.
+#
+# Who may sign in at all is decided in Entra, not here: the Proxmox app's
+# enterprise application has "assignment required" on, so only the users and
+# groups assigned to it get a token. See README.md for the Entra side.
+
+proxmox_openid_realm: entra
+
+proxmox_openid_issuer_url: >-
+  https://login.microsoftonline.com/2ff60116-7431-425d-b5af-077d7791bda4/v2.0
+
+# The Application (client) ID of the Entra app registration. Each environment
+# has its own, so this is set in group_vars/proxmox/<runtime_env>.yml.
+proxmox_openid_client_id: ""
+
+proxmox_openid_scopes: "openid email profile"
+
+# Proxmox cannot change the username claim of an existing realm, so the role
+# only asserts it matches.
+proxmox_openid_username_claim: email
+
+# Create a PVE user on first login. The user gets no permissions until an ACL
+# below (or their group's) grants some.
+proxmox_openid_autocreate: true
+
+# Preselect this realm on the login page.
+proxmox_openid_default: true
+
+# The token claim that lists the user's groups. Entra sends group object IDs,
+# and Proxmox names the PVE group "<object id>-<realm>".
+proxmox_openid_groups_claim: groups
+
+# Replace a user's PVE group memberships with the ones in the claim on every
+# login, so someone removed from the group in Grouper loses the access it
+# granted on their next login.
+proxmox_openid_groups_overwrite: true
+
+# The apps are public clients: Proxmox redeems the code with PKCE and no
+# client secret. A client-key left in the realm is removed, because Entra
+# rejects a public client that presents one (AADSTS700025).
+proxmox_openid_remove_client_key: true
+
+# Entra groups to map into PVE groups. "id" is the Entra group object ID.
+#   - id: 08b5fed6-19ce-4a1b-ba57-9c445e408a70
+#     comment: "Entra PU:LIB:devops:admins (read-only)"
+#     path: /
+#     roles: [PVEAuditor]
+proxmox_openid_groups: []
+
+# Users granted proxmox_openid_admin_role on /, by their username claim
+# (email). Proxmox only creates the user on first login, so anyone who has not
+# logged in yet is skipped and picked up on a later run. The role only adds
+# these grants; it never removes ACLs that are not listed.
+proxmox_openid_admins: []
+proxmox_openid_admin_role: Administrator
