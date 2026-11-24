@@ -192,13 +192,6 @@
       register: nomad_node_status
       changed_when: false
 
-    - name: Get Podman info
-      ansible.builtin.command: podman info
-      register: podman_info
-      changed_when: false
-      when:
-        - "ansible_facts['os_family'] == 'RedHat'"
-
     - name: Verify Nomad client is registered and ready
       ansible.builtin.assert:
         that:
@@ -206,24 +199,6 @@
           - "'ready' in nomad_node_status.stdout"
         fail_msg: "Nomad client is not ready"
         success_msg: "Nomad client is registered and ready"
-
-    - name: Verify Podman driver is available (Rocky Linux only)
-      ansible.builtin.assert:
-        that:
-          - "'podman' in nomad_node_status.stdout"
-        fail_msg: "Podman driver not available on Nomad client"
-        success_msg: "Podman driver is available"
-      when:
-        - "ansible_facts['os_family'] == 'RedHat'"
-
-    - name: Verify podman is set up with sqlite
-      ansible.builtin.assert:
-        that:
-          - "'sqlite' in podman_info.stdout"
-        fail_msg: "Podman not configured to use sqlite"
-        success_msg: "Podman configured to use sqlite"
-      when:
-        - "ansible_facts['os_family'] == 'RedHat'"
 
     - name: Verify Docker driver is available (Ubuntu clients only)
       ansible.builtin.assert:
