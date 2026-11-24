@@ -78,6 +78,7 @@
         argv: "{{ ['getent', 'ahostsv4'] + groups[proxmox_cluster_group] | default([]) }}"
       register: proxmox_cluster_peers
       changed_when: false
+      check_mode: false
       failed_when: proxmox_cluster_peers.rc not in [0, 2]
 
     # Nodes without a subscription get 401 from enterprise.proxmox.com, which
@@ -87,6 +88,7 @@
       ansible.builtin.command: pvesubscription get
       register: proxmox_subscription
       changed_when: false
+      check_mode: false
 
     - name: Switch unsubscribed nodes to the no-subscription repositories
       when: "'status: active' not in proxmox_subscription.stdout | lower"
