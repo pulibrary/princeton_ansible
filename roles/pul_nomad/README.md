@@ -39,8 +39,8 @@ Variables have defaults in [`defaults/main.yml`](defaults/main.yml) and may be d
 
 * `nomad_server_group` - the ansible group that contains all the server VMs for a given cluster. We need to know these because Consul uses their IPs to build a cluster.
 * `pul_nomad_role` - Either `client` or `server`. This determines whether client or server software/configuration is run.
-* `consul_version` - version of consul to install - [releases](https://github.com/hashicorp/consul/releases)
-* `nomad_version` - version of nomad to install - [releases](https://github.com/hashicorp/nomad/releases)
+* `consul_version` - version of the consul package to install from HashiCorp's apt repository - [releases](https://github.com/hashicorp/consul/releases)
+* `nomad_version` - version of the nomad package to install from HashiCorp's apt repository - [releases](https://github.com/hashicorp/nomad/releases)
 * `nomad_node_pool` - pool to assign to a client VM. Right now we have `staging` and `production` - VMs in VMWare's staging infrastructure with the Nomad client software have this set to `staging` and VMs in VMWare's production infrastructure with the Nomad client software have this set to `production`.
 * `nomad_host_volumes` - map of host volumes to create and make available to containers. See [Host Volumes](#host-volumes) for more. Example:
 
@@ -215,9 +215,9 @@ To refresh the gossip encryption key for consul (`consul_gossip_encryption_key`)
 
 Nomad and Consul are built to be largely backwards compatible. Nomad has good [documentation](https://developer.hashicorp.com/nomad/docs/upgrade#upgrade-process), but the process is effectively:
 
-1. Change `nomad_version`
+1. Change `nomad_version` (or `consul_version`) in [`defaults/main.yml`](defaults/main.yml)
 1. Provision one nomad server VM with `--limit=<nomad_host_here>`
 1. Test to make sure it's in the cluster by checking the Nomad UI ([documentation](../../nomad/README.md)).
 1. Do the rest of them.
 
-The same process is true for Consul. We don't have a staging cluster to try this out in yet.
+The same process is true for Consul. The role prevents system updates from updating them, so you have to increment that version to update them. You should be able to test that in sandbox for now, and eventually in staging.

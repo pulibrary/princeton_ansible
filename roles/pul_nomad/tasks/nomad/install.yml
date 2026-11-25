@@ -1,90 +1,59 @@
 ---
-- name: pul_nomad | nomad | Install OS packages (Debian)
-  ansible.builtin.package:
-    name:
-      - curl
-      - git
-      - unzip
-    state: present
-  when: ansible_facts['os_family'] == "Debian"
+- name: pul_nomad | nomad | Check for pre-package install
+  ansible.builtin.stat:
+    path: /usr/local/bin/nomad
+  register: pul_nomad_legacy_binary
 
-- name: pul_nomad | nomad | Install OS packages (Rocky)
-  ansible.builtin.package:
-    name:
-      - curl
-      - git
-      - unzip
-    state: present
-    allowerasing: true
-  when: ansible_facts['os_family'] == "RedHat"
-
-- name: 'pul_nomad | nomad | Install nomad binary'
-  when: nomad_installed_version != nomad_version
-  block:
-    - name: 'pul_nomad | nomad | Create a temporary directory'
-      ansible.builtin.tempfile:
-        state: directory
-        prefix: ansible-nomad.
-      register: nomad_temp_dir
-
-    - name: 'pul_nomad | nomad | Download and unarchive Nomad'
-      block:
-        - name: 'pul_nomad | nomad | Download Nomad package checksum file'
-          ansible.builtin.get_url:
-            url: "https://releases.hashicorp.com/nomad/{{ nomad_version }}/nomad_{{ nomad_version }}_SHA256SUMS"
-            dest: "{{ nomad_temp_dir.path }}/nomad_{{ nomad_version }}_SHA256SUMS"
-          tags: installation
-
-        - name: 'pul_nomad | nomad | Read Nomad package checksum'
-          ansible.builtin.shell: grep nomad_{{nomad_version}}_linux_{{ nomad_architecture }}.zip {{ nomad_temp_dir.path }}/nomad_{{ nomad_version }}_SHA256SUMS
-          register: nomad_sha256
-          changed_when: false
-          tags:
-            - installation
-
-        - name: 'pul_nomad | nomad | Download Nomad'
-          ansible.builtin.get_url:
-            url: "https://releases.hashicorp.com/nomad/{{ nomad_version }}/nomad_{{ nomad_version }}_linux_{{ nomad_architecture }}.zip"
-            dest: "{{ nomad_temp_dir.path }}/nomad_{{ nomad_version }}_linux_{{ nomad_architecture }}.zip"
-            checksum: "sha256:{{ nomad_sha256.stdout.split(' ') | first }}"
-            timeout: 42
-          register: nomad_download
-          tags: installation
-
-        - name: 'pul_nomad | nomad | Unarchive Nomad and install binary'
-          ansible.builtin.unarchive:
-            remote_src: true
-            src: "{{ nomad_temp_dir.path }}/nomad_{{ nomad_version }}_linux_{{ nomad_architecture }}.zip"
-            dest: "/usr/local/bin"
-            mode: "0755"
-          register: nomad_install
-          notify:
-            - reload systemd
-            - restart nomad
-          when: nomad_download is changed
-          tags: installation
-      always:
-        - name: 'pul_nomad | nomad | Cleanup'
-          ansible.builtin.file:
-            path: "{{ nomad_temp_dir.path }}"
-            state: absent
-          tags: installation
-
-- name: 'pul_nomad | nomad | Install systemd config'
-  ansible.builtin.copy:
-    src: files/nomad/nomad.service
-    dest: /lib/systemd/system/nomad.service
-    owner: root
-    group: root
-    mode: 0644
-  notify: 'reload systemd'
-
-- name: pul_nomad | nomad | Create directories
+- name: pul_nomad | nomad | Remove pre-package systemd unit
   ansible.builtin.file:
-    dest: "{{ item }}"
+    path: /lib/systemd/system/nomad.service
+    state: absent
+  when: pul_nomad_legacy_binary.stat.exists
+
+- name: pul_nomad | nomad | Install Nomad
+  ansible.builtin.apt:
+    name: "nomad={{ nomad_version }}-1"
+    allow_change_held_packages: true
+  notify: restart nomad
+
+- name: pul_nomad | nomad | Hold Nomad package
+  ansible.builtin.dpkg_selections:
+    name: nomad
+    selection: hold
+
+- name: pul_nomad | nomad | Remove pre-package install files
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /usr/local/bin/nomad
+    - /var/nomad/plugins
+    - /var/nomad/.podman-plugin-version
+  notify:
+    - reload systemd
+    - restart nomad
+
+- name: pul_nomad | nomad | Remove packaged default config
+  ansible.builtin.file:
+    path: /etc/nomad.d/nomad.hcl
+    state: absent
+  notify: restart nomad
+
+- name: pul_nomad | nomad | Create systemd override directory
+  ansible.builtin.file:
+    path: /etc/systemd/system/nomad.service.d
     state: directory
     mode: "0755"
-  with_items:
-    - "/var/nomad"
-    - "/var/nomad/plugins"
-    - "/etc/nomad.d"
+
+- name: pul_nomad | nomad | Start Nomad after Consul
+  ansible.builtin.copy:
+    src: files/nomad/consul.conf
+    dest: /etc/systemd/system/nomad.service.d/consul.conf
+    mode: "0644"
+  notify: reload systemd
+
+- name: pul_nomad | nomad | Create data directory
+  ansible.builtin.file:
+    dest: /var/nomad
+    state: directory
+    mode: "0755"
