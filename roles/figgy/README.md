@@ -1,7 +1,9 @@
-Role Name
+Figgy
 =========
 
 This role installs [figgy](https://github.com/pulibrary/figgy) a Valkyrie based digital repository application
+
+**NOTE**: Figgy configures its bind9 to query `nomad-host-prod1/2/3` for *.consul addresses. If you suddenly get failed connections to those addresses, look there!
 
 Requirements
 ------------

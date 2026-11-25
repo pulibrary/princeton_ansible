@@ -1,0 +1,10 @@
+{{ ansible_managed | comment('c') }}
+zone "consul" IN {
+    type forward;
+    forward only;
+    forwarders {
+{% for host in groups[figgy_consul_dns_group] | default([]) %}
+      {{ lookup('community.general.dig', host) }};
+{% endfor %}
+    };
+};
