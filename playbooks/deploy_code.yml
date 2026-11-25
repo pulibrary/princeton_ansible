@@ -106,9 +106,20 @@
     - name: Deploy with Nomad
       when: nomad_job_file.stat.exists
       block:
-        - name: Read Nomad job file
+        - name: Find Nomad job files
+          ansible.builtin.find:
+            paths: "{{ project_dir }}/config/deploy"
+            patterns:
+              - "{{ runtime_env }}.hcl"
+              - "{{ runtime_env }}-periodic.hcl"
+          register: nomad_job_files
+
+        - name: Read Nomad job files
           ansible.builtin.slurp:
-            src: "{{ project_dir }}/config/deploy/{{ runtime_env }}.hcl"
+            src: "{{ item.path }}"
+          loop: "{{ nomad_job_files.files | sort(attribute='path', reverse=true) }}"
+          loop_control:
+            label: "{{ item.path | basename }}"
           register: nomad_job_hcl
 
         - name: Download Nomad CLI
@@ -131,9 +142,12 @@
         - name: Run Nomad deploy
           ansible.builtin.command:
             cmd: "/tmp/nomad job run -var branch_or_sha={{ repo_checkout.after[:7] }} -"
-            stdin: "{{ nomad_job_hcl.content | b64decode }}"
+            stdin: "{{ item.content | b64decode }}"
           environment:
             NOMAD_ADDR: "{{ nomad_addr }}"
+          loop: "{{ nomad_job_hcl.results }}"
+          loop_control:
+            label: "{{ item.source | basename }}"
           delegate_to: localhost
           become: false
           changed_when: true
