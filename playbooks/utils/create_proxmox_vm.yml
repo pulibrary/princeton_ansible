@@ -220,12 +220,14 @@
         update: true
       when: proxmox_cloud_init_enabled | bool
 
-    - name: Configure the primary NIC without changing its MAC address
+    - name: Configure the primary NIC, option to define its MAC address
+      # proxmox_nic preserves the cloned MAC when mac is omitted
       community.proxmox.proxmox_nic:
         vmid: "{{ proxmox_vm_vmid | int }}"
         name: "{{ proxmox_vm_name }}"
         interface: "{{ proxmox_vm_nic }}"
         bridge: "{{ proxmox_vm_bridge }}"
+        mac: "{{ proxmox_vm_mac | default(omit) }}"
         model: "{{ proxmox_vm_nic_model }}"
         firewall: "{{ proxmox_vm_firewall | bool }}"
         tag: >-
