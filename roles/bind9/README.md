@@ -17,6 +17,8 @@ caches the answers, and points `/etc/resolv.conf` at itself. The campus
 resolvers stay in `/etc/resolv.conf` as fallbacks so that a `named` outage
 cannot take DNS on the host down with it.
 
+NOTE: Figgy also has a special config to forward *.consul addresses to nomad hosts.
+
 Requirements
 ------------
 
