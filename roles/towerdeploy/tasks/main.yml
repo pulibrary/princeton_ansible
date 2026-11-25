@@ -39,3 +39,35 @@
     mode: "0600"
   no_log: true
   when: running_on_server
+
+- name: towerdeploy | install python3-debian for deb822_repository
+  ansible.builtin.apt:
+    name: python3-debian
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: towerdeploy | add HashiCorp apt repository
+  ansible.builtin.deb822_repository:
+    name: hashicorp
+    types: [deb]
+    uris: https://apt.releases.hashicorp.com
+    suites: ["{{ ansible_facts['distribution_release'] }}"]
+    components: [main]
+    signed_by: https://apt.releases.hashicorp.com/gpg
+  register: towerdeploy_hashicorp_repo
+
+- name: towerdeploy | update apt cache after adding HashiCorp repository
+  ansible.builtin.apt:
+    update_cache: true
+  when: towerdeploy_hashicorp_repo is changed
+
+- name: towerdeploy | install Nomad
+  ansible.builtin.apt:
+    name: "nomad={{ nomad_version }}-1"
+    allow_change_held_packages: true
+
+- name: towerdeploy | hold Nomad package
+  ansible.builtin.dpkg_selections:
+    name: nomad
+    selection: hold
