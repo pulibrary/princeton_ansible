@@ -48,6 +48,16 @@ clickhouse:
           </clickhouse>
 
   files:
+{% if not signoz_clickhouse_zookeeper_log_enabled | bool %}
+    # The operator's config.d/01-clickhouse-15-zookeeper_log.xml defines the
+    # table with replace="1". ClickHouse merges config.d files in name
+    # order, so this file must sort after it to have the last word. A file
+    # in conf.d would not work: conf.d is merged before config.d.
+    config.d/zz-signoz-disable-zookeeper-log.xml: |
+      <clickhouse>
+          <zookeeper_log remove="1"/>
+      </clickhouse>
+{% endif %}
     # Read-only user for the Checkmk log freshness check.
     users.d/{{ signoz_clickhouse_checkmk_user }}.xml: |
       <clickhouse>

@@ -12,6 +12,12 @@ WARN_PERCENT={{ signoz_checkmk_clickhouse_disk_warn_percent | int }}
 CRIT_PERCENT={{ signoz_checkmk_clickhouse_disk_crit_percent | int }}
 SUSTAIN_SECONDS={{ signoz_checkmk_clickhouse_disk_sustain_seconds | int }}
 STATE_FILE="${MK_VARDIR:-/var/lib/check_mk_agent}/signoz_clickhouse_disk.state"
+HISTORY_FILE="${MK_VARDIR:-/var/lib/check_mk_agent}/signoz_clickhouse_disk.history"
+FREE_CRIT_BYTES=$(( {{ signoz_checkmk_clickhouse_disk_free_crit_gib | int }} * 1073741824 ))
+DAYS_LEFT_WARN={{ signoz_checkmk_clickhouse_disk_days_left_warn | int }}
+DAYS_LEFT_CRIT={{ signoz_checkmk_clickhouse_disk_days_left_crit | int }}
+RATE_WINDOW_SECONDS={{ signoz_checkmk_clickhouse_disk_rate_window_seconds | int }}
+RATE_MIN_SPAN_SECONDS={{ signoz_checkmk_clickhouse_disk_rate_min_span_seconds | int }}
 NOW="${CLICKHOUSE_DISK_NOW:-$(date +%s)}"
 
 SERVICE="ClickHouse data filesystem"
@@ -86,3 +92,45 @@ if (( level > status )); then
   text="${text}; at or above ${threshold}% for $(( NOW - since ))s, state changes after ${SUSTAIN_SECONDS}s"
 fi
 echo "${status} \"${SERVICE}\" ${metrics} ${text}"
+
+# Growth: one "<epoch> <free bytes>" line per run, kept for the rate window.
+# The oldest kept line gives the average rate free space fell since then.
+GROWTH_SERVICE="${SERVICE} growth"
+{
+  if [[ -r "${HISTORY_FILE}" ]]; then
+    awk -v cutoff=$(( NOW - RATE_WINDOW_SECONDS )) \
+      '$1 ~ /^[0-9]+$/ && $2 ~ /^[0-9]+$/ && $1 >= cutoff' "${HISTORY_FILE}"
+  fi
+  echo "${NOW} ${avail}"
+} > "${HISTORY_FILE}.tmp" && mv "${HISTORY_FILE}.tmp" "${HISTORY_FILE}"
+if ! read -r old_t old_avail < "${HISTORY_FILE}" \
+    || [[ ! "${old_t}" =~ ^[0-9]+$ || ! "${old_avail}" =~ ^[0-9]+$ ]]; then
+  old_t="${NOW}"
+  old_avail="${avail}"
+fi
+span=$(( NOW - old_t ))
+
+growth_status=0
+(( avail < FREE_CRIT_BYTES )) && growth_status=2
+growth_metrics="free_bytes=${avail};;${FREE_CRIT_BYTES};0;$(( used + avail ))"
+if (( span < RATE_MIN_SPAN_SECONDS )); then
+  echo "${growth_status} \"${GROWTH_SERVICE}\" ${growth_metrics} ${free_gib} GiB free; collecting history (${span}s of ${RATE_MIN_SPAN_SECONDS}s)"
+  exit 0
+fi
+
+# Bytes per day by which free space shrank; negative when it grew.
+growth_per_day=$(( (old_avail - avail) * 86400 / span ))
+growth_metrics="${growth_metrics}|growth_per_day=${growth_per_day}"
+if (( growth_per_day > 0 )); then
+  days_left=$(( avail / growth_per_day ))
+  if (( days_left < DAYS_LEFT_CRIT )); then
+    growth_status=2
+  elif (( days_left < DAYS_LEFT_WARN && growth_status < 1 )); then
+    growth_status=1
+  fi
+  growth_metrics="${growth_metrics}|days_left=${days_left};${DAYS_LEFT_WARN};${DAYS_LEFT_CRIT}"
+  growth_text="using $(awk -v b="${growth_per_day}" 'BEGIN { printf "%.1f", b / 1073741824 }') GiB/day over the last $(( span / 3600 ))h, about ${days_left} days until full"
+else
+  growth_text="free space not shrinking over the last $(( span / 3600 ))h"
+fi
+echo "${growth_status} \"${GROWTH_SERVICE}\" ${growth_metrics} ${free_gib} GiB free; ${growth_text}"

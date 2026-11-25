@@ -561,6 +561,11 @@
         signoz_checkmk_clickhouse_disk_warn_percent: 0
         signoz_checkmk_clickhouse_disk_crit_percent: 0
         signoz_checkmk_clickhouse_disk_sustain_seconds: 300
+        signoz_checkmk_clickhouse_disk_free_crit_gib: 50
+        signoz_checkmk_clickhouse_disk_days_left_warn: 14
+        signoz_checkmk_clickhouse_disk_days_left_crit: 7
+        signoz_checkmk_clickhouse_disk_rate_window_seconds: 86400
+        signoz_checkmk_clickhouse_disk_rate_min_span_seconds: 21600
 
     - name: Run the disk check over time
       ansible.builtin.shell: |
@@ -574,14 +579,44 @@
       changed_when: false
 
     - name: Assert the disk check waits for the sustain period
+      vars:
+        usage: "{{ disk_runs.stdout_lines | reject('match', '^\\d \"ClickHouse data filesystem growth\"') | list }}"
+        growth: "{{ disk_runs.stdout_lines | select('match', '^\\d \"ClickHouse data filesystem growth\"') | list }}"
       ansible.builtin.assert:
         that:
-          - disk_runs.stdout_lines[0] is match('^0 "ClickHouse data filesystem" used_percent=\d+;0;0;0;100 .*for 0s, state changes after 300s$')
-          - disk_runs.stdout_lines[1] is match('^0 .*for 299s, state changes after 300s$')
-          - disk_runs.stdout_lines[2] is match('^2 "ClickHouse data filesystem" used_percent=')
-          - disk_runs.stdout_lines[3] is match('^2 "ClickHouse data filesystem" - /usr is not mounted \(found /\)$')
-          - disk_runs.stdout_lines[4] is match('^[0-2] "ClickHouse data filesystem" used_percent=\d+;75;85;0;100 / ')
+          - usage[0] is match('^0 "ClickHouse data filesystem" used_percent=\d+;0;0;0;100 .*for 0s, state changes after 300s$')
+          - usage[1] is match('^0 .*for 299s, state changes after 300s$')
+          - usage[2] is match('^2 "ClickHouse data filesystem" used_percent=')
+          - usage[3] is match('^2 "ClickHouse data filesystem" - /usr is not mounted \(found /\)$')
+          - usage[4] is match('^[0-2] "ClickHouse data filesystem" used_percent=\d+;75;85;0;100 / ')
+          # One growth line per run that reached df; too little history yet.
+          - growth | length == 4
+          - growth[0] is match('^[02] "ClickHouse data filesystem growth" free_bytes=\d+;;\d+;0;\d+ .*collecting history \(0s of 21600s\)$')
+          - growth[2] is match('.*collecting history \(300s of 21600s\)$')
         fail_msg: "{{ disk_runs.stdout_lines }}"
+
+    - name: Run the disk check with a day of shrinking free space
+      ansible.builtin.shell: |
+        export MK_VARDIR=/tmp/mk-disk-growth
+        rm -rf "$MK_VARDIR"; mkdir -p "$MK_VARDIR"
+        avail=$(df -P -B1 / | awk 'NR == 2 { print $4 }')
+        # A day ago there was 10 x the current free space: full in ~1/9 day.
+        echo "1000 $(( avail * 10 ))" > "$MK_VARDIR/signoz_clickhouse_disk.history"
+        CLICKHOUSE_DISK_NOW=$(( 1000 + 86400 )) /tmp/check_disk_low.sh
+        # Free space rose over the day: not shrinking.
+        echo "1000 0" > "$MK_VARDIR/signoz_clickhouse_disk.history"
+        CLICKHOUSE_DISK_NOW=$(( 1000 + 86400 )) /tmp/check_disk_low.sh
+      register: growth_runs
+      changed_when: false
+
+    - name: Assert the growth service reports days left
+      vars:
+        growth: "{{ growth_runs.stdout_lines | select('match', '^\\d \"ClickHouse data filesystem growth\"') | list }}"
+      ansible.builtin.assert:
+        that:
+          - growth[0] is match('^2 "ClickHouse data filesystem growth" free_bytes=\d+;;\d+;0;\d+\|growth_per_day=\d+\|days_left=0;14;7 .*about 0 days until full$')
+          - growth[1] is match('^[02] "ClickHouse data filesystem growth" free_bytes=.*\|growth_per_day=-\d+ .*not shrinking over the last 24h$')
+        fail_msg: "{{ growth_runs.stdout_lines }}"
 
     # ---- Collector recovery watchdog -------------------------------------
 

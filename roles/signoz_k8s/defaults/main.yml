@@ -33,6 +33,14 @@ signoz_checkmk_clickhouse_disk_enabled: false
 signoz_checkmk_clickhouse_disk_warn_percent: 75
 signoz_checkmk_clickhouse_disk_crit_percent: 85
 signoz_checkmk_clickhouse_disk_sustain_seconds: 300
+# Second service, "ClickHouse data filesystem growth": free bytes and the
+# days left at the rate free space fell over the last window. It reports
+# nothing until it has history covering the minimum span.
+signoz_checkmk_clickhouse_disk_free_crit_gib: 50
+signoz_checkmk_clickhouse_disk_days_left_warn: 14
+signoz_checkmk_clickhouse_disk_days_left_crit: 7
+signoz_checkmk_clickhouse_disk_rate_window_seconds: 86400
+signoz_checkmk_clickhouse_disk_rate_min_span_seconds: 21600
 
 # Temporary collector recovery watchdog (see README). A systemd timer on one
 # host checks log freshness every minute and restarts only the collector
@@ -106,6 +114,13 @@ signoz_clickhouse_stock_system_logs:
   - aggregated_zookeeper_log
   - zookeeper_connection_log
   - background_schedule_pool_log
+# Whether ClickHouse records every ZooKeeper request in system.zookeeper_log.
+# The chart always defines that table, and has no switch for it. false adds
+# a config.d file that removes it. ZooKeeper's coordination data is not
+# affected, and aggregated_zookeeper_log and zookeeper_connection_log stay
+# on. Changing it restarts ClickHouse, because the operator restarts on any
+# config.d change. The existing table is kept; see README.
+signoz_clickhouse_zookeeper_log_enabled: true
 # Align TTLs of existing tables before the Helm upgrade (see README).
 signoz_clickhouse_system_log_migration_enabled: true
 # Recreate ZooKeeper metadata for read-only replicas after Helm (see README).
