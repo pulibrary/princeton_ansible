@@ -150,6 +150,25 @@ SELECT name, total_bytes FROM system.tables
 WHERE database = 'system' AND match(name, '_log_[0-9]+$');
 ```
 
+### Turning off `system.zookeeper_log`
+
+`system.zookeeper_log` records every request ClickHouse sends to ZooKeeper,
+which is most of what the incident above filled. The chart always defines it
+and has no switch for it. `signoz_clickhouse_zookeeper_log_enabled: false`
+adds `config.d/zz-signoz-disable-zookeeper-log.xml`, which removes it.
+
+- Only ClickHouse's request history stops. The replication metadata in
+  ZooKeeper, ZooKeeper's own logs and snapshots, and the small
+  `aggregated_zookeeper_log` and `zookeeper_connection_log` are unaffected.
+- The operator restarts ClickHouse to apply a `config.d` change. Ingestion
+  pauses while ClickHouse loads its tables; inhibit the collector watchdog
+  first.
+- The existing table stays, stops growing, and empties as its 7-day TTL
+  expires. To free it sooner, drop its old daily partitions (see above).
+  Whole-table `DROP` is refused above 50 GB by `max_table_size_to_drop`.
+- Rollback: set it back to `true` and run the role. ClickHouse restarts and
+  writes the table again.
+
 ## ClickHouse replica metadata after a cluster rebuild
 
 ClickHouse keeps its data on the storage node's local disk, but ZooKeeper
