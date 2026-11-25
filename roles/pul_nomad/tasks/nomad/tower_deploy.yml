@@ -1,0 +1,29 @@
+---
+- name: pul_nomad | nomad | tower deploy | Apply tower-deploy ACL policy
+  ansible.builtin.command:
+    cmd: >-
+      nomad acl policy apply
+      -description='Ansible Tower code deploys'
+      tower-deploy -
+    stdin: "{{ lookup('ansible.builtin.file', 'nomad/tower-deploy-policy.hcl') }}"
+  environment:
+    NOMAD_ADDR: "{{ nomad_http_address }}"
+    NOMAD_TOKEN: '{{ pul_nomad_management_token }}'
+  delegate_to: localhost
+  become: false
+  changed_when: false
+
+- name: pul_nomad | nomad | tower deploy | Create tower-deploy token
+  community.general.nomad_token:
+    host: "{{ nomad_http_address | urlsplit('hostname') }}"
+    port: 443
+    token: "{{ pul_nomad_management_token }}"
+    name: tower-deploy
+    token_type: client
+    policies:
+      - tower-deploy
+    state: present
+  delegate_to: localhost
+  become: false
+  changed_when: false
+  no_log: true

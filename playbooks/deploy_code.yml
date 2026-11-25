@@ -6,6 +6,8 @@
 
   vars:
     project_dir: "/tmp/{{ repo_name }}"
+    nomad_addr: "https://nomad.lib.princeton.edu"
+    nomad_version: "2.0.5"
 
   pre_tasks:
     - name: Validate deployment parameters
@@ -85,6 +87,11 @@
       become_user: deploy
       register: repo_checkout
 
+    - name: Check for Nomad job file
+      ansible.builtin.stat:
+        path: "{{ project_dir }}/config/deploy/{{ runtime_env }}.hcl"
+      register: nomad_job_file
+
     - name: Run Capistrano deploy
       ansible.builtin.command:
         cmd: "/usr/local/bin/cap {{ runtime_env }} deploy"
@@ -94,6 +101,42 @@
       become: true
       become_user: deploy
       changed_when: true
+      when: not nomad_job_file.stat.exists
+
+    - name: Deploy with Nomad
+      when: nomad_job_file.stat.exists
+      block:
+        - name: Read Nomad job file
+          ansible.builtin.slurp:
+            src: "{{ project_dir }}/config/deploy/{{ runtime_env }}.hcl"
+          register: nomad_job_hcl
+
+        - name: Download Nomad CLI
+          ansible.builtin.get_url:
+            url: "https://releases.hashicorp.com/nomad/{{ nomad_version }}/nomad_{{ nomad_version }}_linux_amd64.zip"
+            checksum: "sha256:https://releases.hashicorp.com/nomad/{{ nomad_version }}/nomad_{{ nomad_version }}_SHA256SUMS"
+            dest: /tmp/nomad.zip
+            mode: "0644"
+          delegate_to: localhost
+          become: false
+
+        - name: Extract Nomad CLI
+          ansible.builtin.shell:
+            cmd: python3 -m zipfile -e nomad.zip . && chmod +x nomad
+            chdir: /tmp
+            creates: /tmp/nomad
+          delegate_to: localhost
+          become: false
+
+        - name: Run Nomad deploy
+          ansible.builtin.command:
+            cmd: "/tmp/nomad job run -var branch_or_sha={{ repo_checkout.after[:7] }} -"
+            stdin: "{{ nomad_job_hcl.content | b64decode }}"
+          environment:
+            NOMAD_ADDR: "{{ nomad_addr }}"
+          delegate_to: localhost
+          become: false
+          changed_when: true
 
     - name: Create a tag
       when: success_tag is defined
