@@ -371,13 +371,12 @@
     - name: Remove host from towerdeploy known hosts
       ansible.builtin.known_hosts:
         path: /home/deploy/.ssh/known_hosts
-        name: "{{ item.1 }}"
+        name: "{{ vm_fqdn }}"
         state: absent
-      delegate_to: "{{ item.0 }}"
-      loop: >-
-        {{ ['towerdeploy1.princeton.edu', 'towerdeploy-staging1.princeton.edu']
-           | product([vm_fqdn, old_vm_info.virtual_machines[0].ip_address | default('')] | select | list)
-           | list }}
+      delegate_to: "{{ item }}"
+      loop:
+         - 'towerdeploy1.princeton.edu'
+         - 'towerdeploy-staging1.princeton.edu'
       become: true
       become_user: deploy
 
