@@ -143,6 +143,12 @@ EOF
       source    = "prometheus"
     }
 
+    constraint {
+      attribute = "${attr.unique.hostname}"
+      operator  = "set_contains_any"
+      value     = "nomad-client-staging2.lib.princeton.edu"
+    }
+
     service {
       name = "prometheus"
       port = "prometheus_ui"

@@ -32,6 +32,13 @@ job "loki" {
       read_only = false
       source    = "loki"
     }
+
+    constraint {
+      attribute = "${attr.unique.hostname}"
+      operator  = "set_contains_any"
+      value     = "dpul-collections-staging1.lib.princeton.edu"
+    }
+
     service {
       name = "loki"
         port = "loki"
