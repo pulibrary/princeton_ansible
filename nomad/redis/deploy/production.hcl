@@ -15,6 +15,12 @@ job "redis-production" {
   group "redis" {
     count = 3
 
+    constraint {
+      attribute = "${node.unique.name}"
+      operator = "set_contains_any"
+      value = "nomad-client-prod3,nomad-client-prod4,nomad-client-prod5"
+    }
+
     shutdown_delay = "10s"
 
     update {
@@ -67,9 +73,9 @@ job "redis-production" {
       check {
         type = "script"
         task = "redis"
-        command = "redis-cli"
-        args = ["-p", "6379", "ping"]
-        interval = "30s"
+        command = "sh"
+        args = ["-c", "redis-cli info replication | grep -qE 'role:master|master_link_status:up'"]
+        interval = "10s"
         timeout = "10s"
       }
     }
@@ -98,10 +104,7 @@ job "redis-production" {
 
     volume "redis_data" {
       type = "host"
-      source = "redis-production-cluster"
-      access_mode = "single-node-single-writer"
-      attachment_mode = "file-system"
-      sticky = false
+      source = "redis"
     }
 
     task "redis" {
@@ -114,7 +117,7 @@ job "redis-production" {
         entrypoint = ["redis-server"]
         # Anything that might change needs to be in args, since the config gets overridden.
         args = [
-          "/data/redis/redis.conf",
+          "/alloc/data/redis.conf",
           "--masterauth", "${REDIS_PASSWORD}",
           "--replica-announce-ip", "${NOMAD_IP_redis}",
           "--replica-announce-port", "${NOMAD_HOST_PORT_redis}",
@@ -160,8 +163,6 @@ job "redis-production" {
       }
     }
 
-    # Redis & Sentinel both overwrite their .conf files constantly to keep state on the cluster. We'll give it some startup values, then leave it alone after that.
-    # On first start up, point everything at whatever Consul says is "index-0". After that, Sentinel and Redis will manage the cluster state. They discover the other nodes by querying that index-0 node.
     task "seed-config" {
       driver = "docker"
       user = "999:999"
@@ -175,8 +176,7 @@ job "redis-production" {
 
       config {
         image = "redis:8.10-alpine"
-        entrypoint = ["/bin/sh", "-c"]
-        args = ["mkdir -p /data/redis /data/sentinel && { { [ -f /data/redis/redis.conf ] && grep -q \"Bootstrap\" /data/redis/redis.conf; } || { grep -q \"Bootstrap\" /local/redis.conf && cp /local/redis.conf /data/redis/redis.conf; }; } && { { [ -f /data/sentinel/sentinel.conf ] && grep -q \"monitor\" /data/sentinel/sentinel.conf; } || { grep -q \"monitor\" /local/sentinel.conf && cp /local/sentinel.conf /data/sentinel/sentinel.conf; }; }"]
+        entrypoint = ["/bin/sh", "/local/seed.sh"]
       }
 
       volume_mount {
@@ -184,8 +184,43 @@ job "redis-production" {
         destination = "/data"
       }
 
-      # The "Bootstrap" comments below are checked during the first-boot copy phase to make sure that the node knows about the first leader.
-      # Do NOT delete those without having a different strategy in place, the cluster will come up disconnected from one another.
+      template {
+        destination = "local/seed.sh"
+        uid = 1000999
+        gid = 1000999
+        perms = "0640"
+        data = <<EOF
+        {{- with nomadVar "nomad/jobs/redis-production" }}
+        export REDISCLI_AUTH='{{ .REDIS_PASSWORD }}'
+        {{- end }}
+        # Find the running sentinels.
+        SENTINELS="{{ range service "redis-production-sentinel" }}{{ .Address }} {{ end }}"
+        # Ask them who the primary is.
+        for s in $SENTINELS; do
+          LEADER=$(redis-cli -h $s -p 26379 SENTINEL get-master-addr-by-name redis-production | head -n 1)
+          [ -n "$LEADER" ] && break
+        done
+        # Brand new cluster, so the first one is the primary.
+        if [ -z "$SENTINELS" ] && [ "$NOMAD_ALLOC_INDEX" = 0 ]; then
+          cp /local/redis.conf /alloc/data/redis.conf
+          LEADER=$NOMAD_IP_redis
+        # Someone else is primary, so copy from them.
+        elif [ -n "$LEADER" ] && [ "$LEADER" != "$NOMAD_IP_redis" ]; then
+          { cat /local/redis.conf; echo "replicaof $LEADER 6379"; } > /alloc/data/redis.conf
+          # If the primary is up, make the sentinels relearn the cluster.
+          redis-cli -h $LEADER ping | grep -q PONG && for s in $SENTINELS; do redis-cli -h $s -p 26379 SENTINEL RESET redis-production; done
+        # We were the primary and still have our data, so stay primary.
+        elif [ "$LEADER" = "$NOMAD_IP_redis" ] && [ -d /data/appendonlydir ]; then
+          cp /local/redis.conf /alloc/data/redis.conf
+        # Not safe to start yet, so try again.
+        else
+          exit 1
+        fi
+        # Point our sentinel at the primary.
+        { echo "sentinel monitor redis-production $LEADER 6379 2"; cat /local/sentinel.conf; } > /alloc/data/sentinel.conf
+        EOF
+      }
+
       template {
         destination = "local/redis.conf"
         uid = 1000999
@@ -205,19 +240,6 @@ job "redis-production" {
         # Don't do anything unless it's replicated.
         min-replicas-to-write 1
         min-replicas-max-lag 10
-
-        {{- if ne (env "NOMAD_ALLOC_INDEX") "0" }}
-
-        {{- with service "index-0.redis-production|any" }}
-        {{- with index . 0 }}
-        # Bootstrap Secondary
-        replicaof {{ .Address }} {{ .Port }}
-        {{- end }}
-        {{- end }}
-        {{- end }}
-        {{- if eq (env "NOMAD_ALLOC_INDEX") "0" }}
-        # Bootstrap Primary
-        {{- end }}
         EOF
       }
 
@@ -227,16 +249,8 @@ job "redis-production" {
         gid = 1000999
         perms = "0640"
         data = <<EOF
-        sentinel resolve-hostnames yes
-        {{- with service "index-0.redis-production|any" }}
-        {{- with index . 0 }}
-        sentinel monitor redis-production {{ .Address }} {{ .Port }} 2
-        {{- end }}
-        {{- end }}
         bind 0.0.0.0
         protected-mode no
-        dir /data/sentinel
-
         sentinel down-after-milliseconds redis-production 5000
         sentinel failover-timeout redis-production 30000
         sentinel parallel-syncs redis-production 1
@@ -250,6 +264,58 @@ job "redis-production" {
       }
     }
 
+    task "forget" {
+      driver = "docker"
+      user = "999:999"
+
+      lifecycle {
+        hook = "poststop"
+      }
+
+      consul {}
+
+      config {
+        image = "redis:8.10-alpine"
+        entrypoint = ["/bin/sh", "/local/forget.sh"]
+      }
+
+      template {
+        destination = "local/forget.sh"
+        uid = 1000999
+        gid = 1000999
+        perms = "0640"
+        data = <<EOF
+        {{- with nomadVar "nomad/jobs/redis-production" }}
+        export REDISCLI_AUTH='{{ .REDIS_PASSWORD }}'
+        {{- end }}
+        # Find the running sentinels.
+        SENTINELS="{{ range service "redis-production-sentinel" }}{{ .Address }} {{ end }}"
+        # Wait up to a minute for a new primary.
+        for i in $(seq 30); do
+          LEADER=""
+          for s in $SENTINELS; do
+            LEADER=$(redis-cli -h $s -p 26379 SENTINEL get-master-addr-by-name redis-production | head -n 1)
+            FLAGS=$(redis-cli -h $s -p 26379 SENTINEL master redis-production | sed -n '/^flags$/{n;p;}')
+            [ -n "$LEADER" ] && break
+          done
+          # No sentinels left, nothing to clean up.
+          [ -z "$LEADER" ] && exit 0
+          # Once another primary is healthy, make the sentinels forget us.
+          if [ "$LEADER" != "$NOMAD_IP_redis" ] && [ "$FLAGS" = master ]; then
+            for s in $SENTINELS; do redis-cli -h $s -p 26379 SENTINEL RESET redis-production; done
+            exit 0
+          fi
+          sleep 2
+        done
+        EOF
+      }
+
+      resources {
+        cpu = 100
+        memory = 64
+      }
+    }
+
     task "sentinel" {
       driver = "docker"
       user = "999:999"
@@ -260,7 +326,7 @@ job "redis-production" {
         command = "redis-sentinel"
         # Anything that might change needs to be in args, since the config gets overridden.
         args = [
-          "/data/sentinel/sentinel.conf",
+          "/alloc/data/sentinel.conf",
           "--sentinel", "auth-pass", "redis-production", "${REDIS_PASSWORD}",
           "--sentinel", "sentinel-pass", "${REDIS_PASSWORD}",
           "--sentinel", "announce-ip", "${NOMAD_IP_sentinel}",
@@ -270,11 +336,6 @@ job "redis-production" {
       }
 
       consul {}
-
-      volume_mount {
-        volume = "redis_data"
-        destination = "/data"
-      }
 
       template {
         destination = "local/sentinel-users.acl"
