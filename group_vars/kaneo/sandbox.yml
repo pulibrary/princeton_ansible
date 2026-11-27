@@ -1,0 +1,42 @@
+---
+db_name: 'kaneo_sandbox'
+db_user: 'kaneo_sandbox'
+db_password: '{{ vault_kaneo_sandbox_db_password }}'
+db_host: 'sandbox-postgresql1.lib.princeton.edu'
+db_admin_user: "postgres"
+
+# Princeton's Microsoft Entra ID tenant. Not a secret - the same value is
+# already used unencrypted in nomad/grist/deploy/sandbox.hcl for SAML.
+entra_tenant_id: '2ff60116-7431-425d-b5af-077d7791bda4'
+database_connections:
+  - db_host: '{{ db_host }}'
+    db_name: '{{ db_name }}'
+    db_user: '{{ db_user }}'
+    db_owner: '{{ db_user }}'
+    db_password: '{{ db_password }}'
+    db_admin_user: "{{ db_admin_user }}"
+nomad_vars:
+  kaneo-sandbox:
+    POSTGRES_HOST: '{{ db_host }}'
+    POSTGRES_PORT: '5432'
+    POSTGRES_DB: '{{ db_name }}'
+    POSTGRES_USER: '{{ db_user }}'
+    POSTGRES_PASSWORD: '{{ db_password }}'
+    AUTH_SECRET: '{{ vault_kaneo_sandbox_auth_secret }}'
+    # Custom OAuth/OIDC against Princeton's Entra ID tenant.
+    # https://kaneo.app/docs/core/social-providers/custom-oauth
+    CUSTOM_OAUTH_CLIENT_ID: '{{ vault_kaneo_sandbox_entra_client_id }}'
+    CUSTOM_OAUTH_CLIENT_SECRET: '{{ vault_kaneo_sandbox_entra_client_secret }}'
+    CUSTOM_OAUTH_DISCOVERY_URL: 'https://login.microsoftonline.com/{{ entra_tenant_id }}/v2.0/.well-known/openid-configuration'
+    CUSTOM_OAUTH_SCOPES: 'openid,profile,email'
+    CUSTOM_OAUTH_LOGOUT_URL: 'https://login.microsoftonline.com/{{ entra_tenant_id }}/oauth2/v2.0/logout'
+    # GitHub App integration (repository sync, not GitHub sign-in).
+    # https://kaneo.app/docs/core/integrations/github/configuration
+    GITHUB_APP_ID: '{{ vault_kaneo_sandbox_github_app_id }}'
+    GITHUB_APP_NAME: '{{ vault_kaneo_sandbox_github_app_name }}'
+    GITHUB_WEBHOOK_SECRET: '{{ vault_kaneo_sandbox_github_webhook_secret }}'
+    GITHUB_PRIVATE_KEY_BASE64: '{{ vault_kaneo_sandbox_github_private_key_base64 }}'
+    # GitHub sign-in (OAuth App, separate from the GitHub App above).
+    # https://kaneo.app/docs/core/social-providers/github
+    GITHUB_OAUTH_CLIENT_ID: '{{ vault_kaneo_sandbox_github_oauth_client_id }}'
+    GITHUB_OAUTH_CLIENT_SECRET: '{{ vault_kaneo_sandbox_github_oauth_client_secret }}'
